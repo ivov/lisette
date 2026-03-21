@@ -29,9 +29,11 @@ Neovim language support for [Lisette](https://github.com/ivov/lisette). Requires
     ```lua
     {
       "ivov/lisette",
-      ft = "lisette",
+      event = "VeryLazy",
       config = function(plugin)
-        vim.opt.rtp:append(plugin.dir .. "/editors/nvim")
+        vim.opt.rtp:prepend(plugin.dir .. "/editors/nvim")
+        dofile(plugin.dir .. "/editors/nvim/ftdetect/lisette.lua")
+        dofile(plugin.dir .. "/editors/nvim/plugin/lisette.lua")
       end,
     }
     ```
