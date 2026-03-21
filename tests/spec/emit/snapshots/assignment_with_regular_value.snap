@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test() {\n  let mut x = 0;\n  x = 42;\n}\n"
+---
+package main
+
+func test() {
+	_ = 0
+	_ = 42
+}

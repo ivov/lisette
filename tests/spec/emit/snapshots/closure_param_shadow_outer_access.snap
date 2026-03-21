@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() -> string {\n  let x = \"outer\"\n  let f = |x: int| -> string {\n    let x = x * 2\n    f\"doubled: {x}\"\n  }\n  let result = f(5)\n  f\"{result} and {x}\"\n}\n"
+---
+package main
+
+import "fmt"
+
+func test() string {
+	x := "outer"
+	f := func(x int) string {
+		x_1 := x * 2
+		return fmt.Sprintf("doubled: %v", x_1)
+	}
+	result := f(5)
+	return fmt.Sprintf("%v and %v", result, x)
+}

@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { let f = |a, b, c| a + b + c; }"
+---
+fn test() {
+  let f = |a, b, c| a + b + c
+}

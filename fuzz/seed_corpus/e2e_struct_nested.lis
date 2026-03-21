@@ -1,0 +1,15 @@
+struct Point { x: int, y: int }
+struct Rect { origin: Point, width: int, height: int }
+
+fn test_struct_nested() -> int {
+  let r = Rect { origin: Point { x: 1, y: 2 }, width: 10, height: 20 };
+  match r {
+    Rect { origin: Point { x, y }, width, height } => x + y + width + height,
+  }
+}
+
+fn test_let_destructure() -> int {
+  let r = Rect { origin: Point { x: 5, y: 6 }, width: 10, height: 20 };
+  let Rect { origin: Point { x, y }, width, height } = r;
+  x + y + width + height
+}

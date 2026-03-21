@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:5:11]
+ 4 │   let opt = Option.Some(42);
+ 5 │   process(opt)
+   ·           ─┬─
+   ·            ╰── expected `int`, found `Option<int>`
+ 6 │ }
+   ╰────
+  help: Unwrap the inner value with `?` or using `match` · code: [infer.type_mismatch]

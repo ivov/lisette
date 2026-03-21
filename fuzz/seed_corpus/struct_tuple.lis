@@ -1,0 +1,11 @@
+struct Point(int, int)
+
+struct UserId(int)
+
+struct Wrapper<T>(T)
+
+struct Pair<A, B>(A, B)
+
+struct Container(Slice<int>, Map<string, bool>)
+
+struct Marker()

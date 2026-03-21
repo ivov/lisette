@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Config { pub name: string, secret: string, pub enabled: bool }"
+---
+struct Config {
+  pub name: string,
+  secret: string,
+  pub enabled: bool,
+}

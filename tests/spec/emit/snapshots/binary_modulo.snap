@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> int {\n  10 % 3\n}\n"
+---
+package main
+
+func test() int {
+	return 10 % 3
+}

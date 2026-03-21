@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() -> (Sender<int>, Receiver<int>) {\n  let ch = Channel.new<int>();\n  ch.split()\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Tuple2[chan<- int, <-chan int] {
+	ch := make(chan int)
+	return lisette.ChannelSplit(ch)
+}

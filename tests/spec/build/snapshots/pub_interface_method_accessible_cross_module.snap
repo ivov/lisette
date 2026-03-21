@@ -1,0 +1,38 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/types"
+
+func greet_anyone(g types.Greetable) string {
+	return g.Greet()
+}
+
+func main() {
+	p := types.Person{Name: "Alice"}
+	_ = greet_anyone(p)
+}
+
+
+// === types/lib.go ===
+package types
+
+import "fmt"
+
+type Greetable interface {
+	Greet() string
+}
+
+type Person struct {
+	Name string
+}
+
+func (p Person) String() string {
+	return fmt.Sprintf("Person { name: %v }", p.Name)
+}
+
+func (p Person) Greet() string {
+	return fmt.Sprintf("Hello, I'm %v", p.Name)
+}

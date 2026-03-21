@@ -1,0 +1,14 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  match x {\n    Pair(\n      a,\n      // comment before b\n      b,\n    ) => a + b,\n    _ => 0,\n  }\n}"
+---
+fn test() {
+  match x {
+    Pair(
+      a,
+      // comment before b
+      b,
+    ) => a + b,
+    _ => 0,
+  }
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Refutable pattern in select receive
+   ╭─[test.lis:6:12]
+ 5 │     match ch.receive() {
+ 6 │       Some(1) => println("one"),
+   ·            ┬
+   ·            ╰── may not match all received values
+ 7 │       None => println("closed"),
+   ╰────
+  help: Select receive requires an irrefutable binding like `Some(v)` or `Some(_)`. Use a regular `match` inside the arm body to filter values · code: [infer.select_receive_refutable_pattern]

@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(x: int) -> int {\n  if x < 0 {\n    panic(\"negative value\")\n  } else {\n    x\n  }\n}\n"
+---
+package main
+
+func test(x int) int {
+	if x < 0 {
+		panic("negative value")
+	}
+	return x
+}

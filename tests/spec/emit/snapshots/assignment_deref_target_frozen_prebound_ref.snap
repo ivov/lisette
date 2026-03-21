@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Holder { p: Ref<int> }\n\nfn retarget(h: Ref<Holder>, np: Ref<int>) -> int {\n  h.p = np\n  9\n}\n\nfn main() {\n  let mut a = 1\n  let mut b = 2\n  let mut h = Holder { p: &a }\n  let hp = &h\n  let np = &b\n  h.p.* = retarget(hp, np)\n  let _ = a\n}\n"
+---
+package main
+
+import "fmt"
+
+type Holder struct {
+	p *int
+}
+
+func (h Holder) String() string {
+	return fmt.Sprintf("Holder { p: %v }", h.p)
+}
+
+func retarget(h *Holder, np *int) int {
+	h.p = np
+	return 9
+}
+
+func main() {
+	a := 1
+	b := 2
+	h := Holder{p: &a}
+	hp := &h
+	np := &b
+	*h.p = retarget(hp, np)
+	_ = a
+}

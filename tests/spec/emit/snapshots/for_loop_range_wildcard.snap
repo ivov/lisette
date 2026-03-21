@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn do_work() {}\n\nfn test() {\n  for _ in 0..3 {\n    do_work();\n  }\n}\n"
+---
+package main
+
+func do_work() {}
+
+func test() {
+	for _i_1 := 0; _i_1 < 3; _i_1++ {
+		do_work()
+	}
+}

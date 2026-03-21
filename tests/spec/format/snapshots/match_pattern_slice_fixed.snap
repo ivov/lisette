@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { match items { [a, b, c] => a + b + c, _ => 0 } }"
+---
+fn test() {
+  match items {
+    [a, b, c] => a + b + c,
+    _ => 0,
+  }
+}

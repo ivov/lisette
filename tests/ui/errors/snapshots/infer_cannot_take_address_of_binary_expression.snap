@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Non-addressable expression
+   ╭─[test.lis:6:13]
+ 5 │ fn main() {
+ 6 │   takes_ref(&(1 + 2))
+   ·             ────┬───
+   ·                 ╰── cannot take address of binary expression
+ 7 │ }
+   ╰────
+  help: Assign the value to a variable first, then take its address · code: [infer.non_addressable_expression]

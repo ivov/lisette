@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(r: Receiver<int>) -> int {\n  r.length()\n}\n"
+---
+package main
+
+func test(r <-chan int) int {
+	return len(r)
+}

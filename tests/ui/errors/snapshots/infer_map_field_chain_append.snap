@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot assign to field of map entry
+   ╭─[test.lis:7:4]
+ 6 │   m["a"] = Outer{ items: [1] }
+ 7 │   m["a"].items.append(2)
+   ·    ──────────┬──────────
+   ·              ╰── assignment not allowed here
+ 8 │ }
+   ╰────
+  help: Extract, modify, and reinsert: `let mut entry = m[key]; entry.field = value; m[key] = entry` · code: [infer.map_field_chain_assignment]

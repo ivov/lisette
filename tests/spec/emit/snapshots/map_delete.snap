@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(mut m: Map<string, int>, key: string) {\n  m.delete(key)\n}\n"
+---
+package main
+
+func test(m map[string]int, key string) {
+	delete(m, key)
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `task`
+   ╭─[test.lis:4:13]
+ 3 │ fn f() {
+ 4 │   let x = { task work(); };
+   ·             ─────┬─────
+   ·                  ╰── produces no value
+ 5 │ }
+   ╰────
+  help: Move `task` to its own statement · code: [infer.task_in_expression_position]

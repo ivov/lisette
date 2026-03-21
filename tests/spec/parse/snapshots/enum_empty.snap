@@ -1,0 +1,24 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum Nothing {}\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Nothing",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 7,
+        },
+        generics: [],
+        variants: [],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 15,
+        },
+    },
+]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot negate unsigned type
+   ╭─[test.lis:3:18]
+ 2 │ fn test() {
+ 3 │   let x: uint8 = -1;
+   ·                  ─┬
+   ·                   ╰── cannot negate `uint8`
+ 4 │ }
+   ╰────
+  help: Unsigned types cannot represent negative values · code: [infer.cannot_negate_unsigned]

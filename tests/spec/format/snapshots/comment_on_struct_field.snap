@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Point {\n    x: int, // the x coordinate\n    y: int, // the y coordinate\n}"
+---
+struct Point {
+  x: int, // the x coordinate
+  y: int, // the y coordinate
+}

@@ -1,0 +1,68 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: f\"name: {person.name}\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: FormatStringStart,
+            text: "f\"",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: FormatStringText,
+            text: "name: ",
+            byte_offset: 2,
+            byte_length: 6,
+        },
+        Token {
+            kind: FormatStringInterpolationStart,
+            text: "{",
+            byte_offset: 8,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "person",
+            byte_offset: 9,
+            byte_length: 6,
+        },
+        Token {
+            kind: Dot,
+            text: ".",
+            byte_offset: 15,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "name",
+            byte_offset: 16,
+            byte_length: 4,
+        },
+        Token {
+            kind: FormatStringInterpolationEnd,
+            text: "}",
+            byte_offset: 20,
+            byte_length: 1,
+        },
+        Token {
+            kind: FormatStringEnd,
+            text: "\"",
+            byte_offset: 21,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 22,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

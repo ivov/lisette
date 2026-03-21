@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Wrap(Slice<int>)\n\nfn get() -> Ref<Wrap> {\n  let mut w = Wrap([1])\n  &w\n}\n\nfn main() {\n  let x = { get().0.append(2) }\n  let _ = x[0]\n}\n"
+---
+package main
+
+import "fmt"
+
+type Wrap []int
+
+func (w Wrap) String() string {
+	return fmt.Sprintf("Wrap(%v)", []int(w))
+}
+
+func get() *Wrap {
+	w := Wrap([]int{1})
+	return &w
+}
+
+func main() {
+	var x []int
+	x = append([]int(*get()), 2)
+	_ = x[0]
+}

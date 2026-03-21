@@ -1,0 +1,16 @@
+fn test_block_as_value() -> int {
+  let x = {
+    let a = 5;
+    let b = 10;
+    a * b
+  };
+  x
+}
+
+fn test_negative_literal_on_new_line() -> int {
+  let x = {
+    foo()
+    -1
+  };
+  x
+}

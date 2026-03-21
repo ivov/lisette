@@ -1,0 +1,40 @@
+pub enum Color {
+  Red,
+  Green,
+  Blue,
+}
+
+fn test_enum_simple() -> int {
+  let c = Color.Red;
+  match c {
+    Color.Red => 1,
+    Color.Green => 2,
+    Color.Blue => 3,
+  }
+}
+
+pub enum Status {
+  Active,
+  Inactive(int),
+}
+
+fn test_enum_with_data() -> int {
+  let s = Status.Inactive(42);
+  match s {
+    Status.Active => 0,
+    Status.Inactive(n) => n,
+  }
+}
+
+pub enum Pair<A, B> {
+  Both(A, B),
+  Neither,
+}
+
+fn test_enum_generic() -> int {
+  let p = Pair.Both(3, 4);
+  match p {
+    Pair.Both(a, b) => a + b,
+    Pair.Neither => 0,
+  }
+}

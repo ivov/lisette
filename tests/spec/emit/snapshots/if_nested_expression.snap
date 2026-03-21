@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(x: int, y: int) -> int {\n  if x > 0 {\n    if y > 0 {\n      100\n    } else {\n      50\n    }\n  } else {\n    0\n  }\n}\n"
+---
+package main
+
+func test(x, y int) int {
+	if x > 0 {
+		if y > 0 {
+			return 100
+		}
+		return 50
+	}
+	return 0
+}

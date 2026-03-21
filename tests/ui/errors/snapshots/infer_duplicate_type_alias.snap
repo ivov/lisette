@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate type alias
+   ╭─[test.lis:3:6]
+ 2 │ type Id = int
+ 3 │ type Id = string
+   ·      ─┬
+   ·       ╰── already defined
+ 4 │ 
+   ╰────
+  help: `Id` is already defined in this module. Rename or remove this definition · code: [infer.duplicate_definition]

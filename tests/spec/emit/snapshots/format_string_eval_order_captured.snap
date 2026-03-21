@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  10\n}\n\nfn main() {\n  let mut i = 0\n  let s = f\"{i},{bump(&i)}\"\n  let _ = s\n}\n"
+---
+package main
+
+import "fmt"
+
+func bump(i *int) int {
+	*i = 1
+	return 10
+}
+
+func main() {
+	i := 0
+	_ = fmt.Sprintf("%v,%v", i, bump(&i))
+}

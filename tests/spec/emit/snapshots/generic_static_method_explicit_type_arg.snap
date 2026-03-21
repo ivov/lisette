@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Box<T> { value: T }\n\nimpl<T> Box<T> {\n  fn new(value: T) -> Box<T> {\n    Box { value: value }\n  }\n}\n\nfn main() -> int {\n  let b = Box.new<int>(42);\n  b.value\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.value)
+}
+
+func Box_new[T any](value T) Box[T] {
+	return Box[T]{value: value}
+}
+
+func main() int {
+	b := Box_new[int](42)
+	return b.value
+}

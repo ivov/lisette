@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn rest(items: Ref<Slice<int>>) -> Slice<int> {\n  items.*[1..]\n}\n"
+---
+package main
+
+func rest(items *[]int) []int {
+	len_1 := len((*items))
+	return (*items)[1:len_1:len_1]
+}

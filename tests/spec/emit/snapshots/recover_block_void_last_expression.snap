@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/recover.rs
+description: "input: \nfn risky() {\n  panic(\"oops\");\n}\n\nfn test() {\n  let result = recover { risky() };\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func risky() {
+	panic("oops")
+}
+
+func test() {
+	recoverResult_1 := lisette.RecoverBlock(func() struct{} {
+		risky()
+		return struct{}{}
+	})
+	_ = recoverResult_1
+}

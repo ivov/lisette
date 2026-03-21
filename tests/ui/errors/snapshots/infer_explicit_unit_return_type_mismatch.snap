@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:3:3]
+ 2 │ fn foo() -> () {
+ 3 │   123
+   ·   ─┬─
+   ·    ╰── expected `()`, found `int`
+ 4 │ }
+   ╰────
+  help: Change the type annotation to `int` or convert the value to `()` · code: [infer.type_mismatch]

@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:path\"\n\nfn make_splitter() -> fn(string) -> (string, string) {\n  path.Split\n}\n\nfn main() {\n  let f = make_splitter()\n  let r = f(\"/foo/bar.txt\")\n  let _ = r\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"path"
+)
+
+func make_splitter() func(string) lisette.Tuple2[string, string] {
+	return func(arg0 string) lisette.Tuple2[string, string] {
+		ret_1, ret_2 := path.Split(arg0)
+		return lisette.MakeTuple2(ret_1, ret_2)
+	}
+}
+
+func main() {
+	f := make_splitter()
+	_ = f("/foo/bar.txt")
+}

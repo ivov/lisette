@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct P { x: int }\nstruct H { ptr: Ref<P> }\n\nimpl H {\n  fn repoint(self: Ref<H>, q: Ref<P>) -> int {\n    self.ptr = q\n    9\n  }\n}\n\nfn main() {\n  let mut a = P { x: 1 }\n  let mut b = P { x: 2 }\n  let mut h = H { ptr: &a }\n  h.ptr.x = h.repoint(&b)\n  let _ = a\n  let _ = b\n}\n"
+---
+package main
+
+import "fmt"
+
+type P struct {
+	x int
+}
+
+func (p P) String() string {
+	return fmt.Sprintf("P { x: %v }", p.x)
+}
+
+type H struct {
+	ptr *P
+}
+
+func (h H) String() string {
+	return fmt.Sprintf("H { ptr: %v }", h.ptr)
+}
+
+func (h *H) repoint(q *P) int {
+	h.ptr = q
+	return 9
+}
+
+func main() {
+	a := P{x: 1}
+	b := P{x: 2}
+	h := H{ptr: &a}
+	h.ptr.x = h.repoint(&b)
+	_ = a
+	_ = b
+}

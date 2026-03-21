@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use native constructor as a value
+   ╭─[test.lis:7:9]
+ 6 │ fn main() {
+ 7 │   apply(Channel.new)
+   ·         ─────┬─────
+   ·              ╰── native constructors must be called directly
+ 8 │ }
+   ╰────
+  help: Use a closure instead: `|args| Channel.new(args)` · code: [infer.native_constructor_value]

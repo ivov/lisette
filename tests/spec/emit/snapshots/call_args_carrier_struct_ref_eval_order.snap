@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Carrier { p: Ref<int> }\n\nfn bump(c: Carrier) -> int {\n  c.p.* = 1\n  9\n}\n\nfn first(a: int, _b: int) -> int { a }\n\nfn main() {\n  let mut i = 0\n  let m = [[10], [20]]\n  let c = Carrier { p: &i }\n  let x = first(m[i][0], [bump(c)][0])\n  let _ = x\n}\n"
+---
+package main
+
+import "fmt"
+
+type Carrier struct {
+	p *int
+}
+
+func (c Carrier) String() string {
+	return fmt.Sprintf("Carrier { p: %v }", c.p)
+}
+
+func bump(c Carrier) int {
+	*c.p = 1
+	return 9
+}
+
+func first(a, _ int) int {
+	return a
+}
+
+func main() {
+	i := 0
+	m := [][]int{[]int{10}, []int{20}}
+	c := Carrier{p: &i}
+	_ = first(m[i][0], []int{bump(c)}[0])
+}

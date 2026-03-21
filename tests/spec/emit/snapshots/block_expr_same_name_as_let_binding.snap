@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> int {\n  let result = {\n    let result = 42;\n    result * 2\n  }\n  result\n}\n"
+---
+package main
+
+func test() int {
+	result := 42
+	return result * 2
+}

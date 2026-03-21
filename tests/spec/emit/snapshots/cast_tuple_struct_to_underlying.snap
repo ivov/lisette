@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nstruct Wrapper(int)\n\nfn test() -> int {\n  let w = Wrapper(42)\n  w as int\n}\n"
+---
+package main
+
+import "fmt"
+
+type Wrapper int
+
+func (w Wrapper) String() string {
+	return fmt.Sprintf("Wrapper(%v)", int(w))
+}
+
+func test() int {
+	w := Wrapper(42)
+	return int(w)
+}

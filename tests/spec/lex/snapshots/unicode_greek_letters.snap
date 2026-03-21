@@ -1,0 +1,50 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: θ α β λ π"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Identifier,
+            text: "θ",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: Identifier,
+            text: "α",
+            byte_offset: 3,
+            byte_length: 2,
+        },
+        Token {
+            kind: Identifier,
+            text: "β",
+            byte_offset: 6,
+            byte_length: 2,
+        },
+        Token {
+            kind: Identifier,
+            text: "λ",
+            byte_offset: 9,
+            byte_length: 2,
+        },
+        Token {
+            kind: Identifier,
+            text: "π",
+            byte_offset: 12,
+            byte_length: 2,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 14,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

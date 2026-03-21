@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn test() -> int {\n  let val = Some(42)\n  let result = match val {\n    Some(x) => {\n      let x = x * 2\n      x\n    },\n    None => 0,\n  }\n  result\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	val := lisette.MakeOptionSome(42)
+	if val.Tag == lisette.OptionSome {
+		x := val.SomeVal
+		return x * 2
+	}
+	return 0
+}

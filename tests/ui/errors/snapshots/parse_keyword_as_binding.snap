@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Reserved keyword
+   ╭─[test.lis:2:27]
+ 1 │ 
+ 2 │ fn walk_dir(root: string, fn: string) {}
+   ·                           ─┬
+   ·                            ╰── reserved keyword
+   ╰────
+  help: Rename binding `fn` · code: [parse.keyword_as_binding]

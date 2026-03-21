@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn noop() {}\n\nfn f() -> Result<(), string> {\n  Ok(noop())\n}\n\nfn main() { let _ = f() }\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func noop() {}
+
+func f() lisette.Result[struct{}, string] {
+	noop()
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}
+
+func main() {
+	_ = f()
+}

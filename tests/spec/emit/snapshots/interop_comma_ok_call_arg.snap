@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:os\"\n\nfn apply(f: fn(string) -> Option<string>, key: string) -> string {\n  match f(key) {\n    Some(v) => v,\n    None => \"unset\",\n  }\n}\n\nfn main() {\n  let r = apply(os.LookupEnv, \"HOME\")\n  let _ = r\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"os"
+)
+
+func apply(f func(string) lisette.Option[string], key string) string {
+	subject_1 := f(key)
+	if subject_1.Tag == lisette.OptionSome {
+		return subject_1.SomeVal
+	}
+	return "unset"
+}
+
+func main() {
+	r := apply(func(arg0 string) lisette.Option[string] {
+		ret_1, ret_2 := os.LookupEnv(arg0)
+		if ret_2 {
+			return lisette.MakeOptionSome[string](ret_1)
+		}
+		return lisette.MakeOptionNone[string]()
+	}, "HOME")
+	_ = r
+}

@@ -1,0 +1,228 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\n  let cell = matrix[row][col];\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "matrix",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 6,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Slice",
+                        params: [
+                            Constructor {
+                                name: "Slice",
+                                params: [
+                                    Constructor {
+                                        name: "int",
+                                        params: [],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 29,
+                                            byte_length: 3,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 23,
+                                    byte_length: 10,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 17,
+                            byte_length: 17,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "row",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 36,
+                        byte_length: 3,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 41,
+                            byte_length: 3,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "col",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 46,
+                        byte_length: 3,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 51,
+                            byte_length: 3,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "cell",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 64,
+                                byte_length: 4,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: IndexedAccess {
+                        expression: IndexedAccess {
+                            expression: Identifier {
+                                value: "matrix",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 71,
+                                    byte_length: 6,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                            index: Identifier {
+                                value: "row",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 78,
+                                    byte_length: 3,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 77,
+                                byte_length: 5,
+                            },
+                        },
+                        index: Identifier {
+                            value: "col",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 83,
+                                byte_length: 3,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 82,
+                            byte_length: 5,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 60,
+                        byte_length: 27,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 56,
+                byte_length: 34,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 89,
+        },
+    },
+]

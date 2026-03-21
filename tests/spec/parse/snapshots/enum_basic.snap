@@ -1,0 +1,65 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum Status {\n  Pending,\n  Processing,\n  Complete,\n  Failed,\n}\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Status",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 6,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                name: "Pending",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 17,
+                    byte_length: 7,
+                },
+                fields: Unit,
+            },
+            EnumVariant {
+                doc: None,
+                name: "Processing",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 28,
+                    byte_length: 10,
+                },
+                fields: Unit,
+            },
+            EnumVariant {
+                doc: None,
+                name: "Complete",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 42,
+                    byte_length: 8,
+                },
+                fields: Unit,
+            },
+            EnumVariant {
+                doc: None,
+                name: "Failed",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 54,
+                    byte_length: 6,
+                },
+                fields: Unit,
+            },
+        ],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 62,
+        },
+    },
+]

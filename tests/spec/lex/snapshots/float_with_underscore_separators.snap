@@ -1,0 +1,26 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: 1_000.123_456"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Float,
+            text: "1_000.123_456",
+            byte_offset: 0,
+            byte_length: 13,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 13,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

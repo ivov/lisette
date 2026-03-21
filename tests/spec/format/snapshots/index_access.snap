@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { arr[0] }"
+---
+fn test() {
+  arr[0]
+}

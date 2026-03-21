@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> float64 {\n  3.14e-5\n}\n"
+---
+package main
+
+func test() float64 {
+	return 3.14e-5
+}

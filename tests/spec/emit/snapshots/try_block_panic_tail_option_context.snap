@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test() -> Option<int> {\n  try {\n    let _ = Some(1)?;\n    panic(\"fatal\")\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Option[int] {
+	tryResult_1 := func() lisette.Option[int] {
+		check_2 := lisette.MakeOptionSome(1)
+		if check_2.Tag != lisette.OptionSome {
+			return lisette.MakeOptionNone[int]()
+		}
+		panic("fatal")
+	}()
+	return tryResult_1
+}

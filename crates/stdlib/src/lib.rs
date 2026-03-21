@@ -1,0 +1,7 @@
+mod go_modules;
+
+pub use go_modules::{get_go_stdlib_packages, get_go_stdlib_typedef};
+
+pub const LIS_PRELUDE_SOURCE: &str = include_str!("../../../prelude/prelude.d.lis");
+
+include!(concat!(env!("OUT_DIR"), "/stdlib_hash.rs"));

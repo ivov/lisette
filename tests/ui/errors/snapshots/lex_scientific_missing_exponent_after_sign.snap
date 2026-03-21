@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid number literal
+   ╭─[test.lis:1:10]
+ 1 │ let x = 1e+
+   ·          ─┬
+   ·           ╰── expected digits after exponent
+   ╰────
+  help: Add digits after `e`, e.g. `1e10` or `1.5e-3` · code: [lex.number_missing_exponent]

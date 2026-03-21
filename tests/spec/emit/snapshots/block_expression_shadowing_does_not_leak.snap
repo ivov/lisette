@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let y = 10\n  let z = {\n    let y = 20\n    y\n  }\n  let _ = z\n  y\n}\n"
+---
+package main
+
+func test() int {
+	y := 10
+	var z int
+	{
+		y := 20
+		z = y
+	}
+	_ = z
+	return y
+}

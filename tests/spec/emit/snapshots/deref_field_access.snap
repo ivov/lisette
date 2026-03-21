@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Counter { value: int }\n\nimpl Counter {\n  fn increment(self: Ref<Counter>) {\n    self.*.value = self.*.value + 1\n  }\n\n  fn get(self: Ref<Counter>) -> int {\n    self.*.value\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Counter struct {
+	value int
+}
+
+func (c Counter) String() string {
+	return fmt.Sprintf("Counter { value: %v }", c.value)
+}
+
+func (c *Counter) increment() {
+	c.value++
+}
+
+func (c *Counter) get() int {
+	return c.value
+}

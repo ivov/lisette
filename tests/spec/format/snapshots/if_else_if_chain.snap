@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { if a { 1 } else if b { 2 } else if c { 3 } else { 4 } }"
+---
+fn test() {
+  if a { 1 } else if b { 2 } else if c { 3 } else { 4 }
+}

@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(res: Result<int, string>) {\n  let mut current = res;\n  while let Ok(value) = current {\n    current = Err(\"done\");\n    let _ = value;\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(res lisette.Result[int, string]) {
+	current := res
+	for {
+		if current.Tag == lisette.ResultOk {
+			value := current.OkVal
+			current = lisette.MakeResultErr[int, string]("done")
+			_ = value
+		} else {
+			break
+		}
+	}
+}

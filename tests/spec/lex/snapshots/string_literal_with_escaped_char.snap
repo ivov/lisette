@@ -1,0 +1,26 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: \"hello\\nworld\\t\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: String,
+            text: "\"hello\\nworld\\t\"",
+            byte_offset: 0,
+            byte_length: 16,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 16,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

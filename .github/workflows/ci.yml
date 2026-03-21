@@ -1,0 +1,92 @@
+# Setup:
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  pr-title:
+    name: Conventional commit PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          CONVENTIONAL_COMMIT_REGEX: '^(feat|fix|refactor|test|docs|chore|ci|perf|build)(\(.+\))?!?: [a-z].*'
+        run: |
+          if ! echo "$PR_TITLE" | grep -qE "$CONVENTIONAL_COMMIT_REGEX"; then
+            echo "PR title: $PR_TITLE"
+            echo ""
+            echo "PR title must follow Conventional Commits: <type>: <description>"
+            echo "Types: feat, fix, refactor, test, docs, chore, ci, perf, build"
+            exit 1
+          fi
+          LEN=$(echo -n "$PR_TITLE" | wc -c | tr -d ' ')
+          if [ "$LEN" -gt 72 ]; then
+            echo "PR title is $LEN chars (max 72)"
+            exit 1
+          fi
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - uses: extractions/setup-just@v3
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Check formatting
+        run: just format-check
+
+      - name: Lint
+        run: just lint
+
+      - name: Test
+        run: NO_COLOR=1 cargo test -p tests --test suite -- --format terse
+
+      - name: Build
+        run: just build
+
+      - name: Check stdlib
+        run: just check-stdlib-typedefs
+
+      - name: E2E tests
+        run: just test-e2e
+
+      - name: Test prelude Go module
+        run: cd prelude && go test ./...
+
+      - uses: taiki-e/install-action@cargo-shear
+
+      - name: Check unused dependencies
+        run: cargo shear

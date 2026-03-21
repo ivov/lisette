@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `defer`
+   ╭─[test.lis:5:14]
+ 4 │ fn f() {
+ 5 │   let arr = [defer a(), defer b()];
+   ·              ────┬────
+   ·                  ╰── produces no value
+ 6 │ }
+   ╰────
+  help: Move `defer` to its own statement · code: [infer.defer_in_expression_position]

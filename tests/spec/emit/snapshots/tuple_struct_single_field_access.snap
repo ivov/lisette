@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct UserId(int)\n\nfn test(id: UserId) -> int {\n  id.0\n}\n"
+---
+package main
+
+import "fmt"
+
+type UserId int
+
+func (u UserId) String() string {
+	return fmt.Sprintf("UserId(%v)", int(u))
+}
+
+func test(id UserId) int {
+	return int(id)
+}

@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Point(int, int)\n\nfn test(p: Point) -> int {\n  match p {\n    Point(x, y) if x > 0 => x + y,\n    Point(_, y) => y,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	F0 int
+	F1 int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point(%v, %v)", p.F0, p.F1)
+}
+
+func test(p Point) int {
+	{
+		x := p.F0
+		y := p.F1
+		if x > 0 {
+			return x + y
+		}
+	}
+	{
+		y := p.F1
+		return y
+	}
+}

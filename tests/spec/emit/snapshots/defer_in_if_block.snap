@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nimport \"go:fmt\"\n\nfn test(flag: bool) {\n  if flag {\n    defer fmt.Println(\"cleanup\")\n    fmt.Println(\"work\")\n  }\n  fmt.Println(\"after if\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func test(flag bool) {
+	if flag {
+		defer fmt.Println("cleanup")
+		fmt.Println("work")
+	}
+	fmt.Println("after if")
+}

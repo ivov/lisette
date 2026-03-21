@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: import \"go:os\"\nimport \"go:fmt\"\nimport \"go:io\""
+---
+import "go:fmt"
+import "go:io"
+import "go:os"

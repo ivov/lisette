@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unattached doc comment
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ /// Provides utilities for working with strings.
+   · ────────────────────────┬───────────────────────
+   ·                         ╰── is detached
+ 3 │ import "some_module"
+   ╰────
+  help: Place the doc comment on the line immediately above a symbol definition · code: [parse.detached_doc_comment]

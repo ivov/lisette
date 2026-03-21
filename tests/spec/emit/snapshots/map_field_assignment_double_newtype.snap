@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Inner { x: int }\nstruct A(Inner)\nstruct B(A)\n\nfn main() {\n  let mut m = Map.new<string, B>()\n  m[\"k\"] = B(A(Inner { x: 1 }))\n  let mut inner = m[\"k\"].0.0\n  inner.x = 2\n  m[\"k\"] = B(A(inner))\n}\n"
+---
+package main
+
+import "fmt"
+
+type Inner struct {
+	x int
+}
+
+func (i Inner) String() string {
+	return fmt.Sprintf("Inner { x: %v }", i.x)
+}
+
+type A Inner
+
+func (a A) String() string {
+	return fmt.Sprintf("A(%v)", Inner(a))
+}
+
+type B A
+
+func (b B) String() string {
+	return fmt.Sprintf("B(%v)", A(b))
+}
+
+func main() {
+	m := make(map[string]B)
+	m["k"] = B(A(Inner{x: 1}))
+	inner := Inner(A(m["k"]))
+	inner.x = 2
+	m["k"] = B(A(inner))
+}

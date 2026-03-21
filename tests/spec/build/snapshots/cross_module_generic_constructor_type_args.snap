@@ -1,0 +1,33 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/util"
+)
+
+func main() {
+	b := util.Box_New[string]()
+	fmt.Println(b.Items)
+}
+
+
+// === util/box.go ===
+package util
+
+import "fmt"
+
+type Box[T any] struct {
+	Items []T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { items: %v }", b.Items)
+}
+
+func Box_New[T any]() Box[T] {
+	return Box[T]{Items: []T{}}
+}

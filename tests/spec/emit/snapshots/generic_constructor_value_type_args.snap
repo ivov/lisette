@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum Wrap<T> { W(T) }\n\nfn main() {\n  let f = Wrap.W\n  let w = f(1)\n  let _ = w\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeWrapW[T any](arg0 T) Wrap[T] {
+	return Wrap[T]{Tag: WrapW, W: arg0}
+}
+
+type WrapTag int
+
+const (
+	WrapW WrapTag = iota
+)
+
+type Wrap[T any] struct {
+	Tag WrapTag
+	W   T
+}
+
+func (w Wrap[T]) String() string {
+	switch w.Tag {
+	case WrapW:
+		return fmt.Sprintf("Wrap.W(%v)", w.W)
+	default:
+		return fmt.Sprintf("Wrap(%d)", w.Tag)
+	}
+}
+
+func main() {
+	f := MakeWrapW[int]
+	_ = f(1)
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unreachable pattern
+   ╭─[test.lis:7:5]
+ 6 │     Pt { x, y: 0 } => f"y=0, x={x}",
+ 7 │     Pt { x: 0, y: 0 } => "origin",
+   ·     ────────┬────────
+   ·             ╰── arm #2 is unreachable
+ 8 │     Pt { x, y } => f"({x}, {y})",
+   ╰────
+  help: This pattern is unreachable because it is already covered by arm #1: `Pt(_, 0)` · code: [infer.redundant_arm]

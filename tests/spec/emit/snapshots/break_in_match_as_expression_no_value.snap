@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() {\n  let mut i = 0;\n  while i < 100 {\n    let v = match i >= 5 {\n      true => break,\n      false => i,\n    };\n    let _ = v;\n    i += 1;\n  }\n}\n"
+---
+package main
+
+func test() {
+	i := 0
+loop_1:
+	for i < 100 {
+		var v int
+		subject_2 := i >= 5
+		if subject_2 {
+			break loop_1
+		}
+		v = i
+		_ = v
+		i++
+	}
+}

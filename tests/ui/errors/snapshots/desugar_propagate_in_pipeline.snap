@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `?` in pipeline
+   ╭─[test.lis:1:18]
+ 1 │ fn test() { x |> validate? |> transform; }
+   ·                  ────┬────
+   ·                      ╰── propagate operator used here
+   ╰────
+  help: Extract the `?` operation to a `let` binding: `let result = (... |> func)?` · code: [parse.propagate_in_pipeline]

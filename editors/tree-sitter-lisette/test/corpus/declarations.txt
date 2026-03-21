@@ -1,0 +1,297 @@
+================================================================================
+Simple let binding
+================================================================================
+
+let x = 42
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (integer_literal)))
+
+================================================================================
+Let with type annotation
+================================================================================
+
+let x: int = 42
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    type: (type_identifier)
+    value: (integer_literal)))
+
+================================================================================
+Mutable let
+================================================================================
+
+let mut x = 0
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    (mutable_specifier)
+    pattern: (identifier)
+    value: (integer_literal)))
+
+================================================================================
+Let-else
+================================================================================
+
+let Some(x) = opt else { return }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (tuple_struct_pattern
+      type: (identifier)
+      (identifier))
+    value: (identifier)
+    alternative: (block
+      (return_expression))))
+
+================================================================================
+Const
+================================================================================
+
+const MAX: int = 100
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (const_item
+    name: (identifier)
+    type: (type_identifier)
+    value: (integer_literal)))
+
+================================================================================
+Var
+================================================================================
+
+var counter: int
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (var_declaration
+    name: (identifier)
+    type: (type_identifier)))
+
+================================================================================
+Function
+================================================================================
+
+fn add(a: int, b: int) -> int { a + b }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        pattern: (identifier)
+        type: (type_identifier))
+      (parameter
+        pattern: (identifier)
+        type: (type_identifier)))
+    return_type: (type_identifier)
+    body: (block
+      (binary_expression
+        left: (identifier)
+        right: (identifier)))))
+
+================================================================================
+Pub function
+================================================================================
+
+pub fn greet() { hello() }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters)
+    body: (block
+      (call_expression
+        function: (identifier)
+        arguments: (arguments)))))
+
+================================================================================
+Struct with fields
+================================================================================
+
+struct Point { x: int, y: int }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (struct_item
+    name: (type_identifier)
+    body: (field_declaration_list
+      (field_declaration
+        name: (field_identifier)
+        type: (type_identifier))
+      (field_declaration
+        name: (field_identifier)
+        type: (type_identifier)))))
+
+================================================================================
+Tuple struct
+================================================================================
+
+struct Pair(int, int)
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (struct_item
+    name: (type_identifier)
+    body: (ordered_field_declaration_list
+      type: (type_identifier)
+      type: (type_identifier))))
+
+================================================================================
+Enum (ADT)
+================================================================================
+
+enum Option { Some(int), None }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (enum_item
+    name: (type_identifier)
+    body: (enum_variant_list
+      (enum_variant
+        name: (identifier)
+        body: (ordered_field_declaration_list
+          type: (type_identifier)))
+      (enum_variant
+        name: (identifier)))))
+
+================================================================================
+Value enum
+================================================================================
+
+enum Color: int { Red = 1, Blue = 2 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (value_enum_item
+    name: (type_identifier)
+    underlying_type: (type_identifier)
+    body: (value_enum_variant_list
+      (value_enum_variant
+        name: (identifier)
+        value: (integer_literal))
+      (value_enum_variant
+        name: (identifier)
+        value: (integer_literal)))))
+
+================================================================================
+Interface
+================================================================================
+
+interface Reader { fn read(self) -> int; }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (interface_item
+    name: (type_identifier)
+    body: (interface_body
+      (function_signature_item
+        name: (identifier)
+        parameters: (parameters
+          (self_parameter))
+        return_type: (type_identifier)))))
+
+================================================================================
+Impl block
+================================================================================
+
+impl Point { fn new() -> Point { Point { x: 0, y: 0 } } }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (impl_item
+    type: (type_identifier)
+    body: (declaration_list
+      (function_item
+        name: (identifier)
+        parameters: (parameters)
+        return_type: (type_identifier)
+        body: (block
+          (struct_expression
+            name: (type_identifier)
+            body: (field_initializer_list
+              (field_initializer
+                field: (field_identifier)
+                value: (integer_literal))
+              (field_initializer
+                field: (field_identifier)
+                value: (integer_literal)))))))))
+
+================================================================================
+Type alias
+================================================================================
+
+type ID = int
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (type_item
+    name: (type_identifier)
+    type: (type_identifier)))
+
+================================================================================
+Import
+================================================================================
+
+import "go:fmt"
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (import_declaration
+    path: (string_literal
+      (string_content))))
+
+================================================================================
+Import with alias
+================================================================================
+
+import m "models"
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (import_declaration
+    alias: (identifier)
+    path: (string_literal
+      (string_content))))
+
+================================================================================
+Blank import
+================================================================================
+
+import _ "go:net/http/pprof"
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (import_declaration
+    path: (string_literal
+      (string_content))))

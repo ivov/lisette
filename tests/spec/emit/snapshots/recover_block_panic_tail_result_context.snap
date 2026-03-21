@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test() -> Result<int, PanicValue> {\n  recover { panic(\"fatal\") }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Result[int, lisette.PanicValue] {
+	recoverResult_1 := lisette.RecoverBlock(func() int {
+		panic("fatal")
+	})
+	return recoverResult_1
+}

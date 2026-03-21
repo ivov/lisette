@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:5:40]
+ 4 │ fn test() {
+ 5 │   let result: Result<string, string> = try {
+   ·                                        ─┬─
+   ·                                         ╰── expected `Result<string, string>`, found `Result<int, string>`
+ 6 │     risky()?
+   ╰────
+  help: Change the type annotation to `Result<int, string>` or convert the value to `Result<string, string>` · code: [infer.type_mismatch]

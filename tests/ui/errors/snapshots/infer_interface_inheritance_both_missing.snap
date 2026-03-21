@@ -1,0 +1,17 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Interface not implemented
+    ╭─[test.lis:18:14]
+ 17 │ fn test() {
+ 18 │   use_logger(File { path: "test.txt" })
+    ·              ────────────┬────────────
+    ·                          ╰── `File` does not implement `Logger`
+ 19 │ }
+    ╰────
+  help: Missing methods:
+          From `Logger`
+            - log: fn () -> ()
+          From `Display` (required by `Logger`)
+            - show: fn () -> string
+        code: [infer.interface_not_implemented]

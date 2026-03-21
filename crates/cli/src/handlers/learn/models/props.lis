@@ -1,0 +1,47 @@
+pub enum Priority {
+  Low,
+  Medium,
+  High,
+}
+
+impl Priority {
+  pub fn label(self) -> string {
+    match self {
+      Priority.Low => "low",
+      Priority.Medium => "medium",
+      Priority.High => "high",
+    }
+  }
+}
+
+pub fn parse_priority(s: string) -> Result<Priority, string> {
+  match s {
+    "low" => Ok(Priority.Low),
+    "medium" => Ok(Priority.Medium),
+    "high" => Ok(Priority.High),
+    other => Err(f"unknown priority: '{other}' (expected low, medium, or high)"),
+  }
+}
+
+pub enum Status {
+  Pending,
+  Done,
+  Cancelled(string),
+}
+
+impl Status {
+  pub fn is_cancelled(self) -> bool {
+    match self {
+      Status.Cancelled(_) => true,
+      _ => false,
+    }
+  }
+
+  pub fn label(self) -> string {
+    match self {
+      Status.Pending => "pending",
+      Status.Done => "done",
+      Status.Cancelled(reason) => f"cancelled: {reason}",
+    }
+  }
+}

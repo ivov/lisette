@@ -1,0 +1,12 @@
+fn test() {
+  let s1 = f"hello world";
+  let s2 = f"hello {name}";
+  let s3 = f"name: {person.name}";
+  let s4 = f"hello {first} {last}!";
+  let s5 = f"sum: {x + y}";
+  let s6 = f"result: {foo()}";
+  let s7 = f"result: {obj.method()}";
+  let s8 = f"result: {arr[0]}";
+  let s9 = f"result: {if x { 1 } else { 0 }}";
+  let s10 = f"literal {{ and }} braces";
+}

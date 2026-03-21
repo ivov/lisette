@@ -1,0 +1,8 @@
+/// Adds two numbers
+/// Returns the sum
+fn add(a: int, b: int) -> int {
+  a + b
+}
+
+// regular comment
+42; // meaning of life

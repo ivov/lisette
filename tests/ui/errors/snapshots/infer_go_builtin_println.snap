@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(name: string) {
+ 3 │   println(name)
+   ·   ───┬───
+   ·      ╰── name not found in scope
+ 4 │ }
+   ╰────
+  help: Lisette has no `print` builtin. Use `fmt.Println`, `fmt.Printf`, etc. after `import "go:fmt"` · code: [resolve.name_not_found]

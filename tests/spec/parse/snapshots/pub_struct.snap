@@ -1,0 +1,72 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \npub struct Point { x: int, y: int }\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Point",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 12,
+            byte_length: 5,
+        },
+        generics: [],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "x",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 20,
+                    byte_length: 1,
+                },
+                annotation: Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 23,
+                        byte_length: 3,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "y",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 28,
+                    byte_length: 1,
+                },
+                annotation: Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 31,
+                        byte_length: 3,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Public,
+        span: Span {
+            file_id: 0,
+            byte_offset: 5,
+            byte_length: 31,
+        },
+    },
+]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `panic()` used as a value
+   ╭─[test.lis:3:16]
+ 2 │ fn main() {
+ 3 │   let x: int = panic("boom")
+   ·                ──────┬──────
+   ·                      ╰── disallowed
+ 4 │ }
+   ╰────
+  help: `panic()` can only be used in statement position, not assigned to a variable or passed as an argument · code: [infer.panic_in_expression_position]

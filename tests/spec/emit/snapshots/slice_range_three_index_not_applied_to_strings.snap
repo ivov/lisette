@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn test_slice(arr: Slice<int>) -> Slice<int> {\n  arr[1..4]\n}\n\nfn test_string(s: string) -> string {\n  s[1..4]\n}\n"
+---
+package main
+
+func test_slice(arr []int) []int {
+	return arr[1:4:4]
+}
+
+func test_string(s string) string {
+	return s[1:4]
+}

@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct Key { k: string }\nstruct Box { x: int }\n\nfn make_key(counter: Ref<int>) -> Key {\n  counter.* = counter.* + 1\n  Key { k: \"a\" }\n}\n\nfn main() {\n  let mut counter = 0\n  let mut m = Map.from([(\"a\", Box { x: 1 })])\n  let key = make_key(&counter).k\n  let mut entry = m[key]\n  entry.x = 2\n  m[key] = entry\n  fmt.Println(counter)\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Key struct {
+	k string
+}
+
+func (k Key) String() string {
+	return fmt.Sprintf("Key { k: %v }", k.k)
+}
+
+type Box struct {
+	x int
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { x: %v }", b.x)
+}
+
+func make_key(counter *int) Key {
+	*counter++
+	return Key{k: "a"}
+}
+
+func main() {
+	counter := 0
+	m := lisette.MapFrom([]lisette.Tuple2[string, Box]{lisette.MakeTuple2("a", Box{x: 1})})
+	key := make_key(&counter).k
+	entry := m[key]
+	entry.x = 2
+	m[key] = entry
+	fmt.Println(counter)
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `else` block
+   ╭─[test.lis:3:21]
+ 2 │ fn test(opt: Option<int>) -> int {
+ 3 │   let Some(x) = opt else { 42 };
+   ·                     ──┬─
+   ·                       ╰── this branch does not diverge
+ 4 │   x
+   ╰────
+  help: Add `return`, `break`, `continue`, or a diverging call in the `else` block · code: [infer.let_else_must_diverge]

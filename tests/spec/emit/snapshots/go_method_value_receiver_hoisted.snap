@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nimport \"go:bytes\"\nimport \"go:fmt\"\n\nfn make(counter: Ref<int>) -> Ref<bytes.Buffer> {\n  counter.* = counter.* + 1\n  bytes.NewBufferString(\"a\\nb\\n\")\n}\n\nfn use_fn(f: fn(uint8) -> Result<string, error>) {\n  let _ = f(10)\n  let _ = f(10)\n}\n\nfn main() {\n  let mut count = 0\n  use_fn(make(&count).ReadString)\n  fmt.Println(count)\n}\n"
+---
+package main
+
+import (
+	"bytes"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func make_(counter *int) *bytes.Buffer {
+	*counter++
+	return bytes.NewBufferString("a\nb\n")
+}
+
+func use_fn(f func(uint8) lisette.Result[string, error]) {
+	_ = f(10)
+	_ = f(10)
+}
+
+func main() {
+	count := 0
+	fn_1 := make_(&count).ReadString
+	use_fn(func(arg0 uint8) lisette.Result[string, error] {
+		ret_2, ret_3 := fn_1(arg0)
+		if ret_3 != nil {
+			return lisette.MakeResultErr[string, error](ret_3)
+		}
+		return lisette.MakeResultOk[string, error](ret_2)
+	})
+	fmt.Println(count)
+}

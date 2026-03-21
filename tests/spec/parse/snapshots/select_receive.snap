@@ -1,0 +1,156 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(ch: Receiver<int>) {\n  select {\n    let x = ch => process(x),\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "ch",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 2,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Receiver",
+                        params: [
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 22,
+                                    byte_length: 3,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 13,
+                            byte_length: 13,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Select {
+                    arms: [
+                        SelectArm {
+                            pattern: Receive {
+                                binding: Identifier {
+                                    identifier: "x",
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 49,
+                                        byte_length: 1,
+                                    },
+                                },
+                                typed_pattern: None,
+                                receive_expression: Identifier {
+                                    value: "ch",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 53,
+                                        byte_length: 2,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                body: Call {
+                                    expression: Identifier {
+                                        value: "process",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 59,
+                                            byte_length: 7,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    args: [
+                                        Identifier {
+                                            value: "x",
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 67,
+                                                byte_length: 1,
+                                            },
+                                            binding_id: None,
+                                            qualified: None,
+                                        },
+                                    ],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 59,
+                                        byte_length: 10,
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 32,
+                        byte_length: 42,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 28,
+                byte_length: 48,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 75,
+        },
+    },
+]

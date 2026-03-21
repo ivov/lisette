@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:4:3]
+ 3 │   let x: Option<Result<Either<Box<Ref<Map<int,
+ 4 │   let y = 5;
+   ·   ─┬─
+   ·    ╰── expected `>`
+ 5 │ }
+   ╰────
+  help: Add `>` to close the type arguments · code: [parse.syntax_error]

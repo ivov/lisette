@@ -1,0 +1,48 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nconst GREETING: string = \"Hello\";\n"
+---
+[
+    Const {
+        doc: None,
+        identifier: "GREETING",
+        identifier_span: Span {
+            file_id: 0,
+            byte_offset: 7,
+            byte_length: 8,
+        },
+        annotation: Some(
+            Constructor {
+                name: "string",
+                params: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 17,
+                    byte_length: 6,
+                },
+            },
+        ),
+        expression: Literal {
+            literal: String(
+                "Hello",
+            ),
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 26,
+                byte_length: 7,
+            },
+        },
+        visibility: Private,
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 32,
+        },
+    },
+]

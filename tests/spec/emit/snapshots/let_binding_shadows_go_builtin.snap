@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test(items: Slice<int>) -> int {\n  let len = items.length();\n  len\n}\n"
+---
+package main
+
+func test(items []int) int {
+	return len(items)
+}

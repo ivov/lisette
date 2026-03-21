@@ -1,0 +1,95 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \n#[json]\n#[db]\nstruct User {\n  #[json(omitempty)]\n  #[db(\"user_name\")]\n  name: string,\n}\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [
+            Attribute {
+                name: "json",
+                args: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 1,
+                    byte_length: 7,
+                },
+            },
+            Attribute {
+                name: "db",
+                args: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 9,
+                    byte_length: 5,
+                },
+            },
+        ],
+        name: "User",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 22,
+            byte_length: 4,
+        },
+        generics: [],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [
+                    Attribute {
+                        name: "json",
+                        args: [
+                            Flag(
+                                "omitempty",
+                            ),
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 31,
+                            byte_length: 18,
+                        },
+                    },
+                    Attribute {
+                        name: "db",
+                        args: [
+                            String(
+                                "user_name",
+                            ),
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 52,
+                            byte_length: 18,
+                        },
+                    },
+                ],
+                name: "name",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 73,
+                    byte_length: 4,
+                },
+                annotation: Constructor {
+                    name: "string",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 79,
+                        byte_length: 6,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 15,
+            byte_length: 73,
+        },
+    },
+]

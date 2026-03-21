@@ -1,0 +1,111 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() {\n  let foo = 1;\n  foo {}\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "foo",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 19,
+                                byte_length: 3,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: Literal {
+                        literal: Integer {
+                            value: 1,
+                            text: None,
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 25,
+                            byte_length: 1,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 11,
+                    },
+                },
+                Identifier {
+                    value: "foo",
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 30,
+                        byte_length: 3,
+                    },
+                    binding_id: None,
+                    qualified: None,
+                },
+                Block {
+                    items: [],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 34,
+                        byte_length: 2,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 27,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 37,
+        },
+    },
+]

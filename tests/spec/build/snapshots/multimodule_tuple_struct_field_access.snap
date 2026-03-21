@@ -1,0 +1,58 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/types"
+
+func get_raw_id(id types.UserId) int {
+	return int(id)
+}
+
+func get_x(p types.Point) int {
+	return p.F0
+}
+
+func main() {
+	id := types.UserId(42)
+	p := types.Point{
+		F0: 10,
+		F1: 20,
+	}
+	pair := types.Pair[int, string]{
+		F0: 1,
+		F1: "hello",
+	}
+	_ = get_raw_id(id) + get_x(p) + pair.F0
+}
+
+
+// === types/lib.go ===
+package types
+
+import "fmt"
+
+type UserId int
+
+func (u UserId) String() string {
+	return fmt.Sprintf("UserId(%v)", int(u))
+}
+
+type Point struct {
+	F0 int
+	F1 int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point(%v, %v)", p.F0, p.F1)
+}
+
+type Pair[A any, B any] struct {
+	F0 A
+	F1 B
+}
+
+func (p Pair[A, B]) String() string {
+	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
+}

@@ -1,0 +1,31 @@
+enum Event {
+  Click { x: int, y: int },
+  KeyPress { key: string, ctrl: bool },
+  Close,
+}
+
+fn test() -> int {
+  let e = Event.Click { x: 10, y: 20 };
+  match e {
+    Event.Click { x, y } => x + y,
+    Event.KeyPress { key: _, ctrl: _ } => 0,
+    Event.Close => 0,
+  }
+}
+
+fn test_partial() -> int {
+  let e = Event.Click { x: 800, y: 600 };
+  match e {
+    Event.Click { x, .. } => x,
+    _ => 0,
+  }
+}
+
+fn test_if_let() -> int {
+  let e = Event.Click { x: 5, y: 10 };
+  if let Event.Click { x, y } = e {
+    x * y
+  } else {
+    0
+  }
+}

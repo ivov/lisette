@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test(a: Option<int>, b: Option<int>) -> int { if let Some(x) = a { x } else if let Some(y) = b { y } else { 0 } }"
+---
+fn test(a: Option<int>, b: Option<int>) -> int {
+  if let Some(x) = a { x } else if let Some(y) = b { y } else { 0 }
+}

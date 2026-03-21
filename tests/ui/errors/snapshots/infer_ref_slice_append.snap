@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot call append/extend on `Ref<Slice>`
+   ╭─[test.lis:5:3]
+ 4 │   let r: Ref<Slice<int>> = &s
+ 5 │   r.append(4)
+   ·   ────┬───
+   ·       ╰── dereference the ref first
+ 6 │ }
+   ╰────
+  help: Use `r.*.append(x)` to deref, then append · code: [infer.ref_slice_append]

@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Inner { items: Slice<int> }\nstruct Wrap(Inner)\n\nfn main() {\n  let mut w = Wrap(Inner { items: [1] })\n  let mut m = Map.new<string, Ref<Wrap>>()\n  m[\"a\"] = &w\n  let mut inner = m[\"a\"].0\n  inner.items = inner.items.append(2)\n  m[\"a\"].* = Wrap(inner)\n  let _ = w\n}\n"
+---
+package main
+
+import "fmt"
+
+type Inner struct {
+	items []int
+}
+
+func (i Inner) String() string {
+	return fmt.Sprintf("Inner { items: %v }", i.items)
+}
+
+type Wrap Inner
+
+func (w Wrap) String() string {
+	return fmt.Sprintf("Wrap(%v)", Inner(w))
+}
+
+func main() {
+	w := Wrap(Inner{items: []int{1}})
+	m := make(map[string]*Wrap)
+	m["a"] = &w
+	inner := Inner(*m["a"])
+	inner.items = append(inner.items, 2)
+	*m["a"] = Wrap(inner)
+	_ = w
+}

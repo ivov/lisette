@@ -1,0 +1,11 @@
+fn display<T: Display>(value: T) -> string {
+  return "displayed";
+}
+
+fn process<T: Display + Clone>(value: T) -> T {
+  return value;
+}
+
+fn complex<T: Display + Clone, U: Debug, V>(x: T, y: U, z: V) -> int {
+  return 0;
+}

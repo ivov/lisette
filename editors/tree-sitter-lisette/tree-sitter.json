@@ -1,0 +1,26 @@
+{
+  "grammars": [
+    {
+      "name": "lisette",
+      "camelcase": "Lisette",
+      "scope": "source.lisette",
+      "path": ".",
+      "file-types": [
+        "lis"
+      ],
+      "highlights": [
+        "queries/highlights.scm"
+      ],
+      "injection-regex": "lisette"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Lisette grammar for tree-sitter"
+  },
+  "bindings": {
+    "c": true,
+    "node": true
+  }
+}

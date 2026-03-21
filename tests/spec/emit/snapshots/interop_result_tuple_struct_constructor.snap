@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:strconv\"\n\ntype F = fn(string) -> Result<int, error>\nstruct Pair(F, int)\n\nfn main() {\n  let p = Pair(strconv.Atoi, 1)\n  let r = p.0(\"1\")\n  match r {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+type F = func(string) lisette.Result[int, error]
+
+type Pair struct {
+	F0 F
+	F1 int
+}
+
+func (p Pair) String() string {
+	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
+}
+
+func main() {
+	p := Pair{
+		F0: func(arg0 string) lisette.Result[int, error] {
+			ret_1, ret_2 := strconv.Atoi(arg0)
+			if ret_2 != nil {
+				return lisette.MakeResultErr[int, error](ret_2)
+			}
+			return lisette.MakeResultOk[int, error](ret_1)
+		},
+		F1: 1,
+	}
+	r := p.F0("1")
+	if r.Tag == lisette.ResultOk {
+		_ = r.OkVal
+	} else {
+		_ = 0
+	}
+}

@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Box<T> { value: T }\n\nimpl<T> Box<T> {\n  fn make<U>(self) -> U { panic(\"boom\") }\n}\n\nfn main() {\n  let b = Box { value: 1 };\n  let x: string = b.make();\n  let _ = x;\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.value)
+}
+
+func Box_make[T any, U any](_ Box[T]) U {
+	panic("boom")
+}
+
+func main() {
+	b := Box[int]{value: 1}
+	_ = Box_make[int, string](b)
+}

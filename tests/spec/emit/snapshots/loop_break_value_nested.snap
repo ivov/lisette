@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let x = loop {\n    let inner = loop {\n      break 10\n    };\n    break inner + 1\n  };\n  x\n}\n"
+---
+package main
+
+func test() int {
+	for {
+		var inner int
+		for {
+			inner = 10
+			break
+		}
+		return inner + 1
+	}
+}

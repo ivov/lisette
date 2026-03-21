@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let x = Maybe(42);
+   ·           ──┬──
+   ·             ╰── name not found in scope
+ 4 │ }
+   ╰────
+  help: Define or import `Maybe` · code: [resolve.name_not_found]

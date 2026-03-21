@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(items: Slice<int>, extra: Slice<int>) -> Slice<int> {\n  let mut s = items\n  s = s.extend(extra)\n  s\n}\n"
+---
+package main
+
+func test(items, extra []int) []int {
+	s := items
+	s = append(s, extra...)
+	return s
+}

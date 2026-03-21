@@ -1,0 +1,164 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn compare<T: Display, U: Debug>(x: T, y: U) -> bool {\n  return true;\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "compare",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 7,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [
+                    Constructor {
+                        name: "Display",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 15,
+                            byte_length: 7,
+                        },
+                    },
+                ],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 12,
+                    byte_length: 10,
+                },
+            },
+            Generic {
+                name: "U",
+                bounds: [
+                    Constructor {
+                        name: "Debug",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 27,
+                            byte_length: 5,
+                        },
+                    },
+                ],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 24,
+                    byte_length: 8,
+                },
+            },
+        ],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "x",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 34,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "T",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 37,
+                            byte_length: 1,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "y",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 40,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "U",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 43,
+                            byte_length: 1,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Constructor {
+            name: "bool",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 49,
+                byte_length: 4,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Return {
+                    expression: Literal {
+                        literal: Boolean(
+                            true,
+                        ),
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 65,
+                            byte_length: 4,
+                        },
+                    },
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 58,
+                        byte_length: 11,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 54,
+                byte_length: 18,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 71,
+        },
+    },
+]

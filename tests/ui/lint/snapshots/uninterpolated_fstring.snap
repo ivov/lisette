@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Uninterpolated f-string
+   ╭─[test.lis:3:13]
+ 2 │ fn main() {
+ 3 │   let msg = f"hello world";
+   ·             ───────┬──────
+   ·                    ╰── zero interpolations
+ 4 │   msg
+   ╰────
+  help: Remove the `f` prefix. A string without interpolations does not need to be a format string · code: [lint.uninterpolated_fstring]

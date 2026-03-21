@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/recover.rs
+description: "input: \nfn test() {\n  let result = recover {\n    let x = 1;\n    let y = 2;\n    x + y\n  };\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	recoverResult_1 := lisette.RecoverBlock(func() int {
+		x := 1
+		y := 2
+		return x + y
+	})
+	_ = recoverResult_1
+}

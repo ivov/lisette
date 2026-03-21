@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nimport \"go:fmt\"\n\nfn parse(s: string) -> Result<int, string> {\n  if s == \"42\" { Ok(42) } else { Err(\"bad\") }\n}\n\nfn main() {\n  let x = 100\n  fmt.Println(x)\n  let x = 200\n\n  let result = try {\n    let x = parse(\"42\")?\n    x + 1\n  }\n\n  match result {\n    Ok(v) => fmt.Println(v),\n    Err(e) => fmt.Println(e),\n  }\n\n  fmt.Println(x)\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func parse(s string) lisette.Result[int, string] {
+	if s == "42" {
+		return lisette.MakeResultOk[int, string](42)
+	}
+	return lisette.MakeResultErr[int, string]("bad")
+}
+
+func main() {
+	x := 100
+	fmt.Println(x)
+	x_1 := 200
+	var result lisette.Result[int, string]
+	tryResult_2 := func() lisette.Result[int, string] {
+		check_3 := parse("42")
+		if check_3.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, string](check_3.ErrVal)
+		}
+		x := check_3.OkVal
+		return lisette.MakeResultOk[int, string](x + 1)
+	}()
+	result = tryResult_2
+	if result.Tag == lisette.ResultOk {
+		v := result.OkVal
+		fmt.Println(v)
+	} else {
+		e := result.ErrVal
+		fmt.Println(e)
+	}
+	fmt.Println(x_1)
+}

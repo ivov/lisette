@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:13]
+ 1 │ 
+ 2 │ fn test() { @unknown(foo); }
+   ·             ────┬───
+   ·                 ╰── unknown directive
+   ╰────
+  help: There is no such directive · code: [parse.syntax_error]

@@ -1,0 +1,14 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  select {\n    let Some(v) = ch1.receive() => handle(v),\n    match ch2.receive() {\n      Some(x) => process(x),\n      None => close(),\n    },\n    _ => timeout(),\n  }\n}"
+---
+fn test() {
+  select {
+    let Some(v) = ch1.receive() => handle(v),
+    match ch2.receive() {
+      Some(x) => process(x),
+      None => close(),
+    },
+    _ => timeout(),
+  }
+}

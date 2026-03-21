@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n    match x {\n        // comment before arm\n        Some(a) => a,\n        None => 0,\n    }\n}"
+---
+fn test() {
+  match x {
+    // comment before arm
+    Some(a) => a,
+    None => 0,
+  }
+}

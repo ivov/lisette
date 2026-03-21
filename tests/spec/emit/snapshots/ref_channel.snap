@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn test(c: Ref<Channel<string>>) {\n  let _ = c\n}\n"
+---
+package main
+
+func test(c *chan string) {
+	_ = c
+}

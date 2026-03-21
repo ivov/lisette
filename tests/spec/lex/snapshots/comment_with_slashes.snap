@@ -1,0 +1,31 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: // comment with // multiple slashes"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Comment,
+            text: "// comment with // multiple slashes",
+            byte_offset: 0,
+            byte_length: 35,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 35,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [
+            (
+                0,
+                35,
+            ),
+        ],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

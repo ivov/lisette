@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused parameter
+   ╭─[test.lis:2:12]
+ 1 │ 
+ 2 │ pub fn foo(x: int) -> int {
+   ·            ┬
+   ·            ╰── never used
+ 3 │   42
+   ╰────
+  help: Use this parameter or prefix it with an underscore: `_x` · code: [lint.unused_param]

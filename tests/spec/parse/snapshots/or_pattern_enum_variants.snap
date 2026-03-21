@@ -1,0 +1,230 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> string {\n  match c {\n    Red | Green => \"warm\",\n    Blue => \"cool\",\n  }\n}\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Color",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 5,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                name: "Red",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 14,
+                    byte_length: 3,
+                },
+                fields: Unit,
+            },
+            EnumVariant {
+                doc: None,
+                name: "Green",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 19,
+                    byte_length: 5,
+                },
+                fields: Unit,
+            },
+            EnumVariant {
+                doc: None,
+                name: "Blue",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 26,
+                    byte_length: 4,
+                },
+                fields: Unit,
+            },
+        ],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 31,
+        },
+    },
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 36,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "c",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 41,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Color",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 44,
+                            byte_length: 5,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Constructor {
+            name: "string",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 54,
+                byte_length: 6,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Match {
+                    subject: Identifier {
+                        value: "c",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 71,
+                            byte_length: 1,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: Or {
+                                patterns: [
+                                    EnumVariant {
+                                        identifier: "Red",
+                                        fields: [],
+                                        rest: false,
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 79,
+                                            byte_length: 3,
+                                        },
+                                    },
+                                    EnumVariant {
+                                        identifier: "Green",
+                                        fields: [],
+                                        rest: false,
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 85,
+                                            byte_length: 5,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 79,
+                                    byte_length: 11,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "warm",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 94,
+                                    byte_length: 6,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Blue",
+                                fields: [],
+                                rest: false,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 106,
+                                    byte_length: 4,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "cool",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 114,
+                                    byte_length: 6,
+                                },
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 65,
+                        byte_length: 60,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 61,
+                byte_length: 66,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 33,
+            byte_length: 94,
+        },
+    },
+]

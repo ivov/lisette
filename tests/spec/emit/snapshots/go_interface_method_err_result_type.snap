@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nimport \"go:context\"\nimport \"go:fmt\"\n\nfn main() {\n  let ctx = context.Background()\n  let err = ctx.Err()\n  fmt.Println(f\"err={err}\")\n}\n"
+---
+package main
+
+import (
+	"context"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ctx := context.Background()
+	raw_1 := ctx.Err()
+	var err lisette.Option[error]
+	if raw_1 != nil {
+		err = lisette.MakeOptionSome[error](raw_1)
+	} else {
+		err = lisette.MakeOptionNone[error]()
+	}
+	fmt.Printf("err=%v\n", err)
+}

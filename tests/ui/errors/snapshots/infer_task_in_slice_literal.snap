@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `task`
+   ╭─[test.lis:5:14]
+ 4 │ fn f() {
+ 5 │   let arr = [task a(), task b()];
+   ·              ────┬───
+   ·                  ╰── produces no value
+ 6 │ }
+   ╰────
+  help: Move `task` to its own statement · code: [infer.task_in_expression_position]

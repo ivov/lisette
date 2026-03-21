@@ -1,0 +1,68 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: f\"val: {c == '}'}\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: FormatStringStart,
+            text: "f\"",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: FormatStringText,
+            text: "val: ",
+            byte_offset: 2,
+            byte_length: 5,
+        },
+        Token {
+            kind: FormatStringInterpolationStart,
+            text: "{",
+            byte_offset: 7,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "c",
+            byte_offset: 8,
+            byte_length: 1,
+        },
+        Token {
+            kind: EqualDouble,
+            text: "==",
+            byte_offset: 10,
+            byte_length: 2,
+        },
+        Token {
+            kind: Char,
+            text: "'}'",
+            byte_offset: 13,
+            byte_length: 3,
+        },
+        Token {
+            kind: FormatStringInterpolationEnd,
+            text: "}",
+            byte_offset: 16,
+            byte_length: 1,
+        },
+        Token {
+            kind: FormatStringEnd,
+            text: "\"",
+            byte_offset: 17,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 18,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

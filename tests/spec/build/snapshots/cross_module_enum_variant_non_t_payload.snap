@@ -1,0 +1,60 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === data/data.go ===
+package data
+
+import "fmt"
+
+func MakeResult2Success[T any](arg0 T) Result2[T] {
+	return Result2[T]{Tag: Result2Success, Success: arg0}
+}
+
+func MakeResult2Failure[T any](arg0 string) Result2[T] {
+	return Result2[T]{Tag: Result2Failure, Failure: arg0}
+}
+
+type Result2Tag int
+
+const (
+	Result2Success Result2Tag = iota
+	Result2Failure
+)
+
+type Result2[T any] struct {
+	Tag     Result2Tag
+	Success T
+	Failure string
+}
+
+func (r Result2[T]) String() string {
+	switch r.Tag {
+	case Result2Success:
+		return fmt.Sprintf("Result2.Success(%v)", r.Success)
+	case Result2Failure:
+		return fmt.Sprintf("Result2.Failure(%v)", r.Failure)
+	default:
+		return fmt.Sprintf("Result2(%d)", r.Tag)
+	}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/data"
+)
+
+func process(ok bool) data.Result2[string] {
+	if ok {
+		return data.MakeResult2Success("done")
+	}
+	return data.MakeResult2Failure[string]("failed")
+}
+
+func main() {
+	fmt.Println(process(true))
+	fmt.Println(process(false))
+}

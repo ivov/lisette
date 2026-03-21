@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(opt: Option<int>) {\n  let mut current = opt;\n  while let Some(x) = current {\n    if x > 100 {\n      break;\n    }\n    current = None;\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) {
+	current := opt
+	for {
+		if current.Tag == lisette.OptionSome {
+			x := current.SomeVal
+			if x > 100 {
+				break
+			}
+			current = lisette.MakeOptionNone[int]()
+		} else {
+			break
+		}
+	}
+}

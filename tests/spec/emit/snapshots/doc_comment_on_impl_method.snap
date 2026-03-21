@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Counter { count: int }\n\nimpl Counter {\n  /// Creates a new counter starting at zero.\n  fn new() -> Counter {\n    Counter { count: 0 }\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Counter struct {
+	count int
+}
+
+func (c Counter) String() string {
+	return fmt.Sprintf("Counter { count: %v }", c.count)
+}
+
+// Creates a new counter starting at zero.
+func Counter_new() Counter {
+	return Counter{count: 0}
+}

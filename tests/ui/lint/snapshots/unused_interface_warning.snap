@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused type
+   ╭─[test.lis:2:11]
+ 1 │ 
+ 2 │ interface Processor {
+   ·           ────┬────
+   ·               ╰── never used
+ 3 │   fn process(_x: int);
+   ╰────
+  help: Use or remove this type · code: [lint.unused_type]

@@ -1,0 +1,64 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum FileMode {\n  ModeDir = 0x80000000,\n  ModeRegular = 0,\n}\n"
+---
+[
+    ValueEnum {
+        doc: None,
+        name: "FileMode",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 8,
+        },
+        underlying_ty: None,
+        variants: [
+            ValueEnumVariant {
+                doc: None,
+                name: "ModeDir",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 19,
+                    byte_length: 7,
+                },
+                value: Integer {
+                    value: 2147483648,
+                    text: Some(
+                        "0x80000000",
+                    ),
+                },
+                value_span: Span {
+                    file_id: 0,
+                    byte_offset: 27,
+                    byte_length: 12,
+                },
+            },
+            ValueEnumVariant {
+                doc: None,
+                name: "ModeRegular",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 43,
+                    byte_length: 11,
+                },
+                value: Integer {
+                    value: 0,
+                    text: Some(
+                        "0",
+                    ),
+                },
+                value_span: Span {
+                    file_id: 0,
+                    byte_offset: 55,
+                    byte_length: 3,
+                },
+            },
+        ],
+        visibility: Public,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 60,
+        },
+    },
+]

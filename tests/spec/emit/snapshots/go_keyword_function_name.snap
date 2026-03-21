@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn map(x: int) -> int {\n  x * 2\n}\n\nfn range(x: int) -> int {\n  x + 1\n}\n\nfn test() -> int {\n  map(5) + range(10)\n}\n"
+---
+package main
+
+func map_(x int) int {
+	return x * 2
+}
+
+func range_(x int) int {
+	return x + 1
+}
+
+func test() int {
+	return map_(5) + range_(10)
+}

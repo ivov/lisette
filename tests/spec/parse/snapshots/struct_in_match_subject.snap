@@ -1,0 +1,226 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct Point { x: int }\nfn test() -> int {\n  let x = 42;\n  match Point { x } {\n    Point { x: val } => val,\n  }\n}\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Point",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 5,
+        },
+        generics: [],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "x",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 16,
+                    byte_length: 1,
+                },
+                annotation: Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 19,
+                        byte_length: 3,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 23,
+        },
+    },
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 28,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Constructor {
+            name: "int",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 38,
+                byte_length: 3,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "x",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 50,
+                                byte_length: 1,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: Literal {
+                        literal: Integer {
+                            value: 42,
+                            text: None,
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 54,
+                            byte_length: 2,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 46,
+                        byte_length: 10,
+                    },
+                },
+                Match {
+                    subject: StructCall {
+                        name: "Point",
+                        field_assignments: [
+                            StructFieldAssignment {
+                                name: "x",
+                                name_span: Span {
+                                    file_id: 0,
+                                    byte_offset: 74,
+                                    byte_length: 1,
+                                },
+                                value: Identifier {
+                                    value: "x",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 74,
+                                        byte_length: 1,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                            },
+                        ],
+                        spread: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 66,
+                            byte_length: 11,
+                        },
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: Struct {
+                                identifier: "Point",
+                                fields: [
+                                    StructFieldPattern {
+                                        name: "x",
+                                        value: Identifier {
+                                            identifier: "val",
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 95,
+                                                byte_length: 3,
+                                            },
+                                        },
+                                    },
+                                ],
+                                rest: false,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 84,
+                                    byte_length: 16,
+                                },
+                            },
+                            expression: Identifier {
+                                value: "val",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 104,
+                                    byte_length: 3,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 60,
+                        byte_length: 52,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 42,
+                byte_length: 72,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 25,
+            byte_length: 89,
+        },
+    },
+]

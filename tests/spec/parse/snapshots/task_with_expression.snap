@@ -1,0 +1,78 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() {\n  task compute();\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Task {
+                    expression: Call {
+                        expression: Identifier {
+                            value: "compute",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 20,
+                                byte_length: 7,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                        args: [],
+                        type_args: [],
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 20,
+                            byte_length: 9,
+                        },
+                    },
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 14,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 21,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 31,
+        },
+    },
+]

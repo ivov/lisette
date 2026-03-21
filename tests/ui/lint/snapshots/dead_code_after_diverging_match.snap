@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unreachable code after diverging match
+   ╭─[test.lis:7:3]
+ 6 │   };
+ 7 │   let y = 2;
+   ·   ────┬────
+   ·       ╰── unreachable from this point onward
+ 8 │   y
+   ╰────
+  help: Remove this line and all code after it · code: [lint.dead_code_after_diverging_match]

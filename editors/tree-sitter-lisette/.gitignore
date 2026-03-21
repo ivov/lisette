@@ -1,0 +1,4 @@
+node_modules/
+*.dylib
+*.so
+*.wasm

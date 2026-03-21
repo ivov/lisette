@@ -1,0 +1,35 @@
+[package]
+name = "tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dev-dependencies]
+semantics = { package = "lisette-semantics", path = "../crates/semantics" }
+syntax = { package = "lisette-syntax", path = "../crates/syntax" }
+diagnostics = { package = "lisette-diagnostics", path = "../crates/diagnostics" }
+format = { package = "lisette-format", path = "../crates/format" }
+emit = { package = "lisette-emit", path = "../crates/emit" }
+stdlib = { package = "lisette-stdlib", path = "../crates/stdlib" }
+lsp = { package = "lisette-lsp", path = "../crates/lsp" }
+ecow.workspace = true
+rustc-hash.workspace = true
+insta.workspace = true
+miette.workspace = true
+tower-lsp = "0.20"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bytes = "1"
+futures = "0.3"
+tempfile = "3"
+
+[[test]]
+name = "suite"
+path = "suite.rs"
+
+[[test]]
+name = "lsp"
+path = "lsp.rs"

@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(opt: Option<(int, int)>) -> int {\n  let Some((a, b)) = opt else { return 0; };\n  a + b\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[lisette.Tuple2[int, int]]) int {
+	if opt.Tag != lisette.OptionSome {
+		return 0
+	}
+	a := opt.SomeVal.First
+	b := opt.SomeVal.Second
+	return a + b
+}

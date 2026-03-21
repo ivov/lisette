@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `nil` is not supported
+   ╭─[test.lis:3:3]
+ 2 │ fn test() -> Option<int> {
+ 3 │   nil
+   ·   ─┬─
+   ·    ╰── does not exist
+ 4 │ }
+   ╰────
+  help: Absence is encoded with `Option<T>` in Lisette. Use `None` to represent absent values · code: [resolve.nil_not_supported]

@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: interface Display {\n  fn fmt() -> string;\n}"
+---
+interface Display {
+  fn fmt() -> string
+}

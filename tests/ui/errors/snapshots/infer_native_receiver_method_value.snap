@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use native method as a value
+   ╭─[test.lis:4:11]
+ 3 │   let s = [1, 2, 3]
+ 4 │   let f = s.length
+   ·           ────┬───
+   ·               ╰── native methods must be called directly
+ 5 │   let _ = f
+   ╰────
+  help: Use a closure instead: `|args| receiver.length(args)` · code: [infer.native_method_value]

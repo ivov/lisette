@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate struct
+   ╭─[test.lis:3:8]
+ 2 │ struct Point { x: int, y: int }
+ 3 │ struct Point { x: float64, y: float64 }
+   ·        ──┬──
+   ·          ╰── already defined
+ 4 │ 
+   ╰────
+  help: `Point` is already defined in this module. Rename or remove this definition · code: [infer.duplicate_definition]

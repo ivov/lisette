@@ -1,0 +1,328 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn test(s: Shape) {\n  match s {\n    Shape.Triangle(..) => print(\"triangle\"),\n    Shape.Circle(..) => print(\"circle\"),\n  }\n}\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Shape",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 5,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                name: "Triangle",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 14,
+                    byte_length: 8,
+                },
+                fields: Tuple(
+                    [
+                        EnumFieldDefinition {
+                            name: "field0",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 23,
+                                    byte_length: 3,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                        EnumFieldDefinition {
+                            name: "field1",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 28,
+                                    byte_length: 3,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                        EnumFieldDefinition {
+                            name: "field2",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 33,
+                                    byte_length: 3,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                    ],
+                ),
+            },
+            EnumVariant {
+                doc: None,
+                name: "Circle",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 39,
+                    byte_length: 6,
+                },
+                fields: Tuple(
+                    [
+                        EnumFieldDefinition {
+                            name: "field0",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "float",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 46,
+                                    byte_length: 5,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                    ],
+                ),
+            },
+        ],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 53,
+        },
+    },
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 58,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "s",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 63,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Shape",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 66,
+                            byte_length: 5,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Match {
+                    subject: Identifier {
+                        value: "s",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 83,
+                            byte_length: 1,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Shape.Triangle",
+                                fields: [],
+                                rest: true,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 91,
+                                    byte_length: 18,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 113,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "triangle",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 119,
+                                            byte_length: 10,
+                                        },
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 113,
+                                    byte_length: 17,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Shape.Circle",
+                                fields: [],
+                                rest: true,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 136,
+                                    byte_length: 16,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 156,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "circle",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 162,
+                                            byte_length: 8,
+                                        },
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 156,
+                                    byte_length: 15,
+                                },
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 77,
+                        byte_length: 99,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 73,
+                byte_length: 105,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 55,
+            byte_length: 123,
+        },
+    },
+]

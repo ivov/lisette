@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(x: int) -> string {\n  match x {\n    1 | _ => \"matched\",\n  }\n}\n"
+---
+package main
+
+func test(x int) string {
+	_ = x
+	return "matched"
+}

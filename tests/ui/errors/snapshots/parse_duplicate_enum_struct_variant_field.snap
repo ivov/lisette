@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate field
+   ╭─[test.lis:2:16]
+ 1 │ 
+ 2 │ enum E { Foo { x: int, x: int } }
+   ·                ┬       ┬
+   ·                │       ╰── defined again
+   ·                ╰── first defined
+   ╰────
+  help: Remove the duplicate field `x` · code: [parse.duplicate_struct_field]

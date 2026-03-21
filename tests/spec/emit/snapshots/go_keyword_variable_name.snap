@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() -> int {\n  let map = 42;\n  let range = 10;\n  map + range\n}\n"
+---
+package main
+
+func test() int {
+	map_ := 42
+	range_ := 10
+	return map_ + range_
+}

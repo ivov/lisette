@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn unwrap_or(o: Option<int>, fallback: int) -> int {\n  match o { Some(v) => v, None => fallback }\n}\n\nfn test() -> int {\n  unwrap_or(Some(42), 0)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func unwrap_or(o lisette.Option[int], fallback int) int {
+	if o.Tag == lisette.OptionSome {
+		return o.SomeVal
+	}
+	return fallback
+}
+
+func test() int {
+	return unwrap_or(lisette.MakeOptionSome(42), 0)
+}

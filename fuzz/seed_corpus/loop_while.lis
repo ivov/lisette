@@ -1,0 +1,19 @@
+fn test() {
+  loop {
+    if should_stop() {
+      break;
+    }
+  }
+
+  let x = loop {
+    if done() {
+      break 42;
+    }
+  };
+
+  let mut count = 0;
+  while count < 10 {
+    print(count);
+    count = count + 1;
+  }
+}

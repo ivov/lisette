@@ -1,0 +1,32 @@
+[package]
+name = "lisette-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+lisette-syntax = { path = "../crates/syntax" }
+lisette-semantics = { path = "../crates/semantics" }
+lisette-diagnostics = { path = "../crates/diagnostics" }
+lisette-stdlib = { path = "../crates/stdlib" }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "infer"
+path = "fuzz_targets/infer.rs"
+test = false
+doc = false
+bench = false

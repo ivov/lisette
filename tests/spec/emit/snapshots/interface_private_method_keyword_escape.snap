@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport \"go:fmt\"\n\ninterface Worker {\n  fn range(self) -> int\n}\n\nstruct S {\n  value: int,\n}\n\nimpl S {\n  fn range(self) -> int { self.value }\n}\n\nfn main() {\n  let s = S { value: 3 }\n  let w: Worker = s\n  fmt.Println(w.range())\n}\n"
+---
+package main
+
+import "fmt"
+
+type Worker interface {
+	range_() int
+}
+
+type S struct {
+	value int
+}
+
+func (s S) String() string {
+	return fmt.Sprintf("S { value: %v }", s.value)
+}
+
+func (s S) range_() int {
+	return s.value
+}
+
+func main() {
+	var w Worker = S{value: 3}
+	fmt.Println(w.range_())
+}

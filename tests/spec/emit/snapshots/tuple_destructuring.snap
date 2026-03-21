@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn test() -> int {\n  let pair = (10, 20);\n  let (a, b) = pair;\n  a + b\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	pair := lisette.MakeTuple2(10, 20)
+	a := pair.First
+	b := pair.Second
+	return a + b
+}

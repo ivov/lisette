@@ -1,0 +1,36 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === geo/lib.go ===
+package geo
+
+import "fmt"
+
+type Point struct {
+	X int
+	Y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.X, p.Y)
+}
+
+type Coordinate = Point
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/geo"
+
+func get_x(c geo.Point) int {
+	return c.X
+}
+
+func main() {
+	c := geo.Point{
+		X: 10,
+		Y: 20,
+	}
+	_ = get_x(c)
+}

@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { match opt { Some(x) | Some(x) => x, None => 0 } }"
+---
+fn test() {
+  match opt {
+    Some(x) | Some(x) => x,
+    None => 0,
+  }
+}

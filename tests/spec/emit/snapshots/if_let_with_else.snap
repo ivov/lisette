@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(opt: Option<int>) -> int {\n  if let Some(x) = opt {\n    x * 2\n  } else {\n    0\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) int {
+	if opt.Tag == lisette.OptionSome {
+		x := opt.SomeVal
+		return x * 2
+	}
+	return 0
+}

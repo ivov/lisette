@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  10\n}\n\nfn main() {\n  let items = [100, 200, 300]\n  let mut i = 0\n  let v = items[bump(&i)]\n  let _ = v\n}\n"
+---
+package main
+
+func bump(i *int) int {
+	*i = 1
+	return 10
+}
+
+func main() {
+	items := []int{100, 200, 300}
+	i := 0
+	_ = items[bump(&i)]
+}

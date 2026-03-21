@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport s \"go:sync\"\n\nstruct Wrapper {\n  mu: s.Mutex,\n}\n\nfn main() {}\n"
+---
+package main
+
+import (
+	"fmt"
+	s "sync"
+)
+
+type Wrapper struct {
+	mu s.Mutex
+}
+
+func (w Wrapper) String() string {
+	return fmt.Sprintf("Wrapper { mu: %v }", w.mu)
+}
+
+func main() {}

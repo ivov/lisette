@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `defer`
+   ╭─[test.lis:4:9]
+ 3 │ fn f() {
+ 4 │   defer cleanup
+   ·         ───┬───
+   ·            ╰── expected `()`
+ 5 │ }
+   ╰────
+  help: Add parens to call the function · code: [parse.defer_missing_parens]

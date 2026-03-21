@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { obj.field.method().another.final_call() }"
+---
+fn test() {
+  obj.field.method().another.final_call()
+}

@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: enum Option<T> { Some(T), None }"
+---
+enum Option<T> {
+  Some(T),
+  None,
+}

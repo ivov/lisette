@@ -1,0 +1,8 @@
+fn test() { let r = 0..10; }
+fn test2() { let r = 0..=10; }
+fn test3() { for i in 0.. { break; } }
+fn test4(arr: Slice<int>) { let head = arr[..3]; }
+fn test5(arr: Slice<int>) { let head = arr[..=3]; }
+fn test6(arr: Slice<int>) { let copy = arr[..]; }
+fn test7(arr: Slice<int>) { let sub = arr[1..4]; }
+fn test8(start: int, end: int) { let r = start..end; }

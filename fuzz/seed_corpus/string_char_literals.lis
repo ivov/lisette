@@ -1,0 +1,14 @@
+fn test() {
+  let s1 = "hello world";
+  let s2 = "";
+  let s3 = "hello\nworld\t";
+  let s4 = "She said \"hello\"";
+  let s5 = "backslash: \\";
+  let c1 = 'b';
+  let c2 = '\n';
+  let c3 = '\t';
+  let c4 = '\\';
+  let c5 = '\'';
+  let c6 = '\r';
+  let c7 = '\0';
+}

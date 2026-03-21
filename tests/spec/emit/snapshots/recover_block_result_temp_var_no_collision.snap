@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/recover.rs
+description: "input: \nfn main() {\n  let result = recover { 1 };\n  let recoverResult_1 = 7;\n  let _ = recoverResult_1;\n  let _ = result;\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	recoverResult_1 := lisette.RecoverBlock(func() int {
+		return 1
+	})
+	result := recoverResult_1
+	_ = 7
+	_ = result
+}

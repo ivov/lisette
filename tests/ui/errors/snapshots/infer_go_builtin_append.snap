@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(items: Slice<int>) -> Slice<int> {
+ 3 │   append(items, 1)
+   ·   ───┬──
+   ·      ╰── name not found in scope
+ 4 │ }
+   ╰────
+  help: Lisette has no `append` builtin. Use the `.append()` method instead, e.g. `items.append(1)` · code: [resolve.name_not_found]

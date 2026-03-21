@@ -1,0 +1,49 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nconst PI: float64 = 3.14159;\n"
+---
+[
+    Const {
+        doc: None,
+        identifier: "PI",
+        identifier_span: Span {
+            file_id: 0,
+            byte_offset: 7,
+            byte_length: 2,
+        },
+        annotation: Some(
+            Constructor {
+                name: "float64",
+                params: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 11,
+                    byte_length: 7,
+                },
+            },
+        ),
+        expression: Literal {
+            literal: Float {
+                value: 3.14159,
+                text: None,
+            },
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 21,
+                byte_length: 7,
+            },
+        },
+        visibility: Private,
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 27,
+        },
+    },
+]

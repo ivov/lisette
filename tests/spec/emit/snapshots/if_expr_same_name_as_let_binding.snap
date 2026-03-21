@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> int {\n  let val = if true {\n    let val = 100;\n    val + 1\n  } else {\n    0\n  }\n  val\n}\n"
+---
+package main
+
+func test() int {
+	if true {
+		val := 100
+		return val + 1
+	}
+	return 0
+}

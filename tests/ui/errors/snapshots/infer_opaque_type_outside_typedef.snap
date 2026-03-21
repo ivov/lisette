@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Undefined type
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ type Point
+   · ─────┬────
+   ·      ╰── needs a definition
+   ╰────
+  help: Use `type Point = ...` to define the type. Opaque declarations are only allowed in `.d.lis` files · code: [infer.undefined_type_outside_typedef]

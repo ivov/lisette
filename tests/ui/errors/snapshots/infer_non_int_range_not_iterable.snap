@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Not iterable
+   ╭─[test.lis:5:12]
+ 4 │ fn test() {
+ 5 │   for c in 'a'..'z' {
+   ·            ────┬───
+   ·                ╰── cannot iterate over `Range<rune>`
+ 6 │     fmt.Print(f"{c}");
+   ╰────
+  help: Range iteration requires integer bounds · code: [infer.non_int_range_not_iterable]

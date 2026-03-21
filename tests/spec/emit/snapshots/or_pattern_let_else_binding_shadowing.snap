@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn maybe() -> Option<int> { Some(1) }\n\nfn main() {\n  let Some(x) | Some(x) = maybe() else { return };\n  let _ = x;\n  let x = 2;\n  let _ = x;\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func maybe() lisette.Option[int] {
+	return lisette.MakeOptionSome[int](1)
+}
+
+func main() {
+	subject_1 := maybe()
+	var x int
+	if subject_1.Tag == lisette.OptionSome {
+		x = subject_1.SomeVal
+	} else if subject_1.Tag == lisette.OptionSome {
+		x = subject_1.SomeVal
+	} else {
+		return
+	}
+	_ = x
+	_ = 2
+}

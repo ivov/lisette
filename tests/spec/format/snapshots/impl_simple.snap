@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: impl Point { fn origin() -> Point { Point { x: 0, y: 0 } } }"
+---
+impl Point {
+  fn origin() -> Point {
+    Point { x: 0, y: 0 }
+  }
+}

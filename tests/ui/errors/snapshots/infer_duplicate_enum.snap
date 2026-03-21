@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate enum
+   ╭─[test.lis:3:6]
+ 2 │ enum Dir { North, South }
+ 3 │ enum Dir { East, West }
+   ·      ─┬─
+   ·       ╰── already defined
+ 4 │ 
+   ╰────
+  help: `Dir` is already defined in this module. Rename or remove this definition · code: [infer.duplicate_definition]

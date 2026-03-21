@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() {\n  let items = [(1,2), (3,4)]\n  for (i, (a, b)) in items.enumerate() {\n    ()\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	items := []lisette.Tuple2[int, int]{lisette.MakeTuple2(1, 2), lisette.MakeTuple2(3, 4)}
+	for key_1, value_2 := range items {
+		_ = value_2
+		_ = key_1
+	}
+}

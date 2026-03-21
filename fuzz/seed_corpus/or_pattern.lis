@@ -1,0 +1,29 @@
+fn test(x: int) -> string {
+  match x {
+    1 | 2 | 3 => "small",
+    _ => "other",
+  }
+}
+
+enum Color { Red, Green, Blue }
+fn test2(c: Color) -> string {
+  match c {
+    Red | Green => "warm",
+    Blue => "cool",
+  }
+}
+
+fn test3(a: bool, b: bool) -> string {
+  match (a, b) {
+    (true, true) | (false, false) => "same",
+    (true, false) | (false, true) => "different",
+  }
+}
+
+fn test4(s: string) -> int {
+  match s {
+    "yes" | "y" | "true" => 1,
+    "no" | "n" | "false" => 0,
+    _ => -1,
+  }
+}

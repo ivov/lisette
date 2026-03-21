@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused `mut`
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let mut x = 5;
+   ·           ┬
+   ·           ╰── declared as mutable
+ 4 │   x
+   ╰────
+  help: Remove `mut` from the declaration if you do not need to mutate the variable · code: [lint.unnecessary_mut]

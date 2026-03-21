@@ -1,0 +1,26 @@
+fn get_pair() -> (int, int) {
+  (10, 20)
+}
+
+fn test_tuple() -> int {
+  let pair = (1, 2);
+  match pair {
+    (1, 2) => 100,
+    _ => 0,
+  }
+}
+
+fn test_nested() -> int {
+  let nested = ((1, 2), 3);
+  match nested {
+    ((1, 2), 3) => 100,
+    ((x, y), z) => x + y + z,
+  }
+}
+
+fn test_deep() -> int {
+  let deep = (((1, 2), 3), 4);
+  match deep {
+    (((a, b), c), d) => a + b + c + d,
+  }
+}

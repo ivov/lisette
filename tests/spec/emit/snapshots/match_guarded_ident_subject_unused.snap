@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct P { v: int }\nfn test() {\n  let p = P { v: 1 }\n  match p {\n    P { v } if false => (),\n    _ => (),\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type P struct {
+	v int
+}
+
+func (p P) String() string {
+	return fmt.Sprintf("P { v: %v }", p.v)
+}
+
+func test() {
+	_ = P{v: 1}
+match_1:
+	for {
+		{
+			if false {
+				break match_1
+			}
+		}
+		break match_1
+	}
+}

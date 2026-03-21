@@ -1,0 +1,61 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Printable interface {
+	Print_val() string
+}
+
+type Summable interface {
+	Sum_val() int
+}
+
+type Container[T any] struct {
+	value T
+	label string
+}
+
+func (c Container[T]) String() string {
+	return fmt.Sprintf("Container { value: %v, label: %v }", c.value, c.label)
+}
+
+func Container_display[T Printable](self Container[T]) string {
+	return fmt.Sprintf("[%v] %v", self.label, self.value.Print_val())
+}
+
+func Container_total[T Summable](self Container[T]) int {
+	return self.value.Sum_val()
+}
+
+type Item struct {
+	name  string
+	count int
+}
+
+func (i Item) String() string {
+	return fmt.Sprintf("Item { name: %v, count: %v }", i.name, i.count)
+}
+
+func (i Item) Print_val() string {
+	return i.name
+}
+
+func (i Item) Sum_val() int {
+	return i.count
+}
+
+func main() {
+	c := Container[Item]{
+		value: Item{
+			name:  "widget",
+			count: 5,
+		},
+		label: "box",
+	}
+	fmt.Println(Container_display(c))
+	fmt.Printf("total: %v\n", Container_total(c))
+}

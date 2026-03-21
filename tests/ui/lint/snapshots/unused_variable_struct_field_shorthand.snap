@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused variable
+   ╭─[test.lis:6:15]
+ 5 │   let p = Point { x: 1 };
+ 6 │   let Point { x } = p;
+   ·               ┬
+   ·               ╰── never used
+ 7 │   ()
+   ╰────
+  help: Use this variable or prefix it with an underscore: `x: _x` · code: [lint.unused_variable]

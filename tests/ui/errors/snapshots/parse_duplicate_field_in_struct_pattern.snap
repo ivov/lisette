@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate field
+   ╭─[test.lis:6:15]
+ 5 │   let p = Point { x: 1, y: 2 };
+ 6 │   let Point { x, x: x2, .. } = p;
+   ·               ┬  ┬
+   ·               │  ╰── used again
+   ·               ╰── first use of `x`
+ 7 │ }
+   ╰────
+  help: Remove the duplicate binding · code: [parse.duplicate_field_in_pattern]

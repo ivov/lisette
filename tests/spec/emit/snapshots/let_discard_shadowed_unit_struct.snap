@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Blank {}\n\nfn test() {\n  let _ = Blank {}\n}\n"
+---
+package main
+
+type Blank struct{}
+
+func (b Blank) String() string {
+	return "Blank"
+}
+
+func test() {
+	_ = Blank{}
+}

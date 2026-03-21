@@ -1,0 +1,265 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(ch: Channel<int>) {\n  select {\n    match ch.receive() {\n      Some(v) => process(v),\n      None => handle_close(),\n    },\n    _ => default(),\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "ch",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 2,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Channel",
+                        params: [
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 21,
+                                    byte_length: 3,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 13,
+                            byte_length: 12,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Select {
+                    arms: [
+                        SelectArm {
+                            pattern: MatchReceive {
+                                receive_expression: Call {
+                                    expression: DotAccess {
+                                        expression: Identifier {
+                                            value: "ch",
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 50,
+                                                byte_length: 2,
+                                            },
+                                            binding_id: None,
+                                            qualified: None,
+                                        },
+                                        member: "receive",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 50,
+                                            byte_length: 10,
+                                        },
+                                    },
+                                    args: [],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 50,
+                                        byte_length: 12,
+                                    },
+                                },
+                                arms: [
+                                    MatchArm {
+                                        pattern: EnumVariant {
+                                            identifier: "Some",
+                                            fields: [
+                                                Identifier {
+                                                    identifier: "v",
+                                                    span: Span {
+                                                        file_id: 0,
+                                                        byte_offset: 76,
+                                                        byte_length: 1,
+                                                    },
+                                                },
+                                            ],
+                                            rest: false,
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 71,
+                                                byte_length: 7,
+                                            },
+                                        },
+                                        expression: Call {
+                                            expression: Identifier {
+                                                value: "process",
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 82,
+                                                    byte_length: 7,
+                                                },
+                                                binding_id: None,
+                                                qualified: None,
+                                            },
+                                            args: [
+                                                Identifier {
+                                                    value: "v",
+                                                    ty: Variable(
+                                                        -1,
+                                                    ),
+                                                    span: Span {
+                                                        file_id: 0,
+                                                        byte_offset: 90,
+                                                        byte_length: 1,
+                                                    },
+                                                    binding_id: None,
+                                                    qualified: None,
+                                                },
+                                            ],
+                                            type_args: [],
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 82,
+                                                byte_length: 10,
+                                            },
+                                        },
+                                    },
+                                    MatchArm {
+                                        pattern: EnumVariant {
+                                            identifier: "None",
+                                            fields: [],
+                                            rest: false,
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 100,
+                                                byte_length: 4,
+                                            },
+                                        },
+                                        expression: Call {
+                                            expression: Identifier {
+                                                value: "handle_close",
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 108,
+                                                    byte_length: 12,
+                                                },
+                                                binding_id: None,
+                                                qualified: None,
+                                            },
+                                            args: [],
+                                            type_args: [],
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 108,
+                                                byte_length: 14,
+                                            },
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                        SelectArm {
+                            pattern: WildCard {
+                                body: Call {
+                                    expression: Identifier {
+                                        value: "default",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 140,
+                                            byte_length: 7,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    args: [],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 140,
+                                        byte_length: 9,
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 31,
+                        byte_length: 123,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 27,
+                byte_length: 129,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 155,
+        },
+    },
+]

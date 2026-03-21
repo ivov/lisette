@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[tag(\"validate\")]\n#[tag(\"custom\")]\nstruct User {\n  #[tag(`validate:\"required\"`)]\n  #[tag(`custom:\"foo\"`)]\n  name: string,\n}\n"
+---
+package main
+
+import "fmt"
+
+type User struct {
+	Name string `custom:"foo" validate:"required"`
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { name: %v }", u.Name)
+}

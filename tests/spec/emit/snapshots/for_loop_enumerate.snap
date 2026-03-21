@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(items: Slice<string>) {\n  for (i, item) in items.enumerate() {\n    let _ = i;\n    let _ = item;\n  }\n}\n"
+---
+package main
+
+func test(items []string) {
+	for i, item := range items {
+		_ = i
+		_ = item
+	}
+}

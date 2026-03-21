@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(items: Slice<int>) -> int {\n  let mut count = 0;\n  for _ in items {\n    count = count + 1;\n  };\n  count\n}\n"
+---
+package main
+
+func test(items []int) int {
+	count := 0
+	for range items {
+		count++
+	}
+	return count
+}

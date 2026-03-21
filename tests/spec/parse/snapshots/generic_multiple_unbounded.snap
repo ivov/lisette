@@ -1,0 +1,187 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn pair<T, U>(x: T, y: U) -> (T, U) {\n  return (x, y);\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "pair",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 9,
+                    byte_length: 1,
+                },
+            },
+            Generic {
+                name: "U",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 12,
+                    byte_length: 1,
+                },
+            },
+        ],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "x",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "T",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 18,
+                            byte_length: 1,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "y",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 21,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "U",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 24,
+                            byte_length: 1,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Tuple {
+            elements: [
+                Constructor {
+                    name: "T",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 31,
+                        byte_length: 1,
+                    },
+                },
+                Constructor {
+                    name: "U",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 34,
+                        byte_length: 1,
+                    },
+                },
+            ],
+            span: Span {
+                file_id: 0,
+                byte_offset: 30,
+                byte_length: 6,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Return {
+                    expression: Tuple {
+                        elements: [
+                            Identifier {
+                                value: "x",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 49,
+                                    byte_length: 1,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                            Identifier {
+                                value: "y",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 52,
+                                    byte_length: 1,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                        ],
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 48,
+                            byte_length: 6,
+                        },
+                    },
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 41,
+                        byte_length: 13,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 37,
+                byte_length: 20,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 56,
+        },
+    },
+]

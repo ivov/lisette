@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> bool {\n  3 < 5\n}\n"
+---
+package main
+
+func test() bool {
+	return 3 < 5
+}

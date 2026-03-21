@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() {\n  let ch = Channel.new<int>();\n  ch.send(42);\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	ch := make(chan int)
+	lisette.ChannelSend(ch, 42)
+}

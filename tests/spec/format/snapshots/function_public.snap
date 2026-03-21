@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: pub fn greet() { \"hello\" }"
+---
+pub fn greet() {
+  "hello"
+}

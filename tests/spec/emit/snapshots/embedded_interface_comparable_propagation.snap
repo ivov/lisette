@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface A<K> {\n  fn get(self, m: Map<K, int>) -> int\n}\n\ninterface B<K> {\n  impl A<K>\n}\n\nfn main() { let _ = 0 }\n"
+---
+package main
+
+type A[K comparable] interface {
+	get(map[K]int) int
+}
+
+type B[K comparable] interface {
+	A[K]
+}
+
+func main() {
+	_ = 0
+}

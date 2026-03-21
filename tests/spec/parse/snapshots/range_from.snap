@@ -1,0 +1,114 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() { for i in 0.. { break; } }\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                For {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "i",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 17,
+                                byte_length: 1,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    iterable: Range {
+                        start: Some(
+                            Literal {
+                                literal: Integer {
+                                    value: 0,
+                                    text: None,
+                                },
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 22,
+                                    byte_length: 1,
+                                },
+                            },
+                        ),
+                        end: None,
+                        inclusive: false,
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 22,
+                            byte_length: 3,
+                        },
+                    },
+                    body: Block {
+                        items: [
+                            Break {
+                                value: None,
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 28,
+                                    byte_length: 5,
+                                },
+                            },
+                        ],
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 26,
+                            byte_length: 10,
+                        },
+                    },
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 13,
+                        byte_length: 23,
+                    },
+                    needs_label: false,
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 27,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 37,
+        },
+    },
+]

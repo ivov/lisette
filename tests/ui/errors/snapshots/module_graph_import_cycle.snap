@@ -1,0 +1,9 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Import cycle detected
+  │
+  │ module_a -> module_b -> module_c
+  │ ────┬───                ────┬───
+  │     ╰───────────────────────╯
+  help: To break the cycle, remove one of imports or extract common dependencies into a separate module · code: [resolve.import_cycle]

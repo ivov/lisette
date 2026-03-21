@@ -1,0 +1,145 @@
+---
+source: tests/spec/desugar/mod.rs
+description: "input: fn test() { let x = 5; f\"result: {x |> double}\"; }"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 3,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "x",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 16,
+                                byte_length: 1,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: Literal {
+                        literal: Integer {
+                            value: 5,
+                            text: None,
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 20,
+                            byte_length: 1,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 12,
+                        byte_length: 9,
+                    },
+                },
+                Literal {
+                    literal: FormatString(
+                        [
+                            Text(
+                                "result: ",
+                            ),
+                            Expression(
+                                Call {
+                                    expression: Identifier {
+                                        value: "double",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 39,
+                                            byte_length: 6,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    args: [
+                                        Identifier {
+                                            value: "x",
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 34,
+                                                byte_length: 1,
+                                            },
+                                            binding_id: None,
+                                            qualified: None,
+                                        },
+                                    ],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 34,
+                                        byte_length: 11,
+                                    },
+                                },
+                            ),
+                        ],
+                    ),
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 23,
+                        byte_length: 24,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 10,
+                byte_length: 40,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 0,
+            byte_length: 50,
+        },
+    },
+]

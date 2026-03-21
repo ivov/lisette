@@ -1,0 +1,200 @@
+use syntax::ast::{Expression, FormatStringPart, Literal, Span};
+use syntax::types::Type;
+
+use super::super::Checker;
+
+impl Checker<'_, '_> {
+    pub(super) fn infer_literal(
+        &mut self,
+        literal: Literal,
+        expected_ty: &Type,
+        span: Span,
+    ) -> Expression {
+        match literal {
+            Literal::Boolean(boolean) => {
+                let bool_ty = self.type_bool();
+                self.unify(expected_ty, &bool_ty, &span);
+
+                Expression::Literal {
+                    literal: Literal::Boolean(boolean),
+                    ty: bool_ty,
+                    span,
+                }
+            }
+
+            Literal::Integer { value, text } => {
+                let resolved = expected_ty.resolve();
+                let ty = if resolved.is_numeric() {
+                    if !self.scopes.is_inside_negation() {
+                        self.check_integer_literal_overflow(value, &resolved, span);
+                    }
+                    resolved.clone()
+                } else {
+                    let int_ty = self.type_int();
+                    self.unify(expected_ty, &int_ty, &span);
+                    int_ty
+                };
+
+                Expression::Literal {
+                    literal: Literal::Integer { value, text },
+                    ty,
+                    span,
+                }
+            }
+
+            Literal::Float { value, text } => {
+                let resolved = expected_ty.resolve();
+                let ty = if resolved.is_float() {
+                    // Float overflow is symmetric (absolute value matters), so check regardless
+                    // of negation context
+                    self.check_float_literal_overflow(value, &resolved, span);
+                    resolved.clone()
+                } else {
+                    let float_ty = self.type_float();
+                    self.unify(expected_ty, &float_ty, &span);
+                    float_ty
+                };
+
+                Expression::Literal {
+                    literal: Literal::Float { value, text },
+                    ty,
+                    span,
+                }
+            }
+
+            Literal::Imaginary(coef) => {
+                let complex_ty = self.type_complex128();
+                self.unify(expected_ty, &complex_ty, &span);
+
+                Expression::Literal {
+                    literal: Literal::Imaginary(coef),
+                    ty: complex_ty,
+                    span,
+                }
+            }
+
+            Literal::String(string) => {
+                let string_ty = self.type_string();
+                self.unify(expected_ty, &string_ty, &span);
+
+                Expression::Literal {
+                    literal: Literal::String(string),
+                    ty: string_ty,
+                    span,
+                }
+            }
+
+            Literal::Char(char) => {
+                let resolved = expected_ty.resolve();
+                let ty = if resolved.is_numeric() {
+                    if let Some(codepoint) = char_literal_codepoint(&char) {
+                        self.check_integer_literal_overflow(codepoint, &resolved, span);
+                    }
+                    resolved.clone()
+                } else {
+                    let char_ty = self.type_char();
+                    self.unify(expected_ty, &char_ty, &span);
+                    char_ty
+                };
+
+                Expression::Literal {
+                    literal: Literal::Char(char),
+                    ty,
+                    span,
+                }
+            }
+
+            Literal::Slice(elements) => {
+                // If expected type is Slice<T>, propagate T to element inference
+                // so literals can adapt (e.g., `let x: Slice<int8> = [1, 2, 3]` works)
+                let resolved = expected_ty.resolve();
+                let element_expected_ty = if resolved.get_name() == Some("Slice") {
+                    resolved
+                        .inner()
+                        .unwrap_or_else(|| self.new_type_var_with_hint("T"))
+                } else {
+                    self.new_type_var_with_hint("T")
+                };
+
+                let new_elements: Vec<Expression> = elements
+                    .into_iter()
+                    .map(|e| {
+                        self.with_value_context(|s| s.infer_expression(e, &element_expected_ty))
+                    })
+                    .collect();
+
+                for elem in &new_elements {
+                    self.check_not_temp_producing(elem);
+                }
+
+                let slice_ty = self.type_slice(element_expected_ty);
+                self.unify(expected_ty, &slice_ty, &span);
+
+                Expression::Literal {
+                    literal: Literal::Slice(new_elements),
+                    ty: slice_ty,
+                    span,
+                }
+            }
+
+            Literal::FormatString(parts) => {
+                let is_single_expression = parts.len() == 1
+                    && matches!(parts.first(), Some(FormatStringPart::Expression(_)));
+
+                let new_parts: Vec<_> = parts
+                    .into_iter()
+                    .map(|part| match part {
+                        FormatStringPart::Text(text) => FormatStringPart::Text(text),
+                        FormatStringPart::Expression(expression) => {
+                            let type_var = self.new_type_var();
+                            let inferred_expression = self.infer_expression(*expression, &type_var);
+                            self.check_not_temp_producing(&inferred_expression);
+                            FormatStringPart::Expression(Box::new(inferred_expression))
+                        }
+                    })
+                    .collect();
+
+                if is_single_expression
+                    && let Some(FormatStringPart::Expression(expression)) = new_parts.first()
+                    && expression.get_type().resolve().is_string()
+                {
+                    self.facts.add_expression_only_fstring(span);
+                }
+
+                let string_ty = self.type_string();
+                self.unify(expected_ty, &string_ty, &span);
+
+                Expression::Literal {
+                    literal: Literal::FormatString(new_parts),
+                    ty: string_ty,
+                    span,
+                }
+            }
+        }
+    }
+
+    pub(super) fn infer_unit(&mut self, span: Span, expected_ty: &Type) -> Expression {
+        let new_ty = self.new_type_var();
+        let unit_ty = self.type_unit();
+        self.unify(&new_ty, &unit_ty, &span);
+        self.unify(expected_ty, &new_ty, &span);
+        Expression::Unit { ty: new_ty, span }
+    }
+}
+
+fn char_literal_codepoint(s: &str) -> Option<u64> {
+    if let Some(rest) = s.strip_prefix('\\') {
+        match rest.as_bytes().first()? {
+            b'n' => Some(10),
+            b't' => Some(9),
+            b'r' => Some(13),
+            b'0' => Some(0),
+            b'\\' => Some(92),
+            b'\'' => Some(39),
+            b'x' => u64::from_str_radix(&rest[1..], 16).ok(),
+            _ => None,
+        }
+    } else {
+        s.chars().next().map(|c| c as u64)
+    }
+}

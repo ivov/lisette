@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nimport \"go:fmt\"\n\nfn divide(a: int, b: int) -> Option<int> {\n  if b == 0 { None } else { Some(a / b) }\n}\n\nfn test() {\n  if let Some(x) = divide(100, 10) {\n    let _ = fmt.Print(f\"Result: {x}\\n\");\n  }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func divide(a, b int) lisette.Option[int] {
+	if b == 0 {
+		return lisette.MakeOptionNone[int]()
+	}
+	return lisette.MakeOptionSome[int](a / b)
+}
+
+func test() {
+	subject_1 := divide(100, 10)
+	if subject_1.Tag == lisette.OptionSome {
+		x := subject_1.SomeVal
+		fmt.Printf("Result: %v\n", x)
+	}
+}

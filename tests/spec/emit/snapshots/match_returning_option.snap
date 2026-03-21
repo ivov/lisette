@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test(flag: bool) -> Option<int> {\n  match flag {\n    true => Some(42),\n    false => None,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(flag bool) lisette.Option[int] {
+	if flag {
+		return lisette.MakeOptionSome[int](42)
+	}
+	return lisette.MakeOptionNone[int]()
+}

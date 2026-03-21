@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nstruct Box { x: int }\n\nimpl Box {\n  fn range(self) -> int { self.x }\n  fn chan(self) -> int { self.x }\n}\n\nfn main() {\n  let b = Box { x: 1 }\n  let _ = Box.range(b)\n  let _ = Box.chan(b)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box struct {
+	x int
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { x: %v }", b.x)
+}
+
+func (b Box) range_() int {
+	return b.x
+}
+
+func (b Box) chan_() int {
+	return b.x
+}
+
+func main() {
+	b := Box{x: 1}
+	_ = b.range_()
+	_ = b.chan_()
+}

@@ -1,0 +1,15 @@
+fn test(items: Slice<Option<int>>) {
+  let mut i = 0;
+  while let Some(x) = items[i] {
+    print(x);
+    i = i + 1;
+  }
+}
+
+fn test2(pairs: Slice<Option<(int, int)>>) {
+  let mut i = 0;
+  while let Some((a, b)) = pairs[i] {
+    print(a + b);
+    i = i + 1;
+  }
+}

@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(res: Result<int, string>) -> int {\n  let Ok(value) = res else { return -1; };\n  value\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(res lisette.Result[int, string]) int {
+	if res.Tag != lisette.ResultOk {
+		return -1
+	}
+	return res.OkVal
+}

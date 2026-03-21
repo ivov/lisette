@@ -1,0 +1,12 @@
+fn test() {
+  let x = -10;
+  let negation_count = -count;
+  let result = -(a + b);
+  let is_not_true = !true;
+  let is_inactive = !is_active;
+  let result2 = !(a && b);
+  let still_a = !!a;
+  let still_b = --b;
+  let result3 = &x;
+  let result4 = &(a + b).field;
+}

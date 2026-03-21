@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn id<T>(x: T) -> T { x }\n\nfn test() -> int {\n  (id)(1)\n}\n"
+---
+package main
+
+func id[T any](x T) T {
+	return x
+}
+
+func test() int {
+	return id(1)
+}

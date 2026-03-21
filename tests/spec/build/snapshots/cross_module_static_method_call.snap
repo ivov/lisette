@@ -1,0 +1,42 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === geometry/lib.go ===
+package geometry
+
+import "fmt"
+
+type Point struct {
+	X float64
+	Y float64
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.X, p.Y)
+}
+
+func Point_New(x, y float64) Point {
+	return Point{
+		X: x,
+		Y: y,
+	}
+}
+
+func (p Point) Translate(dx, dy float64) Point {
+	return Point{
+		X: p.X + dx,
+		Y: p.Y + dy,
+	}
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/geometry"
+
+func main() {
+	p := geometry.Point_New(3.0, 4.0)
+	p2 := p.Translate(1.0, 1.0)
+	_ = p2.X
+}

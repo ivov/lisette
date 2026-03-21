@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn foo() { }\n\nfn main() {\n  let x = foo()\n  let _ = x\n  let x = foo()\n  let _ = x\n}\n"
+---
+package main
+
+func foo() {}
+
+func main() {
+	foo()
+	_ = struct{}{}
+	foo()
+	_ = struct{}{}
+}

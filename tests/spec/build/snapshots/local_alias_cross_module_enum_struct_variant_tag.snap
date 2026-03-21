@@ -1,0 +1,47 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/lib.go ===
+package lib
+
+import "fmt"
+
+func MakeEventClick(arg0 int) Event {
+	return Event{Tag: EventClick, X: arg0}
+}
+
+type EventTag int
+
+const (
+	EventClick EventTag = iota
+)
+
+type Event struct {
+	Tag EventTag
+	X   int
+}
+
+func (e Event) String() string {
+	switch e.Tag {
+	case EventClick:
+		return fmt.Sprintf("Event.Click { x: %v }", e.X)
+	default:
+		return fmt.Sprintf("Event(%d)", e.Tag)
+	}
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/lib"
+
+type Alias = lib.Event
+
+func main() {
+	e := lib.Event{
+		Tag: lib.EventClick,
+		X:   1,
+	}
+	_ = e
+}

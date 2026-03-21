@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test() -> Map<string, fn()> {\n  Map.new()\n}\n"
+---
+package main
+
+func test() map[string]func() {
+	return make(map[string]func())
+}

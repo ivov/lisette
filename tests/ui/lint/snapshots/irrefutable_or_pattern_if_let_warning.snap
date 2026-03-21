@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Redundant `if let` pattern
+   ╭─[test.lis:3:10]
+ 2 │ fn test(opt: Option<int>) {
+ 3 │   if let Some(_) | None = opt {
+   ·          ───────┬──────
+   ·                 ╰── always matches
+ 4 │     ();
+   ╰────
+  help: Use `let` instead of `if let` since the pattern cannot fail · code: [lint.redundant_if_let]

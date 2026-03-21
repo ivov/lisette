@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Not indexable
+   ╭─[test.lis:4:3]
+ 3 │   let x = 42;
+ 4 │   x[0]
+   ·   ┬
+   ·   ╰── expected `Slice` or `Map`, found `int`
+ 5 │ }
+   ╰────
+  help: Only `Slice` and `Map` can be indexed into · code: [infer.not_indexable]

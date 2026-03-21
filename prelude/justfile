@@ -1,0 +1,25 @@
+alias c := check
+alias t := test
+alias f := format
+alias l := lint
+alias lf := lintfix
+
+test:
+    go test ./...
+
+format:
+    go fmt ./...
+
+format-check:
+    @test -z "$(go fmt ./...)" || (echo "Error: Found unformatted Go files" && exit 1)
+
+lint:
+    golangci-lint run
+
+lintfix:
+    golangci-lint run --fix
+
+vet:
+    go vet ./...
+
+check: vet format-check lint test

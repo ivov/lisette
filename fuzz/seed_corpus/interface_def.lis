@@ -1,0 +1,5 @@
+interface Display {
+  fn fmt() -> string;
+}
+
+pub interface Printable { fn print(self); }

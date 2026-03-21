@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unnecessary parens
+   ╭─[test.lis:4:9]
+ 3 │   let mut i = 0;
+ 4 │   while (i < 10) {
+   ·         ────┬───
+   ·             ╰── remove parens
+ 5 │     i = i + 1;
+   ╰────
+  help: Lisette does not require parens around `while` conditions · code: [lint.excess_parens_on_condition]

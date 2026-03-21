@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Uninferrable type
+   ╭─[test.lis:3:3]
+ 2 │ fn test() {
+ 3 │   let x = [];
+   ·   ─────┬────
+   ·        ╰── cannot be inferred
+ 4 │ }
+   ╰────
+  help: Add a type annotation. For example: `let x: Slice<int> = ...` · code: [infer.type_not_inferred]

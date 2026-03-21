@@ -1,0 +1,108 @@
+---
+source: tests/spec/desugar/mod.rs
+description: "input: fn test() { x |> f |> g; }"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 3,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Call {
+                    expression: Identifier {
+                        value: "g",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 22,
+                            byte_length: 1,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    args: [
+                        Call {
+                            expression: Identifier {
+                                value: "f",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 17,
+                                    byte_length: 1,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                            args: [
+                                Identifier {
+                                    value: "x",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 12,
+                                        byte_length: 1,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                            ],
+                            type_args: [],
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 12,
+                                byte_length: 6,
+                            },
+                        },
+                    ],
+                    type_args: [],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 12,
+                        byte_length: 11,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 10,
+                byte_length: 16,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 0,
+            byte_length: 26,
+        },
+    },
+]

@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn noop() {}\n\nfn test() {\n  let b = noop() == ()\n  let _ = b\n}\n"
+---
+package main
+
+func noop() {}
+
+func test() {
+	noop()
+	_ = struct{}{} == struct{}{}
+}

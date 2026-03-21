@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Inner { x: int }\nstruct Wrap(Inner)\n\nfn main() {\n  let mut w = Wrap(Inner { x: 0 })\n  let mut inner = w.0\n  let _ = { inner.x = 1 }\n  w = Wrap(inner)\n  let _ = w.0.x\n}\n"
+---
+package main
+
+import "fmt"
+
+type Inner struct {
+	x int
+}
+
+func (i Inner) String() string {
+	return fmt.Sprintf("Inner { x: %v }", i.x)
+}
+
+type Wrap Inner
+
+func (w Wrap) String() string {
+	return fmt.Sprintf("Wrap(%v)", Inner(w))
+}
+
+func main() {
+	w := Wrap(Inner{x: 0})
+	inner := Inner(w)
+	inner.x = 1
+	w = Wrap(inner)
+	_ = Inner(w).x
+}

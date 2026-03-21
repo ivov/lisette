@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"internal/api\"\nimport \"internal/handlers\"\nimport \"go:fmt\"\n\nfn test() {\n  fmt.Print(\"Nested path imports\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func test() {
+	fmt.Print("Nested path imports")
+}

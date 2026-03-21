@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum MyResult<T> {\n  Ok(T),\n  Fail(string),\n}\n\nfn main() {\n  let ok: MyResult<int> = MyResult.Ok(42);\n  let fail: MyResult<int> = MyResult.Fail(\"oops\");\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeMyResultOk[T any](arg0 T) MyResult[T] {
+	return MyResult[T]{Tag: MyResultOk, Ok: arg0}
+}
+
+func MakeMyResultFail[T any](arg0 string) MyResult[T] {
+	return MyResult[T]{Tag: MyResultFail, Fail: arg0}
+}
+
+type MyResultTag int
+
+const (
+	MyResultOk MyResultTag = iota
+	MyResultFail
+)
+
+type MyResult[T any] struct {
+	Tag  MyResultTag
+	Ok   T
+	Fail string
+}
+
+func (m MyResult[T]) String() string {
+	switch m.Tag {
+	case MyResultOk:
+		return fmt.Sprintf("MyResult.Ok(%v)", m.Ok)
+	case MyResultFail:
+		return fmt.Sprintf("MyResult.Fail(%v)", m.Fail)
+	default:
+		return fmt.Sprintf("MyResult(%d)", m.Tag)
+	}
+}
+
+func main() {
+	_ = MakeMyResultOk(42)
+	_ = MakeMyResultFail[int]("oops")
+}

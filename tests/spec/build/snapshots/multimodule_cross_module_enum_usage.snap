@@ -1,0 +1,70 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/shapes"
+
+func describe(s shapes.ShapeKind) float64 {
+	if s.Tag == shapes.ShapeKindCircleKind {
+		c := s.CircleKind
+		return c.Radius
+	}
+	width := s.Width
+	height := s.Height
+	return width * height
+}
+
+func main() {
+	circle := shapes.Circle{Radius: 5.0}
+	shape := shapes.MakeShapeKindCircleKind(circle)
+	_ = describe(shape)
+}
+
+
+// === shapes/lib.go ===
+package shapes
+
+import "fmt"
+
+func MakeShapeKindCircleKind(arg0 Circle) ShapeKind {
+	return ShapeKind{Tag: ShapeKindCircleKind, CircleKind: arg0}
+}
+
+func MakeShapeKindRectKind(arg0 float64, arg1 float64) ShapeKind {
+	return ShapeKind{Tag: ShapeKindRectKind, Width: arg0, Height: arg1}
+}
+
+type Circle struct {
+	Radius float64
+}
+
+func (c Circle) String() string {
+	return fmt.Sprintf("Circle { radius: %v }", c.Radius)
+}
+
+type ShapeKindTag int
+
+const (
+	ShapeKindCircleKind ShapeKindTag = iota
+	ShapeKindRectKind
+)
+
+type ShapeKind struct {
+	Tag        ShapeKindTag
+	CircleKind Circle
+	Width      float64
+	Height     float64
+}
+
+func (s ShapeKind) String() string {
+	switch s.Tag {
+	case ShapeKindCircleKind:
+		return fmt.Sprintf("ShapeKind.CircleKind(%v)", s.CircleKind)
+	case ShapeKindRectKind:
+		return fmt.Sprintf("ShapeKind.RectKind { width: %v, height: %v }", s.Width, s.Height)
+	default:
+		return fmt.Sprintf("ShapeKind(%d)", s.Tag)
+	}
+}

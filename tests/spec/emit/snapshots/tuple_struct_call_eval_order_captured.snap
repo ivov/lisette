@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Pair(int, int)\n\nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  10\n}\n\nfn main() {\n  let mut i = 0\n  let p = Pair(i, bump(&i))\n  let _ = p\n}\n"
+---
+package main
+
+import "fmt"
+
+type Pair struct {
+	F0 int
+	F1 int
+}
+
+func (p Pair) String() string {
+	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
+}
+
+func bump(i *int) int {
+	*i = 1
+	return 10
+}
+
+func main() {
+	i := 0
+	p := Pair{
+		F0: i,
+		F1: bump(&i),
+	}
+	_ = p
+}

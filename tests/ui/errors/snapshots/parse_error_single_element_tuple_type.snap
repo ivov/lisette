@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid tuple
+   ╭─[test.lis:2:11]
+ 1 │ 
+ 2 │ fn f() -> (int,) {}
+   ·           ───┬──
+   ·              ╰── 1-element tuple not allowed
+   ╰────
+  help: Use the type directly without wrapping in a tuple · code: [parse.tuple_element_count]

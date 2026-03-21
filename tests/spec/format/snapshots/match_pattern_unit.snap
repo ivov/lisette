@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { match u { () => \"unit\" } }"
+---
+fn test() {
+  match u {
+    () => "unit",
+  }
+}

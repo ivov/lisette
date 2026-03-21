@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Items { items: Slice<int> }\n\nfn get() -> Items { Items { items: [1] } }\n\nfn main() {\n  get().items.append(2)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Items struct {
+	items []int
+}
+
+func (i Items) String() string {
+	return fmt.Sprintf("Items { items: %v }", i.items)
+}
+
+func get() Items {
+	return Items{items: []int{1}}
+}
+
+func main() {
+	_ = append(get().items, 2)
+}

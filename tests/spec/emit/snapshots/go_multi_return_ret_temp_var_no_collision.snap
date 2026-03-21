@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\nimport \"go:strconv\"\n\nfn main() {\n  let n = strconv.Atoi(\"42\")\n  let ret_1 = 7\n  fmt.Println(n)\n  fmt.Println(ret_1)\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func main() {
+	ret_1, ret_2 := strconv.Atoi("42")
+	var n lisette.Result[int, error]
+	if ret_2 != nil {
+		n = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		n = lisette.MakeResultOk[int, error](ret_1)
+	}
+	ret_1_4 := 7
+	fmt.Println(n)
+	fmt.Println(ret_1_4)
+}

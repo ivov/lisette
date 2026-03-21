@@ -1,0 +1,15 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Duplicate tag
+   ╭─[test.lis:4:3]
+ 3 │ pub struct User {
+ 4 │   #[tag(`validate:"required"`)]
+   ·   ──────────────┬──────────────
+   ·                 ╰── first occurrence
+ 5 │   #[tag("validate", "email")]
+   ·   ─────────────┬─────────────
+   ·                ╰── duplicate
+ 6 │   name: string,
+   ╰────
+  help: Remove one of the `validate` attributes - each tag key may appear only once per field · code: [lint.duplicate_tag]

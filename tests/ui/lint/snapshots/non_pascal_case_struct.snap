@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Miscased name
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ struct point { x: int, y: int }
+   ·        ──┬──
+   ·          ╰── expected PascalCase
+ 3 │ 
+   ╰────
+  help: Rename to `Point` · code: [lint.non_pascal_case_type]

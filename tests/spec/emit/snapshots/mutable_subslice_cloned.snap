@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn test(arr: Slice<int>) {\n  let view = arr[1..4]\n  let mut owned = arr[1..4]\n  owned[0] = 99\n  let _ = view\n}\n"
+---
+package main
+
+import "slices"
+
+func test(arr []int) {
+	view := arr[1:4:4]
+	owned := slices.Clone(arr[1:4:4])
+	owned[0] = 99
+	_ = view
+}

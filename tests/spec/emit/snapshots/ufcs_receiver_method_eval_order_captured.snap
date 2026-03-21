@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Adder { base: int }\n\nimpl Adder {\n  fn add(self, a: int, b: int) -> int {\n    self.base + a + b\n  }\n}\n\nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  10\n}\n\nfn main() {\n  let mut i = 0\n  let adder = Adder { base: 5 }\n  let v = adder.add(i, bump(&i))\n  let _ = v\n}\n"
+---
+package main
+
+import "fmt"
+
+type Adder struct {
+	base int
+}
+
+func (a Adder) String() string {
+	return fmt.Sprintf("Adder { base: %v }", a.base)
+}
+
+func (aa Adder) add(a, b int) int {
+	return aa.base + a + b
+}
+
+func bump(i *int) int {
+	*i = 1
+	return 10
+}
+
+func main() {
+	i := 0
+	adder := Adder{base: 5}
+	_ = adder.add(i, bump(&i))
+}

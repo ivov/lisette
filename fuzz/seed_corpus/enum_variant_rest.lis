@@ -1,0 +1,7 @@
+enum Shape { Triangle(int, int, int), Circle(float) }
+fn test(s: Shape) {
+  match s {
+    Shape.Triangle(..) => print("triangle"),
+    Shape.Circle(..) => print("circle"),
+  }
+}

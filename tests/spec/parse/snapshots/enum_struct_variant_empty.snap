@@ -1,0 +1,37 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum Token {\n  Eof {},\n}\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Token",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 5,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                name: "Eof",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 16,
+                    byte_length: 3,
+                },
+                fields: Struct(
+                    [],
+                ),
+            },
+        ],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 24,
+        },
+    },
+]

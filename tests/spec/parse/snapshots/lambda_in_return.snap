@@ -1,0 +1,119 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() {\n  return |x| x * 2;\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Return {
+                    expression: Lambda {
+                        params: [
+                            Binding {
+                                pattern: Identifier {
+                                    identifier: "x",
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 23,
+                                        byte_length: 1,
+                                    },
+                                },
+                                annotation: None,
+                                typed_pattern: None,
+                                ty: Variable(
+                                    -1,
+                                ),
+                            },
+                        ],
+                        return_annotation: Unknown,
+                        body: Binary {
+                            operator: Multiplication,
+                            left: Identifier {
+                                value: "x",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 26,
+                                    byte_length: 1,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                            right: Literal {
+                                literal: Integer {
+                                    value: 2,
+                                    text: None,
+                                },
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 30,
+                                    byte_length: 1,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 26,
+                                byte_length: 5,
+                            },
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 22,
+                            byte_length: 9,
+                        },
+                    },
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 16,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 23,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 33,
+        },
+    },
+]

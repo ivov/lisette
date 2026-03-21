@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unclosed block
+   ╭─[test.lis:2:11]
+ 1 │ 
+ 2 │ fn main() {
+   ·           ┬
+   ·           ╰── opening brace here
+ 3 │   let x = 42;
+   ╰────
+  help: Add a closing `}` · code: [parse.unclosed_block]

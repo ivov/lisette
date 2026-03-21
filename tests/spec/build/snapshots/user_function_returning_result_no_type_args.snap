@@ -1,0 +1,30 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func parse_int(s string) lisette.Result[int, error] {
+	ret_1, ret_2 := strconv.Atoi(s)
+	if ret_2 != nil {
+		return lisette.MakeResultErr[int, error](ret_2)
+	}
+	return lisette.MakeResultOk[int, error](ret_1)
+}
+
+func main() {
+	subject_1 := parse_int("42")
+	if subject_1.Tag == lisette.ResultOk {
+		n := subject_1.OkVal
+		fmt.Println(n)
+	} else {
+		e := subject_1.ErrVal
+		fmt.Println(e)
+	}
+}

@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: interface Reader {\n  impl Closable;\n  fn read() -> string;\n}"
+---
+interface Reader {
+  impl Closable
+  fn read() -> string
+}

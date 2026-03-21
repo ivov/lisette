@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { match x { 1 | 2 | 3 => \"small\", _ => \"other\" } }"
+---
+fn test() {
+  match x {
+    1 | 2 | 3 => "small",
+    _ => "other",
+  }
+}

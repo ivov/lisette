@@ -1,0 +1,31 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: // comment with symbols: !@#$%^&*()_+-=[]{}|;:'\",.<>/?"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Comment,
+            text: "// comment with symbols: !@#$%^&*()_+-=[]{}|;:'\",.<>/?",
+            byte_offset: 0,
+            byte_length: 54,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 54,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [
+            (
+                0,
+                54,
+            ),
+        ],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

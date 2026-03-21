@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn accept_float32(x: float32) -> float32 {\n  x\n}\n"
+---
+package main
+
+func accept_float32(x float32) float32 {
+	return x
+}

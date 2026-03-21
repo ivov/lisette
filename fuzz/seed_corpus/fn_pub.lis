@@ -1,0 +1,7 @@
+pub fn greet() { }
+
+pub const MAX: int = 100;
+
+pub type Id = int;
+
+pub interface Printable { fn print(self); }

@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nenum Dir { North, South, East }\n\nfn test() -> string {\n  match Dir.North {\n    Dir.North => \"north\",\n    Dir.South => \"south\",\n    _ => \"other\",\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeDirNorth() Dir {
+	return Dir{Tag: DirNorth}
+}
+
+func MakeDirSouth() Dir {
+	return Dir{Tag: DirSouth}
+}
+
+func MakeDirEast() Dir {
+	return Dir{Tag: DirEast}
+}
+
+type DirTag int
+
+const (
+	DirNorth DirTag = iota
+	DirSouth
+	DirEast
+)
+
+type Dir struct {
+	Tag DirTag
+}
+
+func (d Dir) String() string {
+	switch d.Tag {
+	case DirNorth:
+		return "Dir.North"
+	case DirSouth:
+		return "Dir.South"
+	case DirEast:
+		return "Dir.East"
+	default:
+		return fmt.Sprintf("Dir(%d)", d.Tag)
+	}
+}
+
+func test() string {
+	subject_1 := MakeDirNorth()
+	switch subject_1.Tag {
+	case DirNorth:
+		return "north"
+	case DirSouth:
+		return "south"
+	default:
+		return "other"
+	}
+}

@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn noop() {}\n\nstruct Box {}\n\nimpl Box {\n  fn ping(self, _x: ()) {}\n}\n\nfn test() {\n  let b = Box {}\n  Box.ping(b, noop())\n}\n"
+---
+package main
+
+func noop() {}
+
+type Box struct{}
+
+func (b Box) String() string {
+	return "Box"
+}
+
+func (b Box) ping(_ struct{}) {}
+
+func test() {
+	b := Box{}
+	noop()
+	b.ping(struct{}{})
+}

@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() -> int {\n  let xs = [1, 2, 3, 4, 5];\n  let mut sum = 0;\n  for x in xs {\n    sum = sum + x;\n  };\n  sum\n}\n"
+---
+package main
+
+func test() int {
+	xs := []int{1, 2, 3, 4, 5}
+	sum := 0
+	for _, x := range xs {
+		sum += x
+	}
+	return sum
+}

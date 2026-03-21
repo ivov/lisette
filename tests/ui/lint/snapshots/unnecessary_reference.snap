@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unnecessary `&`
+   ╭─[test.lis:3:11]
+ 2 │ pub fn foo(x: Ref<int>) {
+ 3 │   let _ = &x;
+   ·           ─┬
+   ·            ╰── `x` is already a reference
+ 4 │ }
+   ╰────
+  help: Remove the `&` operator from `x` · code: [lint.unnecessary_reference]

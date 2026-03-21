@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Counter { n: int }\n\nimpl Counter {\n  fn get(self) -> int { self.n }\n}\n\nfn bump_and_get(c: Ref<Counter>) -> int {\n  c.*.n = c.*.n + 1\n  c.*.n\n}\n\nfn sum(a: int, b: int) -> int { a + b }\n\nfn main() {\n  let mut c = Counter { n: 0 }\n  let v = sum(c.get(), bump_and_get(&c))\n  let _ = v\n}\n"
+---
+package main
+
+import "fmt"
+
+type Counter struct {
+	n int
+}
+
+func (c Counter) String() string {
+	return fmt.Sprintf("Counter { n: %v }", c.n)
+}
+
+func (c Counter) get() int {
+	return c.n
+}
+
+func bump_and_get(c *Counter) int {
+	c.n++
+	return c.n
+}
+
+func sum(a, b int) int {
+	return a + b
+}
+
+func main() {
+	c := Counter{n: 0}
+	_ = sum(c.get(), bump_and_get(&c))
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:15]
+ 2 │ fn test() {
+ 3 │   let f = |x: | x + 1;
+   ·               ┬
+   ·               ╰── expected type after `:`
+ 4 │   let g = 5;
+   ╰────
+  help: Annotate the type, e.g. `x: int` · code: [parse.syntax_error]

@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn maybe_get() -> Option<int> {\n  None\n}\n\nfn process() -> Option<int> {\n  let x = maybe_get()?;\n  Some(x + 1)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func maybe_get() lisette.Option[int] {
+	return lisette.MakeOptionNone[int]()
+}
+
+func process() lisette.Option[int] {
+	check_1 := maybe_get()
+	if check_1.Tag != lisette.OptionSome {
+		return lisette.MakeOptionNone[int]()
+	}
+	x := check_1.SomeVal
+	return lisette.MakeOptionSome[int](x + 1)
+}

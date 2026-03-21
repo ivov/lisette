@@ -1,0 +1,61 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nenum Shape {\n  Circle(int),\n  Square(int),\n  Triangle(int),\n}\n\nfn shape_size(s: Shape) -> int {\n  match s {\n    Shape.Circle(r) | Shape.Square(r) | Shape.Triangle(r) => r,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeShapeCircle(arg0 int) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeSquare(arg0 int) Shape {
+	return Shape{Tag: ShapeSquare, Square: arg0}
+}
+
+func MakeShapeTriangle(arg0 int) Shape {
+	return Shape{Tag: ShapeTriangle, Triangle: arg0}
+}
+
+type ShapeTag int
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeSquare
+	ShapeTriangle
+)
+
+type Shape struct {
+	Tag      ShapeTag
+	Circle   int
+	Square   int
+	Triangle int
+}
+
+func (s Shape) String() string {
+	switch s.Tag {
+	case ShapeCircle:
+		return fmt.Sprintf("Shape.Circle(%v)", s.Circle)
+	case ShapeSquare:
+		return fmt.Sprintf("Shape.Square(%v)", s.Square)
+	case ShapeTriangle:
+		return fmt.Sprintf("Shape.Triangle(%v)", s.Triangle)
+	default:
+		return fmt.Sprintf("Shape(%d)", s.Tag)
+	}
+}
+
+func shape_size(s Shape) int {
+	switch s.Tag {
+	case ShapeCircle:
+		r := s.Circle
+		return r
+	case ShapeSquare:
+		r := s.Square
+		return r
+	default:
+		r := s.Triangle
+		return r
+	}
+}

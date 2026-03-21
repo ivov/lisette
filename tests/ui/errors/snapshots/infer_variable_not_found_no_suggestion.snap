@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let x = unknown_variable;
+   ·           ────────┬───────
+   ·                   ╰── name not found in scope
+ 4 │ }
+   ╰────
+  help: Define or import `unknown_variable` · code: [resolve.name_not_found]

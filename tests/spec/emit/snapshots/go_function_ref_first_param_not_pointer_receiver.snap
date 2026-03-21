@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nimport \"go:flag\"\n\nfn main() {\n  let f = flag.UnquoteUsage\n  let fl = flag.Lookup(\"verbose\")\n  match fl {\n    Some(v) => { let _ = f(v) },\n    None => {},\n  }\n}\n"
+---
+package main
+
+import (
+	"flag"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	f := func(arg0 *flag.Flag) lisette.Tuple2[string, string] {
+		ret_1, ret_2 := flag.UnquoteUsage(arg0)
+		return lisette.MakeTuple2(ret_1, ret_2)
+	}
+	raw_4 := flag.Lookup("verbose")
+	var fl lisette.Option[*flag.Flag]
+	if raw_4 != nil {
+		fl = lisette.MakeOptionSome[*flag.Flag](raw_4)
+	} else {
+		fl = lisette.MakeOptionNone[*flag.Flag]()
+	}
+	if fl.Tag == lisette.OptionSome {
+		v := fl.SomeVal
+		_ = f(v)
+	}
+}

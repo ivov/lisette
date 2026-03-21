@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"internal/services/auth\"\nimport \"go:fmt\"\n\nfn test() {\n  fmt.Print(\"Deep nested import\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func test() {
+	fmt.Print("Deep nested import")
+}

@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nenum Tree<T> {\n  Leaf(T),\n  Node { left: Tree<T>, right: Tree<T> },\n}\n\nfn count_leaves<T>(tree: Tree<T>) -> int {\n  match tree {\n    Tree.Leaf(_) => 1,\n    Tree.Node { left, right } => count_leaves(left) + count_leaves(right),\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeTreeLeaf[T any](arg0 T) Tree[T] {
+	return Tree[T]{Tag: TreeLeaf, Leaf: arg0}
+}
+
+func MakeTreeNode[T any](arg0 *Tree[T], arg1 *Tree[T]) Tree[T] {
+	return Tree[T]{Tag: TreeNode, Left: arg0, Right: arg1}
+}
+
+type TreeTag int
+
+const (
+	TreeLeaf TreeTag = iota
+	TreeNode
+)
+
+type Tree[T any] struct {
+	Tag   TreeTag
+	Leaf  T
+	Left  *Tree[T]
+	Right *Tree[T]
+}
+
+func (t Tree[T]) String() string {
+	switch t.Tag {
+	case TreeLeaf:
+		return fmt.Sprintf("Tree.Leaf(%v)", t.Leaf)
+	case TreeNode:
+		return fmt.Sprintf("Tree.Node { left: %v, right: %v }", t.Left, t.Right)
+	default:
+		return fmt.Sprintf("Tree(%d)", t.Tag)
+	}
+}
+
+func count_leaves[T any](tree Tree[T]) int {
+	if tree.Tag == TreeLeaf {
+		return 1
+	}
+	left := *tree.Left
+	right := *tree.Right
+	return count_leaves(left) + count_leaves(right)
+}

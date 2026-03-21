@@ -1,0 +1,74 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: \nenum Status {\n  Pending,\n  Complete,\n}\n"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Enum,
+            text: "enum",
+            byte_offset: 1,
+            byte_length: 4,
+        },
+        Token {
+            kind: Identifier,
+            text: "Status",
+            byte_offset: 6,
+            byte_length: 6,
+        },
+        Token {
+            kind: LeftCurlyBrace,
+            text: "{",
+            byte_offset: 13,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "Pending",
+            byte_offset: 17,
+            byte_length: 7,
+        },
+        Token {
+            kind: Comma,
+            text: ",",
+            byte_offset: 24,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "Complete",
+            byte_offset: 28,
+            byte_length: 8,
+        },
+        Token {
+            kind: Comma,
+            text: ",",
+            byte_offset: 36,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightCurlyBrace,
+            text: "}",
+            byte_offset: 38,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: "",
+            byte_offset: 39,
+            byte_length: 0,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 40,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

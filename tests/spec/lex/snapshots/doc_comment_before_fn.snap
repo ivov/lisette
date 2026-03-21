@@ -1,0 +1,103 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: /// Adds two numbers\nfn add(a, b) { a + b }"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: DocComment,
+            text: "Adds two numbers",
+            byte_offset: 0,
+            byte_length: 20,
+        },
+        Token {
+            kind: Function,
+            text: "fn",
+            byte_offset: 21,
+            byte_length: 2,
+        },
+        Token {
+            kind: Identifier,
+            text: "add",
+            byte_offset: 24,
+            byte_length: 3,
+        },
+        Token {
+            kind: LeftParen,
+            text: "(",
+            byte_offset: 27,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "a",
+            byte_offset: 28,
+            byte_length: 1,
+        },
+        Token {
+            kind: Comma,
+            text: ",",
+            byte_offset: 29,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "b",
+            byte_offset: 31,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightParen,
+            text: ")",
+            byte_offset: 32,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftCurlyBrace,
+            text: "{",
+            byte_offset: 34,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "a",
+            byte_offset: 36,
+            byte_length: 1,
+        },
+        Token {
+            kind: Plus,
+            text: "+",
+            byte_offset: 38,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "b",
+            byte_offset: 40,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightCurlyBrace,
+            text: "}",
+            byte_offset: 42,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 43,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [
+            (
+                0,
+                20,
+            ),
+        ],
+        blank_lines: [],
+    },
+}

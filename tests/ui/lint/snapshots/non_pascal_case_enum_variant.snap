@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Miscased name
+   ╭─[test.lis:2:19]
+ 1 │ 
+ 2 │ pub enum Status { pending, completed }
+   ·                   ───┬───
+   ·                      ╰── expected PascalCase
+ 3 │ 
+   ╰────
+  help: Rename to `Pending` · code: [lint.non_pascal_case_enum_variant]

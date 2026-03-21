@@ -1,0 +1,29 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+func main() {}
+
+
+// === models/models.go ===
+package models
+
+import "fmt"
+
+type Showable interface {
+	Show() string
+}
+
+type Item struct {
+	Name string
+}
+
+func (i Item) String() string {
+	return fmt.Sprintf("Item { name: %v }", i.Name)
+}
+
+func (i Item) Show() string {
+	return i.Name
+}

@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn find_first_negative(items: Slice<int>) -> int {\n  let mut result = 0\n  for item in items {\n    match item {\n      n if n < 0 => { result = n; break },\n      _ => (),\n    }\n  }\n  result\n}\n"
+---
+package main
+
+func find_first_negative(items []int) int {
+	result := 0
+loop_1:
+	for _, item := range items {
+	match_2:
+		for {
+			{
+				n := item
+				if n < 0 {
+					result = n
+					break loop_1
+				}
+			}
+			break match_2
+		}
+	}
+	return result
+}

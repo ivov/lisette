@@ -1,0 +1,15 @@
+fn defer_helper_normal(acc: Ref<int>) {
+  defer record(acc, 1);
+  record(acc, 2);
+}
+
+fn defer_helper_early_return(acc: Ref<int>) -> Result<int, string> {
+  defer record(acc, 1);
+  Err("fail")
+}
+
+fn defer_helper_lifo(acc: Ref<int>) {
+  defer record(acc, 1);
+  defer record(acc, 2);
+  defer record(acc, 3)
+}

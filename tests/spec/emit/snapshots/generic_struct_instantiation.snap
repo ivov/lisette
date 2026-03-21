@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Box<T> { value: T }\n\nfn test() -> Box<int> {\n  Box { value: 42 }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.value)
+}
+
+func test() Box[int] {
+	return Box[int]{value: 42}
+}

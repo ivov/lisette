@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Private field
+   ╭─[main.lis:7:20]
+ 6 │   match p {
+ 7 │     shapes.Point { x, y } => x + y,
+   ·                    ┬
+   ·                    ╰── private
+ 8 │   }
+   ╰────
+  help: Cannot access private field `x` of struct `shapes.Point`. Mark the field as `pub` · code: [resolve.private_field_spread]

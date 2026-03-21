@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \npub struct Counter {\n  pub value: int,\n}\n\nfn test() {\n  let mut c = Counter { value: 0 };\n  c.value = 10\n}\n"
+---
+package main
+
+import "fmt"
+
+type Counter struct {
+	Value int
+}
+
+func (c Counter) String() string {
+	return fmt.Sprintf("Counter { value: %v }", c.Value)
+}
+
+func test() {
+	c := Counter{Value: 0}
+	c.Value = 10
+}

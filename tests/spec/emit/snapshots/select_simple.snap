@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() -> int {\n  let ch1 = Channel.new<int>();\n  let ch2 = Channel.new<int>();\n\n  select {\n    match ch1.receive() {\n      Some(val) => val + 10,\n      None => 0,\n    },\n    match ch2.receive() {\n      Some(val) => val + 20,\n      None => 0,\n    },\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+func test() int {
+	ch1 := make(chan int)
+	ch2 := make(chan int)
+	select {
+	case val, ok := <-ch1:
+		if ok {
+			return val + 10
+		}
+		return 0
+	case val, ok := <-ch2:
+		if ok {
+			return val + 20
+		}
+		return 0
+	default:
+		return 0
+	}
+}

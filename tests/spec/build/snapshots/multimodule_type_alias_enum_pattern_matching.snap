@@ -1,0 +1,80 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === api/mod.go ===
+package api
+
+import "github.com/user/myproject/events"
+
+type UIEvent = events.Event
+
+
+// === events/mod.go ===
+package events
+
+import "fmt"
+
+func MakeEventClick(arg0 int, arg1 int) Event {
+	return Event{Tag: EventClick, X: arg0, Y: arg1}
+}
+
+func MakeEventKeyPress(arg0 string) Event {
+	return Event{Tag: EventKeyPress, KeyPress: arg0}
+}
+
+func MakeEventClose() Event {
+	return Event{Tag: EventClose}
+}
+
+type EventTag int
+
+const (
+	EventClick EventTag = iota
+	EventKeyPress
+	EventClose
+)
+
+type Event struct {
+	Tag      EventTag
+	X        int
+	Y        int
+	KeyPress string
+}
+
+func (e Event) String() string {
+	switch e.Tag {
+	case EventClick:
+		return fmt.Sprintf("Event.Click { x: %v, y: %v }", e.X, e.Y)
+	case EventKeyPress:
+		return fmt.Sprintf("Event.KeyPress(%v)", e.KeyPress)
+	case EventClose:
+		return "Event.Close"
+	default:
+		return fmt.Sprintf("Event(%d)", e.Tag)
+	}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"github.com/user/myproject/api"
+	"github.com/user/myproject/events"
+)
+
+func main() {
+	e := api.UIEvent{
+		Tag: events.EventClick,
+		X:   10,
+		Y:   20,
+	}
+	switch e.Tag {
+	case events.EventClick:
+		x := e.X
+		y := e.Y
+		_ = x + y
+	case events.EventKeyPress:
+		_ = e.KeyPress
+	}
+}

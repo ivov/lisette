@@ -1,0 +1,94 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[json]\nenum Message {\n  Move { x: int, y: int },\n  Quit,\n}\n"
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func MakeMessageMove(arg0 int, arg1 int) Message {
+	return Message{Tag: MessageMove, X: arg0, Y: arg1}
+}
+
+func MakeMessageQuit() Message {
+	return Message{Tag: MessageQuit}
+}
+
+type MessageTag int
+
+const (
+	MessageMove MessageTag = iota
+	MessageQuit
+)
+
+type Message struct {
+	Tag MessageTag
+	X   int
+	Y   int
+}
+
+func (m Message) String() string {
+	switch m.Tag {
+	case MessageMove:
+		return fmt.Sprintf("Message.Move { x: %v, y: %v }", m.X, m.Y)
+	case MessageQuit:
+		return "Message.Quit"
+	default:
+		return fmt.Sprintf("Message(%d)", m.Tag)
+	}
+}
+
+func (m Message) MarshalJSON() ([]byte, error) {
+	switch m.Tag {
+	case MessageMove:
+		return json.Marshal(map[string]any{"Move": map[string]any{"x": m.X, "y": m.Y}})
+	case MessageQuit:
+		return json.Marshal("Quit")
+	default:
+		return nil, fmt.Errorf("unknown Message tag: %d", m.Tag)
+	}
+}
+
+func (m *Message) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		switch name {
+		case "Quit":
+			m.Tag = MessageQuit
+			return nil
+		default:
+			return fmt.Errorf("unknown Message variant: %s", name)
+		}
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("invalid Message JSON")
+	}
+	for key, val := range obj {
+		switch key {
+		case "Move":
+			m.Tag = MessageMove
+			var inner map[string]json.RawMessage
+			if err := json.Unmarshal(val, &inner); err != nil {
+				return err
+			}
+			if v, ok := inner["x"]; ok {
+				if err := json.Unmarshal(v, &m.X); err != nil {
+					return err
+				}
+			}
+			if v, ok := inner["y"]; ok {
+				if err := json.Unmarshal(v, &m.Y); err != nil {
+					return err
+				}
+			}
+			return nil
+		default:
+			return fmt.Errorf("unknown Message variant: %s", key)
+		}
+	}
+	return fmt.Errorf("empty Message JSON object")
+}

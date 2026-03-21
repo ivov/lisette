@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `continue` in `recover` block
+   ╭─[test.lis:4:15]
+ 3 │   for i in [1, 2, 3] {
+ 4 │     recover { continue };
+   ·               ────┬───
+   ·                   ╰── not allowed inside `recover` block
+ 5 │   }
+   ╰────
+  help: Remove the `continue`, or move it inside a loop within the `recover` block · code: [infer.recover_block_continue]

@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Empty rune literal
+   ╭─[test.lis:1:9]
+ 1 │ let x = ''
+   ·         ─┬
+   ·          ╰── empty rune
+   ╰────
+  help: Add a rune between the single quotes · code: [lex.empty_rune]

@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:flag\"\n\nfn main() {\n  let r = flag.Lookup(\"verbose\")\n  match r {\n    Some(f) => { let _ = f },\n    None => {},\n  }\n}\n"
+---
+package main
+
+import (
+	"flag"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	raw_1 := flag.Lookup("verbose")
+	var r lisette.Option[*flag.Flag]
+	if raw_1 != nil {
+		r = lisette.MakeOptionSome[*flag.Flag](raw_1)
+	} else {
+		r = lisette.MakeOptionNone[*flag.Flag]()
+	}
+	if r.Tag == lisette.OptionSome {
+		_ = r.SomeVal
+	}
+}

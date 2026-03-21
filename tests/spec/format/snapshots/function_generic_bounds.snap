@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn print<T: Display>(x: T) { x.to_string() }"
+---
+fn print<T: Display>(x: T) {
+  x.to_string()
+}

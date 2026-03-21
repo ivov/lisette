@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid method value
+   ╭─[test.lis:4:11]
+ 3 │   let opt: Option<int> = Some(42);
+ 4 │   let f = opt.map;
+   ·           ───┬───
+   ·              ╰── taking value not allowed
+ 5 │ }
+   ╰────
+  help: This method cannot be taken as a value. Call the method directly: `obj.method(...)` · code: [infer.taking_value_of_ufcs_method]

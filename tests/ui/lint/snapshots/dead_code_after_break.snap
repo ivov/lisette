@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unreachable code after break
+   ╭─[test.lis:5:5]
+ 4 │     break;
+ 5 │     let x = 1;
+   ·     ────┬────
+   ·         ╰── unreachable from this point onward
+ 6 │     x
+   ╰────
+  help: Remove this line and all code after it · code: [lint.dead_code_after_break]

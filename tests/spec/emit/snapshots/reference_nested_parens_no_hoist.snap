@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct S { x: int }\n\nimpl S {\n  fn inc(self: Ref<S>) { self.x = self.x + 1 }\n}\n\nfn main() {\n  let mut s = S { x: 1 }\n  let r = &((s))\n  r.inc()\n}\n"
+---
+package main
+
+import "fmt"
+
+type S struct {
+	x int
+}
+
+func (s S) String() string {
+	return fmt.Sprintf("S { x: %v }", s.x)
+}
+
+func (s *S) inc() {
+	s.x++
+}
+
+func main() {
+	s := S{x: 1}
+	r := &(s)
+	r.inc()
+}

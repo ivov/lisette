@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[json(snake_case)]\nstruct Auth {\n  OAuth2Token: string,\n}\n"
+---
+package main
+
+import "fmt"
+
+type Auth struct {
+	OAuth2Token string `json:"oauth2_token"`
+}
+
+func (a Auth) String() string {
+	return fmt.Sprintf("Auth { OAuth2Token: %v }", a.OAuth2Token)
+}

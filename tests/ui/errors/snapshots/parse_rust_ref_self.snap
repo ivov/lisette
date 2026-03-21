@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:5:16]
+ 4 │ impl Counter {
+ 5 │   fn get_count(&self) -> int {
+   ·                ──┬──
+   ·                  ╰── invalid syntax
+ 6 │     self.count
+   ╰────
+  help: Lisette methods receive `self` by reference. Use `self` instead · code: [parse.syntax_error]

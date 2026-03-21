@@ -1,0 +1,18 @@
+enum Message {
+  Quit,
+  Move { x: int, y: int },
+  Write(string),
+}
+
+enum Event {
+  Click { x: int, y: int },
+  KeyPress { key: string, ctrl: bool },
+  Resize { width: int, height: int },
+  Close,
+}
+
+enum Shape {
+  Circle(int),
+  Rectangle { width: int, height: int },
+  Triangle { base: int, height: int },
+}

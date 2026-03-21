@@ -1,0 +1,22 @@
+{
+  "name": "tree-sitter-lisette",
+  "version": "0.1.0",
+  "description": "Lisette grammar for tree-sitter",
+  "license": "MIT",
+  "main": "bindings/node",
+  "keywords": [
+    "incremental",
+    "parsing",
+    "tree-sitter",
+    "lisette"
+  ],
+  "devDependencies": {
+    "tree-sitter-cli": "^0.24.4"
+  },
+  "scripts": {
+    "build": "tree-sitter generate",
+    "test": "tree-sitter test",
+    "prestart": "tree-sitter build --wasm",
+    "start": "tree-sitter playground"
+  }
+}

@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() -> Channel<string> {\n  Channel.buffered(5)\n}\n"
+---
+package main
+
+func test() chan string {
+	return make(chan string, 5)
+}

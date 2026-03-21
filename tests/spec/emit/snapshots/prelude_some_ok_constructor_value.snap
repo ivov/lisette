@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn main() {\n  let f = Some\n  let x = f(42)\n  let _ = x\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	f := lisette.MakeOptionSome[int]
+	_ = f(42)
+}

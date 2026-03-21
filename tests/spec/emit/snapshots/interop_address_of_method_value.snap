@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nstruct S {}\n\nimpl S {\n  fn inc(self) -> int { 1 }\n}\n\nfn main() {\n  let s = S {}\n  let r = &s.inc\n  let _ = r\n}\n"
+---
+package main
+
+type S struct{}
+
+func (s S) String() string {
+	return "S"
+}
+
+func (s S) inc() int {
+	return 1
+}
+
+func main() {
+	s := S{}
+	ref_1 := s.inc
+	_ = &ref_1
+}

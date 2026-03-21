@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: #[json]\nstruct Person {\n  #[json(\"firstName\")]\n  first_name: string,\n  #[json(omitempty)]\n  age: int,\n}"
+---
+#[json]
+struct Person {
+  #[json("firstName")]
+  first_name: string,
+  #[json(omitempty)]
+  age: int,
+}

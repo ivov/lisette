@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn add(a: int, b: int) -> int { a + b }"
+---
+fn add(a: int, b: int) -> int {
+  a + b
+}

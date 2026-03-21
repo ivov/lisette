@@ -1,0 +1,41 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: // first line\n// second line"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Comment,
+            text: "// first line",
+            byte_offset: 0,
+            byte_length: 13,
+        },
+        Token {
+            kind: Comment,
+            text: "// second line",
+            byte_offset: 14,
+            byte_length: 14,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 28,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [
+            (
+                0,
+                13,
+            ),
+            (
+                14,
+                28,
+            ),
+        ],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

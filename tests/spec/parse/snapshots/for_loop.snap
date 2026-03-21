@@ -1,0 +1,166 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n    print(item);\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "items",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 5,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Slice",
+                        params: [
+                            Constructor {
+                                name: "string",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 22,
+                                    byte_length: 6,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 16,
+                            byte_length: 13,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                For {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "item",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 39,
+                                byte_length: 4,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    iterable: Identifier {
+                        value: "items",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 47,
+                            byte_length: 5,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    body: Block {
+                        items: [
+                            Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 59,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Identifier {
+                                        value: "item",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 65,
+                                            byte_length: 4,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 59,
+                                    byte_length: 11,
+                                },
+                            },
+                        ],
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 53,
+                            byte_length: 22,
+                        },
+                    },
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 35,
+                        byte_length: 40,
+                    },
+                    needs_label: false,
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 31,
+                byte_length: 46,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 76,
+        },
+    },
+]

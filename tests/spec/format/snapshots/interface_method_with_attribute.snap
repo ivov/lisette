@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: interface Cache {\n  #[go(comma_ok)]\n  fn Get(key: string) -> Option<Ref<Value>>\n  fn Put(key: string, val: Ref<Value>)\n}"
+---
+interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Value>>
+  fn Put(key: string, val: Ref<Value>)
+}

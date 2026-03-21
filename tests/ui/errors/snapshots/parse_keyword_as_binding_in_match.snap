@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Reserved keyword
+   ╭─[test.lis:5:10]
+ 4 │   match x {
+ 5 │     Some(type) => 0,
+   ·          ──┬─
+   ·            ╰── reserved keyword
+ 6 │     None => 0,
+   ╰────
+  help: Rename binding `type` · code: [parse.keyword_as_binding]

@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:1:25]
+ 1 │ fn test() { let r = 1..=; }
+   ·                         ┬
+   ·                         ╰── expected end value
+   ╰────
+  help: Inclusive ranges require an end value · code: [parse.syntax_error]

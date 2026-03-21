@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(items: Slice<int>) -> int {\n  match items {\n    [] => 0,\n    [first, ..] => first,\n  }\n}\n"
+---
+package main
+
+func test(items []int) int {
+	if len(items) == 0 {
+		return 0
+	}
+	return items[0]
+}

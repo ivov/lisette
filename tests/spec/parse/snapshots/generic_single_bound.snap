@@ -1,0 +1,120 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn display<T: Display>(value: T) -> string {\n  return \"displayed\";\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "display",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 7,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [
+                    Constructor {
+                        name: "Display",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 15,
+                            byte_length: 7,
+                        },
+                    },
+                ],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 12,
+                    byte_length: 10,
+                },
+            },
+        ],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "value",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 24,
+                        byte_length: 5,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "T",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 31,
+                            byte_length: 1,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Constructor {
+            name: "string",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 37,
+                byte_length: 6,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Return {
+                    expression: Literal {
+                        literal: String(
+                            "displayed",
+                        ),
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 55,
+                            byte_length: 11,
+                        },
+                    },
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 48,
+                        byte_length: 18,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 44,
+                byte_length: 25,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 68,
+        },
+    },
+]

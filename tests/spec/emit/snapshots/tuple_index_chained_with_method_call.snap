@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> Option<int> {\n  let items = ([1, 2, 3], [4, 5, 6])\n  items.0.get(0)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Option[int] {
+	items := lisette.MakeTuple2([]int{1, 2, 3}, []int{4, 5, 6})
+	return lisette.SliceGet(items.First, 0)
+}

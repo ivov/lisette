@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[json]\n#[db]\nstruct User {\n  #[json(omitempty)]\n  #[db(\"user_name\")]\n  name: string,\n}\n"
+---
+package main
+
+import "fmt"
+
+type User struct {
+	Name string `json:"name,omitempty" db:"user_name"`
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { name: %v }", u.Name)
+}

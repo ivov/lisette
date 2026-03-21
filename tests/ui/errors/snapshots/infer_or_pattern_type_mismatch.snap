@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid or-pattern
+   ╭─[test.lis:4:17]
+ 3 │   match res {
+ 4 │     Ok(x) | Err(x) => x,
+   ·                 ┬
+   ·                 ╰── expected `int`, found `string`
+ 5 │   }
+   ╰────
+  help: Use a wildcard `_` instead of a binding, or use separate match arms for each variant · code: [infer.or_pattern_type_mismatch]

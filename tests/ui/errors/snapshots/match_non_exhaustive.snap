@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `match` is not exhaustive
+   ╭─[test.lis:4:3]
+ 3 │   let r: Result<int, string> = Ok(42);
+ 4 │   match r {
+   ·   ───┬───
+   ·      ╰── not all patterns covered
+ 5 │     Ok(x) => x,
+   ╰────
+  help: Handle the missing case `Result.Err(_)`, e.g. `Result.Err(_) => { ... }` · code: [infer.non_exhaustive]

@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ 123
+   · ─┬─
+   ·  ╰── expected declaration
+   ╰────
+  help: At the top level of a file, Lisette expects `fn`, `struct`, `enum`, `interface`, `import`, or `type` · code: [parse.expected_declaration]

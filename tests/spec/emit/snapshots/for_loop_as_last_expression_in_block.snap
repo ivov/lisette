@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() {\n  let _ = {\n    for x in [1, 2, 3] {\n      let _ = x\n    }\n  }\n}\n"
+---
+package main
+
+func test() {
+	for _, x := range []int{1, 2, 3} {
+		_ = x
+	}
+}

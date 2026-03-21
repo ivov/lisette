@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nstruct Consumer { input: Receiver<int> }\n\nfn test(c: Consumer) -> Receiver<int> {\n  c.input\n}\n"
+---
+package main
+
+import "fmt"
+
+type Consumer struct {
+	input <-chan int
+}
+
+func (c Consumer) String() string {
+	return fmt.Sprintf("Consumer { input: %v }", c.input)
+}
+
+func test(c Consumer) <-chan int {
+	return c.input
+}

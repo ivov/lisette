@@ -1,0 +1,42 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn noop() {\n  // does nothing\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "noop",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 21,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 31,
+        },
+    },
+]

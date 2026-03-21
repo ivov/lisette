@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let x = Some(42)?;
+   ·           ────┬────
+   ·               ╰── expects `Option<T>`, but function returns `()`
+ 4 │ }
+   ╰────
+  help: Change the function return type to `Option<T>` or remove the `?` operator · code: [infer.try_return_type_mismatch]

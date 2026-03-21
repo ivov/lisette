@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn fail(msg: string) -> Never { panic(msg) }\n\nfn test() -> string {\n  fail(\"boom\")\n}\n"
+---
+package main
+
+func fail(msg string) struct{} {
+	panic(msg)
+}
+
+func test() string {
+	fail("boom")
+	panic("unreachable")
+}

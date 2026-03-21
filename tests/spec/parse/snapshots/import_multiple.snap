@@ -1,0 +1,48 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nimport \"go:fmt\"\nimport \"app/services\"\nimport \"third/party/utils\"\n"
+---
+[
+    ModuleImport {
+        name: "go:fmt",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 8,
+        },
+        alias: None,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 15,
+        },
+    },
+    ModuleImport {
+        name: "app/services",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 24,
+            byte_length: 14,
+        },
+        alias: None,
+        span: Span {
+            file_id: 0,
+            byte_offset: 17,
+            byte_length: 21,
+        },
+    },
+    ModuleImport {
+        name: "third/party/utils",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 46,
+            byte_length: 19,
+        },
+        alias: None,
+        span: Span {
+            file_id: 0,
+            byte_offset: 39,
+            byte_length: 26,
+        },
+    },
+]

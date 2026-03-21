@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { while condition { do_something() } }"
+---
+fn test() {
+  while condition {
+    do_something()
+  }
+}

@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid imaginary literal
+   ╭─[test.lis:1:9]
+ 1 │ let x = 0o10i
+   ·         ──┬──
+   ·           ╰── octal imaginary literals are not supported
+   ╰────
+  help: Use decimal notation for imaginary literals, e.g. `16i` instead of `0x10i` · code: [lex.non_decimal_imaginary]

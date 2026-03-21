@@ -1,0 +1,13 @@
+fn test() {
+  let result = 10 + 5;
+  let result2 = 10 - 5;
+  let result3 = 10 * 5;
+  let result4 = 10 / 5;
+  let result5 = 10 % 3;
+  let result6 = a == b;
+  let result7 = a != b;
+  let result8 = a < b;
+  let result9 = a > b;
+  let result10 = true && false;
+  let result11 = true || false;
+}

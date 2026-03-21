@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:14]
+ 1 │ 
+ 2 │ fn test(arr: []int) {}
+   ·              ──┬──
+   ·                ╰── invalid syntax for `Slice`
+   ╰────
+  help: Use `Slice<int>` instead of `[]int` · code: [parse.syntax_error]

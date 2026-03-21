@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { for item in items { process(item) } }"
+---
+fn test() {
+  for item in items {
+    process(item)
+  }
+}

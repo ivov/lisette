@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:4:29]
+ 3 │ fn f(p: Point) -> int {
+ 4 │   match p { Point { ..rest, x } => 1 }
+   ·                             ┬
+   ·                             ╰── cannot be last
+ 5 │ }
+   ╰────
+  help: Move the spread expression `..rest` to the last position in the struct · code: [parse.syntax_error]

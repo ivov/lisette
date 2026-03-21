@@ -1,0 +1,53 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/types/events"
+)
+
+func main() {
+	reset := events.Event{Tag: events.EventReset}
+	fmt.Println(reset)
+}
+
+
+// === types/events/mod.go ===
+package events
+
+import "fmt"
+
+func MakeEventClick(arg0 int, arg1 int) Event {
+	return Event{Tag: EventClick, X: arg0, Y: arg1}
+}
+
+func MakeEventReset() Event {
+	return Event{Tag: EventReset}
+}
+
+type EventTag int
+
+const (
+	EventClick EventTag = iota
+	EventReset
+)
+
+type Event struct {
+	Tag EventTag
+	X   int
+	Y   int
+}
+
+func (e Event) String() string {
+	switch e.Tag {
+	case EventClick:
+		return fmt.Sprintf("Event.Click { x: %v, y: %v }", e.X, e.Y)
+	case EventReset:
+		return "Event.Reset"
+	default:
+		return fmt.Sprintf("Event(%d)", e.Tag)
+	}
+}

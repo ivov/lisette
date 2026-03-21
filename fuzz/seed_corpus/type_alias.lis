@@ -1,0 +1,12 @@
+type UserID = int;
+type IntRef = Ref<int>;
+type Callback = fn(int, string) -> bool;
+type IntSlice = Slice<int>;
+type Pair = (int, string);
+type Unit = ();
+type Data = Foo.Bar;
+type Container = Foo.Bar<T>;
+type Complex = Result<Option<T>, Error>;
+type StringMap<V> = Map<string, V>;
+type ID = int;
+type ProductID = ID;

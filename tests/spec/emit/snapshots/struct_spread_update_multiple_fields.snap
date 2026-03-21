@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Config { host: string, port: int, timeout: int }\n\nfn test() -> Config {\n  let default_config = Config { host: \"localhost\", port: 8080, timeout: 30 };\n  Config { port: 9000, timeout: 60, ..default_config }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Config struct {
+	host    string
+	port    int
+	timeout int
+}
+
+func (c Config) String() string {
+	return fmt.Sprintf("Config { host: %v, port: %v, timeout: %v }", c.host, c.port, c.timeout)
+}
+
+func test() Config {
+	default_config := Config{
+		host:    "localhost",
+		port:    8080,
+		timeout: 30,
+	}
+	copy_1 := default_config
+	copy_1.port = 9000
+	copy_1.timeout = 60
+	return copy_1
+}

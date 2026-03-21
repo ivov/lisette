@@ -1,0 +1,53 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"go/ast"
+)
+
+func main() {
+	obj := ast.Object{
+		Kind: ast.Bad,
+		Name: "x",
+		Decl: lisette.MakeOptionNone[any](),
+		Data: lisette.MakeOptionNone[any](),
+		Type: lisette.MakeOptionNone[any](),
+	}
+	objects := make(map[string]lisette.Option[*ast.Object])
+	objects["present"] = lisette.MakeOptionSome(&obj)
+	objects["absent"] = lisette.MakeOptionNone[*ast.Object]()
+	opt_1 := lisette.MakeOptionNone[*ast.Scope]()
+	var unwrap_2 *ast.Scope
+	if opt_1.Tag == lisette.OptionSome {
+		unwrap_2 = opt_1.SomeVal
+	}
+	src_3 := objects
+	unwrapped_4 := make(map[string]*ast.Object, len(src_3))
+	for i_5, v_6 := range src_3 {
+		if v_6.Tag == lisette.OptionSome {
+			unwrapped_4[i_5] = v_6.SomeVal
+		} else {
+			unwrapped_4[i_5] = nil
+		}
+	}
+	scope := ast.Scope{
+		Outer:   unwrap_2,
+		Objects: unwrapped_4,
+	}
+	raw_7 := scope.Objects
+	src_8 := raw_7
+	wrapped_9 := make(map[string]lisette.Option[*ast.Object], len(src_8))
+	for i_10, v_11 := range src_8 {
+		if v_11 != nil {
+			wrapped_9[i_10] = lisette.MakeOptionSome[*ast.Object](v_11)
+		} else {
+			wrapped_9[i_10] = lisette.MakeOptionNone[*ast.Object]()
+		}
+	}
+	fmt.Print(wrapped_9)
+}

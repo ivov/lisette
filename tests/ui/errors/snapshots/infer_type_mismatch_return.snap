@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:6:10]
+ 5 │   let z = 3;
+ 6 │   return "not a number";
+   ·          ───────┬──────
+   ·                 ╰── expected `int`, found `string`
+ 7 │ }
+   ╰────
+  help: Change the type annotation to `string` or convert the value to `int` · code: [infer.type_mismatch]

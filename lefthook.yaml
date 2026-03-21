@@ -1,0 +1,29 @@
+commit-msg:
+  commands:
+    conventional-commit:
+      run: |
+        MSG=$(head -1 {1})
+        echo "$MSG" | grep -qE "^(feat|fix|refactor|test|docs|chore|ci|perf|build)(\(.+\))?!?: [a-z].*" || { echo "Commit message must follow Conventional Commits: <type>: <description> (lowercase after colon)"; exit 1; }
+        LEN=$(echo -n "$MSG" | wc -c | tr -d ' ')
+        [ "$LEN" -le 72 ] || { echo "Commit subject is $LEN chars (max 72)"; exit 1; }
+
+pre-commit:
+  parallel: true
+  commands:
+    check:
+      glob: "*.{rs,lis,toml}"
+      run: just check && just check-stdlib-typedefs
+    bindgen:
+      glob: "tools/bindgen/**/*.go"
+      root: "tools/bindgen"
+      run: just check
+    regenerate-stdlib-typedefs:
+      glob: "tools/bindgen/**/*.go"
+      run: just regenerate-stdlib-typedefs && git diff --exit-code crates/stdlib/
+    go-version-sync:
+      glob: "{Cargo.toml,prelude/go.mod}"
+      run: |
+        COMPILER_GO_VERSION=$(grep 'go-version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')
+        COMPILER_GO_MAJOR_MINOR=$(echo "$COMPILER_GO_VERSION" | cut -d. -f1,2)
+        PRELUDE_GO_VERSION=$(grep '^go ' prelude/go.mod | awk '{print $2}')
+        [ "$COMPILER_GO_MAJOR_MINOR" = "$PRELUDE_GO_VERSION" ] || { echo "Go version mismatch: Cargo.toml has $COMPILER_GO_VERSION but prelude/go.mod has go $PRELUDE_GO_VERSION. Update prelude/go.mod to 'go $COMPILER_GO_MAJOR_MINOR'."; exit 1; }

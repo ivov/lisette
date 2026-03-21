@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct Box<T> { v: T }\n\nfn test() -> int {\n  if Box { v: 1 }.v != 1 {\n    0\n  } else {\n    1\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box[T any] struct {
+	v T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { v: %v }", b.v)
+}
+
+func test() int {
+	if (Box[int]{v: 1}).v != 1 {
+		return 0
+	}
+	return 1
+}

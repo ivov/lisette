@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ntype KeyVal<K, V> = Map<K, V>\n\nfn test() -> KeyVal<string, int> {\n  let mut m = Map.new<string, int>()\n  m[\"a\"] = 1\n  m\n}\n"
+---
+package main
+
+type KeyVal[K comparable, V any] = map[K]V
+
+func test() map[string]int {
+	m := make(map[string]int)
+	m["a"] = 1
+	return m
+}

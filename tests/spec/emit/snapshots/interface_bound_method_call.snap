@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport \"go:fmt\"\n\ninterface Stringer {\n  fn string_value() -> string\n}\n\nfn print_it<T: Stringer>(x: T) {\n  let s = x.string_value();\n  fmt.Print(f\"{s}\\n\");\n}\n"
+---
+package main
+
+import "fmt"
+
+type Stringer interface {
+	string_value() string
+}
+
+func print_it[T Stringer](x T) {
+	s := x.string_value()
+	fmt.Printf("%v\n", s)
+}

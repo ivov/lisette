@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct Inner { x: int }\nstruct Wrap(Inner)\n\nfn get() -> Ref<Wrap> {\n  let _ = fmt.Println(\"get\")\n  let mut w = Wrap(Inner { x: 1 })\n  &w\n}\n\nfn main() {\n  let r = get()\n  let mut inner = r.0\n  inner.x = 2\n  r.* = Wrap(inner)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Inner struct {
+	x int
+}
+
+func (i Inner) String() string {
+	return fmt.Sprintf("Inner { x: %v }", i.x)
+}
+
+type Wrap Inner
+
+func (w Wrap) String() string {
+	return fmt.Sprintf("Wrap(%v)", Inner(w))
+}
+
+func get() *Wrap {
+	fmt.Println("get")
+	w := Wrap(Inner{x: 1})
+	return &w
+}
+
+func main() {
+	r := get()
+	inner := Inner(*r)
+	inner.x = 2
+	*r = Wrap(inner)
+}

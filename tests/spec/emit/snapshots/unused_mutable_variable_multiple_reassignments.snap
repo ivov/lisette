@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn f() -> int { 42 }\nfn g() -> int { 99 }\n\nfn test() {\n  let mut x = 0\n  x = f()\n  x = g()\n}\n"
+---
+package main
+
+func f() int {
+	return 42
+}
+
+func g() int {
+	return 99
+}
+
+func test() {
+	_ = 0
+	_ = f()
+	_ = g()
+}

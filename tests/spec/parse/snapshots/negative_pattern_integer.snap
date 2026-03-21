@@ -1,0 +1,216 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(x: int) -> string {\n  match x {\n    -5 => \"negative five\",\n    -1 => \"negative one\",\n    0 => \"zero\",\n    _ => \"other\",\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "x",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 12,
+                            byte_length: 3,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Constructor {
+            name: "string",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 20,
+                byte_length: 6,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Match {
+                    subject: Identifier {
+                        value: "x",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 37,
+                            byte_length: 1,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: Literal {
+                                literal: Integer {
+                                    value: 5,
+                                    text: Some(
+                                        "-5",
+                                    ),
+                                },
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 45,
+                                    byte_length: 2,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "negative five",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 51,
+                                    byte_length: 15,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: Literal {
+                                literal: Integer {
+                                    value: 1,
+                                    text: Some(
+                                        "-1",
+                                    ),
+                                },
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 72,
+                                    byte_length: 2,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "negative one",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 78,
+                                    byte_length: 14,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: Literal {
+                                literal: Integer {
+                                    value: 0,
+                                    text: None,
+                                },
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 98,
+                                    byte_length: 1,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "zero",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 103,
+                                    byte_length: 6,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: WildCard {
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 115,
+                                    byte_length: 1,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "other",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 120,
+                                    byte_length: 7,
+                                },
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 31,
+                        byte_length: 101,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 27,
+                byte_length: 107,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 133,
+        },
+    },
+]

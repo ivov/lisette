@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:strconv\"\n\nstruct Box {}\n\nimpl Box {\n  fn apply(self, f: fn(string) -> Result<int, error>) -> Result<int, error> {\n    f(\"1\")\n  }\n}\n\nfn main() {\n  let b = Box {}\n  let r = Box.apply(b, strconv.Atoi)\n  match r {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+type Box struct{}
+
+func (b Box) String() string {
+	return "Box"
+}
+
+func (b Box) apply(f func(string) lisette.Result[int, error]) lisette.Result[int, error] {
+	return f("1")
+}
+
+func main() {
+	b := Box{}
+	r := b.apply(func(arg0 string) lisette.Result[int, error] {
+		ret_1, ret_2 := strconv.Atoi(arg0)
+		if ret_2 != nil {
+			return lisette.MakeResultErr[int, error](ret_2)
+		}
+		return lisette.MakeResultOk[int, error](ret_1)
+	})
+	if r.Tag == lisette.ResultOk {
+		_ = r.OkVal
+	} else {
+		_ = 0
+	}
+}

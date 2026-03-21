@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct Wrap(int)\ntype Alias = Wrap\n\nfn main() {\n  let v = Alias(1)\n  fmt.Println(v)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Wrap int
+
+func (w Wrap) String() string {
+	return fmt.Sprintf("Wrap(%v)", int(w))
+}
+
+type Alias = Wrap
+
+func main() {
+	v := Alias(1)
+	fmt.Println(v)
+}

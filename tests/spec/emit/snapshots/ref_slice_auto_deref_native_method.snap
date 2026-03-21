@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn main() {\n  let s = [1, 2, 3]\n  let r = &s\n  let _ = r.length()\n}\n"
+---
+package main
+
+func main() {
+	s := []int{1, 2, 3}
+	r := &s
+	_ = len(*r)
+}

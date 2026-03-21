@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid comment
+   ╭─[test.lis:1:1]
+ 1 │ //// This has too many slashes
+   · ──┬─
+   ·   ╰── expected 2 or 3 slashes
+   ╰────
+  help: Use `//` for regular comments or `///` for doc comments · code: [lex.excess_slashes_in_comment]

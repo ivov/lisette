@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:11]
+ 2 │ fn test(ch: Receiver<int>) {
+ 3 │   let x = <-ch;
+   ·           ─┬
+   ·            ╰── invalid syntax for channel receive
+ 4 │ }
+   ╰────
+  help: Use `select { let v = ch.receive() => ... }` to receive from a channel · code: [parse.syntax_error]

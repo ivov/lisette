@@ -1,0 +1,58 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nenum Color { Red, Green, Blue }\n\nfn main() {\n  let c = Color.Red\n  let _ = match c {\n    Color.Red => 1,\n    Color.Green => 2,\n    Color.Blue => 3,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen() Color {
+	return Color{Tag: ColorGreen}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type ColorTag int
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) String() string {
+	switch c.Tag {
+	case ColorRed:
+		return "Color.Red"
+	case ColorGreen:
+		return "Color.Green"
+	case ColorBlue:
+		return "Color.Blue"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+func main() {
+	c := MakeColorRed()
+	var tmp_1 int
+	switch c.Tag {
+	case ColorRed:
+		tmp_1 = 1
+	case ColorGreen:
+		tmp_1 = 2
+	default:
+		tmp_1 = 3
+	}
+	_ = tmp_1
+}

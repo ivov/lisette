@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `return` in `try` block
+   ╭─[test.lis:5:7]
+ 4 │     if true {
+ 5 │       return 0;
+   ·       ────┬───
+   ·           ╰── not inside a function
+ 6 │     }
+   ╰────
+  help: Use `return` inside a function, or use `Err(...)? ` to exit the `try` block early · code: [infer.try_block_return]

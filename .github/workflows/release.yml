@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #     - main
+
+jobs:
+  # prepare:
+  #   name: Prepare release PR
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: write
+  #     pull-requests: write
+  #   concurrency:
+  #     group: release-plz-${{ github.ref }}
+  #     cancel-in-progress: false
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #       with:
+  #         fetch-depth: 0
+  #
+  #     - uses: dtolnay/rust-toolchain@stable
+  #
+  #     - uses: release-plz/action@v0.5
+  #       with:
+  #         command: release-pr
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish prelude to Go proxy and compiler to crates.io
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Tag and publish prelude Go module
+        run: |
+          COMPILER_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.name == "lisette") | .version')
+          git tag "prelude/v${COMPILER_VERSION}" 2>/dev/null || true
+          git push origin "prelude/v${COMPILER_VERSION}"
+          curl -sf "https://proxy.golang.org/github.com/ivov/lisette/prelude/@v/v${COMPILER_VERSION}.info" > /dev/null || true # warm proxy cache
+
+      - uses: release-plz/action@v0.5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

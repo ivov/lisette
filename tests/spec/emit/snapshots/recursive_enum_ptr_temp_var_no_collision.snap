@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nenum Node {\n  Leaf { value: int },\n  Branch { left: Node, right: Node },\n}\n\nfn main() {\n  let n = Node.Branch { left: Node.Leaf { value: 1 }, right: Node.Leaf { value: 2 } }\n  let ptr_1 = 3\n  fmt.Println(n)\n  fmt.Println(ptr_1)\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeNodeLeaf(arg0 int) Node {
+	return Node{Tag: NodeLeaf, Value: arg0}
+}
+
+func MakeNodeBranch(arg0 *Node, arg1 *Node) Node {
+	return Node{Tag: NodeBranch, Left: arg0, Right: arg1}
+}
+
+type NodeTag int
+
+const (
+	NodeLeaf NodeTag = iota
+	NodeBranch
+)
+
+type Node struct {
+	Tag   NodeTag
+	Value int
+	Left  *Node
+	Right *Node
+}
+
+func (n Node) String() string {
+	switch n.Tag {
+	case NodeLeaf:
+		return fmt.Sprintf("Node.Leaf { value: %v }", n.Value)
+	case NodeBranch:
+		return fmt.Sprintf("Node.Branch { left: %v, right: %v }", n.Left, n.Right)
+	default:
+		return fmt.Sprintf("Node(%d)", n.Tag)
+	}
+}
+
+func main() {
+	ptr_1 := Node{
+		Tag:   NodeLeaf,
+		Value: 1,
+	}
+	ptr_2 := Node{
+		Tag:   NodeLeaf,
+		Value: 2,
+	}
+	n := Node{
+		Tag:   NodeBranch,
+		Left:  &ptr_1,
+		Right: &ptr_2,
+	}
+	ptr_1_3 := 3
+	fmt.Println(n)
+	fmt.Println(ptr_1_3)
+}

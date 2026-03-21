@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Box { x: int }\n\nimpl Box {\n  fn inc(self: Ref<Box>) -> int {\n    self.*.x = self.*.x + 1\n    self.*.x\n  }\n}\n\nfn make_box() -> Box {\n  Box { x: 1 }\n}\n\nfn main() {\n  let v = make_box().inc()\n  let ref_1 = 7\n  let _ = v\n  let _ = ref_1\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box struct {
+	x int
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { x: %v }", b.x)
+}
+
+func (b *Box) inc() int {
+	b.x++
+	return b.x
+}
+
+func make_box() Box {
+	return Box{x: 1}
+}
+
+func main() {
+	ref_1 := make_box()
+	v := ref_1.inc()
+	ref_1_2 := 7
+	_ = v
+	_ = ref_1_2
+}

@@ -1,0 +1,16 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  select {\n    match ch.receive() {\n      Some(msg) => {\n        log(msg);\n        process(msg);\n      },\n      None => cleanup(),\n    },\n    _ => {},\n  }\n}"
+---
+fn test() {
+  select {
+    match ch.receive() {
+      Some(msg) => {
+        log(msg)
+        process(msg)
+      },
+      None => cleanup(),
+    },
+    _ => {},
+  }
+}

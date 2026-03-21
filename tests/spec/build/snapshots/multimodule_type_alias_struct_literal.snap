@@ -1,0 +1,34 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === api/mod.go ===
+package api
+
+import "github.com/user/myproject/internal"
+
+type PublicSecret = internal.Secret
+
+
+// === internal/mod.go ===
+package internal
+
+import "fmt"
+
+type Secret struct {
+	Value int
+}
+
+func (s Secret) String() string {
+	return fmt.Sprintf("Secret { value: %v }", s.Value)
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/api"
+
+func main() {
+	s := api.PublicSecret{Value: 42}
+	_ = s.Value
+}

@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn bump(i: Ref<int>) -> int {\n  i.* = 1\n  9\n}\n\nfn first(a: int, _b: int) -> int { a }\n\nfn main() {\n  let mut i = 0\n  let m = [[10], [20]]\n  let ip = &i\n  let x = first(m[i][0], [bump(ip)][0])\n  let _ = x\n}\n"
+---
+package main
+
+func bump(i *int) int {
+	*i = 1
+	return 9
+}
+
+func first(a, _ int) int {
+	return a
+}
+
+func main() {
+	i := 0
+	m := [][]int{[]int{10}, []int{20}}
+	ip := &i
+	_ = first(m[i][0], []int{bump(ip)}[0])
+}

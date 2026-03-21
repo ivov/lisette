@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Expression-only f-string
+   ╭─[test.lis:4:13]
+ 3 │   let name = "world";
+ 4 │   let msg = f"{name}";
+   ·             ────┬────
+   ·                 ╰── the entire f-string is an expression
+ 5 │   msg
+   ╰────
+  help: Use the expression directly. Wrapping it in an f-string adds no value · code: [lint.expression_only_fstring]

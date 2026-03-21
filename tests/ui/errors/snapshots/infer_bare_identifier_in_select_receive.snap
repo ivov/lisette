@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid select case
+   ╭─[test.lis:5:9]
+ 4 │   select {
+ 5 │     let v = ch.receive() => v,
+   ·         ┬
+   ·         ╰── expected destructuring
+ 6 │     _ => 0,
+   ╰────
+  help: `ch.receive()` returns an `Option`, so use `let Some(v) = ch.receive()` to bind the value · code: [infer.bare_identifier_in_select_receive]

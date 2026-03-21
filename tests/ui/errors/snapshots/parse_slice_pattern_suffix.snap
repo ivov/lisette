@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid pattern
+   ╭─[test.lis:4:14]
+ 3 │   match items {
+ 4 │     [..rest, last] => 0,
+   ·              ──┬─
+   ·                ╰── not supported
+ 5 │   }
+   ╰────
+  help: Use `[first, ..rest]` instead of `[..rest, last]`. Elements after rest pattern are not supported · code: [parse.suffix_slice_pattern]

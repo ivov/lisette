@@ -1,0 +1,185 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) => print(\"sent\"),\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "ch",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 2,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Sender",
+                        params: [
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 20,
+                                    byte_length: 3,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 13,
+                            byte_length: 11,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Select {
+                    arms: [
+                        SelectArm {
+                            pattern: Send {
+                                send_expression: Call {
+                                    expression: DotAccess {
+                                        expression: Identifier {
+                                            value: "ch",
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 43,
+                                                byte_length: 2,
+                                            },
+                                            binding_id: None,
+                                            qualified: None,
+                                        },
+                                        member: "send",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 43,
+                                            byte_length: 7,
+                                        },
+                                    },
+                                    args: [
+                                        Literal {
+                                            literal: Integer {
+                                                value: 42,
+                                                text: None,
+                                            },
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 51,
+                                                byte_length: 2,
+                                            },
+                                        },
+                                    ],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 43,
+                                        byte_length: 11,
+                                    },
+                                },
+                                body: Call {
+                                    expression: Identifier {
+                                        value: "print",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 58,
+                                            byte_length: 5,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    args: [
+                                        Literal {
+                                            literal: String(
+                                                "sent",
+                                            ),
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 64,
+                                                byte_length: 6,
+                                            },
+                                        },
+                                    ],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 58,
+                                        byte_length: 13,
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 30,
+                        byte_length: 46,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 26,
+                byte_length: 52,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 77,
+        },
+    },
+]

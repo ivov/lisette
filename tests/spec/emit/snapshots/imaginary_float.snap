@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> complex128 {\n  3.14i\n}\n"
+---
+package main
+
+func test() complex128 {
+	return 3.14i
+}

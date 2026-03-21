@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:strconv\"\n\nfn parse(s: string) -> Result<int, error> {\n  let error = \"context\"\n  let result = strconv.Atoi(s)\n  match result {\n    Ok(n) => Ok(n),\n    Err(e) => Err(e),\n  }\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func parse(s string) lisette.Result[int, error] {
+	_ = "context"
+	ret_1, ret_2 := strconv.Atoi(s)
+	var result lisette.Result[int, error]
+	if ret_2 != nil {
+		result = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		result = lisette.MakeResultOk[int, error](ret_1)
+	}
+	if result.Tag == lisette.ResultOk {
+		n := result.OkVal
+		return lisette.MakeResultOk[int, error](n)
+	}
+	e := result.ErrVal
+	return lisette.MakeResultErr[int, error](e)
+}

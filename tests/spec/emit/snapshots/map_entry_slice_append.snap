@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Box {\n  items: Slice<int>,\n}\n\nfn main() {\n  let mut m = Map.new<string, Box>()\n  m[\"a\"] = Box { items: [] }\n  let mut entry = m[\"a\"]\n  entry.items = entry.items.append(1)\n  m[\"a\"] = entry\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box struct {
+	items []int
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { items: %v }", b.items)
+}
+
+func main() {
+	m := make(map[string]Box)
+	m["a"] = Box{items: []int{}}
+	entry := m["a"]
+	entry.items = append(entry.items, 1)
+	m["a"] = entry
+}

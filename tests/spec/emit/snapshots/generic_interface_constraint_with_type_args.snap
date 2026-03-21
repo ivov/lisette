@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface Mapper<A, B> {\n  fn map_value(self, a: A) -> B\n}\n\nfn apply_mapper<M: Mapper<int, string>>(m: M, val: int) -> string {\n  m.map_value(val)\n}\n"
+---
+package main
+
+type Mapper[A any, B any] interface {
+	map_value(A) B
+}
+
+func apply_mapper[M Mapper[int, string]](m M, val int) string {
+	return m.map_value(val)
+}

@@ -1,0 +1,41 @@
+fn test_while_loop() -> int {
+  let mut sum = 0;
+  let mut i = 1;
+  while i <= 10 {
+    sum = sum + i;
+    i = i + 1
+  }
+  sum
+}
+
+fn test_for_loop() -> int {
+  let mut sum = 0;
+  for i in [1, 2, 3, 4, 5] {
+    sum = sum + i
+  }
+  sum
+}
+
+fn test_loop_break() -> int {
+  let mut i = 0;
+  loop {
+    i = i + 1;
+    if i == 5 {
+      break
+    }
+  }
+  i
+}
+
+fn test_loop_continue() -> int {
+  let mut sum = 0;
+  let mut i = 0;
+  while i < 10 {
+    i = i + 1;
+    if i % 2 == 0 {
+      continue
+    }
+    sum = sum + i
+  }
+  sum
+}

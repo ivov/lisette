@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { match p { Point { x, y } => x + y } }"
+---
+fn test() {
+  match p {
+    Point { x, y } => x + y,
+  }
+}

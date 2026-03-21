@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { let x = 1; let y = 2; Point { x, y } }"
+---
+fn test() {
+  let x = 1
+  let y = 2
+  Point { x, y }
+}

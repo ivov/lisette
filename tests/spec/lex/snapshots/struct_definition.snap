@@ -1,0 +1,98 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Struct,
+            text: "struct",
+            byte_offset: 1,
+            byte_length: 6,
+        },
+        Token {
+            kind: Identifier,
+            text: "Point",
+            byte_offset: 8,
+            byte_length: 5,
+        },
+        Token {
+            kind: LeftCurlyBrace,
+            text: "{",
+            byte_offset: 14,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "x",
+            byte_offset: 18,
+            byte_length: 1,
+        },
+        Token {
+            kind: Colon,
+            text: ":",
+            byte_offset: 19,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "int",
+            byte_offset: 21,
+            byte_length: 3,
+        },
+        Token {
+            kind: Comma,
+            text: ",",
+            byte_offset: 24,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "y",
+            byte_offset: 28,
+            byte_length: 1,
+        },
+        Token {
+            kind: Colon,
+            text: ":",
+            byte_offset: 29,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "int",
+            byte_offset: 31,
+            byte_length: 3,
+        },
+        Token {
+            kind: Comma,
+            text: ",",
+            byte_offset: 34,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightCurlyBrace,
+            text: "}",
+            byte_offset: 36,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: "",
+            byte_offset: 37,
+            byte_length: 0,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 38,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

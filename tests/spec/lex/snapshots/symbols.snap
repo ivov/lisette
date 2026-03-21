@@ -1,0 +1,218 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: = == != >= <= : | || |> & && + - * / ^ % ! ? . .. , ; ( ) [ ] { } < > -> =>"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Equal,
+            text: "=",
+            byte_offset: 0,
+            byte_length: 1,
+        },
+        Token {
+            kind: EqualDouble,
+            text: "==",
+            byte_offset: 2,
+            byte_length: 2,
+        },
+        Token {
+            kind: NotEqual,
+            text: "!=",
+            byte_offset: 5,
+            byte_length: 2,
+        },
+        Token {
+            kind: GreaterThanOrEqual,
+            text: ">=",
+            byte_offset: 8,
+            byte_length: 2,
+        },
+        Token {
+            kind: LessThanOrEqual,
+            text: "<=",
+            byte_offset: 11,
+            byte_length: 2,
+        },
+        Token {
+            kind: Colon,
+            text: ":",
+            byte_offset: 14,
+            byte_length: 1,
+        },
+        Token {
+            kind: Pipe,
+            text: "|",
+            byte_offset: 16,
+            byte_length: 1,
+        },
+        Token {
+            kind: PipeDouble,
+            text: "||",
+            byte_offset: 18,
+            byte_length: 2,
+        },
+        Token {
+            kind: Pipeline,
+            text: "|>",
+            byte_offset: 21,
+            byte_length: 2,
+        },
+        Token {
+            kind: Ampersand,
+            text: "&",
+            byte_offset: 24,
+            byte_length: 1,
+        },
+        Token {
+            kind: AmpersandDouble,
+            text: "&&",
+            byte_offset: 26,
+            byte_length: 2,
+        },
+        Token {
+            kind: Plus,
+            text: "+",
+            byte_offset: 29,
+            byte_length: 1,
+        },
+        Token {
+            kind: Minus,
+            text: "-",
+            byte_offset: 31,
+            byte_length: 1,
+        },
+        Token {
+            kind: Star,
+            text: "*",
+            byte_offset: 33,
+            byte_length: 1,
+        },
+        Token {
+            kind: Slash,
+            text: "/",
+            byte_offset: 35,
+            byte_length: 1,
+        },
+        Token {
+            kind: Caret,
+            text: "^",
+            byte_offset: 37,
+            byte_length: 1,
+        },
+        Token {
+            kind: Percent,
+            text: "%",
+            byte_offset: 39,
+            byte_length: 1,
+        },
+        Token {
+            kind: Bang,
+            text: "!",
+            byte_offset: 41,
+            byte_length: 1,
+        },
+        Token {
+            kind: QuestionMark,
+            text: "?",
+            byte_offset: 43,
+            byte_length: 1,
+        },
+        Token {
+            kind: Dot,
+            text: ".",
+            byte_offset: 45,
+            byte_length: 1,
+        },
+        Token {
+            kind: DotDot,
+            text: "..",
+            byte_offset: 47,
+            byte_length: 2,
+        },
+        Token {
+            kind: Comma,
+            text: ",",
+            byte_offset: 50,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: ";",
+            byte_offset: 52,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftParen,
+            text: "(",
+            byte_offset: 54,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightParen,
+            text: ")",
+            byte_offset: 56,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftSquareBracket,
+            text: "[",
+            byte_offset: 58,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightSquareBracket,
+            text: "]",
+            byte_offset: 60,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftCurlyBrace,
+            text: "{",
+            byte_offset: 62,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightCurlyBrace,
+            text: "}",
+            byte_offset: 64,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftAngleBracket,
+            text: "<",
+            byte_offset: 66,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightAngleBracket,
+            text: ">",
+            byte_offset: 68,
+            byte_length: 1,
+        },
+        Token {
+            kind: Arrow,
+            text: "->",
+            byte_offset: 70,
+            byte_length: 2,
+        },
+        Token {
+            kind: ArrowDouble,
+            text: "=>",
+            byte_offset: 73,
+            byte_length: 2,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 75,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

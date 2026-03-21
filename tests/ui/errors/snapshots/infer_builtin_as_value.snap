@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use native constructor as a value
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let f = imaginary
+   ·           ────┬────
+   ·               ╰── native constructors must be called directly
+ 4 │   let _ = f
+   ╰────
+  help: Use a closure instead: `|args| imaginary(args)` · code: [infer.native_constructor_value]

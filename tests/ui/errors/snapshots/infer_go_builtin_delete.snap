@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(m: Map<string, int>) {
+ 3 │   delete(m, "key");
+   ·   ───┬──
+   ·      ╰── name not found in scope
+ 4 │ }
+   ╰────
+  help: Lisette has no `delete` builtin. Use the `.delete()` method instead, e.g. `map.delete(key)` · code: [resolve.name_not_found]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Underlying type on regular enum
+   ╭─[test.lis:2:12]
+ 1 │ 
+ 2 │ enum Status: int {
+   ·            ┬
+   ·            ╰── only allowed on value enums
+ 3 │   Active,
+   ╰────
+  help: Remove the `: type` annotation. Underlying types are allowed only on value enums, which represent Go const groups · code: [parse.enum_underlying_type]

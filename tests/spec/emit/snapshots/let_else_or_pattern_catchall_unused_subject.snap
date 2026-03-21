@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() {\n  let _ | _ = 1 else {\n    panic(\"x\")\n  }\n}\n"
+---
+package main
+
+func test() {
+	_ = 1
+}

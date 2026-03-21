@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn make_bound() -> int { 3 }\n\nfn main() {\n  let mut sum = 0;\n  for i in 0..make_bound() {\n    sum = sum + i;\n  }\n  let _bound_1 = 7;\n  let _ = sum;\n  let _ = _bound_1;\n}\n"
+---
+package main
+
+func make_bound() int {
+	return 3
+}
+
+func main() {
+	sum := 0
+	_bound_1 := make_bound()
+	for i := 0; i < _bound_1; i++ {
+		sum += i
+	}
+	_bound_1_2 := 7
+	_ = sum
+	_ = _bound_1_2
+}

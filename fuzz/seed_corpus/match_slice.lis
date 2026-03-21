@@ -1,0 +1,20 @@
+fn test(items: Slice<int>) {
+  match items {
+    [] => print("empty"),
+    [x] => print("single", x),
+    [first, ..rest] => print("head", first),
+  }
+}
+
+fn test2(items: Slice<int>) {
+  match items {
+    [..init, last] => print("last is", last),
+    [] => print("empty"),
+  }
+}
+
+fn test3(items: Slice<int>) {
+  match items {
+    [..] => print("any slice"),
+  }
+}

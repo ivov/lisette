@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct User { name: string, age: int, active: bool }\n"
+---
+package main
+
+import "fmt"
+
+type User struct {
+	name   string
+	age    int
+	active bool
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { name: %v, age: %v, active: %v }", u.name, u.age, u.active)
+}

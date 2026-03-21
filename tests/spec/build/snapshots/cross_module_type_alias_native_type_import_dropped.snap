@@ -1,0 +1,16 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/mod.go ===
+package lib
+
+type Alias = []int
+
+
+// === main.go ===
+package main
+
+func main() {
+	s := []int{1}
+	_ = s[0]
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Undeclared type parameter
+   ╭─[test.lis:6:16]
+ 5 │ 
+ 6 │ impl Container<T> {
+   ·                ┬
+   ·                ╰── undeclared
+ 7 │   fn get(self) -> T {}
+   ╰────
+  help: Declare the type parameter: `impl<T> Container<T>` · code: [resolve.type_not_found]

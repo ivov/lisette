@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused type
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ struct UnusedPoint {
+   ·        ─────┬─────
+   ·             ╰── never used
+ 3 │   x: int,
+   ╰────
+  help: Use or remove this type · code: [lint.unused_type]

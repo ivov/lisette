@@ -1,0 +1,29 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"bufio"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func main() {
+	reader := bufio.NewReader(strings.NewReader("hello\nworld"))
+	ret_1, ret_2 := reader.ReadString(10)
+	var line lisette.Result[string, error]
+	if ret_2 != nil {
+		line = lisette.MakeResultErr[string, error](ret_2)
+	} else {
+		line = lisette.MakeResultOk[string, error](ret_1)
+	}
+	if line.Tag == lisette.ResultOk {
+		s := line.OkVal
+		fmt.Print(s)
+	} else {
+		fmt.Print("error")
+	}
+}

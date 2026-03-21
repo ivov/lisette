@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct New(int)\n\nfn main() {\n  let mut n = New(1)\n  let _ = { n = New(2) }\n  fmt.Println(n.0)\n}\n"
+---
+package main
+
+import "fmt"
+
+type New int
+
+func (n New) String() string {
+	return fmt.Sprintf("New(%v)", int(n))
+}
+
+func main() {
+	n := New(1)
+	n = New(2)
+	fmt.Println(int(n))
+}

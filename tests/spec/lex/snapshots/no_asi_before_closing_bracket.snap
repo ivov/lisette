@@ -1,0 +1,44 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: arr[\n    0\n]"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Identifier,
+            text: "arr",
+            byte_offset: 0,
+            byte_length: 3,
+        },
+        Token {
+            kind: LeftSquareBracket,
+            text: "[",
+            byte_offset: 3,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "0",
+            byte_offset: 9,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightSquareBracket,
+            text: "]",
+            byte_offset: 11,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 12,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

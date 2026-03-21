@@ -1,0 +1,29 @@
+fn test(ch: Receiver<int>) {
+  select {
+    let x = ch => process(x),
+  }
+}
+
+fn test2(ch: Sender<int>) {
+  select {
+    ch.send(42) => print("sent"),
+  }
+}
+
+fn test3(ch1: Receiver<int>, ch2: Sender<string>) {
+  select {
+    let x = ch1 => process(x),
+    ch2.send("hello") => print("sent"),
+    _ => print("default"),
+  }
+}
+
+fn test4(ch: Channel<int>) {
+  select {
+    match ch.receive() {
+      Some(v) => process(v),
+      None => handle_close(),
+    },
+    _ => default(),
+  }
+}

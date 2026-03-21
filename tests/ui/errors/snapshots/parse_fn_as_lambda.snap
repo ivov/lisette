@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:31]
+ 2 │ fn main() {
+ 3 │   let doubled = [1, 2, 3].map(fn(x: int) -> int { x * 2 });
+   ·                               ─┬─
+   ·                                ╰── expected a lambda
+ 4 │ }
+   ╰────
+  help: Use a lambda instead: `|x| x * 2` · code: [parse.fn_as_lambda]

@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(s: Slice<int>) {\n  let _x = { s.append(2) }\n}\n"
+---
+package main
+
+func test(s []int) {
+	var _ []int
+	_ = append(s, 2)
+}

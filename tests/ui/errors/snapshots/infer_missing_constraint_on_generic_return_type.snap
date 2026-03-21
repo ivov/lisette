@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Missing constraint on generic return type
+    ╭─[test.lis:16:28]
+ 15 │ 
+ 16 │ pub fn wrap<T>(item: T) -> Wrapper<T> {
+    ·                            ─────┬────
+    ·                                 ╰── expected `T` to be constrained
+ 17 │   Wrapper { inner: item }
+    ╰────
+  help: Constrain the generic: `wrap<T: Displayable>()`. The function returns a type whose methods depend on the constraint · code: [infer.missing_constraint_on_return_type]

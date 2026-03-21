@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Integer literal overflow
+   ╭─[test.lis:3:17]
+ 2 │ fn test() {
+ 3 │   let x: int8 = 1000;
+   ·                 ──┬─
+   ·                   ╰── overflows `int8`
+ 4 │ }
+   ╰────
+  help: `int8` must be in range `0` to `127` · code: [infer.integer_literal_overflow]

@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(m: Map<string, int>) -> Map<string, int> {\n  m.clone()\n}\n"
+---
+package main
+
+import "maps"
+
+func test(m map[string]int) map[string]int {
+	return maps.Clone(m)
+}

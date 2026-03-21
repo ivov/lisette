@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unexpected character
+   ╭─[test.lis:1:12]
+ 1 │ let x = 42 ~ invalid
+   ·            ┬
+   ·            ╰── unexpected character
+   ╰────
+  help: Remove this character · code: [lex.unexpected_char]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid value enum
+   ╭─[test.lis:3:10]
+ 2 │ enum Weekday {
+ 3 │   Sunday = 0,
+   ·          ─┬─
+   ·           ╰── not allowed in .lis files
+ 4 │   Monday = 1,
+   ╰────
+  help: Use a regular enum instead: `enum Weekday { A, B, C }`. Value enums exist only to represent Go's enums in typedefs · code: [infer.value_enum_outside_typedef]

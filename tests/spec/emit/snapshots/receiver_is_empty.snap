@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(r: Receiver<int>) -> bool {\n  r.is_empty()\n}\n"
+---
+package main
+
+func test(r <-chan int) bool {
+	return len(r) == 0
+}

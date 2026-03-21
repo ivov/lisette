@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct Pair(int, int)\n\nfn test() -> int {\n  let a = 100;\n  let b = 200;\n  let p = Pair(1, 2);\n  let sum = match p {\n    Pair(a, b) => a + b,\n  };\n  a + b + sum\n}\n"
+---
+package main
+
+import "fmt"
+
+type Pair struct {
+	F0 int
+	F1 int
+}
+
+func (p Pair) String() string {
+	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
+}
+
+func test() int {
+	a := 100
+	b := 200
+	p := Pair{
+		F0: 1,
+		F1: 2,
+	}
+	var sum int
+	a_1 := p.F0
+	b_2 := p.F1
+	sum = a_1 + b_2
+	return a + b + sum
+}

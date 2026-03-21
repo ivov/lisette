@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \ninterface Printable {\n  fn to_string(self) -> string\n}\n\nstruct Text { content: string }\nstruct Number { value: int }\n\nimpl Text {\n  fn to_string(self) -> string { self.content }\n}\n\nimpl Number {\n  fn to_string(self) -> string { \"number\" }\n}\n\nfn test() {\n  let items: Slice<Option<Printable>> = [\n    Some(Text { content: \"hello\" }),\n    Some(Number { value: 42 }),\n  ]\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Printable interface {
+	to_string() string
+}
+
+type Text struct {
+	content string
+}
+
+func (t Text) String() string {
+	return fmt.Sprintf("Text { content: %v }", t.content)
+}
+
+type Number struct {
+	value int
+}
+
+func (n Number) String() string {
+	return fmt.Sprintf("Number { value: %v }", n.value)
+}
+
+func (t Text) to_string() string {
+	return t.content
+}
+
+func (n Number) to_string() string {
+	return "number"
+}
+
+func test() {
+	_ = []lisette.Option[Printable]{
+		lisette.MakeOptionSome[Printable](Text{content: "hello"}),
+		lisette.MakeOptionSome[Printable](Number{value: 42}),
+	}
+}

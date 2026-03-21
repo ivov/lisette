@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface Shape {\n    fn area(self) -> float64;\n    fn name(self) -> string;\n}\n\nstruct Circle {\n    radius: float64,\n}\n\nimpl Circle {\n    pub fn area(self) -> float64 {\n        3.14159 * self.radius * self.radius\n    }\n    pub fn name(self) -> string {\n        \"Circle\"\n    }\n}\n\nfn test() {\n    let c = Circle { radius: 5.0 }\n    let _a = c.area()\n    let _n = c.name()\n}\n"
+---
+package main
+
+type Shape interface {
+	area() float64
+	name() string
+}
+
+type Circle struct {
+	radius float64
+}
+
+func (c Circle) Area() float64 {
+	return 3.14159 * c.radius * c.radius
+}
+
+func (c Circle) Name() string {
+	return "Circle"
+}
+
+func test() {
+	c := Circle{radius: 5.0}
+	_ = c.Area()
+	_ = c.Name()
+}

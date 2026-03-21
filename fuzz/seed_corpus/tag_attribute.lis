@@ -1,0 +1,17 @@
+#[tag]
+struct User {
+  #[tag(`json:"name,omitempty" validate:"required"`)]
+  name: string,
+}
+
+#[tag]
+struct Config {
+  #[tag("json", omitempty)]
+  name: string,
+}
+
+#[json(omitempty)]
+struct Opts {
+  #[json(!omitempty)]
+  name: string,
+}

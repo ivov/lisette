@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct Point { x: int, y: int }\n\nimpl Point {\n  fn describe(self) -> string {\n    match self {\n      Point { x: 0, y: 0 } => \"origin\",\n      Point { x: 0, y: _ } => \"y-axis\",\n      Point { x: _, y: 0 } => \"x-axis\",\n      _ => \"other\",\n    }\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func (p Point) describe() string {
+	if p.x == 0 && p.y == 0 {
+		return "origin"
+	} else if p.x == 0 {
+		return "y-axis"
+	} else if p.y == 0 {
+		return "x-axis"
+	}
+	return "other"
+}

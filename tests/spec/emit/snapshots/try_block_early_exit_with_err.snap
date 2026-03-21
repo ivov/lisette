@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(bad: bool) -> int {\n  let result: Result<int, string> = try {\n    if bad {\n      Err(\"failed\")?\n    }\n    42\n  };\n  match result {\n    Ok(x) => x,\n    Err(_) => -1,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(bad bool) int {
+	var result lisette.Result[int, string]
+	tryResult_1 := func() lisette.Result[int, string] {
+		if bad {
+			check_2 := lisette.MakeResultErr[int, string]("failed")
+			if check_2.Tag != lisette.ResultOk {
+				return lisette.MakeResultErr[int, string](check_2.ErrVal)
+			}
+			_ = check_2.OkVal
+		}
+		return lisette.MakeResultOk[int, string](42)
+	}()
+	result = tryResult_1
+	if result.Tag == lisette.ResultOk {
+		return result.OkVal
+	}
+	return -1
+}

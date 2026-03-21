@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Private field
+   ╭─[main.lis:5:26]
+ 4 │ fn main() {
+ 5 │   let p = shapes.Point { x: 1, y: 2 };
+   ·                          ┬
+   ·                          ╰── private
+ 6 │ }
+   ╰────
+  help: Cannot access private field `x` of struct `shapes.Point`. Mark the field as `pub` · code: [resolve.private_field_spread]

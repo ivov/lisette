@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport t \"go:time\"\n\nfn main() {\n  let d = t.Duration.Second\n  let _ = d\n}\n"
+---
+package main
+
+import t "time"
+
+func main() {
+	_ = t.Second
+}

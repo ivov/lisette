@@ -1,0 +1,23 @@
+fn test() -> Option<int> {
+  let Some(x) = opt else { return None; };
+  Some(x)
+}
+
+fn test2() -> int {
+  let Ok(value) = get_result() else { return -1; };
+  value
+}
+
+fn test3() {
+  loop {
+    let Some(item) = iter.next() else { break; };
+    process(item);
+  }
+}
+
+fn test4() {
+  for item in items {
+    let Valid(data) = validate(item) else { continue; };
+    process(data);
+  }
+}

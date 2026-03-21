@@ -1,0 +1,50 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: nested.0.0"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Identifier,
+            text: "nested",
+            byte_offset: 0,
+            byte_length: 6,
+        },
+        Token {
+            kind: Dot,
+            text: ".",
+            byte_offset: 6,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "0",
+            byte_offset: 7,
+            byte_length: 1,
+        },
+        Token {
+            kind: Dot,
+            text: ".",
+            byte_offset: 8,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "0",
+            byte_offset: 9,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 10,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ import foo.bar;
+   ·        ─┬─
+   ·         ╰── expected double quotes
+   ╰────
+  help: Wrap the import path in double quotes: `import "foo"` · code: [parse.syntax_error]

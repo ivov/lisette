@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct Point { x: int, y: int }\n\nfn test(points: Slice<Point>) -> int {\n  let mut sum = 0;\n  for Point { x, y } in points {\n    sum = sum + x + y;\n  };\n  sum\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func test(points []Point) int {
+	sum := 0
+	for _, item_1 := range points {
+		x := item_1.x
+		y := item_1.y
+		sum = sum + x + y
+	}
+	return sum
+}

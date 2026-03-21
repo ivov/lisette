@@ -1,0 +1,12 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn process(first_argument: string, second_argument: int, third_argument: bool, fourth_argument: float) -> string { first_argument }"
+---
+fn process(
+  first_argument: string,
+  second_argument: int,
+  third_argument: bool,
+  fourth_argument: float,
+) -> string {
+  first_argument
+}

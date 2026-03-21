@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid cast
+   ╭─[test.lis:4:3]
+ 3 │   let c: complex128 = 1.0 + 2.0i;
+ 4 │   c as int
+   ·   ────┬───
+   ·       ╰── cannot cast `complex128` to `int`
+ 5 │ }
+   ╰────
+  help: Complex numbers cannot be cast directly. Use `real(c)` or `imaginary(c)` to extract components · code: [infer.invalid_cast]

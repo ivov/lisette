@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn first(items: Ref<Slice<int>>) -> int {\n  items.*[0]\n}\n"
+---
+package main
+
+func first(items *[]int) int {
+	return (*items)[0]
+}

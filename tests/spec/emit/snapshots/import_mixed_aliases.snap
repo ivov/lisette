@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport mystrings \"go:strings\"\nimport _ \"go:os\"\nimport \"go:fmt\"\n\nfn test() {\n  let _ = fmt.Print(\"Mixed alias imports\");\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	_ "os"
+)
+
+func test() {
+	fmt.Print("Mixed alias imports")
+}

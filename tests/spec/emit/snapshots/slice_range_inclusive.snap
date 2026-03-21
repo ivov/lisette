@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn test(arr: Slice<int>) -> Slice<int> {\n  arr[1..=4]\n}\n"
+---
+package main
+
+func test(arr []int) []int {
+	return arr[1 : 4+1 : 4+1]
+}

@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { first_value + second_value + third_value + fourth_value + fifth_value + sixth_value }"
+---
+fn test() {
+  first_value + second_value + third_value + fourth_value + fifth_value +
+  sixth_value
+}

@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { match pair { (a, b) => a + b } }"
+---
+fn test() {
+  match pair {
+    (a, b) => a + b,
+  }
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unreachable code after diverging if/else
+   ╭─[test.lis:8:3]
+ 7 │   };
+ 8 │   let x = 3;
+   ·   ────┬────
+   ·       ╰── unreachable from this point onward
+ 9 │   x
+   ╰────
+  help: Remove this line and all code after it · code: [lint.dead_code_after_diverging_if]

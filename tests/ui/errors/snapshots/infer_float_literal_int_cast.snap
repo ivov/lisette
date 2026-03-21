@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot cast float literal to integer directly
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let x = 3.14 as int
+   ·           ─────┬─────
+   ·                ╰── unsupported cast
+ 4 │   let _ = x
+   ╰────
+  help: Bind to a variable first: `let f = 1.0; f as int` · code: [infer.float_literal_int_cast]

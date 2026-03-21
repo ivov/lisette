@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport t \"go:time\"\n\nfn f(x: t.Time) -> t.Duration {\n  t.Since(x)\n}\n\nfn main() {\n  let _ = f(t.Now())\n}\n"
+---
+package main
+
+import t "time"
+
+func f(x t.Time) t.Duration {
+	return t.Since(x)
+}
+
+func main() {
+	_ = f(t.Now())
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused field
+   ╭─[test.lis:4:3]
+ 3 │   used_field: int,
+ 4 │   unused_field: int,
+   ·   ──────┬─────
+   ·         ╰── never read
+ 5 │ }
+   ╰────
+  help: Use or remove this field · code: [lint.unused_struct_field]

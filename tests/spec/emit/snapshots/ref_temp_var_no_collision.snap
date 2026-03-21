@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct Box { x: int }\n\nfn make_box() -> Box {\n  Box { x: 1 }\n}\n\nfn main() {\n  let r = &make_box()\n  let ref_1 = 3\n  fmt.Println(r.*.x, ref_1)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box struct {
+	x int
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { x: %v }", b.x)
+}
+
+func make_box() Box {
+	return Box{x: 1}
+}
+
+func main() {
+	ref_1 := make_box()
+	r := &ref_1
+	ref_1_2 := 3
+	fmt.Println(r.x, ref_1_2)
+}

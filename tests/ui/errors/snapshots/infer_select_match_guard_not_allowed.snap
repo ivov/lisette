@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid select match
+   ╭─[test.lis:6:15]
+ 5 │     match ch.receive() {
+ 6 │       Some(v) if v > 0 => v,
+   ·               ────┬───
+   ·                   ╰── not supported
+ 7 │       None => 0,
+   ╰────
+  help: Match arms inside `select` do not support guards. Move the condition inside the arm body: `Some(v) => { if condition { ... } }` · code: [infer.select_match_guard_not_allowed]

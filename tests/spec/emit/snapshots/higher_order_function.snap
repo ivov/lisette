@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn compose(f: fn(int) -> int, g: fn(int) -> int) -> fn(int) -> int {\n  |x: int| f(g(x))\n}\n"
+---
+package main
+
+func compose(f, g func(int) int) func(int) int {
+	return func(x int) int {
+		return f(g(x))
+	}
+}

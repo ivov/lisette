@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(opt: Option<int>) -> int {\n  match opt {\n    Some(n) if n > 100 => n * 2,\n    Some(n) if n > 0 => n,\n    Some(_) => 0,\n    None => -1,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) int {
+	if opt.Tag == lisette.OptionSome {
+		n := opt.SomeVal
+		if n > 100 {
+			return n * 2
+		}
+		if n > 0 {
+			return n
+		}
+		return 0
+	}
+	return -1
+}

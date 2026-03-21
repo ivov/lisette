@@ -1,0 +1,8 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n/// The maximum number of connections.\nconst MAX_CONNECTIONS: int = 100\n"
+---
+package main
+
+// The maximum number of connections.
+const MAX_CONNECTIONS int = 100

@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let mut sum = 0;\n  for i in 0..=5 {\n    sum = sum + i;\n  };\n  sum\n}\n"
+---
+package main
+
+func test() int {
+	sum := 0
+	for i := 0; i <= 5; i++ {
+		sum += i
+	}
+	return sum
+}

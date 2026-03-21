@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(opt: Option<int>) -> string {\n  match opt {\n    Some(x) if x > 0 => \"positive\",\n    Some(_) => \"non-positive\",\n    None => \"none\",\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) string {
+	if opt.Tag == lisette.OptionSome {
+		x := opt.SomeVal
+		if x > 0 {
+			return "positive"
+		}
+		return "non-positive"
+	}
+	return "none"
+}

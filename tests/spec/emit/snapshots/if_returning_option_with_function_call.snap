@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn get_value() -> Option<int> {\n  Some(99)\n}\n\nfn test(flag: bool) -> Option<int> {\n  if flag { Some(42) } else { get_value() }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func get_value() lisette.Option[int] {
+	return lisette.MakeOptionSome[int](99)
+}
+
+func test(flag bool) lisette.Option[int] {
+	if flag {
+		return lisette.MakeOptionSome[int](42)
+	}
+	return get_value()
+}

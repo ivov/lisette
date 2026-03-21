@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(s: Slice<int>) -> int {\n  s.capacity()\n}\n"
+---
+package main
+
+func test(s []int) int {
+	return cap(s)
+}

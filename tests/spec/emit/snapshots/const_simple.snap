@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nconst MAX_SIZE = 100\n\nfn test() -> int {\n  MAX_SIZE\n}\n"
+---
+package main
+
+const MAX_SIZE int = 100
+
+func test() int {
+	return MAX_SIZE
+}

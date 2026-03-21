@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() {\n  loop {\n    break;\n  }\n}\n"
+---
+package main
+
+func test() {
+	for {
+		break
+	}
+}

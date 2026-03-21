@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use private method as a value
+    ╭─[test.lis:9:11]
+  8 │ fn main() {
+  9 │   let f = Box.add
+    ·           ───┬───
+    ·              ╰── private methods must be called directly
+ 10 │   let _ = f
+    ╰────
+  help: Use a closure instead: `|self_, args| self_.method(args)` · code: [infer.private_method_expression]

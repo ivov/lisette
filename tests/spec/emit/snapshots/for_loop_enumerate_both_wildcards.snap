@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(items: Slice<int>) {\n  for _ in items.enumerate() {\n    let x = 1;\n  }\n}\n"
+---
+package main
+
+func test(items []int) {
+	for range items {
+		_ = 1
+	}
+}

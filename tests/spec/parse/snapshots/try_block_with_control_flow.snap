@@ -1,0 +1,251 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n      if i > 10 {\n        break;\n      }\n    };\n    get_value()?\n  };\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "result",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 19,
+                                byte_length: 6,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: TryBlock {
+                        items: [
+                            For {
+                                binding: Binding {
+                                    pattern: Identifier {
+                                        identifier: "i",
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 42,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                    annotation: None,
+                                    typed_pattern: None,
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                },
+                                iterable: Identifier {
+                                    value: "items",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 47,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                body: Block {
+                                    items: [
+                                        If {
+                                            condition: Binary {
+                                                operator: GreaterThan,
+                                                left: Identifier {
+                                                    value: "i",
+                                                    ty: Variable(
+                                                        -1,
+                                                    ),
+                                                    span: Span {
+                                                        file_id: 0,
+                                                        byte_offset: 64,
+                                                        byte_length: 1,
+                                                    },
+                                                    binding_id: None,
+                                                    qualified: None,
+                                                },
+                                                right: Literal {
+                                                    literal: Integer {
+                                                        value: 10,
+                                                        text: None,
+                                                    },
+                                                    ty: Variable(
+                                                        -1,
+                                                    ),
+                                                    span: Span {
+                                                        file_id: 0,
+                                                        byte_offset: 68,
+                                                        byte_length: 2,
+                                                    },
+                                                },
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 64,
+                                                    byte_length: 6,
+                                                },
+                                            },
+                                            consequence: Block {
+                                                items: [
+                                                    Break {
+                                                        value: None,
+                                                        span: Span {
+                                                            file_id: 0,
+                                                            byte_offset: 81,
+                                                            byte_length: 5,
+                                                        },
+                                                    },
+                                                ],
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 71,
+                                                    byte_length: 24,
+                                                },
+                                            },
+                                            alternative: Unit {
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 61,
+                                                    byte_length: 34,
+                                                },
+                                            },
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 61,
+                                                byte_length: 34,
+                                            },
+                                        },
+                                    ],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 53,
+                                        byte_length: 48,
+                                    },
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 38,
+                                    byte_length: 63,
+                                },
+                                needs_label: false,
+                            },
+                            Propagate {
+                                expression: Call {
+                                    expression: Identifier {
+                                        value: "get_value",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 107,
+                                            byte_length: 9,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    args: [],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 107,
+                                        byte_length: 11,
+                                    },
+                                },
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 107,
+                                    byte_length: 12,
+                                },
+                            },
+                        ],
+                        ty: Variable(
+                            -1,
+                        ),
+                        try_keyword_span: Span {
+                            file_id: 0,
+                            byte_offset: 28,
+                            byte_length: 3,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 28,
+                            byte_length: 95,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 108,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 115,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 125,
+        },
+    },
+]

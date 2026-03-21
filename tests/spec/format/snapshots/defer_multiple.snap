@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  defer {\n    first();\n  };\n  defer {\n    second();\n  };\n  work();\n}"
+---
+fn test() {
+  defer {
+    first()
+  }
+  defer {
+    second()
+  }
+  work()
+}

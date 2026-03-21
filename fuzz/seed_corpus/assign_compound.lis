@@ -1,0 +1,14 @@
+fn test() {
+  let mut x = 10;
+  x += 5;
+  x -= 3;
+  x *= 2;
+  x /= 4;
+  x %= 3;
+
+  let mut p = Point { x: 1, y: 1};
+  p.x = 10;
+
+  let mut arr = [1, 2, 3];
+  arr[0] = 100;
+}

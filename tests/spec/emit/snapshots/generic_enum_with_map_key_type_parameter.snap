@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum Container<K, V> {\n  Empty,\n  Indexed(Map<K, V>),\n}\n\nfn test() {\n  let mut m = Map.new<string, int>()\n  m[\"hello\"] = 1\n  let c = Container.Indexed<string, int>(m)\n  c\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeContainerEmpty[K comparable, V any]() Container[K, V] {
+	return Container[K, V]{Tag: ContainerEmpty}
+}
+
+func MakeContainerIndexed[K comparable, V any](arg0 map[K]V) Container[K, V] {
+	return Container[K, V]{Tag: ContainerIndexed, Indexed: arg0}
+}
+
+type ContainerTag int
+
+const (
+	ContainerEmpty ContainerTag = iota
+	ContainerIndexed
+)
+
+type Container[K comparable, V any] struct {
+	Tag     ContainerTag
+	Indexed map[K]V
+}
+
+func (c Container[K, V]) String() string {
+	switch c.Tag {
+	case ContainerEmpty:
+		return "Container.Empty"
+	case ContainerIndexed:
+		return fmt.Sprintf("Container.Indexed(%v)", c.Indexed)
+	default:
+		return fmt.Sprintf("Container(%d)", c.Tag)
+	}
+}
+
+func test() {
+	m := make(map[string]int)
+	m["hello"] = 1
+	_ = MakeContainerIndexed[string, int](m)
+}

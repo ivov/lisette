@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn use_map_in_task<K, V>(key: K, value: V) {\n  task {\n    let mut m: Map<K, V> = Map.new()\n    m[key] = value\n  }\n}\n"
+---
+package main
+
+func use_map_in_task[K comparable, V any](key K, value V) {
+	go func() {
+		m := make(map[K]V)
+		m[key] = value
+	}()
+}

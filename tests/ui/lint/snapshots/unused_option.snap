@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused Option
+   ╭─[test.lis:7:3]
+ 6 │ fn main() {
+ 7 │   get_option();
+   ·   ──────┬─────
+   ·         ╰── this `Option` is discarded
+ 8 │   ()
+   ╰────
+  help: Handle this `Option`, or explicitly discard it with `let _ = ...` · code: [lint.unused_option]

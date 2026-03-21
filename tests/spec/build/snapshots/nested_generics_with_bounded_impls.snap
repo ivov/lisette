@@ -1,0 +1,102 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/ops"
+	"github.com/user/myproject/types"
+)
+
+type Label struct {
+	text string
+}
+
+func (l Label) String() string {
+	return fmt.Sprintf("Label { text: %v }", l.text)
+}
+
+func (l Label) Show() string {
+	return l.text
+}
+
+func main() {
+	l1 := Label{text: "x"}
+	l2 := Label{text: "y"}
+	inner_pair := types.Pair[Label, Label]{
+		First:  l1,
+		Second: l2,
+	}
+	tagged_pair := types.Tagged[types.Pair[Label, Label]]{
+		Value: inner_pair,
+		Label: "coords",
+	}
+	fmt.Println(ops.Describe_tagged_pair(tagged_pair))
+}
+
+
+// === ops/lib.go ===
+package ops
+
+import (
+	"fmt"
+	"github.com/user/myproject/traits"
+	"github.com/user/myproject/types"
+)
+
+func Describe_tagged_pair[A traits.Showable, B traits.Showable](tp types.Tagged[types.Pair[A, B]]) string {
+	return fmt.Sprintf("tagged_pair: %v", tp.Display())
+}
+
+
+// === traits/lib.go ===
+package traits
+
+type Showable interface {
+	Show() string
+}
+
+
+// === types/lib.go ===
+package types
+
+import (
+	"fmt"
+	"github.com/user/myproject/traits"
+)
+
+type Pair[A traits.Showable, B traits.Showable] struct {
+	First  A
+	Second B
+}
+
+func (p Pair[A, B]) String() string {
+	return fmt.Sprintf("Pair { first: %v, second: %v }", p.First, p.Second)
+}
+
+func (p Pair[A, B]) Show() string {
+	return fmt.Sprintf("(%v, %v)", p.First.Show(), p.Second.Show())
+}
+
+func (p Pair[A, B]) Display() string {
+	return fmt.Sprintf("Pair%v", p.Show())
+}
+
+type Tagged[T traits.Showable] struct {
+	Value T
+	Label string
+}
+
+func (t Tagged[T]) String() string {
+	return fmt.Sprintf("Tagged { value: %v, label: %v }", t.Value, t.Label)
+}
+
+func (t Tagged[T]) Show() string {
+	return fmt.Sprintf("[%v] %v", t.Label, t.Value.Show())
+}
+
+func (t Tagged[T]) Display() string {
+	return fmt.Sprintf("Tagged%v", t.Show())
+}

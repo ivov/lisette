@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `continue` in `defer` block
+   ╭─[test.lis:4:5]
+ 3 │   defer {
+ 4 │     continue;
+   ·     ────┬───
+   ·         ╰── not allowed inside `defer` block
+ 5 │   };
+   ╰────
+  help: Remove the `continue`, or move it inside a loop within the `defer` block · code: [infer.continue_in_defer_block]

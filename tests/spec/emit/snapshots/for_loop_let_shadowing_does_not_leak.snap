@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> string {\n  let x = \"outside\"\n  for i in 0..3 {\n    let x = i\n    let _ = x\n  }\n  x\n}\n"
+---
+package main
+
+func test() string {
+	x := "outside"
+	for i := 0; i < 3; i++ {
+		x := i
+		_ = x
+	}
+	return x
+}

@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { (first_long_element, second_long_element, third_long_element, fourth_long_element, fifth_long_element) }"
+---
+fn test() {
+  (
+    first_long_element,
+    second_long_element,
+    third_long_element,
+    fourth_long_element,
+    fifth_long_element,
+  )
+}

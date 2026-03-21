@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+assertion_line: 475
+description: "input: import \"display\"\nimport \"commands\"\nimport \"store\""
+---
+import "commands"
+import "display"
+import "store"

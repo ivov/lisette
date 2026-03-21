@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Member not found
+   ╭─[test.lis:6:3]
+ 5 │   let p = Point { x: 1, y: 2 };
+ 6 │   p.yy
+   ·   ──┬─
+   ·     ╰── no member `yy` on type `Point`
+ 7 │ }
+   ╰────
+  help: Did you mean `y`? · code: [infer.member_not_found]

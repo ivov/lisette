@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn process_close() {}\n\nfn test() {\n  let ch = Channel.new<int>();\n  select {\n    match ch.receive() {\n      Some(_) => {},\n      None => process_close(),\n    },\n    _ => {},\n  }\n}\n"
+---
+package main
+
+func process_close() {}
+
+func test() {
+	ch := make(chan int)
+	select {
+	case _, ok := <-ch:
+		if !ok {
+			process_close()
+		}
+	default:
+	}
+}

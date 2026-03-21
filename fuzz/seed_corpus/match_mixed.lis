@@ -1,0 +1,12 @@
+enum Data { Int(int), Pair((int, int)), Text(string), Nothing }
+fn test(data: Data) {
+  match data {
+    Data.Int(0)      => print("Zero"),
+    Data.Int(n)      => print("Number", n),
+    Data.Pair((0, y))=> print("Pair on Y axis", y),
+    Data.Pair(_)     => print("Some pair"),
+    Data.Text("end") => print("End marker"),
+    Data.Text(_)     => print("Some text"),
+    Data.Nothing     => print("Nothing"),
+  }
+}

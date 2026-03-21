@@ -1,0 +1,23 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/utils"
+
+func main() {
+	_ = utils.Quadruple(10)
+}
+
+
+// === utils/lib.go ===
+package utils
+
+func double(x int) int {
+	return x * 2
+}
+
+func Quadruple(x int) int {
+	return double(double(x))
+}

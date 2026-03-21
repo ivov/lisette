@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type not found
+   ╭─[test.lis:3:10]
+ 2 │ fn test() {
+ 3 │   let x: UnknownType = 42;
+   ·          ─────┬─────
+   ·               ╰── type not found in scope
+ 4 │ }
+   ╰────
+  help: Define or import this type · code: [resolve.type_not_found]

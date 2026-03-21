@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid select match
+   ╭─[test.lis:6:7]
+ 5 │     match ch.receive() {
+ 6 │       None => 0,
+   ·       ──┬─
+   ·         ╰── missing `Some` arm
+ 7 │     },
+   ╰────
+  help: `None` only handles channel close. Add a `Some(v) => ...` arm to handle received values · code: [infer.select_match_missing_some_arm]

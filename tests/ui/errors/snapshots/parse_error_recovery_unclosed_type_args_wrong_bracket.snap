@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:21]
+ 1 │ 
+ 2 │ fn test(x: Slice<int) {}
+   ·                     ┬
+   ·                     ╰── expected `>`
+   ╰────
+  help: Add `>` to close the type arguments · code: [parse.syntax_error]

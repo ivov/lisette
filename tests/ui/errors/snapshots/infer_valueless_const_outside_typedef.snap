@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Missing const value
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ const MAX_SIZE: int
+   · ─────────┬─────────
+   ·          ╰── needs a value
+   ╰────
+  help: Ensure the constant has a value: `const MAX_SIZE: int = 100`. Valueless const declarations are only allowed in `.d.lis` files · code: [infer.valueless_const_outside_typedef]

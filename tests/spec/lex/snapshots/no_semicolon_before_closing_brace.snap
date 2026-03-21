@@ -1,0 +1,80 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: struct Box<T> {\n    value: T\n}"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Struct,
+            text: "struct",
+            byte_offset: 0,
+            byte_length: 6,
+        },
+        Token {
+            kind: Identifier,
+            text: "Box",
+            byte_offset: 7,
+            byte_length: 3,
+        },
+        Token {
+            kind: LeftAngleBracket,
+            text: "<",
+            byte_offset: 10,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "T",
+            byte_offset: 11,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightAngleBracket,
+            text: ">",
+            byte_offset: 12,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftCurlyBrace,
+            text: "{",
+            byte_offset: 14,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "value",
+            byte_offset: 20,
+            byte_length: 5,
+        },
+        Token {
+            kind: Colon,
+            text: ":",
+            byte_offset: 25,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "T",
+            byte_offset: 27,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightCurlyBrace,
+            text: "}",
+            byte_offset: 29,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 30,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

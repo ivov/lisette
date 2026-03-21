@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Conflicting field types across enum variants
+   ╭─[test.lis:4:19]
+ 3 │   Circle(string),
+ 4 │   Other { circle: int },
+   ·                   ─┬─
+   ·                    ╰── field type mismatch
+ 5 │ }
+   ╰────
+  help: `Shape.Circle` is `string` but `Shape.Other.circle` is `int`. Rename one of the fields or align their types · code: [infer.enum_field_type_conflict]

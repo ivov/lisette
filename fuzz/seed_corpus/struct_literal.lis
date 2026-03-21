@@ -1,0 +1,18 @@
+fn test(x: int, y: int) {
+  let p = Point { x, y };
+}
+
+fn test2(defaults: Config) {
+  let cfg = Config { enabled: true, ..defaults };
+}
+
+fn test3(x: int, base: Point) {
+  let p = Point { x, y: 10, ..base };
+}
+
+fn test4(user: User) {
+  let data = Data {
+    id: 1,
+    payload: Payload { user, status: "active" },
+  };
+}

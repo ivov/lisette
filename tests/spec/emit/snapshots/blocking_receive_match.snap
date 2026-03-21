@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() -> int {\n  let ch = Channel.new<int>();\n  match ch.receive() {\n    Some(v) => v,\n    None => 0,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	ch := make(chan int)
+	subject_1 := lisette.ChannelReceive(ch)
+	if subject_1.Tag == lisette.OptionSome {
+		return subject_1.SomeVal
+	}
+	return 0
+}

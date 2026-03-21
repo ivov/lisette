@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() {\n  let mut x = 0\n  x = 1\n}\n"
+---
+package main
+
+func test() {
+	_ = 0
+	_ = 1
+}

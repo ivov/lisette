@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn test() -> string {\n  let x = 42;\n  let x = \"hello\";\n  x\n}\n"
+---
+package main
+
+func test() string {
+	_ = 42
+	return "hello"
+}

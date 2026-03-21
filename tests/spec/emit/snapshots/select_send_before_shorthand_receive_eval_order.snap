@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn mark(log: Channel<int>, tag: int) -> int {\n  log.send(tag)\n  tag\n}\n\nfn choose(log: Channel<int>, tag: int, ch: Channel<int>) -> Channel<int> {\n  let _ = mark(log, tag)\n  ch\n}\n\nfn main() {\n  let log = Channel.buffered<int>(8)\n  let send_ch = Channel.buffered<int>(1)\n  let recv_ch = Channel.buffered<int>(1)\n  recv_ch.send(42)\n\n  let _ = select {\n    send_ch.send(mark(log, 1)) => 0,\n    let Some(v) = choose(log, 2, recv_ch).receive() => v,\n    _ => -1,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func mark(log chan int, tag int) int {
+	lisette.ChannelSend(log, tag)
+	return tag
+}
+
+func choose(log chan int, tag int, ch chan int) chan int {
+	_ = mark(log, tag)
+	return ch
+}
+
+func main() {
+	log := make(chan int, 8)
+	send_ch := make(chan int, 1)
+	recv_ch := make(chan int, 1)
+	lisette.ChannelSend(recv_ch, 42)
+	var tmp_1 int
+	send_val_2 := mark(log, 1)
+	ch_3 := choose(log, 2, recv_ch)
+	for {
+		select {
+		case send_ch <- send_val_2:
+			tmp_1 = 0
+		case v, ok := <-ch_3:
+			if ok {
+				tmp_1 = v
+			} else {
+				ch_3 = nil
+				continue
+			}
+		default:
+			tmp_1 = -1
+		}
+		break
+	}
+	_ = tmp_1
+}

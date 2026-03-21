@@ -1,0 +1,354 @@
+{
+  "overrides": {
+    "lints": {
+      "allow_unused_result": {
+        "bytes": ["Buffer.WriteByte", "Buffer.WriteRune", "Buffer.WriteString"],
+        "fmt": ["Print", "Printf", "Println", "Fprint", "Fprintf", "Fprintln"],
+        "strings": ["Builder.WriteByte", "Builder.WriteRune", "Builder.WriteString"]
+      }
+    },
+    "types": {
+      "bool_as_flag": {
+        "go/constant": ["Float32Val", "Float64Val", "Int64Val", "Uint64Val"],
+        "math/big": ["Rat.Float32", "Rat.Float64", "Rat.FloatPrec"],
+        "reflect": ["Select"]
+      },
+      "direct_error": {
+        "errors": ["New"],
+        "fmt": ["Errorf"]
+      },
+      "nilable_error": {
+        "bufio": ["Scanner.Err"],
+        "context": ["Cause", "Context.Err"],
+        "crypto/tls": ["CertificateVerificationError.Unwrap"],
+        "crypto/x509": ["SystemRootsError.Unwrap"],
+        "database/sql": ["Row.Err", "Rows.Err"],
+        "encoding/csv": ["ParseError.Unwrap"],
+        "encoding/json": ["MarshalerError.Unwrap"],
+        "errors": ["Join", "Unwrap"],
+        "go/scanner": ["ErrorList.Err"],
+        "go/types": ["ArgumentError.Unwrap"],
+        "io/fs": ["PathError.Unwrap"],
+        "net": ["DNSConfigError.Unwrap", "DNSError.Unwrap", "OpError.Unwrap"],
+        "net/url": ["Error.Unwrap"],
+        "os": ["LinkError.Unwrap", "NewSyscallError", "SyscallError.Unwrap"],
+        "os/exec": ["Error.Unwrap"],
+        "strconv": ["NumError.Unwrap"],
+        "text/template": ["ExecError.Unwrap"]
+      },
+      "nilable_return": {
+        "crypto/tls": ["Conn.LocalAddr", "Conn.NetConn", "Conn.RemoteAddr"],
+        "database/sql": ["ColumnType.ScanType"],
+        "expvar": ["Get", "Map.Get"],
+        "go/types": [
+          "SizesFor",
+          "Const.Val",
+          "Info.ObjectOf", "Info.TypeOf",
+          "Scope.Insert", "Scope.Lookup"
+        ],
+        "image": ["Paletted.At"],
+        "image/color": ["Palette.Convert"],
+        "math/rand": ["NewZipf"],
+        "math/rand/v2": ["NewZipf"],
+        "os": ["NewFile"],
+        "reflect": ["TypeOf"],
+        "sync/atomic": ["Pointer.Load", "Pointer.Swap"]
+      },
+      "mutates_param": {
+        "archive/tar": {
+          "Reader.Read": ["b"]
+        },
+        "bufio": {
+          "Reader.Read": ["p"],
+          "Scanner.Buffer": ["buf"]
+        },
+        "bytes": {
+          "Buffer.Read": ["p"],
+          "NewBuffer": ["buf"],
+          "Reader.Read": ["b"],
+          "Reader.ReadAt": ["b"]
+        },
+        "compress/gzip": {
+          "Reader.Read": ["p"]
+        },
+        "compress/lzw": {
+          "Reader.Read": ["b"]
+        },
+        "crypto/cipher": {
+          "Block.Encrypt": ["dst"],
+          "Block.Decrypt": ["dst"],
+          "BlockMode.CryptBlocks": ["dst"],
+          "Stream.XORKeyStream": ["dst"],
+          "StreamReader.Read": ["dst"]
+        },
+        "crypto/rand": {
+          "Read": ["b"]
+        },
+        "crypto/rc4": {
+          "Cipher.XORKeyStream": ["dst"]
+        },
+        "crypto/sha3": {
+          "SHA3.AppendBinary": ["p"],
+          "SHA3.Sum": ["b"],
+          "SHAKE.AppendBinary": ["p"],
+          "SHAKE.Read": ["p"]
+        },
+        "crypto/subtle": {
+          "ConstantTimeCopy": ["x"],
+          "XORBytes": ["dst"]
+        },
+        "crypto/tls": {
+          "Conn.Read": ["b"]
+        },
+        "crypto/x509": {
+          "OID.AppendBinary": ["b"],
+          "OID.AppendText": ["b"]
+        },
+        "database/sql/driver": {
+          "Rows.Next": ["dest"],
+          "RowsColumnTypeDatabaseTypeName.Next": ["dest"],
+          "RowsColumnTypeLength.Next": ["dest"],
+          "RowsColumnTypeNullable.Next": ["dest"],
+          "RowsColumnTypePrecisionScale.Next": ["dest"],
+          "RowsColumnTypeScanType.Next": ["dest"],
+          "RowsNextResultSet.Next": ["dest"]
+        },
+        "encoding": {
+          "BinaryAppender.AppendBinary": ["b"],
+          "TextAppender.AppendText": ["b"]
+        },
+        "encoding/ascii85": {
+          "Encode": ["dst"],
+          "Decode": ["dst"]
+        },
+        "encoding/base32": {
+          "Encoding.AppendDecode": ["dst"],
+          "Encoding.AppendEncode": ["dst"],
+          "Encoding.Decode": ["dst"],
+          "Encoding.Encode": ["dst"]
+        },
+        "encoding/base64": {
+          "Encoding.AppendDecode": ["dst"],
+          "Encoding.AppendEncode": ["dst"],
+          "Encoding.Decode": ["dst"],
+          "Encoding.Encode": ["dst"]
+        },
+        "encoding/binary": {
+          "Append": ["buf"],
+          "AppendByteOrder.AppendUint16": ["arg0"],
+          "AppendByteOrder.AppendUint32": ["arg0"],
+          "AppendByteOrder.AppendUint64": ["arg0"],
+          "AppendUvarint": ["buf"],
+          "AppendVarint": ["buf"],
+          "ByteOrder.PutUint16": ["arg0"],
+          "ByteOrder.PutUint32": ["arg0"],
+          "ByteOrder.PutUint64": ["arg0"],
+          "Encode": ["buf"],
+          "PutUvarint": ["buf"],
+          "PutVarint": ["buf"]
+        },
+        "encoding/hex": {
+          "AppendDecode": ["dst"],
+          "AppendEncode": ["dst"],
+          "Decode": ["dst"],
+          "Encode": ["dst"]
+        },
+        "fmt": {
+          "Append": ["b"],
+          "Appendf": ["b"],
+          "Appendln": ["b"],
+          "ScanState.Read": ["buf"]
+        },
+        "hash": {
+          "Cloner.Sum": ["b"],
+          "Hash.Sum": ["b"],
+          "Hash32.Sum": ["b"],
+          "Hash64.Sum": ["b"],
+          "XOF.Read": ["p"]
+        },
+        "hash/maphash": {
+          "Hash.Sum": ["b"]
+        },
+        "image/jpeg": {
+          "Reader.Read": ["p"]
+        },
+        "io": {
+          "CopyBuffer": ["buf"],
+          "LimitedReader.Read": ["p"],
+          "PipeReader.Read": ["data"],
+          "ReadAtLeast": ["buf"],
+          "ReadCloser.Read": ["p"],
+          "ReadFull": ["buf"],
+          "ReadSeekCloser.Read": ["p"],
+          "ReadSeeker.Read": ["p"],
+          "ReadWriteCloser.Read": ["p"],
+          "ReadWriteSeeker.Read": ["p"],
+          "ReadWriter.Read": ["p"],
+          "Reader.Read": ["p"],
+          "ReaderAt.ReadAt": ["p"],
+          "SectionReader.Read": ["p"],
+          "SectionReader.ReadAt": ["p"]
+        },
+        "io/fs": {
+          "File.Read": ["arg0"],
+          "ReadDirFile.Read": ["arg0"]
+        },
+        "log/slog": {
+          "Level.AppendText": ["b"],
+          "LevelVar.AppendText": ["b"]
+        },
+        "math/big": {
+          "Float.Append": ["buf"],
+          "Float.AppendText": ["b"],
+          "Int.Append": ["buf"],
+          "Int.AppendText": ["b"],
+          "Int.FillBytes": ["buf"],
+          "Rat.AppendText": ["b"]
+        },
+        "math/rand": {
+          "Rand.Read": ["p"],
+          "Read": ["p"]
+        },
+        "math/rand/v2": {
+          "ChaCha8.AppendBinary": ["b"],
+          "ChaCha8.Read": ["p"],
+          "PCG.AppendBinary": ["b"]
+        },
+        "mime/multipart": {
+          "File.Read": ["p"],
+          "File.ReadAt": ["p"],
+          "Part.Read": ["d"]
+        },
+        "mime/quotedprintable": {
+          "Reader.Read": ["p"]
+        },
+        "net": {
+          "Buffers.Read": ["p"],
+          "Conn.Read": ["b"],
+          "IP.AppendText": ["b"],
+          "IPConn.ReadFrom": ["b"],
+          "IPConn.ReadFromIP": ["b"],
+          "IPConn.ReadMsgIP": ["b", "oob"],
+          "PacketConn.ReadFrom": ["p"],
+          "UDPConn.ReadFrom": ["b"],
+          "UDPConn.ReadFromUDP": ["b"],
+          "UDPConn.ReadFromUDPAddrPort": ["b"],
+          "UDPConn.ReadMsgUDP": ["b", "oob"],
+          "UDPConn.ReadMsgUDPAddrPort": ["b", "oob"],
+          "UnixConn.ReadFrom": ["b"],
+          "UnixConn.ReadFromUnix": ["b"],
+          "UnixConn.ReadMsgUnix": ["b", "oob"]
+        },
+        "net/http": {
+          "File.Read": ["p"]
+        },
+        "net/netip": {
+          "Addr.AppendBinary": ["b"],
+          "Addr.AppendText": ["b"],
+          "Addr.AppendTo": ["b"],
+          "AddrPort.AppendBinary": ["b"],
+          "AddrPort.AppendText": ["b"],
+          "AddrPort.AppendTo": ["b"],
+          "Prefix.AppendBinary": ["b"],
+          "Prefix.AppendText": ["b"],
+          "Prefix.AppendTo": ["b"]
+        },
+        "net/url": {
+          "URL.AppendBinary": ["b"]
+        },
+        "os": {
+          "File.Read": ["b"],
+          "File.ReadAt": ["b"]
+        },
+        "regexp": {
+          "Regexp.AppendText": ["b"],
+          "Regexp.Expand": ["dst"],
+          "Regexp.ExpandString": ["dst"]
+        },
+        "runtime": {
+          "BlockProfile": ["p"],
+          "Callers": ["pc"],
+          "GoroutineProfile": ["p"],
+          "MemProfile": ["p"],
+          "MutexProfile": ["p"],
+          "Stack": ["buf"],
+          "ThreadCreateProfile": ["p"]
+        },
+        "runtime/metrics": {
+          "Read": ["m"]
+        },
+        "sort": {
+          "Float64s": ["x"],
+          "Ints": ["x"],
+          "Strings": ["x"]
+        },
+        "strconv": {
+          "AppendBool": ["dst"],
+          "AppendFloat": ["dst"],
+          "AppendInt": ["dst"],
+          "AppendQuote": ["dst"],
+          "AppendQuoteRune": ["dst"],
+          "AppendQuoteRuneToASCII": ["dst"],
+          "AppendQuoteRuneToGraphic": ["dst"],
+          "AppendQuoteToASCII": ["dst"],
+          "AppendQuoteToGraphic": ["dst"],
+          "AppendUint": ["dst"]
+        },
+        "strings": {
+          "Reader.Read": ["b"],
+          "Reader.ReadAt": ["b"]
+        },
+        "syscall": {
+          "Getdirentries": ["buf"],
+          "Getfsstat": ["buf"],
+          "Pipe": ["p"],
+          "Pread": ["p"],
+          "Read": ["p"],
+          "ReadDirent": ["buf"],
+          "Readlink": ["buf"],
+          "Recvfrom": ["p"],
+          "Recvmsg": ["p", "oob"]
+        },
+        "time": {
+          "Time.AppendBinary": ["b"],
+          "Time.AppendFormat": ["b"],
+          "Time.AppendText": ["b"]
+        },
+        "unicode/utf8": {
+          "AppendRune": ["p"],
+          "EncodeRune": ["p"]
+        },
+        "unicode/utf16": {
+          "AppendRune": ["a"]
+        }
+      },
+      "non_nilable_return": {
+        "container/list": ["List.PushBack", "List.PushFront"],
+        "container/ring": ["Ring.Next", "Ring.Prev"],
+        "crypto/ecdh": ["PrivateKey.PublicKey"],
+        "crypto/elliptic": ["Curve.Params", "CurveParams.Params"],
+        "go/doc/comment": ["Parser.Parse"],
+        "go/types": [
+          "Alias.Obj",
+          "Func.Signature",
+          "Interface.ExplicitMethod", "Interface.Method",
+          "MethodSet.At",
+          "Named.Method", "Named.Obj",
+          "Package.Scope",
+          "PkgName.Imported",
+          "Struct.Field",
+          "Tuple.At",
+          "TypeParam.Obj", "TypeParamList.At",
+          "Union.Term"
+        ],
+        "hash/crc32": ["IEEETable"],
+        "net/http/httptest": ["ResponseRecorder.Result", "Server.Client"],
+        "os/exec": ["CommandContext"],
+        "time": ["AfterFunc", "FixedZone", "Time.Location"]
+      },
+      "non_nilable_var": {
+        "unicode": ["*"]
+      }
+    }
+  }
+}

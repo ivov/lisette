@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  let x = 10;\n  let y = 20;\n  fmt.Print(f\"x = {x}, y = {y}\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func test() {
+	x := 10
+	y := 20
+	fmt.Printf("x = %v, y = %v", x, y)
+}

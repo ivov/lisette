@@ -1,0 +1,25 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func main() {
+	ret_2, ret_3, ret_4 := strings.Cut("hello:world", ":")
+	var subject_1 lisette.Option[lisette.Tuple2[string, string]]
+	if ret_4 {
+		subject_1 = lisette.MakeOptionSome[lisette.Tuple2[string, string]](lisette.MakeTuple2(ret_2, ret_3))
+	} else {
+		subject_1 = lisette.MakeOptionNone[lisette.Tuple2[string, string]]()
+	}
+	if subject_1.Tag == lisette.OptionSome {
+		result := subject_1.SomeVal
+		fmt.Print(result.First)
+	}
+}

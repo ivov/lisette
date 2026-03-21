@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Redundant `else` branch
+   ╭─[test.lis:5:5]
+ 4 │     let _ = x;
+ 5 │   } else {
+   ·     ──┬─
+   ·       ╰── this branch does nothing
+ 6 │     ()
+   ╰────
+  help: Remove the `else` branch · code: [lint.redundant_if_let_else]

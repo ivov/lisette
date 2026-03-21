@@ -1,0 +1,24 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Name struct {
+	first string
+	last  string
+}
+
+func (n Name) String() string {
+	return fmt.Sprintf("Name { first: %v, last: %v }", n.first, n.last)
+}
+
+func main() {
+	n := Name{
+		first: "A",
+		last:  "B",
+	}
+	fmt.Println(n.first)
+}

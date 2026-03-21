@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n/// A user in the system.\nstruct User {\n  /// The user's display name.\n  pub name: string,\n  /// The user's age in years.\n  age: int,\n}\n"
+---
+package main
+
+import "fmt"
+
+// A user in the system.
+type User struct {
+	// The user's display name.
+	Name string
+	// The user's age in years.
+	age int
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { name: %v, age: %v }", u.Name, u.age)
+}

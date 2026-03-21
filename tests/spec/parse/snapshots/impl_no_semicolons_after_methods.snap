@@ -1,0 +1,362 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n  fn new(x: int, y: int) -> Point {\n    return Point { x, y };\n  }\n  fn get_x(self: Point) -> int {\n    return self.x;\n  }\n}\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Point",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 5,
+        },
+        generics: [],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "x",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 18,
+                    byte_length: 1,
+                },
+                annotation: Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 21,
+                        byte_length: 3,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "y",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 28,
+                    byte_length: 1,
+                },
+                annotation: Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 31,
+                        byte_length: 3,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 36,
+        },
+    },
+    ImplBlock {
+        annotation: Constructor {
+            name: "Point",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 44,
+                byte_length: 5,
+            },
+        },
+        receiver_name: "Point",
+        methods: [
+            Function {
+                doc: None,
+                attributes: [],
+                name: "new",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 57,
+                    byte_length: 3,
+                },
+                generics: [],
+                params: [
+                    Binding {
+                        pattern: Identifier {
+                            identifier: "x",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 61,
+                                byte_length: 1,
+                            },
+                        },
+                        annotation: Some(
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 64,
+                                    byte_length: 3,
+                                },
+                            },
+                        ),
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    Binding {
+                        pattern: Identifier {
+                            identifier: "y",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 69,
+                                byte_length: 1,
+                            },
+                        },
+                        annotation: Some(
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 72,
+                                    byte_length: 3,
+                                },
+                            },
+                        ),
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                ],
+                return_annotation: Constructor {
+                    name: "Point",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 80,
+                        byte_length: 5,
+                    },
+                },
+                return_type: Variable(
+                    -1,
+                ),
+                visibility: Private,
+                body: Block {
+                    items: [
+                        Return {
+                            expression: StructCall {
+                                name: "Point",
+                                field_assignments: [
+                                    StructFieldAssignment {
+                                        name: "x",
+                                        name_span: Span {
+                                            file_id: 0,
+                                            byte_offset: 107,
+                                            byte_length: 1,
+                                        },
+                                        value: Identifier {
+                                            value: "x",
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 107,
+                                                byte_length: 1,
+                                            },
+                                            binding_id: None,
+                                            qualified: None,
+                                        },
+                                    },
+                                    StructFieldAssignment {
+                                        name: "y",
+                                        name_span: Span {
+                                            file_id: 0,
+                                            byte_offset: 110,
+                                            byte_length: 1,
+                                        },
+                                        value: Identifier {
+                                            value: "y",
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 110,
+                                                byte_length: 1,
+                                            },
+                                            binding_id: None,
+                                            qualified: None,
+                                        },
+                                    },
+                                ],
+                                spread: None,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 99,
+                                    byte_length: 14,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 92,
+                                byte_length: 21,
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 86,
+                        byte_length: 32,
+                    },
+                },
+                ty: Variable(
+                    -1,
+                ),
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 54,
+                    byte_length: 64,
+                },
+            },
+            Function {
+                doc: None,
+                attributes: [],
+                name: "get_x",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 124,
+                    byte_length: 5,
+                },
+                generics: [],
+                params: [
+                    Binding {
+                        pattern: Identifier {
+                            identifier: "self",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 130,
+                                byte_length: 4,
+                            },
+                        },
+                        annotation: Some(
+                            Constructor {
+                                name: "Point",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 136,
+                                    byte_length: 5,
+                                },
+                            },
+                        ),
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                ],
+                return_annotation: Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 146,
+                        byte_length: 3,
+                    },
+                },
+                return_type: Variable(
+                    -1,
+                ),
+                visibility: Private,
+                body: Block {
+                    items: [
+                        Return {
+                            expression: DotAccess {
+                                expression: Identifier {
+                                    value: "self",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 163,
+                                        byte_length: 4,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                member: "x",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 163,
+                                    byte_length: 6,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 156,
+                                byte_length: 13,
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 150,
+                        byte_length: 24,
+                    },
+                },
+                ty: Variable(
+                    -1,
+                ),
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 121,
+                    byte_length: 53,
+                },
+            },
+        ],
+        generics: [],
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 39,
+            byte_length: 137,
+        },
+    },
+]

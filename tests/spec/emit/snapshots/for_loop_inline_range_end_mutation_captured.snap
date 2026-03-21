@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn main() {\n  let mut n = 3\n  let mut iters = 0\n  for i in 0..n {\n    iters += 1\n    n = 0\n    let _ = i\n  }\n  let _ = iters\n}\n"
+---
+package main
+
+func main() {
+	n := 3
+	iters := 0
+	_bound_1 := n
+	for i := 0; i < _bound_1; i++ {
+		iters++
+		n = 0
+		_ = i
+	}
+	_ = iters
+}

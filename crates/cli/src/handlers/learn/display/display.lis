@@ -1,0 +1,41 @@
+import "go:fmt"
+
+import "models"
+
+/// Prints a list of tasks with a title header.
+pub fn print_tasks(title: string, items: Slice<models.Task>) {
+  if items.is_empty() {
+    return
+  }
+  fmt.Println(f"\n{title}:")
+  for item in items {
+    fmt.Println(item.display())
+  }
+}
+
+/// Prints summary statistics.
+pub fn print_stats(items: Slice<models.Task>) {
+  let total = items.length()
+  let done = items.filter(|t| t.status == models.Status.Done).length()
+  let pending = items.filter(|t| t.status == models.Status.Pending).length()
+  let cancelled = total - done - pending
+  let tag_count = items.fold(0, |sum, t| sum + t.tags.length())
+
+  fmt.Println(f"\n  total:     {total}")
+  fmt.Println(f"  done:      {done}")
+  fmt.Println(f"  pending:   {pending}")
+  fmt.Println(f"  cancelled: {cancelled}")
+  fmt.Println(f"  tags:      {tag_count}")
+}
+
+pub fn print_usage() {
+  fmt.Println("Usage: tasks <command> [args]")
+  fmt.Println("")
+  fmt.Println("Commands:")
+  fmt.Println("  add <title> [--priority low|medium|high] [--tags a,b,c]")
+  fmt.Println("  done <id>")
+  fmt.Println("  cancel <id> <reason>")
+  fmt.Println("  list")
+  fmt.Println("  stats")
+  fmt.Println("  watch")
+}

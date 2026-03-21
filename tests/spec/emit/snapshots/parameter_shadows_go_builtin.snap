@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test(len: int) -> int {\n  len + 1\n}\n"
+---
+package main
+
+func test(len_ int) int {
+	return len_ + 1
+}

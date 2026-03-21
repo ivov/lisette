@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:4:3]
+ 3 │   let counter = 42;
+ 4 │   countr
+   ·   ───┬──
+   ·      ╰── name not found in scope
+ 5 │ }
+   ╰────
+  help: Did you mean `counter`? · code: [resolve.name_not_found]

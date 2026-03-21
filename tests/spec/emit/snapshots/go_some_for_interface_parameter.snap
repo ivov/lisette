@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nimport \"go:net/http\"\nimport \"go:strings\"\nimport \"go:fmt\"\n\nfn main() {\n  let body = strings.NewReader(\"hello\")\n  let req = http.NewRequest(\"POST\", \"https://example.com\", Some(body))\n  fmt.Println(req)\n}\n"
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"net/http"
+	"strings"
+)
+
+func main() {
+	body := strings.NewReader("hello")
+	opt_1 := lisette.MakeOptionSome(body)
+	var unwrap_2 *strings.Reader
+	if opt_1.Tag == lisette.OptionSome {
+		unwrap_2 = opt_1.SomeVal
+	}
+	ret_3, ret_4 := http.NewRequest("POST", "https://example.com", unwrap_2)
+	var req lisette.Result[*http.Request, error]
+	if ret_4 != nil {
+		req = lisette.MakeResultErr[*http.Request, error](ret_4)
+	} else if ret_3 == nil {
+		req = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
+	} else {
+		req = lisette.MakeResultOk[*http.Request, error](ret_3)
+	}
+	fmt.Println(req)
+}

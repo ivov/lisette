@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Wrap(Ref<int>)\n\nfn main() {\n  let mut x = 1\n  let w = Wrap(&x)\n  let r = w.0\n  let _ = r.*\n}\n"
+---
+package main
+
+type Wrap *int
+
+func main() {
+	x := 1
+	w := Wrap(&x)
+	r := (*int)(w)
+	_ = *r
+}

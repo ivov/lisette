@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn do_nothing() {}\n\nfn main() {\n  let x = { do_nothing() }\n  let _ = x\n}\n"
+---
+package main
+
+func do_nothing() {}
+
+func main() {
+	var x struct{}
+	do_nothing()
+	x = struct{}{}
+	_ = x
+}

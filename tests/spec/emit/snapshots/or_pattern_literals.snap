@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(x: int) -> string {\n  match x {\n    1 | 2 | 3 => \"small\",\n    4 | 5 | 6 => \"medium\",\n    _ => \"large\",\n  }\n}\n"
+---
+package main
+
+func test(x int) string {
+	if x == 1 || x == 2 || x == 3 {
+		return "small"
+	} else if x == 4 || x == 5 || x == 6 {
+		return "medium"
+	}
+	return "large"
+}

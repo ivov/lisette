@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(items: Slice<int>) -> string {\n  match items {\n    [] => \"empty\",\n    _ => \"not empty\",\n  }\n}\n"
+---
+package main
+
+func test(items []int) string {
+	if len(items) == 0 {
+		return "empty"
+	}
+	return "not empty"
+}

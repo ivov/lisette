@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/recover.rs
+description: "input: \nfn test() -> string {\n  let result = recover { panic(\"oh no!\") };\n  match result {\n    Ok(_) => \"ok\",\n    Err(pv) => \"caught panic\",\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() string {
+	recoverResult_1 := lisette.RecoverBlock(func() struct{} {
+		panic("oh no!")
+	})
+	result := recoverResult_1
+	if result.Tag == lisette.ResultOk {
+		return "ok"
+	}
+	return "caught panic"
+}

@@ -1,0 +1,1 @@
+fn test() { @rawgo("fmt.Println(\"Hello\")"); }

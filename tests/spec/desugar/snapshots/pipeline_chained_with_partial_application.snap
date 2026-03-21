@@ -1,0 +1,136 @@
+---
+source: tests/spec/desugar/mod.rs
+description: "input: fn test() { x |> add(5) |> multiply(2); }"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 3,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Call {
+                    expression: Identifier {
+                        value: "multiply",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 27,
+                            byte_length: 8,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    args: [
+                        Call {
+                            expression: Identifier {
+                                value: "add",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 17,
+                                    byte_length: 3,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                            args: [
+                                Identifier {
+                                    value: "x",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 12,
+                                        byte_length: 1,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                Literal {
+                                    literal: Integer {
+                                        value: 5,
+                                        text: None,
+                                    },
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 21,
+                                        byte_length: 1,
+                                    },
+                                },
+                            ],
+                            type_args: [],
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 12,
+                                byte_length: 11,
+                            },
+                        },
+                        Literal {
+                            literal: Integer {
+                                value: 2,
+                                text: None,
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 36,
+                                byte_length: 1,
+                            },
+                        },
+                    ],
+                    type_args: [],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 12,
+                        byte_length: 26,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 10,
+                byte_length: 31,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 0,
+            byte_length: 41,
+        },
+    },
+]

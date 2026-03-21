@@ -1,0 +1,31 @@
+fn test_option() -> int {
+  let x = Some(42);
+  match x {
+    Some(n) => n,
+    None => 0,
+  }
+}
+
+fn maybe_double(x: int) -> Option<int> {
+  if x > 0 {
+    Some(x * 2)
+  } else {
+    None
+  }
+}
+
+fn fallible() -> Result<int, string> {
+  Ok(10)
+}
+
+fn fallible_propagate() -> Result<int, string> {
+  let x = fallible()?;
+  Ok(x + 1)
+}
+
+fn test_result() -> int {
+  match fallible_propagate() {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}

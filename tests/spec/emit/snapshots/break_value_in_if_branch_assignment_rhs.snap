@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() {\n  let _ = loop {\n    let mut x = 0\n    x = if true { break 1 } else { 1 }\n    let _ = x\n    2\n  }\n}\n"
+---
+package main
+
+func test() {
+	var tmp_1 int
+	for {
+		x := 0
+		var tmp_2 int
+		if true {
+			tmp_1 = 1
+			break
+		}
+		tmp_2 = 1
+		x = tmp_2
+		_ = x
+		_ = 2
+	}
+	_ = tmp_1
+}

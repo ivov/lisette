@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct User {\n  #[tag(`validate:\"required,email\"`)]\n  email: string,\n}"
+---
+struct User {
+  #[tag(`validate:"required,email"`)]
+  email: string,
+}

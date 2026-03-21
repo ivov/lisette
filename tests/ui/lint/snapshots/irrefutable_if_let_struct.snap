@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Redundant `if let` pattern
+   ╭─[test.lis:5:10]
+ 4 │ pub fn test(p: Point) {
+ 5 │   if let Point { x, y } = p {
+   ·          ───────┬──────
+   ·                 ╰── always matches
+ 6 │     let _ = x + y;
+   ╰────
+  help: Use `let` instead of `if let` since the pattern cannot fail · code: [lint.redundant_if_let]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:4:11]
+ 3 │   select {
+ 4 │     let x | y = <-ch => (),
+   ·           ┬
+   ·           ╰── expected `=`
+ 5 │   }
+   ╰────
+  help:  · code: [parse.unexpected_token]

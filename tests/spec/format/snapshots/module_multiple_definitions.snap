@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Point { x: int, y: int }\n\nfn origin() -> Point { Point { x: 0, y: 0 } }\n\nfn add(a: Point, b: Point) -> Point { Point { x: a.x + b.x, y: a.y + b.y } }"
+---
+struct Point { x: int, y: int }
+
+fn origin() -> Point {
+  Point { x: 0, y: 0 }
+}
+
+fn add(a: Point, b: Point) -> Point {
+  Point { x: a.x + b.x, y: a.y + b.y }
+}

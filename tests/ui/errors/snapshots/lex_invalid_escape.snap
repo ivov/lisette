@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid escape sequence
+   ╭─[test.lis:1:9]
+ 1 │ let x = '\v'
+   ·         ─┬
+   ·          ╰── `\v` is not a valid escape
+   ╰────
+  help: Valid escapes are `\n`, `\t`, `\r`, `\0`, `\\`, `\'`, and `\xHH` (hex) · code: [lex.invalid_escape_sequence]

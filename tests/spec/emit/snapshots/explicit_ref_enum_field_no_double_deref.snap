@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nenum List<T> {\n  Cons(T, Ref<List<T>>),\n  Nil,\n}\n\nfn list_len<T>(list: List<T>) -> int {\n  match list {\n    List.Nil => 0,\n    List.Cons(_, rest) => 1 + list_len(rest.*),\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeListCons[T any](arg0 T, arg1 *List[T]) List[T] {
+	return List[T]{Tag: ListCons, Cons0: arg0, Cons1: arg1}
+}
+
+func MakeListNil[T any]() List[T] {
+	return List[T]{Tag: ListNil}
+}
+
+type ListTag int
+
+const (
+	ListCons ListTag = iota
+	ListNil
+)
+
+type List[T any] struct {
+	Tag   ListTag
+	Cons0 T
+	Cons1 *List[T]
+}
+
+func (l List[T]) String() string {
+	switch l.Tag {
+	case ListCons:
+		return fmt.Sprintf("List.Cons(%v, %v)", l.Cons0, l.Cons1)
+	case ListNil:
+		return "List.Nil"
+	default:
+		return fmt.Sprintf("List(%d)", l.Tag)
+	}
+}
+
+func list_len[T any](list List[T]) int {
+	if list.Tag == ListNil {
+		return 0
+	}
+	rest := list.Cons1
+	return 1 + list_len(*rest)
+}

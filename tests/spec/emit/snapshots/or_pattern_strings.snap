@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \"y\" | \"true\" => 1,\n    \"no\" | \"n\" | \"false\" => 0,\n    _ => -1,\n  }\n}\n"
+---
+package main
+
+func test(s string) int {
+	if s == "yes" || s == "y" || s == "true" {
+		return 1
+	} else if s == "no" || s == "n" || s == "false" {
+		return 0
+	}
+	return -1
+}

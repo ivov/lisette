@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Item {\n  #[json(omitempty)]\n  value: int,\n}"
+---
+struct Item {
+  #[json(omitempty)]
+  value: int,
+}

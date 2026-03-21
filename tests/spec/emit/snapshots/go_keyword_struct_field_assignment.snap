@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nstruct Config {\n  range: int,\n  default: string,\n}\n\nfn main() {\n  let mut c = Config { range: 10, default: \"hello\" }\n  c.range = 20\n  c.default = \"world\"\n}\n"
+---
+package main
+
+import "fmt"
+
+type Config struct {
+	range_   int
+	default_ string
+}
+
+func (c Config) String() string {
+	return fmt.Sprintf("Config { range: %v, default: %v }", c.range_, c.default_)
+}
+
+func main() {
+	c := Config{
+		range_:   10,
+		default_: "hello",
+	}
+	c.range_ = 20
+	c.default_ = "world"
+}

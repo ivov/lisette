@@ -1,0 +1,61 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nenum E { A(int), B(int) }\n\nfn test() -> int {\n  let mut current: Option<E> = Some(E.A(5));\n  let mut sum = 0;\n  while let Some(A(x)) | Some(B(x)) = current {\n    sum = sum + x;\n    current = None;\n  }\n  sum\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func MakeEA(arg0 int) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 int) E {
+	return E{Tag: EB, B: arg0}
+}
+
+type ETag int
+
+const (
+	EA ETag = iota
+	EB
+)
+
+type E struct {
+	Tag ETag
+	A   int
+	B   int
+}
+
+func (e E) String() string {
+	switch e.Tag {
+	case EA:
+		return fmt.Sprintf("E.A(%v)", e.A)
+	case EB:
+		return fmt.Sprintf("E.B(%v)", e.B)
+	default:
+		return fmt.Sprintf("E(%d)", e.Tag)
+	}
+}
+
+func test() int {
+	current := lisette.MakeOptionSome(MakeEA(5))
+	sum := 0
+	for {
+		if current.Tag == lisette.OptionSome && current.SomeVal.Tag == EA {
+			x := current.SomeVal.A
+			sum += x
+			current = lisette.MakeOptionNone[E]()
+		} else if current.Tag == lisette.OptionSome && current.SomeVal.Tag == EB {
+			x := current.SomeVal.B
+			sum += x
+			current = lisette.MakeOptionNone[E]()
+		} else {
+			break
+		}
+	}
+	return sum
+}

@@ -1,0 +1,61 @@
+{
+  "name": "lisette",
+  "displayName": "Lisette",
+  "description": "Language support for Lisette",
+  "version": "0.1.0",
+  "publisher": "ivov",
+  "license": "MIT",
+  "repository": "https://github.com/ivov/lisette",
+  "homepage": "https://lisette.run",
+  "keywords": ["lisette", "go", "language"],
+  "icon": "icon.png",
+  "engines": { "vscode": "^1.95.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "lisette",
+        "aliases": ["Lisette"],
+        "extensions": [".lis", ".d.lis"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "lisette",
+        "scopeName": "source.lisette",
+        "path": "./syntaxes/lisette.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Lisette",
+      "properties": {
+        "lisette.serverPath": {
+          "type": "string",
+          "default": "lis",
+          "description": "Path to the Lisette CLI binary."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "pnpm run typecheck && node esbuild.js",
+    "typecheck": "tsc --noEmit",
+    "vscode:prepublish": "pnpm run typecheck && node esbuild.js --production",
+    "publish": "vsce publish",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.95.0",
+    "@types/node": "^22.0.0",
+    "@vscode/vsce": "^3.7.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  }
+}

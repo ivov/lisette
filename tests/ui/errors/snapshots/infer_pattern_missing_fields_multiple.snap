@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Missing pattern fields
+   ╭─[test.lis:6:7]
+ 5 │   let p = Point { x: 1, y: 2, z: 3 };
+ 6 │   let Point { x } = p;
+   ·       ─────┬─────
+   ·            ╰── missing `y`, `z`
+ 7 │ }
+   ╰────
+  help: Include the missing fields, or use `..` to ignore them · code: [infer.pattern_missing_fields]

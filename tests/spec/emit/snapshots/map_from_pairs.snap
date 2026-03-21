@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test() -> Map<string, int> {\n  Map.from([(\"alice\", 95), (\"bob\", 82)])\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() map[string]int {
+	return lisette.MapFrom([]lisette.Tuple2[string, int]{
+		lisette.MakeTuple2("alice", 95),
+		lisette.MakeTuple2("bob", 82),
+	})
+}

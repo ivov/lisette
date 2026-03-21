@@ -1,0 +1,32 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: ..10"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: DotDot,
+            text: "..",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: Integer,
+            text: "10",
+            byte_offset: 2,
+            byte_length: 2,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 4,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

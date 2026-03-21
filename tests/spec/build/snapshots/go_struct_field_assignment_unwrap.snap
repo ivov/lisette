@@ -1,0 +1,43 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"runtime/debug"
+)
+
+func main() {
+	opt_1 := lisette.MakeOptionNone[*debug.Module]()
+	var unwrap_2 *debug.Module
+	if opt_1.Tag == lisette.OptionSome {
+		unwrap_2 = opt_1.SomeVal
+	}
+	replacement := debug.Module{
+		Path:    "example.com/replacement",
+		Version: "v2.0.0",
+		Sum:     "",
+		Replace: unwrap_2,
+	}
+	opt_3 := lisette.MakeOptionNone[*debug.Module]()
+	var unwrap_4 *debug.Module
+	if opt_3.Tag == lisette.OptionSome {
+		unwrap_4 = opt_3.SomeVal
+	}
+	mod_ := debug.Module{
+		Path:    "example.com/mod",
+		Version: "v1.0.0",
+		Sum:     "",
+		Replace: unwrap_4,
+	}
+	opt_5 := lisette.MakeOptionSome(&replacement)
+	var unwrap_6 *debug.Module
+	if opt_5.Tag == lisette.OptionSome {
+		unwrap_6 = opt_5.SomeVal
+	}
+	mod_.Replace = unwrap_6
+	fmt.Print(mod_.Path)
+}

@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn noop() {}\n\nfn main() {\n  (task { noop() })\n}\n"
+---
+package main
+
+func noop() {}
+
+func main() {
+	go func() {
+		noop()
+	}()
+}

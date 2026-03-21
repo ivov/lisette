@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test() -> Channel<int> {\n  Channel.new<int>()\n}\n"
+---
+package main
+
+func test() chan int {
+	return make(chan int)
+}

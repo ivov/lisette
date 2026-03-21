@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn do_thing() -> Result<int, string> { Ok(1) }\n\nfn test() {\n  let result: Result<int, string> = try {\n    do_thing()?\n  };\n  let _ = result;\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func do_thing() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func test() {
+	var result lisette.Result[int, string]
+	tryResult_1 := func() lisette.Result[int, string] {
+		check_2 := do_thing()
+		if check_2.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, string](check_2.ErrVal)
+		}
+		result_3 := check_2.OkVal
+		return lisette.MakeResultOk[int, string](result_3)
+	}()
+	result = tryResult_1
+	_ = result
+}

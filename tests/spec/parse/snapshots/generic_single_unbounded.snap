@@ -1,0 +1,110 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn identity<T>(x: T) -> T {\n  return x;\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "identity",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 8,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 13,
+                    byte_length: 1,
+                },
+            },
+        ],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "x",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 16,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "T",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 19,
+                            byte_length: 1,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Constructor {
+            name: "T",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 25,
+                byte_length: 1,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Return {
+                    expression: Identifier {
+                        value: "x",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 38,
+                            byte_length: 1,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 31,
+                        byte_length: 8,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 27,
+                byte_length: 15,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 41,
+        },
+    },
+]

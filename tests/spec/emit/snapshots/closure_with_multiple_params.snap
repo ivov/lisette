@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() {\n  let add = |a: int, b: int| a + b;\n}\n"
+---
+package main
+
+func test() {
+	_ = func(a, b int) int {
+		return a + b
+	}
+}

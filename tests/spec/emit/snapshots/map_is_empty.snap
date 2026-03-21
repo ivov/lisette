@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(m: Map<string, int>) -> bool {\n  m.is_empty()\n}\n"
+---
+package main
+
+func test(m map[string]int) bool {
+	return len(m) == 0
+}

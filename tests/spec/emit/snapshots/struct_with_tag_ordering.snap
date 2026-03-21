@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[yaml]\n#[json]\n#[xml]\n#[db]\nstruct User {\n  #[yaml(\"user\")]\n  #[json(\"user\")]\n  #[xml(\"user\")]\n  #[db(\"user\")]\n  name: string,\n}\n"
+---
+package main
+
+import "fmt"
+
+type User struct {
+	Name string `json:"user" db:"user" xml:"user" yaml:"user"`
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { name: %v }", u.Name)
+}

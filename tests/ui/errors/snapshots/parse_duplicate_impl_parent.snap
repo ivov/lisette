@@ -1,0 +1,15 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate impl
+   ╭─[test.lis:4:8]
+ 3 │ interface I {
+ 4 │   impl A;
+   ·        ┬
+   ·        ╰── first use
+ 5 │   impl A;
+   ·        ┬
+   ·        ╰── used again
+ 6 │ }
+   ╰────
+  help: Remove the duplicate parent · code: [parse.duplicate_impl_parent]

@@ -1,0 +1,41 @@
+alias b := build
+alias c := check
+alias t := test
+alias ta := test-accept
+alias f := format
+alias l := lint
+alias lf := lintfix
+alias cov := test-cov
+
+build:
+    go build -o bin ./cmd/bindgen
+
+check: lint format-check test
+    go vet ./...
+
+clean:
+    rm -f bin/bindgen tests/coverage.out tests/coverage.html
+
+lint:
+    golangci-lint run
+
+lintfix:
+    golangci-lint run --fix
+
+format:
+    go fmt ./...
+
+format-check:
+    @test -z "$(go fmt ./...)" || (echo "Error: Found unformatted Go files" && exit 1)
+
+test:
+    go test ./tests
+
+test-accept:
+    go test ./tests -update
+
+test-cov:
+    go test -coverprofile=tests/coverage.out -coverpkg=./internal/... ./...
+    go tool cover -html=tests/coverage.out -o tests/coverage.html
+    open tests/coverage.html
+

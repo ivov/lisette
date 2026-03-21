@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `Map` initialization
+   ╭─[test.lis:3:29]
+ 2 │ fn main() {
+ 3 │   let m: Map<string, int> = {}
+   ·                             ─┬
+   ·                              ╰── invalid syntax
+ 4 │ }
+   ╰────
+  help: To initialize a `Map`, use `Map.new<string, int>()` · code: [infer.invalid_map_initialization]

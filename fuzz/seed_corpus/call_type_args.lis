@@ -1,0 +1,7 @@
+fn test() {
+  func<int>(x);
+  func<Map<string, int>>();
+  func<A, B, C>(x, y);
+  obj.method<int>(arg);
+  Map.new<string, fn(int, int) -> int>();
+}

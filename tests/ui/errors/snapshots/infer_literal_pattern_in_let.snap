@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Pattern might not match
+   ╭─[test.lis:3:7]
+ 2 │ fn test(x: int) {
+ 3 │   let 42 = x;
+   ·       ─┬
+   ·        ╰── value might not equal this literal
+ 4 │ }
+   ╰────
+  help: Use `match` or `if` to compare values · code: [infer.literal_in_binding]

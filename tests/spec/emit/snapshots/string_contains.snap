@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(s: string, sub: string) -> bool {\n  s.contains(sub)\n}\n"
+---
+package main
+
+import "strings"
+
+func test(s, sub string) bool {
+	return strings.Contains(s, sub)
+}

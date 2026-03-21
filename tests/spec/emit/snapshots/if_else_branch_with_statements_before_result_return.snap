@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn checked_sqrt(n: int) -> Result<int, string> {\n  if n < 0 {\n    Err(\"negative input\")\n  } else {\n    let mut x = n;\n    while x * x > n {\n      x = x - 1;\n    }\n    Ok(x)\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func checked_sqrt(n int) lisette.Result[int, string] {
+	if n < 0 {
+		return lisette.MakeResultErr[int, string]("negative input")
+	}
+	x := n
+	for x*x > n {
+		x--
+	}
+	return lisette.MakeResultOk[int, string](x)
+}

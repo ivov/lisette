@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `const` requires a simple expression
+   ╭─[test.lis:2:15]
+ 1 │     
+ 2 │ ╭─▶ const VALUE = {
+ 3 │ │     let x = 10
+ 4 │ │     x + 20
+ 5 │ ├─▶ }
+   · ╰──── expected literal or simple expression
+   ╰────
+  help: Use `let` for computed values · code: [infer.const_requires_simple_expression]

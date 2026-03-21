@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `try`
+   ╭─[test.lis:4:3]
+ 3 │ fn f() {
+ 4 │   try foo()
+   ·   ─┬─
+   ·    ╰── requires a block
+ 5 │ }
+   ╰────
+  help: Use `try { expression }` instead of `try expression` · code: [parse.syntax_error]

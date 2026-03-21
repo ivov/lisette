@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[json]\nstruct User {\n  name: string,\n  age: int,\n}\n\nfn test() -> string {\n  let u = User { name: \"Alice\", age: 30 };\n  u.name\n}\n"
+---
+package main
+
+import "fmt"
+
+type User struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { name: %v, age: %v }", u.Name, u.Age)
+}
+
+func test() string {
+	u := User{
+		Name: "Alice",
+		Age:  30,
+	}
+	return u.Name
+}

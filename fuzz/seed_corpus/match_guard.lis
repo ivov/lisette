@@ -1,0 +1,18 @@
+fn test_guard(opt: Option<int>) -> int {
+  match opt {
+    Some(x) if x > 100 => 1,
+    Some(x) if x > 50 => 2,
+    Some(x) if x > 0 => 3,
+    Some(_) => 4,
+    None => 5,
+  }
+}
+
+fn test_guard_tuple() -> int {
+  let pair = (3, 5);
+  match pair {
+    (x, y) if x == y => 1,
+    (x, y) if x > y => 2,
+    _ => 3,
+  }
+}

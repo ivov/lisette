@@ -1,0 +1,19 @@
+fn takes_ref(r: Ref<int>) -> int {
+  r.*
+}
+
+fn test_ref_create() -> int {
+  let x = 42;
+  let r = &x;
+  r.*
+}
+
+fn mutates_ref(r: Ref<int>) {
+  r.* = 99
+}
+
+fn test_ref_mut() -> int {
+  let mut x = 1;
+  mutates_ref(&x);
+  x
+}

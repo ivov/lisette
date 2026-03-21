@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(items: Slice<int>) {\n  let mut s = items\n  s = s.append(1, 2, 3)\n}\n"
+---
+package main
+
+func test(items []int) {
+	s := items
+	s = append(s, 1, 2, 3)
+}

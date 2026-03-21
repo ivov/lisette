@@ -1,0 +1,12 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  [\n    a,\n    // comment before b\n    b,\n    c,\n  ]\n}"
+---
+fn test() {
+  [
+    a,
+    // comment before b
+    b,
+    c,
+  ]
+}

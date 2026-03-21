@@ -1,0 +1,59 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct Wrapper<T>(T)\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Wrapper",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 7,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 16,
+                    byte_length: 1,
+                },
+            },
+        ],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "_0",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 19,
+                    byte_length: 1,
+                },
+                annotation: Constructor {
+                    name: "T",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 19,
+                        byte_length: 1,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Tuple,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 20,
+        },
+    },
+]

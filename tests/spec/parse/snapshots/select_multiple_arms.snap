@@ -1,0 +1,327 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  select {\n    let x = ch1 => process(x),\n    ch2.send(\"hello\") => print(\"sent\"),\n    _ => print(\"default\"),\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "ch1",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 3,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Receiver",
+                        params: [
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 23,
+                                    byte_length: 3,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 14,
+                            byte_length: 13,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "ch2",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 29,
+                        byte_length: 3,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Sender",
+                        params: [
+                            Constructor {
+                                name: "string",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 41,
+                                    byte_length: 6,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 34,
+                            byte_length: 14,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Select {
+                    arms: [
+                        SelectArm {
+                            pattern: Receive {
+                                binding: Identifier {
+                                    identifier: "x",
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 71,
+                                        byte_length: 1,
+                                    },
+                                },
+                                typed_pattern: None,
+                                receive_expression: Identifier {
+                                    value: "ch1",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 75,
+                                        byte_length: 3,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                body: Call {
+                                    expression: Identifier {
+                                        value: "process",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 82,
+                                            byte_length: 7,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    args: [
+                                        Identifier {
+                                            value: "x",
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 90,
+                                                byte_length: 1,
+                                            },
+                                            binding_id: None,
+                                            qualified: None,
+                                        },
+                                    ],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 82,
+                                        byte_length: 10,
+                                    },
+                                },
+                            },
+                        },
+                        SelectArm {
+                            pattern: Send {
+                                send_expression: Call {
+                                    expression: DotAccess {
+                                        expression: Identifier {
+                                            value: "ch2",
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 98,
+                                                byte_length: 3,
+                                            },
+                                            binding_id: None,
+                                            qualified: None,
+                                        },
+                                        member: "send",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 98,
+                                            byte_length: 8,
+                                        },
+                                    },
+                                    args: [
+                                        Literal {
+                                            literal: String(
+                                                "hello",
+                                            ),
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 107,
+                                                byte_length: 7,
+                                            },
+                                        },
+                                    ],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 98,
+                                        byte_length: 17,
+                                    },
+                                },
+                                body: Call {
+                                    expression: Identifier {
+                                        value: "print",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 119,
+                                            byte_length: 5,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    args: [
+                                        Literal {
+                                            literal: String(
+                                                "sent",
+                                            ),
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 125,
+                                                byte_length: 6,
+                                            },
+                                        },
+                                    ],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 119,
+                                        byte_length: 13,
+                                    },
+                                },
+                            },
+                        },
+                        SelectArm {
+                            pattern: WildCard {
+                                body: Call {
+                                    expression: Identifier {
+                                        value: "print",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 143,
+                                            byte_length: 5,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    args: [
+                                        Literal {
+                                            literal: String(
+                                                "default",
+                                            ),
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 149,
+                                                byte_length: 9,
+                                            },
+                                        },
+                                    ],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 143,
+                                        byte_length: 16,
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 54,
+                        byte_length: 110,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 50,
+                byte_length: 116,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 165,
+        },
+    },
+]

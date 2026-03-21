@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nenum Shape {\n  Rectangle { x: int, y: int, width: int, height: int },\n}\n\nfn area(s: Shape) -> int {\n  match s {\n    Rectangle { width, height, .. } => width * height,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeShapeRectangle(arg0 int, arg1 int, arg2 int, arg3 int) Shape {
+	return Shape{Tag: ShapeRectangle, X: arg0, Y: arg1, Width: arg2, Height: arg3}
+}
+
+type ShapeTag int
+
+const (
+	ShapeRectangle ShapeTag = iota
+)
+
+type Shape struct {
+	Tag    ShapeTag
+	X      int
+	Y      int
+	Width  int
+	Height int
+}
+
+func (s Shape) String() string {
+	switch s.Tag {
+	case ShapeRectangle:
+		return fmt.Sprintf("Shape.Rectangle { x: %v, y: %v, width: %v, height: %v }", s.X, s.Y, s.Width, s.Height)
+	default:
+		return fmt.Sprintf("Shape(%d)", s.Tag)
+	}
+}
+
+func area(s Shape) int {
+	width := s.Width
+	height := s.Height
+	return width * height
+}

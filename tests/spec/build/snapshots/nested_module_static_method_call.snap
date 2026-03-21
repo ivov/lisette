@@ -1,0 +1,33 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/models/user"
+
+func main() {
+	_ = user.User_New("Alice", "alice@test.com")
+}
+
+
+// === models/user/user.go ===
+package user
+
+import "fmt"
+
+type User struct {
+	Name  string
+	Email string
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { name: %v, email: %v }", u.Name, u.Email)
+}
+
+func User_New(name, email string) User {
+	return User{
+		Name:  name,
+		Email: email,
+	}
+}

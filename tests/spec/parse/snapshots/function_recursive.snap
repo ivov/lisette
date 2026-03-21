@@ -1,0 +1,269 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 1;\n  }\n  return n * factorial(n - 1);\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "factorial",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 9,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "n",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 14,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 17,
+                            byte_length: 3,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Constructor {
+            name: "int",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 25,
+                byte_length: 3,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                If {
+                    condition: Binary {
+                        operator: LessThanOrEqual,
+                        left: Identifier {
+                            value: "n",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 36,
+                                byte_length: 1,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                        right: Literal {
+                            literal: Integer {
+                                value: 1,
+                                text: None,
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 41,
+                                byte_length: 1,
+                            },
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 36,
+                            byte_length: 6,
+                        },
+                    },
+                    consequence: Block {
+                        items: [
+                            Return {
+                                expression: Literal {
+                                    literal: Integer {
+                                        value: 1,
+                                        text: None,
+                                    },
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 56,
+                                        byte_length: 1,
+                                    },
+                                },
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 49,
+                                    byte_length: 8,
+                                },
+                            },
+                        ],
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 43,
+                            byte_length: 19,
+                        },
+                    },
+                    alternative: Unit {
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 33,
+                            byte_length: 29,
+                        },
+                    },
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 33,
+                        byte_length: 29,
+                    },
+                },
+                Return {
+                    expression: Binary {
+                        operator: Multiplication,
+                        left: Identifier {
+                            value: "n",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 72,
+                                byte_length: 1,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                        right: Call {
+                            expression: Identifier {
+                                value: "factorial",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 76,
+                                    byte_length: 9,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                            args: [
+                                Binary {
+                                    operator: Subtraction,
+                                    left: Identifier {
+                                        value: "n",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 86,
+                                            byte_length: 1,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    right: Literal {
+                                        literal: Integer {
+                                            value: 1,
+                                            text: None,
+                                        },
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 90,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 86,
+                                        byte_length: 5,
+                                    },
+                                },
+                            ],
+                            type_args: [],
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 76,
+                                byte_length: 16,
+                            },
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 72,
+                            byte_length: 20,
+                        },
+                    },
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 65,
+                        byte_length: 27,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 29,
+                byte_length: 66,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 94,
+        },
+    },
+]

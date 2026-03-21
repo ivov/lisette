@@ -1,0 +1,121 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum Message {\n  Quit,\n  Move { x: int, y: int },\n  Write(string),\n}\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Message",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 7,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                name: "Quit",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 18,
+                    byte_length: 4,
+                },
+                fields: Unit,
+            },
+            EnumVariant {
+                doc: None,
+                name: "Move",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 26,
+                    byte_length: 4,
+                },
+                fields: Struct(
+                    [
+                        EnumFieldDefinition {
+                            name: "x",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 33,
+                                byte_length: 1,
+                            },
+                            annotation: Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 36,
+                                    byte_length: 3,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                        EnumFieldDefinition {
+                            name: "y",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 41,
+                                byte_length: 1,
+                            },
+                            annotation: Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 44,
+                                    byte_length: 3,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                    ],
+                ),
+            },
+            EnumVariant {
+                doc: None,
+                name: "Write",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 53,
+                    byte_length: 5,
+                },
+                fields: Tuple(
+                    [
+                        EnumFieldDefinition {
+                            name: "field0",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "string",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 59,
+                                    byte_length: 6,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                    ],
+                ),
+            },
+        ],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 68,
+        },
+    },
+]

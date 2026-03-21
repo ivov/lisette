@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport h \"utils/helpers\"\nimport \"go:fmt\"\n\nfn test() {\n  fmt.Print(\"Local module with alias\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func test() {
+	fmt.Print("Local module with alias")
+}

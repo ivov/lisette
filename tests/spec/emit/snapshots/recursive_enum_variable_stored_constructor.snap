@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nenum List {\n  Nil,\n  Cons(int, List),\n}\n\nfn main() {\n  let make = List.Cons\n  let xs = make(1, List.Nil)\n  let _ = xs\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeListNil() List {
+	return List{Tag: ListNil}
+}
+
+func MakeListCons(arg0 int, arg1 *List) List {
+	return List{Tag: ListCons, Cons0: arg0, Cons1: arg1}
+}
+
+type ListTag int
+
+const (
+	ListNil ListTag = iota
+	ListCons
+)
+
+type List struct {
+	Tag   ListTag
+	Cons0 int
+	Cons1 *List
+}
+
+func (l List) String() string {
+	switch l.Tag {
+	case ListNil:
+		return "List.Nil"
+	case ListCons:
+		return fmt.Sprintf("List.Cons(%v, %v)", l.Cons0, l.Cons1)
+	default:
+		return fmt.Sprintf("List(%d)", l.Tag)
+	}
+}
+
+func main() {
+	make_ := MakeListCons
+	ptr_1 := MakeListNil()
+	_ = make_(1, &ptr_1)
+}

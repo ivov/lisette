@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn main() {\n  let ch = Channel.buffered<int>(1)\n  ch.send(42)\n  let r = &ch\n  let _ = select {\n    let Some(v) = r.receive() => v,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 42)
+	r := &ch
+	var tmp_1 int
+	ch_2 := *r
+	for {
+		select {
+		case v, ok := <-ch_2:
+			if ok {
+				tmp_1 = v
+			} else {
+				ch_2 = nil
+				continue
+			}
+		default:
+			tmp_1 = 0
+		}
+		break
+	}
+	_ = tmp_1
+}

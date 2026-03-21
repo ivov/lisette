@@ -1,0 +1,17 @@
+fn test(items: Slice<string>) {
+  for item in items {
+    print(item);
+  }
+}
+
+fn test2(map_data: Map<string, int>) {
+  for (key, value) in map_data {
+    print(key, value);
+  }
+}
+
+fn test3() {
+  for i in 0..5 {
+    print(i);
+  }
+}

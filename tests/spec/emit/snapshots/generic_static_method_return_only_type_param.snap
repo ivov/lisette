@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Container<T> {\n  items: Slice<T>,\n  name: string,\n}\n\nimpl<T> Container<T> {\n  fn new(name: string) -> Container<T> {\n    Container { items: [], name: name }\n  }\n}\n\nfn test() -> Container<string> {\n  Container.new(\"things\")\n}\n"
+---
+package main
+
+import "fmt"
+
+type Container[T any] struct {
+	items []T
+	name  string
+}
+
+func (c Container[T]) String() string {
+	return fmt.Sprintf("Container { items: %v, name: %v }", c.items, c.name)
+}
+
+func Container_new[T any](name string) Container[T] {
+	return Container[T]{
+		items: []T{},
+		name:  name,
+	}
+}
+
+func test() Container[string] {
+	return Container_new[string]("things")
+}

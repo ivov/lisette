@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> int {\n  0b1010\n}\n"
+---
+package main
+
+func test() int {
+	return 0b1010
+}

@@ -1,0 +1,175 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() { let result = Outer { inner: Inner { x: 1, y: 2 }, z: 3 }; }\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "result",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 17,
+                                byte_length: 6,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: StructCall {
+                        name: "Outer",
+                        field_assignments: [
+                            StructFieldAssignment {
+                                name: "inner",
+                                name_span: Span {
+                                    file_id: 0,
+                                    byte_offset: 34,
+                                    byte_length: 5,
+                                },
+                                value: StructCall {
+                                    name: "Inner",
+                                    field_assignments: [
+                                        StructFieldAssignment {
+                                            name: "x",
+                                            name_span: Span {
+                                                file_id: 0,
+                                                byte_offset: 49,
+                                                byte_length: 1,
+                                            },
+                                            value: Literal {
+                                                literal: Integer {
+                                                    value: 1,
+                                                    text: None,
+                                                },
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 52,
+                                                    byte_length: 1,
+                                                },
+                                            },
+                                        },
+                                        StructFieldAssignment {
+                                            name: "y",
+                                            name_span: Span {
+                                                file_id: 0,
+                                                byte_offset: 55,
+                                                byte_length: 1,
+                                            },
+                                            value: Literal {
+                                                literal: Integer {
+                                                    value: 2,
+                                                    text: None,
+                                                },
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 58,
+                                                    byte_length: 1,
+                                                },
+                                            },
+                                        },
+                                    ],
+                                    spread: None,
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 41,
+                                        byte_length: 20,
+                                    },
+                                },
+                            },
+                            StructFieldAssignment {
+                                name: "z",
+                                name_span: Span {
+                                    file_id: 0,
+                                    byte_offset: 63,
+                                    byte_length: 1,
+                                },
+                                value: Literal {
+                                    literal: Integer {
+                                        value: 3,
+                                        text: None,
+                                    },
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 66,
+                                        byte_length: 1,
+                                    },
+                                },
+                            },
+                        ],
+                        spread: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 26,
+                            byte_length: 43,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 13,
+                        byte_length: 56,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 61,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 71,
+        },
+    },
+]

@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Box { x: int }\n\nfn main() {\n  let mut m = Map.from([(\"a\", Box { x: 1 })])\n  let mut entry = m[\"a\"]\n  entry.x = 2\n  m[\"a\"] = entry\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Box struct {
+	x int
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { x: %v }", b.x)
+}
+
+func main() {
+	m := lisette.MapFrom([]lisette.Tuple2[string, Box]{lisette.MakeTuple2("a", Box{x: 1})})
+	entry := m["a"]
+	entry.x = 2
+	m["a"] = entry
+}

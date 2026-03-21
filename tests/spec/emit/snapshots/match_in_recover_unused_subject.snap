@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct P { v: int }\nfn test() {\n  let out = recover {\n    let p = P { v: 1 }\n    match p { P { v } => () }\n  }\n  let _ = out\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type P struct {
+	v int
+}
+
+func (p P) String() string {
+	return fmt.Sprintf("P { v: %v }", p.v)
+}
+
+func test() {
+	recoverResult_1 := lisette.RecoverBlock(func() struct{} {
+		_ = P{v: 1}
+		return struct{}{}
+	})
+	_ = recoverResult_1
+}

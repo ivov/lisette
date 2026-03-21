@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:3]
+ 2 │ interface Foo {
+ 3 │   ^
+   ·   ┬
+   ·   ╰── expected `fn` or `impl`
+ 4 │   fn bar();
+   ╰────
+  help: Only functions and `impl` blocks are allowed in interfaces · code: [parse.syntax_error]

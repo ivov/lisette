@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unreachable code after return
+   ╭─[test.lis:4:3]
+ 3 │   { return 1 };
+ 4 │   let x = 2;
+   ·   ────┬────
+   ·       ╰── unreachable from this point onward
+ 5 │   x
+   ╰────
+  help: Remove this line and all code after it · code: [lint.dead_code_after_return]

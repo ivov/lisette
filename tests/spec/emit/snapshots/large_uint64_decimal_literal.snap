@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> uint64 {\n  18446744073709551615\n}\n"
+---
+package main
+
+func test() uint64 {
+	return 18446744073709551615
+}

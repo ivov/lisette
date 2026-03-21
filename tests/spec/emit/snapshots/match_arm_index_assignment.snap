@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(key: string, value: int) {\n  let mut m = Map.new()\n  match key {\n    \"a\" => m[key] = value,\n    _ => m[\"default\"] = 0,\n  }\n}\n"
+---
+package main
+
+func test(key string, value int) {
+	m := make(map[string]int)
+	if key == "a" {
+		m[key] = value
+	} else {
+		m["default"] = 0
+	}
+}

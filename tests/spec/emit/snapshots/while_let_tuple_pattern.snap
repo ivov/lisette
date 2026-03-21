@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(opt: Option<(int, int)>) {\n  let mut current = opt;\n  while let Some((a, b)) = current {\n    current = None;\n    let _ = a + b;\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[lisette.Tuple2[int, int]]) {
+	current := opt
+	for {
+		if current.Tag == lisette.OptionSome {
+			a := current.SomeVal.First
+			b := current.SomeVal.Second
+			current = lisette.MakeOptionNone[lisette.Tuple2[int, int]]()
+			_ = a + b
+		} else {
+			break
+		}
+	}
+}

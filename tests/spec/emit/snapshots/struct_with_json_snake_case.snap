@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[json(snake_case)]\nstruct User {\n  first_name: string,\n  last_name: string,\n}\n"
+---
+package main
+
+import "fmt"
+
+type User struct {
+	First_name string `json:"first_name"`
+	Last_name  string `json:"last_name"`
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { first_name: %v, last_name: %v }", u.First_name, u.Last_name)
+}

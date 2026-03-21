@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Uninferred type
+   ╭─[test.lis:8:9]
+ 7 │   let x = get_something();
+ 8 │   match x {
+   ·         ┬
+   ·         ╰── type cannot be inferred at this point
+ 9 │     (a, b) => a,
+   ╰────
+  help: Add a type annotation on the value before matching on it · code: [infer.cannot_match_on_unconstrained_type]

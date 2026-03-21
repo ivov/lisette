@@ -1,0 +1,34 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"io/fs"
+	"os"
+)
+
+func main() {
+	ret_1, ret_2 := os.Stat("/tmp")
+	var result lisette.Result[fs.FileInfo, error]
+	if ret_2 != nil {
+		result = lisette.MakeResultErr[fs.FileInfo, error](ret_2)
+	} else if ret_1 == nil {
+		result = lisette.MakeResultErr[fs.FileInfo, error](errors.New("unexpected nil"))
+	} else {
+		result = lisette.MakeResultOk[fs.FileInfo, error](ret_1)
+	}
+	if result.Tag == lisette.ResultOk {
+		info := result.OkVal
+		size := info.Size()
+		fmt.Printf("size: %d\n", size)
+	} else {
+		e := result.ErrVal
+		msg := e.Error()
+		fmt.Printf("error: %s\n", msg)
+	}
+}

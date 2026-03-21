@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `defer` inside loop
+   ╭─[test.lis:5:5]
+ 4 │   loop {
+ 5 │     defer cleanup();
+   ·     ───────┬───────
+   ·            ╰── not allowed inside loop
+ 6 │     break;
+   ╰────
+  help: Wrap the loop body in a helper function, e.g. `fn process(file: File) { defer file.close(); ... }` and call it in the loop: `for f in files { process(f); }` · code: [infer.defer_in_loop]

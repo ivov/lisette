@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] double boolean negation
+   ╭─[test.lis:4:3]
+ 3 │   let x = true;
+ 4 │   !!x
+   ·   ─┬
+   ·    ╰── mistaken double negation
+ 5 │ }
+   ╰────
+  help: Remove one of the negation operators · code: [lint.double_bool_negation]

@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ntype MyInt = int\n\nstruct Box<T> { val: T }\n\nimpl Box<MyInt> {\n  fn doubled(self) -> MyInt { self.val * 2 }\n}\n"
+---
+package main
+
+import "fmt"
+
+type MyInt = int
+
+type Box[T any] struct {
+	val T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { val: %v }", b.val)
+}
+
+func Box_doubled(self Box[int]) int {
+	return self.val * 2
+}

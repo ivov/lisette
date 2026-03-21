@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:crypto/sha256\"\n\nfn get(cond: bool) -> fn(Slice<uint8>) -> Slice<uint8> {\n  if cond {\n    sha256.Sum256\n  } else {\n    sha256.Sum224\n  }\n}\n\nfn main() {\n  let f = get(true)\n  let data: Slice<uint8> = []\n  let out = f(data)\n  let _ = out\n}\n"
+---
+package main
+
+import "crypto/sha256"
+
+func get(cond bool) func([]uint8) []uint8 {
+	if cond {
+		return func(arg0 []uint8) []uint8 {
+			arr_1 := sha256.Sum256(arg0)
+			return arr_1[:]
+		}
+	} else {
+		return func(arg0 []uint8) []uint8 {
+			arr_2 := sha256.Sum224(arg0)
+			return arr_2[:]
+		}
+	}
+}
+
+func main() {
+	f := get(true)
+	data := []uint8{}
+	_ = f(data)
+}

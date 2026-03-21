@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() {\n  loop {\n    let _ = if true { { continue } } else { { 1 } }\n    break\n  }\n}\n"
+---
+package main
+
+func test() {
+	for {
+		var tmp_1 int
+		if true {
+			continue
+			panic("unreachable")
+		}
+		var tmp_2 int
+		tmp_2 = 1
+		tmp_1 = tmp_2
+		_ = tmp_1
+		break
+	}
+}

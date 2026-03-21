@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \ntype IntFn = fn(int) -> int\n\nfn apply(f: Ref<IntFn>, x: int) -> int {\n  f.*(x)\n}\n\nfn test() -> int {\n  let double: IntFn = |x: int| x * 2;\n  apply(&double, 3)\n}\n"
+---
+package main
+
+type IntFn = func(int) int
+
+func apply(f *IntFn, x int) int {
+	return (*f)(x)
+}
+
+func test() int {
+	double := func(x int) int {
+		return x * 2
+	}
+	return apply(&double, 3)
+}

@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() -> float64 {\n  let a: int = 1;\n  let b: int = 2;\n  a as float64 + b as float64\n}\n"
+---
+package main
+
+func test() float64 {
+	a := 1
+	b := 2
+	return float64(a) + float64(b)
+}

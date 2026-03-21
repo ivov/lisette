@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn main() {\n  let mut r = 0..3\n  let mut n = 0\n  for i in r {\n    n += 1\n    r = 0..0\n    let _ = i\n  }\n  let _ = n\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	r := lisette.Range[int]{
+		Start: 0,
+		End:   3,
+	}
+	n := 0
+	_range_1 := r
+	for i := _range_1.Start; i < _range_1.End; i++ {
+		n++
+		r = lisette.Range[int]{
+			Start: 0,
+			End:   0,
+		}
+		_ = i
+	}
+	_ = n
+}

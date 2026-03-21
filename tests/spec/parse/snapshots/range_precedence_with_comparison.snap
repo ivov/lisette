@@ -1,0 +1,166 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "other",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 5,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "bool",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 16,
+                            byte_length: 4,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "r",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 28,
+                                byte_length: 1,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: Binary {
+                        operator: Equal,
+                        left: Range {
+                            start: Some(
+                                Literal {
+                                    literal: Integer {
+                                        value: 0,
+                                        text: None,
+                                    },
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 32,
+                                        byte_length: 1,
+                                    },
+                                },
+                            ),
+                            end: Some(
+                                Literal {
+                                    literal: Integer {
+                                        value: 5,
+                                        text: None,
+                                    },
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 35,
+                                        byte_length: 1,
+                                    },
+                                },
+                            ),
+                            inclusive: false,
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 32,
+                                byte_length: 4,
+                            },
+                        },
+                        right: Identifier {
+                            value: "other",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 40,
+                                byte_length: 5,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 32,
+                            byte_length: 13,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 24,
+                        byte_length: 21,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 22,
+                byte_length: 26,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 47,
+        },
+    },
+]

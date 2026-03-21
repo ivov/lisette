@@ -1,0 +1,80 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: let r = 5..\nlet x = 42"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Let,
+            text: "let",
+            byte_offset: 0,
+            byte_length: 3,
+        },
+        Token {
+            kind: Identifier,
+            text: "r",
+            byte_offset: 4,
+            byte_length: 1,
+        },
+        Token {
+            kind: Equal,
+            text: "=",
+            byte_offset: 6,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "5",
+            byte_offset: 8,
+            byte_length: 1,
+        },
+        Token {
+            kind: DotDot,
+            text: "..",
+            byte_offset: 9,
+            byte_length: 2,
+        },
+        Token {
+            kind: Semicolon,
+            text: "",
+            byte_offset: 11,
+            byte_length: 0,
+        },
+        Token {
+            kind: Let,
+            text: "let",
+            byte_offset: 12,
+            byte_length: 3,
+        },
+        Token {
+            kind: Identifier,
+            text: "x",
+            byte_offset: 16,
+            byte_length: 1,
+        },
+        Token {
+            kind: Equal,
+            text: "=",
+            byte_offset: 18,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "42",
+            byte_offset: 20,
+            byte_length: 2,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 22,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

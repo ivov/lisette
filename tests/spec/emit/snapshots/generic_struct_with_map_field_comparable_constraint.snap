@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nstruct Cache<K, V> {\n  data: Map<K, V>,\n}\n"
+---
+package main
+
+import "fmt"
+
+type Cache[K comparable, V any] struct {
+	data map[K]V
+}
+
+func (c Cache[K, V]) String() string {
+	return fmt.Sprintf("Cache { data: %v }", c.data)
+}

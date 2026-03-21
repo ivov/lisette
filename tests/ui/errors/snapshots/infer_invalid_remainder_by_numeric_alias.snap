@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid operation
+   ╭─[main.lis:5:11]
+ 4 │ fn test() {
+ 5 │   let x = 100 % time.Duration.Second;
+   ·           ─────────────┬────────────
+   ·                        ╰── cannot compute `int` % `Duration`
+ 6 │ }
+   ╰────
+  help: To take the remainder by `Duration`, the dividend (left operand) must also be `Duration` · code: [infer.invalid_division_order]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Useless `try` block
+   ╭─[test.lis:3:16]
+ 2 │ fn test() {
+ 3 │   let result = try {
+   ·                ─┬─
+   ·                 ╰── no `?` operator found
+ 4 │     let x = 42;
+   ╰────
+  help: A `try` block must contain at least one `?` for propagation · code: [infer.try_block_no_question_mark]

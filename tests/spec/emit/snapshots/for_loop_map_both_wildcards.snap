@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(m: Map<string, int>) -> int {\n  let mut count = 0;\n  for (_, _) in m {\n    count += 1;\n  };\n  count\n}\n"
+---
+package main
+
+func test(m map[string]int) int {
+	count := 0
+	for range m {
+		count++
+	}
+	return count
+}

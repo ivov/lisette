@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn get_nested(outer: Option<Option<int>>) -> Option<int> {\n  let inner = outer?;\n  let val = inner?;\n  Some(val)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func get_nested(outer lisette.Option[lisette.Option[int]]) lisette.Option[int] {
+	if outer.Tag != lisette.OptionSome {
+		return lisette.MakeOptionNone[int]()
+	}
+	inner := outer.SomeVal
+	if inner.Tag != lisette.OptionSome {
+		return lisette.MakeOptionNone[int]()
+	}
+	val := inner.SomeVal
+	return lisette.MakeOptionSome[int](val)
+}

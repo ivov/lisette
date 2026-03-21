@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(s: string) -> int {\n  s.length()\n}\n"
+---
+package main
+
+func test(s string) int {
+	return len(s)
+}

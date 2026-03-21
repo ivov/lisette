@@ -1,0 +1,49 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct UserId(int)\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "UserId",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 6,
+        },
+        generics: [],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "_0",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 15,
+                    byte_length: 3,
+                },
+                annotation: Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 3,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Tuple,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 18,
+        },
+    },
+]

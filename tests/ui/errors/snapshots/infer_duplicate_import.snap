@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate import
+   ╭─[main.lis:3:10]
+ 2 │ import a "utils"
+ 3 │ import b "utils"
+   ·          ───┬───
+   ·             ╰── already imported above
+ 4 │ 
+   ╰────
+  help: Module `utils` is already imported. Remove the duplicate import · code: [resolve.duplicate_import]

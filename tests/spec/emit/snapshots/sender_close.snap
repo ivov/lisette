@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(s: Sender<int>) {\n  s.close()\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s chan<- int) {
+	lisette.SenderClose(s)
+}

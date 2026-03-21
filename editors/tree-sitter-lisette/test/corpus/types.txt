@@ -1,0 +1,145 @@
+================================================================================
+Simple type
+================================================================================
+
+let x: int = 0
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    type: (type_identifier)
+    value: (integer_literal)))
+
+================================================================================
+Generic type
+================================================================================
+
+let x: Vec<int> = make()
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    type: (generic_type
+      type: (type_identifier)
+      type_arguments: (type_arguments
+        (type_identifier)))
+    value: (call_expression
+      function: (identifier)
+      arguments: (arguments))))
+
+================================================================================
+Nested generic
+================================================================================
+
+let x: Map<string, Vec<int>> = make()
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    type: (generic_type
+      type: (type_identifier)
+      type_arguments: (type_arguments
+        (type_identifier)
+        (generic_type
+          type: (type_identifier)
+          type_arguments: (type_arguments
+            (type_identifier)))))
+    value: (call_expression
+      function: (identifier)
+      arguments: (arguments))))
+
+================================================================================
+Tuple type
+================================================================================
+
+let x: (int, string) = (1, "a")
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    type: (tuple_type
+      (type_identifier)
+      (type_identifier))
+    value: (tuple_expression
+      (integer_literal)
+      (string_literal
+        (string_content)))))
+
+================================================================================
+Function type
+================================================================================
+
+let f: fn(int) -> int = add
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    type: (function_type
+      parameters: (parameters
+        (type_identifier))
+      return_type: (type_identifier))
+    value: (identifier)))
+
+================================================================================
+Never type
+================================================================================
+
+let x: Never = panic()
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    type: (never_type)
+    value: (call_expression
+      function: (identifier)
+      arguments: (arguments))))
+
+================================================================================
+Type parameters
+================================================================================
+
+fn id<T>(x: T) -> T { x }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    name: (identifier)
+    type_parameters: (type_parameters
+      (type_parameter
+        name: (type_identifier)))
+    parameters: (parameters
+      (parameter
+        pattern: (identifier)
+        type: (type_identifier)))
+    return_type: (type_identifier)
+    body: (block
+      (identifier))))
+
+================================================================================
+Scoped type
+================================================================================
+
+let x: io.Reader = r
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    type: (scoped_type_identifier
+      path: (type_identifier)
+      name: (type_identifier))
+    value: (identifier)))

@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let _x = 42;\n  _x\n}\n"
+---
+package main
+
+func test() int {
+	return 42
+}

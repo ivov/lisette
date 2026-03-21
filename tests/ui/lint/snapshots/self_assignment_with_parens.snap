@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Self-assignment
+   ╭─[test.lis:4:3]
+ 3 │   let mut x = 5;
+ 4 │   x = (x);
+   ·   ───┬───
+   ·      ╰── assigning to itself
+ 5 │   x
+   ╰────
+  help: Correct this assignment · code: [lint.self_assignment]

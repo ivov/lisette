@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn main() {\n  let x = 1\n  x as float64\n}\n"
+---
+package main
+
+func main() {
+	x := 1
+	_ = float64(x)
+}

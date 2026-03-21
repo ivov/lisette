@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused literal
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   42;
+   ·   ─┬
+   ·    ╰── this literal has no effect
+ 4 │   ()
+   ╰────
+  help: Remove this literal · code: [lint.unused_literal]

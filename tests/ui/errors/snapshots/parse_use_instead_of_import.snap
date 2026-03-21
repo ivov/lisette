@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ use fmt
+   · ─┬─
+   ·  ╰── unexpected syntax for import
+   ╰────
+  help: Use `import` instead of `use` for imports: `import "module/path"` · code: [parse.use_unsupported]

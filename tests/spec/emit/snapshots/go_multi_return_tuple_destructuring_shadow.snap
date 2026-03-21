@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nimport \"go:math\"\n\nfn main() {\n  let x = \"hi\"\n  let _ = x\n  let (x, y) = math.Modf(1.25)\n  let _ = (x, y)\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"math"
+)
+
+func main() {
+	_ = "hi"
+	x_1, y := math.Modf(1.25)
+	_ = lisette.MakeTuple2(x_1, y)
+}

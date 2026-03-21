@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nstruct Box<T> { value: T }\n\nimpl<T> Box<T> {\n  fn map(self: Box<T>, f: fn(T) -> T) -> Box<T> {\n    Box { value: f(self.value) }\n  }\n}\n\nfn test() -> int {\n  let b = Box { value: 10 };\n  b.map(|x: int| x * 2).value\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.value)
+}
+
+func (b Box[T]) map_(f func(T) T) Box[T] {
+	return Box[T]{value: f(b.value)}
+}
+
+func test() int {
+	b := Box[int]{value: 10}
+	return b.map_(func(x int) int {
+		return x * 2
+	}).value
+}

@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { match s { \"yes\" | \"y\" => true, \"no\" | \"n\" => false, _ => false } }"
+---
+fn test() {
+  match s {
+    "yes" | "y" => true,
+    "no" | "n" => false,
+    _ => false,
+  }
+}

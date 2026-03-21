@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let mut x = 0\n  x = { { return 1 } }\n  let _ = x\n  2\n}\n"
+---
+package main
+
+func test() int {
+	x := 0
+	{
+		return 1
+	}
+	_ = x
+	return 2
+}

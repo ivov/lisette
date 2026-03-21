@@ -1,0 +1,199 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { return None; };\n  Some(x)\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Constructor {
+            name: "Option",
+            params: [
+                Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 21,
+                        byte_length: 3,
+                    },
+                },
+            ],
+            span: Span {
+                file_id: 0,
+                byte_offset: 14,
+                byte_length: 11,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: EnumVariant {
+                            identifier: "Some",
+                            fields: [
+                                Identifier {
+                                    identifier: "x",
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 39,
+                                        byte_length: 1,
+                                    },
+                                },
+                            ],
+                            rest: false,
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 34,
+                                byte_length: 7,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: Identifier {
+                        value: "opt",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 44,
+                            byte_length: 3,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: Some(
+                        Block {
+                            items: [
+                                Return {
+                                    expression: Identifier {
+                                        value: "None",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 62,
+                                            byte_length: 4,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 55,
+                                        byte_length: 11,
+                                    },
+                                },
+                            ],
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 53,
+                                byte_length: 16,
+                            },
+                        },
+                    ),
+                    else_span: Some(
+                        Span {
+                            file_id: 0,
+                            byte_offset: 48,
+                            byte_length: 4,
+                        },
+                    ),
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 30,
+                        byte_length: 39,
+                    },
+                },
+                Call {
+                    expression: Identifier {
+                        value: "Some",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 73,
+                            byte_length: 4,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    args: [
+                        Identifier {
+                            value: "x",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 78,
+                                byte_length: 1,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                    ],
+                    type_args: [],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 73,
+                        byte_length: 7,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 26,
+                byte_length: 56,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 81,
+        },
+    },
+]

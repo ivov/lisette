@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:18]
+ 1 │ 
+ 2 │ fn f<T: Display +>() {}
+   ·                  ┬
+   ·                  ╰── expected bound after `+`
+   ╰────
+  help: Provide a bound or remove the trailing `+` · code: [parse.syntax_error]

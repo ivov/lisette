@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn g() -> Result<Channel<int>, string> { Ok(Channel.buffered<int>(1)) }\n\nfn f() -> Result<int, string> {\n  let ch = Channel.buffered<int>(1)\n  ch.send(7)\n  let x = select {\n    match g()?.receive() {\n      Some(v) => v,\n      None => 0,\n    },\n    _ => 0,\n  }\n  Ok(x)\n}\n\nfn main() { let _ = f() }\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func g() lisette.Result[chan int, string] {
+	return lisette.MakeResultOk[chan int, string](make(chan int, 1))
+}
+
+func f() lisette.Result[int, string] {
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 7)
+	var x int
+	check_1 := g()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_1.ErrVal)
+	}
+	result_2 := check_1.OkVal
+	select {
+	case v, ok := <-result_2:
+		if ok {
+			x = v
+		} else {
+			x = 0
+		}
+	default:
+		x = 0
+	}
+	return lisette.MakeResultOk[int, string](x)
+}
+
+func main() {
+	_ = f()
+}

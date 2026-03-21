@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let mut sum = 0;\n  for i in [1, 2, 3, 4, 5] {\n    let v = if i % 2 == 0 {\n      continue\n    } else {\n      i\n    };\n    sum += v;\n  }\n  sum\n}\n"
+---
+package main
+
+func test() int {
+	sum := 0
+	for _, i := range []int{1, 2, 3, 4, 5} {
+		var v int
+		if i%2 == 0 {
+			continue
+		}
+		v = i
+		sum += v
+	}
+	return sum
+}

@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(flag: bool) -> () {\n  if flag {\n    return ()\n  }\n  let x = 10;\n  ()\n}\n"
+---
+package main
+
+func test(flag bool) {
+	if flag {
+		return
+	}
+	_ = 10
+}

@@ -1,0 +1,90 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[json]\nenum Shape {\n  Rectangle(float64, float64),\n  Point,\n}\n"
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func MakeShapeRectangle(arg0 float64, arg1 float64) Shape {
+	return Shape{Tag: ShapeRectangle, Rectangle0: arg0, Rectangle1: arg1}
+}
+
+func MakeShapePoint() Shape {
+	return Shape{Tag: ShapePoint}
+}
+
+type ShapeTag int
+
+const (
+	ShapeRectangle ShapeTag = iota
+	ShapePoint
+)
+
+type Shape struct {
+	Tag        ShapeTag
+	Rectangle0 float64
+	Rectangle1 float64
+}
+
+func (s Shape) String() string {
+	switch s.Tag {
+	case ShapeRectangle:
+		return fmt.Sprintf("Shape.Rectangle(%v, %v)", s.Rectangle0, s.Rectangle1)
+	case ShapePoint:
+		return "Shape.Point"
+	default:
+		return fmt.Sprintf("Shape(%d)", s.Tag)
+	}
+}
+
+func (s Shape) MarshalJSON() ([]byte, error) {
+	switch s.Tag {
+	case ShapeRectangle:
+		return json.Marshal(map[string]any{"Rectangle": []any{s.Rectangle0, s.Rectangle1}})
+	case ShapePoint:
+		return json.Marshal("Point")
+	default:
+		return nil, fmt.Errorf("unknown Shape tag: %d", s.Tag)
+	}
+}
+
+func (s *Shape) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		switch name {
+		case "Point":
+			s.Tag = ShapePoint
+			return nil
+		default:
+			return fmt.Errorf("unknown Shape variant: %s", name)
+		}
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("invalid Shape JSON")
+	}
+	for key, val := range obj {
+		switch key {
+		case "Rectangle":
+			s.Tag = ShapeRectangle
+			var arr []json.RawMessage
+			if err := json.Unmarshal(val, &arr); err != nil {
+				return err
+			}
+			if len(arr) != 2 {
+				return fmt.Errorf("Rectangle expects 2 fields, got %d", len(arr))
+			}
+			if err := json.Unmarshal(arr[0], &s.Rectangle0); err != nil {
+				return err
+			}
+			return json.Unmarshal(arr[1], &s.Rectangle1)
+		default:
+			return fmt.Errorf("unknown Shape variant: %s", key)
+		}
+	}
+	return fmt.Errorf("empty Shape JSON object")
+}

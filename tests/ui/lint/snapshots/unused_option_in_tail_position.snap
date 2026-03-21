@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused Option
+   ╭─[test.lis:7:3]
+ 6 │ fn do_search() {
+ 7 │   find_item()
+   ·   ─────┬─────
+   ·        ╰── this `Option` is discarded
+ 8 │ }
+   ╰────
+  help: Handle this `Option`, explicitly discard it with `let _ = ...`, or return it by adding `-> Option<int>` to the function signature · code: [lint.unused_option]

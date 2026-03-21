@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn main() {\n  let f = Option.map\n  let x = f(Some(1), |v| v + 1)\n  let _ = x\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	f := lisette.OptionMap[int, int]
+	x := f(lisette.MakeOptionSome(1), func(v int) int {
+		return v + 1
+	})
+	_ = x
+}

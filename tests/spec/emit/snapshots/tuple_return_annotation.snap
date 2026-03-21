@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn get_pair() -> (int, string) {\n  (42, \"hello\")\n}\n\nfn test() {\n  let (x, y) = get_pair();\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func get_pair() lisette.Tuple2[int, string] {
+	return lisette.MakeTuple2(42, "hello")
+}
+
+func test() {
+	_ = get_pair()
+}

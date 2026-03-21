@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn len(items: Slice<int>) -> int {\n  match items {\n    [] => 0,\n    [first, ..rest] => 1 + len(rest),\n  }\n}\n"
+---
+package main
+
+func len_(items []int) int {
+	if len(items) == 0 {
+		return 0
+	}
+	rest := items[1:]
+	return 1 + len_(rest)
+}

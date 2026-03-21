@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: /// First line\n/// Second line\nfn foo() {}"
+---
+/// First line
+/// Second line
+fn foo() {}

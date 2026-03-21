@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:16]
+ 1 │ 
+ 2 │ enum E { A(int }
+   ·                ┬
+   ·                ╰── expected `,` or `)`
+   ╰────
+  help: Add a comma between elements · code: [parse.syntax_error]

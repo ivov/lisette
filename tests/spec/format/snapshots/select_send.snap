@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  select {\n    tx.Send(42) => done(),\n    _ => timeout(),\n  }\n}"
+---
+fn test() {
+  select {
+    tx.Send(42) => done(),
+    _ => timeout(),
+  }
+}

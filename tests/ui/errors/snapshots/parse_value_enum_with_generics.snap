@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Value enum with generics
+   ╭─[status.d.lis:2:13]
+ 1 │ 
+ 2 │ enum Status<T> {
+   ·             ┬
+   ·             ╰── not allowed on value enums
+ 3 │   Active = 0,
+   ╰────
+  help: Remove the generic parameter. Value enums represent Go const groups, which cannot be generic · code: [parse.value_enum_generics]

@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn mk() -> int { 42 }\n\nfn test() -> int {\n  let new = mk\n  new()\n}\n"
+---
+package main
+
+func mk() int {
+	return 42
+}
+
+func test() int {
+	new_ := mk
+	return new_()
+}

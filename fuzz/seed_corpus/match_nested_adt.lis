@@ -1,0 +1,17 @@
+fn test(opt_res: Option<Result<int, string>>) {
+  match opt_res {
+    Some(Ok(value)) => print("Success:", value),
+    Some(Err(msg))  => print("Inner Error:", msg),
+    None            => print("No value"),
+  }
+}
+
+enum State { Running(int), Stopped, Error(string, Option<int>) }
+fn test2(state: State) {
+  match state {
+    State.Running(_)      => print("Running"),
+    State.Stopped         => print("Stopped"),
+    State.Error(_, None)  => print("Error without code"),
+    State.Error(msg, Some(code)) => print("Error with code", msg, code),
+  }
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Tuple arity mismatch
+   ╭─[test.lis:3:7]
+ 2 │ fn test() {
+ 3 │   let (a, b, c): (int, int) = (1, 2);
+   ·       ────┬────
+   ·           ╰── expected 2 elements, found 3 elements
+ 4 │ }
+   ╰────
+  help: Adjust the pattern to match the number of elements in the tuple · code: [infer.tuple_element_count_mismatch]

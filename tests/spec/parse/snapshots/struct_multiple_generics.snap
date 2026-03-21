@@ -1,0 +1,91 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct Pair<K, V> {\n  key: K,\n  value: V,\n}\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Pair",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 4,
+        },
+        generics: [
+            Generic {
+                name: "K",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 13,
+                    byte_length: 1,
+                },
+            },
+            Generic {
+                name: "V",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 16,
+                    byte_length: 1,
+                },
+            },
+        ],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "key",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 23,
+                    byte_length: 3,
+                },
+                annotation: Constructor {
+                    name: "K",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 28,
+                        byte_length: 1,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "value",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 33,
+                    byte_length: 5,
+                },
+                annotation: Constructor {
+                    name: "V",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 40,
+                        byte_length: 1,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 43,
+        },
+    },
+]

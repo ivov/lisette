@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \n/// A publicly exported function.\npub fn greet(name: string) -> string {\n  f\"Hello, {name}!\"\n}\n"
+---
+package main
+
+import "fmt"
+
+// A publicly exported function.
+func Greet(name string) string {
+	return fmt.Sprintf("Hello, %v!", name)
+}

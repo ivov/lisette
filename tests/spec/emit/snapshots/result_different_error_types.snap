@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test_string_error() -> Result<int, string> {\n  Ok(42)\n}\n\nfn test_int_error() -> Result<string, int> {\n  Ok(\"hello\")\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test_string_error() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](42)
+}
+
+func test_int_error() lisette.Result[string, int] {
+	return lisette.MakeResultOk[string, int]("hello")
+}

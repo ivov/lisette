@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() {\n  let ch = Channel.new<int>()\n  select {\n    let Some(_v) = ch.receive() => {\n      let _ = 1\n    },\n    _ => {},\n  }\n}\n"
+---
+package main
+
+func test() {
+	ch := make(chan int)
+	ch_1 := ch
+	for {
+		select {
+		case _, ok := <-ch_1:
+			if ok {
+				_ = 1
+			} else {
+				ch_1 = nil
+				continue
+			}
+		default:
+		}
+		break
+	}
+}

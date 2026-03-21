@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn f(arg_1: int, (x, y): (int, int)) -> int { arg_1 + x + y }\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func f(arg_1 int, arg_2 lisette.Tuple2[int, int]) int {
+	x := arg_2.First
+	y := arg_2.Second
+	return arg_1 + x + y
+}

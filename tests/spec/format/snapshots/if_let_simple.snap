@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test(opt: Option<int>) { if let Some(x) = opt { use(x); } }"
+---
+fn test(opt: Option<int>) {
+  if let Some(x) = opt { use(x) }
+}

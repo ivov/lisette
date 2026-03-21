@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct W<T>(T)\n\nfn test() -> int {\n  match 1 {\n    n if W(1).0 == 1 => n,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type W[T any] struct {
+	F0 T
+}
+
+func (w W[T]) String() string {
+	return fmt.Sprintf("W(%v)", w.F0)
+}
+
+func test() int {
+	{
+		n := 1
+		if (W[int]{F0: 1}).F0 == 1 {
+			return n
+		}
+	}
+	return 0
+}

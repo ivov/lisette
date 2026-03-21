@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(pair: (int, int)) -> string {\n  match pair {\n    (x, y) if x == y => \"equal\",\n    (x, y) if x > y => \"greater\",\n    _ => \"less\",\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(pair lisette.Tuple2[int, int]) string {
+	{
+		x := pair.First
+		y := pair.Second
+		if x == y {
+			return "equal"
+		}
+	}
+	{
+		x := pair.First
+		y := pair.Second
+		if x > y {
+			return "greater"
+		}
+	}
+	return "less"
+}

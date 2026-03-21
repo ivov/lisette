@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Missing constraint on generic return type
+    ╭─[test.lis:25:34]
+ 24 │ 
+ 25 │ pub fn create_box<T>(item: T) -> Box<T> {
+    ·                                  ───┬──
+    ·                                     ╰── expected `T` to be constrained
+ 26 │   Box { val: item }
+    ╰────
+  help: Constrain the generic: `create_box<T: Summable>()`. The function returns a type whose methods depend on the constraint · code: [infer.missing_constraint_on_return_type]

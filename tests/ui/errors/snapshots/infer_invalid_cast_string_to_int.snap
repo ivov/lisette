@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid cast
+   ╭─[test.lis:3:3]
+ 2 │ fn test() -> int {
+ 3 │   "42" as int
+   ·   ─────┬─────
+   ·        ╰── cannot cast `string` to `int`
+ 4 │ }
+   ╰────
+  help: Strings cannot be cast to numbers and require explicit conversion. Use `strconv.Atoi()` to parse · code: [infer.invalid_cast]

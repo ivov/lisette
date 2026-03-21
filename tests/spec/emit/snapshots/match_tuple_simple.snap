@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let pair = (1, 2);\n  match pair {\n    (0, 0) => 0,\n    (1, 2) => 3,\n    (x, y) => x + y,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	pair := lisette.MakeTuple2(1, 2)
+	if pair.First == 0 && pair.Second == 0 {
+		return 0
+	} else if pair.First == 1 && pair.Second == 2 {
+		return 3
+	}
+	x := pair.First
+	y := pair.Second
+	return x + y
+}

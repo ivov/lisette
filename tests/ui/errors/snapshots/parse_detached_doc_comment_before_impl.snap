@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unattached doc comment
+   ╭─[test.lis:4:1]
+ 3 │ 
+ 4 │ /// Methods for working with Foo.
+   · ────────────────┬────────────────
+   ·                 ╰── is detached
+ 5 │ impl Foo {
+   ╰────
+  help: Place the doc comment on the line immediately above a symbol definition · code: [parse.detached_doc_comment]

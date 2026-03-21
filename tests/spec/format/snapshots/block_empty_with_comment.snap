@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn foo() {\n  // nothing here\n}"
+---
+fn foo() {
+  // nothing here
+}

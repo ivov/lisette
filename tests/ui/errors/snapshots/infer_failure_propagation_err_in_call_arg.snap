@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Failure propagation in expression position
+   ╭─[test.lis:5:8]
+ 4 │ fn test() -> Result<int, string> {
+ 5 │   Ok(f(Err("e")?))
+   ·        ────┬────
+   ·            ╰── `Err(..)?` and `None?` always early-return and never produce a value
+ 6 │ }
+   ╰────
+  help: Use `return Err(..)` or `return None` instead · code: [infer.failure_propagation_in_expression]

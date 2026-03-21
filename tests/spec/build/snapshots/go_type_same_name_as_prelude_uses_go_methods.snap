@@ -1,0 +1,29 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"sync"
+)
+
+func main() {
+	m := sync.Map{}
+	m.Store("key", "value")
+	ret_2, ret_3 := m.Load("key")
+	var subject_1 lisette.Option[any]
+	if ret_3 {
+		subject_1 = lisette.MakeOptionSome[any](ret_2)
+	} else {
+		subject_1 = lisette.MakeOptionNone[any]()
+	}
+	if subject_1.Tag == lisette.OptionSome {
+		v := subject_1.SomeVal
+		fmt.Printf("got: %v\n", v)
+	} else {
+		fmt.Println("not found")
+	}
+}

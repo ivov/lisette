@@ -1,0 +1,12 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "sort"
+
+func main() {
+	nums := []int{3, 1, 2}
+	sort.Ints(nums)
+}

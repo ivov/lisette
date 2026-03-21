@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn maybe(flag: bool) -> Option<int> {\n  if flag { Some(42) } else { None }\n}\n\nfn test() -> int {\n  let mut count = 0\n  loop {\n    count = count + 1\n    if count > 5 { break }\n    match count {\n      1 => {\n        let Some(v) = maybe(true) else { break }\n        let _ = v\n      },\n      _ => {},\n    }\n  }\n  count\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func maybe(flag bool) lisette.Option[int] {
+	if flag {
+		return lisette.MakeOptionSome[int](42)
+	}
+	return lisette.MakeOptionNone[int]()
+}
+
+func test() int {
+	count := 0
+loop_1:
+	for {
+		count++
+		if count > 5 {
+			break loop_1
+		}
+		if count == 1 {
+			subject_2 := maybe(true)
+			if subject_2.Tag != lisette.OptionSome {
+				break loop_1
+			}
+			_ = subject_2.SomeVal
+		}
+	}
+	return count
+}

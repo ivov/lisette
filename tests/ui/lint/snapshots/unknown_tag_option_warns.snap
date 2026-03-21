@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unknown tag option
+   ╭─[test.lis:4:3]
+ 3 │ pub struct User {
+ 4 │   #[json(unknown_flag)]
+   ·   ──────────┬──────────
+   ·             ╰── not recognized
+ 5 │   name: string,
+   ╰────
+  help: `unknown_flag` is not a recognized tag option. Known options: `snake_case`, `camel_case`, `omitempty`, `!omitempty`, `skip`, `string` · code: [lint.unknown_tag_option]

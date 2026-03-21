@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() {\n  let mut count = 0;\n  let inc = || { count = count + 1; };\n  inc();\n}\n"
+---
+package main
+
+func test() {
+	count := 0
+	inc := func() {
+		count++
+	}
+	inc()
+}

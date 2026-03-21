@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let t = (1, \"hello\")\n  fmt.Println(t)\n  fmt.Println(f\"tuple: {t}\")\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	t := lisette.MakeTuple2(1, "hello")
+	fmt.Println(t)
+	fmt.Printf("tuple: %v\n", t)
+}

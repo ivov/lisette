@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct P { v: int }\nfn mk() -> P { P { v: 1 } }\n\nfn test() {\n  match mk() {\n    P { v: _ } if false => (),\n    _ => (),\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type P struct {
+	v int
+}
+
+func (p P) String() string {
+	return fmt.Sprintf("P { v: %v }", p.v)
+}
+
+func mk() P {
+	return P{v: 1}
+}
+
+func test() {
+	_ = mk()
+match_2:
+	for {
+		if false {
+			break match_2
+		}
+		break match_2
+	}
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:3:12]
+ 2 │ fn test() {
+ 3 │   let ch = make(10);
+   ·            ──┬─
+   ·              ╰── name not found in scope
+ 4 │ }
+   ╰────
+  help: Lisette has no `make` builtin. Use constructor methods instead, e.g. `Channel.new<int>()`, `Slice.new<int>()`, `Map.new<K, V>()` · code: [resolve.name_not_found]

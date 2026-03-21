@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(items: Slice<int>) -> int {
+ 3 │   cap(items)
+   ·   ─┬─
+   ·    ╰── name not found in scope
+ 4 │ }
+   ╰────
+  help: Lisette has no `cap` builtin. Use the `.capacity()` method instead, e.g. `items.capacity()` · code: [resolve.name_not_found]

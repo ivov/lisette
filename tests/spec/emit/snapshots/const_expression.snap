@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nconst RESULT = 10 + 20\n\nfn test() -> int {\n  RESULT * 2\n}\n"
+---
+package main
+
+const RESULT int = 10 + 20
+
+func test() int {
+	return RESULT * 2
+}

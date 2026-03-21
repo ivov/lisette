@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate name in impl
+    ╭─[test.lis:9:6]
+  8 │ impl Foo {
+  9 │   fn bar(self: Foo) {}
+    ·      ─┬─
+    ·       ╰── method name already taken
+ 10 │ }
+    ╰────
+  help: Method `bar` is already defined for type `Foo`. Rename one of the methods · code: [infer.duplicate_impl_item]

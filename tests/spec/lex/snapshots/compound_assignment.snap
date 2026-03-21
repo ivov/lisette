@@ -1,0 +1,140 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: x += 1; y -= 2; z *= 3; a /= 4; b %= 5;"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Identifier,
+            text: "x",
+            byte_offset: 0,
+            byte_length: 1,
+        },
+        Token {
+            kind: PlusEqual,
+            text: "+=",
+            byte_offset: 2,
+            byte_length: 2,
+        },
+        Token {
+            kind: Integer,
+            text: "1",
+            byte_offset: 5,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: ";",
+            byte_offset: 6,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "y",
+            byte_offset: 8,
+            byte_length: 1,
+        },
+        Token {
+            kind: MinusEqual,
+            text: "-=",
+            byte_offset: 10,
+            byte_length: 2,
+        },
+        Token {
+            kind: Integer,
+            text: "2",
+            byte_offset: 13,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: ";",
+            byte_offset: 14,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "z",
+            byte_offset: 16,
+            byte_length: 1,
+        },
+        Token {
+            kind: StarEqual,
+            text: "*=",
+            byte_offset: 18,
+            byte_length: 2,
+        },
+        Token {
+            kind: Integer,
+            text: "3",
+            byte_offset: 21,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: ";",
+            byte_offset: 22,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "a",
+            byte_offset: 24,
+            byte_length: 1,
+        },
+        Token {
+            kind: SlashEqual,
+            text: "/=",
+            byte_offset: 26,
+            byte_length: 2,
+        },
+        Token {
+            kind: Integer,
+            text: "4",
+            byte_offset: 29,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: ";",
+            byte_offset: 30,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "b",
+            byte_offset: 32,
+            byte_length: 1,
+        },
+        Token {
+            kind: PercentEqual,
+            text: "%=",
+            byte_offset: 34,
+            byte_length: 2,
+        },
+        Token {
+            kind: Integer,
+            text: "5",
+            byte_offset: 37,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: ";",
+            byte_offset: 38,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 39,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

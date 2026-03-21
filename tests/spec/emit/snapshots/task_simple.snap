@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nimport \"go:fmt\"\n\nfn compute() {\n  fmt.Print(f\"Hello from goroutine\");\n}\n\nfn test() {\n  task compute()\n}\n"
+---
+package main
+
+import "fmt"
+
+func compute() {
+	fmt.Print("Hello from goroutine")
+}
+
+func test() {
+	go compute()
+}

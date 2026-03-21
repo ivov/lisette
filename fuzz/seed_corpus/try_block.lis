@@ -1,0 +1,27 @@
+fn test() {
+  let result = try {
+    let a = get_a()?;
+    let b = get_b()?;
+    a + b
+  };
+}
+
+fn test2() {
+  let outer = try {
+    let inner = try {
+      inner_risky()?
+    };
+    outer_risky()?
+  };
+}
+
+fn test3() {
+  let result = try {
+    for i in items {
+      if i > 10 {
+        break;
+      }
+    };
+    get_value()?
+  };
+}

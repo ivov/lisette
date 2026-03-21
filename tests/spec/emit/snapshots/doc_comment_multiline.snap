@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \n/// Calculates the factorial of a number.\n///\n/// Returns 1 for n <= 1.\nfn factorial(n: int) -> int {\n  if n <= 1 { 1 } else { n * factorial(n - 1) }\n}\n"
+---
+package main
+
+// Calculates the factorial of a number.
+//
+// Returns 1 for n <= 1.
+func factorial(n int) int {
+	if n <= 1 {
+		return 1
+	}
+	return n * factorial(n-1)
+}

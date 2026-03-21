@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused function
+   ╭─[test.lis:2:4]
+ 1 │ 
+ 2 │ fn unused_helper() -> int {
+   ·    ──────┬──────
+   ·          ╰── never called
+ 3 │   42
+   ╰────
+  help: Call or remove this function · code: [lint.unused_function]

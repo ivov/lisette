@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unreachable code after infinite loop
+   ╭─[test.lis:6:3]
+ 5 │   };
+ 6 │   let x = 1;
+   ·   ────┬────
+   ·       ╰── unreachable from this point onward
+ 7 │   x
+   ╰────
+  help: Remove this line and all code after it · code: [lint.dead_code_after_infinite_loop]

@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(items: Slice<Option<int>>) {\n  for item in items {\n    let Some(x) = item else { continue; };\n    let _ = x;\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(items []lisette.Option[int]) {
+	for _, item := range items {
+		if item.Tag != lisette.OptionSome {
+			continue
+		}
+		_ = item.SomeVal
+	}
+}

@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { if true { 1 } else { 2 } }"
+---
+fn test() {
+  if true { 1 } else { 2 }
+}

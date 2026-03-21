@@ -1,0 +1,34 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/utils"
+
+func main() {
+	b := utils.Container[int]{Value: 42}
+	_ = b.Value
+}
+
+
+// === types/mod.go ===
+package types
+
+import "fmt"
+
+type Box[T any] struct {
+	Value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.Value)
+}
+
+
+// === utils/mod.go ===
+package utils
+
+import "github.com/user/myproject/types"
+
+type Container[T any] = types.Box[T]

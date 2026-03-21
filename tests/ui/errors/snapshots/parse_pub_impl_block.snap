@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Misplaced `pub`
+   ╭─[test.lis:4:1]
+ 3 │ 
+ 4 │ pub impl Foo {
+   · ─┬─
+   ·  ╰── not allowed here
+ 5 │   fn bar(self) -> int {
+   ╰────
+  help: Place `pub` on individual methods inside the `impl` block instead · code: [parse.syntax_error]

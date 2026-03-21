@@ -1,0 +1,39 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/mod.go ===
+package lib
+
+type Printable interface {
+	Display() string
+}
+
+func Print_all[T Printable](items []T) string {
+	return items[0].Display()
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/lib"
+)
+
+type Name struct {
+	value string
+}
+
+func (n Name) String() string {
+	return fmt.Sprintf("Name { value: %v }", n.value)
+}
+
+func (n Name) Display() string {
+	return n.value
+}
+
+func main() {
+	names := []Name{Name{value: "alice"}}
+	fmt.Println(lib.Print_all(names))
+}

@@ -1,0 +1,17 @@
+fn test(arr: Slice<int>, i: int) {
+  let val = arr[i];
+}
+
+fn test2(data: Map<string, bool>) {
+  let active = data["user_status"];
+}
+
+fn test3(matrix: Slice<Slice<int>>, row: int, col: int) {
+  let cell = matrix[row][col];
+}
+
+fn test4(key: string) {
+  let value = get_map()[key];
+}
+
+fn test5() { let result = arr[i + j][k * l]; }

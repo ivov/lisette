@@ -1,0 +1,20 @@
+method1()
+    .method2()
+
+method1()?
+    .method2()
+
+method1()
+    // comment
+    .method2()
+
+apply(
+    10,
+    |x| { x * 3 }
+)
+
+let r = 5..
+let x = 42
+
+expr?
+(a, b)

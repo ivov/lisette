@@ -1,0 +1,152 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(x_val: int) {\n  process(Point { x: x_val, y: 0 });\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "x_val",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 5,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 16,
+                            byte_length: 3,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Call {
+                    expression: Identifier {
+                        value: "process",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 25,
+                            byte_length: 7,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    args: [
+                        StructCall {
+                            name: "Point",
+                            field_assignments: [
+                                StructFieldAssignment {
+                                    name: "x",
+                                    name_span: Span {
+                                        file_id: 0,
+                                        byte_offset: 41,
+                                        byte_length: 1,
+                                    },
+                                    value: Identifier {
+                                        value: "x_val",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 44,
+                                            byte_length: 5,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                },
+                                StructFieldAssignment {
+                                    name: "y",
+                                    name_span: Span {
+                                        file_id: 0,
+                                        byte_offset: 51,
+                                        byte_length: 1,
+                                    },
+                                    value: Literal {
+                                        literal: Integer {
+                                            value: 0,
+                                            text: None,
+                                        },
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 54,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                },
+                            ],
+                            spread: None,
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 33,
+                                byte_length: 24,
+                            },
+                        },
+                    ],
+                    type_args: [],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 25,
+                        byte_length: 33,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 21,
+                byte_length: 40,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 60,
+        },
+    },
+]

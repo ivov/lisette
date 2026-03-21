@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn safe_divide(a: float64, b: float64) -> Option<float64> {\n  if b == 0.0 { None } else { Some(a / b) }\n}\n\nfn parse_and_divide(a: float64, b: float64) -> Result<string, string> {\n  let result = match safe_divide(a, b) {\n    Some(v) => v,\n    None => return Err(\"division by zero\"),\n  };\n  Ok(f\"{result}\")\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func safe_divide(a, b float64) lisette.Option[float64] {
+	if b == 0.0 {
+		return lisette.MakeOptionNone[float64]()
+	}
+	return lisette.MakeOptionSome[float64](a / b)
+}
+
+func parse_and_divide(a, b float64) lisette.Result[string, string] {
+	var result float64
+	subject_1 := safe_divide(a, b)
+	if subject_1.Tag == lisette.OptionSome {
+		result = subject_1.SomeVal
+	} else {
+		return lisette.MakeResultErr[string, string]("division by zero")
+	}
+	return lisette.MakeResultOk[string, string](fmt.Sprint(result))
+}

@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nstruct Counter { count: int }\n\nimpl Counter {\n  fn get_count(self: Ref<Counter>) -> int {\n    self.count\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Counter struct {
+	count int
+}
+
+func (c Counter) String() string {
+	return fmt.Sprintf("Counter { count: %v }", c.count)
+}
+
+func (c *Counter) get_count() int {
+	return c.count
+}

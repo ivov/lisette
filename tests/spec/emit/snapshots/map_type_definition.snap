@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn test(m: Map<string, int>) -> int {\n  m[\"key\"]\n}\n"
+---
+package main
+
+func test(m map[string]int) int {
+	return m["key"]
+}

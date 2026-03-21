@@ -1,0 +1,8 @@
+enum Status {
+  Pending,
+  Processing,
+  Complete,
+  Failed,
+}
+
+enum Nothing {}

@@ -1,0 +1,26 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: 1.7976931348623157e+308"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Float,
+            text: "1.7976931348623157e+308",
+            byte_offset: 0,
+            byte_length: 23,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 23,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

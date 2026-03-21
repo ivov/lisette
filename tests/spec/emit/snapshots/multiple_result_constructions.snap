@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test(flag: bool) -> Result<int, string> {\n  if flag {\n    Ok(42)\n  } else {\n    Err(\"error\")\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(flag bool) lisette.Result[int, string] {
+	if flag {
+		return lisette.MakeResultOk[int, string](42)
+	}
+	return lisette.MakeResultErr[int, string]("error")
+}

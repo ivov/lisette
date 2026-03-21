@@ -1,0 +1,145 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.name;\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "cfg",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 3,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Config",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 14,
+                            byte_length: 6,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "username",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 30,
+                                byte_length: 8,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: DotAccess {
+                        expression: DotAccess {
+                            expression: DotAccess {
+                                expression: Identifier {
+                                    value: "cfg",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 41,
+                                        byte_length: 3,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                member: "auth",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 41,
+                                    byte_length: 8,
+                                },
+                            },
+                            member: "user",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 41,
+                                byte_length: 13,
+                            },
+                        },
+                        member: "name",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 41,
+                            byte_length: 18,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 26,
+                        byte_length: 33,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 22,
+                byte_length: 40,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 61,
+        },
+    },
+]

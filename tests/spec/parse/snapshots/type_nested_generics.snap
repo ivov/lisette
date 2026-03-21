@@ -1,0 +1,63 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \ntype Complex = Result<Option<T>, Error>;\n"
+---
+[
+    TypeAlias {
+        doc: None,
+        name: "Complex",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 7,
+        },
+        generics: [],
+        annotation: Constructor {
+            name: "Result",
+            params: [
+                Constructor {
+                    name: "Option",
+                    params: [
+                        Constructor {
+                            name: "T",
+                            params: [],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 30,
+                                byte_length: 1,
+                            },
+                        },
+                    ],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 23,
+                        byte_length: 9,
+                    },
+                },
+                Constructor {
+                    name: "Error",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 34,
+                        byte_length: 5,
+                    },
+                },
+            ],
+            span: Span {
+                file_id: 0,
+                byte_offset: 16,
+                byte_length: 24,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 39,
+        },
+    },
+]

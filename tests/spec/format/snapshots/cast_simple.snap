@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { x as int }"
+---
+fn test() {
+  x as int
+}

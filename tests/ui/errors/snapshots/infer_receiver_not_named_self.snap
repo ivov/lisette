@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid receiver name
+   ╭─[test.lis:5:16]
+ 4 │ impl Counter {
+ 5 │   fn get_count(this: Counter) -> int {
+   ·                ──┬─
+   ·                  ╰── expected `self`
+ 6 │     this.count
+   ╰────
+  help: Rename `this` to `self`. In an instance method definition, Lisette expects the first parameter to be named `self` · code: [infer.receiver_not_self]

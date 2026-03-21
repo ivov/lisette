@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid octal literal
+   ╭─[test.lis:1:12]
+ 1 │ let x = 0o789
+   ·            ┬
+   ·            ╰── `8` is not a valid octal digit
+   ╰────
+  help: Use digits `0` to `7` for octal literals · code: [lex.number_invalid_octal_digit]

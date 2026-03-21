@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Ineffective `try` block
+   ╭─[test.lis:4:5]
+ 3 │   let result: Result<int, string> = try {
+ 4 │     Err("fail")?
+   ·     ──────┬─────
+   ·           ╰── always propagates
+ 5 │   };
+   ╰────
+  help: A `try` block is effective only if the expression may succeed or fail · code: [lint.try_block_no_success_path]

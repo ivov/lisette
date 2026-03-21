@@ -1,0 +1,92 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[json]\nenum Shape {\n  Circle(float64),\n  Square(float64),\n  Unknown,\n}\n"
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func MakeShapeCircle(arg0 float64) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeSquare(arg0 float64) Shape {
+	return Shape{Tag: ShapeSquare, Square: arg0}
+}
+
+func MakeShapeUnknown() Shape {
+	return Shape{Tag: ShapeUnknown}
+}
+
+type ShapeTag int
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeSquare
+	ShapeUnknown
+)
+
+type Shape struct {
+	Tag    ShapeTag
+	Circle float64
+	Square float64
+}
+
+func (s Shape) String() string {
+	switch s.Tag {
+	case ShapeCircle:
+		return fmt.Sprintf("Shape.Circle(%v)", s.Circle)
+	case ShapeSquare:
+		return fmt.Sprintf("Shape.Square(%v)", s.Square)
+	case ShapeUnknown:
+		return "Shape.Unknown"
+	default:
+		return fmt.Sprintf("Shape(%d)", s.Tag)
+	}
+}
+
+func (s Shape) MarshalJSON() ([]byte, error) {
+	switch s.Tag {
+	case ShapeCircle:
+		return json.Marshal(map[string]any{"Circle": s.Circle})
+	case ShapeSquare:
+		return json.Marshal(map[string]any{"Square": s.Square})
+	case ShapeUnknown:
+		return json.Marshal("Unknown")
+	default:
+		return nil, fmt.Errorf("unknown Shape tag: %d", s.Tag)
+	}
+}
+
+func (s *Shape) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		switch name {
+		case "Unknown":
+			s.Tag = ShapeUnknown
+			return nil
+		default:
+			return fmt.Errorf("unknown Shape variant: %s", name)
+		}
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return fmt.Errorf("invalid Shape JSON")
+	}
+	for key, val := range obj {
+		switch key {
+		case "Circle":
+			s.Tag = ShapeCircle
+			return json.Unmarshal(val, &s.Circle)
+		case "Square":
+			s.Tag = ShapeSquare
+			return json.Unmarshal(val, &s.Square)
+		default:
+			return fmt.Errorf("unknown Shape variant: %s", key)
+		}
+	}
+	return fmt.Errorf("empty Shape JSON object")
+}

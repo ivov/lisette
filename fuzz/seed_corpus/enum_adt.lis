@@ -1,0 +1,14 @@
+enum IpAddress {
+  V4(uint8, uint8, uint8, uint8),
+  V6(string),
+}
+
+enum Result<T, E> {
+  Ok(T),
+  Err(E),
+}
+
+enum Option<T> {
+  Some(T),
+  None,
+}

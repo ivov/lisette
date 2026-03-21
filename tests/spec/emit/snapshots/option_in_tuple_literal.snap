@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn maybe_int(x: int) -> Option<int> {\n  if x > 0 { Some(x) } else { None }\n}\n\nfn maybe_string(s: string) -> Option<string> {\n  if s != \"\" { Some(s) } else { None }\n}\n\nfn test() {\n  let pair = (maybe_int(5), maybe_string(\"hello\"));\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func maybe_int(x int) lisette.Option[int] {
+	if x > 0 {
+		return lisette.MakeOptionSome[int](x)
+	}
+	return lisette.MakeOptionNone[int]()
+}
+
+func maybe_string(s string) lisette.Option[string] {
+	if s != "" {
+		return lisette.MakeOptionSome[string](s)
+	}
+	return lisette.MakeOptionNone[string]()
+}
+
+func test() {
+	_ = lisette.MakeTuple2(maybe_int(5), maybe_string("hello"))
+}

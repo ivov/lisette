@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:strconv\"\n\nfn main() {\n  let f: fn(string) -> Result<int, error> = if true {\n    strconv.Atoi\n  } else {\n    strconv.Atoi\n  }\n  let r = f(\"1\")\n  match r {\n    Ok(v) => { let _ = v },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func main() {
+	var f func(string) lisette.Result[int, error]
+	if true {
+		f = func(arg0 string) lisette.Result[int, error] {
+			ret_1, ret_2 := strconv.Atoi(arg0)
+			if ret_2 != nil {
+				return lisette.MakeResultErr[int, error](ret_2)
+			}
+			return lisette.MakeResultOk[int, error](ret_1)
+		}
+	} else {
+		f = func(arg0 string) lisette.Result[int, error] {
+			ret_4, ret_5 := strconv.Atoi(arg0)
+			if ret_5 != nil {
+				return lisette.MakeResultErr[int, error](ret_5)
+			}
+			return lisette.MakeResultOk[int, error](ret_4)
+		}
+	}
+	r := f("1")
+	if r.Tag == lisette.ResultOk {
+		_ = r.OkVal
+	} else {
+		_ = 0
+	}
+}

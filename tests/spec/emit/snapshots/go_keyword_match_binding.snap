@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() -> int {\n  let x = Some(42);\n  match x {\n    Some(map) => map,\n    None => 0,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	x := lisette.MakeOptionSome(42)
+	if x.Tag == lisette.OptionSome {
+		return x.SomeVal
+	}
+	return 0
+}

@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -100 => \"very negative\",\n    -5 => \"negative five\",\n    -1 => \"negative one\",\n    0 => \"zero\",\n    1 => \"one\",\n    _ => \"other\",\n  }\n}\n"
+---
+package main
+
+func classify(x int) string {
+	switch x {
+	case -100:
+		return "very negative"
+	case -5:
+		return "negative five"
+	case -1:
+		return "negative one"
+	case 0:
+		return "zero"
+	case 1:
+		return "one"
+	default:
+		return "other"
+	}
+}

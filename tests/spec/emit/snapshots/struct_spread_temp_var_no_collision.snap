@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct Point { x: int, y: int }\n\nfn main() {\n  let p1 = Point { x: 1, y: 2 }\n  let p2 = Point { x: 3, ..p1 }\n  let copy_1 = 7\n  fmt.Println(p2.x, copy_1)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func main() {
+	p1 := Point{
+		x: 1,
+		y: 2,
+	}
+	copy_1 := p1
+	copy_1.x = 3
+	p2 := copy_1
+	copy_1_2 := 7
+	fmt.Println(p2.x, copy_1_2)
+}

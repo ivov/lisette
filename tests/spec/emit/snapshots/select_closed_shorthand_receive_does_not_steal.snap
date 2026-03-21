@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() -> int {\n  let closed = Channel.new<int>()\n  closed.close()\n  let sink = Channel.buffered<int>(1)\n  select {\n    let Some(_x) = closed.receive() => 10,\n    sink.send(5) => 20,\n    _ => 30,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	closed := make(chan int)
+	lisette.ChannelClose(closed)
+	sink := make(chan int, 1)
+	ch_1 := closed
+	for {
+		select {
+		case _, ok := <-ch_1:
+			if ok {
+				return 10
+			}
+			ch_1 = nil
+			continue
+		case sink <- 5:
+			return 20
+		default:
+			return 30
+		}
+		break
+	}
+	panic("unreachable")
+}

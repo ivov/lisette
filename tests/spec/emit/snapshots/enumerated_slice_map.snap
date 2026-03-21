@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(s: Slice<int>) -> Slice<int> {\n  s.enumerate().map(|(i, v)| i * v)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s []int) []int {
+	return lisette.EnumeratedSliceMap(s, func(arg_1 lisette.Tuple2[int, int]) int {
+		i := arg_1.First
+		v := arg_1.Second
+		return i * v
+	})
+}

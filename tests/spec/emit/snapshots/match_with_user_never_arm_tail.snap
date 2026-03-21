@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn die() -> Never { panic(\"dead\") }\n\nfn test(x: int) -> int {\n  match x {\n    0 => die(),\n    _ => x + 1,\n  }\n}\n"
+---
+package main
+
+func die() struct{} {
+	panic("dead")
+}
+
+func test(x int) int {
+	if x == 0 {
+		die()
+		panic("unreachable")
+	}
+	return x + 1
+}

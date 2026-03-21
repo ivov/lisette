@@ -1,0 +1,257 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(x: int) -> string {\n  match x {\n    0 | 1 => \"binary\",\n    2 | 3 | 5 | 7 => \"small prime\",\n    _ => \"other\",\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "x",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "int",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 12,
+                            byte_length: 3,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Constructor {
+            name: "string",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 20,
+                byte_length: 6,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Match {
+                    subject: Identifier {
+                        value: "x",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 37,
+                            byte_length: 1,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: Or {
+                                patterns: [
+                                    Literal {
+                                        literal: Integer {
+                                            value: 0,
+                                            text: None,
+                                        },
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 45,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                    Literal {
+                                        literal: Integer {
+                                            value: 1,
+                                            text: None,
+                                        },
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 49,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 45,
+                                    byte_length: 5,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "binary",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 54,
+                                    byte_length: 8,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: Or {
+                                patterns: [
+                                    Literal {
+                                        literal: Integer {
+                                            value: 2,
+                                            text: None,
+                                        },
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 68,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                    Literal {
+                                        literal: Integer {
+                                            value: 3,
+                                            text: None,
+                                        },
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 72,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                    Literal {
+                                        literal: Integer {
+                                            value: 5,
+                                            text: None,
+                                        },
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 76,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                    Literal {
+                                        literal: Integer {
+                                            value: 7,
+                                            text: None,
+                                        },
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 80,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 68,
+                                    byte_length: 13,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "small prime",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 85,
+                                    byte_length: 13,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: WildCard {
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 104,
+                                    byte_length: 1,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "other",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 109,
+                                    byte_length: 7,
+                                },
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 31,
+                        byte_length: 90,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 27,
+                byte_length: 96,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 122,
+        },
+    },
+]

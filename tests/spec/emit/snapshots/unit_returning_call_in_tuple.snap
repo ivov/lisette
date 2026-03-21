@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn do_nothing() {}\n\nfn main() {\n  let t = (42, do_nothing())\n  let _ = t.0\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func do_nothing() {}
+
+func main() {
+	do_nothing()
+	t := lisette.MakeTuple2(42, struct{}{})
+	_ = t.First
+}

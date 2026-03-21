@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unterminated string literal
+   ╭─[test.lis:1:9]
+ 1 │ let x = "unterminated
+   ·         ──────┬──────
+   ·               ╰── string not completed
+   ╰────
+  help: Add a closing double quote · code: [lex.unterminated_string]

@@ -1,0 +1,7 @@
+fn identity<T>(x: T) -> T {
+  return x;
+}
+
+fn pair<T, U>(x: T, y: U) -> (T, U) {
+  return (x, y);
+}

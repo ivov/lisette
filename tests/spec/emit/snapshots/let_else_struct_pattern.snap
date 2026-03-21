@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct Point { x: int, y: int }\n\nfn test(opt: Option<Point>) -> int {\n  let Some(Point { x, y }) = opt else { return 0; };\n  x + y\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func test(opt lisette.Option[Point]) int {
+	if opt.Tag != lisette.OptionSome {
+		return 0
+	}
+	x := opt.SomeVal.x
+	y := opt.SomeVal.y
+	return x + y
+}

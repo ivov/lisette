@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport \"go:fmt\"\n\ninterface Reader {\n  fn read() -> int;\n  fn close();\n}\n\nfn test() {\n  fmt.Print(\"Interface with methods\")\n}\n"
+---
+package main
+
+import "fmt"
+
+type Reader interface {
+	read() int
+	close()
+}
+
+func test() {
+	fmt.Print("Interface with methods")
+}

@@ -1,0 +1,27 @@
+fn test_while_let_basic() -> int {
+  let mut opt = Some(3);
+  let mut sum = 0;
+  while let Some(x) = opt {
+    sum = sum + x;
+    if x <= 1 {
+      opt = None;
+    } else {
+      opt = Some(x - 1);
+    }
+  }
+  sum
+}
+
+fn test_while_let_result() -> int {
+  let mut res = Ok(5);
+  let mut sum = 0;
+  while let Ok(x) = res {
+    sum = sum + x;
+    if x <= 1 {
+      res = Err("done");
+    } else {
+      res = Ok(x - 1);
+    }
+  }
+  sum
+}

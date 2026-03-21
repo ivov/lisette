@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \ntype MyInt = int\n\nfn main() {\n  let f = 3.14\n  let x: MyInt = f as MyInt\n  let _ = x\n}\n"
+---
+package main
+
+type MyInt = int
+
+func main() {
+	f := 3.14
+	_ = MyInt(f)
+}

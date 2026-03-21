@@ -1,0 +1,15 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn medium_branch(items: Slice<int>, id: int) -> Slice<int> { let mut result: Slice<int> = []; for item in items { if item == id { result = result.append(item * 100) } else { result = result.append(item) } }; result }"
+---
+fn medium_branch(items: Slice<int>, id: int) -> Slice<int> {
+  let mut result: Slice<int> = []
+  for item in items {
+    if item == id {
+      result = result.append(item * 100)
+    } else {
+      result = result.append(item)
+    }
+  }
+  result
+}

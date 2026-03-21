@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() {\n  let _ = loop {\n    let _ = match { { break 1 } } {\n      1 => 1,\n      _ => 2,\n    }\n    3\n  }\n}\n"
+---
+package main
+
+func test() {
+	var tmp_1 int
+	for {
+		var tmp_2 int
+		{
+			tmp_1 = 1
+			break
+		}
+		_ = tmp_2
+		_ = 3
+	}
+	_ = tmp_1
+}

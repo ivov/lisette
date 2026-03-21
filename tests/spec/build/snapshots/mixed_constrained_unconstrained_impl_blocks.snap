@@ -1,0 +1,46 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Printable interface {
+	To_string() string
+}
+
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.value)
+}
+
+func Box_print[T Printable](self Box[T]) {
+	fmt.Println(self.value.To_string())
+}
+
+func (b Box[T]) get() T {
+	return b.value
+}
+
+type Name struct {
+	name string
+}
+
+func (n Name) String() string {
+	return fmt.Sprintf("Name { name: %v }", n.name)
+}
+
+func (n Name) To_string() string {
+	return n.name
+}
+
+func main() {
+	b := Box[Name]{value: Name{name: "Alice"}}
+	Box_print(b)
+	b2 := Box[int]{value: 42}
+	fmt.Printf("int box: %v\n", b2.get())
+}

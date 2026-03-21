@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid cast
+   ╭─[test.lis:6:3]
+ 5 │   let s = MyStruct { x: 1 };
+ 6 │   s as int
+   ·   ────┬───
+   ·       ╰── cannot cast `MyStruct` to `int`
+ 7 │ }
+   ╰────
+  help: Casts are supported between numeric types, strings and byte/rune slices, concrete types and interfaces, and values and their type aliases · code: [infer.invalid_cast]

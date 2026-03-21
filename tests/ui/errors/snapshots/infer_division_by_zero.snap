@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Division by zero
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let x = 10 / 0;
+   ·           ───┬──
+   ·              ╰── cannot divide by zero
+ 4 │   x
+   ╰────
+  help: This operation will panic at runtime · code: [infer.division_by_zero]

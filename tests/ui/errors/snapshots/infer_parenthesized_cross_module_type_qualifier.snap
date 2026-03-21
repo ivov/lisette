@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unnecessary parentheses around qualifier
+   ╭─[main.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let n = (util.Box).one()
+   ·           ─────┬────
+   ·                ╰── parenthesized qualifier
+ 6 │   let _ = n
+   ╰────
+  help: Remove the parentheses: `util.Box.one` · code: [infer.parenthesized_qualifier]

@@ -1,0 +1,151 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum IpAddress {\n  V4(uint8, uint8, uint8, uint8),\n  V6(string),\n}\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "IpAddress",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 9,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                name: "V4",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 20,
+                    byte_length: 2,
+                },
+                fields: Tuple(
+                    [
+                        EnumFieldDefinition {
+                            name: "field0",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "uint8",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 23,
+                                    byte_length: 5,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                        EnumFieldDefinition {
+                            name: "field1",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "uint8",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 30,
+                                    byte_length: 5,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                        EnumFieldDefinition {
+                            name: "field2",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "uint8",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 37,
+                                    byte_length: 5,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                        EnumFieldDefinition {
+                            name: "field3",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "uint8",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 44,
+                                    byte_length: 5,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                    ],
+                ),
+            },
+            EnumVariant {
+                doc: None,
+                name: "V6",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 54,
+                    byte_length: 2,
+                },
+                fields: Tuple(
+                    [
+                        EnumFieldDefinition {
+                            name: "field0",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "string",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 57,
+                                    byte_length: 6,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                    ],
+                ),
+            },
+        ],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 66,
+        },
+    },
+]

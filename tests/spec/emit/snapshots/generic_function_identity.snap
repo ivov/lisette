@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn identity<T>(x: T) -> T {\n  x\n}\n\nfn test() -> int {\n  identity(42)\n}\n"
+---
+package main
+
+func identity[T any](x T) T {
+	return x
+}
+
+func test() int {
+	return identity(42)
+}

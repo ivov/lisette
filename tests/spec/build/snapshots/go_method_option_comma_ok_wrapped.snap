@@ -1,0 +1,24 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"context"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"time"
+)
+
+func main() {
+	ctx := context.Background()
+	ret_1, ret_2 := ctx.Deadline()
+	var deadline lisette.Option[time.Time]
+	if ret_2 {
+		deadline = lisette.MakeOptionSome[time.Time](ret_1)
+	} else {
+		deadline = lisette.MakeOptionNone[time.Time]()
+	}
+	fmt.Print(deadline.IsSome())
+}

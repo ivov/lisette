@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unterminated format string
+   ╭─[test.lis:1:9]
+ 1 │ let x = f"hello {name}
+   ·         ───────┬──────
+   ·                ╰── format string not completed
+   ╰────
+  help: Add a closing double quote · code: [lex.format_string_unterminated]

@@ -1,0 +1,341 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n    (true, true) | (false, false) => \"same\",\n    (true, false) | (false, true) => \"different\",\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "a",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "bool",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 12,
+                            byte_length: 4,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            Binding {
+                pattern: Identifier {
+                    identifier: "b",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 18,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "bool",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 21,
+                            byte_length: 4,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Constructor {
+            name: "string",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 30,
+                byte_length: 6,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Match {
+                    subject: Tuple {
+                        elements: [
+                            Identifier {
+                                value: "a",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 48,
+                                    byte_length: 1,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                            Identifier {
+                                value: "b",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 51,
+                                    byte_length: 1,
+                                },
+                                binding_id: None,
+                                qualified: None,
+                            },
+                        ],
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 47,
+                            byte_length: 6,
+                        },
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: Or {
+                                patterns: [
+                                    Tuple {
+                                        elements: [
+                                            Literal {
+                                                literal: Boolean(
+                                                    true,
+                                                ),
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 61,
+                                                    byte_length: 4,
+                                                },
+                                            },
+                                            Literal {
+                                                literal: Boolean(
+                                                    true,
+                                                ),
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 67,
+                                                    byte_length: 4,
+                                                },
+                                            },
+                                        ],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 60,
+                                            byte_length: 12,
+                                        },
+                                    },
+                                    Tuple {
+                                        elements: [
+                                            Literal {
+                                                literal: Boolean(
+                                                    false,
+                                                ),
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 76,
+                                                    byte_length: 5,
+                                                },
+                                            },
+                                            Literal {
+                                                literal: Boolean(
+                                                    false,
+                                                ),
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 83,
+                                                    byte_length: 5,
+                                                },
+                                            },
+                                        ],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 75,
+                                            byte_length: 14,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 60,
+                                    byte_length: 29,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "same",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 93,
+                                    byte_length: 6,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: Or {
+                                patterns: [
+                                    Tuple {
+                                        elements: [
+                                            Literal {
+                                                literal: Boolean(
+                                                    true,
+                                                ),
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 106,
+                                                    byte_length: 4,
+                                                },
+                                            },
+                                            Literal {
+                                                literal: Boolean(
+                                                    false,
+                                                ),
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 112,
+                                                    byte_length: 5,
+                                                },
+                                            },
+                                        ],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 105,
+                                            byte_length: 13,
+                                        },
+                                    },
+                                    Tuple {
+                                        elements: [
+                                            Literal {
+                                                literal: Boolean(
+                                                    false,
+                                                ),
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 122,
+                                                    byte_length: 5,
+                                                },
+                                            },
+                                            Literal {
+                                                literal: Boolean(
+                                                    true,
+                                                ),
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 129,
+                                                    byte_length: 4,
+                                                },
+                                            },
+                                        ],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 121,
+                                            byte_length: 13,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 105,
+                                    byte_length: 29,
+                                },
+                            },
+                            expression: Literal {
+                                literal: String(
+                                    "different",
+                                ),
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 138,
+                                    byte_length: 11,
+                                },
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 41,
+                        byte_length: 113,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 37,
+                byte_length: 119,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 155,
+        },
+    },
+]

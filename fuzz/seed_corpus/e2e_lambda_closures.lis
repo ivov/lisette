@@ -1,0 +1,23 @@
+fn test_lambda_capture() -> int {
+  let y = 10;
+  let f = |x: int| -> int {
+    x + y
+  };
+  f(5)
+}
+
+fn returns_lambda() -> fn(int) -> int {
+  |x: int| -> int { x * 2 }
+}
+
+fn test_lambda_iife() -> int {
+  (|x: int| -> int { x + 10 })(30)
+}
+
+fn test_lambda_nested() -> int {
+  let make_adder = |x: int| -> fn(int) -> int {
+    |y: int| -> int { x + y }
+  };
+  let add5 = make_adder(5);
+  add5(10)
+}

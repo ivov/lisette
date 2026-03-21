@@ -1,0 +1,68 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: f\"result: {foo()}\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: FormatStringStart,
+            text: "f\"",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: FormatStringText,
+            text: "result: ",
+            byte_offset: 2,
+            byte_length: 8,
+        },
+        Token {
+            kind: FormatStringInterpolationStart,
+            text: "{",
+            byte_offset: 10,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "foo",
+            byte_offset: 11,
+            byte_length: 3,
+        },
+        Token {
+            kind: LeftParen,
+            text: "(",
+            byte_offset: 14,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightParen,
+            text: ")",
+            byte_offset: 15,
+            byte_length: 1,
+        },
+        Token {
+            kind: FormatStringInterpolationEnd,
+            text: "}",
+            byte_offset: 16,
+            byte_length: 1,
+        },
+        Token {
+            kind: FormatStringEnd,
+            text: "\"",
+            byte_offset: 17,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 18,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

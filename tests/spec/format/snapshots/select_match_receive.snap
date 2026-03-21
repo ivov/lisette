@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  select {\n    match ch.receive() {\n      Some(v) => process(v),\n      None => handle_close(),\n    },\n    _ => default(),\n  }\n}"
+---
+fn test() {
+  select {
+    match ch.receive() {
+      Some(v) => process(v),
+      None => handle_close(),
+    },
+    _ => default(),
+  }
+}

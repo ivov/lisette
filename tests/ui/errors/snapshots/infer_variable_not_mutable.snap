@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Immutable variable
+   ╭─[test.lis:4:3]
+ 3 │   let x = 10;
+ 4 │   x = 20;
+   ·   ───┬──
+   ·      ╰── cannot mutate an immutable variable
+ 5 │ }
+   ╰────
+  help: Declare using `let mut x` to make the variable mutable · code: [infer.immutable]

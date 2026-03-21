@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn bump(i: Ref<int>) -> int {\n  i.* = i.* + 1\n  i.*\n}\nfn test() {\n  let mut i = 0\n  while (i < 3, bump(&i)).0 {\n    let _ = i\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func bump(i *int) int {
+	*i++
+	return *i
+}
+
+func test() {
+	i := 0
+	for lisette.MakeTuple2(i < 3, bump(&i)).First {
+		_ = i
+	}
+}

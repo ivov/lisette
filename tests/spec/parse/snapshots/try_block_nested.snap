@@ -1,0 +1,207 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() {\n  let outer = try {\n    let inner = try {\n      inner_risky()?\n    };\n    outer_risky()?\n  };\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "outer",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 19,
+                                byte_length: 5,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: TryBlock {
+                        items: [
+                            Let {
+                                binding: Binding {
+                                    pattern: Identifier {
+                                        identifier: "inner",
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 41,
+                                            byte_length: 5,
+                                        },
+                                    },
+                                    annotation: None,
+                                    typed_pattern: None,
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                },
+                                value: TryBlock {
+                                    items: [
+                                        Propagate {
+                                            expression: Call {
+                                                expression: Identifier {
+                                                    value: "inner_risky",
+                                                    ty: Variable(
+                                                        -1,
+                                                    ),
+                                                    span: Span {
+                                                        file_id: 0,
+                                                        byte_offset: 61,
+                                                        byte_length: 11,
+                                                    },
+                                                    binding_id: None,
+                                                    qualified: None,
+                                                },
+                                                args: [],
+                                                type_args: [],
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 61,
+                                                    byte_length: 13,
+                                                },
+                                            },
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 61,
+                                                byte_length: 14,
+                                            },
+                                        },
+                                    ],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    try_keyword_span: Span {
+                                        file_id: 0,
+                                        byte_offset: 49,
+                                        byte_length: 3,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 49,
+                                        byte_length: 32,
+                                    },
+                                },
+                                mutable: false,
+                                mut_span: None,
+                                else_block: None,
+                                else_span: None,
+                                typed_pattern: None,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 37,
+                                    byte_length: 44,
+                                },
+                            },
+                            Propagate {
+                                expression: Call {
+                                    expression: Identifier {
+                                        value: "outer_risky",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 87,
+                                            byte_length: 11,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    args: [],
+                                    type_args: [],
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 87,
+                                        byte_length: 13,
+                                    },
+                                },
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 87,
+                                    byte_length: 14,
+                                },
+                            },
+                        ],
+                        ty: Variable(
+                            -1,
+                        ),
+                        try_keyword_span: Span {
+                            file_id: 0,
+                            byte_offset: 27,
+                            byte_length: 3,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 27,
+                            byte_length: 78,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 90,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 97,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 107,
+        },
+    },
+]

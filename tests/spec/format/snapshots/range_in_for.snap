@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { for i in 0..3 { print(i) } }"
+---
+fn test() {
+  for i in 0..3 {
+    print(i)
+  }
+}

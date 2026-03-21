@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Span {\n  start: int,\n  end: int,\n}\n\nimpl Span {\n  fn new(start: int, end: int) -> Span {\n    Span { start: start, end: end }\n  }\n\n  fn contains(self: Span, val: int) -> bool {\n    val >= self.start && val < self.end\n  }\n\n  fn len(self: Span) -> int {\n    self.end - self.start\n  }\n}\n\nfn test() -> int {\n  let r = Span.new(0, 10);\n  r.len()\n}\n"
+---
+package main
+
+import "fmt"
+
+type Span struct {
+	start int
+	end   int
+}
+
+func (s Span) String() string {
+	return fmt.Sprintf("Span { start: %v, end: %v }", s.start, s.end)
+}
+
+func Span_new(start, end int) Span {
+	return Span{
+		start: start,
+		end:   end,
+	}
+}
+
+func (s Span) contains(val int) bool {
+	return val >= s.start && val < s.end
+}
+
+func (s Span) len() int {
+	return s.end - s.start
+}
+
+func test() int {
+	r := Span_new(0, 10)
+	return r.len()
+}

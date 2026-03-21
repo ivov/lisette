@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:5:11]
+ 4 │   let items = [1, 2, 3];
+ 5 │   process(items)
+   ·           ──┬──
+   ·             ╰── expected `int`, found `Slice<int>`
+ 6 │ }
+   ╰────
+  help: Index into the slice, e.g. `items[0]` · code: [infer.type_mismatch]

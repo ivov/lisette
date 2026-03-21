@@ -1,0 +1,598 @@
+---
+source: tests/spec/e2e.rs
+expression: stdout
+---
+// pattern matching - tuples
+
+tuple_literal: PASS
+tuple_binding: PASS
+tuple_mixed: PASS
+tuple_wildcard: PASS
+tuple_nested: PASS
+tuple_first_match: PASS
+tuple_triple: PASS
+tuple_deep: PASS
+tuple_expr_arm: PASS
+tuple_all_wild: PASS
+tuple_return_annotation: PASS
+
+// pattern matching - enums
+
+enum_simple: PASS
+enum_with_data: PASS
+enum_multi_field: PASS
+enum_neither: PASS
+enum_message: PASS
+enum_nested: PASS
+enum_nested_none: PASS
+enum_message_quit: PASS
+enum_message_write: PASS
+enum_multi_arm: PASS
+
+// struct variants
+
+struct_variant_match: PASS
+struct_variant_keypress: PASS
+struct_variant_partial: PASS
+struct_variant_construction: PASS
+mixed_variants: PASS
+struct_variant_with_unit: PASS
+if_let_struct_variant: PASS
+let_else_struct_variant: PASS
+let_else_struct_variant_or: PASS
+struct_variant_field_order: PASS
+struct_variant_type_conflict: PASS
+tuple_struct_field_conflict: PASS
+tag_variant_collision: PASS
+tag_field_collision: PASS
+
+// enum methods
+
+enum_method: PASS
+enum_method_chained: PASS
+
+// pattern matching - slices
+
+slice_empty: PASS
+slice_single: PASS
+slice_fixed: PASS
+slice_fixed_mismatch: PASS
+slice_rest_discard: PASS
+slice_rest_bind: PASS
+slice_literal_match: PASS
+slice_mixed: PASS
+
+// pattern matching - structs
+
+struct_full: PASS
+struct_literal: PASS
+struct_renamed: PASS
+struct_partial: PASS
+struct_nested: PASS
+struct_wildcard_field: PASS
+struct_multiple_arms: PASS
+struct_let_destructure: PASS
+
+// option handling
+
+option_some: PASS
+option_none: PASS
+option_chain: PASS
+option_passthrough: PASS
+option_conditional: PASS
+option_conditional_none: PASS
+option_nested: PASS
+option_in_struct: PASS
+option_return_some: PASS
+option_return_none: PASS
+
+// if let
+
+if_let_some: PASS
+if_let_none: PASS
+if_let_statement: PASS
+if_let_nested: PASS
+if_let_else_if_let: PASS
+if_let_result_ok: PASS
+if_let_result_err: PASS
+
+// let else
+
+let_else_some: PASS
+let_else_none: PASS
+let_else_result_ok: PASS
+let_else_result_err: PASS
+let_else_with_computation: PASS
+let_else_chained: PASS
+let_else_in_loop: PASS
+let_else_break: PASS
+
+// while let
+
+while_let_basic: PASS
+while_let_none_initially: PASS
+while_let_with_break: PASS
+while_let_tuple: PASS
+while_let_result: PASS
+
+// result handling
+
+result_ok: PASS
+result_err: PASS
+result_chain: PASS
+result_mixed: PASS
+result_propagation: PASS
+result_propagation_err: PASS
+result_multi_propagation: PASS
+result_err_value: PASS
+
+// try blocks
+
+try_block_basic: PASS
+try_block_multiple: PASS
+try_block_early_err: PASS
+try_block_option: PASS
+try_block_option_none: PASS
+try_block_nested: PASS
+try_block_with_loop: PASS
+try_block_conditional: PASS
+
+// control flow
+
+if_true: PASS
+if_false: PASS
+if_chain: PASS
+if_nested: PASS
+while_loop: PASS
+for_loop: PASS
+range_exclusive: PASS
+range_inclusive: PASS
+range_from: PASS
+stored_range: PASS
+slice_range_exclusive: PASS
+slice_range_inclusive: PASS
+slice_range_from: PASS
+slice_range_to: PASS
+slice_range_full: PASS
+subslice_append_no_alias: PASS
+mutable_subslice_element_write_no_alias: PASS
+loop_break: PASS
+loop_continue: PASS
+nested_loop: PASS
+early_return: PASS
+
+// functions
+
+fn_call: PASS
+higher_order: PASS
+lambda_simple: PASS
+lambda_capture: PASS
+recursion: PASS
+method_call: PASS
+generic_fn: PASS
+generic_fn_string: PASS
+
+// concurrency
+
+channel_basic: PASS
+channel_multiple: PASS
+select_basic: PASS
+select_default: PASS
+task_spawn: PASS
+buffered_channel: PASS
+blocking_send_receive: PASS
+channel_iteration: PASS
+channel_split: PASS
+select_match_receive_value: PASS
+select_match_receive_closed: PASS
+
+// expressions as arguments
+
+if_as_argument: PASS
+match_as_argument: PASS
+block_as_argument: PASS
+select_as_argument: PASS
+nested_expr_argument: PASS
+
+// try operator contexts
+
+try_in_argument: PASS
+try_then_chain: PASS
+try_in_return: PASS
+try_in_lambda: PASS
+
+// lambda edge cases
+
+lambda_return_value: PASS
+lambda_iife: PASS
+lambda_nested: PASS
+
+// references
+
+ref_create: PASS
+ref_deref: PASS
+ref_pass: PASS
+ref_mut: PASS
+
+// block expressions
+
+block_as_value: PASS
+
+// format strings
+
+fmt_variable: PASS
+fmt_multi_variable: PASS
+fmt_expression_addition: PASS
+fmt_expression_method_call: PASS
+fmt_expression_index_access: PASS
+fmt_expression_if: PASS
+fmt_expression_chained: PASS
+fmt_escaped_braces: PASS
+
+// let destructuring
+
+let_slice_destructure: PASS
+let_slice_rest: PASS
+let_struct_nested: PASS
+let_tuple_destructure: PASS
+let_struct_alias: PASS
+let_struct_alias_nested: PASS
+
+// slice param patterns
+
+slice_param_destructure: PASS
+slice_param_rest: PASS
+
+// lambdas as values
+
+lambda_as_value: PASS
+lambda_passed: PASS
+
+// compound assignment
+
+compound_add: PASS
+compound_sub: PASS
+compound_mul: PASS
+compound_div: PASS
+compound_mod: PASS
+compound_chain: PASS
+
+// index access
+
+index_on_call: PASS
+index_nested: PASS
+index_in_expression: PASS
+index_on_field: PASS
+
+// dot access chains
+
+dot_chain_deep: PASS
+method_chain: PASS
+method_then_field: PASS
+
+// complex match arms
+
+match_with_block_arm: PASS
+match_with_nested_if: PASS
+match_nested_match: PASS
+if_with_match: PASS
+
+// unary operators
+
+unary_not_complex: PASS
+unary_neg_field: PASS
+unary_not_comparison: PASS
+
+// early return nested
+
+early_return_nested: PASS
+
+// return in expression arms
+
+return_in_match_arm: PASS
+return_in_if_arm: PASS
+
+// generic methods
+
+generic_method_int: PASS
+generic_method_string: PASS
+generic_method_chain: PASS
+generic_struct_direct_construction: PASS
+
+// go keyword escaping
+
+go_keyword_as_variable: PASS
+
+// type aliases
+
+type_alias_basic: PASS
+
+// nested generics
+
+nested_option_some_some: PASS
+nested_option_some_none: PASS
+nested_option_none: PASS
+result_with_option: PASS
+
+// multiple type parameters
+
+multi_type_params: PASS
+multi_type_params_swap: PASS
+
+// assignment expressions
+
+field_assignment: PASS
+index_assignment: PASS
+nested_field_assignment: PASS
+
+// complex control flow
+
+break_nested_labeled: PASS
+continue_in_nested: PASS
+
+// custom generic enum
+
+either_left: PASS
+either_right: PASS
+
+// struct spread
+
+struct_spread: PASS
+struct_spread_override_last: PASS
+struct_variant_spread: PASS
+
+// tuple structs
+
+tuple_struct_single: PASS
+tuple_struct_multi: PASS
+tuple_struct_pattern: PASS
+tuple_struct_function_param: PASS
+tuple_struct_generic: PASS
+
+// match guards
+
+guard_basic: PASS
+guard_negative: PASS
+guard_zero: PASS
+guard_none: PASS
+guard_multiple: PASS
+guard_uses_binding: PASS
+guard_on_tuple: PASS
+guard_on_struct: PASS
+guard_complex_condition: PASS
+guard_with_result: PASS
+
+// per-field visibility
+
+all_pub_fields: PASS
+mixed_visibility: PASS
+all_private_fields: PASS
+pub_struct_spread: PASS
+mixed_struct_spread: PASS
+pub_field_pattern: PASS
+mixed_field_pattern: PASS
+pub_field_method: PASS
+pub_let_destructure: PASS
+enum_struct_let_destructure: PASS
+
+// or-patterns
+
+or_pattern_literals: PASS
+or_pattern_enum: PASS
+or_pattern_strings: PASS
+or_pattern_booleans: PASS
+or_pattern_with_guard: PASS
+or_pattern_guard_skips_arm: PASS
+or_pattern_exhaustive: PASS
+or_pattern_if_let: PASS
+or_pattern_mixed_arms: PASS
+
+// imaginary literals
+
+imaginary_integer: PASS
+imaginary_float: PASS
+imaginary_zero: PASS
+complex_addition: PASS
+complex_subtraction: PASS
+complex_multiplication: PASS
+imaginary_addition: PASS
+complex_return: PASS
+complex_as_param: PASS
+
+// go stdlib tuple destructuring
+
+go_tuple_destructure: PASS
+go_tuple_destructure_wildcard: PASS
+go_tuple_discard: PASS
+go_tuple_store: PASS
+go_tuple_field_inline: PASS
+
+// go:strings module
+
+strings_to_upper: PASS
+strings_to_lower: PASS
+strings_to_title: PASS
+
+// pipeline with Go stdlib
+
+pipeline_go_stdlib: PASS
+pipeline_go_stdlib_chained: PASS
+pipeline_go_stdlib_with_args: PASS
+
+// Result/Option direct arg
+
+result_direct_arg_ok: PASS
+result_direct_arg_err: PASS
+option_direct_arg_some: PASS
+option_direct_arg_none: PASS
+
+// Match statement with Unit arms
+
+match_statement_result: PASS
+match_statement_option: PASS
+
+// Result/Option if-else chain type inference
+
+result_if_else_chain_ok: PASS
+result_if_else_chain_err: PASS
+option_if_else_chain_some: PASS
+option_if_else_chain_none: PASS
+
+// let-else with direct function call
+
+let_else_option_direct_call: PASS
+let_else_option_direct_call_else: PASS
+let_else_result_direct_call: PASS
+let_else_result_direct_call_else: PASS
+
+// underscore-prefixed bindings
+
+underscore_prefix_binding: PASS
+underscore_prefix_binding_result: PASS
+underscore_prefix_slice_rest: PASS
+
+// numeric type alias operations
+
+duration_times_literal: PASS
+duration_times_variable: PASS
+duration_div_duration: PASS
+duration_div_scalar: PASS
+duration_add: PASS
+duration_sub: PASS
+duration_comparison: PASS
+duration_negation: PASS
+eq_with_variable: PASS
+variable_not_variant: PASS
+negated_literal_times_aliased: PASS
+paren_negated_literal_times_aliased: PASS
+
+// Go-style value enum access
+
+go_style_access: PASS
+go_style_times_literal: PASS
+go_style_arithmetic: PASS
+both_styles_equal: PASS
+mixed_styles_arithmetic: PASS
+
+// go: prefix regression tests
+
+go_style_times_variable: PASS
+go_style_times_function: PASS
+lis_style_times_function: PASS
+
+// defer
+
+defer_cleanup_on_success: PASS
+defer_cleanup_on_early_return: PASS
+defer_lifo_order: PASS
+
+// go stdlib constants
+
+go_stdlib_constant_math_pi: PASS
+
+// ufcs methods
+
+option_map: PASS
+option_and_then: PASS
+option_map_or: PASS
+option_map_or_else: PASS
+option_zip: PASS
+option_flatten: PASS
+result_map: PASS
+result_and_then: PASS
+result_map_or: PASS
+
+// non-ufcs to ufcs chaining
+
+option_filter_then_map: PASS
+option_or_else_then_map: PASS
+option_filter_then_is_some: PASS
+result_ok_then_map: PASS
+
+// ufcs callback with nested ufcs
+
+nested_ufcs_in_and_then: PASS
+triple_chain_filter_map_map: PASS
+result_and_then_ok: PASS
+result_and_then_err: PASS
+result_or_else_recover: PASS
+long_ufcs_chain: PASS
+
+// closure/ufcs regression tests
+
+generic_fn_result_closure: PASS
+user_ufcs_method_result: PASS
+closure_var_and_then_chain: PASS
+mutual_recursion_result: PASS
+
+// Go Result call wrapping
+
+go_result_call_let_underscore: PASS
+go_result_call_in_match: PASS
+go_result_call_assigned: PASS
+
+// recover blocks
+
+recover_catches_panic: PASS
+recover_success_path: PASS
+recover_with_statements: PASS
+recover_panic_value_stack_trace: PASS
+recover_nested: PASS
+
+// as cast syntax
+
+cast_int_to_float64: PASS
+cast_float64_to_int: PASS
+cast_int_to_rune: PASS
+cast_rune_to_int: PASS
+cast_string_to_byte_slice: PASS
+cast_byte_slice_to_string: PASS
+cast_string_to_rune_slice: PASS
+cast_rune_slice_to_string: PASS
+cast_in_expression: PASS
+cast_int_to_int8: PASS
+cast_float32_to_float64: PASS
+cast_duration_to_int64: PASS
+cast_int64_to_duration: PASS
+
+// slice fold and find
+
+slice_fold_sum: PASS
+slice_fold_product: PASS
+slice_fold_empty: PASS
+slice_find_some: PASS
+slice_find_none: PASS
+slice_find_empty: PASS
+
+// slice enumerate
+
+slice_enumerate: PASS
+enumerated_slice_filter: PASS
+
+// slice join
+
+slice_join: PASS
+
+// enum variant named string
+
+enum_variant_named_string: PASS
+
+// map from
+
+map_from: PASS
+
+// string range slicing
+
+string_range_slicing: PASS
+
+// go import shadowing
+
+go_import_not_shadowed_by_transitive: PASS
+
+// go pointer receiver
+
+pointer_receiver_struct_literal: PASS
+pointer_receiver_constructor: PASS
+pointer_receiver_method_expr: PASS
+
+All tests completed

@@ -1,0 +1,19 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import t "github.com/user/myproject/type"
+
+func main() {
+	_ = t.Foo()
+}
+
+
+// === type/mod.go ===
+package type_
+
+func Foo() int {
+	return 1
+}

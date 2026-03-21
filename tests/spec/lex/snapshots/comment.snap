@@ -1,0 +1,43 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: 42; // meaning of life"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Integer,
+            text: "42",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: Semicolon,
+            text: ";",
+            byte_offset: 2,
+            byte_length: 1,
+        },
+        Token {
+            kind: Comment,
+            text: "// meaning of life",
+            byte_offset: 4,
+            byte_length: 18,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 22,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [
+            (
+                4,
+                22,
+            ),
+        ],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

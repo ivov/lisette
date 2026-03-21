@@ -1,0 +1,5 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: pub var Stdin: Ref<File>"
+---
+pub var Stdin: Ref<File>

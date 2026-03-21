@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn noop() {}\n\nfn main() {\n  let x = assert_type<()>(noop())\n  let _ = x\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func noop() {}
+
+func main() {
+	noop()
+	_ = lisette.AssertType[struct{}](struct{}{})
+}

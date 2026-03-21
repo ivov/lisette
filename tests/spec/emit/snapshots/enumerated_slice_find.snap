@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(s: Slice<int>) -> Option<(int, int)> {\n  s.enumerate().find(|(_, v)| v > 10)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s []int) lisette.Option[lisette.Tuple2[int, int]] {
+	return lisette.EnumeratedSliceFind(s, func(arg_1 lisette.Tuple2[int, int]) bool {
+		v := arg_1.Second
+		return v > 10
+	})
+}

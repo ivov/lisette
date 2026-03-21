@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nenum Message {\n  Move { x: int, y: int },\n  Quit,\n}\n\nfn handle(m: Message) -> int {\n  match m {\n    Move { x, y } => x + y,\n    Quit => 0,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeMessageMove(arg0 int, arg1 int) Message {
+	return Message{Tag: MessageMove, X: arg0, Y: arg1}
+}
+
+func MakeMessageQuit() Message {
+	return Message{Tag: MessageQuit}
+}
+
+type MessageTag int
+
+const (
+	MessageMove MessageTag = iota
+	MessageQuit
+)
+
+type Message struct {
+	Tag MessageTag
+	X   int
+	Y   int
+}
+
+func (m Message) String() string {
+	switch m.Tag {
+	case MessageMove:
+		return fmt.Sprintf("Message.Move { x: %v, y: %v }", m.X, m.Y)
+	case MessageQuit:
+		return "Message.Quit"
+	default:
+		return fmt.Sprintf("Message(%d)", m.Tag)
+	}
+}
+
+func handle(m Message) int {
+	if m.Tag == MessageMove {
+		x := m.X
+		y := m.Y
+		return x + y
+	}
+	return 0
+}

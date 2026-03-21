@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Reserved import alias
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ import map "go:fmt"
+   ·        ─┬─
+   ·         ╰── reserved name
+ 3 │ 
+   ╰────
+  help: `map` is a reserved name and cannot be used as an import alias. Choose a different alias, e.g. `import my_map "..."` · code: [resolve.reserved_import_alias]

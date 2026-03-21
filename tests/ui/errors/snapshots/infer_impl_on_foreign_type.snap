@@ -1,0 +1,15 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot implement methods on foreign type
+   ╭─[main.lis:4:1]
+ 3 │     
+ 4 │ ╭─▶ impl ext.Widget {
+ 5 │ │     fn greet(self) -> string {
+ 6 │ │       "hello"
+ 7 │ │     }
+ 8 │ ├─▶ }
+   · ╰──── `Widget` is defined in module `ext`
+ 9 │     
+   ╰────
+  help: Methods can only be defined on types in the same module. Use a standalone function instead: `fn my_method(w: Widget) { ... }` · code: [infer.impl_on_foreign_type]

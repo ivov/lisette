@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  defer {\n    cleanup();\n  };\n}"
+---
+fn test() {
+  defer {
+    cleanup()
+  }
+}

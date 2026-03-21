@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(flag: bool) -> int {\n  match flag {\n    true => 1,\n    false => 0,\n  }\n}\n"
+---
+package main
+
+func test(flag bool) int {
+	if flag {
+		return 1
+	}
+	return 0
+}

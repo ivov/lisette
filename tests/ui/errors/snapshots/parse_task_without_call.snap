@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `task`
+   ╭─[test.lis:4:8]
+ 3 │ fn f() {
+ 4 │   task work
+   ·        ──┬─
+   ·          ╰── expected `()`
+ 5 │ }
+   ╰────
+  help: Add parens to call the function · code: [parse.task_missing_parens]

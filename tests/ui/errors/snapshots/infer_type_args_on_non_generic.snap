@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unexpected type arguments
+   ╭─[test.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let _ = foo<string>(42);
+   ·           ───────┬───────
+   ·                  ╰── accepts no type arguments
+ 6 │ }
+   ╰────
+  help: Remove the type argument from this call · code: [infer.type_arg_on_non_generic]

@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() -> int {\n  let ch = Channel.new<int>();\n\n  select {\n    let Some(val) = ch.receive() => val,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+func test() int {
+	ch := make(chan int)
+	ch_1 := ch
+	for {
+		select {
+		case val, ok := <-ch_1:
+			if ok {
+				return val
+			}
+			ch_1 = nil
+			continue
+		default:
+			return 0
+		}
+		break
+	}
+	panic("unreachable")
+}

@@ -1,0 +1,23 @@
+struct Inner { value: int }
+struct Middle { inner: Inner }
+struct Outer { middle: Middle }
+
+impl Inner {
+  fn get(self: Inner) -> int {
+    self.value
+  }
+
+  fn doubled(self: Inner) -> Inner {
+    Inner { value: self.value * 2 }
+  }
+}
+
+fn test_method_chain() -> int {
+  let i = Inner { value: 10 };
+  i.doubled().get()
+}
+
+fn test_dot_chain_deep() -> int {
+  let o = Outer { middle: Middle { inner: Inner { value: 42 } } };
+  o.middle.inner.value
+}

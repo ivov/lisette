@@ -1,0 +1,25 @@
+fn test() {
+  let process = |x| {
+    let doubled = x * 2;
+    doubled + 1
+  };
+
+  let result = (|x| x + 1)(5);
+
+  let outer = |x| |y| x + y;
+
+  let threshold = 10;
+  let check = |x| x > threshold;
+}
+
+fn returns_lambda() -> fn(int) -> int {
+  |x: int| -> int { x * 2 }
+}
+
+fn make_counter() -> fn() -> int {
+  let mut n = 0
+  || -> int {
+    n = n + 1
+    n
+  }
+}

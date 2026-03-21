@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn sum((x, y): (int, int)) -> int {\n  x + y\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func sum(arg_1 lisette.Tuple2[int, int]) int {
+	x := arg_1.First
+	y := arg_1.Second
+	return x + y
+}

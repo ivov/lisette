@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Redundant `else` in `let...else`
+   ╭─[test.lis:3:7]
+ 2 │ pub fn test(opt: Option<int>) {
+ 3 │   let x = opt else { return; };
+   ·       ┬
+   ·       ╰── always matches
+ 4 │   let _ = x;
+   ╰────
+  help: Remove the `else` block since the pattern cannot fail · code: [lint.redundant_let_else]

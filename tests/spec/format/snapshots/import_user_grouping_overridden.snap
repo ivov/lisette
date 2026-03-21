@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+assertion_line: 468
+description: "input: import \"go:fmt\"\n\nimport \"commands\"\n\nimport \"go:os\"\n\nimport \"display\""
+---
+import "go:fmt"
+import "go:os"
+
+import "commands"
+import "display"

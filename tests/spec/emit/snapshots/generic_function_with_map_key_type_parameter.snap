@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn put_in_map<K, V>(key: K, value: V) -> Map<K, V> {\n  let mut m: Map<K, V> = Map.new()\n  m[key] = value\n  m\n}\n"
+---
+package main
+
+func put_in_map[K comparable, V any](key K, value V) map[K]V {
+	m := make(map[K]V)
+	m[key] = value
+	return m
+}

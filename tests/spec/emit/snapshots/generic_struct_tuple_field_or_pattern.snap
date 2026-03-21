@@ -1,0 +1,65 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct Pair<T> { coords: (T, T) }\nenum E { A(Pair<int>), B(Pair<int>) }\n\nfn test(e: E) -> int {\n  let A(Pair { coords: (x, y) }) | B(Pair { coords: (x, y) }) = e else { return 0; };\n  x + y\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func MakeEA(arg0 Pair[int]) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 Pair[int]) E {
+	return E{Tag: EB, B: arg0}
+}
+
+type Pair[T any] struct {
+	coords lisette.Tuple2[T, T]
+}
+
+func (p Pair[T]) String() string {
+	return fmt.Sprintf("Pair { coords: %v }", p.coords)
+}
+
+type ETag int
+
+const (
+	EA ETag = iota
+	EB
+)
+
+type E struct {
+	Tag ETag
+	A   Pair[int]
+	B   Pair[int]
+}
+
+func (e E) String() string {
+	switch e.Tag {
+	case EA:
+		return fmt.Sprintf("E.A(%v)", e.A)
+	case EB:
+		return fmt.Sprintf("E.B(%v)", e.B)
+	default:
+		return fmt.Sprintf("E(%d)", e.Tag)
+	}
+}
+
+func test(e E) int {
+	var x int
+	var y int
+	if e.Tag == EA {
+		x = e.A.coords.First
+		y = e.A.coords.Second
+	} else if e.Tag == EB {
+		x = e.B.coords.First
+		y = e.B.coords.Second
+	} else {
+		return 0
+	}
+	return x + y
+}

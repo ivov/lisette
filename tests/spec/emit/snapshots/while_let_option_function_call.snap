@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nimport \"go:fmt\"\n\nfn next_item(counter: int) -> Option<int> {\n  if counter < 5 { Some(counter) } else { None }\n}\n\nfn test() {\n  let mut i = 0;\n  while let Some(x) = next_item(i) {\n    fmt.Print(f\"Got: {x}\\n\");\n    i = i + 1;\n  }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func next_item(counter int) lisette.Option[int] {
+	if counter < 5 {
+		return lisette.MakeOptionSome[int](counter)
+	}
+	return lisette.MakeOptionNone[int]()
+}
+
+func test() {
+	i := 0
+	for {
+		subject_1 := next_item(i)
+		if subject_1.Tag == lisette.OptionSome {
+			x := subject_1.SomeVal
+			fmt.Printf("Got: %v\n", x)
+			i++
+		} else {
+			break
+		}
+	}
+}

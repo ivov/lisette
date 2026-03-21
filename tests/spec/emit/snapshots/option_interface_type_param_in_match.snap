@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \ninterface Printable {\n  fn to_string(self) -> string\n}\n\nstruct Box { label: string }\nimpl Box {\n  pub fn to_string(self) -> string { self.label }\n}\n\nstruct Circle { radius: int }\nimpl Circle {\n  pub fn to_string(self) -> string { \"circle\" }\n}\n\nfn find_it(n: int) -> Option<Printable> {\n  match n {\n    1 => Some(Box { label: \"found\" }),\n    2 => Some(Circle { radius: 10 }),\n    _ => None,\n  }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Printable interface {
+	To_string() string
+}
+
+type Box struct {
+	label string
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { label: %v }", b.label)
+}
+
+func (b Box) To_string() string {
+	return b.label
+}
+
+type Circle struct {
+	radius int
+}
+
+func (c Circle) String() string {
+	return fmt.Sprintf("Circle { radius: %v }", c.radius)
+}
+
+func (c Circle) To_string() string {
+	return "circle"
+}
+
+func find_it(n int) lisette.Option[Printable] {
+	switch n {
+	case 1:
+		return lisette.MakeOptionSome[Printable](Box{label: "found"})
+	case 2:
+		return lisette.MakeOptionSome[Printable](Circle{radius: 10})
+	default:
+		return lisette.MakeOptionNone[Printable]()
+	}
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:5:11]
+ 4 │   let data = get_unknown();
+ 5 │   process(data)
+   ·           ──┬─
+   ·             ╰── expected `int`, found `Unknown`
+ 6 │ }
+   ╰────
+  help: The `Unknown` type cannot be used directly. Use `assert_type` to narrow it down to a concrete type. Example: `let value = assert_type<int>(...)?` · code: [infer.type_mismatch]

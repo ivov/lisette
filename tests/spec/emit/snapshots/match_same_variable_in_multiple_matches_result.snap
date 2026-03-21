@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn test() -> int {\n  let res1: Result<int, string> = Ok(5);\n  let x1 = match res1 {\n    Ok(v) => v,\n    Err(e) => 0,\n  };\n\n  let res2: Result<int, string> = Ok(10);\n  let x2 = match res2 {\n    Ok(v) => v,\n    Err(e) => 0,\n  };\n\n  x1 + x2\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	res1 := lisette.MakeResultOk[int, string](5)
+	var x1 int
+	if res1.Tag == lisette.ResultOk {
+		x1 = res1.OkVal
+	} else {
+		x1 = 0
+	}
+	res2 := lisette.MakeResultOk[int, string](10)
+	var x2 int
+	if res2.Tag == lisette.ResultOk {
+		x2 = res2.OkVal
+	} else {
+		x2 = 0
+	}
+	return x1 + x2
+}

@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> complex128 {\n  4i + 4i\n}\n"
+---
+package main
+
+func test() complex128 {
+	return 4i + 4i
+}

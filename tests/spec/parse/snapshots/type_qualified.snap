@@ -1,0 +1,34 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \ntype Data = Foo.Bar;\n"
+---
+[
+    TypeAlias {
+        doc: None,
+        name: "Data",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 4,
+        },
+        generics: [],
+        annotation: Constructor {
+            name: "Foo.Bar",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 13,
+                byte_length: 7,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 19,
+        },
+    },
+]

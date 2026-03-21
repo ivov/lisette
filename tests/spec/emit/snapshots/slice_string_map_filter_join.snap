@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(items: Slice<string>) -> string {\n  items\n    .map(|s| s + \"!\")\n    .filter(|s| s.length() > 2)\n    .join(\", \")\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strings"
+)
+
+func test(items []string) string {
+	return strings.Join(lisette.SliceFilter(lisette.SliceMap(items, func(s string) string {
+		return s + "!"
+	}), func(s string) bool {
+		return len(s) > 2
+	}), ", ")
+}

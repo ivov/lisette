@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn get_value() -> Result<int, string> {\n  Ok(42)\n}\n\nfn test() -> Result<int, string> {\n  let x = get_value();\n  x\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func get_value() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](42)
+}
+
+func test() lisette.Result[int, string] {
+	return get_value()
+}

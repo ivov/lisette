@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn test() -> int {\n  let x = 5\n  {\n    let x = x * 2\n    let x = x + 100\n    x\n  }\n}\n"
+---
+package main
+
+func test() int {
+	x := 5
+	{
+		x := x * 2
+		return x + 100
+	}
+}

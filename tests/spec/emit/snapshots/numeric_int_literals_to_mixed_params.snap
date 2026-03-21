@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn mixed_params(a: float64, b: int, c: float64) -> float64 {\n  a + c\n}\n\nfn test() -> float64 {\n  mixed_params(1, 2, 3)\n}\n"
+---
+package main
+
+func mixed_params(a float64, _ int, c float64) float64 {
+	return a + c
+}
+
+func test() float64 {
+	return mixed_params(1, 2, 3)
+}

@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let x = loop {\n    loop { break 42 }\n    break 0\n  };\n  x\n}\n"
+---
+package main
+
+func test() int {
+	for {
+		for {
+			_ = 42
+			break
+		}
+		return 0
+	}
+}

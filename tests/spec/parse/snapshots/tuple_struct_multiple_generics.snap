@@ -1,0 +1,91 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct Pair<A, B>(A, B)\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Pair",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 4,
+        },
+        generics: [
+            Generic {
+                name: "A",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 13,
+                    byte_length: 1,
+                },
+            },
+            Generic {
+                name: "B",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 16,
+                    byte_length: 1,
+                },
+            },
+        ],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "_0",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 19,
+                    byte_length: 1,
+                },
+                annotation: Constructor {
+                    name: "A",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 19,
+                        byte_length: 1,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "_1",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 22,
+                    byte_length: 1,
+                },
+                annotation: Constructor {
+                    name: "B",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 22,
+                        byte_length: 1,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Tuple,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 23,
+        },
+    },
+]

@@ -1,0 +1,274 @@
+use rustc_hash::FxHashMap as HashMap;
+
+use syntax::EcoString;
+use syntax::ast::{Annotation, Generic, Span};
+use syntax::types::{SubstitutionMap, Type, substitute};
+
+use crate::checker::Checker;
+
+impl Checker<'_, '_> {
+    pub fn convert_to_type(&mut self, annotation: &Annotation, span: &Span) -> Type {
+        match annotation {
+            Annotation::Unknown => self.new_type_var(),
+
+            Annotation::Function {
+                params,
+                return_type,
+                ..
+            } => {
+                let new_params: Vec<Type> = params
+                    .iter()
+                    .map(|param| self.convert_to_type(param, span))
+                    .collect();
+                // For function type annotations, omitted return type means Unit (`()`),
+                // not a type variable. This ensures `fn(T)` is `fn(T) -> ()`.
+                let new_return_type = if matches!(return_type.as_ref(), Annotation::Unknown) {
+                    self.type_unit()
+                } else {
+                    self.convert_to_type(return_type, span)
+                };
+
+                Type::Function {
+                    param_mutability: vec![false; new_params.len()],
+                    params: new_params,
+                    bounds: Default::default(),
+                    return_type: new_return_type.into(),
+                }
+            }
+
+            Annotation::Constructor {
+                name: type_name,
+                params,
+                span: annotation_span,
+            } => {
+                // Unit is internal — `()` desugars to Constructor { name: "Unit" }.
+                // Return the interned unit type directly, unless a user-defined
+                // type named `Unit` exists in scope.
+                if type_name == "Unit"
+                    && params.is_empty()
+                    && self.resolve_type_name("Unit").is_none()
+                {
+                    return Type::unit();
+                }
+
+                if self.lookup_generic_index(type_name).is_some() {
+                    if !params.is_empty() {
+                        self.sink.push(diagnostics::infer::type_param_with_args(
+                            params.len(),
+                            *annotation_span,
+                        ));
+                    }
+                    return Type::Parameter(type_name.into());
+                }
+
+                let Some((qualified_name, ty)) =
+                    self.resolve_type_with_arity(type_name, params.len())
+                else {
+                    if type_name == "Self" {
+                        self.sink.push(diagnostics::infer::self_type_not_supported(
+                            *annotation_span,
+                        ));
+                    } else {
+                        self.sink.push(diagnostics::infer::type_not_found(
+                            type_name,
+                            *annotation_span,
+                        ));
+                    }
+                    return Type::Error;
+                };
+
+                self.track_name_usage(&qualified_name, annotation_span, type_name.len() as u32);
+
+                if qualified_name == "prelude.Unknown" && self.is_lis() {
+                    self.sink.push(diagnostics::infer::unknown_outside_typedef(
+                        *annotation_span,
+                    ));
+                }
+
+                let (generics, body) = match &ty {
+                    Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
+                    _ => (vec![], ty.clone()),
+                };
+
+                if generics.len() != params.len() {
+                    let actual_types: Vec<Type> = params
+                        .iter()
+                        .map(|arg| self.convert_to_type(arg, span))
+                        .collect();
+                    let generics_as_str: Vec<String> =
+                        generics.iter().map(|s| s.to_string()).collect();
+                    self.sink.push(diagnostics::infer::generics_arity_mismatch(
+                        &generics_as_str,
+                        params,
+                        &actual_types,
+                        *span,
+                    ));
+                }
+
+                let resolved_ty = self.instantiate_from_annotations(&generics, &body, params, span);
+
+                // Reject Ref<InterfaceType> — Go pointer-to-interface is invalid
+                if self.is_lis()
+                    && qualified_name == "prelude.Ref"
+                    && params.len() == 1
+                    && let Some(inner) = resolved_ty.inner()
+                    && let Some(inner_id) = inner.resolve().get_qualified_id()
+                    && self.store.get_interface(inner_id).is_some()
+                {
+                    self.sink.push(diagnostics::infer::ref_of_interface_type(
+                        &inner,
+                        *annotation_span,
+                    ));
+                }
+
+                if qualified_name == "prelude.Map"
+                    && !params.is_empty()
+                    && let Some(key_ty) = resolved_ty
+                        .get_type_params()
+                        .and_then(|p| p.first().cloned())
+                {
+                    self.check_map_key_comparable(&key_ty, *annotation_span);
+                }
+
+                resolved_ty
+            }
+
+            Annotation::Tuple { elements, .. } => {
+                let element_types = elements
+                    .iter()
+                    .map(|e| self.convert_to_type(e, span))
+                    .collect();
+                Type::Tuple(element_types)
+            }
+
+            Annotation::Opaque { .. } => {
+                unreachable!("Annotation::Opaque should not be converted to a type")
+            }
+        }
+    }
+
+    pub(super) fn resolve_type_with_arity(
+        &mut self,
+        type_name: &str,
+        expected_arity: usize,
+    ) -> Option<(String, Type)> {
+        let arity_of = |ty: &Type| match ty {
+            Type::Forall { vars, .. } => vars.len(),
+            _ => 0,
+        };
+
+        if let Some((qname, ty)) = self.resolve_type_name(type_name) {
+            if arity_of(&ty) == expected_arity {
+                return Some((qname, ty));
+            }
+            if !type_name.contains('.')
+                && let Some((pname, pty)) = self.resolve_type_from_prelude(type_name)
+                && arity_of(&pty) == expected_arity
+            {
+                return Some((pname, pty));
+            }
+            return Some((qname, ty));
+        }
+
+        self.resolve_type_from_prelude(type_name)
+    }
+
+    pub fn instantiate_from_annotations(
+        &mut self,
+        generics: &[EcoString],
+        body: &Type,
+        type_args: &[Annotation],
+        span: &Span,
+    ) -> Type {
+        let args: Vec<Type> = type_args
+            .iter()
+            .map(|arg_ann| self.convert_to_type(arg_ann, span))
+            .collect();
+
+        let map: SubstitutionMap = generics
+            .iter()
+            .zip(args.iter())
+            .map(|(name, ty)| (name.clone(), ty.clone()))
+            .collect();
+
+        substitute(body, &map)
+    }
+
+    /// Check that a map key type is comparable.
+    /// Only rejects concrete non-comparable types (Slice, Map, Function).
+    /// Type parameters are allowed here — they may be instantiated with comparable types.
+    /// Pre-check impl annotation for undeclared type params (e.g. `impl Container<T>`
+    /// without `impl<T>`). Adds them to scope to prevent cascading errors from
+    /// `convert_to_type`, and emits a diagnostic with the specific fix.
+    pub(crate) fn check_undeclared_impl_type_params(
+        &mut self,
+        annotation: &Annotation,
+        generics: &[Generic],
+    ) {
+        let Annotation::Constructor {
+            name: receiver_name,
+            params,
+            ..
+        } = annotation
+        else {
+            return;
+        };
+
+        let undeclared: Vec<_> = params
+            .iter()
+            .filter_map(|param| {
+                let Annotation::Constructor {
+                    name,
+                    params: sub_params,
+                    span: param_span,
+                } = param
+                else {
+                    return None;
+                };
+
+                // Single uppercase letter not declared as a type param — always a typo.
+                // Multi-letter names (Key, Error, etc.) are left to `type_not_found`.
+                if sub_params.is_empty()
+                    && name.len() == 1
+                    && name.chars().next().is_some_and(|c| c.is_uppercase())
+                    && self.lookup_generic_index(name).is_none()
+                {
+                    Some((name.to_string(), *param_span))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for (i, (name, param_span)) in undeclared.iter().enumerate() {
+            self.scopes
+                .current_mut()
+                .type_params
+                .get_or_insert_with(HashMap::default)
+                .insert(name.clone(), generics.len() + i);
+            self.sink
+                .push(diagnostics::infer::undeclared_impl_type_param(
+                    name,
+                    *param_span,
+                    receiver_name,
+                ));
+        }
+    }
+
+    fn check_map_key_comparable(&mut self, key_ty: &Type, span: Span) {
+        let resolved = key_ty.resolve();
+
+        let reason = match &resolved {
+            Type::Function { .. } => Some("functions"),
+            _ if resolved.has_name("Slice") => Some("slices"),
+            _ if resolved.has_name("Map") => Some("maps"),
+            _ => None,
+        };
+
+        if let Some(reason) = reason {
+            self.sink.push(diagnostics::infer::non_comparable_map_key(
+                &resolved, reason, span,
+            ));
+        }
+    }
+}

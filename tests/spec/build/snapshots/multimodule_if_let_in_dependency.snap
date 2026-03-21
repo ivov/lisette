@@ -1,0 +1,27 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"github.com/user/myproject/utils"
+)
+
+func main() {
+	_ = utils.Unwrap_or_default(lisette.MakeOptionSome(42))
+}
+
+
+// === utils/lib.go ===
+package utils
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func Unwrap_or_default(opt lisette.Option[int]) int {
+	if opt.Tag == lisette.OptionSome {
+		return opt.SomeVal
+	}
+	return 0
+}

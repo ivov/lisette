@@ -1,0 +1,19 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/utils"
+
+func main() {
+	_ = utils.Add(1, 2)
+}
+
+
+// === utils/helpers.go ===
+package utils
+
+func Add(a, b int) int {
+	return a + b
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Complex expression in `select` arm
+   ╭─[test.lis:6:5]
+ 5 │   select {
+ 6 │     (if true { ch1 } else { ch2 }).send(1) => 0,
+   ·     ───────────────┬──────────────
+   ·                    ╰── expected simple expression
+ 7 │     _ => 1,
+   ╰────
+  help: Hoist to a `let` binding before the `select` · code: [infer.complex_select_expression]

@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Params {\n  pub alpha: Option<Ref<big.Int>>,\n  pub beta: Option<Ref<big.Int>>,\n  pub gamma: Option<Ref<big.Int>>,\n  pub size: int,\n}"
+---
+struct Params {
+  pub alpha: Option<Ref<big.Int>>,
+  pub beta: Option<Ref<big.Int>>,
+  pub gamma: Option<Ref<big.Int>>,
+  pub size: int,
+}

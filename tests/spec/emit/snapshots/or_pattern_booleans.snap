@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n    (true, true) | (false, false) => \"same\",\n    (true, false) | (false, true) => \"different\",\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(a, b bool) string {
+	subject_1 := lisette.MakeTuple2(a, b)
+	if (subject_1.First && subject_1.Second) || (!subject_1.First && !subject_1.Second) {
+		return "same"
+	}
+	return "different"
+}

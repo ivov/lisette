@@ -1,0 +1,225 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 42;\n  let c: Container<int> = Container { value: x };\n}\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Container",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 9,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 18,
+                    byte_length: 1,
+                },
+            },
+        ],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "value",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 23,
+                    byte_length: 5,
+                },
+                annotation: Constructor {
+                    name: "T",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 30,
+                        byte_length: 1,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 32,
+        },
+    },
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 37,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "x",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 52,
+                                byte_length: 1,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: Literal {
+                        literal: Integer {
+                            value: 42,
+                            text: None,
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 56,
+                            byte_length: 2,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 48,
+                        byte_length: 10,
+                    },
+                },
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "c",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 66,
+                                byte_length: 1,
+                            },
+                        },
+                        annotation: Some(
+                            Constructor {
+                                name: "Container",
+                                params: [
+                                    Constructor {
+                                        name: "int",
+                                        params: [],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 79,
+                                            byte_length: 3,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 69,
+                                    byte_length: 14,
+                                },
+                            },
+                        ),
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: StructCall {
+                        name: "Container",
+                        field_assignments: [
+                            StructFieldAssignment {
+                                name: "value",
+                                name_span: Span {
+                                    file_id: 0,
+                                    byte_offset: 98,
+                                    byte_length: 5,
+                                },
+                                value: Identifier {
+                                    value: "x",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 105,
+                                        byte_length: 1,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                            },
+                        ],
+                        spread: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 86,
+                            byte_length: 22,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 62,
+                        byte_length: 46,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 44,
+                byte_length: 67,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 34,
+            byte_length: 77,
+        },
+    },
+]

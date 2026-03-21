@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use native method as a value
+   ╭─[test.lis:7:9]
+ 6 │ fn main() {
+ 7 │   apply(Slice.append)
+   ·         ──────┬─────
+   ·               ╰── native methods must be called directly
+ 8 │ }
+   ╰────
+  help: Use a closure instead: `|args| receiver.append(args)` · code: [infer.native_method_value]

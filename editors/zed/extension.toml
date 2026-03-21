@@ -1,0 +1,16 @@
+id = "lisette"
+name = "Lisette"
+description = "Language support for Lisette"
+version = "0.1.0"
+schema_version = 1
+authors = ["Iván Ovejero <ivov.src@gmail.com>"]
+repository = "https://github.com/ivov/lisette"
+
+[grammars.lisette]
+repository = "https://github.com/ivov/lisette"
+rev = "4885472c936aaddcfb2a1e6765af83cdc8825a18"
+path = "editors/tree-sitter-lisette"
+
+[language_servers.lisette-lsp]
+name = "Lisette LSP"
+language = "Lisette"

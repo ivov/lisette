@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(s: Slice<int>) -> Slice<(int, int)> {\n  s.enumerate().filter(|(i, _)| i % 2 == 0)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s []int) []lisette.Tuple2[int, int] {
+	return lisette.EnumeratedSliceFilter(s, func(arg_1 lisette.Tuple2[int, int]) bool {
+		i := arg_1.First
+		return i%2 == 0
+	})
+}

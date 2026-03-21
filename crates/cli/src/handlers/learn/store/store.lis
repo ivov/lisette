@@ -1,0 +1,65 @@
+import "go:encoding/json"
+import "go:io/fs"
+import "go:os"
+
+import "models"
+
+/// Loads tasks from the JSON file. Returns an empty list if the file doesn't exist.
+pub fn load() -> Result<Slice<models.Task>, string> {
+  let data = os.ReadFile("tasks.json")
+  match data {
+    Err(_) => Ok([]),
+    Ok(bytes) => {
+      let mut items: Slice<models.Task> = []
+      match json.Unmarshal(bytes, &items) {
+        Ok(_) => Ok(items),
+        Err(e) => Err(f"failed to load tasks: {e}"),
+      }
+    },
+  }
+}
+
+/// Saves tasks to the JSON file.
+pub fn save(items: Slice<models.Task>) -> Result<(), string> {
+  match json.MarshalIndent(items, "", "  ") {
+    Err(e) => Err(f"failed to save tasks: {e}"),
+    Ok(data) => match os.WriteFile("tasks.json", data, 0o644 as fs.FileMode) {
+      Ok(_) => Ok(()),
+      Err(e) => Err(f"failed to save tasks: {e}"),
+    },
+  }
+}
+
+/// Returns the next available ID (max existing ID + 1).
+pub fn next_id(items: Slice<models.Task>) -> int {
+  items.fold(0, |max, t| if t.id > max { t.id } else { max }) + 1
+}
+
+/// Finds a task by ID.
+pub fn find(items: Slice<models.Task>, id: int) -> Option<models.Task> {
+  items.find(|t| t.id == id)
+}
+
+/// Marks a task as done. Returns an error if the task doesn't exist.
+pub fn complete(items: Slice<models.Task>, id: int) -> Result<Slice<models.Task>, string> {
+  let Some(_) = find(items, id) else {
+    return Err(f"task #{id} not found")
+  }
+  Ok(items.map(|t| if t.id == id {
+    models.Task { status: models.Status.Done, ..t }
+  } else {
+    t
+  }))
+}
+
+/// Cancels a task with a reason. Returns an error if the task doesn't exist.
+pub fn cancel(items: Slice<models.Task>, id: int, reason: string) -> Result<Slice<models.Task>, string> {
+  let Some(_) = find(items, id) else {
+    return Err(f"task #{id} not found")
+  }
+  Ok(items.map(|t| if t.id == id {
+    models.Task { status: models.Status.Cancelled(reason), ..t }
+  } else {
+    t
+  }))
+}

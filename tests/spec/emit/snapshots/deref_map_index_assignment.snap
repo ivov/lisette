@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn update(m: Ref<Map<string, int>>, key: string, val: int) {\n  m.*[key] = val\n}\n"
+---
+package main
+
+func update(m *map[string]int, key string, val int) {
+	base_1 := m
+	(*base_1)[key] = val
+}

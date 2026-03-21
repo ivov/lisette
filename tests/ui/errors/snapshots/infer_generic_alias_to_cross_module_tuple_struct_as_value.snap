@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use native constructor as a value
+   ╭─[main.lis:7:11]
+ 6 │ fn main() {
+ 7 │   let f = G
+   ·           ┬
+   ·           ╰── native constructors must be called directly
+ 8 │   let _ = f
+   ╰────
+  help: Use a closure instead: `|args| G(args)` · code: [infer.native_constructor_value]

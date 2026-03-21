@@ -1,0 +1,52 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/shapes"
+
+func main() {
+	p1 := shapes.Point{
+		X: 3,
+		Y: 4,
+	}
+	p2 := shapes.Point{
+		X: 0,
+		Y: 0,
+	}
+	_ = p1.Manhattan_distance(p2)
+}
+
+
+// === mymath/lib.go ===
+package mymath
+
+func Abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+
+// === shapes/lib.go ===
+package shapes
+
+import (
+	"fmt"
+	"github.com/user/myproject/mymath"
+)
+
+type Point struct {
+	X int
+	Y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.X, p.Y)
+}
+
+func (p Point) Manhattan_distance(other Point) int {
+	return mymath.Abs(p.X-other.X) + mymath.Abs(p.Y-other.Y)
+}

@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn get_value() -> Result<int, string> {\n  Ok(42)\n}\n\nfn test() {\n  let mut res: Result<int, string> = Err(\"initial\");\n  res = get_value();\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func get_value() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](42)
+}
+
+func test() {
+	_ = lisette.MakeResultErr[int, string]("initial")
+	_ = get_value()
+}

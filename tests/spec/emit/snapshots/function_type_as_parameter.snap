@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn apply(f: fn(int) -> int, x: int) -> int {\n  f(x)\n}\n\nfn double(x: int) -> int { x * 2 }\n\nfn test() -> int {\n  apply(double, 21)\n}\n"
+---
+package main
+
+func apply(f func(int) int, x int) int {
+	return f(x)
+}
+
+func double(x int) int {
+	return x * 2
+}
+
+func test() int {
+	return apply(double, 21)
+}

@@ -1,0 +1,63 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \n#[json(snake_case)]\nstruct User {\n  first_name: string,\n}\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [
+            Attribute {
+                name: "json",
+                args: [
+                    Flag(
+                        "snake_case",
+                    ),
+                ],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 1,
+                    byte_length: 19,
+                },
+            },
+        ],
+        name: "User",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 28,
+            byte_length: 4,
+        },
+        generics: [],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "first_name",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 37,
+                    byte_length: 10,
+                },
+                annotation: Constructor {
+                    name: "string",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 49,
+                        byte_length: 6,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 21,
+            byte_length: 37,
+        },
+    },
+]

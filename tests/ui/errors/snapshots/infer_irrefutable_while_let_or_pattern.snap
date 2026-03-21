@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Pattern always matches
+   ╭─[test.lis:3:13]
+ 2 │ fn test(opt: Option<int>) {
+ 3 │   while let Some(_) | None = opt {
+   ·             ───────┬──────
+   ·                    ╰── always matches
+ 4 │     break;
+   ╰────
+  help: Use `loop` with `let` binding instead · code: [infer.irrefutable_while_let]

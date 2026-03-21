@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  let name = \"Alice\";\n  fmt.Print(f\"Hello, {name}!\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func test() {
+	name := "Alice"
+	fmt.Printf("Hello, %v!", name)
+}

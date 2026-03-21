@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `task`
+   ╭─[test.lis:5:13]
+ 4 │ fn f() {
+ 5 │   consume({ task work() });
+   ·             ─────┬─────
+   ·                  ╰── produces no value
+ 6 │ }
+   ╰────
+  help: Move `task` to its own statement · code: [infer.task_in_expression_position]

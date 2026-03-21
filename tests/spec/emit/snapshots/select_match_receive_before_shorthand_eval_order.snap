@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn choose(tag: int, ch: Channel<int>) -> Channel<int> {\n  ch\n}\n\nfn main() {\n  let ch1 = Channel.buffered<int>(1)\n  let ch2 = Channel.buffered<int>(1)\n  ch1.send(10)\n  ch2.send(20)\n\n  let _ = select {\n    match choose(1, ch1).receive() {\n      Some(v) => v,\n      None => -1,\n    },\n    let Some(v) = choose(2, ch2).receive() => v,\n    _ => -2,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func choose(_ int, ch chan int) chan int {
+	return ch
+}
+
+func main() {
+	ch1 := make(chan int, 1)
+	ch2 := make(chan int, 1)
+	lisette.ChannelSend(ch1, 10)
+	lisette.ChannelSend(ch2, 20)
+	var tmp_1 int
+	ch_2 := choose(1, ch1)
+	ch_3 := choose(2, ch2)
+	for {
+		select {
+		case v, ok := <-ch_2:
+			if ok {
+				tmp_1 = v
+			} else {
+				tmp_1 = -1
+			}
+		case v, ok := <-ch_3:
+			if ok {
+				tmp_1 = v
+			} else {
+				ch_3 = nil
+				continue
+			}
+		default:
+			tmp_1 = -2
+		}
+		break
+	}
+	_ = tmp_1
+}

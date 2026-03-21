@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn mark(log: Channel<int>, tag: int) -> int {\n  log.send(tag)\n  tag\n}\n\nfn main() {\n  let log = Channel.buffered<int>(8)\n  let closed = Channel.new<int>()\n  closed.close()\n  let out_ch = Channel.new<int>()\n\n  let _ = select {\n    let Some(v) = closed.receive() => v,\n    out_ch.send(mark(log, 1)) => 0,\n    _ => -1,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func mark(log chan int, tag int) int {
+	lisette.ChannelSend(log, tag)
+	return tag
+}
+
+func main() {
+	log := make(chan int, 8)
+	closed := make(chan int)
+	lisette.ChannelClose(closed)
+	out_ch := make(chan int)
+	var tmp_1 int
+	ch_2 := closed
+	send_val_3 := mark(log, 1)
+	for {
+		select {
+		case v, ok := <-ch_2:
+			if ok {
+				tmp_1 = v
+			} else {
+				ch_2 = nil
+				continue
+			}
+		case out_ch <- send_val_3:
+			tmp_1 = 0
+		default:
+			tmp_1 = -1
+		}
+		break
+	}
+	_ = tmp_1
+}

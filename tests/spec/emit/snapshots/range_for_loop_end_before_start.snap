@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn start() -> int { 0 }\nfn bound() -> int { 3 }\n\nfn main() {\n  for i in start()..bound() {\n    let _ = i\n  }\n}\n"
+---
+package main
+
+func start() int {
+	return 0
+}
+
+func bound() int {
+	return 3
+}
+
+func main() {
+	start_2 := start()
+	_bound_1 := bound()
+	for i := start_2; i < _bound_1; i++ {
+		_ = i
+	}
+}

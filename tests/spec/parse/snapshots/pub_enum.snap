@@ -1,0 +1,45 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \npub enum Status { Active, Inactive }\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Status",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 10,
+            byte_length: 6,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                name: "Active",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 19,
+                    byte_length: 6,
+                },
+                fields: Unit,
+            },
+            EnumVariant {
+                doc: None,
+                name: "Inactive",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 27,
+                    byte_length: 8,
+                },
+                fields: Unit,
+            },
+        ],
+        visibility: Public,
+        span: Span {
+            file_id: 0,
+            byte_offset: 5,
+            byte_length: 32,
+        },
+    },
+]

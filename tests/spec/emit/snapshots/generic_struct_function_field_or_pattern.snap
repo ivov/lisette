@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct Handler<T> { callback: fn(T) -> int }\nenum E { A(Handler<string>), B(Handler<string>) }\n\nfn test(e: E) -> int {\n  let A(Handler { callback }) | B(Handler { callback }) = e else { return 0; };\n  callback(\"test\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeEA(arg0 Handler[string]) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 Handler[string]) E {
+	return E{Tag: EB, B: arg0}
+}
+
+type Handler[T any] struct {
+	callback func(T) int
+}
+
+func (h Handler[T]) String() string {
+	return fmt.Sprintf("Handler { callback: %v }", h.callback)
+}
+
+type ETag int
+
+const (
+	EA ETag = iota
+	EB
+)
+
+type E struct {
+	Tag ETag
+	A   Handler[string]
+	B   Handler[string]
+}
+
+func (e E) String() string {
+	switch e.Tag {
+	case EA:
+		return fmt.Sprintf("E.A(%v)", e.A)
+	case EB:
+		return fmt.Sprintf("E.B(%v)", e.B)
+	default:
+		return fmt.Sprintf("E(%d)", e.Tag)
+	}
+}
+
+func test(e E) int {
+	var callback func(string) int
+	if e.Tag == EA {
+		callback = e.A.callback
+	} else if e.Tag == EB {
+		callback = e.B.callback
+	} else {
+		return 0
+	}
+	return callback("test")
+}

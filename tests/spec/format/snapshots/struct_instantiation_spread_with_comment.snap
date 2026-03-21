@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  Point {\n    x: 1,\n    // inherit the rest\n    ..other\n  }\n}"
+---
+fn test() {
+  Point { 
+    x: 1,
+    // inherit the rest
+    ..other,
+  }
+}

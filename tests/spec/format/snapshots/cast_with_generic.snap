@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { value as Option<int> }"
+---
+fn test() {
+  value as Option<int>
+}

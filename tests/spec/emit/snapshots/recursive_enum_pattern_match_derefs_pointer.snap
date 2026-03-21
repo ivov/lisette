@@ -1,0 +1,48 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum List {\n  Cons(int, List),\n  Nil,\n}\n\nfn list_sum(l: List) -> int {\n  match l {\n    List.Cons(head, tail) => head + list_sum(tail),\n    List.Nil => 0,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeListCons(arg0 int, arg1 *List) List {
+	return List{Tag: ListCons, Cons0: arg0, Cons1: arg1}
+}
+
+func MakeListNil() List {
+	return List{Tag: ListNil}
+}
+
+type ListTag int
+
+const (
+	ListCons ListTag = iota
+	ListNil
+)
+
+type List struct {
+	Tag   ListTag
+	Cons0 int
+	Cons1 *List
+}
+
+func (l List) String() string {
+	switch l.Tag {
+	case ListCons:
+		return fmt.Sprintf("List.Cons(%v, %v)", l.Cons0, l.Cons1)
+	case ListNil:
+		return "List.Nil"
+	default:
+		return fmt.Sprintf("List(%d)", l.Tag)
+	}
+}
+
+func list_sum(l List) int {
+	if l.Tag == ListCons {
+		head := l.Cons0
+		tail := *l.Cons1
+		return head + list_sum(tail)
+	}
+	return 0
+}

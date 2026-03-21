@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Mixed `try` block
+   ╭─[test.lis:8:13]
+ 7 │     let a = get_result()?;
+ 8 │     let b = get_option()?;
+   ·             ──────┬──────
+   ·                   ╰── mixing `Option` and `Result`
+ 9 │     a + b
+   ╰────
+  help: A `try` block must use either all `Option` operations or all `Result` operations · code: [infer.try_block_mixed_carriers]

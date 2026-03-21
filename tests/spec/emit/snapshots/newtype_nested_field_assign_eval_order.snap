@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Inner { x: int }\nstruct Wrap(Inner)\n\nfn bump(i: Ref<int>) -> int {\n  i.* = i.* + 1\n  i.*\n}\n\nfn main() {\n  let mut items = [Wrap(Inner { x: 0 })]\n  let mut i = 0\n  let mut inner = items[i].0\n  inner.x = if true { bump(&i) } else { 0 }\n  items[i] = Wrap(inner)\n  let _ = items\n}\n"
+---
+package main
+
+import "fmt"
+
+type Inner struct {
+	x int
+}
+
+func (i Inner) String() string {
+	return fmt.Sprintf("Inner { x: %v }", i.x)
+}
+
+type Wrap Inner
+
+func (w Wrap) String() string {
+	return fmt.Sprintf("Wrap(%v)", Inner(w))
+}
+
+func bump(i *int) int {
+	*i++
+	return *i
+}
+
+func main() {
+	items := []Wrap{Wrap(Inner{x: 0})}
+	i := 0
+	inner := Inner(items[i])
+	var tmp_1 int
+	if true {
+		tmp_1 = bump(&i)
+	} else {
+		tmp_1 = 0
+	}
+	inner.x = tmp_1
+	items[i] = Wrap(inner)
+	_ = items
+}

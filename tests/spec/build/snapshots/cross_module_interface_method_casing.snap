@@ -1,0 +1,41 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/models"
+)
+
+type Describable interface {
+	Describe() string
+}
+
+func print_it(item Describable) {
+	fmt.Println(item.Describe())
+}
+
+func main() {
+	u := models.User{Name: "Alice"}
+	print_it(u)
+}
+
+
+// === models/mod.go ===
+package models
+
+import "fmt"
+
+type User struct {
+	Name string
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { name: %v }", u.Name)
+}
+
+func (u User) Describe() string {
+	return u.Name
+}

@@ -1,0 +1,31 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/lib.go ===
+package lib
+
+import "fmt"
+
+type Box[T any] struct {
+	Value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.Value)
+}
+
+func Box_New[T any](x T) Box[T] {
+	return Box[T]{Value: x}
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/lib"
+
+func main() {
+	f := lib.Box_New[int]
+	b := f(42)
+	_ = b.Value
+}

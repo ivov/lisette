@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot take reference through newtype boundary
+   ╭─[test.lis:7:11]
+ 6 │   let w = Wrap(Inner { x: 1 })
+ 7 │   let r = &w.0.x
+   ·           ───┬──
+   ·              ╰── newtype `.0` inside `&`
+ 8 │   let _ = r
+   ╰────
+  help: Bind the inner value first: `let inner = val.0; &inner` · code: [infer.reference_through_newtype]

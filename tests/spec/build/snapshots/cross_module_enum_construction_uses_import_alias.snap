@@ -1,0 +1,51 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/colors.go ===
+package lib
+
+import "fmt"
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type ColorTag int
+
+const (
+	ColorRed ColorTag = iota
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) String() string {
+	switch c.Tag {
+	case ColorRed:
+		return "Color.Red"
+	case ColorBlue:
+		return "Color.Blue"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	L "github.com/user/myproject/lib"
+)
+
+func main() {
+	c := L.Color{Tag: L.ColorRed}
+	fmt.Println(c)
+}

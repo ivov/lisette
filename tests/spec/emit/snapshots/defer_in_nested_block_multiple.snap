@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  {\n    defer fmt.Print(\"block1 cleanup\");\n    fmt.Print(\"block1 work\");\n  };\n  {\n    defer fmt.Print(\"block2 cleanup\");\n    fmt.Print(\"block2 work\");\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func test() {
+	{
+		defer fmt.Print("block1 cleanup")
+		fmt.Print("block1 work")
+	}
+	{
+		defer fmt.Print("block2 cleanup")
+		fmt.Print("block2 work")
+	}
+}

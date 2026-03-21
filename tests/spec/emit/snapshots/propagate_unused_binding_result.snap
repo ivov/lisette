@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn fallible() -> Result<int, string> { Ok(1) }\n\nfn test() -> Result<(), string> {\n  let _x = fallible()?\n  Ok(())\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func fallible() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func test() lisette.Result[struct{}, string] {
+	check_1 := fallible()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
+	}
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}

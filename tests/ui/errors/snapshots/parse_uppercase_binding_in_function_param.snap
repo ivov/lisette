@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid binding name
+   ╭─[test.lis:2:10]
+ 1 │ 
+ 2 │ fn scale(X: int, Y: int) -> int {
+   ·          ┬
+   ·          ╰── uppercase not allowed here
+ 3 │   X + Y
+   ╰────
+  help: Lowercase the binding · code: [parse.uppercase_binding]

@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn noop() {}\n\nfn test() {\n  let ch = Channel.buffered<()>(1)\n  select {\n    ch.send(noop()) => {},\n    _ => {},\n  }\n}\n"
+---
+package main
+
+func noop() {}
+
+func test() {
+	ch := make(chan struct{}, 1)
+	noop()
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}

@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct Point { x: int, y: int }\n\nfn make_point() -> Point {\n  Point { x: 1, y: 2 }\n}\n\nfn test() -> int {\n  match make_point() {\n    Point { .. } => 1,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func make_point() Point {
+	return Point{
+		x: 1,
+		y: 2,
+	}
+}
+
+func test() int {
+	_ = make_point()
+	return 1
+}

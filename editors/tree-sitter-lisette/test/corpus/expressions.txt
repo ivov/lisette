@@ -1,0 +1,486 @@
+================================================================================
+Binary arithmetic
+================================================================================
+
+let x = a + b * c
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (binary_expression
+      left: (identifier)
+      right: (binary_expression
+        left: (identifier)
+        right: (identifier)))))
+
+================================================================================
+Comparison
+================================================================================
+
+let x = a < b
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (binary_expression
+      left: (identifier)
+      right: (identifier))))
+
+================================================================================
+Logical
+================================================================================
+
+let x = a && b || c
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (binary_expression
+      left: (binary_expression
+        left: (identifier)
+        right: (identifier))
+      right: (identifier))))
+
+================================================================================
+Unary negation
+================================================================================
+
+let x = -y
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (unary_expression
+      (identifier))))
+
+================================================================================
+Unary not
+================================================================================
+
+let x = !flag
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (unary_expression
+      (identifier))))
+
+================================================================================
+Unary not with not-equal
+================================================================================
+
+let x = !a != b
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (binary_expression
+      left: (unary_expression
+        (identifier))
+      right: (identifier))))
+
+================================================================================
+Reference
+================================================================================
+
+let x = &y
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (reference_expression
+      value: (identifier))))
+
+================================================================================
+Deref
+================================================================================
+
+let x = r.*
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (deref_expression
+      value: (identifier))))
+
+================================================================================
+Field access
+================================================================================
+
+let x = obj.field
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (field_expression
+      value: (identifier)
+      field: (field_identifier))))
+
+================================================================================
+Index
+================================================================================
+
+let x = items[0]
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (index_expression
+      (identifier)
+      (integer_literal))))
+
+================================================================================
+Call
+================================================================================
+
+let x = foo(1, 2)
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (call_expression
+      function: (identifier)
+      arguments: (arguments
+        (integer_literal)
+        (integer_literal)))))
+
+================================================================================
+Generic call
+================================================================================
+
+identity<int>(42)
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (generic_call_expression
+      function: (identifier)
+      type_arguments: (call_type_arguments
+        (type_identifier))
+      arguments: (arguments
+        (integer_literal)))))
+
+================================================================================
+Method call
+================================================================================
+
+let x = obj.method()
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (call_expression
+      function: (field_expression
+        value: (identifier)
+        field: (field_identifier))
+      arguments: (arguments))))
+
+================================================================================
+Pipeline
+================================================================================
+
+let x = a |> b |> c
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (binary_expression
+      left: (binary_expression
+        left: (identifier)
+        right: (identifier))
+      right: (identifier))))
+
+================================================================================
+Range
+================================================================================
+
+let x = 0..10
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (range_expression
+      (integer_literal)
+      (integer_literal))))
+
+================================================================================
+Inclusive range
+================================================================================
+
+let x = 0..=10
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (range_expression
+      (integer_literal)
+      (integer_literal))))
+
+================================================================================
+Open range
+================================================================================
+
+let x = start..
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (range_expression
+      (identifier))))
+
+================================================================================
+Type cast
+================================================================================
+
+let x = y as float64
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (type_cast_expression
+      value: (identifier)
+      type: (type_identifier))))
+
+================================================================================
+Try postfix
+================================================================================
+
+let x = read()?
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (try_expression
+      (call_expression
+        function: (identifier)
+        arguments: (arguments)))))
+
+================================================================================
+Assignment
+================================================================================
+
+x = 42
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      left: (identifier)
+      right: (integer_literal))))
+
+================================================================================
+Compound assignment
+================================================================================
+
+x += 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (compound_assignment_expression
+      left: (identifier)
+      right: (integer_literal))))
+
+================================================================================
+Struct expression
+================================================================================
+
+let p = Point { x: 1, y: 2 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (struct_expression
+      name: (type_identifier)
+      body: (field_initializer_list
+        (field_initializer
+          field: (field_identifier)
+          value: (integer_literal))
+        (field_initializer
+          field: (field_identifier)
+          value: (integer_literal))))))
+
+================================================================================
+Closure
+================================================================================
+
+let f = |x: int| x * 2
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (closure_expression
+      parameters: (closure_parameters
+        (parameter
+          pattern: (identifier)
+          type: (type_identifier)))
+      body: (binary_expression
+        left: (identifier)
+        right: (integer_literal)))))
+
+================================================================================
+Empty closure
+================================================================================
+
+let f = || 0
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (closure_expression
+      parameters: (closure_parameters)
+      body: (integer_literal))))
+
+================================================================================
+Tuple
+================================================================================
+
+let t = (1, 2, 3)
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (tuple_expression
+      (integer_literal)
+      (integer_literal)
+      (integer_literal))))
+
+================================================================================
+Unit
+================================================================================
+
+let u = ()
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (unit_expression)))
+
+================================================================================
+Parenthesized
+================================================================================
+
+let x = (a + b) * c
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (binary_expression
+      left: (parenthesized_expression
+        (binary_expression
+          left: (identifier)
+          right: (identifier)))
+      right: (identifier))))
+
+================================================================================
+Slice literal
+================================================================================
+
+let s = [1, 2, 3]
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (slice_expression
+      (integer_literal)
+      (integer_literal)
+      (integer_literal))))
+
+================================================================================
+Break with value
+================================================================================
+
+loop { break 42 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (loop_expression
+      body: (block
+        (break_expression
+          (integer_literal))))))
+
+================================================================================
+Return
+================================================================================
+
+fn f() -> int { return 42 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_item
+    name: (identifier)
+    parameters: (parameters)
+    return_type: (type_identifier)
+    body: (block
+      (return_expression
+        (integer_literal)))))
+
+================================================================================
+Rawgo
+================================================================================
+
+@rawgo("fmt.Println()")
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (rawgo_directive
+      (string_literal
+        (string_content)))))

@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn maybe() -> Option<()> { Some(()) }"
+---
+fn maybe() -> Option<()> {
+  Some(())
+}

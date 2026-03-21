@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Point(int, int)\n\nimpl Point {\n  fn x(self: Point) -> int {\n    self.0\n  }\n\n  fn sum(self: Point) -> int {\n    self.0 + self.1\n  }\n}\n\nfn test() -> int {\n  let p = Point(10, 20);\n  p.sum()\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	F0 int
+	F1 int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point(%v, %v)", p.F0, p.F1)
+}
+
+func (p Point) x() int {
+	return p.F0
+}
+
+func (p Point) sum() int {
+	return p.F0 + p.F1
+}
+
+func test() int {
+	p := Point{
+		F0: 10,
+		F1: 20,
+	}
+	return p.sum()
+}

@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Wrapper<T>(T)\n\nfn main() {\n  let w = Wrapper<int>(1)\n  let z = w.0 + 1\n  let _ = z\n}\n"
+---
+package main
+
+import "fmt"
+
+type Wrapper[T any] struct {
+	F0 T
+}
+
+func (w Wrapper[T]) String() string {
+	return fmt.Sprintf("Wrapper(%v)", w.F0)
+}
+
+func main() {
+	w := Wrapper[int]{F0: 1}
+	_ = w.F0 + 1
+}

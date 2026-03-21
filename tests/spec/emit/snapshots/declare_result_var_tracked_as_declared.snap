@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn main() {\n  let _ = if true { 1 } else { 2 }\n  let tmp_1 = 3\n  let _ = tmp_1\n}\n"
+---
+package main
+
+func main() {
+	var tmp_1 int
+	if true {
+		tmp_1 = 1
+	} else {
+		tmp_1 = 2
+	}
+	_ = tmp_1
+	_ = 3
+}

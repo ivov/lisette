@@ -1,0 +1,17 @@
+fn test() {
+  let a = 1;
+  let b = 1.68;
+  let c = 1_000_000;
+  let d = 1_000.123_456;
+  let e = 0xFF;
+  let f = 0xDeAdBeEf;
+  let g = 0xFF_FF_FF_FF;
+  let h = 1e10;
+  let i = 1.5e-10;
+  let j = 0o755;
+  let k = 0b1010;
+  let l = 0b1111_0000;
+  let m = 4i;
+  let n = 3.14i;
+  let o = 3 + 4i;
+}

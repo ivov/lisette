@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Pair { x: int }\n\nfn set_key(k: Ref<string>) -> int {\n  k.* = \"b\"\n  1\n}\n\nfn main() {\n  let mut m = Map.new<string, Pair>()\n  m[\"a\"] = Pair { x: 0 }\n  let mut k = \"a\"\n  let captured_key = k\n  let mut entry = m[captured_key]\n  entry.x = set_key(&k)\n  m[captured_key] = entry\n  let _ = m\n}\n"
+---
+package main
+
+import "fmt"
+
+type Pair struct {
+	x int
+}
+
+func (p Pair) String() string {
+	return fmt.Sprintf("Pair { x: %v }", p.x)
+}
+
+func set_key(k *string) int {
+	*k = "b"
+	return 1
+}
+
+func main() {
+	m := make(map[string]Pair)
+	m["a"] = Pair{x: 0}
+	k := "a"
+	captured_key := k
+	entry := m[captured_key]
+	entry.x = set_key(&k)
+	m[captured_key] = entry
+	_ = m
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:5:3]
+ 4 │ fn main() {
+ 5 │   impl Foo {
+   ·   ──┬─
+   ·     ╰── misplaced
+ 6 │     fn bar(self) -> int { self.x }
+   ╰────
+  help: Move this `impl` block to the top level of the file · code: [parse.syntax_error]

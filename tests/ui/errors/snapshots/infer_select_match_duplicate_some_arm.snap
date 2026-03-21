@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid select match
+   ╭─[test.lis:7:7]
+ 6 │       Some(v) => v,
+ 7 │       Some(x) => x + 1,
+   ·       ───┬───
+   ·          ╰── duplicate
+ 8 │       None => 0,
+   ╰────
+  help: Remove the duplicate `Some` arm. If you need to, use a `match` inside the arm body · code: [infer.select_match_duplicate_some_arm]

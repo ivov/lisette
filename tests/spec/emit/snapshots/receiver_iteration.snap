@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn process(v: int) {}\n\nfn test(rx: Receiver<int>) {\n  for v in rx {\n    process(v);\n  }\n}\n"
+---
+package main
+
+func process(_ int) {}
+
+func test(rx <-chan int) {
+	for v := range rx {
+		process(v)
+	}
+}

@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn noop() {}\n\nfn test() -> Result<int, ()> {\n  Err(noop())\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func noop() {}
+
+func test() lisette.Result[int, struct{}] {
+	noop()
+	return lisette.MakeResultErr[int, struct{}](struct{}{})
+}

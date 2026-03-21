@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nstruct MyError { msg: string }\n\nimpl MyError {\n  fn Error(self) -> string { self.msg }\n}\n\nfn might_fail() -> Result<int, error> {\n  Err(MyError { msg: \"oops\" })\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type MyError struct {
+	msg string
+}
+
+func (m MyError) String() string {
+	return fmt.Sprintf("MyError { msg: %v }", m.msg)
+}
+
+func (m MyError) Error() string {
+	return m.msg
+}
+
+func might_fail() lisette.Result[int, error] {
+	return lisette.MakeResultErr[int, error](MyError{msg: "oops"})
+}

@@ -1,0 +1,11 @@
+fn main() {
+   let total = 7 + 5;
+   let is_active = true;
+   let pi = 3.14;
+   let name = "Lisette";
+   let initial = 'L';
+   match total {
+       12 => print("Correct!"),
+       _  => print("Incorrect!"),
+   }
+}

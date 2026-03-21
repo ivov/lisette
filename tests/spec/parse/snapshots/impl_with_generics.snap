@@ -1,0 +1,217 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct Container<T> {\n  value: T,\n}\n\nimpl<T> Container<T> {\n  fn get(self: Container<T>) -> T {\n    return self.value;\n  }\n}\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Container",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 9,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 18,
+                    byte_length: 1,
+                },
+            },
+        ],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "value",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 25,
+                    byte_length: 5,
+                },
+                annotation: Constructor {
+                    name: "T",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 32,
+                        byte_length: 1,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 35,
+        },
+    },
+    ImplBlock {
+        annotation: Constructor {
+            name: "Container",
+            params: [
+                Constructor {
+                    name: "T",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 56,
+                        byte_length: 1,
+                    },
+                },
+            ],
+            span: Span {
+                file_id: 0,
+                byte_offset: 46,
+                byte_length: 12,
+            },
+        },
+        receiver_name: "Container",
+        methods: [
+            Function {
+                doc: None,
+                attributes: [],
+                name: "get",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 66,
+                    byte_length: 3,
+                },
+                generics: [],
+                params: [
+                    Binding {
+                        pattern: Identifier {
+                            identifier: "self",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 70,
+                                byte_length: 4,
+                            },
+                        },
+                        annotation: Some(
+                            Constructor {
+                                name: "Container",
+                                params: [
+                                    Constructor {
+                                        name: "T",
+                                        params: [],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 86,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 76,
+                                    byte_length: 12,
+                                },
+                            },
+                        ),
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                ],
+                return_annotation: Constructor {
+                    name: "T",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 93,
+                        byte_length: 1,
+                    },
+                },
+                return_type: Variable(
+                    -1,
+                ),
+                visibility: Private,
+                body: Block {
+                    items: [
+                        Return {
+                            expression: DotAccess {
+                                expression: Identifier {
+                                    value: "self",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 108,
+                                        byte_length: 4,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                member: "value",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 108,
+                                    byte_length: 10,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 101,
+                                byte_length: 17,
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 95,
+                        byte_length: 28,
+                    },
+                },
+                ty: Variable(
+                    -1,
+                ),
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 63,
+                    byte_length: 60,
+                },
+            },
+        ],
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 43,
+                    byte_length: 1,
+                },
+            },
+        ],
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 38,
+            byte_length: 87,
+        },
+    },
+]

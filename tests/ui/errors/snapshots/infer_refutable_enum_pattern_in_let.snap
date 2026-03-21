@@ -1,0 +1,21 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Pattern might not match
+   ╭─[test.lis:3:7]
+ 2 │ fn test(opt: Option<int>) {
+ 3 │   let Some(x) = opt;
+   ·       ───┬───
+   ·          ╰── only matches `Some`
+ 4 │ }
+   ╰────
+  help: Use `if let` to handle only `Some`:
+            if let Some(x) = opt {
+                ...
+            }
+        Or use `match` to also handle `None`:
+            match opt {
+                Some(x) => ...,
+                None => ...,
+            }
+        code: [infer.refutable_pattern]

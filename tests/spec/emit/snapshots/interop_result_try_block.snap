@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:strconv\"\n\nfn make() -> Result<fn(string) -> Result<int, error>, error> {\n  try {\n    let _ = Ok(1)?\n    strconv.Atoi\n  }\n}\n\nfn main() {\n  let r = make()\n  match r {\n    Ok(f) => {\n      let r2 = f(\"1\")\n      match r2 {\n        Ok(v) => { let _ = v },\n        Err(_) => { let _ = 0 },\n      }\n    },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func make_() lisette.Result[func(string) lisette.Result[int, error], error] {
+	tryResult_1 := func() lisette.Result[func(string) lisette.Result[int, error], error] {
+		check_2 := lisette.MakeResultOk[int, error](1)
+		if check_2.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[func(string) lisette.Result[int, error], error](check_2.ErrVal)
+		}
+		return lisette.MakeResultOk[func(string) lisette.Result[int, error], error](func(arg0 string) lisette.Result[int, error] {
+			ret_3, ret_4 := strconv.Atoi(arg0)
+			if ret_4 != nil {
+				return lisette.MakeResultErr[int, error](ret_4)
+			}
+			return lisette.MakeResultOk[int, error](ret_3)
+		})
+	}()
+	return tryResult_1
+}
+
+func main() {
+	r := make_()
+	if r.Tag == lisette.ResultOk {
+		f := r.OkVal
+		r2 := f("1")
+		if r2.Tag == lisette.ResultOk {
+			_ = r2.OkVal
+		} else {
+			_ = 0
+		}
+	} else {
+		_ = 0
+	}
+}

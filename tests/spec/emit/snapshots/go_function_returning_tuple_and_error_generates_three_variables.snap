@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nimport \"go:net\"\n\nfn main() {\n  match net.SplitHostPort(\"localhost:8080\") {\n    Ok((host, port)) => {\n      let _ = host\n      let _ = port\n      ()\n    },\n    Err(e) => {\n      let _ = e\n      ()\n    },\n  }\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"net"
+)
+
+func main() {
+	ret_2, ret_3, ret_4 := net.SplitHostPort("localhost:8080")
+	tup_5 := lisette.MakeTuple2(ret_2, ret_3)
+	var subject_1 lisette.Result[lisette.Tuple2[string, string], error]
+	if ret_4 != nil {
+		subject_1 = lisette.MakeResultErr[lisette.Tuple2[string, string], error](ret_4)
+	} else {
+		subject_1 = lisette.MakeResultOk[lisette.Tuple2[string, string], error](tup_5)
+	}
+	if subject_1.Tag == lisette.ResultOk {
+		host := subject_1.OkVal.First
+		port := subject_1.OkVal.Second
+		_ = host
+		_ = port
+	} else {
+		_ = subject_1.ErrVal
+	}
+}

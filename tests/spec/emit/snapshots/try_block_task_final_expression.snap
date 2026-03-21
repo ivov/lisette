@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn risky() -> Result<int, string> { Ok(1) }\nfn do_something() { }\n\nfn test() {\n    let r = try {\n        let _ = risky()?;\n        task { do_something() }\n    };\n    let _ = r;\n}\n"
+---
+package main
+
+import "myproject/lisette"
+
+func risky() (int, string) {
+	return 1, ""
+}
+
+func do_something() {
+
+}
+
+func test() {
+	var r lisette.Result[struct{}, string]
+	tryResult_1 := func() lisette.Result[struct{}, string] {
+		tmp_2, err_3 := risky()
+		if err_3 != "" {
+			return lisette.MakeResultErr[struct{}, string](err_3)
+		}
+
+		_ = tmp_2
+		go func() {
+			do_something()
+		}()
+		return lisette.MakeResultOk[struct{}, string](*new(struct{}))
+	}()
+	r = tryResult_1
+	_ = r
+}

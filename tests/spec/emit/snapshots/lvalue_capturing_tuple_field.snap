@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nfn make_i() -> int {\n  fmt.Println(\"i\")\n  0\n}\n\nfn main() {\n  let mut items = [(0, 0)]\n  items[make_i()].0 = if true { 1 } else { 2 }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func make_i() int {
+	fmt.Println("i")
+	return 0
+}
+
+func main() {
+	items := []lisette.Tuple2[int, int]{lisette.MakeTuple2(0, 0)}
+	idx_2 := make_i()
+	var tmp_1 int
+	if true {
+		tmp_1 = 1
+	} else {
+		tmp_1 = 2
+	}
+	items[idx_2].First = tmp_1
+}

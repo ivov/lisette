@@ -1,0 +1,9 @@
+fn test() {
+  task {
+    print("concurrent task");
+  }
+}
+
+fn test2() {
+  task compute();
+}

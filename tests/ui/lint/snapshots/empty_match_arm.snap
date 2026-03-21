@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Empty match arm
+   ╭─[test.lis:5:17]
+ 4 │   match opt {
+ 5 │     Some(_x) => {},
+   ·                 ─┬
+   ·                  ╰── forgotten stub?
+ 6 │     None => (),
+   ╰────
+  help: Return `()` to indicate an intentional no-op in a match arm · code: [lint.empty_match_arm]

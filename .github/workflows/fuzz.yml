@@ -1,0 +1,106 @@
+name: Fuzz
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  fuzz-parse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz -> target
+
+      - name: Cache cargo-fuzz binary
+        id: cache-cargo-fuzz
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-fuzz
+          key: cargo-fuzz-0.13.1
+
+      - name: Install cargo-fuzz
+        if: steps.cache-cargo-fuzz.outputs.cache-hit != 'true'
+        run: cargo install cargo-fuzz --version 0.13.1 --locked
+
+      - name: Restore fuzz-parse corpus
+        uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus/parse
+          key: fuzz-corpus-parse
+
+      - uses: extractions/setup-just@v3
+
+      - name: Minimize fuzz-parse corpus
+        run: cargo +nightly fuzz cmin parse -- -rss_limit_mb=2048
+
+      - name: Fuzz parse
+        run: just fuzz-parse
+
+      - name: Save fuzz-parse corpus
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: fuzz/corpus/parse
+          key: fuzz-corpus-parse-${{ github.run_id }}
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fuzz-crash-parse
+          path: fuzz/artifacts/
+
+  fuzz-infer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz -> target
+
+      - name: Cache cargo-fuzz binary
+        id: cache-cargo-fuzz
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-fuzz
+          key: cargo-fuzz-0.13.1
+
+      - name: Install cargo-fuzz
+        if: steps.cache-cargo-fuzz.outputs.cache-hit != 'true'
+        run: cargo install cargo-fuzz --version 0.13.1 --locked
+
+      - name: Restore fuzz-infer corpus
+        uses: actions/cache/restore@v5
+        with:
+          path: fuzz/corpus/infer
+          key: fuzz-corpus-infer
+
+      - uses: extractions/setup-just@v3
+
+      - name: Minimize fuzz-infer corpus
+        run: cargo +nightly fuzz cmin infer -- -rss_limit_mb=2048
+
+      - name: Fuzz infer
+        run: just fuzz-infer
+
+      - name: Save fuzz-infer corpus
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: fuzz/corpus/infer
+          key: fuzz-corpus-infer-${{ github.run_id }}
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fuzz-crash-infer
+          path: fuzz/artifacts/

@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }"
+---
+fn pair<A, B>(a: A, b: B) -> (A, B) {
+  (a, b)
+}

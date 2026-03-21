@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn test(s: Ref<Slice<int>>) {\n  let _ = s\n}\n"
+---
+package main
+
+func test(s *[]int) {
+	_ = s
+}

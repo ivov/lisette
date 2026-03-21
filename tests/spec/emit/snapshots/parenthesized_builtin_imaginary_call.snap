@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test(c: complex128) -> float64 {\n  (imaginary)(c)\n}\n"
+---
+package main
+
+func test(c complex128) float64 {
+	return imag(c)
+}

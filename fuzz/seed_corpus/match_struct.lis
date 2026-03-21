@@ -1,0 +1,8 @@
+fn test(p: Point) {
+  match p {
+    Point { x: 0, y: 0 } => print("Origin"),
+    Point { x, y: 0 }    => print("On X axis", x),
+    Point { x: 0, y }    => print("On Y axis", y),
+    Point { x, y }       => print("Somewhere else", x, y),
+  }
+}

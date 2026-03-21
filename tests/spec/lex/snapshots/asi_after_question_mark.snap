@@ -1,0 +1,68 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: expr?\n(a, b)"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Identifier,
+            text: "expr",
+            byte_offset: 0,
+            byte_length: 4,
+        },
+        Token {
+            kind: QuestionMark,
+            text: "?",
+            byte_offset: 4,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: "",
+            byte_offset: 5,
+            byte_length: 0,
+        },
+        Token {
+            kind: LeftParen,
+            text: "(",
+            byte_offset: 6,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "a",
+            byte_offset: 7,
+            byte_length: 1,
+        },
+        Token {
+            kind: Comma,
+            text: ",",
+            byte_offset: 8,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "b",
+            byte_offset: 10,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightParen,
+            text: ")",
+            byte_offset: 11,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 12,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

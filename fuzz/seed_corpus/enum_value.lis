@@ -1,0 +1,16 @@
+enum Weekday {
+  Sunday = 0,
+  Monday = 1,
+  Tuesday = 2,
+}
+
+enum HttpMethod {
+  Get = "GET",
+  Post = "POST",
+  Put = "PUT",
+}
+
+enum Offset {
+  Start = 0,
+  End = -1,
+}

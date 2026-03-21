@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() {\n  let ch = Channel.new<int>();\n  let (tx, rx) = ch.split();\n  tx.send(42);\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	ch := make(chan int)
+	tmp_1 := lisette.ChannelSplit(ch)
+	tx := tmp_1.First
+	lisette.SenderSend(tx, 42)
+}

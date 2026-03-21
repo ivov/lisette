@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Item {\n  #[json(snake_case, omitempty)]\n  value: int,\n}"
+---
+struct Item {
+  #[json(snake_case, omitempty)]
+  value: int,
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:3]
+ 2 │ enum Foo {
+ 3 │   let x = 1
+   ·   ─┬─
+   ·    ╰── expected variant name
+ 4 │ }
+   ╰────
+  help: Variant names must be identifiers · code: [parse.syntax_error]

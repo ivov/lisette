@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   interface Greeter {
+   ·   ────┬────
+   ·       ╰── misplaced
+ 4 │     fn greet(self) -> string
+   ╰────
+  help: Move this interface definition to the top level of the file · code: [parse.syntax_error]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Miscased name
+   ╭─[test.lis:2:6]
+ 1 │ 
+ 2 │ enum color { Red, Green, Blue }
+   ·      ──┬──
+   ·        ╰── expected PascalCase
+ 3 │ 
+   ╰────
+  help: Rename to `Color` · code: [lint.non_pascal_case_type]

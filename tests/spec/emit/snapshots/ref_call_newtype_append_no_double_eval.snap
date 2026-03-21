@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct Wrap(Slice<int>)\n\nfn get() -> Ref<Wrap> {\n  let _ = fmt.Println(\"get\")\n  let mut w = Wrap([1])\n  &w\n}\n\nfn main() {\n  get().0.append(2)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Wrap []int
+
+func (w Wrap) String() string {
+	return fmt.Sprintf("Wrap(%v)", []int(w))
+}
+
+func get() *Wrap {
+	fmt.Println("get")
+	w := Wrap([]int{1})
+	return &w
+}
+
+func main() {
+	_ = append([]int(*get()), 2)
+}

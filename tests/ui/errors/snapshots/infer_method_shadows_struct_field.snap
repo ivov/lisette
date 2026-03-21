@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Method shadows struct field
+   ╭─[test.lis:7:6]
+ 6 │ impl Dog {
+ 7 │   fn name(self) -> string {
+   ·      ──┬─
+   ·        ╰── same as field
+ 8 │     f"Dog:{self.name}"
+   ╰────
+  help: `Dog` has a field `name` and a method `name`. Rename either the field or the method · code: [infer.method_shadows_field]

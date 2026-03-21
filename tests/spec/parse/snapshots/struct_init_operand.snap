@@ -1,0 +1,154 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance(); }\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "result",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 17,
+                                byte_length: 6,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: Call {
+                        expression: DotAccess {
+                            expression: StructCall {
+                                name: "Point",
+                                field_assignments: [
+                                    StructFieldAssignment {
+                                        name: "x",
+                                        name_span: Span {
+                                            file_id: 0,
+                                            byte_offset: 34,
+                                            byte_length: 1,
+                                        },
+                                        value: Literal {
+                                            literal: Integer {
+                                                value: 1,
+                                                text: None,
+                                            },
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 37,
+                                                byte_length: 1,
+                                            },
+                                        },
+                                    },
+                                    StructFieldAssignment {
+                                        name: "y",
+                                        name_span: Span {
+                                            file_id: 0,
+                                            byte_offset: 40,
+                                            byte_length: 1,
+                                        },
+                                        value: Literal {
+                                            literal: Integer {
+                                                value: 2,
+                                                text: None,
+                                            },
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 43,
+                                                byte_length: 1,
+                                            },
+                                        },
+                                    },
+                                ],
+                                spread: None,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 26,
+                                    byte_length: 20,
+                                },
+                            },
+                            member: "distance",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 26,
+                                byte_length: 29,
+                            },
+                        },
+                        args: [],
+                        type_args: [],
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 26,
+                            byte_length: 31,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 13,
+                        byte_length: 44,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 49,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 59,
+        },
+    },
+]

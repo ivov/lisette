@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn first() {}\n\n// comment before second\nfn second() {}"
+---
+fn first() {}
+
+// comment before second
+fn second() {}

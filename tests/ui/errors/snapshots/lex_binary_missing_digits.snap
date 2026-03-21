@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid binary literal
+   ╭─[test.lis:1:9]
+ 1 │ let x = 0b
+   ·         ─┬
+   ·          ╰── expected digits after `0b`
+   ╰────
+  help: Add binary digits after `0b`, e.g. `0b1010` or `0b1111_0000` · code: [lex.number_missing_binary_digits]

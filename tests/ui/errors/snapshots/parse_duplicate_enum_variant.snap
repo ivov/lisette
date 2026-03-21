@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate variant
+   ╭─[test.lis:2:10]
+ 1 │ 
+ 2 │ enum E { A, A }
+   ·          ┬  ┬
+   ·          │  ╰── defined again
+   ·          ╰── first defined
+   ╰────
+  help: Remove the duplicate variant `A` · code: [parse.duplicate_enum_variant]

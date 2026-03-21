@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid select match
+   ╭─[test.lis:5:11]
+ 4 │   select {
+ 5 │     match ch.receive() {},
+   ·           ──────┬─────
+   ·                 ╰── missing `Some` arm
+ 6 │     _ => println("timeout"),
+   ╰────
+  help: `None` only handles channel close. Add a `Some(v) => ...` arm to handle received values · code: [infer.select_match_missing_some_arm]

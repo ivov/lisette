@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn foo() -> Result<int, string> {\n  let y = Ok(1)? + 1\n  let result_2 = 7\n  let _ = result_2\n  Ok(y)\n}\n\nfn main() {\n  let _ = foo()\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func foo() lisette.Result[int, string] {
+	check_1 := lisette.MakeResultOk[int, string](1)
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_1.ErrVal)
+	}
+	result_2 := check_1.OkVal
+	y := result_2 + 1
+	_ = 7
+	return lisette.MakeResultOk[int, string](y)
+}
+
+func main() {
+	_ = foo()
+}

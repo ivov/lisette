@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid pipeline
+   ╭─[test.lis:1:18]
+ 1 │ fn test() { x |> 1 + 2; }
+   ·                  ──┬──
+   ·                    ╰── expected function
+   ╰────
+  help: Pipeline only supports functions (not lambdas) · code: [parse.invalid_pipeline_target]

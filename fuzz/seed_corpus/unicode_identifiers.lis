@@ -1,0 +1,10 @@
+fn polar(r: float64, θ: float64) -> complex128 {
+  r * (cos(θ) + sin(θ) * 1i)
+}
+
+fn test() {
+  let 北京 = "Beijing";
+  let α = 1;
+  let β = 2;
+  let λ = α + β;
+}

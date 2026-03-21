@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { 5 - 3 }"
+---
+fn test() {
+  5 - 3
+}

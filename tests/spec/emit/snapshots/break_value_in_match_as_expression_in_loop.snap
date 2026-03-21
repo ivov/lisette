@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let mut n = 0;\n  loop {\n    n = match n {\n      5 => break n,\n      _ => n + 1,\n    }\n  }\n}\n"
+---
+package main
+
+func test() int {
+	n := 0
+	for {
+		var tmp_3 int
+		if n == 5 {
+			return n
+		}
+		tmp_3 = n + 1
+		n = tmp_3
+	}
+}

@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn use_map(map: int, range: int) -> int {\n  map + range\n}\n\nfn test() -> int {\n  use_map(10, 20)\n}\n"
+---
+package main
+
+func use_map(map_, range_ int) int {
+	return map_ + range_
+}
+
+func test() int {
+	return use_map(10, 20)
+}

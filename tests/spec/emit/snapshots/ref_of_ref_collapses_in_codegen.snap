@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn test() {\n  let mut x = 42\n  let r1 = &x\n  let r2 = &r1\n  let val = r2.*\n}\n"
+---
+package main
+
+func test() {
+	x := 42
+	r1 := &x
+	r2 := r1
+	_ = *r2
+}

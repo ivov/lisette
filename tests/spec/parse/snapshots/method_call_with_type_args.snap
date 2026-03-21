@@ -1,0 +1,103 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() { obj.method<int>(arg); }\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Call {
+                    expression: DotAccess {
+                        expression: Identifier {
+                            value: "obj",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 13,
+                                byte_length: 3,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                        member: "method",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 13,
+                            byte_length: 10,
+                        },
+                    },
+                    args: [
+                        Identifier {
+                            value: "arg",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 29,
+                                byte_length: 3,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                    ],
+                    type_args: [
+                        Constructor {
+                            name: "int",
+                            params: [],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 24,
+                                byte_length: 3,
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 13,
+                        byte_length: 20,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 25,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 35,
+        },
+    },
+]

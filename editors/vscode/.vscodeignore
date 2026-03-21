@@ -1,0 +1,9 @@
+.vscode/
+node_modules/
+src/
+tsconfig.json
+esbuild.js
+.gitignore
+*.vsix
+pnpm-lock.yaml
+dist/*.map

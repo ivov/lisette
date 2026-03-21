@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn main() {\n  let mut s = [1]\n  let r: Ref<Slice<int>> = &s\n  r.* = r.*.append(2)\n  let _ = s\n}\n"
+---
+package main
+
+func main() {
+	s := []int{1}
+	r := &s
+	*r = append(*r, 2)
+	_ = s
+}

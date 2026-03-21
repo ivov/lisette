@@ -1,0 +1,7 @@
+fn calculate(a: int, b: int) -> int {
+  let result = a + b;
+  if result > 10 {
+    print("Large!\n");
+  }
+  return result;
+}

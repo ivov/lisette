@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> int {\n  let xs = [1, 2, 3]\n  (xs.length)()\n}\n"
+---
+package main
+
+func test() int {
+	xs := []int{1, 2, 3}
+	return len(xs)
+}

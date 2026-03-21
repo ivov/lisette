@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot assign to field of map entry
+   ╭─[test.lis:7:3]
+ 6 │   m["a"] = Point { x: 1, y: 2 }
+ 7 │   m["a"].x = 5
+   ·   ──────┬─────
+   ·         ╰── assignment not allowed here
+ 8 │ }
+   ╰────
+  help: Extract, modify, and reinsert: `let mut entry = m[key]; entry.field = value; m[key] = entry` · code: [infer.map_field_chain_assignment]

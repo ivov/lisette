@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() -> int {\n  let f = 3.14\n  f as int\n}\n"
+---
+package main
+
+func test() int {
+	f := 3.14
+	return int(f)
+}

@@ -1,0 +1,19 @@
+fn test() {
+  let result = recover { foo() };
+}
+
+fn test2() {
+  let result = recover {
+    let x = foo();
+    x + 1
+  };
+}
+
+fn test3() {
+  let outer = recover {
+    let inner = recover {
+      inner_risky()
+    };
+    outer_risky()
+  };
+}

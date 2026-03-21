@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn die() -> Never { panic(\"dead\") }\n\nfn test() -> Result<int, string> {\n  try {\n    let _ = Ok(1)?;\n    die()\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func die() struct{} {
+	panic("dead")
+}
+
+func test() lisette.Result[int, string] {
+	tryResult_1 := func() lisette.Result[int, string] {
+		check_2 := lisette.MakeResultOk[int, string](1)
+		if check_2.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, string](check_2.ErrVal)
+		}
+		die()
+		panic("unreachable")
+	}()
+	return tryResult_1
+}

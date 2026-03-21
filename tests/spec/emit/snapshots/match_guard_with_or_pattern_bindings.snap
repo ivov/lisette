@@ -1,0 +1,66 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nenum E { A(int), B(int), C(int) }\n\nfn test(e: E) -> int {\n  match e {\n    C(x) if x > 0 => x * 100,\n    A(x) | B(x) | C(x) => x,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeEA(arg0 int) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 int) E {
+	return E{Tag: EB, B: arg0}
+}
+
+func MakeEC(arg0 int) E {
+	return E{Tag: EC, C: arg0}
+}
+
+type ETag int
+
+const (
+	EA ETag = iota
+	EB
+	EC
+)
+
+type E struct {
+	Tag ETag
+	A   int
+	B   int
+	C   int
+}
+
+func (e E) String() string {
+	switch e.Tag {
+	case EA:
+		return fmt.Sprintf("E.A(%v)", e.A)
+	case EB:
+		return fmt.Sprintf("E.B(%v)", e.B)
+	case EC:
+		return fmt.Sprintf("E.C(%v)", e.C)
+	default:
+		return fmt.Sprintf("E(%d)", e.Tag)
+	}
+}
+
+func test(e E) int {
+	if e.Tag == EC {
+		x := e.C
+		if x > 0 {
+			return x * 100
+		}
+	}
+	if e.Tag == EA {
+		x := e.A
+		return x
+	}
+	if e.Tag == EB {
+		x := e.B
+		return x
+	}
+	x := e.C
+	return x
+}

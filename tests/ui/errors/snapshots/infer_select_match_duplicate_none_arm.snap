@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid select match
+   ╭─[test.lis:8:7]
+ 7 │       None => 0,
+ 8 │       None => 1,
+   ·       ──┬─
+   ·         ╰── duplicate
+ 9 │     },
+   ╰────
+  help: Remove the duplicate `None` arm. If you need to, use a `match` inside the arm body · code: [infer.select_match_duplicate_none_arm]

@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nimport \"go:fmt\"\n\nfn side() -> int { fmt.Println(\"side\"); 1 }\n\nfn main() {\n  return {\n    let _ = side()\n    ()\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func side() int {
+	fmt.Println("side")
+	return 1
+}
+
+func main() {
+	{
+		_ = side()
+	}
+	return
+}

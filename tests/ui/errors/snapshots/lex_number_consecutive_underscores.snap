@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid number literal
+   ╭─[test.lis:1:10]
+ 1 │ let x = 1__000
+   ·          ─┬
+   ·           ╰── consecutive underscores
+   ╰────
+  help: Use a single underscore to separate each digit group · code: [lex.number_consecutive_underscores]

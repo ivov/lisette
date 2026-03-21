@@ -1,0 +1,79 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/mod.go ===
+package lib
+
+import "fmt"
+
+func MakeValidatedValid[T any](arg0 T) Validated[T] {
+	return Validated[T]{Tag: ValidatedValid, Valid: arg0}
+}
+
+func MakeValidatedInvalid[T any](arg0 string) Validated[T] {
+	return Validated[T]{Tag: ValidatedInvalid, Invalid: arg0}
+}
+
+type ValidatedTag int
+
+const (
+	ValidatedValid ValidatedTag = iota
+	ValidatedInvalid
+)
+
+type Validated[T any] struct {
+	Tag     ValidatedTag
+	Valid   T
+	Invalid string
+}
+
+func (v Validated[T]) String() string {
+	switch v.Tag {
+	case ValidatedValid:
+		return fmt.Sprintf("Validated.Valid(%v)", v.Valid)
+	case ValidatedInvalid:
+		return fmt.Sprintf("Validated.Invalid(%v)", v.Invalid)
+	default:
+		return fmt.Sprintf("Validated(%d)", v.Tag)
+	}
+}
+
+type ValidationResult[T any] struct {
+	Value      Validated[T]
+	Field_name string
+}
+
+func (v ValidationResult[T]) String() string {
+	return fmt.Sprintf("ValidationResult { value: %v, field_name: %v }", v.Value, v.Field_name)
+}
+
+func ValidationResult_New_invalid[T any](field, msg string) ValidationResult[T] {
+	return ValidationResult[T]{
+		Value:      MakeValidatedInvalid[T](msg),
+		Field_name: field,
+	}
+}
+
+func Validate_positive(field string, _ int) ValidationResult[int] {
+	return ValidationResult_New_invalid[int](field, "must be positive")
+}
+
+func Validate_non_empty(field, _ string) ValidationResult[string] {
+	return ValidationResult_New_invalid[string](field, "must not be empty")
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/lib"
+)
+
+func main() {
+	r1 := lib.Validate_positive("age", -1)
+	r2 := lib.Validate_non_empty("name", "")
+	fmt.Println(r1.Field_name)
+	fmt.Println(r2.Field_name)
+}

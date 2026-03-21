@@ -1,0 +1,27 @@
+import "go:fmt"
+import "go:os"
+
+import "commands"
+import "display"
+
+fn main() {
+  let Some(command) = os.Args.get(1) else {
+    display.print_usage()
+    return
+  }
+
+  let result = match command {
+    "add" => commands.add(os.Args),
+    "done" => commands.done(os.Args),
+    "cancel" => commands.cancel(os.Args),
+    "list" => commands.list(),
+    "stats" => commands.stats(),
+    "watch" => commands.watch(),
+    other => Err(f"unknown command: '{other}'"),
+  }
+
+  if let Err(msg) = result {
+    fmt.Println(f"Error: {msg}")
+    os.Exit(1)
+  }
+}

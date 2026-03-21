@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport _ \"go:os\"\nimport \"go:fmt\"\n\nfn test() {\n  let _ = fmt.Print(\"Blank import\");\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	_ "os"
+)
+
+func test() {
+	fmt.Print("Blank import")
+}

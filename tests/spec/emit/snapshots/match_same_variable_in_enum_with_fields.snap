@@ -1,0 +1,62 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nenum Event {\n  Click(int, int),\n  KeyPress(string),\n}\n\nfn test() -> int {\n  let e1 = Event.Click(10, 20);\n  let sum1 = match e1 {\n    Event.Click(x, y) => x + y,\n    Event.KeyPress(k) => 0,\n  };\n\n  let e2 = Event.Click(30, 40);\n  let sum2 = match e2 {\n    Event.Click(x, y) => x + y,\n    Event.KeyPress(k) => 0,\n  };\n\n  sum1 + sum2\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeEventClick(arg0 int, arg1 int) Event {
+	return Event{Tag: EventClick, Click0: arg0, Click1: arg1}
+}
+
+func MakeEventKeyPress(arg0 string) Event {
+	return Event{Tag: EventKeyPress, KeyPress: arg0}
+}
+
+type EventTag int
+
+const (
+	EventClick EventTag = iota
+	EventKeyPress
+)
+
+type Event struct {
+	Tag      EventTag
+	Click0   int
+	Click1   int
+	KeyPress string
+}
+
+func (e Event) String() string {
+	switch e.Tag {
+	case EventClick:
+		return fmt.Sprintf("Event.Click(%v, %v)", e.Click0, e.Click1)
+	case EventKeyPress:
+		return fmt.Sprintf("Event.KeyPress(%v)", e.KeyPress)
+	default:
+		return fmt.Sprintf("Event(%d)", e.Tag)
+	}
+}
+
+func test() int {
+	e1 := MakeEventClick(10, 20)
+	var sum1 int
+	if e1.Tag == EventClick {
+		x := e1.Click0
+		y := e1.Click1
+		sum1 = x + y
+	} else {
+		sum1 = 0
+	}
+	e2 := MakeEventClick(30, 40)
+	var sum2 int
+	if e2.Tag == EventClick {
+		x := e2.Click0
+		y := e2.Click1
+		sum2 = x + y
+	} else {
+		sum2 = 0
+	}
+	return sum1 + sum2
+}

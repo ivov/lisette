@@ -1,0 +1,14 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+func process(_, used_param int) int {
+	_ = 42
+	return used_param * 2
+}
+
+func main() {
+	_ = process(1, 2)
+}

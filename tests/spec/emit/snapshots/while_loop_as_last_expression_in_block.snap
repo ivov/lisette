@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() {\n  let _ = {\n    let mut i = 0\n    while i < 3 {\n      i = i + 1\n    }\n  }\n}\n"
+---
+package main
+
+func test() {
+	i := 0
+	for i < 3 {
+		i++
+	}
+}

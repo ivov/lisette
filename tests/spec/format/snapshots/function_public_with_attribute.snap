@@ -1,0 +1,6 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: #[go(comma_ok)]\npub fn ReadBuildInfo() -> Option<Ref<BuildInfo>>"
+---
+#[go(comma_ok)]
+pub fn ReadBuildInfo() -> Option<Ref<BuildInfo>>

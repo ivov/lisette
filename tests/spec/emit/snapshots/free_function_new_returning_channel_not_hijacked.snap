@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn new() -> Channel<int> {\n  Channel.new<int>()\n}\n\nfn test() -> Channel<int> {\n  new()\n}\n"
+---
+package main
+
+func new_() chan int {
+	return make(chan int)
+}
+
+func test() chan int {
+	return new_()
+}

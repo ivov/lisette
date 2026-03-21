@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test() -> Result<(), string> {\n  try {\n    let _ = Ok(1)?\n    let o = Some(1)\n    while let Some(_v) = o {\n      break\n    }\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Result[struct{}, string] {
+	tryResult_1 := func() lisette.Result[struct{}, string] {
+		check_2 := lisette.MakeResultOk[int, string](1)
+		if check_2.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[struct{}, string](check_2.ErrVal)
+		}
+		o := lisette.MakeOptionSome(1)
+		for {
+			if o.Tag == lisette.OptionSome {
+				break
+			}
+			break
+		}
+		return lisette.MakeResultOk[struct{}, string](struct{}{})
+	}()
+	return tryResult_1
+}

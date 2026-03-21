@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Module not found
+   ╭─[main.lis:1:8]
+ 1 │ import "nonexistent"
+   ·        ──────┬──────
+   ·              ╰── not found
+   ╰────
+  help: Check the module path and ensure the file exists · code: [resolve.module_not_found]

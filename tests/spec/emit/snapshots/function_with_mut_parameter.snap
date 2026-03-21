@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn process(mut items: Slice<int>) {\n  items = [1, 2, 3]\n}\n"
+---
+package main
+
+func process(_ []int) {
+	items = []int{1, 2, 3}
+}

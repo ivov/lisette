@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn get_channel(ch: Ref<Channel<int>>) -> Ref<Channel<int>> {\n  ch\n}\n\nfn test(ch: Ref<Channel<int>>) {\n  select {\n    match get_channel(ch).receive() {\n      Some(v) => { let _ = v },\n      None => {},\n    },\n    _ => {},\n  }\n}\n"
+---
+package main
+
+func get_channel(ch *chan int) *chan int {
+	return ch
+}
+
+func test(ch *chan int) {
+	select {
+	case v, ok := <-*get_channel(ch):
+		if ok {
+			_ = v
+		}
+	default:
+	}
+}

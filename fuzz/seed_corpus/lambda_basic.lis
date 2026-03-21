@@ -1,0 +1,11 @@
+fn test() {
+  let f = || 42;
+  let double = |x| x * 2;
+  let add = |x, y| x + y;
+  let square = |x: int| -> int x * x;
+  let multiply = |a: int, b: int| a * b;
+}
+
+fn test2(numbers: Slice<int>) {
+  let result = map(numbers, |n| n * 2);
+}

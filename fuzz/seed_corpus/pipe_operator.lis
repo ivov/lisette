@@ -1,0 +1,7 @@
+fn test() {
+  let result = x |> func;
+  let result2 = x |> f |> g |> h;
+  let result3 = x |> add(5);
+  let result4 = x |> add(5) |> multiply(2) |> subtract(3);
+  let result5 = a + b |> func;
+}

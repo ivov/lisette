@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let mut xs = [1, 2, 3];\n  xs[0] = 100;\n  xs[0]\n}\n"
+---
+package main
+
+func test() int {
+	xs := []int{1, 2, 3}
+	xs[0] = 100
+	return xs[0]
+}

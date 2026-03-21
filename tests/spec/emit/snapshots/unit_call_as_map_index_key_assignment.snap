@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn noop() {}\n\nfn main() {\n  let mut m = Map.new<(), int>()\n  m[noop()] = 7\n}\n"
+---
+package main
+
+func noop() {}
+
+func main() {
+	m := make(map[struct{}]int)
+	noop()
+	idx_1 := struct{}{}
+	m[idx_1] = 7
+}

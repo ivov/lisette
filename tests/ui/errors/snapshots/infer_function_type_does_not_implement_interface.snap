@@ -1,0 +1,15 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Interface not implemented
+    ╭─[test.lis:15:15]
+ 14 │ fn main() {
+ 15 │   print_value(some_func);
+    ·               ────┬────
+    ·                   ╰── `fn (int) -> int` does not implement `Display`
+ 16 │ }
+    ╰────
+  help: Missing methods:
+          From `Display`
+            - show: fn () -> string
+        code: [infer.interface_not_implemented]

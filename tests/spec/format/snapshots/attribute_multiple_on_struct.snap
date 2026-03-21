@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: #[json]\n#[xml]\nstruct Config { value: int }"
+---
+#[json]
+#[xml]
+struct Config { value: int }

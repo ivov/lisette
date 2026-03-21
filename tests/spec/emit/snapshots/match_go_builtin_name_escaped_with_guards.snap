@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn categorize(items: Slice<int>) -> string {\n  let len = items.length();\n  match len {\n    0 => \"empty\",\n    n if n == 1 => \"single\",\n    n if n <= 3 => \"few\",\n    _ => \"many\",\n  }\n}\n"
+---
+package main
+
+func categorize(items []int) string {
+	len_ := len(items)
+	if len_ == 0 {
+		return "empty"
+	}
+	n := len_
+	if n == 1 {
+		return "single"
+	}
+	n_1 := len_
+	if n_1 <= 3 {
+		return "few"
+	}
+	return "many"
+}

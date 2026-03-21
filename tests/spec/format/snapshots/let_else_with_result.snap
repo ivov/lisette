@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test(res: Result<int, string>) -> int { let Ok(x) = res else { return 0; }; x }"
+---
+fn test(res: Result<int, string>) -> int {
+  let Ok(x) = res else {
+    return 0
+  }
+  x
+}

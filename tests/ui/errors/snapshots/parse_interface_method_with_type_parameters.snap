@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid interface method
+   ╭─[test.lis:3:9]
+ 2 │ interface Mapper {
+ 3 │   fn map<U>(self, f: fn(int) -> U) -> U;
+   ·         ─┬─
+   ·          ╰── type parameter not allowed
+ 4 │ }
+   ╰────
+  help: Interface methods cannot have type parameters, because Go interfaces do not support generic methods · code: [parse.interface_method_with_type_parameters]

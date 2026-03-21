@@ -1,0 +1,22 @@
+fn test(code: int) {
+  match code {
+    200 => print("OK"),
+    404 => print("Not Found"),
+    _   => print("Other"),
+  }
+}
+
+fn test2(active: bool) {
+  match active {
+    true  => start_service(),
+    false => stop_service(),
+  }
+}
+
+fn test3(command: string) {
+  match command {
+    "start" => exec("start"),
+    "stop"  => exec("stop"),
+    _       => print("Unknown command"),
+  }
+}

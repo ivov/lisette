@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:3:10]
+ 2 │ fn test() -> Option<int> {
+ 3 │   return 42;
+   ·          ─┬
+   ·           ╰── expected `Option<int>`, found `int`
+ 4 │ }
+   ╰────
+  help: Wrap the value: `Some(...)` · code: [infer.type_mismatch]

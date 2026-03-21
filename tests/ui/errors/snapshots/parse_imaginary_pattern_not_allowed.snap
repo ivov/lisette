@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:4:5]
+ 3 │   match x {
+ 4 │     4i => 1,
+   ·     ─┬
+   ·      ╰── not allowed
+ 5 │     _ => 0,
+   ╰────
+  help: Imaginary literals are not supported in patterns · code: [parse.syntax_error]

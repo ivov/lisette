@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn init() -> int {\n  42\n}\n\nfn test() -> int {\n  init()\n}\n"
+---
+package main
+
+func init_() int {
+	return 42
+}
+
+func test() int {
+	return init_()
+}

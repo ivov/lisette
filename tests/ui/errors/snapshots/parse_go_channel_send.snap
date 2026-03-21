@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:6]
+ 2 │ fn test(ch: Channel<int>) {
+ 3 │   ch <- 42;
+   ·      ─┬
+   ·       ╰── invalid syntax
+ 4 │ }
+   ╰────
+  help: Use `ch.Send(value)` inside a `select` expression · code: [parse.syntax_error]

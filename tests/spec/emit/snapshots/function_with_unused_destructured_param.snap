@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn foo((a, b): (int, int)) -> int {\n  1\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func foo(arg_1 lisette.Tuple2[int, int]) int {
+	return 1
+}

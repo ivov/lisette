@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:18]
+ 2 │ fn test() {
+ 3 │   let x: Foo<Bar = 1;
+   ·                  ┬
+   ·                  ╰── expected `>`
+ 4 │ }
+   ╰────
+  help: Add `>` to close the type arguments · code: [parse.syntax_error]

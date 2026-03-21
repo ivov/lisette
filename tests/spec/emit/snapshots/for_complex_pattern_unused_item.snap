@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct P { v: int }\nfn test() {\n  for P { v } in [P { v: 1 }] {\n    ()\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type P struct {
+	v int
+}
+
+func (p P) String() string {
+	return fmt.Sprintf("P { v: %v }", p.v)
+}
+
+func test() {
+	for _, item_1 := range []P{P{v: 1}} {
+		_ = item_1
+	}
+}

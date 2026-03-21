@@ -1,0 +1,11 @@
+fn apply(f: fn(int) -> int, x: int) -> int {
+  f(x)
+}
+
+fn double(x: int) -> int {
+  x * 2
+}
+
+fn test_higher_order() -> int {
+  apply(double, 5)
+}

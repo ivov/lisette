@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct Point { x: int, y: int }\n\nfn make_x() -> int { fmt.Println(\"x\"); 1 }\nfn make_base() -> Point { fmt.Println(\"base\"); Point { x: 0, y: 0 } }\n\nfn main() {\n  let _ = Point { x: make_x(), ..make_base() }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func make_x() int {
+	fmt.Println("x")
+	return 1
+}
+
+func make_base() Point {
+	fmt.Println("base")
+	return Point{
+		x: 0,
+		y: 0,
+	}
+}
+
+func main() {
+	field_1 := make_x()
+	copy_2 := make_base()
+	copy_2.x = field_1
+	_ = copy_2
+}

@@ -1,0 +1,52 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Mapper[T any] interface {
+	Map_val() T
+}
+
+type Filter interface {
+	Keep() bool
+}
+
+type Processor[T any] interface {
+	Mapper[T]
+	Filter
+}
+
+type Score struct {
+	name string
+	val  int
+}
+
+func (s Score) String() string {
+	return fmt.Sprintf("Score { name: %v, val: %v }", s.name, s.val)
+}
+
+func (s Score) Map_val() string {
+	return s.name
+}
+
+func (s Score) Keep() bool {
+	return s.val > 50
+}
+
+func process_score(item Score) string {
+	if item.Keep() {
+		return item.Map_val()
+	}
+	return "filtered"
+}
+
+func main() {
+	s := Score{
+		name: "hello",
+		val:  42,
+	}
+	fmt.Println(process_score(s))
+}

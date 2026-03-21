@@ -1,0 +1,52 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum Tree {\n  Leaf(int),\n  Node { value: int, left: Ref<Tree>, right: Ref<Tree> },\n}\n\nfn test() -> Tree {\n  let l = Tree.Leaf(1);\n  let r = Tree.Leaf(2);\n  Tree.Node { value: 0, left: &l, right: &r }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeTreeLeaf(arg0 int) Tree {
+	return Tree{Tag: TreeLeaf, Leaf: arg0}
+}
+
+func MakeTreeNode(arg0 int, arg1 *Tree, arg2 *Tree) Tree {
+	return Tree{Tag: TreeNode, Value: arg0, Left: arg1, Right: arg2}
+}
+
+type TreeTag int
+
+const (
+	TreeLeaf TreeTag = iota
+	TreeNode
+)
+
+type Tree struct {
+	Tag   TreeTag
+	Leaf  int
+	Value int
+	Left  *Tree
+	Right *Tree
+}
+
+func (t Tree) String() string {
+	switch t.Tag {
+	case TreeLeaf:
+		return fmt.Sprintf("Tree.Leaf(%v)", t.Leaf)
+	case TreeNode:
+		return fmt.Sprintf("Tree.Node { value: %v, left: %v, right: %v }", t.Value, t.Left, t.Right)
+	default:
+		return fmt.Sprintf("Tree(%d)", t.Tag)
+	}
+}
+
+func test() Tree {
+	l := MakeTreeLeaf(1)
+	r := MakeTreeLeaf(2)
+	return Tree{
+		Tag:   TreeNode,
+		Value: 0,
+		Left:  &l,
+		Right: &r,
+	}
+}

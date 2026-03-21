@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Wrapper<T>(T)\n\nimpl<T> Wrapper<T> {\n  fn unwrap(self: Wrapper<T>) -> T {\n    self.0\n  }\n}\n\nfn test() -> int {\n  let w = Wrapper(42);\n  w.unwrap()\n}\n"
+---
+package main
+
+import "fmt"
+
+type Wrapper[T any] struct {
+	F0 T
+}
+
+func (w Wrapper[T]) String() string {
+	return fmt.Sprintf("Wrapper(%v)", w.F0)
+}
+
+func (w Wrapper[T]) unwrap() T {
+	return w.F0
+}
+
+func test() int {
+	w := Wrapper[int]{F0: 42}
+	return w.unwrap()
+}

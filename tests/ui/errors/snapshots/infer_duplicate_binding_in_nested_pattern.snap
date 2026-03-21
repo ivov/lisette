@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate binding
+   ╭─[test.lis:3:8]
+ 2 │ fn main() {
+ 3 │   let (x, (y, x)) = (1, (2, 3));
+   ·        ┬      ┬
+   ·        │      ╰── used again
+   ·        ╰── first use of `x`
+ 4 │ }
+   ╰────
+  help: Remove the duplicate binding · code: [infer.duplicate_binding_in_pattern]

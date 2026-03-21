@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test() {\n  let mut opt: Option<int> = Some(1);\n  opt = None;\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	_ = lisette.MakeOptionSome(1)
+	_ = lisette.MakeOptionNone[int]()
+}

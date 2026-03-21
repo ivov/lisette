@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct IntList {\n  items: Slice<int>,\n}\n\nimpl IntList {\n  fn display(self) -> string {\n    let mut s = \"[\"\n    for i in self.items {\n      if s != \"[\" {\n        s = s + \", \"\n      }\n      s = s + f\"{i}\"\n    }\n    s + \"]\"\n  }\n}\n\nfn main() {\n  let list = IntList { items: [1, 2, 3] }\n  fmt.Println(list.display())\n}\n"
+---
+package main
+
+import "fmt"
+
+type IntList struct {
+	items []int
+}
+
+func (i IntList) String() string {
+	return fmt.Sprintf("IntList { items: %v }", i.items)
+}
+
+func (i IntList) display() string {
+	s := "["
+	for _, i_1 := range i.items {
+		if s != "[" {
+			s += ", "
+		}
+		s += fmt.Sprint(i_1)
+	}
+	return s + "]"
+}
+
+func main() {
+	list := IntList{items: []int{1, 2, 3}}
+	fmt.Println(list.display())
+}

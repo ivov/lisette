@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> float32 {\n  let f: float32 = -1.5;\n  f\n}\n"
+---
+package main
+
+func test() float32 {
+	var f float32 = -1.5
+	return f
+}

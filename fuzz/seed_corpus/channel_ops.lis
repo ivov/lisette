@@ -1,0 +1,43 @@
+fn test() -> int {
+  let ch = Channel.new<int>();
+  select {
+    let Some(v) = ch.receive() => v,
+    _ => 42,
+  }
+}
+
+fn test2() -> int {
+  let ch = Channel.buffered<int>(2);
+  ch.send(10);
+  ch.send(20);
+  let v1 = match ch.receive() {
+    Some(v) => v,
+    None => 0,
+  };
+  v1
+}
+
+fn test3() -> int {
+  let ch = Channel.buffered<int>(3);
+  ch.send(1);
+  ch.send(2);
+  ch.send(3);
+  ch.close();
+  let mut sum = 0;
+  for v in ch {
+    sum = sum + v;
+  };
+  sum
+}
+
+fn test4() -> int {
+  let ch = Channel.new<int>();
+  let (tx, rx) = ch.split();
+  task {
+    tx.send(99);
+  };
+  match rx.receive() {
+    Some(v) => v,
+    None => 0,
+  }
+}

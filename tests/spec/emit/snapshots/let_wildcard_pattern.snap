@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn compute() -> int { 42 }\n\nfn test() {\n  let _ = compute();\n}\n"
+---
+package main
+
+func compute() int {
+	return 42
+}
+
+func test() {
+	_ = compute()
+}

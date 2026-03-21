@@ -1,0 +1,15 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Interface not implemented
+    ╭─[test.lis:12:15]
+ 11 │   let tuple = (1, 2);
+ 12 │   print_value(tuple);
+    ·               ──┬──
+    ·                 ╰── `(int, int)` does not implement `Display`
+ 13 │ }
+    ╰────
+  help: Missing methods:
+          From `Display`
+            - show: fn () -> string
+        code: [infer.interface_not_implemented]

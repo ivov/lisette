@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `continue` in `try` block
+   ╭─[test.lis:5:7]
+ 4 │     if true {
+ 5 │       continue;
+   ·       ────┬───
+   ·           ╰── not inside a loop
+ 6 │     }
+   ╰────
+  help: Use `continue` inside a loop, or use `Err(...)? ` to exit the `try` block early · code: [infer.try_block_continue]

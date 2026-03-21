@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn make_counter(start: int) -> fn() -> int {\n  let mut n = start;\n  || {\n    n += 1;\n    n\n  }\n}\n"
+---
+package main
+
+func make_counter(start int) func() int {
+	n := start
+	return func() int {
+		n++
+		return n
+	}
+}

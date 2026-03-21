@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Escaped quote in f-string interpolation
+   ╭─[test.lis:1:20]
+ 1 │ let s = f"x: {func(\"arg\")}"
+   ·                    ─┬
+   ·                     ╰── unneeded
+   ╰────
+  help: Use bare quotes inside f-string interpolations: `f"x: {func("arg")}"` · code: [lex.escaped_quote_in_interpolation]

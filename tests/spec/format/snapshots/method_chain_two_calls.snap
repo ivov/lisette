@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { let result = Some(42).map(|x: int| -> int { x * 2 }).unwrap_or(0) }"
+---
+fn test() {
+  let result = Some(42)
+    .map(|x: int| -> int {
+      x * 2
+    })
+    .unwrap_or(0)
+}

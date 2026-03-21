@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Empty {\n  // no fields yet\n}"
+---
+struct Empty {
+  // no fields yet
+}

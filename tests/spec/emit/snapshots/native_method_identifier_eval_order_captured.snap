@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn bump(i: Ref<int>) -> string {\n  i.* = 1\n  \",\"\n}\n\nfn main() {\n  let mut i = 0\n  let items = [\"a\", \"b\", \"c\"]\n  let joined = items.join(bump(&i))\n  let _ = joined\n}\n"
+---
+package main
+
+import "strings"
+
+func bump(i *int) string {
+	*i = 1
+	return ","
+}
+
+func main() {
+	i := 0
+	items := []string{"a", "b", "c"}
+	_ = strings.Join(items, bump(&i))
+}

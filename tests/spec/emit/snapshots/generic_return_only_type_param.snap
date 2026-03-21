@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn default_value<T>() -> Option<T> {\n  None\n}\n\nfn test() -> Option<int> {\n  default_value()\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func default_value[T any]() lisette.Option[T] {
+	return lisette.MakeOptionNone[T]()
+}
+
+func test() lisette.Option[int] {
+	return default_value[int]()
+}

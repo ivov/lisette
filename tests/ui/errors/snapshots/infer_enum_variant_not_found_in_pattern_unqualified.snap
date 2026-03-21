@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Variant not found
+   ╭─[main.lis:7:5]
+ 6 │   match s {
+ 7 │     Circle(r) => {}
+   ·     ────┬────
+   ·         ╰── not found
+ 8 │   }
+   ╰────
+  help: Use `Shape.Circle` to match this variant · code: [resolve.variant_not_found]

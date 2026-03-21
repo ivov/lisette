@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Conflicting field types across enum variants
+   ╭─[test.lis:4:19]
+ 3 │   Click { target: int },
+ 4 │   Hover { target: string },
+   ·                   ───┬──
+   ·                      ╰── field type mismatch
+ 5 │ }
+   ╰────
+  help: `Event.Click.target` is `int` but `Event.Hover.target` is `string`. Rename one of the fields or align their types · code: [infer.enum_field_type_conflict]

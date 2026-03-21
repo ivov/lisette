@@ -1,0 +1,56 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/mod.go ===
+package lib
+
+import (
+	"fmt"
+	"github.com/user/myproject/lib/sub"
+)
+
+type Container struct {
+	Items []sub.Item
+}
+
+func (c Container) String() string {
+	return fmt.Sprintf("Container { items: %v }", c.Items)
+}
+
+func First_item(c Container) sub.Item {
+	return c.Items[0]
+}
+
+
+// === lib/sub/mod.go ===
+package sub
+
+import "fmt"
+
+type Item struct {
+	Name  string
+	Score int
+}
+
+func (i Item) String() string {
+	return fmt.Sprintf("Item { name: %v, score: %v }", i.Name, i.Score)
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/lib"
+	"github.com/user/myproject/lib/sub"
+)
+
+func main() {
+	item := sub.Item{
+		Name:  "test",
+		Score: 42,
+	}
+	c := lib.Container{Items: []sub.Item{item}}
+	fmt.Println(lib.First_item(c).Name)
+}

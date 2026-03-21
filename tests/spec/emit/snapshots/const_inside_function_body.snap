@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn main() {\n  const MAX = 100\n  let x = MAX + 1\n}\n"
+---
+package main
+
+func main() {
+	const MAX int = 100
+	_ = MAX + 1
+}

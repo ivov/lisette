@@ -1,0 +1,364 @@
+================================================================================
+If
+================================================================================
+
+if x > 0 { foo() }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (if_expression
+      condition: (binary_expression
+        left: (identifier)
+        right: (integer_literal))
+      consequence: (block
+        (call_expression
+          function: (identifier)
+          arguments: (arguments))))))
+
+================================================================================
+If-else
+================================================================================
+
+if x > 0 { foo() } else { bar() }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (if_expression
+      condition: (binary_expression
+        left: (identifier)
+        right: (integer_literal))
+      consequence: (block
+        (call_expression
+          function: (identifier)
+          arguments: (arguments)))
+      alternative: (else_clause
+        (block
+          (call_expression
+            function: (identifier)
+            arguments: (arguments)))))))
+
+================================================================================
+If-else-if
+================================================================================
+
+if a { one() } else if b { two() } else { three() }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (if_expression
+      condition: (identifier)
+      consequence: (block
+        (call_expression
+          function: (identifier)
+          arguments: (arguments)))
+      alternative: (else_clause
+        (if_expression
+          condition: (identifier)
+          consequence: (block
+            (call_expression
+              function: (identifier)
+              arguments: (arguments)))
+          alternative: (else_clause
+            (block
+              (call_expression
+                function: (identifier)
+                arguments: (arguments)))))))))
+
+================================================================================
+If-let
+================================================================================
+
+if let Some(v) = opt { use(v) }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (if_let_expression
+      pattern: (tuple_struct_pattern
+        type: (identifier)
+        (identifier))
+      value: (identifier)
+      consequence: (block
+        (call_expression
+          function: (identifier)
+          arguments: (arguments
+            (identifier)))))))
+
+================================================================================
+Match basic
+================================================================================
+
+match x { 0 => "zero", _ => "other" }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      value: (identifier)
+      body: (match_block
+        (match_arm
+          pattern: (match_pattern
+            (integer_literal))
+          value: (string_literal
+            (string_content)))
+        (match_arm
+          pattern: (match_pattern)
+          value: (string_literal
+            (string_content)))))))
+
+================================================================================
+Match with guard
+================================================================================
+
+match x { n if n > 0 => "pos", _ => "neg" }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      value: (identifier)
+      body: (match_block
+        (match_arm
+          pattern: (match_pattern
+            (identifier)
+            condition: (binary_expression
+              left: (identifier)
+              right: (integer_literal)))
+          value: (string_literal
+            (string_content)))
+        (match_arm
+          pattern: (match_pattern)
+          value: (string_literal
+            (string_content)))))))
+
+================================================================================
+Match with block arm
+================================================================================
+
+match x { 0 => { compute() } _ => default() }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      value: (identifier)
+      body: (match_block
+        (match_arm
+          pattern: (match_pattern
+            (integer_literal))
+          value: (block
+            (call_expression
+              function: (identifier)
+              arguments: (arguments))))
+        (match_arm
+          pattern: (match_pattern)
+          value: (call_expression
+            function: (identifier)
+            arguments: (arguments)))))))
+
+================================================================================
+While
+================================================================================
+
+while x > 0 { x -= 1 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (while_expression
+      condition: (binary_expression
+        left: (identifier)
+        right: (integer_literal))
+      body: (block
+        (compound_assignment_expression
+          left: (identifier)
+          right: (integer_literal))))))
+
+================================================================================
+While-let
+================================================================================
+
+while let Some(v) = iter.next() { process(v) }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (while_let_expression
+      pattern: (tuple_struct_pattern
+        type: (identifier)
+        (identifier))
+      value: (call_expression
+        function: (field_expression
+          value: (identifier)
+          field: (field_identifier))
+        arguments: (arguments))
+      body: (block
+        (call_expression
+          function: (identifier)
+          arguments: (arguments
+            (identifier)))))))
+
+================================================================================
+For
+================================================================================
+
+for i in 0..10 { foo(i) }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (for_expression
+      pattern: (identifier)
+      value: (range_expression
+        (integer_literal)
+        (integer_literal))
+      body: (block
+        (call_expression
+          function: (identifier)
+          arguments: (arguments
+            (identifier)))))))
+
+================================================================================
+Loop
+================================================================================
+
+loop { if done() { break } }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (loop_expression
+      body: (block
+        (expression_statement
+          (if_expression
+            condition: (call_expression
+              function: (identifier)
+              arguments: (arguments))
+            consequence: (block
+              (break_expression))))))))
+
+================================================================================
+Defer expression
+================================================================================
+
+defer file.Close()
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (defer_statement
+    (call_expression
+      function: (field_expression
+        value: (identifier)
+        field: (field_identifier))
+      arguments: (arguments))))
+
+================================================================================
+Defer block
+================================================================================
+
+defer { cleanup() }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (defer_statement
+    (block
+      (call_expression
+        function: (identifier)
+        arguments: (arguments)))))
+
+================================================================================
+Task expression
+================================================================================
+
+task do_work()
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (task_statement
+    (call_expression
+      function: (identifier)
+      arguments: (arguments))))
+
+================================================================================
+Task block
+================================================================================
+
+task { work() }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (task_statement
+    (block
+      (call_expression
+        function: (identifier)
+        arguments: (arguments)))))
+
+================================================================================
+Select
+================================================================================
+
+select { _ => default() }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (select_expression
+      (select_arm
+        (select_default_arm
+          body: (call_expression
+            function: (identifier)
+            arguments: (arguments)))))))
+
+================================================================================
+Try block
+================================================================================
+
+let x = try { read()? }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (try_block
+      (block
+        (try_expression
+          (call_expression
+            function: (identifier)
+            arguments: (arguments)))))))
+
+================================================================================
+Recover block
+================================================================================
+
+let x = recover { dangerous() }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (recover_block
+      (block
+        (call_expression
+          function: (identifier)
+          arguments: (arguments))))))

@@ -1,0 +1,20 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/lib.go ===
+package lib
+
+func Id[T any](x T) T {
+	return x
+}
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/lib"
+
+func main() {
+	f := lib.Id[int]
+	_ = f(42)
+}

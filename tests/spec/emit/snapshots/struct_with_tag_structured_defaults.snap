@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[tag(\"bson\", snake_case)]\nstruct User {\n  userName: string,\n}\n"
+---
+package main
+
+import "fmt"
+
+type User struct {
+	UserName string `bson:"user_name"`
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { userName: %v }", u.UserName)
+}

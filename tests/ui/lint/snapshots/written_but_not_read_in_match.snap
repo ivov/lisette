@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused variable
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let mut status = "init"
+   ·           ───┬──
+   ·              ╰── never used
+ 4 │   let opt: Option<int> = None
+   ╰────
+  help: Use this variable or prefix it with an underscore: `_status` · code: [lint.unused_variable]

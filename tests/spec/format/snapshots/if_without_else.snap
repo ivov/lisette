@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { if condition { do_something(); } }"
+---
+fn test() {
+  if condition { do_something() }
+}

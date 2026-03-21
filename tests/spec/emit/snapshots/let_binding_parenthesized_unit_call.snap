@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn noop() {}\n\nfn main() {\n  let x = (noop())\n  let _ = x\n}\n"
+---
+package main
+
+func noop() {}
+
+func main() {
+	(noop())
+	_ = struct{}{}
+}

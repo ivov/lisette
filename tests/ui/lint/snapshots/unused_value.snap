@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused expression value
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   1 + 2;
+   ·   ──┬──
+   ·     ╰── this value is discarded
+ 4 │   ()
+   ╰────
+  help: Use the value, or ignore with `let _ = ...` · code: [lint.unused_value]

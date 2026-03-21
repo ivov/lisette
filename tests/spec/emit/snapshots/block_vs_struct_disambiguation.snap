@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Point { x: int }\n\nfn test_if() -> int {\n  let x = 1;\n  if true { x } else { 0 }\n}\n\nfn test_struct() -> Point {\n  let x = 42;\n  Point { x }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v }", p.x)
+}
+
+func test_if() int {
+	x := 1
+	if true {
+		return x
+	}
+	return 0
+}
+
+func test_struct() Point {
+	x := 42
+	return Point{x: x}
+}

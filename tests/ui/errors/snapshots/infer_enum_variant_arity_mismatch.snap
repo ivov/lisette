@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Wrong argument count
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let x = Some(42, 43);
+   ·           ──────┬─────
+   ·                 ╰── expected `(int)`, found `(int, int)`
+ 4 │ }
+   ╰────
+  help: This constructor expects 1 argument but received 2 arguments · code: [infer.arg_count_mismatch]

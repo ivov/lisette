@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \npub struct Factory {}\n\nimpl Factory {\n  pub fn make<T>() -> Slice<T> {\n    Slice.new<T>()\n  }\n}\n\nfn test() -> Slice<int> {\n  (Factory.make)()\n}\n"
+---
+package main
+
+type Factory struct{}
+
+func (f Factory) String() string {
+	return "Factory"
+}
+
+func Factory_Make[T any]() []T {
+	return []T{}
+}
+
+func test() []int {
+	return Factory_Make[int]()
+}

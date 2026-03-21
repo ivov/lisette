@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `?` in `defer`
+   ╭─[test.lis:7:5]
+ 6 │   defer {
+ 7 │     risky()?;
+   ·     ────┬───
+   ·         ╰── `?` not allowed here
+ 8 │   };
+   ╰────
+  help: `defer` in combination with `?` is not allowed due to confusing semantics. Handle the error inside a `defer` block: `defer { if let Err(e) = file.close() { log(e); } }` · code: [infer.propagate_in_defer]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate method across specialized `impl` blocks
+    ╭─[test.lis:13:6]
+ 12 │ impl Wrapper<string> {
+ 13 │   fn display(self) -> string {
+    ·      ───┬───
+    ·         ╰── already defined in another specialization
+ 14 │     self.value
+    ╰────
+  help: Specialized `impl` blocks for `Wrapper` share a method namespace. Use different method names, or move `display` to a generic `impl<T> Wrapper<T> {}` block · code: [infer.duplicate_method_across_specialized_impls]

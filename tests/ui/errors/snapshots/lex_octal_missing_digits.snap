@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid octal literal
+   ╭─[test.lis:1:9]
+ 1 │ let x = 0o
+   ·         ─┬
+   ·          ╰── expected digits after `0o`
+   ╰────
+  help: Add octal digits after `0o`, e.g. `0o755` or `0o644` · code: [lex.number_missing_octal_digits]

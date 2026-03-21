@@ -1,0 +1,731 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Nothing }\nfn test(data: Data) {\n  match data {\n    Data.Int(0)      => print(\"Zero\"),\n    Data.Int(n)      => print(\"Number\", n),\n    Data.Pair((0, y))=> print(\"Pair on Y axis\", y),\n    Data.Pair(_)     => print(\"Some pair\"),\n    Data.Text(\"end\") => print(\"End marker\"),\n    Data.Text(_)     => print(\"Some text\"),\n    Data.Nothing     => print(\"Nothing\"),\n  }\n}\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Data",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 4,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                name: "Int",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 13,
+                    byte_length: 3,
+                },
+                fields: Tuple(
+                    [
+                        EnumFieldDefinition {
+                            name: "field0",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 17,
+                                    byte_length: 3,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                    ],
+                ),
+            },
+            EnumVariant {
+                doc: None,
+                name: "Pair",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 23,
+                    byte_length: 4,
+                },
+                fields: Tuple(
+                    [
+                        EnumFieldDefinition {
+                            name: "field0",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Tuple {
+                                elements: [
+                                    Constructor {
+                                        name: "int",
+                                        params: [],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 29,
+                                            byte_length: 3,
+                                        },
+                                    },
+                                    Constructor {
+                                        name: "int",
+                                        params: [],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 34,
+                                            byte_length: 3,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 28,
+                                    byte_length: 10,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                    ],
+                ),
+            },
+            EnumVariant {
+                doc: None,
+                name: "Text",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 41,
+                    byte_length: 4,
+                },
+                fields: Tuple(
+                    [
+                        EnumFieldDefinition {
+                            name: "field0",
+                            name_span: Span {
+                                file_id: 0,
+                                byte_offset: 0,
+                                byte_length: 0,
+                            },
+                            annotation: Constructor {
+                                name: "string",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 46,
+                                    byte_length: 6,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                        },
+                    ],
+                ),
+            },
+            EnumVariant {
+                doc: None,
+                name: "Nothing",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 55,
+                    byte_length: 7,
+                },
+                fields: Unit,
+            },
+        ],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 63,
+        },
+    },
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 68,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "data",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 73,
+                        byte_length: 4,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Data",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 79,
+                            byte_length: 4,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Match {
+                    subject: Identifier {
+                        value: "data",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 95,
+                            byte_length: 4,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Data.Int",
+                                fields: [
+                                    Literal {
+                                        literal: Integer {
+                                            value: 0,
+                                            text: None,
+                                        },
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 115,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                ],
+                                rest: false,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 106,
+                                    byte_length: 11,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 126,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "Zero",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 132,
+                                            byte_length: 6,
+                                        },
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 126,
+                                    byte_length: 13,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Data.Int",
+                                fields: [
+                                    Identifier {
+                                        identifier: "n",
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 154,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                ],
+                                rest: false,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 145,
+                                    byte_length: 11,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 165,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "Number",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 171,
+                                            byte_length: 8,
+                                        },
+                                    },
+                                    Identifier {
+                                        value: "n",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 181,
+                                            byte_length: 1,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 165,
+                                    byte_length: 18,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Data.Pair",
+                                fields: [
+                                    Tuple {
+                                        elements: [
+                                            Literal {
+                                                literal: Integer {
+                                                    value: 0,
+                                                    text: None,
+                                                },
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 200,
+                                                    byte_length: 1,
+                                                },
+                                            },
+                                            Identifier {
+                                                identifier: "y",
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 203,
+                                                    byte_length: 1,
+                                                },
+                                            },
+                                        ],
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 199,
+                                            byte_length: 6,
+                                        },
+                                    },
+                                ],
+                                rest: false,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 189,
+                                    byte_length: 17,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 209,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "Pair on Y axis",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 215,
+                                            byte_length: 16,
+                                        },
+                                    },
+                                    Identifier {
+                                        value: "y",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 233,
+                                            byte_length: 1,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 209,
+                                    byte_length: 26,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Data.Pair",
+                                fields: [
+                                    WildCard {
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 251,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                ],
+                                rest: false,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 241,
+                                    byte_length: 12,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 261,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "Some pair",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 267,
+                                            byte_length: 11,
+                                        },
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 261,
+                                    byte_length: 18,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Data.Text",
+                                fields: [
+                                    Literal {
+                                        literal: String(
+                                            "end",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 295,
+                                            byte_length: 5,
+                                        },
+                                    },
+                                ],
+                                rest: false,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 285,
+                                    byte_length: 16,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 305,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "End marker",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 311,
+                                            byte_length: 12,
+                                        },
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 305,
+                                    byte_length: 19,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Data.Text",
+                                fields: [
+                                    WildCard {
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 340,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                ],
+                                rest: false,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 330,
+                                    byte_length: 12,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 350,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "Some text",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 356,
+                                            byte_length: 11,
+                                        },
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 350,
+                                    byte_length: 18,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: EnumVariant {
+                                identifier: "Data.Nothing",
+                                fields: [],
+                                rest: false,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 374,
+                                    byte_length: 12,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 394,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "Nothing",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 400,
+                                            byte_length: 9,
+                                        },
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 394,
+                                    byte_length: 16,
+                                },
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 89,
+                        byte_length: 326,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 85,
+                byte_length: 332,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 65,
+            byte_length: 352,
+        },
+    },
+]

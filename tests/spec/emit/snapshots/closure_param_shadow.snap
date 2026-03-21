@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() -> int {\n  let f = |x: int| -> int {\n    let x = x + 10\n    x\n  }\n  f(1)\n}\n"
+---
+package main
+
+func test() int {
+	f := func(x int) int {
+		return x + 10
+	}
+	return f(1)
+}

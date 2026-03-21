@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] `Result` is silently discarded
+   ╭─[test.lis:7:3]
+ 6 │ fn do_work() {
+ 7 │   get_result()
+   ·   ──────┬─────
+   ·         ╰── failure will go unnoticed
+ 8 │ }
+   ╰────
+  help: Handle this `Result` with `?` or `match`, explicitly discard it with `let _ = ...`, or return it by adding `-> Result<int, string>` to the function signature · code: [lint.unused_result]

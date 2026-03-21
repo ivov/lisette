@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn start() -> int { 0 }\nfn items() -> Slice<int> { [1, 2, 3] }\n\nfn main() {\n  let end = if true { 2 } else { 3 }\n  let s = items()[start()..end]\n  let _ = s\n}\n"
+---
+package main
+
+func start() int {
+	return 0
+}
+
+func items() []int {
+	return []int{1, 2, 3}
+}
+
+func main() {
+	var end int
+	if true {
+		end = 2
+	} else {
+		end = 3
+	}
+	_ = items()[start():end:end]
+}

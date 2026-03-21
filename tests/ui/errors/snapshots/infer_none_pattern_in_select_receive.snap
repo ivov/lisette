@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid select case
+   ╭─[test.lis:5:9]
+ 4 │   select {
+ 5 │     let None = ch.receive() => 0,
+   ·         ──┬─
+   ·           ╰── expected match
+ 6 │     _ => 1,
+   ╰────
+  help: To detect channel close, use `match ch.receive() { Some(v) => ..., None => ... }` · code: [infer.none_pattern_in_select_receive]

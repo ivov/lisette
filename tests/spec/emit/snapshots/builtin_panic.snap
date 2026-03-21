@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test() {\n  panic(\"something went wrong\")\n}\n"
+---
+package main
+
+func test() {
+	panic("something went wrong")
+}

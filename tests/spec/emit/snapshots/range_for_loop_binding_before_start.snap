@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn main() {\n  let start = 0\n  for start in start..3 {\n    let _ = start\n  }\n}\n"
+---
+package main
+
+func main() {
+	start := 0
+	for start_1 := start; start_1 < 3; start_1++ {
+		_ = start_1
+	}
+}

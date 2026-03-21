@@ -1,0 +1,44 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \ntype IntSlice = Slice<int>;\n"
+---
+[
+    TypeAlias {
+        doc: None,
+        name: "IntSlice",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 8,
+        },
+        generics: [],
+        annotation: Constructor {
+            name: "Slice",
+            params: [
+                Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 23,
+                        byte_length: 3,
+                    },
+                },
+            ],
+            span: Span {
+                file_id: 0,
+                byte_offset: 17,
+                byte_length: 10,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 26,
+        },
+    },
+]

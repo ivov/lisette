@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  let x = 1 // trailing comment\n}"
+---
+fn test() {
+  let x = 1 // trailing comment
+}

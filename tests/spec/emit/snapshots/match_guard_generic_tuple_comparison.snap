@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct W<T>(T)\n\nfn test() -> int {\n  let w = W(1)\n  match w {\n    x if x == W(2) => 0,\n    _ => 1,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type W[T any] struct {
+	F0 T
+}
+
+func (w W[T]) String() string {
+	return fmt.Sprintf("W(%v)", w.F0)
+}
+
+func test() int {
+	w := W[int]{F0: 1}
+	{
+		x := w
+		if x == (W[int]{F0: 2}) {
+			return 0
+		}
+	}
+	return 1
+}

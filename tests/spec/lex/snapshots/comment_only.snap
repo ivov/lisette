@@ -1,0 +1,31 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: // This is just a comment"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Comment,
+            text: "// This is just a comment",
+            byte_offset: 0,
+            byte_length: 25,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 25,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [
+            (
+                0,
+                25,
+            ),
+        ],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

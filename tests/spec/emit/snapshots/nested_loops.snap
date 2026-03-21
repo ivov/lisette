@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(matrix: Slice<Slice<int>>) -> int {\n  let mut count = 0;\n  for row in matrix {\n    for item in row {\n      count = count + 1;\n    };\n  };\n  count\n}\n"
+---
+package main
+
+func test(matrix [][]int) int {
+	count := 0
+	for _, row := range matrix {
+		for range row {
+			count++
+		}
+	}
+	return count
+}

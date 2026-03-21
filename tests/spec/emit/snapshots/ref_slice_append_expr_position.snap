@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn main() {\n  let mut s = [1]\n  let r = &s\n  let _ = r.*.append(2)\n}\n"
+---
+package main
+
+func main() {
+	s := []int{1}
+	r := &s
+	_ = append(*r, 2)
+}

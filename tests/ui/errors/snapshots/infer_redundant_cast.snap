@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [warning] Redundant cast
+   ╭─[test.lis:4:3]
+ 3 │   let x: int = 42;
+ 4 │   x as int
+   ·   ────┬───
+   ·       ╰── casting `int` to itself has no effect
+ 5 │ }
+   ╰────
+  help: Remove the unnecessary cast · code: [infer.redundant_cast]

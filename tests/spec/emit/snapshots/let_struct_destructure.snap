@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct Point { x: int, y: int }\n\nfn test() -> int {\n  let p = Point { x: 10, y: 20 };\n  let Point { x, y } = p;\n  x + y\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func test() int {
+	p := Point{
+		x: 10,
+		y: 20,
+	}
+	x := p.x
+	y := p.y
+	return x + y
+}

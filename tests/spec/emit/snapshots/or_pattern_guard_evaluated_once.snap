@@ -1,0 +1,55 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nenum Res { Ok(int), Err(int) }\n\nfn test(r: Res, threshold: int) -> int {\n  match r {\n    Ok(x) | Err(x) if x > threshold => 100,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeResOk(arg0 int) Res {
+	return Res{Tag: ResOk, Ok: arg0}
+}
+
+func MakeResErr(arg0 int) Res {
+	return Res{Tag: ResErr, Err: arg0}
+}
+
+type ResTag int
+
+const (
+	ResOk ResTag = iota
+	ResErr
+)
+
+type Res struct {
+	Tag ResTag
+	Ok  int
+	Err int
+}
+
+func (r Res) String() string {
+	switch r.Tag {
+	case ResOk:
+		return fmt.Sprintf("Res.Ok(%v)", r.Ok)
+	case ResErr:
+		return fmt.Sprintf("Res.Err(%v)", r.Err)
+	default:
+		return fmt.Sprintf("Res(%d)", r.Tag)
+	}
+}
+
+func test(r Res, threshold int) int {
+	if r.Tag == ResOk {
+		x := r.Ok
+		if x > threshold {
+			return 100
+		}
+	}
+	if r.Tag == ResErr {
+		x := r.Err
+		if x > threshold {
+			return 100
+		}
+	}
+	return 0
+}

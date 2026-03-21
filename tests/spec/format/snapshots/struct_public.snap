@@ -1,0 +1,5 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: pub struct Point { x: int, y: int }"
+---
+pub struct Point { x: int, y: int }

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `self`
+   ╭─[test.lis:6:16]
+ 5 │   fn new(x: int, y: int) -> Point {
+ 6 │     Point { x: self.x, y: y }
+   ·                ──┬─
+   ·                  ╰── `self` is not available here
+ 7 │   }
+   ╰────
+  help: Add a `self` parameter to the method if you need an instance method · code: [resolve.self_in_static_method]

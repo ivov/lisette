@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn make_pair() -> (fn() -> int, fn()) {\n  let get = || -> int { 42 };\n  let inc = || { };\n  (get, inc)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func make_pair() lisette.Tuple2[func() int, func()] {
+	get := func() int {
+		return 42
+	}
+	inc := func() {
+	}
+	return lisette.MakeTuple2(get, inc)
+}

@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(opt: Option<int>) {\n  loop {\n    let Some(x) = opt else { break; };\n    let _ = x;\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(opt lisette.Option[int]) {
+	for {
+		if opt.Tag != lisette.OptionSome {
+			break
+		}
+		_ = opt.SomeVal
+	}
+}

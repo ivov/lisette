@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn noop() {}\nfn take(_x: ()) {}\n\nfn test() {\n  take(noop())\n}\n"
+---
+package main
+
+func noop() {}
+
+func take(_ struct{}) {}
+
+func test() {
+	noop()
+	take(struct{}{})
+}

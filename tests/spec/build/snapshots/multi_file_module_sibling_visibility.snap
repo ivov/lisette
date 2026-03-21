@@ -1,0 +1,32 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+func main() {
+	p := Point_new(3.0, 4.0)
+	_ = p.x + p.y
+}
+
+
+// === point.go ===
+package main
+
+import "fmt"
+
+type Point struct {
+	x float64
+	y float64
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func Point_new(x, y float64) Point {
+	return Point{
+		x: x,
+		y: y,
+	}
+}

@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Point(int, int)\n\nfn test(p: Option<Point>) -> int {\n  if let Some(Point(x, y)) = p {\n    x + y\n  } else {\n    0\n  }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Point struct {
+	F0 int
+	F1 int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point(%v, %v)", p.F0, p.F1)
+}
+
+func test(p lisette.Option[Point]) int {
+	if p.Tag == lisette.OptionSome {
+		x := p.SomeVal.F0
+		y := p.SomeVal.F1
+		return x + y
+	}
+	return 0
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Private type `PrivateData` in public API
+   ╭─[test.lis:6:28]
+ 5 │ 
+ 6 │ pub fn leaky_function() -> PrivateData {
+   ·                            ─────┬─────
+   ·                                 ╰── private
+ 7 │   PrivateData { _value: 42 }
+   ╰────
+  help: `PrivateData` is private but exposed by `leaky_function`, which is public. Add `pub` to the private type or remove it from the public API · code: [lint.internal_type_leak]

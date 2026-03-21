@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nstruct Wrapper {\n  opt: Option<int>,\n}\n\nfn get_opt(b: bool) -> Option<int> {\n  if b { Some(42) } else { None }\n}\n\nfn test() {\n  let w = Wrapper { opt: get_opt(true) };\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Wrapper struct {
+	opt lisette.Option[int]
+}
+
+func (w Wrapper) String() string {
+	return fmt.Sprintf("Wrapper { opt: %v }", w.opt)
+}
+
+func get_opt(b bool) lisette.Option[int] {
+	if b {
+		return lisette.MakeOptionSome[int](42)
+	}
+	return lisette.MakeOptionNone[int]()
+}
+
+func test() {
+	_ = Wrapper{opt: get_opt(true)}
+}

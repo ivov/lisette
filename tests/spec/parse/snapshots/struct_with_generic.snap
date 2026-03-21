@@ -1,0 +1,59 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct Container<T> {\n  value: T,\n}\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Container",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 9,
+        },
+        generics: [
+            Generic {
+                name: "T",
+                bounds: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 18,
+                    byte_length: 1,
+                },
+            },
+        ],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "value",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 25,
+                    byte_length: 5,
+                },
+                annotation: Constructor {
+                    name: "T",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 32,
+                        byte_length: 1,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 35,
+        },
+    },
+]

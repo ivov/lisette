@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct W<T>(T)\n\nfn test() {\n  let mut i = 0\n  while W(1).0 == 1 && i < 1 {\n    i = i + 1\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type W[T any] struct {
+	F0 T
+}
+
+func (w W[T]) String() string {
+	return fmt.Sprintf("W(%v)", w.F0)
+}
+
+func test() {
+	i := 0
+	for (W[int]{F0: 1}).F0 == 1 && i < 1 {
+		i++
+	}
+}

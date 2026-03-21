@@ -1,0 +1,12 @@
+struct Point {
+  x: int,
+  y: int,
+}
+
+struct Config {
+  pub name: string,
+  secret: string,
+  pub enabled: bool,
+}
+
+struct Empty {}

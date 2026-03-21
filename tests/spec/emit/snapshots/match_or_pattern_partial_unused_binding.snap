@@ -1,0 +1,68 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nenum E { A((int, int)), B((int, int)), C }\nfn eval(e: E) -> int {\n  match e {\n    E.A((x, y)) | E.B((x, y)) => x,\n    _ => 0,\n  }\n}\nfn test() {\n  if eval(E.B((4, 9))) != 4 { panic(\"bad\") }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func MakeEA(arg0 lisette.Tuple2[int, int]) E {
+	return E{Tag: EA, A: arg0}
+}
+
+func MakeEB(arg0 lisette.Tuple2[int, int]) E {
+	return E{Tag: EB, B: arg0}
+}
+
+func MakeEC() E {
+	return E{Tag: EC}
+}
+
+type ETag int
+
+const (
+	EA ETag = iota
+	EB
+	EC
+)
+
+type E struct {
+	Tag ETag
+	A   lisette.Tuple2[int, int]
+	B   lisette.Tuple2[int, int]
+}
+
+func (e E) String() string {
+	switch e.Tag {
+	case EA:
+		return fmt.Sprintf("E.A(%v)", e.A)
+	case EB:
+		return fmt.Sprintf("E.B(%v)", e.B)
+	case EC:
+		return "E.C"
+	default:
+		return fmt.Sprintf("E(%d)", e.Tag)
+	}
+}
+
+func eval(e E) int {
+	switch e.Tag {
+	case EA:
+		x := e.A.First
+		return x
+	case EB:
+		x := e.B.First
+		return x
+	default:
+		return 0
+	}
+}
+
+func test() {
+	if eval(MakeEB(lisette.MakeTuple2(4, 9))) != 4 {
+		panic("bad")
+	}
+}

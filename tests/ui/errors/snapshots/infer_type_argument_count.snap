@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Wrong type argument count
+   ╭─[test.lis:3:16]
+ 2 │ fn test() {
+ 3 │   let x: Option<int, string> = Some(42);
+   ·                ──────┬──────
+   ·                      ╰── expected `<T>`, found `<int, string>`
+ 4 │ }
+   ╰────
+  help: This type expects 1 type parameter but received 2 type parameters · code: [infer.type_arg_count_mismatch]

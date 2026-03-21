@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let _ = match { { return 1 } } {\n    1 => 1,\n    _ => 2,\n  }\n  3\n}\n"
+---
+package main
+
+func test() int {
+	var tmp_1 int
+	{
+		return 1
+	}
+	_ = tmp_1
+	return 3
+}

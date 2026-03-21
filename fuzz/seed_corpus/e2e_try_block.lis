@@ -1,0 +1,27 @@
+fn risky_ok() -> Result<int, string> { Ok(42) }
+fn risky_err() -> Result<int, string> { Err("error") }
+fn maybe_some() -> Option<int> { Some(10) }
+fn maybe_none() -> Option<int> { None }
+
+fn test_try_block() -> int {
+  let result = try {
+    let a = risky_ok()?;
+    let b = risky_ok()?;
+    a + b
+  };
+  match result {
+    Ok(x) => x,
+    Err(_) => 0,
+  }
+}
+
+fn test_try_option() -> int {
+  let opt = try {
+    let x = maybe_some()?;
+    x + 5
+  };
+  match opt {
+    Some(v) => v,
+    None => 0,
+  }
+}

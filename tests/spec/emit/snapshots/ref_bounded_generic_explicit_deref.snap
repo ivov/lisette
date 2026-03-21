@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface Greetable {\n  fn greet(self) -> string\n}\n\nstruct Person { name: string }\n\nimpl Person {\n  fn greet(self) -> string { f\"Hello, {self.name}\" }\n}\n\nfn greet_ref<T: Greetable>(item: Ref<T>) -> string {\n  item.*.greet()\n}\n\nfn test() {\n  let p = Person { name: \"Alice\" }\n  greet_ref(&p)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Greetable interface {
+	greet() string
+}
+
+type Person struct {
+	name string
+}
+
+func (p Person) String() string {
+	return fmt.Sprintf("Person { name: %v }", p.name)
+}
+
+func (p Person) greet() string {
+	return fmt.Sprintf("Hello, %v", p.name)
+}
+
+func greet_ref[T Greetable](item T) string {
+	return item.greet()
+}
+
+func test() {
+	p := Person{name: "Alice"}
+	greet_ref(&p)
+}

@@ -1,0 +1,29 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nimport router \"go:github.com/gorilla/mux\"\n"
+---
+[
+    ModuleImport {
+        name: "go:github.com/gorilla/mux",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 15,
+            byte_length: 27,
+        },
+        alias: Some(
+            Named(
+                "router",
+                Span {
+                    file_id: 0,
+                    byte_offset: 8,
+                    byte_length: 6,
+                },
+            ),
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 41,
+        },
+    },
+]

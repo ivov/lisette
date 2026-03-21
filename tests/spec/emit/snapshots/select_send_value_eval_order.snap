@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn make_ch() -> Channel<int> { Channel.new<int>() }\n\nfn main() {\n  let to_send = if true { 1 } else { 0 }\n  select {\n    make_ch().send(to_send) => { let _ = 0; },\n  }\n}\n"
+---
+package main
+
+func make_ch() chan int {
+	return make(chan int)
+}
+
+func main() {
+	var to_send int
+	if true {
+		to_send = 1
+	} else {
+		to_send = 0
+	}
+	select {
+	case make_ch() <- to_send:
+		_ = 0
+	}
+}

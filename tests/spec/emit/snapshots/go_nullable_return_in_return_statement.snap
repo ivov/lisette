@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nimport \"go:flag\"\n\nfn get(name: string) -> Option<Ref<flag.Flag>> {\n  flag.Lookup(name)\n}\n\nfn main() {\n  let _ = get(\"x\");\n}\n"
+---
+package main
+
+import (
+	"flag"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func get(name string) lisette.Option[*flag.Flag] {
+	raw_1 := flag.Lookup(name)
+	if raw_1 != nil {
+		return lisette.MakeOptionSome[*flag.Flag](raw_1)
+	}
+	return lisette.MakeOptionNone[*flag.Flag]()
+}
+
+func main() {
+	_ = get("x")
+}

@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: pub enum ParameterSizes: int { L1024N160 = 0, L2048N224 = 1, L2048N256 = 2, L3072N256 = 3 }"
+---
+pub enum ParameterSizes: int {
+  L1024N160 = 0,
+  L2048N224 = 1,
+  L2048N256 = 2,
+  L3072N256 = 3,
+}

@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let x = {\n    let a = 10;\n    let b = 20;\n    a + b\n  };\n  x\n}\n"
+---
+package main
+
+func test() int {
+	a := 10
+	b := 20
+	return a + b
+}

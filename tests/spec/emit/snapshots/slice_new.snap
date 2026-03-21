@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test() -> Slice<int> {\n  Slice.new<int>()\n}\n"
+---
+package main
+
+func test() []int {
+	return []int{}
+}

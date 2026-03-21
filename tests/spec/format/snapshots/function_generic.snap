@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn identity<T>(x: T) -> T { x }"
+---
+fn identity<T>(x: T) -> T {
+  x
+}

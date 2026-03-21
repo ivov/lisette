@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() -> int {\n  let mut total = 0;\n  for range in [1, 2, 3] {\n    total += range;\n  }\n  total\n}\n"
+---
+package main
+
+func test() int {
+	total := 0
+	for _, range_ := range []int{1, 2, 3} {
+		total += range_
+	}
+	return total
+}

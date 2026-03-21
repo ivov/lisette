@@ -1,0 +1,136 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() {\n  let Point { x, y: y_coord }: Point = get_point();\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Struct {
+                            identifier: "Point",
+                            fields: [
+                                StructFieldPattern {
+                                    name: "x",
+                                    value: Identifier {
+                                        identifier: "x",
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 27,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                },
+                                StructFieldPattern {
+                                    name: "y",
+                                    value: Identifier {
+                                        identifier: "y_coord",
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 33,
+                                            byte_length: 7,
+                                        },
+                                    },
+                                },
+                            ],
+                            rest: false,
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 19,
+                                byte_length: 23,
+                            },
+                        },
+                        annotation: Some(
+                            Constructor {
+                                name: "Point",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 44,
+                                    byte_length: 5,
+                                },
+                            },
+                        ),
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: Call {
+                        expression: Identifier {
+                            value: "get_point",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 52,
+                                byte_length: 9,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                        args: [],
+                        type_args: [],
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 52,
+                            byte_length: 11,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 48,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 55,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 65,
+        },
+    },
+]

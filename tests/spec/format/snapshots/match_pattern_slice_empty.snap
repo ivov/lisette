@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { match items { [] => \"empty\", _ => \"not empty\" } }"
+---
+fn test() {
+  match items {
+    [] => "empty",
+    _ => "not empty",
+  }
+}

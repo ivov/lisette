@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Wrapper<T> {\n  value: T,\n}\n\nimpl Wrapper<string> {\n  fn greet(self) -> string {\n    \"hello\"\n  }\n}\n\nfn test() -> string {\n  let w = Wrapper { value: \"world\" };\n  w.greet()\n}\n"
+---
+package main
+
+import "fmt"
+
+type Wrapper[T any] struct {
+	value T
+}
+
+func (w Wrapper[T]) String() string {
+	return fmt.Sprintf("Wrapper { value: %v }", w.value)
+}
+
+func Wrapper_greet(_ Wrapper[string]) string {
+	return "hello"
+}
+
+func test() string {
+	w := Wrapper[string]{value: "world"}
+	return Wrapper_greet(w)
+}

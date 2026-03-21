@@ -1,0 +1,50 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: [first, ..]"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: LeftSquareBracket,
+            text: "[",
+            byte_offset: 0,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "first",
+            byte_offset: 1,
+            byte_length: 5,
+        },
+        Token {
+            kind: Comma,
+            text: ",",
+            byte_offset: 6,
+            byte_length: 1,
+        },
+        Token {
+            kind: DotDot,
+            text: "..",
+            byte_offset: 8,
+            byte_length: 2,
+        },
+        Token {
+            kind: RightSquareBracket,
+            text: "]",
+            byte_offset: 10,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 11,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

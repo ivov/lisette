@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(dst: Slice<int>, src: Slice<int>) {
+ 3 │   copy(dst, src);
+   ·   ──┬─
+   ·     ╰── name not found in scope
+ 4 │ }
+   ╰────
+  help: Lisette has no `copy` builtin. Use the `.copy_from()` method instead, e.g. `dst.copy_from(src)` · code: [resolve.name_not_found]

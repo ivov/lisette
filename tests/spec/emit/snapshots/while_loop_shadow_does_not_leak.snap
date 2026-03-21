@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> string {\n  let result = \"final\"\n  let mut i = 0\n  while i < 3 {\n    let result = i * 10\n    let _ = result\n    i += 1\n  }\n  result\n}\n"
+---
+package main
+
+func test() string {
+	result := "final"
+	i := 0
+	for i < 3 {
+		result := i * 10
+		_ = result
+		i++
+	}
+	return result
+}

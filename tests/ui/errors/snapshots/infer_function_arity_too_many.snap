@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Wrong argument count
+   ╭─[test.lis:4:3]
+ 3 │   let add = |x: int, y: int| -> int { x + y };
+ 4 │   add(5, 10, 15)
+   ·   ───────┬──────
+   ·          ╰── expected `(int, int)`, found `(int, int, int)`
+ 5 │ }
+   ╰────
+  help: This function expects 2 arguments but received 3 arguments · code: [infer.arg_count_mismatch]

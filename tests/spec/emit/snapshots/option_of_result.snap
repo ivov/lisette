@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test() -> Option<Result<int, string>> {\n  Some(Ok(42))\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Option[lisette.Result[int, string]] {
+	return lisette.MakeOptionSome[lisette.Result[int, string]](lisette.MakeResultOk[int, string](42))
+}

@@ -1,0 +1,62 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \ntype ID = int;\ntype ProductID = ID;\n"
+---
+[
+    TypeAlias {
+        doc: None,
+        name: "ID",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 2,
+        },
+        generics: [],
+        annotation: Constructor {
+            name: "int",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 3,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 13,
+        },
+    },
+    TypeAlias {
+        doc: None,
+        name: "ProductID",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 21,
+            byte_length: 9,
+        },
+        generics: [],
+        annotation: Constructor {
+            name: "ID",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 33,
+                byte_length: 2,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 16,
+            byte_length: 19,
+        },
+    },
+]

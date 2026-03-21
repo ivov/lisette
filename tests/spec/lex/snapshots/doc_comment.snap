@@ -1,0 +1,31 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: /// This is a doc comment"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: DocComment,
+            text: "This is a doc comment",
+            byte_offset: 0,
+            byte_length: 25,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 25,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [
+            (
+                0,
+                25,
+            ),
+        ],
+        blank_lines: [],
+    },
+}

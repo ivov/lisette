@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn noop() {}\n\nfn test() {\n  let _ = loop {\n    break noop()\n  }\n}\n"
+---
+package main
+
+func noop() {}
+
+func test() {
+	var tmp_1 struct{}
+	for {
+		noop()
+		tmp_1 = struct{}{}
+		break
+	}
+	_ = tmp_1
+}

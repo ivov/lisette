@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() {\n  let ch = Channel.new<int>();\n  select {\n    ch.send(42) => {},\n    _ => {},\n  }\n}\n"
+---
+package main
+
+func test() {
+	ch := make(chan int)
+	select {
+	case ch <- 42:
+	default:
+	}
+}

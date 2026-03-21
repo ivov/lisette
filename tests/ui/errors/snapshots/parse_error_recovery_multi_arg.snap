@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unsupported operator
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   foo(a, b^c, d);
+   ·           ┬
+   ·           ╰── `^` is not a supported binary operator
+ 4 │ }
+   ╰────
+  help: Lisette does not support bitwise operators · code: [parse.unsupported_operator]

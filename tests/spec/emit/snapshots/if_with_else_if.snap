@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(x: int) -> int {\n  if x > 10 {\n    100\n  } else if x > 5 {\n    50\n  } else {\n    10\n  }\n}\n"
+---
+package main
+
+func test(x int) int {
+	if x > 10 {
+		return 100
+	} else if x > 5 {
+		return 50
+	}
+	return 10
+}

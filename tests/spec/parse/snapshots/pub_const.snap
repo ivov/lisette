@@ -1,0 +1,49 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \npub const MAX: int = 100;\n"
+---
+[
+    Const {
+        doc: None,
+        identifier: "MAX",
+        identifier_span: Span {
+            file_id: 0,
+            byte_offset: 11,
+            byte_length: 3,
+        },
+        annotation: Some(
+            Constructor {
+                name: "int",
+                params: [],
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 16,
+                    byte_length: 3,
+                },
+            },
+        ),
+        expression: Literal {
+            literal: Integer {
+                value: 100,
+                text: None,
+            },
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 22,
+                byte_length: 3,
+            },
+        },
+        visibility: Public,
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 5,
+            byte_length: 20,
+        },
+    },
+]

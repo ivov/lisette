@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> bool {\n  let n = 5;\n  n < -3\n}\n"
+---
+package main
+
+func test() bool {
+	n := 5
+	return n < -3
+}

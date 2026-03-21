@@ -1,0 +1,56 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nenum Color { Red, Green, Blue }\n\nfn test(c: Ref<Color>) -> int {\n  match c.* {\n    Red => 1,\n    Green => 2,\n    Blue => 3,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen() Color {
+	return Color{Tag: ColorGreen}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type ColorTag int
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) String() string {
+	switch c.Tag {
+	case ColorRed:
+		return "Color.Red"
+	case ColorGreen:
+		return "Color.Green"
+	case ColorBlue:
+		return "Color.Blue"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+func test(c *Color) int {
+	subject_1 := *c
+	switch subject_1.Tag {
+	case ColorRed:
+		return 1
+	case ColorGreen:
+		return 2
+	default:
+		return 3
+	}
+}

@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn parse(s: string) -> Result<int, string> {\n  if s == \"42\" { Ok(42) } else { Err(\"bad\") }\n}\n\nfn test() -> int {\n  let Ok(x) = parse(\"42\") else { return -1; };\n  x\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func parse(s string) lisette.Result[int, string] {
+	if s == "42" {
+		return lisette.MakeResultOk[int, string](42)
+	}
+	return lisette.MakeResultErr[int, string]("bad")
+}
+
+func test() int {
+	subject_1 := parse("42")
+	if subject_1.Tag != lisette.ResultOk {
+		return -1
+	}
+	return subject_1.OkVal
+}

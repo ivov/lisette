@@ -1,0 +1,6 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: // leading comment\nfn foo() {}"
+---
+// leading comment
+fn foo() {}

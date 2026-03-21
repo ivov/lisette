@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Struct `Person` is missing fields
+    ╭─[test.lis:9:11]
+  8 │ fn test() {
+  9 │   let p = Person {
+    ·           ───┬──
+    ·              ╰── missing fields: age, email
+ 10 │     name: "Alice",
+    ╰────
+  help: Initialize all fields in this struct literal · code: [infer.missing_struct_fields]

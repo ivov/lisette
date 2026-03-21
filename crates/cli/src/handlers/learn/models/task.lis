@@ -1,0 +1,37 @@
+#[json]
+pub struct Task {
+  pub id: int,
+  pub title: string,
+  pub priority: Priority,
+  pub status: Status,
+  pub tags: Slice<string>,
+}
+
+impl Task {
+  pub fn new(id: int, title: string, priority: Priority, tags: Slice<string>) -> Task {
+    Task { id, title, priority, status: Status.Pending, tags }
+  }
+
+  pub fn display(self) -> string {
+    let icon = match self.status {
+      Status.Pending => "○",
+      Status.Done => "●",
+      Status.Cancelled(_) => "✗",
+    }
+    let prio = match self.priority {
+      Priority.High => " !!",
+      Priority.Medium => " !",
+      Priority.Low => "",
+    }
+    let tag_str = if self.tags.is_empty() {
+      ""
+    } else {
+      f" [{self.tags.join(", ")}]"
+    }
+    let status_str = match self.status {
+      Status.Cancelled(_) => f" ({self.status.label()})",
+      _ => "",
+    }
+    f"  {icon} #{self.id} {self.title}{prio}{tag_str}{status_str}"
+  }
+}

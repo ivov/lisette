@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn test() -> int {\n  let x = 10;\n  let x = \"now a string\";\n  let x = x.length();\n  x\n}\n"
+---
+package main
+
+func test() int {
+	_ = 10
+	x := "now a string"
+	return len(x)
+}

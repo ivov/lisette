@@ -1,0 +1,45 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: \"hello!@#$%^&*()_+{}|:<>?~`-=[]\\;',./\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: String,
+            text: "\"hello!@#$%^&*()_+{}|:<>?~`-=[]\\;',./\"",
+            byte_offset: 0,
+            byte_length: 38,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 38,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Invalid escape sequence",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 0,
+                        byte_length: 2,
+                    },
+                    "`\\;` is not a valid escape",
+                ),
+            ],
+            help: Some(
+                "Valid escapes are `\\n`, `\\t`, `\\r`, `\\0`, `\\\\`, `\\'`, and `\\xHH` (hex)",
+            ),
+            note: None,
+            code: "lex.invalid_escape_sequence",
+        },
+    ],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

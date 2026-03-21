@@ -1,0 +1,14 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { [first_element, second_element, third_element, fourth_element, fifth_element, sixth_element] }"
+---
+fn test() {
+  [
+    first_element,
+    second_element,
+    third_element,
+    fourth_element,
+    fifth_element,
+    sixth_element,
+  ]
+}

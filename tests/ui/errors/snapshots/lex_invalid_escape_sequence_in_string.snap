@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid escape sequence
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let s = "hello\!world"
+   ·           ─┬
+   ·            ╰── `\!` is not a valid escape
+ 4 │ }
+   ╰────
+  help: Valid escapes are `\n`, `\t`, `\r`, `\0`, `\\`, `\'`, and `\xHH` (hex) · code: [lex.invalid_escape_sequence]

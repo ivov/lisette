@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Node {\n  pub value: int,\n  pub next: Option<int>,\n}\n\nimpl Node {\n  fn sum(self) -> int {\n    match self.next {\n      Some(n) => self.value + n,\n      None => self.value,\n    }\n  }\n}\n\nfn test() -> int {\n  let node = Node { value: 10, next: Some(5) }\n  node.sum()\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Node struct {
+	Value int
+	Next  lisette.Option[int]
+}
+
+func (n Node) String() string {
+	return fmt.Sprintf("Node { value: %v, next: %v }", n.Value, n.Next)
+}
+
+func (n Node) sum() int {
+	subject_1 := n.Next
+	if subject_1.Tag == lisette.OptionSome {
+		n_2 := subject_1.SomeVal
+		return n.Value + n_2
+	}
+	return n.Value
+}
+
+func test() int {
+	node := Node{
+		Value: 10,
+		Next:  lisette.MakeOptionSome(5),
+	}
+	return node.sum()
+}

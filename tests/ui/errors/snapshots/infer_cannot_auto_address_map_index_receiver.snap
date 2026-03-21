@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Expression not modifiable
+    ╭─[test.lis:12:4]
+ 11 │   let m = Map.new<string, Foo>();
+ 12 │   m["key"].increment()
+    ·    ────────┬────────
+    ·            ╰── modifies its receiver
+ 13 │ }
+    ╰────
+  help: Assign the map lookup to a variable first, then call the method. The receiver of `increment` is `Ref<Foo>`, not `Foo` · code: [infer.cannot_auto_address_receiver]

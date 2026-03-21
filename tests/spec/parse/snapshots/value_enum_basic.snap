@@ -1,0 +1,84 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum Weekday {\n  Sunday = 0,\n  Monday = 1,\n  Tuesday = 2,\n}\n"
+---
+[
+    ValueEnum {
+        doc: None,
+        name: "Weekday",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 7,
+        },
+        underlying_ty: None,
+        variants: [
+            ValueEnumVariant {
+                doc: None,
+                name: "Sunday",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 18,
+                    byte_length: 6,
+                },
+                value: Integer {
+                    value: 0,
+                    text: Some(
+                        "0",
+                    ),
+                },
+                value_span: Span {
+                    file_id: 0,
+                    byte_offset: 25,
+                    byte_length: 3,
+                },
+            },
+            ValueEnumVariant {
+                doc: None,
+                name: "Monday",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 32,
+                    byte_length: 6,
+                },
+                value: Integer {
+                    value: 1,
+                    text: Some(
+                        "1",
+                    ),
+                },
+                value_span: Span {
+                    file_id: 0,
+                    byte_offset: 39,
+                    byte_length: 3,
+                },
+            },
+            ValueEnumVariant {
+                doc: None,
+                name: "Tuesday",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 46,
+                    byte_length: 7,
+                },
+                value: Integer {
+                    value: 2,
+                    text: Some(
+                        "2",
+                    ),
+                },
+                value_span: Span {
+                    file_id: 0,
+                    byte_offset: 54,
+                    byte_length: 3,
+                },
+            },
+        ],
+        visibility: Public,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 59,
+        },
+    },
+]

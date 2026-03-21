@@ -1,0 +1,37 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct S { x: int }\n\nfn get() -> Ref<S> {\n  let _ = fmt.Println(\"get\")\n  let mut s = S { x: 1 }\n  &s\n}\n\nfn arg() -> int { let _ = fmt.Println(\"arg\"); 2 }\n\nfn main() {\n  get().x = if arg() > 0 { 3 } else { 4 }\n}\n"
+---
+package main
+
+import "fmt"
+
+type S struct {
+	x int
+}
+
+func (s S) String() string {
+	return fmt.Sprintf("S { x: %v }", s.x)
+}
+
+func get() *S {
+	fmt.Println("get")
+	s := S{x: 1}
+	return &s
+}
+
+func arg() int {
+	fmt.Println("arg")
+	return 2
+}
+
+func main() {
+	ref_2 := get()
+	var tmp_1 int
+	if arg() > 0 {
+		tmp_1 = 3
+	} else {
+		tmp_1 = 4
+	}
+	ref_2.x = tmp_1
+}

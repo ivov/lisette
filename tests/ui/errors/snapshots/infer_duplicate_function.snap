@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Duplicate function
+   ╭─[test.lis:3:4]
+ 2 │ fn greet() -> string { "hello" }
+ 3 │ fn greet() -> string { "world" }
+   ·    ──┬──
+   ·      ╰── already defined
+ 4 │ 
+   ╰────
+  help: `greet` is already defined in this module. Rename or remove this definition · code: [infer.duplicate_definition]

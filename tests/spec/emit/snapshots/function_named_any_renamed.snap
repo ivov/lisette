@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn any<T>(items: Slice<T>, pred: fn(T) -> bool) -> bool {\n  for item in items {\n    if pred(item) { return true }\n  }\n  false\n}\n\nfn test() -> bool {\n  any([1, 2, 3], |x| x > 2)\n}\n"
+---
+package main
+
+func any_[T any](items []T, pred func(T) bool) bool {
+	for _, item := range items {
+		if pred(item) {
+			return true
+		}
+	}
+	return false
+}
+
+func test() bool {
+	return any_([]int{1, 2, 3}, func(x int) bool {
+		return x > 2
+	})
+}

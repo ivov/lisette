@@ -1,0 +1,19 @@
+fn test(cfg: Config) {
+  let username = cfg.auth.user.name;
+}
+
+fn test2() {
+  let x_coord = get_point().x;
+}
+
+fn test3(user: User) {
+  let name = user.get_name();
+}
+
+fn test4(pair: (int, string)) {
+  let first_item = pair.0;
+  let second_item = pair.1;
+}
+
+fn test5() { let result = obj.field[i].method().nested.value; }
+fn test6() { let result = obj.method1().method2(); }

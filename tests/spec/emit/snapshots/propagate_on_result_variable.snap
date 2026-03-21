@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test() -> Result<int, string> {\n  let r: Result<int, string> = Ok(42);\n  let x = r?;\n  Ok(x + 1)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Result[int, string] {
+	r := lisette.MakeResultOk[int, string](42)
+	if r.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](r.ErrVal)
+	}
+	x := r.OkVal
+	return lisette.MakeResultOk[int, string](x + 1)
+}

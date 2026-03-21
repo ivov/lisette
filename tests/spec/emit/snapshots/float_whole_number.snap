@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() {\n  2.0\n}\n"
+---
+package main
+
+func test() {
+	_ = 2.0
+}

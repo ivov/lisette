@@ -1,0 +1,121 @@
+package convert
+
+import (
+	"go/ast"
+	"go/token"
+
+	"github.com/ivov/lisette/tools/bindgen/internal/config"
+	"github.com/ivov/lisette/tools/bindgen/internal/extract"
+	"golang.org/x/tools/go/packages"
+)
+
+type ConvertResult struct {
+	Name             string
+	Kind             extract.SymbolExportKind
+	Doc              string
+	LisetteType      string
+	Params           []FunctionParameter
+	ReturnType       string
+	Receiver         *Receiver // for methods
+	TypeParams       []string
+	Fields           []StructField     // for structs
+	InterfaceMethods []InterfaceMethod // for interfaces
+	Variants         []EnumVariant     // for enums (via iota)
+	ConstValue       string            // for constants
+	SkipReason       *SkipReason
+	IsTypeAlias      bool // true for Go type aliases (type X = Y)
+	CommaOk          bool // true when return is from (T, bool) comma-ok with nilable T
+	ArrayReturn      bool // true when Go type is [N]T but Lisette type is Slice<T>
+}
+
+type FunctionParameter struct {
+	Name    string
+	Type    string
+	Mutable bool
+}
+
+type Receiver struct {
+	Name         string
+	Type         string
+	IsPointer    bool
+	BaseTypeName string
+	TypeParams   []string // Type parameters of the receiver type (for generic types)
+}
+
+type StructField struct {
+	Name string
+	Type string
+	Doc  string
+}
+
+type InterfaceMethod struct {
+	Name        string
+	Params      []FunctionParameter
+	ReturnType  string
+	CommaOk     bool
+	ArrayReturn bool
+}
+
+type EnumVariant struct {
+	Name  string
+	Value string
+}
+
+// ExternalPkgs maps package paths to package names (e.g., "time" -> "time").
+type ExternalPkgs map[string]string
+
+type Converter struct {
+	currentPkgPath       string
+	externalPkgs         ExternalPkgs
+	pkg                  *packages.Package
+	cfg                  *config.Config
+	uniformPointerTypes  map[string]bool              // lazily computed; types with 10+ single-pointer-return methods
+	manyToOneTypes       map[string]bool              // lazily computed; return types with 10+ free functions
+	majorityPointerTypes map[string]bool              // lazily computed; types where ≥20 methods return same *T (>90%)
+	funcDeclCache        map[token.Pos]*ast.FuncDecl  // lazily built; AST function declarations by name position
+	nonNilCache          map[token.Pos]nilCacheResult // lazily built; proven non-nil results
+	crossPkgConverters   map[string]*Converter        // lazily built; cached converters for imported packages
+	noCrossPkg           bool                         // when true, skip cross-package transitive analysis
+}
+
+func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config) *Converter {
+	return &Converter{
+		currentPkgPath: pkgPath,
+		externalPkgs:   make(ExternalPkgs),
+		pkg:            pkg,
+		cfg:            cfg,
+	}
+}
+
+func (c *Converter) ExternalPkgs() ExternalPkgs {
+	return c.externalPkgs
+}
+
+func (c *Converter) trackExternalPkg(pkgPath, pkgName string) {
+	if pkgPath != "" && pkgPath != c.currentPkgPath {
+		c.externalPkgs[pkgPath] = pkgName
+	}
+}
+
+func (c *Converter) Convert(symbolExport extract.SymbolExport) ConvertResult {
+	result := ConvertResult{
+		Name: symbolExport.Name,
+		Kind: symbolExport.Kind,
+		Doc:  symbolExport.Doc,
+	}
+
+	switch symbolExport.Kind {
+	case extract.ExportFunction:
+		c.convertFunction(&result, symbolExport)
+	case extract.ExportMethod:
+		c.convertMethod(&result, symbolExport)
+	case extract.ExportType:
+		c.convertType(&result, symbolExport)
+	case extract.ExportConstant:
+		c.convertConstant(&result, symbolExport)
+	case extract.ExportVariable:
+		c.convertVariable(&result, symbolExport)
+	}
+
+	return result
+}

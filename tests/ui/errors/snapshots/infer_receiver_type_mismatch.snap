@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:6:18]
+ 5 │ impl Counter {
+ 6 │   fn wrong(self: Point) -> int {
+   ·                  ──┬──
+   ·                    ╰── expected `Counter` or `Ref<Counter>`, found `Point`
+ 7 │     0
+   ╰────
+  help: Change the receiver type to `Counter` or `Ref<Counter>` · code: [infer.receiver_type_mismatch]

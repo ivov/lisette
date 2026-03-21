@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ trait Displayable {
+   · ──┬──
+   ·   ╰── unexpected `trait`
+ 3 │   fn display() -> string
+   ╰────
+  help: Lisette uses `interface` with Go-style structural typing. Types automatically satisfy interfaces if they have the required methods · code: [parse.trait_unsupported]

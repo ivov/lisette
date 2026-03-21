@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct Pair(int, int)\n\nfn test(p: Pair) -> int {\n  match p {\n    Pair(a, b) => a + b,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Pair struct {
+	F0 int
+	F1 int
+}
+
+func (p Pair) String() string {
+	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
+}
+
+func test(p Pair) int {
+	a := p.F0
+	b := p.F1
+	return a + b
+}

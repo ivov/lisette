@@ -1,0 +1,17 @@
+fn test(res: Result<int, string>) {
+  let value = res?;
+}
+
+fn test2() {
+  let data = load_data()?;
+}
+
+fn test3() {
+  let user = load_config()?.user;
+}
+
+fn test4() {
+  let name = load_config()?.user?.name;
+}
+
+fn test5() { let result = func()? + obj.method(a, b + c)?; }

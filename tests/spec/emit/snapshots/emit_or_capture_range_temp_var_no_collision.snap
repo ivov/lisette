@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn make_range() -> Range<int> { 0..2 }\n\nfn main() {\n  let s = [1, 2, 3];\n  let sub = s[make_range()];\n  let range_1 = 7;\n  let _ = sub;\n  let _ = range_1;\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func make_range() lisette.Range[int] {
+	return lisette.Range[int]{
+		Start: 0,
+		End:   2,
+	}
+}
+
+func main() {
+	s := []int{1, 2, 3}
+	range_1 := make_range()
+	sub := s[range_1.Start:range_1.End:range_1.End]
+	range_1_2 := 7
+	_ = sub
+	_ = range_1_2
+}

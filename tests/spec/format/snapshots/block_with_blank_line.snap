@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn foo() {\n  let x = 1;\n\n  let y = 2;\n  x + y\n}"
+---
+fn foo() {
+  let x = 1
+
+  let y = 2
+  x + y
+}

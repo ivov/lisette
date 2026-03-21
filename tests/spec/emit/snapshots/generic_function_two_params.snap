@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn first<A, B>(a: A, b: B) -> A {\n  a\n}\n\nfn test() -> int {\n  first(10, true)\n}\n"
+---
+package main
+
+func first[A any, B any](a A, _ B) A {
+	return a
+}
+
+func test() int {
+	return first(10, true)
+}

@@ -1,0 +1,19 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === foo-bar/mod.go ===
+package foo_bar
+
+func Id(x int) int {
+	return x
+}
+
+
+// === main.go ===
+package main
+
+import fb "github.com/user/myproject/foo-bar"
+
+func main() {
+	_ = fb.Id(1)
+}

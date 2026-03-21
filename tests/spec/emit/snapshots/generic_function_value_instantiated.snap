@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn id<T>(x: T) -> T { x }\n\nfn main() {\n  let f = id\n  let _ = f(1)\n}\n"
+---
+package main
+
+func id[T any](x T) T {
+	return x
+}
+
+func main() {
+	f := id[int]
+	_ = f(1)
+}

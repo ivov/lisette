@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct UserId(int)\n\nfn main() {\n  let mut id = UserId(1)\n  let r = &id\n  r.* = UserId(2)\n}\n"
+---
+package main
+
+import "fmt"
+
+type UserId int
+
+func (u UserId) String() string {
+	return fmt.Sprintf("UserId(%v)", int(u))
+}
+
+func main() {
+	id := UserId(1)
+	r := &id
+	*r = UserId(2)
+}

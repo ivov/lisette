@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:6:9]
+ 5 │   let two_param_fn = |a: int, b: int| a + b;
+ 6 │   apply(two_param_fn, 5)
+   ·         ──────┬─────
+   ·               ╰── expected `fn (int) -> int`, found `fn (int, int) -> int`
+ 7 │ }
+   ╰────
+  help: The function types must have the same number of parameters · code: [infer.type_mismatch]

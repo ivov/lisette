@@ -1,0 +1,37 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === container/container.go ===
+package container
+
+import "fmt"
+
+type Box[T any] struct {
+	Item T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { item: %v }", b.Item)
+}
+
+func Box_New[T any](item T) Box[T] {
+	return Box[T]{Item: item}
+}
+
+func (b Box[T]) Get() T {
+	return b.Item
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/container"
+)
+
+func main() {
+	nested := container.Box_New(container.Box_New(99))
+	fmt.Println(nested.Get().Get())
+}

@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> uint64 {\n  0xC96C5795D7870F42\n}\n"
+---
+package main
+
+func test() uint64 {
+	return 0xC96C5795D7870F42
+}

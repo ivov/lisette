@@ -1,0 +1,6 @@
+fn test() {
+  let (a, b): (int, string) = get_pair();
+  let (a, b) = get_pair();
+  let (_, status_code): (string, int) = http_request();
+  let Point { x, y: y_coord }: Point = get_point();
+}

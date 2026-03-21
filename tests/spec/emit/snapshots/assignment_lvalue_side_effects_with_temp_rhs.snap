@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn make_a() -> int { 0 }\nfn make_b() -> int { 1 }\n\nfn main() {\n  let mut s = [0, 0, 0]\n  s[make_a()] = if true { make_b() } else { 0 }\n}\n"
+---
+package main
+
+func make_a() int {
+	return 0
+}
+
+func make_b() int {
+	return 1
+}
+
+func main() {
+	s := []int{0, 0, 0}
+	idx_2 := make_a()
+	var tmp_1 int
+	if true {
+		tmp_1 = make_b()
+	} else {
+		tmp_1 = 0
+	}
+	s[idx_2] = tmp_1
+}

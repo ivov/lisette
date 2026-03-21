@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { 0..=10 }"
+---
+fn test() {
+  0..=10
+}

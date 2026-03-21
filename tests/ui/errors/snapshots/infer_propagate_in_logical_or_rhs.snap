@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `?` cannot be used inside a condition
+   ╭─[test.lis:7:15]
+ 6 │ fn run() -> Result<bool, string> {
+ 7 │   Ok(false || check("x")?)
+   ·               ─────┬─────
+   ·                    ╰── `?` inside condition
+ 8 │ }
+   ╰────
+  help: Bind the result first: `let val = expression?; if val { ... }` · code: [infer.propagate_in_condition]

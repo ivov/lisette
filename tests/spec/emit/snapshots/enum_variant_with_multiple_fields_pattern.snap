@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nenum Pair<A, B> { Both(A, B), Neither }\n\nfn test(p: Pair<int, string>) -> int {\n  match p {\n    Both(n, s) => n,\n    Neither => 0,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakePairBoth[A any, B any](arg0 A, arg1 B) Pair[A, B] {
+	return Pair[A, B]{Tag: PairBoth, Both0: arg0, Both1: arg1}
+}
+
+func MakePairNeither[A any, B any]() Pair[A, B] {
+	return Pair[A, B]{Tag: PairNeither}
+}
+
+type PairTag int
+
+const (
+	PairBoth PairTag = iota
+	PairNeither
+)
+
+type Pair[A any, B any] struct {
+	Tag   PairTag
+	Both0 A
+	Both1 B
+}
+
+func (p Pair[A, B]) String() string {
+	switch p.Tag {
+	case PairBoth:
+		return fmt.Sprintf("Pair.Both(%v, %v)", p.Both0, p.Both1)
+	case PairNeither:
+		return "Pair.Neither"
+	default:
+		return fmt.Sprintf("Pair(%d)", p.Tag)
+	}
+}
+
+func test(p Pair[int, string]) int {
+	if p.Tag == PairBoth {
+		return p.Both0
+	}
+	return 0
+}

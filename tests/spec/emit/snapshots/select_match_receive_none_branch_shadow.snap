@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() -> int {\n  let x = 111\n  let ch = Channel.new<int>()\n  ch.close()\n  let out = select {\n    match ch.receive() {\n      Some(x) => x,\n      None => x,\n    },\n    _ => 0,\n  }\n  let _ = x\n  out\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	x := 111
+	ch := make(chan int)
+	lisette.ChannelClose(ch)
+	var out int
+	select {
+	case recv_1, ok := <-ch:
+		if ok {
+			out = recv_1
+		} else {
+			out = x
+		}
+	default:
+		out = 0
+	}
+	_ = x
+	return out
+}

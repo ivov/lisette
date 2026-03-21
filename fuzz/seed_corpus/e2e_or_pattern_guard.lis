@@ -1,0 +1,17 @@
+fn test_or_pattern_with_guard() -> int {
+  let x = 5;
+  match x {
+    1 | 2 | 3 if x > 0 => 10,
+    1 | 2 | 3 => 20,
+    _ => 30,
+  }
+}
+
+fn test_or_pattern_if_let() -> int {
+  let x = 2;
+  if let 1 | 2 | 3 = x {
+    100
+  } else {
+    0
+  }
+}

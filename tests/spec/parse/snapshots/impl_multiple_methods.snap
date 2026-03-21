@@ -1,0 +1,420 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  fn get(self: Counter) -> int {\n    return self.value;\n  }\n\n  fn increment(self: Counter) -> Counter {\n    return Counter { value: self.value + 1 };\n  }\n\n  fn new() -> Counter {\n    return Counter { value: 0 };\n  }\n}\n"
+---
+[
+    Struct {
+        doc: None,
+        attributes: [],
+        name: "Counter",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 7,
+        },
+        generics: [],
+        fields: [
+            StructFieldDefinition {
+                doc: None,
+                attributes: [],
+                name: "value",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 20,
+                    byte_length: 5,
+                },
+                annotation: Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 27,
+                        byte_length: 3,
+                    },
+                },
+                visibility: Private,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        kind: Record,
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 32,
+        },
+    },
+    ImplBlock {
+        annotation: Constructor {
+            name: "Counter",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 40,
+                byte_length: 7,
+            },
+        },
+        receiver_name: "Counter",
+        methods: [
+            Function {
+                doc: None,
+                attributes: [],
+                name: "get",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 55,
+                    byte_length: 3,
+                },
+                generics: [],
+                params: [
+                    Binding {
+                        pattern: Identifier {
+                            identifier: "self",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 59,
+                                byte_length: 4,
+                            },
+                        },
+                        annotation: Some(
+                            Constructor {
+                                name: "Counter",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 65,
+                                    byte_length: 7,
+                                },
+                            },
+                        ),
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                ],
+                return_annotation: Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 77,
+                        byte_length: 3,
+                    },
+                },
+                return_type: Variable(
+                    -1,
+                ),
+                visibility: Private,
+                body: Block {
+                    items: [
+                        Return {
+                            expression: DotAccess {
+                                expression: Identifier {
+                                    value: "self",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 94,
+                                        byte_length: 4,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                member: "value",
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 94,
+                                    byte_length: 10,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 87,
+                                byte_length: 17,
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 81,
+                        byte_length: 28,
+                    },
+                },
+                ty: Variable(
+                    -1,
+                ),
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 52,
+                    byte_length: 57,
+                },
+            },
+            Function {
+                doc: None,
+                attributes: [],
+                name: "increment",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 116,
+                    byte_length: 9,
+                },
+                generics: [],
+                params: [
+                    Binding {
+                        pattern: Identifier {
+                            identifier: "self",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 126,
+                                byte_length: 4,
+                            },
+                        },
+                        annotation: Some(
+                            Constructor {
+                                name: "Counter",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 132,
+                                    byte_length: 7,
+                                },
+                            },
+                        ),
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                ],
+                return_annotation: Constructor {
+                    name: "Counter",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 144,
+                        byte_length: 7,
+                    },
+                },
+                return_type: Variable(
+                    -1,
+                ),
+                visibility: Private,
+                body: Block {
+                    items: [
+                        Return {
+                            expression: StructCall {
+                                name: "Counter",
+                                field_assignments: [
+                                    StructFieldAssignment {
+                                        name: "value",
+                                        name_span: Span {
+                                            file_id: 0,
+                                            byte_offset: 175,
+                                            byte_length: 5,
+                                        },
+                                        value: Binary {
+                                            operator: Addition,
+                                            left: DotAccess {
+                                                expression: Identifier {
+                                                    value: "self",
+                                                    ty: Variable(
+                                                        -1,
+                                                    ),
+                                                    span: Span {
+                                                        file_id: 0,
+                                                        byte_offset: 182,
+                                                        byte_length: 4,
+                                                    },
+                                                    binding_id: None,
+                                                    qualified: None,
+                                                },
+                                                member: "value",
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 182,
+                                                    byte_length: 10,
+                                                },
+                                            },
+                                            right: Literal {
+                                                literal: Integer {
+                                                    value: 1,
+                                                    text: None,
+                                                },
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 195,
+                                                    byte_length: 1,
+                                                },
+                                            },
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 182,
+                                                byte_length: 14,
+                                            },
+                                        },
+                                    },
+                                ],
+                                spread: None,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 165,
+                                    byte_length: 33,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 158,
+                                byte_length: 40,
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 152,
+                        byte_length: 51,
+                    },
+                },
+                ty: Variable(
+                    -1,
+                ),
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 113,
+                    byte_length: 90,
+                },
+            },
+            Function {
+                doc: None,
+                attributes: [],
+                name: "new",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 210,
+                    byte_length: 3,
+                },
+                generics: [],
+                params: [],
+                return_annotation: Constructor {
+                    name: "Counter",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 219,
+                        byte_length: 7,
+                    },
+                },
+                return_type: Variable(
+                    -1,
+                ),
+                visibility: Private,
+                body: Block {
+                    items: [
+                        Return {
+                            expression: StructCall {
+                                name: "Counter",
+                                field_assignments: [
+                                    StructFieldAssignment {
+                                        name: "value",
+                                        name_span: Span {
+                                            file_id: 0,
+                                            byte_offset: 250,
+                                            byte_length: 5,
+                                        },
+                                        value: Literal {
+                                            literal: Integer {
+                                                value: 0,
+                                                text: None,
+                                            },
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 257,
+                                                byte_length: 1,
+                                            },
+                                        },
+                                    },
+                                ],
+                                spread: None,
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 240,
+                                    byte_length: 20,
+                                },
+                            },
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 233,
+                                byte_length: 27,
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 227,
+                        byte_length: 38,
+                    },
+                },
+                ty: Variable(
+                    -1,
+                ),
+                span: Span {
+                    file_id: 0,
+                    byte_offset: 207,
+                    byte_length: 58,
+                },
+            },
+        ],
+        generics: [],
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 35,
+            byte_length: 232,
+        },
+    },
+]

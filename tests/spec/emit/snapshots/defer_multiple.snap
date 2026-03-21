@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  defer fmt.Print(\"first\");\n  defer fmt.Print(\"second\");\n  defer fmt.Print(\"third\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func test() {
+	defer fmt.Print("first")
+	defer fmt.Print("second")
+	defer fmt.Print("third")
+}

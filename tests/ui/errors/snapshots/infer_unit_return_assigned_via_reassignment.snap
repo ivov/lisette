@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:6:7]
+ 5 │   let mut x = returns_unit()
+ 6 │   x = 42
+   ·       ─┬
+   ·        ╰── expected `()`, found `int`
+ 7 │ }
+   ╰────
+  help: Change the type annotation to `int` or convert the value to `()` · code: [infer.type_mismatch]

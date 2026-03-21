@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface Store<K, V> {\n  fn entries(self) -> Map<K, V>\n}\n"
+---
+package main
+
+type Store[K comparable, V any] interface {
+	entries() map[K]V
+}

@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { foo.bar().baz() }"
+---
+fn test() {
+  foo.bar().baz()
+}

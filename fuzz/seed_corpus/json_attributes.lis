@@ -1,0 +1,27 @@
+#[json]
+struct User {
+  name: string,
+}
+
+#[json(snake_case)]
+struct UserSnake {
+  first_name: string,
+}
+
+#[json]
+struct UserAdvanced {
+  #[json(omitempty)]
+  name: string,
+  #[json("userName")]
+  user_name: string,
+  #[json(skip)]
+  password: string,
+}
+
+#[json]
+#[db]
+struct UserMulti {
+  #[json(omitempty)]
+  #[db("user_name")]
+  name: string,
+}

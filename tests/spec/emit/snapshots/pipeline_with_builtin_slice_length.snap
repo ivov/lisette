@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() -> int {\n  let items = [1, 2, 3];\n  items |> Slice.length()\n}\n"
+---
+package main
+
+func test() int {
+	items := []int{1, 2, 3}
+	return len(items)
+}

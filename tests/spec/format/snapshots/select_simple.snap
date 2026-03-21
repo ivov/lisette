@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n    select {\n        let x = rx.Receive() => handle(x),\n        _ => default(),\n    }\n}"
+---
+fn test() {
+  select {
+    let x = rx.Receive() => handle(x),
+    _ => default(),
+  }
+}

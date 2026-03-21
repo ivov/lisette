@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Point(int, int)\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	F0 int
+	F1 int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point(%v, %v)", p.F0, p.F1)
+}

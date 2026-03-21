@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn test(nums: Slice<int>) -> int {\n  match nums {\n    [first, ..rest] => first,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+func test(nums []int) int {
+	if len(nums) >= 1 {
+		return nums[0]
+	}
+	return 0
+}

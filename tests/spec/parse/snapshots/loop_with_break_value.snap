@@ -1,0 +1,176 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      break 42;\n    }\n  };\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "x",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 19,
+                                byte_length: 1,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: Loop {
+                        body: Block {
+                            items: [
+                                If {
+                                    condition: Call {
+                                        expression: Identifier {
+                                            value: "done",
+                                            ty: Variable(
+                                                -1,
+                                            ),
+                                            span: Span {
+                                                file_id: 0,
+                                                byte_offset: 37,
+                                                byte_length: 4,
+                                            },
+                                            binding_id: None,
+                                            qualified: None,
+                                        },
+                                        args: [],
+                                        type_args: [],
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 37,
+                                            byte_length: 6,
+                                        },
+                                    },
+                                    consequence: Block {
+                                        items: [
+                                            Break {
+                                                value: Some(
+                                                    Literal {
+                                                        literal: Integer {
+                                                            value: 42,
+                                                            text: None,
+                                                        },
+                                                        ty: Variable(
+                                                            -1,
+                                                        ),
+                                                        span: Span {
+                                                            file_id: 0,
+                                                            byte_offset: 58,
+                                                            byte_length: 2,
+                                                        },
+                                                    },
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 52,
+                                                    byte_length: 8,
+                                                },
+                                            },
+                                        ],
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 44,
+                                            byte_length: 23,
+                                        },
+                                    },
+                                    alternative: Unit {
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 34,
+                                            byte_length: 33,
+                                        },
+                                    },
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 34,
+                                        byte_length: 33,
+                                    },
+                                },
+                            ],
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 28,
+                                byte_length: 43,
+                            },
+                        },
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 23,
+                            byte_length: 48,
+                        },
+                        needs_label: false,
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 56,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 63,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 73,
+        },
+    },
+]

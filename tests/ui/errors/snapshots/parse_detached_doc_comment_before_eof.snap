@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unattached doc comment
+   ╭─[test.lis:4:1]
+ 3 │ 
+ 4 │ /// Returns the current timestamp.
+   · ─────────────────┬────────────────
+   ·                  ╰── is detached
+   ╰────
+  help: Place the doc comment on the line immediately above a symbol definition · code: [parse.detached_doc_comment]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused type
+   ╭─[test.lis:6:8]
+ 5 │ 
+ 6 │ struct Dog {
+   ·        ─┬─
+   ·         ╰── never used
+ 7 │   name: string,
+   ╰────
+  help: Use or remove this type · code: [lint.unused_type]

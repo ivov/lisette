@@ -1,0 +1,63 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum Validated<T> { Valid(T), Invalid(string) }\n\nstruct ValidationResult<T> {\n  value: Validated<T>,\n  field_name: string,\n}\n\nimpl<T> ValidationResult<T> {\n  fn new_invalid(field: string, msg: string) -> ValidationResult<T> {\n    ValidationResult { value: Validated.Invalid(msg), field_name: field }\n  }\n}\n\nfn validate_positive(field: string, val: int) -> ValidationResult<int> {\n  ValidationResult.new_invalid(field, \"must be positive\")\n}\n\nfn validate_non_empty(field: string, val: string) -> ValidationResult<string> {\n  ValidationResult.new_invalid(field, \"must not be empty\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeValidatedValid[T any](arg0 T) Validated[T] {
+	return Validated[T]{Tag: ValidatedValid, Valid: arg0}
+}
+
+func MakeValidatedInvalid[T any](arg0 string) Validated[T] {
+	return Validated[T]{Tag: ValidatedInvalid, Invalid: arg0}
+}
+
+type ValidatedTag int
+
+const (
+	ValidatedValid ValidatedTag = iota
+	ValidatedInvalid
+)
+
+type Validated[T any] struct {
+	Tag     ValidatedTag
+	Valid   T
+	Invalid string
+}
+
+func (v Validated[T]) String() string {
+	switch v.Tag {
+	case ValidatedValid:
+		return fmt.Sprintf("Validated.Valid(%v)", v.Valid)
+	case ValidatedInvalid:
+		return fmt.Sprintf("Validated.Invalid(%v)", v.Invalid)
+	default:
+		return fmt.Sprintf("Validated(%d)", v.Tag)
+	}
+}
+
+type ValidationResult[T any] struct {
+	value      Validated[T]
+	field_name string
+}
+
+func (v ValidationResult[T]) String() string {
+	return fmt.Sprintf("ValidationResult { value: %v, field_name: %v }", v.value, v.field_name)
+}
+
+func ValidationResult_new_invalid[T any](field, msg string) ValidationResult[T] {
+	return ValidationResult[T]{
+		value:      MakeValidatedInvalid[T](msg),
+		field_name: field,
+	}
+}
+
+func validate_positive(field string, _ int) ValidationResult[int] {
+	return ValidationResult_new_invalid[int](field, "must be positive")
+}
+
+func validate_non_empty(field, _ string) ValidationResult[string] {
+	return ValidationResult_new_invalid[string](field, "must not be empty")
+}

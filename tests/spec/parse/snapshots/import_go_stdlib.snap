@@ -1,0 +1,20 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nimport \"go:fmt\"\n"
+---
+[
+    ModuleImport {
+        name: "go:fmt",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 8,
+            byte_length: 8,
+        },
+        alias: None,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 15,
+        },
+    },
+]

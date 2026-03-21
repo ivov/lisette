@@ -1,0 +1,18 @@
+struct Box<T> {
+  value: T,
+}
+
+struct Container<T: Clone> {
+  item: T,
+}
+
+struct Pair<K, V> {
+  key: K,
+  value: V,
+}
+
+struct Request<Body> {
+  method: string,
+  headers: Map<string, string>,
+  body: Option<Body>,
+}

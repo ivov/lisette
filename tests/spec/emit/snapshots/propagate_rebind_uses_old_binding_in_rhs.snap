@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nimport \"go:strconv\"\n\nfn parse(s: string) -> Result<int, error> {\n  strconv.Atoi(s)\n}\n\nfn process() -> Result<int, error> {\n  let x = 42\n  let x = parse(f\"{x}\")?\n  Ok(x + 1)\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"strconv"
+)
+
+func parse(s string) lisette.Result[int, error] {
+	ret_1, ret_2 := strconv.Atoi(s)
+	if ret_2 != nil {
+		return lisette.MakeResultErr[int, error](ret_2)
+	}
+	return lisette.MakeResultOk[int, error](ret_1)
+}
+
+func process() lisette.Result[int, error] {
+	x := 42
+	check_2 := parse(fmt.Sprint(x))
+	if check_2.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, error](check_2.ErrVal)
+	}
+	x_1 := check_2.OkVal
+	return lisette.MakeResultOk[int, error](x_1 + 1)
+}

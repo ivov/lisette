@@ -1,0 +1,98 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: apply(\n    10,\n    |x| { x * 3 }\n)"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Identifier,
+            text: "apply",
+            byte_offset: 0,
+            byte_length: 5,
+        },
+        Token {
+            kind: LeftParen,
+            text: "(",
+            byte_offset: 5,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "10",
+            byte_offset: 11,
+            byte_length: 2,
+        },
+        Token {
+            kind: Comma,
+            text: ",",
+            byte_offset: 13,
+            byte_length: 1,
+        },
+        Token {
+            kind: Pipe,
+            text: "|",
+            byte_offset: 19,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "x",
+            byte_offset: 20,
+            byte_length: 1,
+        },
+        Token {
+            kind: Pipe,
+            text: "|",
+            byte_offset: 21,
+            byte_length: 1,
+        },
+        Token {
+            kind: LeftCurlyBrace,
+            text: "{",
+            byte_offset: 23,
+            byte_length: 1,
+        },
+        Token {
+            kind: Identifier,
+            text: "x",
+            byte_offset: 25,
+            byte_length: 1,
+        },
+        Token {
+            kind: Star,
+            text: "*",
+            byte_offset: 27,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "3",
+            byte_offset: 29,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightCurlyBrace,
+            text: "}",
+            byte_offset: 31,
+            byte_length: 1,
+        },
+        Token {
+            kind: RightParen,
+            text: ")",
+            byte_offset: 33,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 34,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

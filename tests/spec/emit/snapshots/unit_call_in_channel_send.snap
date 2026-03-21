@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn noop() {}\n\nfn test() {\n  let ch = Channel.buffered<()>(1)\n  ch.send(noop())\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func noop() {}
+
+func test() {
+	ch := make(chan struct{}, 1)
+	noop()
+	lisette.ChannelSend(ch, struct{}{})
+}

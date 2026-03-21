@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n/// Represents the status of a task.\nenum Status { Pending, Running, Complete }\n"
+---
+package main
+
+import "fmt"
+
+func MakeStatusPending() Status {
+	return Status{Tag: StatusPending}
+}
+
+func MakeStatusRunning() Status {
+	return Status{Tag: StatusRunning}
+}
+
+func MakeStatusComplete() Status {
+	return Status{Tag: StatusComplete}
+}
+
+// Represents the status of a task.
+type StatusTag int
+
+const (
+	StatusPending StatusTag = iota
+	StatusRunning
+	StatusComplete
+)
+
+type Status struct {
+	Tag StatusTag
+}
+
+func (s Status) String() string {
+	switch s.Tag {
+	case StatusPending:
+		return "Status.Pending"
+	case StatusRunning:
+		return "Status.Running"
+	case StatusComplete:
+		return "Status.Complete"
+	default:
+		return fmt.Sprintf("Status(%d)", s.Tag)
+	}
+}

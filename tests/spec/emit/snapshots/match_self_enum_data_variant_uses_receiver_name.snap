@@ -1,0 +1,50 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nenum Shape {\n  Circle(int),\n  Rectangle { width: int, height: int },\n}\n\nimpl Shape {\n  fn area(self) -> int {\n    match self {\n      Shape.Circle(r) => r * r * 3,\n      Shape.Rectangle { width, height } => width * height,\n    }\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeShapeCircle(arg0 int) Shape {
+	return Shape{Tag: ShapeCircle, Circle: arg0}
+}
+
+func MakeShapeRectangle(arg0 int, arg1 int) Shape {
+	return Shape{Tag: ShapeRectangle, Width: arg0, Height: arg1}
+}
+
+type ShapeTag int
+
+const (
+	ShapeCircle ShapeTag = iota
+	ShapeRectangle
+)
+
+type Shape struct {
+	Tag    ShapeTag
+	Circle int
+	Width  int
+	Height int
+}
+
+func (s Shape) String() string {
+	switch s.Tag {
+	case ShapeCircle:
+		return fmt.Sprintf("Shape.Circle(%v)", s.Circle)
+	case ShapeRectangle:
+		return fmt.Sprintf("Shape.Rectangle { width: %v, height: %v }", s.Width, s.Height)
+	default:
+		return fmt.Sprintf("Shape(%d)", s.Tag)
+	}
+}
+
+func (s Shape) area() int {
+	if s.Tag == ShapeCircle {
+		r := s.Circle
+		return r * r * 3
+	}
+	width := s.Width
+	height := s.Height
+	return width * height
+}

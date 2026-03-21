@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn do_nothing() -> () { () }"
+---
+fn do_nothing() -> () {
+  ()
+}

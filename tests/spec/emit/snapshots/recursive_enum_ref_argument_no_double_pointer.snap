@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum List {\n  Cons(int, Ref<List>),\n  Nil,\n}\n\nfn test() -> List {\n  let nil = List.Nil;\n  List.Cons(3, &nil)\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeListCons(arg0 int, arg1 *List) List {
+	return List{Tag: ListCons, Cons0: arg0, Cons1: arg1}
+}
+
+func MakeListNil() List {
+	return List{Tag: ListNil}
+}
+
+type ListTag int
+
+const (
+	ListCons ListTag = iota
+	ListNil
+)
+
+type List struct {
+	Tag   ListTag
+	Cons0 int
+	Cons1 *List
+}
+
+func (l List) String() string {
+	switch l.Tag {
+	case ListCons:
+		return fmt.Sprintf("List.Cons(%v, %v)", l.Cons0, l.Cons1)
+	case ListNil:
+		return "List.Nil"
+	default:
+		return fmt.Sprintf("List(%d)", l.Tag)
+	}
+}
+
+func test() List {
+	nil_ := MakeListNil()
+	return MakeListCons(3, &nil_)
+}

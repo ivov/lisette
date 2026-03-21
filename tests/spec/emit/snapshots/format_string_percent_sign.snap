@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nfn test() {\n  let pct = 50;\n  fmt.Print(f\"{pct}% complete\")\n}\n"
+---
+package main
+
+import "fmt"
+
+func test() {
+	pct := 50
+	fmt.Printf("%v%% complete", pct)
+}

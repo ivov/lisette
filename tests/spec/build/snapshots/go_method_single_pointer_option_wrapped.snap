@@ -1,0 +1,24 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"container/list"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	l := list.New()
+	_ = l.PushBack(42)
+	raw_1 := l.Front()
+	var front lisette.Option[*list.Element]
+	if raw_1 != nil {
+		front = lisette.MakeOptionSome[*list.Element](raw_1)
+	} else {
+		front = lisette.MakeOptionNone[*list.Element]()
+	}
+	fmt.Print(front.IsSome())
+}

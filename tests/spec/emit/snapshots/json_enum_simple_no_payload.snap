@@ -1,0 +1,80 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[json]\nenum Status { Active, Inactive, Suspended }\n"
+---
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+func MakeStatusActive() Status {
+	return Status{Tag: StatusActive}
+}
+
+func MakeStatusInactive() Status {
+	return Status{Tag: StatusInactive}
+}
+
+func MakeStatusSuspended() Status {
+	return Status{Tag: StatusSuspended}
+}
+
+type StatusTag int
+
+const (
+	StatusActive StatusTag = iota
+	StatusInactive
+	StatusSuspended
+)
+
+type Status struct {
+	Tag StatusTag
+}
+
+func (s Status) String() string {
+	switch s.Tag {
+	case StatusActive:
+		return "Status.Active"
+	case StatusInactive:
+		return "Status.Inactive"
+	case StatusSuspended:
+		return "Status.Suspended"
+	default:
+		return fmt.Sprintf("Status(%d)", s.Tag)
+	}
+}
+
+func (s Status) MarshalJSON() ([]byte, error) {
+	switch s.Tag {
+	case StatusActive:
+		return json.Marshal("Active")
+	case StatusInactive:
+		return json.Marshal("Inactive")
+	case StatusSuspended:
+		return json.Marshal("Suspended")
+	default:
+		return nil, fmt.Errorf("unknown Status tag: %d", s.Tag)
+	}
+}
+
+func (s *Status) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err != nil {
+		return fmt.Errorf("invalid Status JSON: expected string")
+	}
+	switch name {
+	case "Active":
+		s.Tag = StatusActive
+		return nil
+	case "Inactive":
+		s.Tag = StatusInactive
+		return nil
+	case "Suspended":
+		s.Tag = StatusSuspended
+		return nil
+	default:
+		return fmt.Errorf("unknown Status variant: %s", name)
+	}
+}

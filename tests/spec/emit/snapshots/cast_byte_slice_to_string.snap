@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test() -> string {\n  let bytes: Slice<byte> = \"hello\" as Slice<byte>;\n  bytes as string\n}\n"
+---
+package main
+
+func test() string {
+	bytes := []byte("hello")
+	return string(bytes)
+}

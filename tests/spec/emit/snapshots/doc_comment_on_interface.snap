@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n/// Types that can be displayed as text.\ninterface Displayable {\n  fn display() -> string;\n}\n"
+---
+package main
+
+// Types that can be displayed as text.
+type Displayable interface {
+	display() string
+}

@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn main() {\n  let mut items = [10, 20]\n  let mut i = 0\n  items[i] = if true { i = 1; 9 } else { 0 }\n  let _ = items\n}\n"
+---
+package main
+
+func main() {
+	items := []int{10, 20}
+	i := 0
+	idx_2 := i
+	var tmp_1 int
+	if true {
+		i = 1
+		tmp_1 = 9
+	} else {
+		tmp_1 = 0
+	}
+	items[idx_2] = tmp_1
+	_ = items
+}

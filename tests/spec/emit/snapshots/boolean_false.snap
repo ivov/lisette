@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> bool {\n  false\n}\n"
+---
+package main
+
+func test() bool {
+	return false
+}

@@ -1,0 +1,9 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Import cycle detected
+  │
+  │ module_a -> module_a
+  │ ────┬───    ────┬───
+  │     ╰───────────╯
+  help: Remove the self-import · code: [resolve.import_cycle]

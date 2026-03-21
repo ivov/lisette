@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:5:5]
+ 4 │     1 => 10,
+ 5 │     ^
+   ·     ┬
+   ·     ╰── expected pattern
+ 6 │     2 => 20,
+   ╰────
+  help: Match arms must start with a pattern · code: [parse.syntax_error]

@@ -1,0 +1,46 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nenum Expr {\n  Num(int),\n  Add(Ref<Expr>, Ref<Expr>),\n}\n\nfn test() -> Expr {\n  Expr.Add(&Expr.Num(1), &Expr.Num(2))\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeExprNum(arg0 int) Expr {
+	return Expr{Tag: ExprNum, Num: arg0}
+}
+
+func MakeExprAdd(arg0 *Expr, arg1 *Expr) Expr {
+	return Expr{Tag: ExprAdd, Add0: arg0, Add1: arg1}
+}
+
+type ExprTag int
+
+const (
+	ExprNum ExprTag = iota
+	ExprAdd
+)
+
+type Expr struct {
+	Tag  ExprTag
+	Num  int
+	Add0 *Expr
+	Add1 *Expr
+}
+
+func (e Expr) String() string {
+	switch e.Tag {
+	case ExprNum:
+		return fmt.Sprintf("Expr.Num(%v)", e.Num)
+	case ExprAdd:
+		return fmt.Sprintf("Expr.Add(%v, %v)", e.Add0, e.Add1)
+	default:
+		return fmt.Sprintf("Expr(%d)", e.Tag)
+	}
+}
+
+func test() Expr {
+	ref_1 := MakeExprNum(1)
+	ref_2 := MakeExprNum(2)
+	return MakeExprAdd(&ref_1, &ref_2)
+}

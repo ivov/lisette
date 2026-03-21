@@ -1,0 +1,16 @@
+fn test(pair: (int, int)) {
+  match pair {
+    (0, 0) => print("Origin"),
+    (x, 0) => print("On X axis", x),
+    (0, y) => print("On Y axis", y),
+    (x, y) => print("Coords", x, y),
+  }
+}
+
+fn test2(triple: (string, int, bool)) {
+  match triple {
+    ("status", code, _) => print("Status code:", code),
+    (_, _, true)        => print("Active"),
+    _                   => print("Other"),
+  }
+}

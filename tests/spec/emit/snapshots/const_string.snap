@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nconst GREETING = \"Hello, World!\"\n\nfn test() {\n  fmt.Print(GREETING)\n}\n"
+---
+package main
+
+import "fmt"
+
+const GREETING string = "Hello, World!"
+
+func test() {
+	fmt.Print(GREETING)
+}

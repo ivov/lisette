@@ -1,0 +1,32 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface Mutable {\n  fn mutate(self, val: string)\n}\n\nstruct Box {\n  content: string,\n}\n\nimpl Box {\n  fn mutate(self: Ref<Box>, val: string) {\n    self.content = val\n  }\n}\n\nfn apply_mutation<T: Mutable>(item: Ref<T>, val: string) {\n  item.mutate(val)\n}\n\nfn test() {\n  let mut b = Box { content: \"original\" }\n  apply_mutation(&b, \"changed\")\n}\n"
+---
+package main
+
+import "fmt"
+
+type Mutable interface {
+	mutate(string)
+}
+
+type Box struct {
+	content string
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { content: %v }", b.content)
+}
+
+func (b *Box) mutate(val string) {
+	b.content = val
+}
+
+func apply_mutation[T Mutable](item T, val string) {
+	item.mutate(val)
+}
+
+func test() {
+	b := Box{content: "original"}
+	apply_mutation(&b, "changed")
+}

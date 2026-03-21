@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nfn test(cond: bool) -> int {\n  let x = 1;\n  let x = if cond { 2 } else { 3 };\n  x\n}\n"
+---
+package main
+
+func test(cond bool) int {
+	_ = 1
+	if cond {
+		return 2
+	}
+	return 3
+}

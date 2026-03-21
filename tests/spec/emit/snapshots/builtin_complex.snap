@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test() -> complex128 {\n  complex(1.0, 2.0)\n}\n"
+---
+package main
+
+func test() complex128 {
+	return complex(1.0, 2.0)
+}

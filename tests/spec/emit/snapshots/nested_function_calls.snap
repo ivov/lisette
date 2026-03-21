@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn double(x: int) -> int {\n  x * 2\n}\n\nfn test() -> int {\n  double(double(5))\n}\n"
+---
+package main
+
+func double(x int) int {
+	return x * 2
+}
+
+func test() int {
+	return double(double(5))
+}

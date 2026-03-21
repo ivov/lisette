@@ -1,0 +1,199 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(user: User) {\n  let data = Data {\n    id: 1,\n    payload: Payload { user, status: \"active\" },\n  };\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "user",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 4,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "User",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 15,
+                            byte_length: 4,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Let {
+                    binding: Binding {
+                        pattern: Identifier {
+                            identifier: "data",
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 29,
+                                byte_length: 4,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    value: StructCall {
+                        name: "Data",
+                        field_assignments: [
+                            StructFieldAssignment {
+                                name: "id",
+                                name_span: Span {
+                                    file_id: 0,
+                                    byte_offset: 47,
+                                    byte_length: 2,
+                                },
+                                value: Literal {
+                                    literal: Integer {
+                                        value: 1,
+                                        text: None,
+                                    },
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 51,
+                                        byte_length: 1,
+                                    },
+                                },
+                            },
+                            StructFieldAssignment {
+                                name: "payload",
+                                name_span: Span {
+                                    file_id: 0,
+                                    byte_offset: 58,
+                                    byte_length: 7,
+                                },
+                                value: StructCall {
+                                    name: "Payload",
+                                    field_assignments: [
+                                        StructFieldAssignment {
+                                            name: "user",
+                                            name_span: Span {
+                                                file_id: 0,
+                                                byte_offset: 77,
+                                                byte_length: 4,
+                                            },
+                                            value: Identifier {
+                                                value: "user",
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 77,
+                                                    byte_length: 4,
+                                                },
+                                                binding_id: None,
+                                                qualified: None,
+                                            },
+                                        },
+                                        StructFieldAssignment {
+                                            name: "status",
+                                            name_span: Span {
+                                                file_id: 0,
+                                                byte_offset: 83,
+                                                byte_length: 6,
+                                            },
+                                            value: Literal {
+                                                literal: String(
+                                                    "active",
+                                                ),
+                                                ty: Variable(
+                                                    -1,
+                                                ),
+                                                span: Span {
+                                                    file_id: 0,
+                                                    byte_offset: 91,
+                                                    byte_length: 8,
+                                                },
+                                            },
+                                        },
+                                    ],
+                                    spread: None,
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 67,
+                                        byte_length: 34,
+                                    },
+                                },
+                            },
+                        ],
+                        spread: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 36,
+                            byte_length: 70,
+                        },
+                    },
+                    mutable: false,
+                    mut_span: None,
+                    else_block: None,
+                    else_span: None,
+                    typed_pattern: None,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 25,
+                        byte_length: 81,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 21,
+                byte_length: 88,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 108,
+        },
+    },
+]

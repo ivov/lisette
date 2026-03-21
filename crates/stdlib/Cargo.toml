@@ -1,0 +1,13 @@
+[package]
+name = "lisette-stdlib"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[lib]
+doctest = false
+test = false

@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Box<T> {\n  item: T,\n}\n\nimpl Box<int> {\n  fn unwrap(self) -> int {\n    self.item\n  }\n}\n\nfn test() -> int {\n  let b = Box { item: 42 };\n  b.unwrap()\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box[T any] struct {
+	item T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { item: %v }", b.item)
+}
+
+func Box_unwrap(self Box[int]) int {
+	return self.item
+}
+
+func test() int {
+	b := Box[int]{item: 42}
+	return Box_unwrap(b)
+}

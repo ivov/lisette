@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { 10 / 2 }"
+---
+fn test() {
+  10 / 2
+}

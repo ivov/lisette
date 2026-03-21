@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct Pair(int, int)\nstruct Name(string)\n\nfn test() -> string {\n  let p = Pair(1, 2);\n  let a = match p {\n    Pair(x, y) => x + y,\n  };\n\n  let n = Name(\"hello\");\n  let b = match n {\n    Name(x) => x,\n  };\n\n  b\n}\n"
+---
+package main
+
+import "fmt"
+
+type Pair struct {
+	F0 int
+	F1 int
+}
+
+func (p Pair) String() string {
+	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
+}
+
+type Name string
+
+func (n Name) String() string {
+	return fmt.Sprintf("Name(%v)", string(n))
+}
+
+func test() string {
+	p := Pair{
+		F0: 1,
+		F1: 2,
+	}
+	var _ int
+	x := p.F0
+	y := p.F1
+	_ = x + y
+	n := Name("hello")
+	return string(n)
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:4:9]
+ 3 │   let items = [1, 2, 3];
+ 4 │   items["key"]
+   ·         ──┬──
+   ·           ╰── expected `int`, found `string`
+ 5 │ }
+   ╰────
+  help: Use an integer to index into a `Slice`. For key-value lookup, use a `Map<K, V>` · code: [infer.slice_index_type_mismatch]

@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { loop { break } }"
+---
+fn test() {
+  loop {
+    break
+  }
+}

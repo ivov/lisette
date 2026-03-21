@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Tautological comparison
+   ╭─[test.lis:4:3]
+ 3 │   let x = 5;
+ 4 │   x < x
+   ·   ──┬──
+   ·     ╰── comparing to itself
+ 5 │ }
+   ╰────
+  help: This condition is always false. Did you mean to compare different values? · code: [lint.self_comparison]

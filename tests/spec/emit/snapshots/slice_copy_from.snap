@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(dst: Slice<int>, src: Slice<int>) -> int {\n  dst.copy_from(src)\n}\n"
+---
+package main
+
+func test(dst, src []int) int {
+	return copy(dst, src)
+}

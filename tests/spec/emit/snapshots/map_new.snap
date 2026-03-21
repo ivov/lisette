@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test() -> Map<string, int> {\n  Map.new<string, int>()\n}\n"
+---
+package main
+
+func test() map[string]int {
+	return make(map[string]int)
+}

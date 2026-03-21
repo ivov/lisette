@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n/// A 2D point with x and y coordinates.\nstruct Point { x: int, y: int }\n"
+---
+package main
+
+import "fmt"
+
+// A 2D point with x and y coordinates.
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}

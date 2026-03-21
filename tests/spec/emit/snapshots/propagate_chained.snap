@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn first() -> Result<int, string> {\n  Ok(10)\n}\n\nfn second() -> Result<int, string> {\n  Ok(20)\n}\n\nfn test() -> Result<int, string> {\n  let x = first()?;\n  let y = second()?;\n  Ok(x + y)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func first() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](10)
+}
+
+func second() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](20)
+}
+
+func test() lisette.Result[int, string] {
+	check_1 := first()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_1.ErrVal)
+	}
+	x := check_1.OkVal
+	check_2 := second()
+	if check_2.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_2.ErrVal)
+	}
+	y := check_2.OkVal
+	return lisette.MakeResultOk[int, string](x + y)
+}

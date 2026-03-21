@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test() -> Option<int> {\n  let x: Option<int> = Some(10);\n  Some(x? + 1)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Option[int] {
+	x := lisette.MakeOptionSome(10)
+	if x.Tag != lisette.OptionSome {
+		return lisette.MakeOptionNone[int]()
+	}
+	result_1 := x.SomeVal
+	return lisette.MakeOptionSome[int](result_1 + 1)
+}

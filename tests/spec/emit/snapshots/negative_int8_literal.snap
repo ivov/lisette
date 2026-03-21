@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> int8 {\n  let x: int8 = -1;\n  x\n}\n"
+---
+package main
+
+func test() int8 {
+	var x int8 = -1
+	return x
+}

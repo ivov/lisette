@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(a: Slice<int>, b: Slice<int>) -> Slice<int> {\n  a.extend(b)\n}\n"
+---
+package main
+
+func test(a, b []int) []int {
+	return append(a, b...)
+}

@@ -1,0 +1,33 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/types"
+
+func main() {
+	b := types.Box[int]{Value: 10}
+	mapped := types.Box_Map(b, func(x int) int {
+		return x * 2
+	})
+	_ = mapped.Value
+}
+
+
+// === types/lib.go ===
+package types
+
+import "fmt"
+
+type Box[T any] struct {
+	Value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.Value)
+}
+
+func Box_Map[T any, U any](self Box[T], f func(T) U) Box[U] {
+	return Box[U]{Value: f(self.Value)}
+}

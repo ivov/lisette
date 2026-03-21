@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Failure propagation in expression position
+   ╭─[test.lis:7:19]
+ 6 │ fn test() -> Option<int> {
+ 7 │   Some(maybe()? + None?)
+   ·                   ──┬──
+   ·                     ╰── `Err(..)?` and `None?` always early-return and never produce a value
+ 8 │ }
+   ╰────
+  help: Use `return Err(..)` or `return None` instead · code: [infer.failure_propagation_in_expression]

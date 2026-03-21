@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Conflicting case transforms
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[json(snake_case, camel_case)]
+   · ───────────────┬───────────────
+   ·                ╰── conflicting
+ 3 │ pub struct User {
+   ╰────
+  help: Choose either `snake_case` or `camel_case`, not both · code: [lint.conflicting_case_transforms]

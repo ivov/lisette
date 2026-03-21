@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Reserved keyword
+   ╭─[test.lis:4:7]
+ 3 │   let items = [1, 2, 3];
+ 4 │   for type in items {
+   ·       ──┬─
+   ·         ╰── reserved keyword
+ 5 │     items
+   ╰────
+  help: Rename binding `type` · code: [parse.keyword_as_binding]

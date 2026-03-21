@@ -1,0 +1,18 @@
+struct Point { x: int }
+fn test(other: Point) -> bool {
+  let x = 1;
+  if Point { x } == other { true } else { false }
+}
+
+fn test2() -> int {
+  let x = 42;
+  match Point { x } {
+    Point { x: val } => val,
+  }
+}
+
+struct Bar { x: int }
+fn test3() {
+  let foo = 1;
+  if foo < Bar { x: 42 } { true } else { false }
+}

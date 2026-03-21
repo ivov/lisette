@@ -1,0 +1,56 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === logic/mod.go ===
+package logic
+
+import (
+	"fmt"
+	"github.com/user/myproject/models"
+)
+
+func Process(item models.Item) string {
+	return fmt.Sprintf("%v: %v", item.Name, item.Value)
+}
+
+func Create_item(name string, value int) models.Item {
+	return models.Item{
+		Name:  name,
+		Value: value,
+	}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/logic"
+	"github.com/user/myproject/models"
+)
+
+func main() {
+	item := models.Item{
+		Name:  "test",
+		Value: 42,
+	}
+	fmt.Println(logic.Process(item))
+	created := logic.Create_item("created", 100)
+	fmt.Printf("%v: %v\n", created.Name, created.Value)
+}
+
+
+// === models/mod.go ===
+package models
+
+import "fmt"
+
+type Item struct {
+	Name  string
+	Value int
+}
+
+func (i Item) String() string {
+	return fmt.Sprintf("Item { name: %v, value: %v }", i.Name, i.Value)
+}

@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn use_value(x: int) {}\n\nfn divide(a: int, b: int) -> Result<int, string> {\n  if b == 0 { Err(\"err\") } else { Ok(a / b) }\n}\n\nfn test() {\n  match divide(10, 2) {\n    Ok(v) => use_value(v),\n    Err(_) => use_value(0),\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func use_value(_ int) {}
+
+func divide(a, b int) lisette.Result[int, string] {
+	if b == 0 {
+		return lisette.MakeResultErr[int, string]("err")
+	}
+	return lisette.MakeResultOk[int, string](a / b)
+}
+
+func test() {
+	subject_1 := divide(10, 2)
+	if subject_1.Tag == lisette.ResultOk {
+		v := subject_1.OkVal
+		use_value(v)
+	} else {
+		use_value(0)
+	}
+}

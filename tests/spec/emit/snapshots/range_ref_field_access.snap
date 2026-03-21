@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn get_start(r: Ref<Range<int>>) -> int {\n  r.start\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func get_start(r *lisette.Range[int]) int {
+	return r.Start
+}

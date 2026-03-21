@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `return` in `recover` block
+   ╭─[test.lis:4:5]
+ 3 │   recover {
+ 4 │     return 42;
+   ·     ────┬────
+   ·         ╰── not allowed inside `recover` block
+ 5 │   };
+   ╰────
+  help: Remove the `return`, or move it inside a nested function · code: [infer.recover_block_return]

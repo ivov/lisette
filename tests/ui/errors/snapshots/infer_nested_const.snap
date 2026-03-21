@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Nested const declaration
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │     const MAX = 100
+   ·           ─┬─
+   ·            ╰── constants can only be declared at top level
+ 4 │ }
+   ╰────
+  help: Use a `let` binding instead · code: [infer.nested_const]

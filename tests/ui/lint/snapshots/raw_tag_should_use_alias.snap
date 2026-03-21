@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Prefer predefined tag alias
+   ╭─[test.lis:4:3]
+ 3 │ pub struct User {
+ 4 │   #[tag(`json:"user_name"`)]
+   ·   ─────────────┬────────────
+   ·                ╰── use alias instead
+ 5 │   name: string,
+   ╰────
+  help: Use `#[json(...)]` instead of `#[tag(...)]` for better validation · code: [lint.tag_has_alias]

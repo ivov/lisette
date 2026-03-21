@@ -1,0 +1,32 @@
+fn test(opt: Option<int>) {
+  if let Some(x) = opt {
+    print(x);
+  }
+}
+
+fn test2(opt: Option<int>) {
+  if let Some(x) = opt {
+    print(x);
+  } else {
+    print("none");
+  }
+}
+
+fn test3(a: Option<int>, b: Option<int>) {
+  if let Some(x) = a {
+    print(x);
+  } else if let Some(y) = b {
+    print(y);
+  } else {
+    print("both none");
+  }
+}
+
+fn test4(opt: Option<int>) -> int {
+  let result = if let Some(x) = opt {
+    x * 2
+  } else {
+    0
+  };
+  result
+}

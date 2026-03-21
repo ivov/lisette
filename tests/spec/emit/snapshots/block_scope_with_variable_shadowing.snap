@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> string {\n  let x = \"outer\"\n  {\n    let x = \"inner\"\n    let _ = x\n  }\n  x\n}\n"
+---
+package main
+
+func test() string {
+	x := "outer"
+	{
+		x := "inner"
+		_ = x
+	}
+	return x
+}

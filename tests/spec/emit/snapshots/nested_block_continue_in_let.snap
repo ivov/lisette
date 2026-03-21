@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() {\n  loop {\n    let _ = { { continue } }\n    break\n  }\n}\n"
+---
+package main
+
+func test() {
+	for {
+		{
+			continue
+		}
+		break
+	}
+}

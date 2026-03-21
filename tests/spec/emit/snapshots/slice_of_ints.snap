@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> Slice<int> {\n  [1, 2, 3]\n}\n"
+---
+package main
+
+func test() []int {
+	return []int{1, 2, 3}
+}

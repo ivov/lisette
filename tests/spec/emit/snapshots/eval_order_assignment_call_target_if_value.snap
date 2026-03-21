@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn get_items() -> Slice<int> { [1, 2, 3] }\n\nfn main() {\n  let mut items = [0, 0, 0]\n  items[get_items()[0]] = if true { 42 } else { 0 }\n}\n"
+---
+package main
+
+func get_items() []int {
+	return []int{1, 2, 3}
+}
+
+func main() {
+	items := []int{0, 0, 0}
+	idx_2 := get_items()[0]
+	var tmp_1 int
+	if true {
+		tmp_1 = 42
+	} else {
+		tmp_1 = 0
+	}
+	items[idx_2] = tmp_1
+}

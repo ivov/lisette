@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    1\n  } else {\n    n * factorial(n - 1)\n  }\n}\n"
+---
+package main
+
+func factorial(n int) int {
+	if n <= 1 {
+		return 1
+	}
+	return n * factorial(n-1)
+}

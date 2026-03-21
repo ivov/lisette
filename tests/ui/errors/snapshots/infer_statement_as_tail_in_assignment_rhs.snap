@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Statement used as value
+   ╭─[test.lis:4:19]
+ 3 │   let mut x = 0
+ 4 │   x = if true { { let _ = 1 } } else { 1 }
+   ·                   ────┬────
+   ·                       ╰── this is a statement, not an expression
+ 5 │   let _ = x
+   ╰────
+  help: The last item in this block must be an expression that produces a value. Statements like `let`, `=`, `task`, and `defer` do not produce values · code: [infer.statement_as_tail]

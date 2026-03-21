@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nimport \"go:fmt\"\n\nstruct Point { x: int }\n\nfn main() {\n  let result = match Point { x: 1 }.x {\n    1 => 10,\n    _ => 0,\n  }\n  fmt.Println(result)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v }", p.x)
+}
+
+func main() {
+	var result int
+	subject_1 := Point{x: 1}.x
+	if subject_1 == 1 {
+		result = 10
+	} else {
+		result = 0
+	}
+	fmt.Println(result)
+}

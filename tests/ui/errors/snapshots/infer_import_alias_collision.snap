@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Import conflict
+   ╭─[main.lis:3:8]
+ 2 │ import "foo/utils"
+ 3 │ import "bar/utils"
+   ·        ─────┬─────
+   ·             ╰── conflicts with prior import `utils`
+ 4 │ 
+   ╰────
+  help: `foo/utils` and `bar/utils` resolve to the same name. Add an alias to at least one of them: `import my_utils "bar/utils"` · code: [resolve.import_conflict]

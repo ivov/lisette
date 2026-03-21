@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let mut m = Map.new<string, (int, int)>()\n  m[\"k\"] = (0, 0)\n  let mut entry = m[\"k\"]\n  entry.0 = 1\n  m[\"k\"] = entry\n  let v = m[\"k\"].0\n  fmt.Println(v)\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	m := make(map[string]lisette.Tuple2[int, int])
+	m["k"] = lisette.MakeTuple2(0, 0)
+	entry := m["k"]
+	entry.First = 1
+	m["k"] = entry
+	v := m["k"].First
+	fmt.Println(v)
+}

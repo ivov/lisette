@@ -1,0 +1,8 @@
+fn test() {
+  let x = 10;
+  let message: string = "hello";
+  let mut counter = 0;
+  let mut active: bool = true;
+  let result = (10 + 5) * 2 / calculate_something();
+  let p = Point { x: 1, y: 2 };
+}

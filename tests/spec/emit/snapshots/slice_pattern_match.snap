@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> int {\n  let arr = [1, 2, 3];\n  match arr {\n    [a, b, c] => a + b + c,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+func test() int {
+	arr := []int{1, 2, 3}
+	if len(arr) == 3 {
+		a := arr[0]
+		b := arr[1]
+		c := arr[2]
+		return a + b + c
+	}
+	return 0
+}

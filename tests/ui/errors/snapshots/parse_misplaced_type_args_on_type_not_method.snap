@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Misplaced type argument
+   ╭─[test.lis:3:17]
+ 2 │ fn main() {
+ 3 │   let x = Slice<int>.new()
+   ·                 ─┬─
+   ·                  ╰── misplaced
+ 4 │ }
+   ╰────
+  help: Set the type argument on the method: `Slice.new<int>()` · code: [parse.syntax_error]

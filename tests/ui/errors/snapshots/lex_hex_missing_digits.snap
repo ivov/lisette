@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid hex literal
+   ╭─[test.lis:1:9]
+ 1 │ let x = 0x
+   ·         ─┬
+   ·          ╰── expected digits after `0x`
+   ╰────
+  help: Add hex digits after `0x`, e.g. `0xFF` or `0x1A2B` · code: [lex.number_missing_hex_digits]

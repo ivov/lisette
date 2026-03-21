@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Nested function declaration
+   ╭─[test.lis:3:6]
+ 2 │ fn main() {
+ 3 │   fn nested() -> int {
+   ·      ───┬──
+   ·         ╰── functions can only be declared at top level
+ 4 │     42
+   ╰────
+  help: Use a lambda instead: `|x| x + 1` or `|x| { ... }` · code: [infer.nested_function]

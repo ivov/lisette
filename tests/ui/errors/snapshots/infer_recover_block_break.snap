@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `break` in `recover` block
+   ╭─[test.lis:4:15]
+ 3 │   for i in [1, 2, 3] {
+ 4 │     recover { break };
+   ·               ──┬──
+   ·                 ╰── not allowed inside `recover` block
+ 5 │   }
+   ╰────
+  help: Remove the `break`, or move it inside a loop within the `recover` block · code: [infer.recover_block_break]

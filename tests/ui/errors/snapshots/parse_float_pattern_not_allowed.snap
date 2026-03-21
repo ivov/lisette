@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid pattern
+   ╭─[test.lis:4:5]
+ 3 │   match x {
+ 4 │     3.14 => 1,
+   ·     ──┬─
+   ·       ╰── float literal not allowed here
+ 5 │     _ => 0,
+   ╰────
+  help: Use a guard instead: `x if x == 3.14 =>` · code: [parse.float_pattern]

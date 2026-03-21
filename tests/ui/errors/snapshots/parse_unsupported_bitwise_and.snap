@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unsupported operator
+   ╭─[test.lis:5:13]
+ 4 │   let b = 2
+ 5 │   let c = a & b
+   ·             ┬
+   ·             ╰── `&` is not a supported binary operator
+ 6 │   let _ = c
+   ╰────
+  help: Lisette does not support bitwise operators · code: [parse.unsupported_operator]

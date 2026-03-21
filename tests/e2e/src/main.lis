@@ -1,0 +1,4101 @@
+import "go:bytes"
+import "go:fmt"
+import "go:math"
+import httpx "go:net/http"
+import "go:path"
+import "go:strconv"
+import "go:strings"
+import "go:sync"
+import "go:time"
+
+fn report(name: string, result: int, expected: int) {
+  if result == expected {
+    fmt.Print(f"{name}: PASS\n")
+  } else {
+    fmt.Print(f"{name}: FAIL (got {result}, expected {expected})\n")
+  }
+}
+
+fn section(name: string) {
+  fmt.Print(f"\n// {name}\n\n") // pattern matching - tuples
+}
+
+fn test_tuple_literal() -> int {
+  let pair = (1, 2);
+  match pair {
+    (1, 2) => 100,
+    _ => 0,
+  }
+}
+
+fn test_tuple_binding() -> int {
+  let pair = (3, 4);
+  match pair {
+    (x, y) => x + y,
+  }
+}
+
+fn test_tuple_mixed() -> int {
+  let pair = (0, 42);
+  match pair {
+    (0, y) => y,
+    (x, 0) => x,
+    (x, y) => x + y,
+  }
+}
+
+fn test_tuple_wildcard() -> int {
+  let pair = (5, 10);
+  match pair {
+    (_, y) => y,
+  }
+}
+
+fn test_tuple_nested() -> int {
+  let nested = ((1, 2), 3);
+  match nested {
+    ((1, 2), 3) => 100,
+    ((x, y), z) => x + y + z,
+  }
+}
+
+fn test_tuple_first_match() -> int {
+  let pair = (1, 1);
+  match pair {
+    (1, _) => 10,
+    (_, 1) => 20,
+    _ => 30,
+  }
+}
+
+fn test_tuple_triple() -> int {
+  let triple = (1, 2, 3);
+  match triple {
+    (1, 2, 3) => 6,
+    (a, b, c) => a + b + c,
+  }
+}
+
+fn test_tuple_deep() -> int {
+  let deep = (((1, 2), 3), 4);
+  match deep {
+    (((a, b), c), d) => a + b + c + d,
+  }
+}
+
+fn test_tuple_expr_arm() -> int {
+  let pair = (2, 3);
+  match pair {
+    (x, y) => (x + y) * 2,
+  }
+}
+
+fn test_tuple_all_wild() -> int {
+  let pair = (99, 99);
+  match pair {
+    (_, _) => 1,
+  }
+}
+
+fn get_pair() -> (int, int) {
+  (10, 20)
+}
+
+fn test_tuple_return_annotation() -> int {
+  let (a, b) = get_pair();
+  a + b
+}
+
+// enums
+
+pub enum Color {
+  Red,
+  Green,
+  Blue,
+}
+
+fn test_enum_simple() -> int {
+  let c = Color.Red;
+  match c {
+    Color.Red => 1,
+    Color.Green => 2,
+    Color.Blue => 3,
+  }
+}
+
+pub enum Status {
+  Active,
+  Inactive(int),
+}
+
+fn test_enum_with_data() -> int {
+  let s = Status.Inactive(42);
+  match s {
+    Status.Active => 0,
+    Status.Inactive(n) => n,
+  }
+}
+
+pub enum Pair<A, B> {
+  Both(A, B),
+  Neither,
+}
+
+fn test_enum_multi_field() -> int {
+  let p = Pair.Both(3, 4);
+  match p {
+    Pair.Both(a, b) => a + b,
+    Pair.Neither => 0,
+  }
+}
+
+fn test_enum_neither() -> int {
+  let p: Pair<int, int> = Pair.Neither;
+  match p {
+    Pair.Both(_, _) => 0,
+    Pair.Neither => 100,
+  }
+}
+
+pub enum Message {
+  Quit,
+  Move(int, int),
+  Write(string),
+}
+
+// Enum with struct variants for testing
+pub enum Event {
+  Click { x: int, y: int },
+  KeyPress { key: string, ctrl: bool },
+  Resize { width: int, height: int },
+  Close,
+}
+
+// Struct variants with distinct field names
+pub enum TypeConflict {
+  IntVal { int_value: int },
+  StrVal { str_value: string },
+}
+
+// Mixed tuple and struct variants
+pub enum Shape {
+  Circle(int),
+  Rectangle { width: int, height: int },
+  Triangle { base: int, height: int },
+}
+
+// Struct variant pattern matching - basic
+fn test_struct_variant_match() -> int {
+  let e = Event.Click { x: 10, y: 20 };
+  match e {
+    Event.Click { x, y } => x + y,
+    Event.KeyPress { key: _, ctrl: _ } => 0,
+    Event.Resize { width: _, height: _ } => 0,
+    Event.Close => 0,
+  }
+}
+
+// Struct variant pattern matching - different variant
+fn test_struct_variant_keypress() -> int {
+  let e = Event.KeyPress { key: "a", ctrl: true };
+  match e {
+    Event.Click { x: _, y: _ } => 0,
+    Event.KeyPress { key: _, ctrl } => if ctrl { 100 } else { 50 },
+    Event.Resize { width: _, height: _ } => 0,
+    Event.Close => 0,
+  }
+}
+
+// Struct variant pattern matching - partial with rest
+fn test_struct_variant_partial() -> int {
+  let e = Event.Resize { width: 800, height: 600 };
+  match e {
+    Event.Click { .. } => 0,
+    Event.KeyPress { .. } => 0,
+    Event.Resize { width, .. } => width,
+    Event.Close => 0,
+  }
+}
+
+// Struct variant construction and matching
+fn test_struct_variant_construction() -> int {
+  let s = Shape.Rectangle { width: 10, height: 5 };
+  match s {
+    Shape.Circle(r) => r * r,
+    Shape.Rectangle { width, height } => width * height,
+    Shape.Triangle { base, height } => base * height / 2,
+  }
+}
+
+// Mixed tuple and struct variants in same enum
+fn test_mixed_variants() -> int {
+  let s1 = Shape.Circle(5);
+  let s2 = Shape.Rectangle { width: 4, height: 3 };
+  let area1 = match s1 {
+    Shape.Circle(r) => r * r,
+    Shape.Rectangle { width, height } => width * height,
+    Shape.Triangle { base, height } => base * height / 2,
+  };
+  let area2 = match s2 {
+    Shape.Circle(r) => r * r,
+    Shape.Rectangle { width, height } => width * height,
+    Shape.Triangle { base, height } => base * height / 2,
+  };
+  area1 + area2
+}
+
+// Struct variant with unit variant
+fn test_struct_variant_with_unit() -> int {
+  let e = Event.Close;
+  match e {
+    Event.Click { x, y } => x + y,
+    Event.KeyPress { .. } => 50,
+    Event.Resize { .. } => 75,
+    Event.Close => 99,
+  }
+}
+
+// If-let with struct variant
+fn test_if_let_struct_variant() -> int {
+  let e = Event.Click { x: 5, y: 10 };
+  if let Event.Click { x, y } = e {
+    x * y
+  } else {
+    0
+  }
+}
+
+// Let-else with struct variant
+fn test_let_else_struct_variant() -> int {
+  let e = Event.Click { x: 7, y: 8 };
+  let Event.Click { x, y } = e else {
+    return 0
+  };
+  x + y
+}
+
+// Let-else with struct variant OR-pattern (tests binding declarations)
+fn test_let_else_struct_variant_or() -> int {
+  let e = Event.Click { x: 5, y: 12 };
+  let Event.Click { x, y } | Event.Resize { width: x, height: y } = e else {
+    return 0
+  };
+  x + y
+}
+
+// Struct variant field reordering
+fn test_struct_variant_field_order() -> int {
+  let e = Event.Click { x: 3, y: 7 };
+  match e {
+    // Fields can be matched in any order
+    Event.Click { y, x } => y * 10 + x,
+    _ => 0,
+  }
+}
+
+// Struct variants with distinct field names
+fn test_struct_variant_type_conflict() -> int {
+  let d1 = TypeConflict.IntVal { int_value: 42 };
+  let d2 = TypeConflict.StrVal { str_value: "hello" };
+
+  let v1 = match d1 {
+    TypeConflict.IntVal { int_value } => int_value,
+    TypeConflict.StrVal { .. } => 0,
+  };
+
+  let v2 = match d2 {
+    TypeConflict.IntVal { .. } => 0,
+    TypeConflict.StrVal { str_value } => if str_value == "hello" { 5 } else { 0 },
+  };
+
+  v1 + v2  // 42 + 5 = 47
+}
+
+// Tuple variant with struct variant (distinct field names)
+enum TupleStructConflict {
+  Foo(int),
+  Bar { bar_val: string },
+}
+
+fn test_tuple_struct_field_conflict() -> int {
+  let t = TupleStructConflict.Foo(10);
+  let s = TupleStructConflict.Bar { bar_val: "hello" };
+
+  let v1 = match t {
+    TupleStructConflict.Foo(x) => x,
+    TupleStructConflict.Bar { .. } => 0,
+  };
+
+  let v2 = match s {
+    TupleStructConflict.Foo(_) => 0,
+    TupleStructConflict.Bar { bar_val } => if bar_val == "hello" { 23 } else { 0 },
+  };
+
+  v1 + v2  // 10 + 23 = 33
+}
+
+// Variant named "Tag" collides with the discriminant field
+enum TagCollision {
+  Tag(int),
+  Other(string),
+}
+
+fn test_tag_variant_collision() -> int {
+  let t = TagCollision.Tag(42);
+  let o = TagCollision.Other("hello");
+
+  let v1 = match t {
+    TagCollision.Tag(x) => x,
+    TagCollision.Other(_) => 0,
+  };
+
+  let v2 = match o {
+    TagCollision.Tag(_) => 0,
+    TagCollision.Other(s) => if s == "hello" { 8 } else { 0 },
+  };
+
+  v1 + v2  // 42 + 8 = 50
+}
+
+// Struct variant field named "tag" collides with the discriminant field
+enum TagFieldCollision {
+  Foo { tag: int },
+  Bar(string),
+}
+
+fn test_tag_field_collision() -> int {
+  let f = TagFieldCollision.Foo { tag: 25 };
+  let b = TagFieldCollision.Bar("world");
+
+  let v1 = match f {
+    TagFieldCollision.Foo { tag } => tag,
+    TagFieldCollision.Bar(_) => 0,
+  };
+
+  let v2 = match b {
+    TagFieldCollision.Foo { .. } => 0,
+    TagFieldCollision.Bar(s) => if s == "world" { 12 } else { 0 },
+  };
+
+  v1 + v2  // 25 + 12 = 37
+}
+
+fn test_enum_message() -> int {
+  let m = Message.Move(10, 20);
+  match m {
+    Message.Quit => 0,
+    Message.Move(x, y) => x + y,
+    Message.Write(_) => 100,
+  }
+}
+
+fn test_enum_nested() -> int {
+  let outer = Some(Some(42));
+  match outer {
+    Some(Some(x)) => x,
+    Some(None) => -1,
+    None => -2,
+  }
+}
+
+fn test_enum_nested_none() -> int {
+  let outer: Option<Option<int>> = Some(None);
+  match outer {
+    Some(Some(x)) => x,
+    Some(None) => -1,
+    None => -2,
+  }
+}
+
+fn test_enum_message_quit() -> int {
+  let m = Message.Quit;
+  match m {
+    Message.Quit => 0,
+    Message.Move(x, y) => x + y,
+    Message.Write(_) => 100,
+  }
+}
+
+fn test_enum_message_write() -> int {
+  let m = Message.Write("hello");
+  match m {
+    Message.Quit => 0,
+    Message.Move(x, y) => x + y,
+    Message.Write(_) => 100,
+  }
+}
+
+fn test_enum_multi_arm() -> int {
+  let s = Status.Active;
+  match s {
+    Status.Inactive(n) => n,
+    Status.Active => 999,
+  } // pattern matching - slices
+}
+
+fn test_slice_empty() -> int {
+  let arr: Slice<int> = [];
+  match arr {
+    [] => 100,
+    _ => 0,
+  }
+}
+
+fn test_slice_single() -> int {
+  let arr = [42];
+  match arr {
+    [x] => x,
+    _ => 0,
+  }
+}
+
+fn test_slice_fixed() -> int {
+  let arr = [1, 2, 3];
+  match arr {
+    [a, b, c] => a + b + c,
+    _ => 0,
+  }
+}
+
+fn test_slice_fixed_mismatch() -> int {
+  let arr = [1, 2];
+  match arr {
+    [a, b, c] => a + b + c,
+    [a, b] => a + b,
+    _ => 0,
+  }
+}
+
+fn test_slice_rest_discard() -> int {
+  let arr = [10, 20, 30, 40];
+  match arr {
+    [first, ..] => first,
+    _ => 0,
+  }
+}
+
+fn test_slice_rest_bind() -> int {
+  let arr = [1, 2, 3, 4, 5];
+  match arr {
+    [first, ..rest] => first + rest[0],
+    _ => 0,
+  }
+}
+
+fn test_slice_literal_match() -> int {
+  let arr = [1, 2];
+  match arr {
+    [1, 2] => 100,
+    _ => 0,
+  }
+}
+
+fn test_slice_mixed() -> int {
+  let arr = [0, 99, 3];
+  match arr {
+    [0, x, _] => x,
+    _ => 0,
+  } // pattern matching - structs
+}
+
+struct Point { x: int, y: int }
+
+fn test_struct_full() -> int {
+  let p = Point { x: 3, y: 4 };
+  match p {
+    Point { x, y } => x + y,
+  }
+}
+
+fn test_struct_literal() -> int {
+  let p = Point { x: 0, y: 42 };
+  match p {
+    Point { x: 0, y } => y,
+    Point { x, y: 0 } => x,
+    Point { x, y } => x + y,
+  }
+}
+
+fn test_struct_renamed() -> int {
+  let p = Point { x: 10, y: 20 };
+  match p {
+    Point { x: a, y: b } => a * b,
+  }
+}
+
+fn test_struct_partial() -> int {
+  let p = Point { x: 10, y: 20 };
+  match p {
+    Point { x, .. } => x,
+  }
+}
+
+struct Rect { origin: Point, width: int, height: int }
+
+fn test_struct_nested() -> int {
+  let r = Rect { origin: Point { x: 1, y: 2 }, width: 10, height: 20 };
+  match r {
+    Rect { origin: Point { x, y }, width, height } => x + y + width + height,
+  }
+}
+
+fn test_struct_wildcard_field() -> int {
+  let p = Point { x: 5, y: 10 };
+  match p {
+    Point { x: _, y } => y,
+  }
+}
+
+fn test_struct_multiple_arms() -> int {
+  let p = Point { x: 0, y: 5 };
+  match p {
+    Point { x: 0, y: 0 } => 0,
+    Point { x: 0, y } => y,
+    Point { x, y: 0 } => x,
+    Point { x, y } => x + y,
+  }
+}
+
+fn test_struct_let_destructure() -> int {
+  let p = Point { x: 7, y: 8 };
+  let Point { x, y } = p;
+  x + y // Option
+}
+
+fn test_option_some() -> int {
+  let x = Some(42);
+  match x {
+    Some(n) => n,
+    None => 0,
+  }
+}
+
+fn test_option_none() -> int {
+  let x: Option<int> = None;
+  match x {
+    Some(n) => n,
+    None => -1,
+  }
+}
+
+fn test_option_chain() -> int {
+  let a = Some(5);
+  let b = Some(10);
+  match (a, b) {
+    (Some(x), Some(y)) => x + y,
+    _ => 0,
+  }
+}
+
+fn get_option() -> Option<int> {
+  Some(10)
+}
+
+fn test_option_passthrough() -> int {
+  let x = get_option();
+  match x {
+    Some(n) => n,
+    None => 0,
+  }
+}
+
+fn maybe_double(x: int) -> Option<int> {
+  if x > 0 {
+    Some(x * 2)
+  } else {
+    None
+  }
+}
+
+fn test_option_conditional() -> int {
+  match maybe_double(5) {
+    Some(n) => n,
+    None => 0,
+  }
+}
+
+fn test_option_conditional_none() -> int {
+  match maybe_double(-1) {
+    Some(n) => n,
+    None => -1,
+  }
+}
+
+fn test_option_nested() -> int {
+  let x: Option<Option<int>> = Some(Some(42));
+  match x {
+    Some(Some(n)) => n,
+    Some(None) => -1,
+    None => -2,
+  }
+}
+
+struct Container { value: Option<int> }
+
+fn test_option_in_struct() -> int {
+  let c = Container { value: Some(99) };
+  match c.value {
+    Some(n) => n,
+    None => 0,
+  }
+}
+
+fn get_some() -> Option<int> {
+  Some(123)
+}
+
+fn test_option_return_some() -> int {
+  match get_some() {
+    Some(n) => n,
+    None => 0,
+  }
+}
+
+fn get_none() -> Option<int> {
+  None
+}
+
+fn test_option_return_none() -> int {
+  match get_none() {
+    Some(n) => n,
+    None => -1,
+  }
+}
+
+// if let
+
+fn test_if_let_some() -> int {
+  let opt = Some(42);
+  if let Some(x) = opt {
+    x
+  } else {
+    0
+  }
+}
+
+fn test_if_let_none() -> int {
+  let opt: Option<int> = None;
+  if let Some(x) = opt {
+    x
+  } else {
+    -1
+  }
+}
+
+fn test_if_let_statement() -> int {
+  let opt = Some(10);
+  let mut result = 0;
+  if let Some(x) = opt {
+    result = x + 5;
+  }
+  result
+}
+
+fn test_if_let_nested() -> int {
+  let opt: Option<Option<int>> = Some(Some(100));
+  if let Some(inner) = opt {
+    if let Some(x) = inner {
+      x
+    } else {
+      -1
+    }
+  } else {
+    -2
+  }
+}
+
+fn test_if_let_else_if_let() -> int {
+  let a: Option<int> = None;
+  let b = Some(77);
+  if let Some(x) = a {
+    x
+  } else if let Some(y) = b {
+    y
+  } else {
+    0
+  }
+}
+
+fn test_if_let_result_ok() -> int {
+  let res = Ok(55);
+  if let Ok(x) = res {
+    x
+  } else {
+    -1
+  }
+}
+
+fn test_if_let_result_err() -> int {
+  let res: Result<int, string> = Err("oops");
+  if let Ok(x) = res {
+    x
+  } else {
+    -1
+  }
+}
+
+// let else
+
+fn test_let_else_some() -> int {
+  let opt = Some(42);
+  let Some(x) = opt else { return -1; };
+  x
+}
+
+fn test_let_else_none() -> int {
+  let opt: Option<int> = None;
+  let Some(x) = opt else { return -1; };
+  x
+}
+
+fn test_let_else_result_ok() -> int {
+  let res = Ok(55);
+  let Ok(x) = res else { return -1; };
+  x
+}
+
+fn test_let_else_result_err() -> int {
+  let res: Result<int, string> = Err("oops");
+  let Ok(x) = res else { return -1; };
+  x
+}
+
+fn test_let_else_with_computation() -> int {
+  let opt = Some(10);
+  let Some(x) = opt else { return 0; };
+  x * 2 + 5
+}
+
+fn test_let_else_chained() -> int {
+  let a: Option<int> = None;
+  let b = Some(20);
+
+  let Some(x) = a else {
+    let Some(y) = b else { return -1; };
+    return y;
+  };
+  x
+}
+
+fn helper_let_else_in_loop(items: Slice<Option<int>>) -> int {
+  let mut sum = 0;
+  for item in items {
+    let Some(x) = item else { continue; };
+    sum = sum + x;
+  }
+  sum
+}
+
+fn test_let_else_in_loop() -> int {
+  let items = [Some(1), None, Some(2), None, Some(3)];
+  helper_let_else_in_loop(items)
+}
+
+fn helper_let_else_break(items: Slice<Option<int>>) -> int {
+  let mut result = 0;
+  for item in items {
+    let Some(x) = item else { break; };
+    result = result + x;
+  }
+  result
+}
+
+fn test_let_else_break() -> int {
+  let items = [Some(1), Some(2), None, Some(100)];
+  helper_let_else_break(items)
+}
+
+// while let
+
+fn test_while_let_basic() -> int {
+  let mut opt = Some(3);
+  let mut sum = 0;
+  while let Some(x) = opt {
+    sum = sum + x;
+    if x <= 1 {
+      opt = None;
+    } else {
+      opt = Some(x - 1);
+    }
+  }
+  sum
+}
+
+fn test_while_let_none_initially() -> int {
+  let opt: Option<int> = None;
+  let mut count = 0;
+  while let Some(_) = opt {
+    count = count + 1;
+  }
+  count
+}
+
+fn test_while_let_with_break() -> int {
+  let mut opt = Some(10);
+  let mut sum = 0;
+  while let Some(x) = opt {
+    if x > 100 {
+      break;
+    }
+    sum = sum + x;
+    opt = Some(x * 2);
+  }
+  sum
+}
+
+fn test_while_let_tuple() -> int {
+  let mut opt = Some((1, 2));
+  let mut sum = 0;
+  while let Some((a, b)) = opt {
+    sum = sum + a + b;
+    opt = None;
+  }
+  sum
+}
+
+fn test_while_let_result() -> int {
+  let mut res = Ok(5);
+  let mut sum = 0;
+  while let Ok(x) = res {
+    sum = sum + x;
+    if x <= 1 {
+      res = Err("done");
+    } else {
+      res = Ok(x - 1);
+    }
+  }
+  sum
+}
+
+// Result
+
+fn test_result_ok() -> int {
+  let x = Ok(42);
+  match x {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+fn test_result_err() -> int {
+  let x: Result<int, string> = Err("failed");
+  match x {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+fn fallible() -> Result<int, string> {
+  Ok(10)
+}
+
+fn fallible_propagate() -> Result<int, string> {
+  let x = fallible()?;
+  Ok(x + 1)
+}
+
+fn test_result_propagation() -> int {
+  match fallible_propagate() {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+fn test_result_chain() -> int {
+  let a = Ok(5);
+  let b = Ok(10);
+  match (a, b) {
+    (Ok(x), Ok(y)) => x + y,
+    _ => -1,
+  }
+}
+
+fn test_result_mixed() -> int {
+  let a = Ok(5);
+  let b: Result<int, string> = Err("oops");
+  match (a, b) {
+    (Ok(x), Ok(y)) => x + y,
+    (Ok(x), Err(_)) => x,
+    (Err(_), Ok(y)) => y,
+    (Err(_), Err(_)) => -1,
+  }
+}
+
+fn fallible_err() -> Result<int, string> {
+  Err("error")
+}
+
+fn fallible_propagate_err() -> Result<int, string> {
+  let x = fallible_err()?;
+  Ok(x + 1)
+}
+
+fn test_result_propagation_err() -> int {
+  match fallible_propagate_err() {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+fn multi_fallible() -> Result<int, string> {
+  let a = fallible()?;
+  let b = fallible()?;
+  Ok(a + b)
+}
+
+fn test_result_multi_propagation() -> int {
+  match multi_fallible() {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+fn check_error(e: string) -> int {
+  if e == "specific error" {
+    42
+  } else {
+    -1
+  }
+}
+
+fn test_result_err_value() -> int {
+  let x: Result<int, string> = Err("specific error");
+  match x {
+    Ok(_) => 0,
+    Err(e) => check_error(e),
+  }
+}
+
+// try blocks
+
+fn try_risky_ok() -> Result<int, string> { Ok(42) }
+fn try_risky_err() -> Result<int, string> { Err("error") }
+fn try_maybe_some() -> Option<int> { Some(10) }
+fn try_maybe_none() -> Option<int> { None }
+
+fn test_try_block_basic() -> int {
+  let result = try {
+    try_risky_ok()?
+  };
+  match result {
+    Ok(x) => x,
+    Err(_) => 0,
+  }
+}
+
+fn test_try_block_multiple() -> int {
+  let result = try {
+    let a = try_risky_ok()?;
+    let b = try_risky_ok()?;
+    a + b
+  };
+  match result {
+    Ok(x) => x,
+    Err(_) => 0,
+  }
+}
+
+fn test_try_block_early_err() -> int {
+  let result: Result<int, string> = try {
+    let _ = try_risky_err()?;
+    100
+  };
+  match result {
+    Ok(_) => 0,
+    Err(_) => 42,
+  }
+}
+
+fn test_try_block_option() -> int {
+  let opt = try {
+    let x = try_maybe_some()?;
+    x + 5
+  };
+  match opt {
+    Some(v) => v,
+    None => 0,
+  }
+}
+
+fn test_try_block_option_none() -> int {
+  let opt: Option<int> = try {
+    let _ = try_maybe_none()?;
+    100
+  };
+  match opt {
+    Some(_) => 0,
+    None => 42,
+  }
+}
+
+fn test_try_block_nested() -> int {
+  let outer = try {
+    let inner: Result<int, string> = try {
+      try_risky_ok()?
+    };
+    let inner_val = match inner {
+      Ok(x) => x,
+      Err(_) => 0,
+    };
+    inner_val + try_risky_ok()?
+  };
+  match outer {
+    Ok(x) => x,
+    Err(_) => 0,
+  }
+}
+
+fn test_try_block_with_loop() -> int {
+  let result = try {
+    let mut sum = 0;
+    for i in 0..3 {
+      if i > 1 {
+        break;
+      }
+      sum = sum + i;
+    };
+    sum + try_risky_ok()?
+  };
+  match result {
+    Ok(x) => x,
+    Err(_) => 0,
+  }
+}
+
+fn test_try_block_conditional() -> int {
+  let result = try {
+    if true {
+      try_risky_ok()?
+    } else {
+      0
+    }
+  };
+  match result {
+    Ok(x) => x,
+    Err(_) => 0,
+  }
+}
+
+// Control flow tests
+
+fn test_if_true() -> int {
+  if true {
+    100
+  } else {
+    0
+  }
+}
+
+fn test_if_false() -> int {
+  if false {
+    0
+  } else {
+    100
+  }
+}
+
+fn test_if_chain() -> int {
+  let x = 2;
+  if x == 1 {
+    1
+  } else if x == 2 {
+    2
+  } else if x == 3 {
+    3
+  } else {
+    0
+  }
+}
+
+fn test_if_nested() -> int {
+  let x = 5;
+  let y = 10;
+  if x > 0 {
+    if y > 5 {
+      100
+    } else {
+      50
+    }
+  } else {
+    0
+  }
+}
+
+fn test_while_loop() -> int {
+  let mut sum = 0;
+  let mut i = 1;
+  while i <= 10 {
+    sum = sum + i;
+    i = i + 1
+  }
+  sum
+}
+
+fn test_for_loop() -> int {
+  let mut sum = 0;
+  for i in [1, 2, 3, 4, 5] {
+    sum = sum + i
+  }
+  sum
+}
+
+fn test_range_exclusive() -> int {
+  let mut sum = 0;
+  for i in 0..5 {
+    sum = sum + i
+  }
+  sum
+}
+
+fn test_range_inclusive() -> int {
+  let mut sum = 0;
+  for i in 0..=4 {
+    sum = sum + i
+  }
+  sum
+}
+
+fn test_range_from() -> int {
+  let mut sum = 0;
+  for i in 3.. {
+    if i >= 6 {
+      break
+    }
+    sum = sum + i
+  }
+  sum
+}
+
+fn test_stored_range() -> int {
+  let r = 0..5;
+  let mut sum = 0;
+  for i in r {
+    sum = sum + i
+  }
+  sum
+}
+
+fn test_slice_range_exclusive() -> int {
+  let arr = [10, 20, 30, 40, 50];
+  let sub = arr[1..4];
+  sub[0] + sub[1] + sub[2]
+}
+
+fn test_slice_range_inclusive() -> int {
+  let arr = [10, 20, 30, 40, 50];
+  let sub = arr[1..=3];
+  sub[0] + sub[1] + sub[2]
+}
+
+fn test_slice_range_from() -> int {
+  let arr = [10, 20, 30, 40, 50];
+  let sub = arr[2..];
+  sub[0] + sub[1] + sub[2]
+}
+
+fn test_slice_range_to() -> int {
+  let arr = [10, 20, 30, 40, 50];
+  let sub = arr[..3];
+  sub[0] + sub[1] + sub[2]
+}
+
+fn test_slice_range_full() -> int {
+  let arr = [10, 20, 30];
+  let sub = arr[..];
+  sub[0] + sub[1] + sub[2]
+}
+
+fn test_subslice_append_no_alias() -> int {
+  // Sub-slicing caps capacity, so append on a sub-slice must not
+  // corrupt the original. This is the CVE-2021-39137 class of bug.
+  let source = [1, 2, 3, 4, 5];
+  let sub = source[1..3];
+  let _ = sub.append(99);
+  // If aliasing occurred, source[3] would be 99 instead of 4.
+  source[3]
+}
+
+fn test_mutable_subslice_element_write_no_alias() -> int {
+  let source = [1, 2, 3, 4, 5];
+  let mut sub = source[1..3];
+  sub[0] = 99;
+  // If aliasing occurred, source[1] would be 99 instead of 2.
+  source[1]
+}
+
+fn test_loop_break() -> int {
+  let mut i = 0;
+  loop {
+    i = i + 1;
+    if i == 5 {
+      break
+    }
+  }
+  i
+}
+
+fn test_loop_continue() -> int {
+  let mut sum = 0;
+  let mut i = 0;
+  while i < 10 {
+    i = i + 1;
+    if i % 2 == 0 {
+      continue
+    }
+    sum = sum + i
+  }
+  sum
+}
+
+fn test_nested_loop() -> int {
+  let mut count = 0;
+  for _ in [1, 2, 3] {
+    for _ in [1, 2, 3] {
+      count = count + 1
+    }
+  }
+  count
+}
+
+fn early_return_helper(x: int) -> int {
+  if x < 0 {
+    return -1
+  }
+  if x == 0 {
+    return 0
+  }
+  x * 2
+}
+
+fn test_early_return() -> int {
+  early_return_helper(-5) + early_return_helper(0) + early_return_helper(10) // Functions tests
+}
+
+fn add(a: int, b: int) -> int {
+  a + b
+}
+
+fn test_fn_call() -> int {
+  add(3, 4)
+}
+
+fn apply(f: fn(int) -> int, x: int) -> int {
+  f(x)
+}
+
+fn double(x: int) -> int {
+  x * 2
+}
+
+fn test_higher_order() -> int {
+  apply(double, 5)
+}
+
+fn test_lambda_simple() -> int {
+  let f = |x: int| -> int {
+    x + 1
+  };
+  f(99)
+}
+
+fn test_lambda_capture() -> int {
+  let y = 10;
+  let f = |x: int| -> int {
+    x + y
+  };
+  f(5)
+}
+
+fn factorial(n: int) -> int {
+  if n <= 1 {
+    1
+  } else {
+    n * factorial(n - 1)
+  }
+}
+
+fn test_recursion() -> int {
+  factorial(5)
+}
+
+impl Point {
+  fn sum(self: Point) -> int {
+    self.x + self.y
+  }
+}
+
+fn test_method_call() -> int {
+  let p = Point { x: 12, y: 13 };
+  p.sum()
+}
+
+fn identity<T>(x: T) -> T {
+  x
+}
+
+fn test_generic_fn() -> int {
+  identity(42)
+}
+
+fn test_generic_fn_string() -> int {
+  let s = identity("hello");
+  if s == "hello" {
+    100
+  } else {
+    0
+  }
+}
+
+// Concurrency tests
+
+fn test_channel_basic() -> int {
+  let ch = Channel.new<int>();
+  // Select with default on empty channel takes default
+  select {
+    let Some(v) = ch.receive() => v,
+    _ => 42,
+  }
+}
+
+fn test_channel_multiple() -> int {
+  let ch1 = Channel.new<int>();
+  let ch2 = Channel.new<int>();
+  let ch3 = Channel.new<int>();
+  // All empty, takes default
+  select {
+    match ch1.receive() {
+      Some(v) => v,
+      None => 100,
+    },
+    match ch2.receive() {
+      Some(v) => v + 10,
+      None => 100,
+    },
+    match ch3.receive() {
+      Some(v) => v + 20,
+      None => 100,
+    },
+    _ => 100,
+  }
+}
+
+fn test_select_basic() -> int {
+  let ch1 = Channel.new<int>();
+  let ch2 = Channel.new<int>();
+  select {
+    match ch1.receive() {
+      Some(x) => x,
+      None => 50,
+    },
+    match ch2.receive() {
+      Some(y) => y,
+      None => 50,
+    },
+    _ => 50,
+  }
+}
+
+fn test_select_default() -> int {
+  let ch = Channel.new<int>();
+  let result = select {
+    let Some(v) = ch.receive() => v + 100,
+    _ => 0,
+  };
+  result
+}
+
+fn test_task_spawn() -> int {
+  // Just verify task spawning compiles and runs
+  // The task runs asynchronously, we just verify main continues
+  task {
+    fmt.Print("")
+  };
+  100
+}
+
+fn test_buffered_channel() -> int {
+  let ch = Channel.buffered<int>(2);
+  // Buffered channel can accept sends without blocking (up to capacity)
+  ch.send(10);
+  ch.send(20);
+  // Receive the values
+  let v1 = match ch.receive() {
+    Some(v) => v,
+    None => 0,
+  };
+  let v2 = match ch.receive() {
+    Some(v) => v,
+    None => 0,
+  };
+  v1 + v2
+}
+
+fn test_blocking_send_receive() -> int {
+  let ch = Channel.new<int>();
+  task {
+    ch.send(42);
+  };
+  // Blocking receive waits for the send
+  match ch.receive() {
+    Some(v) => v,
+    None => 0,
+  }
+}
+
+fn test_channel_iteration() -> int {
+  let ch = Channel.buffered<int>(3);
+  ch.send(1);
+  ch.send(2);
+  ch.send(3);
+  ch.close();
+  let mut sum = 0;
+  for v in ch {
+    sum = sum + v;
+  };
+  sum
+}
+
+fn test_channel_split() -> int {
+  let ch = Channel.new<int>();
+  let (tx, rx) = ch.split();
+  task {
+    tx.send(99);
+  };
+  match rx.receive() {
+    Some(v) => v,
+    None => 0,
+  }
+}
+
+fn test_select_match_receive_value() -> int {
+  let ch = Channel.buffered<int>(1);
+  ch.send(42);
+  select {
+    match ch.receive() {
+      Some(v) => v,
+      None => 0,
+    },
+    _ => -1,
+  }
+}
+
+fn test_select_match_receive_closed() -> int {
+  let ch = Channel.buffered<int>(1);
+  ch.close();
+  select {
+    match ch.receive() {
+      Some(v) => v,
+      None => 100,  // Channel is closed, should take this arm
+    },
+    _ => -1,
+  }
+}
+
+// Expressions as arguments tests
+
+fn use_int(x: int) -> int { x }
+
+fn test_if_as_argument() -> int {
+  let val = if true { 42 } else { 0 };
+  use_int(val)
+}
+
+fn test_match_as_argument() -> int {
+  let x = 1;
+  let val = match x {
+    1 => 100,
+    _ => 0,
+  };
+  use_int(val)
+}
+
+fn test_block_as_argument() -> int {
+  let val = {
+    let a = 10;
+    let b = 20;
+    a + b
+  };
+  use_int(val)
+}
+
+fn test_select_as_argument() -> int {
+  let ch = Channel.new<int>();
+  let val = select {
+    let Some(v) = ch.receive() => v,
+    _ => 77,
+  };
+  use_int(val)
+}
+
+fn test_nested_expr_argument() -> int {
+  let x = true;
+  let y = 1;
+  let inner = match y { 1 => 50, _ => 0 };
+  let val = if x { inner } else { 0 };
+  use_int(val)
+}
+
+// Try operator contexts tests
+
+fn try_in_arg_helper() -> Result<int, string> {
+  Ok(use_int(fallible()?))
+}
+
+fn test_try_in_argument() -> int {
+  match try_in_arg_helper() {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+struct Fallible { value: int }
+
+impl Fallible {
+  fn get(self: Fallible) -> Result<int, string> {
+    Ok(self.value)
+  }
+}
+
+fn test_try_then_chain() -> int {
+  // Can't easily chain after try, test try on method call
+  let f = Fallible { value: 25 };
+  match f.get() {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+fn try_return_helper() -> Result<int, string> {
+  let v = fallible()?;
+  Ok(v + 5)
+}
+
+fn test_try_in_return() -> int {
+  match try_return_helper() {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+fn test_try_in_lambda() -> int {
+  let f = |x: int| -> Result<int, string> {
+    let v = fallible()?;
+    Ok(v + x)
+  };
+  match f(5) {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+// Lambda edge cases tests
+
+fn returns_lambda() -> fn(int) -> int {
+  |x: int| -> int { x * 2 }
+}
+
+fn test_lambda_return_value() -> int {
+  let f = returns_lambda();
+  f(25)
+}
+
+fn test_lambda_iife() -> int {
+  (|x: int| -> int { x + 10 })(30)
+}
+
+fn test_lambda_nested() -> int {
+  let make_adder = |x: int| -> fn(int) -> int {
+    |y: int| -> int { x + y }
+  };
+  let add5 = make_adder(5);
+  add5(10)
+}
+
+// References tests
+
+fn takes_ref(r: Ref<int>) -> int {
+  r.*
+}
+
+fn test_ref_create() -> int {
+  let x = 42;
+  let r = &x;
+  r.*
+}
+
+fn test_ref_deref() -> int {
+  let x = 100;
+  let r = &x;
+  let v = r.*;
+  v
+}
+
+fn test_ref_pass() -> int {
+  let x = 55;
+  takes_ref(&x)
+}
+
+fn mutates_ref(r: Ref<int>) {
+  r.* = 99
+}
+
+fn test_ref_mut() -> int {
+  let mut x = 1;
+  mutates_ref(&x);
+  x
+}
+
+// Block expressions tests
+
+fn test_block_as_value() -> int {
+  let x = {
+    let a = 5;
+    let b = 10;
+    a * b
+  };
+  x
+}
+
+// Format strings tests
+
+fn test_fmt_variable() -> int {
+  let result = 1;
+  let s = f"result: {result}";
+  if s == "result: 1" { 100 } else { 0 }
+}
+
+fn test_fmt_multi_variable() -> int {
+  let x = 10;
+  let y = 20;
+  let sum = x + y;
+  let product = x * y;
+  let s = f"sum: {sum}, product: {product}";
+  if s == "sum: 30, product: 200" { 100 } else { 0 }
+}
+
+fn test_fmt_expression_addition() -> int {
+  let x = 10;
+  let y = 20;
+  let s = f"sum: {x + y}";
+  if s == "sum: 30" { 100 } else { 0 }
+}
+
+fn test_fmt_expression_method_call() -> int {
+  let arr = [1, 2, 3];
+  let s = f"len: {arr.length()}";
+  if s == "len: 3" { 100 } else { 0 }
+}
+
+fn test_fmt_expression_index_access() -> int {
+  let arr = [10, 20, 30];
+  let s = f"first: {arr[0]}";
+  if s == "first: 10" { 100 } else { 0 }
+}
+
+fn test_fmt_expression_if() -> int {
+  let x = 5;
+  let label = if x > 0 { "positive" } else { "negative" };
+  let s = f"result: {label}";
+  if s == "result: positive" { 100 } else { 0 }
+}
+
+fn test_fmt_expression_chained() -> int {
+  let arr = [1, 2, 3, 4, 5];
+  let s = f"sum: {arr[0] + arr[1] + arr[2]}";
+  if s == "sum: 6" { 100 } else { 0 }
+}
+
+fn test_fmt_escaped_braces() -> int {
+  let x = 42;
+  let s = f"value: {x}, literal: {{braces}}";
+  if s == "value: 42, literal: {braces}" { 100 } else { 0 }
+}
+
+// Let destructuring tests
+
+fn test_let_slice_destructure() -> int {
+  let arr = [10, 20, 30];
+  match arr {
+    [a, b, c] => a + b + c,
+    _ => 0,
+  }
+}
+
+fn test_let_slice_rest() -> int {
+  let arr = [1, 2, 3, 4, 5];
+  match arr {
+    [first, ..rest] => first + rest[0] + rest[1],
+    _ => 0,
+  }
+}
+
+fn test_let_struct_nested() -> int {
+  let r = Rect { origin: Point { x: 5, y: 6 }, width: 10, height: 20 };
+  let Rect { origin: Point { x, y }, width, height } = r;
+  x + y + width + height
+}
+
+fn test_let_tuple_destructure() -> int {
+  let pair = (7, 8);
+  let (a, b) = pair;
+  a + b
+}
+
+fn get_point() -> Point {
+  Point { x: 100, y: 200 }
+}
+
+fn test_let_struct_alias() -> int {
+  let Point { x, y: y_coord } = get_point();
+  x + y_coord
+}
+
+fn test_let_struct_alias_nested() -> int {
+  let Rect { origin: Point { x: ox, y: oy }, width: w, height: h } =
+    Rect { origin: Point { x: 1, y: 2 }, width: 3, height: 4 };
+  ox + oy + w + h
+}
+
+// Slice patterns in match
+
+fn sum_first_two(slice: Slice<int>) -> int {
+  match slice {
+    [a, b, ..] => a + b,
+    _ => 0,
+  }
+}
+
+fn test_slice_param_destructure() -> int {
+  sum_first_two([10, 20, 30, 40])
+}
+
+fn head_tail(slice: Slice<int>) -> int {
+  match slice {
+    [head, ..tail] => head + tail[0],
+    _ => 0,
+  }
+}
+
+fn test_slice_param_rest() -> int {
+  head_tail([5, 10, 15])
+}
+
+// Lambdas as values
+
+fn test_lambda_as_value() -> int {
+  let f = |x: int| -> int { x * 3 };
+  f(10)
+}
+
+fn test_lambda_passed() -> int {
+  let f = |x: int| -> int { x * 2 };
+  apply(f, 25)
+}
+
+// Compound assignment operators
+
+fn test_compound_add() -> int {
+  let mut x = 10;
+  x += 5;
+  x
+}
+
+fn test_compound_sub() -> int {
+  let mut x = 20;
+  x -= 8;
+  x
+}
+
+fn test_compound_mul() -> int {
+  let mut x = 5;
+  x *= 4;
+  x
+}
+
+fn test_compound_div() -> int {
+  let mut x = 100;
+  x /= 5;
+  x
+}
+
+fn test_compound_mod() -> int {
+  let mut x = 17;
+  x %= 5;
+  x
+}
+
+fn test_compound_chain() -> int {
+  let mut x = 10;
+  x += 5;
+  x *= 2;
+  x -= 10;
+  x
+}
+
+// Index access edge cases
+
+fn returns_slice() -> Slice<int> {
+  [10, 20, 30]
+}
+
+fn test_index_on_call() -> int {
+  returns_slice()[1]
+}
+
+fn test_index_nested() -> int {
+  let matrix = [[1, 2], [3, 4], [5, 6]];
+  matrix[1][0] + matrix[2][1]
+}
+
+fn test_index_in_expression() -> int {
+  let arr = [10, 20, 30];
+  arr[0] + arr[1] * arr[2]
+}
+
+struct SliceHolder { items: Slice<int> }
+
+fn test_index_on_field() -> int {
+  let h = SliceHolder { items: [5, 10, 15] };
+  h.items[0] + h.items[2]
+}
+
+// Dot access chains
+
+struct Inner { value: int }
+struct Middle { inner: Inner }
+struct Outer { middle: Middle }
+
+fn test_dot_chain_deep() -> int {
+  let o = Outer { middle: Middle { inner: Inner { value: 42 } } };
+  o.middle.inner.value
+}
+
+impl Inner {
+  fn get(self: Inner) -> int {
+    self.value
+  }
+
+  fn doubled(self: Inner) -> Inner {
+    Inner { value: self.value * 2 }
+  }
+}
+
+fn test_method_chain() -> int {
+  let i = Inner { value: 10 };
+  i.doubled().get()
+}
+
+fn test_method_then_field() -> int {
+  let i = Inner { value: 15 };
+  i.doubled().value
+}
+
+// Complex match arm expressions
+
+fn test_match_with_block_arm() -> int {
+  let x = 2;
+  match x {
+    1 => 10,
+    2 => {
+      let a = 20;
+      let b = 30;
+      a + b
+    },
+    _ => 0,
+  }
+}
+
+fn test_match_with_nested_if() -> int {
+  let x = 5;
+  match x {
+    n => if n > 3 { n * 10 } else { n },
+  }
+}
+
+fn test_match_nested_match() -> int {
+  let outer = Some(Some(7));
+  match outer {
+    Some(inner) => match inner {
+      Some(n) => n * 2,
+      None => -1,
+    },
+    None => -2,
+  }
+}
+
+fn test_if_with_match() -> int {
+  let x = true;
+  let y = 3;
+  if x {
+    match y {
+      1 => 10,
+      2 => 20,
+      3 => 30,
+      _ => 0,
+    }
+  } else {
+    0
+  }
+}
+
+// Unary operators
+
+fn test_unary_not_complex() -> int {
+  let x = false;
+  let y = true;
+  if !x && y { 100 } else { 0 }
+}
+
+fn test_unary_neg_field() -> int {
+  let p = Point { x: 10, y: 20 };
+  -p.x + p.y
+}
+
+fn test_unary_not_comparison() -> int {
+  let x = 5;
+  if !(x > 10) { 100 } else { 0 }
+}
+
+// Early return from nested contexts
+
+fn deeply_nested(x: int) -> int {
+  if x > 0 {
+    match x {
+      1 => {
+        for i in [1, 2, 3] {
+          if i == 2 {
+            return 200
+          }
+        }
+        100
+      },
+      _ => x,
+    }
+  } else {
+    -1
+  }
+}
+
+fn test_early_return_nested() -> int {
+  deeply_nested(1)
+}
+
+fn test_return_in_match_arm() -> int {
+  let x = 3;
+  let result = match x {
+    1 => return 100,
+    2 => return 200,
+    3 => 300,
+    _ => return 400,
+  };
+  result
+}
+
+fn test_return_in_if_arm() -> int {
+  let x = true;
+  let result = if x {
+    return 50
+  } else {
+    100
+  };
+  result
+}
+
+// generic methods
+
+struct Box<T> {
+  value: T
+}
+
+impl<T> Box<T> {
+  fn get(self: Box<T>) -> T {
+    self.value
+  }
+
+  fn map(self: Box<T>, f: fn(T) -> T) -> Box<T> {
+    Box { value: f(self.value) }
+  }
+}
+
+fn test_generic_method_int() -> int {
+  let b = Box { value: 42 };
+  b.get()
+}
+
+fn test_generic_method_string() -> int {
+  let b = Box { value: "hello" };
+  if b.get() == "hello" { 100 } else { 0 }
+}
+
+fn test_generic_method_chain() -> int {
+  let b = Box { value: 10 };
+  b.map(|x: int| -> int { x * 2 }).get()
+}
+
+fn test_go_keyword_as_variable() -> int {
+  let map = 42;
+  let range = 10;
+  map + range
+}
+
+fn test_generic_struct_direct_construction() -> int {
+  let b = Box { value: 50 };
+  b.get()
+}
+
+// type aliases
+
+type Ints = Slice<int>
+
+fn sum_ints(nums: Ints) -> int {
+  let mut total = 0;
+  for n in nums {
+    total += n;
+  }
+  total
+}
+
+fn test_type_alias_basic() -> int {
+  let nums: Ints = [1, 2, 3, 4, 5];
+  sum_ints(nums)
+}
+
+// nested generics
+
+fn test_nested_option_some_some() -> int {
+  let x: Option<Option<int>> = Some(Some(42));
+  match x {
+    Some(Some(v)) => v,
+    Some(None) => -1,
+    None => -2,
+  }
+}
+
+fn test_nested_option_some_none() -> int {
+  let x: Option<Option<int>> = Some(None);
+  match x {
+    Some(Some(v)) => v,
+    Some(None) => -1,
+    None => -2,
+  }
+}
+
+fn test_nested_option_none() -> int {
+  let x: Option<Option<int>> = None;
+  match x {
+    Some(Some(v)) => v,
+    Some(None) => -1,
+    None => -2,
+  }
+}
+
+fn test_result_with_option() -> int {
+  let x = Ok(Some(100));
+  match x {
+    Ok(Some(v)) => v,
+    Ok(None) => -1,
+    Err(_) => -2,
+  }
+}
+
+// multiple type parameters
+
+struct Duo<A, B> { first: A, second: B }
+
+fn make_duo<A, B>(a: A, b: B) -> Duo<A, B> {
+  Duo { first: a, second: b }
+}
+
+fn test_multi_type_params() -> int {
+  let duo = make_duo(10, "hello");
+  duo.first
+}
+
+fn test_multi_type_params_swap() -> int {
+  let duo = make_duo("world", 99);
+  duo.second
+}
+
+// assignment expressions
+
+struct MutPoint { x: int, y: int }
+
+fn test_field_assignment() -> int {
+  let mut p = MutPoint { x: 0, y: 0 };
+  p.x = 10;
+  p.y = 20;
+  p.x + p.y
+}
+
+fn test_index_assignment() -> int {
+  let mut arr = [1, 2, 3];
+  arr[0] = 100;
+  arr[0]
+}
+
+fn test_nested_field_assignment() -> int {
+  let mut outer = Outer { middle: Middle { inner: Inner { value: 0 } } };
+  outer.middle.inner.value = 42;
+  outer.middle.inner.value
+}
+
+// complex control flow
+
+fn test_break_nested_labeled() -> int {
+  let mut sum = 0;
+  let mut i = 0;
+  loop {
+    i += 1;
+    let mut j = 0;
+    loop {
+      j += 1;
+      sum += 1;
+      if j >= 3 {
+        break
+      }
+    }
+    if i >= 4 {
+      break
+    }
+  }
+  sum
+}
+
+fn test_continue_in_nested() -> int {
+  let mut count = 0;
+  for _ in [1, 2, 3] {
+    for j in [1, 2, 3] {
+      if j == 2 {
+        continue
+      }
+      count += 1;
+    }
+  }
+  count
+}
+
+// custom generic enum
+
+enum Either<L, R> {
+  Left(L),
+  Right(R),
+}
+
+fn test_either_left() -> int {
+  let e: Either<int, string> = Either.Left(42);
+  match e {
+    Either.Left(v) => v,
+    Either.Right(_) => 0,
+  }
+}
+
+fn test_either_right() -> int {
+  let e: Either<int, string> = Either.Right("hello");
+  match e {
+    Either.Left(_) => 0,
+    Either.Right(s) => if s == "hello" { 100 } else { 0 },
+  }
+}
+
+// enum methods (regression test for method call capitalization bug)
+
+enum MethodEnum {
+  Val(int),
+  Empty,
+}
+
+impl MethodEnum {
+  fn get_val(self) -> int {
+    match self {
+      MethodEnum.Val(x) => x,
+      MethodEnum.Empty => 0,
+    }
+  }
+
+  fn doubled(self) -> int {
+    self.get_val() * 2
+  }
+}
+
+fn test_enum_method() -> int {
+  let e = MethodEnum.Val(21);
+  e.get_val()
+}
+
+fn test_enum_method_chained() -> int {
+  let e = MethodEnum.Val(25);
+  e.doubled()
+}
+
+// struct spread
+
+fn test_struct_spread() -> int {
+  let p1 = MutPoint { x: 10, y: 20 };
+  let p2 = MutPoint { x: 100, ..p1 };
+  p2.x + p2.y
+}
+
+fn test_struct_spread_override_last() -> int {
+  let p1 = MutPoint { x: 5, y: 5 };
+  let p2 = MutPoint { y: 50, ..p1 };
+  p2.x + p2.y
+}
+
+fn test_struct_variant_spread() -> int {
+  let base = Event.Click { x: 10, y: 20 };
+  let e = Event.Click { x: 100, ..base };
+  match e {
+    Event.Click { x, y } => x + y,
+    _ => 0,
+  }
+}
+
+// tuple structs
+
+struct UserId(int)
+struct Point2D(int, int)
+struct Wrapper<T>(T)
+
+fn get_user_id_raw(id: UserId) -> int {
+  id.0
+}
+
+fn test_tuple_struct_single() -> int {
+  let id = UserId(42);
+  id.0
+}
+
+fn test_tuple_struct_multi() -> int {
+  let p = Point2D(10, 20);
+  p.0 + p.1
+}
+
+fn test_tuple_struct_pattern() -> int {
+  let p = Point2D(3, 4);
+  match p {
+    Point2D(x, y) => x * x + y * y,
+  }
+}
+
+fn test_tuple_struct_function_param() -> int {
+  get_user_id_raw(UserId(100))
+}
+
+fn test_tuple_struct_generic() -> int {
+  let w = Wrapper(50);
+  w.0
+}
+
+// match guards
+
+fn test_guard_basic() -> int {
+  let opt = Some(42);
+  match opt {
+    Some(x) if x > 0 => 1,
+    Some(_) => 2,
+    None => 3,
+  }
+}
+
+fn test_guard_negative() -> int {
+  let opt = Some(-10);
+  match opt {
+    Some(x) if x > 0 => 1,
+    Some(_) => 2,
+    None => 3,
+  }
+}
+
+fn test_guard_zero() -> int {
+  let opt = Some(0);
+  match opt {
+    Some(x) if x > 0 => 1,
+    Some(x) if x < 0 => 2,
+    Some(_) => 3,
+    None => 4,
+  }
+}
+
+fn test_guard_none() -> int {
+  let opt: Option<int> = None;
+  match opt {
+    Some(x) if x > 0 => 1,
+    Some(_) => 2,
+    None => 3,
+  }
+}
+
+fn test_guard_multiple() -> int {
+  let opt = Some(50);
+  match opt {
+    Some(x) if x > 100 => 1,
+    Some(x) if x > 50 => 2,
+    Some(x) if x > 0 => 3,
+    Some(_) => 4,
+    None => 5,
+  }
+}
+
+fn test_guard_uses_binding() -> int {
+  let opt = Some(7);
+  match opt {
+    Some(n) if n > 10 => n * 10,
+    Some(n) if n > 5 => n * 2,
+    Some(n) => n,
+    None => 0,
+  }
+}
+
+fn test_guard_on_tuple() -> int {
+  let pair = (3, 5);
+  match pair {
+    (x, y) if x == y => 1,
+    (x, y) if x > y => 2,
+    (x, y) if x < y => 3,
+    _ => 4,
+  }
+}
+
+fn test_guard_on_struct() -> int {
+  let p = Point { x: 10, y: 10 };
+  match p {
+    Point { x, y } if x == y => 1,
+    Point { x, y } if x > y => 2,
+    _ => 3,
+  }
+}
+
+fn test_guard_complex_condition() -> int {
+  let pair = (3, 4);
+  match pair {
+    (x, y) if x > 0 && y > 0 && x + y > 5 => 1,
+    (x, y) if x > 0 || y > 0 => 2,
+    _ => 3,
+  }
+}
+
+fn test_guard_with_result() -> int {
+  let res = Ok(25);
+  match res {
+    Ok(n) if n > 50 => 1,
+    Ok(n) if n > 20 => 2,
+    Ok(_) => 3,
+    Err(_) => 4,
+  }
+}
+
+// per-field visibility
+
+pub struct PublicPoint {
+  pub x: int,
+  pub y: int,
+}
+
+pub struct MixedPoint {
+  pub x: int,
+  y: int,  // private
+}
+
+pub struct PrivateFields {
+  a: int,
+  b: int,
+}
+
+fn test_all_pub_fields() -> int {
+  let p = PublicPoint { x: 10, y: 20 };
+  p.x + p.y
+}
+
+fn test_mixed_visibility() -> int {
+  // Within same module, both pub and private fields are accessible
+  let p = MixedPoint { x: 100, y: 50 };
+  p.x + p.y
+}
+
+fn test_all_private_fields() -> int {
+  let p = PrivateFields { a: 7, b: 8 };
+  p.a + p.b
+}
+
+fn test_pub_struct_spread() -> int {
+  let p1 = PublicPoint { x: 5, y: 10 };
+  let p2 = PublicPoint { x: 100, ..p1 };
+  p2.x + p2.y
+}
+
+fn test_mixed_struct_spread() -> int {
+  let p1 = MixedPoint { x: 3, y: 4 };
+  let p2 = MixedPoint { x: 30, ..p1 };
+  p2.x + p2.y
+}
+
+fn test_pub_field_pattern() -> int {
+  let p = PublicPoint { x: 11, y: 22 };
+  match p {
+    PublicPoint { x, y } => x + y,
+  }
+}
+
+fn test_mixed_field_pattern() -> int {
+  let p = MixedPoint { x: 33, y: 44 };
+  match p {
+    MixedPoint { x, y } => x + y,
+  }
+}
+
+impl PublicPoint {
+  fn sum(self: PublicPoint) -> int {
+    self.x + self.y
+  }
+}
+
+fn test_pub_field_method() -> int {
+  let p = PublicPoint { x: 15, y: 25 };
+  p.sum()
+}
+
+fn test_pub_let_destructure() -> int {
+  let p = PublicPoint { x: 5, y: 10 };
+  let PublicPoint { x, y } = p;
+  x + y
+}
+
+fn test_enum_struct_let_destructure() -> int {
+  let e = Event.Click { x: 30, y: 12 };
+  match e {
+    Event.Click { x, y } => {
+      let Event.Click { x: a, y: b } = e else { return 0 };
+      a + b
+    },
+    _ => 0,
+  }
+}
+
+// or-patterns
+
+fn test_or_pattern_literals() -> int {
+  let x = 2;
+  match x {
+    1 | 2 | 3 => 100,
+    _ => 0,
+  }
+}
+
+fn test_or_pattern_enum() -> int {
+  let c = Color.Red;
+  match c {
+    Color.Red | Color.Green => 1,
+    Color.Blue => 2,
+  }
+}
+
+fn test_or_pattern_strings() -> int {
+  let s = "y";
+  match s {
+    "yes" | "y" | "true" => 1,
+    "no" | "n" | "false" => 0,
+    _ => -1,
+  }
+}
+
+fn test_or_pattern_booleans() -> int {
+  let pair = (true, false);
+  match pair {
+    (true, true) | (false, false) => 1,
+    (true, false) | (false, true) => 2,
+  }
+}
+
+fn test_or_pattern_with_guard() -> int {
+  let x = 5;
+  match x {
+    1 | 2 | 3 if x > 0 => 10,
+    1 | 2 | 3 => 20,
+    _ => 30,
+  }
+}
+
+fn test_or_pattern_guard_skips_arm() -> int {
+  let x = 1;
+  match x {
+    1 | 2 if false => 10,
+    _ => 20,
+  }
+}
+
+fn test_or_pattern_exhaustive() -> int {
+  let c = Color.Blue;
+  match c {
+    Color.Red | Color.Green => 1,
+    Color.Blue => 2,
+  }
+}
+
+fn test_or_pattern_if_let() -> int {
+  let x = 2;
+  if let 1 | 2 | 3 = x {
+    100
+  } else {
+    0
+  }
+}
+
+fn test_or_pattern_mixed_arms() -> int {
+  let x = 5;
+  match x {
+    0 | 1 => 10,
+    2 | 3 | 4 => 20,
+    5 | 6 | 7 => 30,
+    _ => 0,
+  }
+}
+
+// Imaginary literals
+
+fn test_imaginary_integer() -> int {
+  let _ = 4i;
+  // Just verify it compiles and runs
+  100
+}
+
+fn test_imaginary_float() -> int {
+  let _ = 3.14i;
+  // Just verify it compiles and runs
+  100
+}
+
+fn test_imaginary_zero() -> int {
+  let _ = 0i;
+  100
+}
+
+fn test_complex_addition() -> int {
+  let _ = 3 + 4i;
+  100
+}
+
+fn test_complex_subtraction() -> int {
+  let _ = 10 - 2i;
+  100
+}
+
+fn test_complex_multiplication() -> int {
+  let _ = (3 + 4i) * 2i;
+  100
+}
+
+fn test_imaginary_addition() -> int {
+  let _ = 4i + 4i;
+  100
+}
+
+fn test_complex_in_function() -> complex128 {
+  3 + 4i
+}
+
+fn test_complex_return() -> int {
+  let _ = test_complex_in_function();
+  100
+}
+
+fn test_complex_param(_c: complex128) -> int {
+  100
+}
+
+fn test_complex_as_param() -> int {
+  test_complex_param(3 + 4i)
+}
+
+// Go stdlib tuple destructuring tests
+fn test_go_tuple_destructure() -> int {
+  let (dir, file) = path.Split("/foo/bar.txt");
+  if dir == "/foo/" && file == "bar.txt" { 100 } else { 0 }
+}
+
+fn test_go_tuple_destructure_wildcard() -> int {
+  let (_, file) = path.Split("/foo/bar.txt");
+  if file == "bar.txt" { 100 } else { 0 }
+}
+
+fn test_go_tuple_discard() -> int {
+  let _ = path.Split("/foo/bar.txt");
+  100
+}
+
+fn test_go_tuple_store() -> int {
+  let pair = path.Split("/foo/bar.txt");
+  if pair.0 == "/foo/" && pair.1 == "bar.txt" { 100 } else { 0 }
+}
+
+fn test_go_tuple_field_inline() -> int {
+  if path.Split("/foo/bar.txt").0 == "/foo/" { 100 } else { 0 }
+}
+
+fn test_strings_to_upper() -> int {
+  let s = "hello";
+  if strings.ToUpper(s) == "HELLO" { 100 } else { 0 }
+}
+
+fn test_strings_to_lower() -> int {
+  let s = "WORLD";
+  if strings.ToLower(s) == "world" { 100 } else { 0 }
+}
+
+fn test_strings_to_title() -> int {
+  let s = "hello world";
+  if strings.ToTitle(s) == "HELLO WORLD" { 100 } else { 0 }
+}
+
+fn test_pipeline_go_stdlib() -> int {
+  let result = 42 |> strconv.Itoa;
+  if result == "42" { 100 } else { 0 }
+}
+
+fn test_pipeline_go_stdlib_chained() -> int {
+  let result = 42
+    |> strconv.Itoa
+    |> strings.ToUpper;
+  if result == "42" { 100 } else { 0 }
+}
+
+fn test_pipeline_go_stdlib_with_args() -> int {
+  let result = "hello"
+    |> strings.Repeat(3);
+  if result == "hellohellohello" { 100 } else { 0 }
+}
+
+// Result/Option direct argument passing
+
+fn divide_for_test(a: int, b: int) -> Result<int, string> {
+  if b == 0 { Err("division by zero") } else { Ok(a / b) }
+}
+
+fn describe_result(r: Result<int, string>) -> string {
+  match r { Ok(v) => f"{v}", Err(e) => e }
+}
+
+fn maybe_int_for_test(b: bool) -> Option<int> {
+  if b { Some(42) } else { None }
+}
+
+fn unwrap_or_for_test(o: Option<int>, fallback: int) -> int {
+  match o { Some(v) => v, None => fallback }
+}
+
+fn test_result_direct_arg_ok() -> int {
+  let s = describe_result(divide_for_test(10, 2));
+  if s == "5" { 100 } else { 0 }
+}
+
+fn test_result_direct_arg_err() -> int {
+  let s = describe_result(divide_for_test(10, 0));
+  if s == "division by zero" { 100 } else { 0 }
+}
+
+fn test_option_direct_arg_some() -> int {
+  let v = unwrap_or_for_test(maybe_int_for_test(true), 0);
+  if v == 42 { 100 } else { 0 }
+}
+
+fn test_option_direct_arg_none() -> int {
+  let v = unwrap_or_for_test(maybe_int_for_test(false), 99);
+  if v == 99 { 100 } else { 0 }
+}
+
+// Match in statement position with Unit arms
+// These tests verify that match expressions with Unit-returning arms compile correctly
+// The original bug generated invalid Go: `result_3 = fmt.Print(...)` and `return result_3`
+
+fn noop() {}
+
+fn test_match_statement_result() -> int {
+  // This match is used as a statement (not assigned, not returned)
+  // Arms call noop() which returns Unit - this triggered invalid Go code
+  match divide_for_test(10, 2) {
+    Ok(_) => noop(),
+    Err(_) => noop(),
+  }
+  100  // If we get here, the code compiled correctly
+}
+
+fn test_match_statement_option() -> int {
+  match maybe_int_for_test(true) {
+    Some(_) => noop(),
+    None => noop(),
+  }
+  100
+}
+
+fn parse_digit(s: string) -> Result<int, string> {
+  if s == "0" { Ok(0) }
+  else if s == "1" { Ok(1) }
+  else if s == "2" { Ok(2) }
+  else { Err("not a digit") }
+}
+
+fn test_result_if_else_chain_ok() -> int {
+  let res = parse_digit("1");
+  match res {
+    Ok(n) => n,
+    Err(_) => -1,
+  }
+}
+
+fn test_result_if_else_chain_err() -> int {
+  let res = parse_digit("x");
+  match res {
+    Ok(_) => -1,
+    Err(_) => 100,
+  }
+}
+
+fn get_optional(flag: bool) -> Option<int> {
+  if flag { Some(42) }
+  else { None }
+}
+
+fn test_option_if_else_chain_some() -> int {
+  let opt = get_optional(true);
+  match opt {
+    Some(n) => n,
+    None => -1,
+  }
+}
+
+fn test_option_if_else_chain_none() -> int {
+  let opt = get_optional(false);
+  match opt {
+    Some(_) => -1,
+    None => 100,
+  }
+}
+
+fn maybe_number(s: string) -> Option<int> {
+  if s == "one" { Some(1) } else { None }
+}
+
+fn parse_number(s: string) -> Result<int, string> {
+  if s == "42" { Ok(42) } else { Err("not 42") }
+}
+
+fn test_let_else_option_direct_call() -> int {
+  let Some(num) = maybe_number("one") else {
+    return 0;
+  };
+  num
+}
+
+fn test_let_else_option_direct_call_else() -> int {
+  let Some(_) = maybe_number("nope") else {
+    return 100;
+  };
+  0
+}
+
+fn test_let_else_result_direct_call() -> int {
+  let Ok(num) = parse_number("42") else {
+    return 0;
+  };
+  if num == 42 { 100 } else { 0 }
+}
+
+fn test_let_else_result_direct_call_else() -> int {
+  let Ok(_) = parse_number("abc") else {
+    return 100;
+  };
+  0
+}
+
+fn test_underscore_prefix_binding() -> int {
+  let opt: Option<int> = Some(42);
+  match opt {
+    Some(_x) => 100,
+    None => 0,
+  }
+}
+
+fn test_underscore_prefix_binding_result() -> int {
+  let res = Ok(42);
+  match res {
+    Ok(_val) => 100,
+    Err(_msg) => 0,
+  }
+}
+
+fn test_underscore_prefix_slice_rest() -> int {
+  let items = [1, 2, 3, 4, 5];
+  match items {
+    [first, .._rest] => first,
+    _ => 0,
+  }
+}
+
+// numeric type alias operations
+
+fn test_duration_times_literal() -> int {
+  // Duration * literal - should not need cast
+  let d = time.Duration.Second * 5;
+  if d == 5000000000 { 100 } else { 0 }
+}
+
+fn test_duration_times_variable() -> int {
+  // Duration * variable - variable needs cast
+  let n: int = 3;
+  let d = time.Duration.Second * n;
+  if d == 3000000000 { 100 } else { 0 }
+}
+
+fn test_duration_div_duration() -> int {
+  // Duration / Duration - yields underlying type (ratio)
+  let ratio: int64 = time.Duration.Second / time.Duration.Millisecond;
+  if ratio == 1000 { 100 } else { 0 }
+}
+
+fn test_duration_div_scalar() -> int {
+  // Duration / scalar - yields Duration
+  let half = time.Duration.Second / 2;
+  if half == 500000000 { 100 } else { 0 }
+}
+
+fn test_duration_add() -> int {
+  // Duration + Duration
+  let sum = time.Duration.Second + time.Duration.Millisecond;
+  if sum == 1001000000 { 100 } else { 0 }
+}
+
+fn test_duration_sub() -> int {
+  // Duration - Duration
+  let diff = time.Duration.Second - time.Duration.Millisecond;
+  if diff == 999000000 { 100 } else { 0 }
+}
+
+fn test_duration_comparison() -> int {
+  // Duration > scalar
+  if time.Duration.Second > 1000 { 100 } else { 0 }
+}
+
+fn test_duration_negation() -> int {
+  // -Duration
+  let neg = -time.Duration.Second;
+  if neg == -1000000000 { 100 } else { 0 }
+}
+
+fn test_eq_with_variable() -> int {
+  let n: int = 1000000000;
+  if time.Duration.Second == n { 100 } else { 0 }
+}
+
+fn test_variable_not_variant() -> int {
+  let n: int = 5;
+  let result: time.Duration = time.Duration.Second * n;
+  if result == 5000000000 { 100 } else { 0 }
+}
+
+// Regression test: negated literals with aliased types should not emit unnecessary casts
+fn test_negated_literal_times_aliased() -> int {
+  // -5 * Duration should emit as `-5 * time.Second`, NOT `time.Duration(-5) * time.Second`
+  let d: time.Duration = -5 * time.Duration.Second;
+  if d == -5000000000 { 100 } else { 0 }
+}
+
+fn test_paren_negated_literal_times_aliased() -> int {
+  // (-5) * Duration should emit as `(-5) * time.Second`, NOT `time.Duration((-5)) * time.Second`
+  let d: time.Duration = (-5) * time.Duration.Second;
+  if d == -5000000000 { 100 } else { 0 }
+}
+
+// Go-style value enum access (time.Second)
+
+fn test_go_style_access() -> int {
+  // Go-style: time.Second (not time.Duration.Second)
+  let d = time.Second;
+  if d == 1000000000 { 100 } else { 0 }
+}
+
+fn test_go_style_times_literal() -> int {
+  let d = time.Second * 5;
+  if d == 5000000000 { 100 } else { 0 }
+}
+
+fn test_go_style_arithmetic() -> int {
+  // Mix of Go-style constants
+  let sum = time.Second + time.Millisecond;
+  if sum == 1001000000 { 100 } else { 0 }
+}
+
+fn test_both_styles_equal() -> int {
+  // Both access styles should yield the same value
+  let go_style = time.Second;
+  let lis_style = time.Duration.Second;
+  if go_style == lis_style { 100 } else { 0 }
+}
+
+fn test_mixed_styles_arithmetic() -> int {
+  // Mixing both styles in one expression
+  let result = time.Second + time.Duration.Millisecond;
+  if result == 1001000000 { 100 } else { 0 }
+}
+
+fn get_duration_multiplier() -> int {
+  3
+}
+
+fn test_go_style_times_variable() -> int {
+  // Regression: time.Second * n should emit time.Duration(n), not go:time.Duration(n)
+  let n = 5;
+  let d = time.Second * n;
+  if d == 5000000000 { 100 } else { 0 }
+}
+
+fn test_go_style_times_function() -> int {
+  // Regression: time.Second * fn() should emit time.Duration(fn()), not go:time.Duration(fn())
+  let d = time.Second * get_duration_multiplier();
+  if d == 3000000000 { 100 } else { 0 }
+}
+
+fn test_lis_style_times_function() -> int {
+  // Same for Lisette-style access
+  let d = time.Duration.Second * get_duration_multiplier();
+  if d == 3000000000 { 100 } else { 0 }
+}
+
+// defer tests
+// Using integer encoding: acc = acc * 10 + digit to track execution order
+
+fn record(acc: Ref<int>, val: int) {
+  acc.* = acc.* * 10 + val
+}
+
+fn defer_helper_normal(acc: Ref<int>) {
+  defer record(acc, 1);
+  record(acc, 2)
+}
+
+fn test_defer_cleanup_on_success() -> int {
+  // Verify defer runs after normal return: body(2) then defer(1) -> 21
+  let mut acc = 0;
+  defer_helper_normal(&acc);
+  if acc == 21 { 100 } else { 0 }
+}
+
+fn defer_helper_early_return(acc: Ref<int>) -> Result<int, string> {
+  defer record(acc, 1);
+  Err("fail")
+}
+
+fn test_defer_cleanup_on_early_return() -> int {
+  // Verify defer runs on early return: only defer(1) runs -> 1
+  let mut acc = 0;
+  let _ = defer_helper_early_return(&acc);
+  if acc == 1 { 100 } else { 0 }
+}
+
+fn defer_helper_lifo(acc: Ref<int>) {
+  defer record(acc, 1);
+  defer record(acc, 2);
+  defer record(acc, 3)
+}
+
+fn test_defer_lifo_order() -> int {
+  // Verify LIFO: defers registered 1,2,3 should run as 3,2,1 -> 321
+  let mut acc = 0;
+  defer_helper_lifo(&acc);
+  if acc == 321 { 100 } else { 0 }
+}
+
+// --- Go stdlib constants tests ---
+
+fn test_go_stdlib_constant_math_pi() -> int {
+  let pi = math.Pi;
+  let quarter_pi = pi / 4.0;
+  // If type inference worked, quarter_pi should be ~0.785
+  if quarter_pi > 0.7 && quarter_pi < 0.8 { 100 } else { 0 }
+}
+
+// --- UFCS method tests ---
+
+fn test_option_map() -> int {
+  let opt: Option<int> = Some(42);
+  let result = opt.map(|x| x * 2);
+  match result {
+    Some(v) => if v == 84 { 100 } else { 0 },
+    None => 0,
+  }
+}
+
+fn test_option_and_then() -> int {
+  let opt: Option<int> = Some(10);
+  let result = opt.and_then(|x| if x > 5 { Some(x * 2) } else { None });
+  match result {
+    Some(v) => if v == 20 { 100 } else { 0 },
+    None => 0,
+  }
+}
+
+fn test_option_map_or() -> int {
+  let opt: Option<int> = None;
+  let result = opt.map_or(100, |x| x * 2);
+  result
+}
+
+fn test_option_map_or_else() -> int {
+  let opt: Option<int> = None;
+  let result = opt.map_or_else(|| 100, |x| x * 2);
+  result
+}
+
+fn test_option_zip() -> int {
+  let a: Option<int> = Some(40);
+  let b: Option<int> = Some(60);
+  let zipped = a.zip(b);
+  match zipped {
+    Some((x, y)) => x + y,
+    None => 0,
+  }
+}
+
+fn test_option_flatten() -> int {
+  let nested: Option<Option<int>> = Some(Some(100));
+  let flat = nested.flatten();
+  match flat {
+    Some(v) => v,
+    None => 0,
+  }
+}
+
+fn test_result_map() -> int {
+  let res = Ok(50);
+  let result = res.map(|x| x * 2);
+  match result {
+    Ok(v) => v,
+    Err(_) => 0,
+  }
+}
+
+fn test_result_and_then() -> int {
+  let res = Ok(10);
+  let result = res.and_then(|x| if x > 5 { Ok(x * 10) } else { Err("too small") });
+  match result {
+    Ok(v) => v,
+    Err(_) => 0,
+  }
+}
+
+fn test_result_map_or() -> int {
+  let res: Result<int, string> = Err("error");
+  let result = res.map_or(100, |x| x * 2);
+  result
+}
+
+// Non-UFCS to UFCS method chaining (filter returns Option, then map is UFCS)
+fn test_option_filter_then_map() -> int {
+  let opt = Some(10);
+  let result = opt.filter(|x| x > 5).map(|y| y * 2);
+  match result {
+    Some(v) => if v == 20 { 100 } else { 0 },
+    None => 0,
+  }
+}
+
+// Non-UFCS to UFCS method chaining (or_else returns Option, then map is UFCS)
+fn test_option_or_else_then_map() -> int {
+  let opt: Option<int> = None;
+  let result = opt.or_else(|| Some(50)).map(|x| x * 2);
+  match result {
+    Some(v) => if v == 100 { 100 } else { 0 },
+    None => 0,
+  }
+}
+
+// Non-UFCS to non-UFCS method chaining (filter returns Option, then is_some)
+fn test_option_filter_then_is_some() -> int {
+  let opt = Some(10);
+  let result = opt.filter(|x| x > 5).is_some();
+  if result { 100 } else { 0 }
+}
+
+// Result ok (non-UFCS returning Option) chained into map (UFCS)
+fn test_result_ok_then_map() -> int {
+  let res = Ok(25);
+  let result = res.ok().map(|x| x * 4);
+  match result {
+    Some(v) => if v == 100 { 100 } else { 0 },
+    None => 0,
+  }
+}
+
+// Closure body returns UFCS call (nested UFCS in and_then callback)
+fn test_nested_ufcs_in_and_then() -> int {
+  let opt = Some(10);
+  let result = opt.and_then(|x| Some(x).map(|y| y * 2));
+  match result {
+    Some(v) => if v == 20 { 100 } else { 0 },
+    None => 0,
+  }
+}
+
+// Triple chain: non-UFCS -> UFCS -> UFCS
+fn test_triple_chain_filter_map_map() -> int {
+  let opt = Some(10);
+  let result = opt.filter(|x| x > 5).map(|y| y * 2).map(|z| z + 1);
+  match result {
+    Some(v) => if v == 21 { 100 } else { 0 },
+    None => 0,
+  }
+}
+
+// Result and_then with closure returning Ok
+fn test_result_and_then_ok() -> int {
+  let res = Ok(10);
+  let result = res.and_then(|x| Ok(x * 3));
+  match result {
+    Ok(v) => if v == 30 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+}
+
+// Result and_then with closure returning Err
+fn test_result_and_then_err() -> int {
+  let res = Ok(10);
+  let result = res.and_then(|_| Err("failed"));
+  match result {
+    Ok(_) => 0,
+    Err(e) => if e == "failed" { 100 } else { 0 },
+  }
+}
+
+// Result or_else with closure returning Ok (recovery)
+fn test_result_or_else_recover() -> int {
+  let res: Result<int, string> = Err("original");
+  let result = res.or_else(|_| Ok(42));
+  match result {
+    Ok(v) => if v == 42 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+}
+
+// Long UFCS chain
+fn test_long_ufcs_chain() -> int {
+  let opt = Some(1);
+  let result = opt
+    .map(|x| x + 1)
+    .map(|x| x * 2)
+    .map(|x| x + 3)
+    .map(|x| x * 2);
+  match result {
+    Some(v) => if v == 14 { 100 } else { 0 },
+    None => 0,
+  }
+}
+
+// Regression tests for closure/UFCS bugs
+
+// Generic function accepting closure that returns Result
+fn apply_result<T, U, E>(r: Result<T, E>, f: fn(T) -> Result<U, E>) -> Result<U, E> {
+  r.and_then(f)
+}
+
+fn test_generic_fn_result_closure() -> int {
+  let r = Ok(5);
+  match apply_result(r, |x| Ok(x * 2)) {
+    Ok(v) => if v == 10 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+}
+
+// User-defined UFCS method returning Result
+struct Transformer<T> { value: T }
+
+impl<T> Transformer<T> {
+  fn apply<U, E>(self, f: fn(T) -> Result<U, E>) -> Result<U, E> {
+    f(self.value)
+  }
+}
+
+fn test_user_ufcs_method_result() -> int {
+  let t = Transformer { value: 10 };
+  match t.apply(|x: int| -> Result<int, string> { Ok(x * 2) }) {
+    Ok(v) => if v == 20 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+}
+
+// Closure stored in variable with and_then chain
+fn test_closure_var_and_then_chain() -> int {
+  let make = |n: int| -> Result<int, string> {
+    if n > 0 { Ok(n * 10) } else { Err("non-positive") }
+  };
+  match make(5).and_then(|x| make(x / 10)) {
+    Ok(v) => if v == 50 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+}
+
+// Mutual recursion with Result return
+fn even_check(n: int) -> Result<bool, string> {
+  if n < 0 { Err("negative") }
+  else if n == 0 { Ok(true) }
+  else { odd_check(n - 1) }
+}
+
+fn odd_check(n: int) -> Result<bool, string> {
+  if n < 0 { Err("negative") }
+  else if n == 0 { Ok(false) }
+  else { even_check(n - 1) }
+}
+
+fn test_mutual_recursion_result() -> int {
+  match (even_check(4), odd_check(5)) {
+    (Ok(a), Ok(b)) => if a && b { 100 } else { 0 },
+    _ => 0,
+  }
+}
+
+// Go Result call wrapping tests
+// Tests for Go functions returning (T, error) wrapped as Result<T, error>
+fn test_go_result_call_let_underscore() -> int {
+  // Discarding result with let _ = should work
+  // fmt.Print returns (int, error) in Go, which is Result<int, error> in Lisette
+  let _ = fmt.Print("");
+  100
+}
+
+fn test_go_result_call_in_match() -> int {
+  // Using Go result call in match should work
+  match fmt.Print("") {
+    Ok(_) => 100,
+    Err(_) => 0,
+  }
+}
+
+fn test_go_result_call_assigned() -> int {
+  // Assigning Go result call to variable should work
+  let result = fmt.Print("");
+  match result {
+    Ok(n) => if n == 0 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+}
+
+// Recover block tests
+fn panicking_function() -> int {
+  // Trigger a panic via index out of bounds
+  let arr: Slice<int> = [];
+  arr[0]
+}
+
+fn test_recover_catches_panic() -> int {
+  let result = recover { panicking_function() };
+  match result {
+    Ok(_) => 0,
+    Err(pv) => {
+      // Just check we got a panic, message varies by Go version
+      if pv.message().length() > 0 { 100 } else { 0 }
+    },
+  }
+}
+
+fn test_recover_success_path() -> int {
+  let result = recover { 42 };
+  match result {
+    Ok(n) => if n == 42 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+}
+
+fn test_recover_with_statements() -> int {
+  let result = recover {
+    let x = 10;
+    let y = 20;
+    x + y
+  };
+  match result {
+    Ok(n) => if n == 30 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+}
+
+fn test_recover_panic_value_stack_trace() -> int {
+  let result = recover { panicking_function() };
+  match result {
+    Ok(_) => 0,
+    Err(pv) => {
+      let stack = pv.stack_trace();
+      // Stack trace should contain something (not empty)
+      if stack.length() > 0 { 100 } else { 0 }
+    },
+  }
+}
+
+fn test_recover_nested() -> int {
+  let outer = recover {
+    let inner = recover { panicking_function() };
+    match inner {
+      Ok(_) => 0,
+      Err(_) => 50,  // Inner caught the panic
+    }
+  };
+  match outer {
+    Ok(n) => if n == 50 { 100 } else { 0 },
+    Err(_) => 0,  // Outer should not see panic
+  }
+}
+
+// as cast syntax
+
+fn test_cast_int_to_float64() -> int {
+  let x: int = 42;
+  let y: float64 = x as float64;
+  if y == 42.0 { 100 } else { 0 }
+}
+
+fn test_cast_float64_to_int() -> int {
+  let x: float64 = 3.9;
+  let y: int = x as int;
+  if y == 3 { 100 } else { 0 }  // truncates toward zero
+}
+
+fn test_cast_int_to_rune() -> int {
+  let x: int = 65;
+  let r: rune = x as rune;
+  if r == 'A' { 100 } else { 0 }
+}
+
+fn test_cast_rune_to_int() -> int {
+  let r: rune = 'Z';
+  let x: int = r as int;
+  if x == 90 { 100 } else { 0 }
+}
+
+fn test_cast_string_to_byte_slice() -> int {
+  let s: string = "hello";
+  let bytes: Slice<byte> = s as Slice<byte>;
+  if bytes.length() == 5 && (bytes[0] as int) == 104 { 100 } else { 0 }  // 'h' = 104
+}
+
+fn test_cast_byte_slice_to_string() -> int {
+  let bytes: Slice<byte> = "world" as Slice<byte>;
+  let s: string = bytes as string;
+  if s == "world" { 100 } else { 0 }
+}
+
+fn test_cast_string_to_rune_slice() -> int {
+  let s: string = "héllo";
+  let runes: Slice<rune> = s as Slice<rune>;
+  if runes.length() == 5 && runes[1] == 'é' { 100 } else { 0 }
+}
+
+fn test_cast_rune_slice_to_string() -> int {
+  let runes: Slice<rune> = ['h', 'i'];
+  let s: string = runes as string;
+  if s == "hi" { 100 } else { 0 }
+}
+
+fn test_cast_in_expression() -> int {
+  let a: int = 7;
+  let b: int = 2;
+  let result: float64 = (a as float64) / (b as float64);
+  if result == 3.5 { 100 } else { 0 }
+}
+
+fn test_cast_int_to_int8() -> int {
+  let x: int = 127;
+  let y: int8 = x as int8;
+  if y == 127 { 100 } else { 0 }
+}
+
+fn test_cast_float32_to_float64() -> int {
+  let x: float32 = 1.5;
+  let y: float64 = x as float64;
+  if y == 1.5 { 100 } else { 0 }
+}
+
+fn test_cast_duration_to_int64() -> int {
+  // Enum with numeric underlying type should be castable
+  let d: time.Duration = time.Second;
+  let nanos: int64 = d as int64;
+  if nanos == 1000000000 { 100 } else { 0 }
+}
+
+fn test_cast_int64_to_duration() -> int {
+  // int64 should be castable to enum with int64 underlying
+  let nanos: int64 = 5000000000;
+  let d: time.Duration = nanos as time.Duration;
+  if d == 5 * time.Second { 100 } else { 0 }
+}
+
+// Slice.fold and Slice.find
+
+fn test_slice_fold_sum() -> int {
+  let nums = [1, 2, 3, 4, 5];
+  if nums.fold(0, |acc, x| acc + x) == 15 { 100 } else { 0 }
+}
+
+fn test_slice_fold_product() -> int {
+  let nums = [1, 2, 3, 4, 5];
+  if nums.fold(1, |acc, x| acc * x) == 120 { 100 } else { 0 }
+}
+
+fn test_slice_fold_empty() -> int {
+  let empty: Slice<int> = [];
+  if empty.fold(42, |acc, x| acc + x) == 42 { 100 } else { 0 }
+}
+
+fn test_slice_find_some() -> int {
+  let nums = [1, 2, 3, 4, 5];
+  match nums.find(|x| x > 3) {
+    Some(4) => 100,
+    _ => 0,
+  }
+}
+
+fn test_slice_find_none() -> int {
+  let nums = [1, 2, 3, 4, 5];
+  match nums.find(|x| x > 100) {
+    None => 100,
+    _ => 0,
+  }
+}
+
+fn test_slice_find_empty() -> int {
+  let empty: Slice<int> = [];
+  match empty.find(|x| x > 0) {
+    None => 100,
+    _ => 0,
+  }
+}
+
+fn test_slice_enumerate() -> int {
+  let items = [10, 20, 30];
+  let mut sum = 0;
+  for (i, v) in items.enumerate() {
+    sum = sum + i * 100 + v;
+  }
+  // 0*100+10 + 1*100+20 + 2*100+30 = 10 + 120 + 230 = 360
+  if sum == 360 { 100 } else { 0 }
+}
+
+fn test_enumerated_slice_filter() -> int {
+  let items = [10, 20, 30, 40];
+  let evens = items.enumerate().filter(|(i, _)| i % 2 == 0);
+  // indices 0 and 2 pass: [(0, 10), (2, 30)]
+  if evens.length() == 2 {
+    let (i0, v0) = evens[0];
+    let (i1, v1) = evens[1];
+    if i0 == 0 && v0 == 10 && i1 == 2 && v1 == 30 { 100 } else { 0 }
+  } else {
+    0
+  }
+}
+
+fn test_slice_join() -> int {
+  let result = ["hello", "world"].join(", ");
+  if result == "hello, world" { 100 } else { 0 }
+}
+
+enum ASTNode {
+  Number(int),
+  String(string),
+  Null,
+}
+
+fn test_enum_variant_named_string() -> int {
+  let n = ASTNode.String("hello")
+  let num = ASTNode.Number(42)
+  let null = ASTNode.Null
+  let s_ok = match n {
+    ASTNode.String(s) => s == "hello",
+    _ => false,
+  }
+  let n_ok = match num {
+    ASTNode.Number(v) => v == 42,
+    _ => false,
+  }
+  let null_ok = match null {
+    ASTNode.Null => true,
+    _ => false,
+  }
+  if s_ok && n_ok && null_ok { 100 } else { 0 }
+}
+
+fn test_map_from() -> int {
+  let m = Map.from([("a", 1), ("b", 2)]);
+  if m.length() == 2 {
+    match m.get("a") {
+      Some(1) => 100,
+      _ => 0,
+    }
+  } else {
+    0
+  }
+}
+
+fn test_string_range_slicing() -> int {
+  let s = "hello world";
+  if s[0..5] == "hello" {
+    if s[6..] == "world" {
+      if s[..5] == "hello" {
+        100
+      } else { 0 }
+    } else { 0 }
+  } else { 0 }
+}
+
+// SUS-167: transitive import `tls.Client` (function) must not shadow `http.Client` (struct).
+// `go:crypto/tls` also exports a function named `Client`; it must not shadow the struct.
+fn test_go_import_not_shadowed_by_transitive() -> int {
+  let c: Option<Ref<httpx.Client>> = None
+  if c.is_none() { 100 } else { 0 }
+}
+
+// Pointer receiver on struct literal (value type) — needs `mut`
+fn test_pointer_receiver_struct_literal() -> int {
+  let mut wg = sync.WaitGroup{}
+  wg.Add(1)
+  wg.Done()
+  wg.Wait()
+  100
+}
+
+// Pointer receiver on constructor-returned Ref<T> — no `mut` needed
+fn test_pointer_receiver_constructor() -> int {
+  let buf = bytes.NewBufferString("hello")
+  match buf.ReadString(111) {
+    Ok(s) => if s == "hello" { 100 } else { 0 },
+    Err(_) => 100, // EOF is expected, but we still read "hello"
+  }
+}
+
+// Pointer receiver method expression
+fn test_pointer_receiver_method_expr() -> int {
+  let f = bytes.Buffer.WriteString
+  let mut buf = bytes.Buffer{}
+  match f(&buf, "hello") {
+    Ok(n) => if n == 5 { 100 } else { 0 },
+    Err(_) => 0,
+  }
+}
+
+fn main() {
+  section("pattern matching - tuples");
+  report("tuple_literal", test_tuple_literal(), 100);
+  report("tuple_binding", test_tuple_binding(), 7);
+  report("tuple_mixed", test_tuple_mixed(), 42);
+  report("tuple_wildcard", test_tuple_wildcard(), 10);
+  report("tuple_nested", test_tuple_nested(), 100);
+  report("tuple_first_match", test_tuple_first_match(), 10);
+  report("tuple_triple", test_tuple_triple(), 6);
+  report("tuple_deep", test_tuple_deep(), 10);
+  report("tuple_expr_arm", test_tuple_expr_arm(), 10);
+  report("tuple_all_wild", test_tuple_all_wild(), 1);
+  report("tuple_return_annotation", test_tuple_return_annotation(), 30);
+
+  section("pattern matching - enums");
+  report("enum_simple", test_enum_simple(), 1);
+  report("enum_with_data", test_enum_with_data(), 42);
+  report("enum_multi_field", test_enum_multi_field(), 7);
+  report("enum_neither", test_enum_neither(), 100);
+  report("enum_message", test_enum_message(), 30);
+  report("enum_nested", test_enum_nested(), 42);
+  report("enum_nested_none", test_enum_nested_none(), -1);
+  report("enum_message_quit", test_enum_message_quit(), 0);
+  report("enum_message_write", test_enum_message_write(), 100);
+  report("enum_multi_arm", test_enum_multi_arm(), 999);
+
+  section("struct variants");
+  report("struct_variant_match", test_struct_variant_match(), 30);
+  report("struct_variant_keypress", test_struct_variant_keypress(), 100);
+  report("struct_variant_partial", test_struct_variant_partial(), 800);
+  report("struct_variant_construction", test_struct_variant_construction(), 50);
+  report("mixed_variants", test_mixed_variants(), 37);
+  report("struct_variant_with_unit", test_struct_variant_with_unit(), 99);
+  report("if_let_struct_variant", test_if_let_struct_variant(), 50);
+  report("let_else_struct_variant", test_let_else_struct_variant(), 15);
+  report("let_else_struct_variant_or", test_let_else_struct_variant_or(), 17);
+  report("struct_variant_field_order", test_struct_variant_field_order(), 73);
+  report("struct_variant_type_conflict", test_struct_variant_type_conflict(), 47);
+  report("tuple_struct_field_conflict", test_tuple_struct_field_conflict(), 33);
+  report("tag_variant_collision", test_tag_variant_collision(), 50);
+  report("tag_field_collision", test_tag_field_collision(), 37);
+
+  section("enum methods");
+  report("enum_method", test_enum_method(), 21);
+  report("enum_method_chained", test_enum_method_chained(), 50);
+
+  section("pattern matching - slices");
+  report("slice_empty", test_slice_empty(), 100);
+  report("slice_single", test_slice_single(), 42);
+  report("slice_fixed", test_slice_fixed(), 6);
+  report("slice_fixed_mismatch", test_slice_fixed_mismatch(), 3);
+  report("slice_rest_discard", test_slice_rest_discard(), 10);
+  report("slice_rest_bind", test_slice_rest_bind(), 3);
+  report("slice_literal_match", test_slice_literal_match(), 100);
+  report("slice_mixed", test_slice_mixed(), 99);
+  
+  section("pattern matching - structs");
+  report("struct_full", test_struct_full(), 7);
+  report("struct_literal", test_struct_literal(), 42);
+  report("struct_renamed", test_struct_renamed(), 200);
+  report("struct_partial", test_struct_partial(), 10);
+  report("struct_nested", test_struct_nested(), 33);
+  report("struct_wildcard_field", test_struct_wildcard_field(), 10);
+  report("struct_multiple_arms", test_struct_multiple_arms(), 5);
+  report("struct_let_destructure", test_struct_let_destructure(), 15);
+  
+  section("option handling");
+  report("option_some", test_option_some(), 42);
+  report("option_none", test_option_none(), -1);
+  report("option_chain", test_option_chain(), 15);
+  report("option_passthrough", test_option_passthrough(), 10);
+  report("option_conditional", test_option_conditional(), 10);
+  report("option_conditional_none", test_option_conditional_none(), -1);
+  report("option_nested", test_option_nested(), 42);
+  report("option_in_struct", test_option_in_struct(), 99);
+  report("option_return_some", test_option_return_some(), 123);
+  report("option_return_none", test_option_return_none(), -1);
+
+  section("if let");
+  report("if_let_some", test_if_let_some(), 42);
+  report("if_let_none", test_if_let_none(), -1);
+  report("if_let_statement", test_if_let_statement(), 15);
+  report("if_let_nested", test_if_let_nested(), 100);
+  report("if_let_else_if_let", test_if_let_else_if_let(), 77);
+  report("if_let_result_ok", test_if_let_result_ok(), 55);
+  report("if_let_result_err", test_if_let_result_err(), -1);
+
+  section("let else");
+  report("let_else_some", test_let_else_some(), 42);
+  report("let_else_none", test_let_else_none(), -1);
+  report("let_else_result_ok", test_let_else_result_ok(), 55);
+  report("let_else_result_err", test_let_else_result_err(), -1);
+  report("let_else_with_computation", test_let_else_with_computation(), 25);
+  report("let_else_chained", test_let_else_chained(), 20);
+  report("let_else_in_loop", test_let_else_in_loop(), 6);
+  report("let_else_break", test_let_else_break(), 3);
+
+  section("while let");
+  report("while_let_basic", test_while_let_basic(), 6);
+  report("while_let_none_initially", test_while_let_none_initially(), 0);
+  report("while_let_with_break", test_while_let_with_break(), 150);
+  report("while_let_tuple", test_while_let_tuple(), 3);
+  report("while_let_result", test_while_let_result(), 15);
+
+  section("result handling");
+  report("result_ok", test_result_ok(), 42);
+  report("result_err", test_result_err(), -1);
+  report("result_chain", test_result_chain(), 15);
+  report("result_mixed", test_result_mixed(), 5);
+  report("result_propagation", test_result_propagation(), 11);
+  report("result_propagation_err", test_result_propagation_err(), -1);
+  report("result_multi_propagation", test_result_multi_propagation(), 20);
+  report("result_err_value", test_result_err_value(), 42);
+
+  section("try blocks");
+  report("try_block_basic", test_try_block_basic(), 42);
+  report("try_block_multiple", test_try_block_multiple(), 84);
+  report("try_block_early_err", test_try_block_early_err(), 42);
+  report("try_block_option", test_try_block_option(), 15);
+  report("try_block_option_none", test_try_block_option_none(), 42);
+  report("try_block_nested", test_try_block_nested(), 84);
+  report("try_block_with_loop", test_try_block_with_loop(), 43);
+  report("try_block_conditional", test_try_block_conditional(), 42);
+
+  section("control flow");
+  report("if_true", test_if_true(), 100);
+  report("if_false", test_if_false(), 100);
+  report("if_chain", test_if_chain(), 2);
+  report("if_nested", test_if_nested(), 100);
+  report("while_loop", test_while_loop(), 55);
+  report("for_loop", test_for_loop(), 15);
+  report("range_exclusive", test_range_exclusive(), 10);
+  report("range_inclusive", test_range_inclusive(), 10);
+  report("range_from", test_range_from(), 12);
+  report("stored_range", test_stored_range(), 10);
+  report("slice_range_exclusive", test_slice_range_exclusive(), 90);
+  report("slice_range_inclusive", test_slice_range_inclusive(), 90);
+  report("slice_range_from", test_slice_range_from(), 120);
+  report("slice_range_to", test_slice_range_to(), 60);
+  report("slice_range_full", test_slice_range_full(), 60);
+  report("subslice_append_no_alias", test_subslice_append_no_alias(), 4);
+  report("mutable_subslice_element_write_no_alias", test_mutable_subslice_element_write_no_alias(), 2);
+  report("loop_break", test_loop_break(), 5);
+  report("loop_continue", test_loop_continue(), 25);
+  report("nested_loop", test_nested_loop(), 9);
+  report("early_return", test_early_return(), 19);
+  
+  section("functions");
+  report("fn_call", test_fn_call(), 7);
+  report("higher_order", test_higher_order(), 10);
+  report("lambda_simple", test_lambda_simple(), 100);
+  report("lambda_capture", test_lambda_capture(), 15);
+  report("recursion", test_recursion(), 120);
+  report("method_call", test_method_call(), 25);
+  report("generic_fn", test_generic_fn(), 42);
+  report("generic_fn_string", test_generic_fn_string(), 100);
+
+  section("concurrency");
+  report("channel_basic", test_channel_basic(), 42);
+  report("channel_multiple", test_channel_multiple(), 100);
+  report("select_basic", test_select_basic(), 50);
+  report("select_default", test_select_default(), 0);
+  report("task_spawn", test_task_spawn(), 100);
+  report("buffered_channel", test_buffered_channel(), 30);
+  report("blocking_send_receive", test_blocking_send_receive(), 42);
+  report("channel_iteration", test_channel_iteration(), 6);
+  report("channel_split", test_channel_split(), 99);
+  report("select_match_receive_value", test_select_match_receive_value(), 42);
+  report("select_match_receive_closed", test_select_match_receive_closed(), 100);
+
+  section("expressions as arguments");
+  report("if_as_argument", test_if_as_argument(), 42);
+  report("match_as_argument", test_match_as_argument(), 100);
+  report("block_as_argument", test_block_as_argument(), 30);
+  report("select_as_argument", test_select_as_argument(), 77);
+  report("nested_expr_argument", test_nested_expr_argument(), 50);
+
+  section("try operator contexts");
+  report("try_in_argument", test_try_in_argument(), 10);
+  report("try_then_chain", test_try_then_chain(), 25);
+  report("try_in_return", test_try_in_return(), 15);
+  report("try_in_lambda", test_try_in_lambda(), 15);
+
+  section("lambda edge cases");
+  report("lambda_return_value", test_lambda_return_value(), 50);
+  report("lambda_iife", test_lambda_iife(), 40);
+  report("lambda_nested", test_lambda_nested(), 15);
+
+  section("references");
+  report("ref_create", test_ref_create(), 42);
+  report("ref_deref", test_ref_deref(), 100);
+  report("ref_pass", test_ref_pass(), 55);
+  report("ref_mut", test_ref_mut(), 99);
+
+  section("block expressions");
+  report("block_as_value", test_block_as_value(), 50);
+
+  section("format strings");
+  report("fmt_variable", test_fmt_variable(), 100);
+  report("fmt_multi_variable", test_fmt_multi_variable(), 100);
+  report("fmt_expression_addition", test_fmt_expression_addition(), 100);
+  report("fmt_expression_method_call", test_fmt_expression_method_call(), 100);
+  report("fmt_expression_index_access", test_fmt_expression_index_access(), 100);
+  report("fmt_expression_if", test_fmt_expression_if(), 100);
+  report("fmt_expression_chained", test_fmt_expression_chained(), 100);
+  report("fmt_escaped_braces", test_fmt_escaped_braces(), 100);
+
+  section("let destructuring");
+  report("let_slice_destructure", test_let_slice_destructure(), 60);
+  report("let_slice_rest", test_let_slice_rest(), 6);
+  report("let_struct_nested", test_let_struct_nested(), 41);
+  report("let_tuple_destructure", test_let_tuple_destructure(), 15);
+  report("let_struct_alias", test_let_struct_alias(), 300);
+  report("let_struct_alias_nested", test_let_struct_alias_nested(), 10);
+
+  section("slice param patterns");
+  report("slice_param_destructure", test_slice_param_destructure(), 30);
+  report("slice_param_rest", test_slice_param_rest(), 15);
+
+  section("lambdas as values");
+  report("lambda_as_value", test_lambda_as_value(), 30);
+  report("lambda_passed", test_lambda_passed(), 50);
+
+  section("compound assignment");
+  report("compound_add", test_compound_add(), 15);
+  report("compound_sub", test_compound_sub(), 12);
+  report("compound_mul", test_compound_mul(), 20);
+  report("compound_div", test_compound_div(), 20);
+  report("compound_mod", test_compound_mod(), 2);
+  report("compound_chain", test_compound_chain(), 20);
+
+  section("index access");
+  report("index_on_call", test_index_on_call(), 20);
+  report("index_nested", test_index_nested(), 9);
+  report("index_in_expression", test_index_in_expression(), 610);
+  report("index_on_field", test_index_on_field(), 20);
+
+  section("dot access chains");
+  report("dot_chain_deep", test_dot_chain_deep(), 42);
+  report("method_chain", test_method_chain(), 20);
+  report("method_then_field", test_method_then_field(), 30);
+
+  section("complex match arms");
+  report("match_with_block_arm", test_match_with_block_arm(), 50);
+  report("match_with_nested_if", test_match_with_nested_if(), 50);
+  report("match_nested_match", test_match_nested_match(), 14);
+  report("if_with_match", test_if_with_match(), 30);
+
+  section("unary operators");
+  report("unary_not_complex", test_unary_not_complex(), 100);
+  report("unary_neg_field", test_unary_neg_field(), 10);
+  report("unary_not_comparison", test_unary_not_comparison(), 100);
+
+  section("early return nested");
+  report("early_return_nested", test_early_return_nested(), 200);
+
+  section("return in expression arms");
+  report("return_in_match_arm", test_return_in_match_arm(), 300);
+  report("return_in_if_arm", test_return_in_if_arm(), 50);
+
+  section("generic methods");
+  report("generic_method_int", test_generic_method_int(), 42);
+  report("generic_method_string", test_generic_method_string(), 100);
+  report("generic_method_chain", test_generic_method_chain(), 20);
+  report("generic_struct_direct_construction", test_generic_struct_direct_construction(), 50);
+
+  section("go keyword escaping");
+  report("go_keyword_as_variable", test_go_keyword_as_variable(), 52);
+
+  section("type aliases");
+  report("type_alias_basic", test_type_alias_basic(), 15);
+
+  section("nested generics");
+  report("nested_option_some_some", test_nested_option_some_some(), 42);
+  report("nested_option_some_none", test_nested_option_some_none(), -1);
+  report("nested_option_none", test_nested_option_none(), -2);
+  report("result_with_option", test_result_with_option(), 100);
+
+  section("multiple type parameters");
+  report("multi_type_params", test_multi_type_params(), 10);
+  report("multi_type_params_swap", test_multi_type_params_swap(), 99);
+
+  section("assignment expressions");
+  report("field_assignment", test_field_assignment(), 30);
+  report("index_assignment", test_index_assignment(), 100);
+  report("nested_field_assignment", test_nested_field_assignment(), 42);
+
+  section("complex control flow");
+  report("break_nested_labeled", test_break_nested_labeled(), 12);
+  report("continue_in_nested", test_continue_in_nested(), 6);
+
+  section("custom generic enum");
+  report("either_left", test_either_left(), 42);
+  report("either_right", test_either_right(), 100);
+
+  section("struct spread");
+  report("struct_spread", test_struct_spread(), 120);
+  report("struct_spread_override_last", test_struct_spread_override_last(), 55);
+  report("struct_variant_spread", test_struct_variant_spread(), 120);
+
+  section("tuple structs");
+  report("tuple_struct_single", test_tuple_struct_single(), 42);
+  report("tuple_struct_multi", test_tuple_struct_multi(), 30);
+  report("tuple_struct_pattern", test_tuple_struct_pattern(), 25);
+  report("tuple_struct_function_param", test_tuple_struct_function_param(), 100);
+  report("tuple_struct_generic", test_tuple_struct_generic(), 50);
+
+  section("match guards");
+  report("guard_basic", test_guard_basic(), 1);
+  report("guard_negative", test_guard_negative(), 2);
+  report("guard_zero", test_guard_zero(), 3);
+  report("guard_none", test_guard_none(), 3);
+  report("guard_multiple", test_guard_multiple(), 3);
+  report("guard_uses_binding", test_guard_uses_binding(), 14);
+  report("guard_on_tuple", test_guard_on_tuple(), 3);
+  report("guard_on_struct", test_guard_on_struct(), 1);
+  report("guard_complex_condition", test_guard_complex_condition(), 1);
+  report("guard_with_result", test_guard_with_result(), 2);
+
+  section("per-field visibility");
+  report("all_pub_fields", test_all_pub_fields(), 30);
+  report("mixed_visibility", test_mixed_visibility(), 150);
+  report("all_private_fields", test_all_private_fields(), 15);
+  report("pub_struct_spread", test_pub_struct_spread(), 110);
+  report("mixed_struct_spread", test_mixed_struct_spread(), 34);
+  report("pub_field_pattern", test_pub_field_pattern(), 33);
+  report("mixed_field_pattern", test_mixed_field_pattern(), 77);
+  report("pub_field_method", test_pub_field_method(), 40);
+  report("pub_let_destructure", test_pub_let_destructure(), 15);
+  report("enum_struct_let_destructure", test_enum_struct_let_destructure(), 42);
+
+  section("or-patterns");
+  report("or_pattern_literals", test_or_pattern_literals(), 100);
+  report("or_pattern_enum", test_or_pattern_enum(), 1);
+  report("or_pattern_strings", test_or_pattern_strings(), 1);
+  report("or_pattern_booleans", test_or_pattern_booleans(), 2);
+  report("or_pattern_with_guard", test_or_pattern_with_guard(), 30);
+  report("or_pattern_guard_skips_arm", test_or_pattern_guard_skips_arm(), 20);
+  report("or_pattern_exhaustive", test_or_pattern_exhaustive(), 2);
+  report("or_pattern_if_let", test_or_pattern_if_let(), 100);
+  report("or_pattern_mixed_arms", test_or_pattern_mixed_arms(), 30);
+
+  section("imaginary literals");
+  report("imaginary_integer", test_imaginary_integer(), 100);
+  report("imaginary_float", test_imaginary_float(), 100);
+  report("imaginary_zero", test_imaginary_zero(), 100);
+  report("complex_addition", test_complex_addition(), 100);
+  report("complex_subtraction", test_complex_subtraction(), 100);
+  report("complex_multiplication", test_complex_multiplication(), 100);
+  report("imaginary_addition", test_imaginary_addition(), 100);
+  report("complex_return", test_complex_return(), 100);
+  report("complex_as_param", test_complex_as_param(), 100);
+
+  section("go stdlib tuple destructuring");
+  report("go_tuple_destructure", test_go_tuple_destructure(), 100);
+  report("go_tuple_destructure_wildcard", test_go_tuple_destructure_wildcard(), 100);
+  report("go_tuple_discard", test_go_tuple_discard(), 100);
+  report("go_tuple_store", test_go_tuple_store(), 100);
+  report("go_tuple_field_inline", test_go_tuple_field_inline(), 100);
+
+  section("go:strings module");
+  report("strings_to_upper", test_strings_to_upper(), 100);
+  report("strings_to_lower", test_strings_to_lower(), 100);
+  report("strings_to_title", test_strings_to_title(), 100);
+
+  section("pipeline with Go stdlib");
+  report("pipeline_go_stdlib", test_pipeline_go_stdlib(), 100);
+  report("pipeline_go_stdlib_chained", test_pipeline_go_stdlib_chained(), 100);
+  report("pipeline_go_stdlib_with_args", test_pipeline_go_stdlib_with_args(), 100);
+
+  section("Result/Option direct arg");
+  report("result_direct_arg_ok", test_result_direct_arg_ok(), 100);
+  report("result_direct_arg_err", test_result_direct_arg_err(), 100);
+  report("option_direct_arg_some", test_option_direct_arg_some(), 100);
+  report("option_direct_arg_none", test_option_direct_arg_none(), 100);
+
+  section("Match statement with Unit arms");
+  report("match_statement_result", test_match_statement_result(), 100);
+  report("match_statement_option", test_match_statement_option(), 100);
+
+  section("Result/Option if-else chain type inference");
+  report("result_if_else_chain_ok", test_result_if_else_chain_ok(), 1);
+  report("result_if_else_chain_err", test_result_if_else_chain_err(), 100);
+  report("option_if_else_chain_some", test_option_if_else_chain_some(), 42);
+  report("option_if_else_chain_none", test_option_if_else_chain_none(), 100);
+
+  section("let-else with direct function call");
+  report("let_else_option_direct_call", test_let_else_option_direct_call(), 1);
+  report("let_else_option_direct_call_else", test_let_else_option_direct_call_else(), 100);
+  report("let_else_result_direct_call", test_let_else_result_direct_call(), 100);
+  report("let_else_result_direct_call_else", test_let_else_result_direct_call_else(), 100);
+
+  section("underscore-prefixed bindings");
+  report("underscore_prefix_binding", test_underscore_prefix_binding(), 100);
+  report("underscore_prefix_binding_result", test_underscore_prefix_binding_result(), 100);
+  report("underscore_prefix_slice_rest", test_underscore_prefix_slice_rest(), 1);
+
+  section("numeric type alias operations");
+  report("duration_times_literal", test_duration_times_literal(), 100);
+  report("duration_times_variable", test_duration_times_variable(), 100);
+  report("duration_div_duration", test_duration_div_duration(), 100);
+  report("duration_div_scalar", test_duration_div_scalar(), 100);
+  report("duration_add", test_duration_add(), 100);
+  report("duration_sub", test_duration_sub(), 100);
+  report("duration_comparison", test_duration_comparison(), 100);
+  report("duration_negation", test_duration_negation(), 100);
+  report("eq_with_variable", test_eq_with_variable(), 100);
+  report("variable_not_variant", test_variable_not_variant(), 100);
+  report("negated_literal_times_aliased", test_negated_literal_times_aliased(), 100);
+  report("paren_negated_literal_times_aliased", test_paren_negated_literal_times_aliased(), 100);
+
+  section("Go-style value enum access");
+  report("go_style_access", test_go_style_access(), 100);
+  report("go_style_times_literal", test_go_style_times_literal(), 100);
+  report("go_style_arithmetic", test_go_style_arithmetic(), 100);
+  report("both_styles_equal", test_both_styles_equal(), 100);
+  report("mixed_styles_arithmetic", test_mixed_styles_arithmetic(), 100);
+
+  section("go: prefix regression tests");
+  report("go_style_times_variable", test_go_style_times_variable(), 100);
+  report("go_style_times_function", test_go_style_times_function(), 100);
+  report("lis_style_times_function", test_lis_style_times_function(), 100);
+
+  section("defer");
+  report("defer_cleanup_on_success", test_defer_cleanup_on_success(), 100);
+  report("defer_cleanup_on_early_return", test_defer_cleanup_on_early_return(), 100);
+  report("defer_lifo_order", test_defer_lifo_order(), 100);
+
+  section("go stdlib constants");
+  report("go_stdlib_constant_math_pi", test_go_stdlib_constant_math_pi(), 100);
+
+  section("ufcs methods");
+  report("option_map", test_option_map(), 100);
+  report("option_and_then", test_option_and_then(), 100);
+  report("option_map_or", test_option_map_or(), 100);
+  report("option_map_or_else", test_option_map_or_else(), 100);
+  report("option_zip", test_option_zip(), 100);
+  report("option_flatten", test_option_flatten(), 100);
+  report("result_map", test_result_map(), 100);
+  report("result_and_then", test_result_and_then(), 100);
+  report("result_map_or", test_result_map_or(), 100);
+
+  section("non-ufcs to ufcs chaining");
+  report("option_filter_then_map", test_option_filter_then_map(), 100);
+  report("option_or_else_then_map", test_option_or_else_then_map(), 100);
+  report("option_filter_then_is_some", test_option_filter_then_is_some(), 100);
+  report("result_ok_then_map", test_result_ok_then_map(), 100);
+
+  section("ufcs callback with nested ufcs");
+  report("nested_ufcs_in_and_then", test_nested_ufcs_in_and_then(), 100);
+  report("triple_chain_filter_map_map", test_triple_chain_filter_map_map(), 100);
+  report("result_and_then_ok", test_result_and_then_ok(), 100);
+  report("result_and_then_err", test_result_and_then_err(), 100);
+  report("result_or_else_recover", test_result_or_else_recover(), 100);
+  report("long_ufcs_chain", test_long_ufcs_chain(), 100);
+
+  section("closure/ufcs regression tests");
+  report("generic_fn_result_closure", test_generic_fn_result_closure(), 100);
+  report("user_ufcs_method_result", test_user_ufcs_method_result(), 100);
+  report("closure_var_and_then_chain", test_closure_var_and_then_chain(), 100);
+  report("mutual_recursion_result", test_mutual_recursion_result(), 100);
+
+  section("Go Result call wrapping");
+  report("go_result_call_let_underscore", test_go_result_call_let_underscore(), 100);
+  report("go_result_call_in_match", test_go_result_call_in_match(), 100);
+  report("go_result_call_assigned", test_go_result_call_assigned(), 100);
+
+  section("recover blocks");
+  report("recover_catches_panic", test_recover_catches_panic(), 100);
+  report("recover_success_path", test_recover_success_path(), 100);
+  report("recover_with_statements", test_recover_with_statements(), 100);
+  report("recover_panic_value_stack_trace", test_recover_panic_value_stack_trace(), 100);
+  report("recover_nested", test_recover_nested(), 100);
+
+  section("as cast syntax");
+  report("cast_int_to_float64", test_cast_int_to_float64(), 100);
+  report("cast_float64_to_int", test_cast_float64_to_int(), 100);
+  report("cast_int_to_rune", test_cast_int_to_rune(), 100);
+  report("cast_rune_to_int", test_cast_rune_to_int(), 100);
+  report("cast_string_to_byte_slice", test_cast_string_to_byte_slice(), 100);
+  report("cast_byte_slice_to_string", test_cast_byte_slice_to_string(), 100);
+  report("cast_string_to_rune_slice", test_cast_string_to_rune_slice(), 100);
+  report("cast_rune_slice_to_string", test_cast_rune_slice_to_string(), 100);
+  report("cast_in_expression", test_cast_in_expression(), 100);
+  report("cast_int_to_int8", test_cast_int_to_int8(), 100);
+  report("cast_float32_to_float64", test_cast_float32_to_float64(), 100);
+  report("cast_duration_to_int64", test_cast_duration_to_int64(), 100);
+  report("cast_int64_to_duration", test_cast_int64_to_duration(), 100);
+
+  section("slice fold and find");
+  report("slice_fold_sum", test_slice_fold_sum(), 100);
+  report("slice_fold_product", test_slice_fold_product(), 100);
+  report("slice_fold_empty", test_slice_fold_empty(), 100);
+  report("slice_find_some", test_slice_find_some(), 100);
+  report("slice_find_none", test_slice_find_none(), 100);
+  report("slice_find_empty", test_slice_find_empty(), 100);
+
+  section("slice enumerate");
+  report("slice_enumerate", test_slice_enumerate(), 100);
+  report("enumerated_slice_filter", test_enumerated_slice_filter(), 100);
+
+  section("slice join");
+  report("slice_join", test_slice_join(), 100);
+
+  section("enum variant named string");
+  report("enum_variant_named_string", test_enum_variant_named_string(), 100);
+
+  section("map from");
+  report("map_from", test_map_from(), 100);
+
+  section("string range slicing");
+  report("string_range_slicing", test_string_range_slicing(), 100);
+
+  section("go import shadowing");
+  report("go_import_not_shadowed_by_transitive", test_go_import_not_shadowed_by_transitive(), 100);
+
+  section("go pointer receiver");
+  report("pointer_receiver_struct_literal", test_pointer_receiver_struct_literal(), 100);
+  report("pointer_receiver_constructor", test_pointer_receiver_constructor(), 100);
+  report("pointer_receiver_method_expr", test_pointer_receiver_method_expr(), 100);
+
+  fmt.Print("\nAll tests completed\n")
+}

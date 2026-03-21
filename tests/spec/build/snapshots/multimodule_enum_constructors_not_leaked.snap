@@ -1,0 +1,54 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/utils"
+)
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen() Color {
+	return Color{Tag: ColorGreen}
+}
+
+type ColorTag int
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) String() string {
+	switch c.Tag {
+	case ColorRed:
+		return "Color.Red"
+	case ColorGreen:
+		return "Color.Green"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+func main() {
+	x := utils.Add(1, 2)
+	_ = MakeColorRed()
+	_ = x
+}
+
+
+// === utils/lib.go ===
+package utils
+
+func Add(a, b int) int {
+	return a + b
+}

@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> int {\n  1 + 2\n}\n"
+---
+package main
+
+func test() int {
+	return 1 + 2
+}

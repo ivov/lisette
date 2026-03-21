@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  1 +\n  // comment before right operand\n  2\n}"
+---
+fn test() {
+  1 +
+  // comment before right operand
+  2
+}

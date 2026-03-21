@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Multi-line f-string interpolation
+   ╭─[test.lis:1:19]
+ 1 │ let s = f"result: {
+   ·                   ┬
+   ·                   ╰── f-string interpolations must be single-line
+ 2 │   match n {
+   ╰────
+  help: Extract the expression into a `let` binding and interpolate the variable · code: [lex.format_string_multiline_interpolation]

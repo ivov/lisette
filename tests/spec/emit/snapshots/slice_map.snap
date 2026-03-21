@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(s: Slice<int>, f: fn(int) -> string) -> Slice<string> {\n  s.map(f)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s []int, f func(int) string) []string {
+	return lisette.SliceMap(s, f)
+}

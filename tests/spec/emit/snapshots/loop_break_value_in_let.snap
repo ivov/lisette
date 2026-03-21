@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let x = loop {\n    if true {\n      break 42\n    }\n  };\n  x\n}\n"
+---
+package main
+
+func test() int {
+	for {
+		if true {
+			return 42
+		}
+	}
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused import
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ import "some/module"
+   ·        ──────┬──────
+   ·              ╰── never used
+ 3 │ 
+   ╰────
+  help: Use or remove this import · code: [lint.unused_import]

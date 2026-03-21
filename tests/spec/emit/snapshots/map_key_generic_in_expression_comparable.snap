@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn foo<U>(u: U) {}\n\nfn make_map<T>(t: T) -> int {\n  foo(Map.new<T, int>())\n  0\n}\n"
+---
+package main
+
+func foo[U any](_ U) {}
+
+func make_map[T comparable](_ T) int {
+	foo(make(map[T]int))
+	return 0
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:6:10]
+ 5 │   match s {
+ 6 │     Shape::Circle(r) => r,
+   ·          ─┬
+   ·           ╰── invalid syntax
+ 7 │     _ => 0,
+   ╰────
+  help: Use `.` instead of `::` for enum variant access, e.g. `Shape.Circle` · code: [parse.syntax_error]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `defer`
+   ╭─[test.lis:4:11]
+ 3 │ fn f() {
+ 4 │   let x = defer cleanup();
+   ·           ───────┬───────
+   ·                  ╰── produces no value
+ 5 │ }
+   ╰────
+  help: Move `defer` to its own statement · code: [infer.defer_in_expression_position]

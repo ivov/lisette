@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(m: Map<string, int>) -> int {\n  m.length()\n}\n"
+---
+package main
+
+func test(m map[string]int) int {
+	return len(m)
+}

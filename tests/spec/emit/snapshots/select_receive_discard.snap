@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn do_work() {}\n\nfn test() {\n  let ch = Channel.new<int>();\n\n  select {\n    ch.receive() => do_work(),\n    _ => {},\n  }\n}\n"
+---
+package main
+
+func do_work() {}
+
+func test() {
+	ch := make(chan int)
+	select {
+	case <-ch:
+		do_work()
+	default:
+	}
+}

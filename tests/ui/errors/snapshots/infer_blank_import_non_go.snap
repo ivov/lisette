@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid import
+   ╭─[main.lis:2:8]
+ 1 │ 
+ 2 │ import _ "utils"
+   ·        ┬
+   ·        ╰── only allowed for Go modules
+ 3 │ 
+   ╰────
+  help: Remove the underscore. Blank imports are allowed only for Go imports, because Lisette modules have no `init()` side effects · code: [resolve.blank_import_non_go]

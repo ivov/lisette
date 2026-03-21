@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Point(int, int)\n\nfn test() -> Point {\n  (Point)(1, 2)\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	F0 int
+	F1 int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point(%v, %v)", p.F0, p.F1)
+}
+
+func test() Point {
+	return Point{
+		F0: 1,
+		F1: 2,
+	}
+}

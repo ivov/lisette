@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn make_int() -> int { 1 }\nfn read_ref(r: Ref<int>) -> int { r.* }\nfn side_effect() -> int { 1 }\n\nfn test() -> int {\n  side_effect() + read_ref(&make_int())\n}\n"
+---
+package main
+
+func make_int() int {
+	return 1
+}
+
+func read_ref(r *int) int {
+	return *r
+}
+
+func side_effect() int {
+	return 1
+}
+
+func test() int {
+	_left_2 := side_effect()
+	ref_1 := make_int()
+	return _left_2 + read_ref(&ref_1)
+}

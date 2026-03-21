@@ -1,0 +1,29 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === core/types/types.go ===
+package types
+
+import "fmt"
+
+type Item struct {
+	Name string
+}
+
+func (i Item) String() string {
+	return fmt.Sprintf("Item { name: %v }", i.Name)
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/core/types"
+)
+
+func main() {
+	item := types.Item{Name: "test"}
+	fmt.Println(item.Name)
+}

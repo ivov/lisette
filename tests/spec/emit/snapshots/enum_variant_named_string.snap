@@ -1,0 +1,59 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum ASTNode {\n  Number(int),\n  String(string),\n  Null,\n}\n\nfn visit(node: ASTNode) -> string {\n  match node {\n    ASTNode.Number(n) => f\"number:{n}\",\n    ASTNode.String(s) => f\"string:{s}\",\n    ASTNode.Null => \"null\",\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeASTNodeNumber(arg0 int) ASTNode {
+	return ASTNode{Tag: ASTNodeNumber, Number: arg0}
+}
+
+func MakeASTNodeString(arg0 string) ASTNode {
+	return ASTNode{Tag: ASTNodeString, ASTNodeString_: arg0}
+}
+
+func MakeASTNodeNull() ASTNode {
+	return ASTNode{Tag: ASTNodeNull}
+}
+
+type ASTNodeTag int
+
+const (
+	ASTNodeNumber ASTNodeTag = iota
+	ASTNodeString
+	ASTNodeNull
+)
+
+type ASTNode struct {
+	Tag            ASTNodeTag
+	Number         int
+	ASTNodeString_ string
+}
+
+func (a ASTNode) String() string {
+	switch a.Tag {
+	case ASTNodeNumber:
+		return fmt.Sprintf("ASTNode.Number(%v)", a.Number)
+	case ASTNodeString:
+		return fmt.Sprintf("ASTNode.String(%v)", a.ASTNodeString_)
+	case ASTNodeNull:
+		return "ASTNode.Null"
+	default:
+		return fmt.Sprintf("ASTNode(%d)", a.Tag)
+	}
+}
+
+func visit(node ASTNode) string {
+	switch node.Tag {
+	case ASTNodeNumber:
+		n := node.Number
+		return fmt.Sprintf("number:%v", n)
+	case ASTNodeString:
+		s := node.ASTNodeString_
+		return fmt.Sprintf("string:%v", s)
+	default:
+		return "null"
+	}
+}

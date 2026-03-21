@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Specialized impl cannot satisfy interface
+    ╭─[test.lis:20:21]
+ 19 │   let p = Pair { first: 1, second: "hello" }
+ 20 │   print_description(p)
+    ·                     ┬
+    ·                     ╰── `describe` on `Pair` cannot satisfy `Describable`
+ 21 │ }
+    ╰────
+  help: Methods in specialized `impl` blocks cannot satisfy interfaces. Move `describe` to a generic `impl` block: `impl<A, B> Pair<A, B> {}` · code: [infer.specialized_impl_cannot_satisfy_interface]

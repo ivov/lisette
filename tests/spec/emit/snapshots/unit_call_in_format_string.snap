@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn noop() {}\n\nfn test() -> string {\n  f\"x:{noop()}\"\n}\n"
+---
+package main
+
+import "fmt"
+
+func noop() {}
+
+func test() string {
+	noop()
+	return fmt.Sprintf("x:%v", struct{}{})
+}

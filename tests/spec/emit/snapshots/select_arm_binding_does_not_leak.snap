@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let x = 100\n  fmt.Println(x)\n  let x = 200\n\n  let ch = Channel.buffered<int>(1)\n  ch.send(99)\n\n  select {\n    let Some(x) = ch.receive() => fmt.Println(x),\n    _ => fmt.Println(\"default\"),\n  }\n\n  fmt.Println(x)\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	x := 100
+	fmt.Println(x)
+	x_1 := 200
+	ch := make(chan int, 1)
+	lisette.ChannelSend(ch, 99)
+	ch_2 := ch
+	for {
+		select {
+		case x, ok := <-ch_2:
+			if ok {
+				fmt.Println(x)
+			} else {
+				ch_2 = nil
+				continue
+			}
+		default:
+			fmt.Println("default")
+		}
+		break
+	}
+	fmt.Println(x_1)
+}

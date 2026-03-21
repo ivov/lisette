@@ -1,0 +1,10 @@
+import "go:fmt"
+import "go:io"
+import router "go:github.com/gorilla/mux"
+import _ "go:database/sql"
+import "app/services"
+import "core/net/http"
+
+fn process() {
+  // function body
+}

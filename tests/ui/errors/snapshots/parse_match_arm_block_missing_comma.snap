@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:6:6]
+ 5 │       let _ = 10
+ 6 │     }
+   ·      ▲
+   ·      ╰── expected `,` or `}`
+ 7 │     2 => {
+   ╰────
+  help: Add a comma between elements · code: [parse.syntax_error]

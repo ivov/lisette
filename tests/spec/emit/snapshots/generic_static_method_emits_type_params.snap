@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Stack<T> { items: Slice<T> }\n\nimpl<T> Stack<T> {\n  fn new() -> Stack<T> {\n    Stack { items: [] }\n  }\n}\n\nfn test() {\n  let s: Stack<int> = Stack.new();\n}\n"
+---
+package main
+
+import "fmt"
+
+type Stack[T any] struct {
+	items []T
+}
+
+func (s Stack[T]) String() string {
+	return fmt.Sprintf("Stack { items: %v }", s.items)
+}
+
+func Stack_new[T any]() Stack[T] {
+	return Stack[T]{items: []T{}}
+}
+
+func test() {
+	_ = Stack_new[int]()
+}

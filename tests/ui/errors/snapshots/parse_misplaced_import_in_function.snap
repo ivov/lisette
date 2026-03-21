@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   import "go:strings"
+   ·   ───┬──
+   ·      ╰── misplaced
+ 4 │ }
+   ╰────
+  help: Move this import to the top level of the file · code: [parse.syntax_error]

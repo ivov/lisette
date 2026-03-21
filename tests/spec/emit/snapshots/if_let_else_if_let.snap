@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(a: Option<int>, b: Option<int>) -> int {\n  if let Some(x) = a {\n    x\n  } else if let Some(y) = b {\n    y\n  } else {\n    0\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(a, b lisette.Option[int]) int {
+	if a.Tag == lisette.OptionSome {
+		return a.SomeVal
+	}
+	if b.Tag == lisette.OptionSome {
+		return b.SomeVal
+	}
+	return 0
+}

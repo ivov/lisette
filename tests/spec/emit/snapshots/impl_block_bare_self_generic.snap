@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Container<T> { value: T }\n\nimpl<T> Container<T> {\n  fn get(self) -> T {\n    self.value\n  }\n}\n\nfn main() {\n  let c = Container { value: 42 };\n  let v = c.get();\n}\n"
+---
+package main
+
+import "fmt"
+
+type Container[T any] struct {
+	value T
+}
+
+func (c Container[T]) String() string {
+	return fmt.Sprintf("Container { value: %v }", c.value)
+}
+
+func (c Container[T]) get() T {
+	return c.value
+}
+
+func main() {
+	c := Container[int]{value: 42}
+	_ = c.get()
+}

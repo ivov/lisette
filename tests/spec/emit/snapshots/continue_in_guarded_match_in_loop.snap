@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn sum_positives(items: Slice<int>) -> int {\n  let mut sum = 0\n  for item in items {\n    match item {\n      n if n > 0 => sum += n,\n      _ => continue,\n    }\n  }\n  sum\n}\n"
+---
+package main
+
+func sum_positives(items []int) int {
+	sum := 0
+loop_1:
+	for _, item := range items {
+	match_2:
+		for {
+			{
+				n := item
+				if n > 0 {
+					sum += n
+					break match_2
+				}
+			}
+			continue loop_1
+		}
+	}
+	return sum
+}

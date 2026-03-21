@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn get_value() -> Result<int, string> { Ok(42) }\n\nfn test() -> int {\n  match get_value() {\n    Ok(x) if x > 0 => x,\n    Ok(_) => 0,\n    Err(_) => -1,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func get_value() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](42)
+}
+
+func test() int {
+	subject_1 := get_value()
+	if subject_1.Tag == lisette.ResultOk {
+		x := subject_1.OkVal
+		if x > 0 {
+			return x
+		}
+		return 0
+	}
+	return -1
+}

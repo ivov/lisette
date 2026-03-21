@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:5]
+ 2 │ fn main() {
+ 3 │   x := 42
+   ·     ─┬
+   ·      ╰── Go-style short declaration
+ 4 │ }
+   ╰────
+  help: Use `let x = ...` instead of `:=` for variable declarations · code: [parse.syntax_error]

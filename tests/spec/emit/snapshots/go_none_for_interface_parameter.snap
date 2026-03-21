@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nimport \"go:net/http\"\nimport \"go:fmt\"\n\nfn main() {\n  let req = http.NewRequest(\"GET\", \"https://example.com\", None)\n  fmt.Println(req)\n}\n"
+---
+package main
+
+import (
+	"errors"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"net/http"
+)
+
+func main() {
+	ret_1, ret_2 := http.NewRequest("GET", "https://example.com", nil)
+	var req lisette.Result[*http.Request, error]
+	if ret_2 != nil {
+		req = lisette.MakeResultErr[*http.Request, error](ret_2)
+	} else if ret_1 == nil {
+		req = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
+	} else {
+		req = lisette.MakeResultOk[*http.Request, error](ret_1)
+	}
+	fmt.Println(req)
+}

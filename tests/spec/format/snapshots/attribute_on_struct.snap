@@ -1,0 +1,6 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: #[json]\nstruct Person { name: string }"
+---
+#[json]
+struct Person { name: string }

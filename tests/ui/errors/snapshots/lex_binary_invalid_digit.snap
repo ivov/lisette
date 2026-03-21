@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid binary literal
+   ╭─[test.lis:1:12]
+ 1 │ let x = 0b123
+   ·            ┬
+   ·            ╰── `2` is not a valid binary digit
+   ╰────
+  help: Use only `0` and `1` for binary literals · code: [lex.number_invalid_binary_digit]

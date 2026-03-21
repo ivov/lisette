@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn noop() {}\n\nfn main() {\n  let x = match noop() {\n    () => 1,\n  }\n  let _ = x\n}\n"
+---
+package main
+
+func noop() {}
+
+func main() {
+	var x int
+	noop()
+	_ = struct{}{}
+	x = 1
+	_ = x
+}

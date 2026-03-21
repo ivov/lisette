@@ -1,0 +1,205 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value) in map_data {\n    print(key, value);\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "map_data",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 8,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Map",
+                        params: [
+                            Constructor {
+                                name: "string",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 23,
+                                    byte_length: 6,
+                                },
+                            },
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 31,
+                                    byte_length: 3,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 19,
+                            byte_length: 16,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                For {
+                    binding: Binding {
+                        pattern: Tuple {
+                            elements: [
+                                Identifier {
+                                    identifier: "key",
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 46,
+                                        byte_length: 3,
+                                    },
+                                },
+                                Identifier {
+                                    identifier: "value",
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 51,
+                                        byte_length: 5,
+                                    },
+                                },
+                            ],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 45,
+                                byte_length: 12,
+                            },
+                        },
+                        annotation: None,
+                        typed_pattern: None,
+                        ty: Variable(
+                            -1,
+                        ),
+                    },
+                    iterable: Identifier {
+                        value: "map_data",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 61,
+                            byte_length: 8,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    body: Block {
+                        items: [
+                            Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 76,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Identifier {
+                                        value: "key",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 82,
+                                            byte_length: 3,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                    Identifier {
+                                        value: "value",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 87,
+                                            byte_length: 5,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 76,
+                                    byte_length: 17,
+                                },
+                            },
+                        ],
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 70,
+                            byte_length: 28,
+                        },
+                    },
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 41,
+                        byte_length: 57,
+                    },
+                    needs_label: false,
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 37,
+                byte_length: 63,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 99,
+        },
+    },
+]

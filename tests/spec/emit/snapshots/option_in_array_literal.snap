@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn maybe(x: int) -> Option<int> {\n  if x > 0 { Some(x) } else { None }\n}\n\nfn test() {\n  let arr = [maybe(1), maybe(0), maybe(3), maybe(-1)];\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func maybe(x int) lisette.Option[int] {
+	if x > 0 {
+		return lisette.MakeOptionSome[int](x)
+	}
+	return lisette.MakeOptionNone[int]()
+}
+
+func test() {
+	_ = []lisette.Option[int]{maybe(1), maybe(0), maybe(3), maybe(-1)}
+}

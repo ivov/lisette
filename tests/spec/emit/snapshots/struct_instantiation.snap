@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Point { x: int, y: int }\n\nfn test() -> Point {\n  Point { x: 10, y: 20 }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func test() Point {
+	return Point{
+		x: 10,
+		y: 20,
+	}
+}

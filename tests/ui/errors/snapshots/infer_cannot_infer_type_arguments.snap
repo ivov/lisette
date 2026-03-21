@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Missing type argument
+   ╭─[test.lis:3:12]
+ 2 │ fn test() {
+ 3 │   let ch = Channel.new();
+   ·            ──────┬──────
+   ·                  ╰── expected type argument
+ 4 │ }
+   ╰────
+  help: Supply a type argument for the call, e.g. `Channel.new<int>()` · code: [infer.missing_type_argument]

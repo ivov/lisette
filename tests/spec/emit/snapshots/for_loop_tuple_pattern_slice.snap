@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nimport \"go:fmt\"\n\nfn test(pairs: Slice<(int, string)>) {\n  for (a, b) in pairs {\n    fmt.Println(a, b)\n  }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func test(pairs []lisette.Tuple2[int, string]) {
+	for _, item_1 := range pairs {
+		a := item_1.First
+		b := item_1.Second
+		fmt.Println(a, b)
+	}
+}

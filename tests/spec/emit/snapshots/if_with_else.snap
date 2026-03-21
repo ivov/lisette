@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(x: int) {\n  if x > 10 {\n    let y = 1;\n  } else {\n    let y = 2;\n  }\n}\n"
+---
+package main
+
+func test(x int) {
+	if x > 10 {
+		_ = 1
+	} else {
+		_ = 2
+	}
+}

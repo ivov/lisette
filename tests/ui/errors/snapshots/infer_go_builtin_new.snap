@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Name not found
+   ╭─[test.lis:3:11]
+ 2 │ fn test() {
+ 3 │   let p = new(int);
+   ·           ─┬─
+   ·            ╰── name not found in scope
+ 4 │ }
+   ╰────
+  help: Lisette has no `new` builtin. Use constructor methods instead, e.g. `MyStruct { field: value }` or `MyType.new()` · code: [resolve.name_not_found]

@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n/// Result of a network operation.\nenum NetworkResult {\n  /// The operation succeeded.\n  Success,\n  /// The operation timed out.\n  Timeout,\n  /// The operation failed with an error code.\n  Error(int),\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeNetworkResultSuccess() NetworkResult {
+	return NetworkResult{Tag: NetworkResultSuccess}
+}
+
+func MakeNetworkResultTimeout() NetworkResult {
+	return NetworkResult{Tag: NetworkResultTimeout}
+}
+
+func MakeNetworkResultError(arg0 int) NetworkResult {
+	return NetworkResult{Tag: NetworkResultError, Error: arg0}
+}
+
+// Result of a network operation.
+type NetworkResultTag int
+
+const (
+	// The operation succeeded.
+	NetworkResultSuccess NetworkResultTag = iota
+	// The operation timed out.
+	NetworkResultTimeout
+	// The operation failed with an error code.
+	NetworkResultError
+)
+
+type NetworkResult struct {
+	Tag   NetworkResultTag
+	Error int
+}
+
+func (n NetworkResult) String() string {
+	switch n.Tag {
+	case NetworkResultSuccess:
+		return "NetworkResult.Success"
+	case NetworkResultTimeout:
+		return "NetworkResult.Timeout"
+	case NetworkResultError:
+		return fmt.Sprintf("NetworkResult.Error(%v)", n.Error)
+	default:
+		return fmt.Sprintf("NetworkResult(%d)", n.Tag)
+	}
+}

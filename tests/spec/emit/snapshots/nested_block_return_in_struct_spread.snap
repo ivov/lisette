@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nstruct S { a: int }\nfn test() -> int {\n  let _ = S { a: 1, ..{ { return 1 } } }.a\n  2\n}\n"
+---
+package main
+
+import "fmt"
+
+type S struct {
+	a int
+}
+
+func (s S) String() string {
+	return fmt.Sprintf("S { a: %v }", s.a)
+}
+
+func test() int {
+	{
+		return 1
+	}
+	_ = S{}.a
+	return 2
+}

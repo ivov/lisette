@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot assign to newtype field
+   ╭─[test.lis:6:3]
+ 5 │   let mut n = UserId(1)
+ 6 │   n.0 = 2
+   ·   ───┬───
+   ·      ╰── newtype fields are read-only
+ 7 │ }
+   ╰────
+  help: Reconstruct the newtype: `variable = UserId(new_value)` · code: [infer.newtype_field_assignment]

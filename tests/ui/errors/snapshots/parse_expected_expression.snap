@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let x = ;
+   ·           ┬
+   ·           ╰── expected expression, found `;`
+ 4 │ }
+   ╰────
+  help: Check your syntax · code: [parse.expected_expression]

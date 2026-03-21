@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn test() {\n  let mut res: Result<int, string> = Ok(1);\n  res = Err(\"error\");\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() {
+	_ = lisette.MakeResultOk[int, string](1)
+	_ = lisette.MakeResultErr[int, string]("error")
+}

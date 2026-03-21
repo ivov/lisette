@@ -1,0 +1,123 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() { func<A, B, C>(x, y); }\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Call {
+                    expression: Identifier {
+                        value: "func",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 13,
+                            byte_length: 4,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    args: [
+                        Identifier {
+                            value: "x",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 27,
+                                byte_length: 1,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                        Identifier {
+                            value: "y",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 30,
+                                byte_length: 1,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                    ],
+                    type_args: [
+                        Constructor {
+                            name: "A",
+                            params: [],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 18,
+                                byte_length: 1,
+                            },
+                        },
+                        Constructor {
+                            name: "B",
+                            params: [],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 21,
+                                byte_length: 1,
+                            },
+                        },
+                        Constructor {
+                            name: "C",
+                            params: [],
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 24,
+                                byte_length: 1,
+                            },
+                        },
+                    ],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 13,
+                        byte_length: 19,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 24,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 34,
+        },
+    },
+]

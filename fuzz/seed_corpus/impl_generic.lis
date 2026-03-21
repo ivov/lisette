@@ -1,0 +1,28 @@
+struct Container<T> {
+  value: T,
+}
+
+impl<T> Container<T> {
+  fn get(self: Container<T>) -> T {
+    return self.value;
+  }
+
+  fn new(value: T) -> Container<T> {
+    return Container { value };
+  }
+}
+
+struct Pair<K, V> {
+  key: K,
+  value: V,
+}
+
+impl<K, V> Pair<K, V> {
+  fn get_key(self: Pair<K, V>) -> K {
+    return self.key;
+  }
+
+  fn get_value(self: Pair<K, V>) -> V {
+    return self.value;
+  }
+}

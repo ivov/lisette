@@ -1,0 +1,21 @@
+struct Counter {
+  value: int,
+}
+
+impl Counter {
+  fn private_helper(self: Counter) -> int {
+    return self.value * 2;
+  }
+
+  pub fn get(self: Counter) -> int {
+    return self.private_helper();
+  }
+
+  pub fn set(self: Counter, new_value: int) -> Counter {
+    return Counter { value: new_value };
+  }
+
+  fn new() -> Counter {
+    return Counter { value: 0 };
+  }
+}

@@ -1,0 +1,26 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: struct"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Struct,
+            text: "struct",
+            byte_offset: 0,
+            byte_length: 6,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 6,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

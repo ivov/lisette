@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unknown attribute
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[foo]
+   · ───┬──
+   ·    ╰── not recognized
+ 3 │ pub struct User {
+   ╰────
+  help: `foo` is not a recognized attribute. Known attributes: `#[json]`, `#[xml]`, `#[yaml]`, `#[toml]`, `#[db]`, `#[bson]`, `#[msgpack]`, `#[mapstructure]`, `#[tag]` · code: [lint.unknown_attribute]

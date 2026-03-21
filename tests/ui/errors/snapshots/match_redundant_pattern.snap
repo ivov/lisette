@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unreachable pattern
+    ╭─[test.lis:9:5]
+  8 │     Inactive => 2,
+  9 │     Active => 3,
+    ·     ───┬──
+    ·        ╰── arm #3 is unreachable
+ 10 │   }
+    ╰────
+  help: This pattern is unreachable because it is already covered by arm #1: `Status.Active` · code: [infer.redundant_arm]

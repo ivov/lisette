@@ -1,0 +1,21 @@
+fn test(a: int, b: bool) {
+  if a > 100 {
+    print("very large");
+  } else if a > 10 {
+    print("large");
+  } else {
+    print("small or medium");
+  }
+
+  if (a * 2 > 50) && b || is_special(a) {
+    // complex condition
+  }
+
+  if a > 0 {
+    if b {
+      print("both positive");
+    } else {
+      print("a positive, b non-positive");
+    }
+  }
+}

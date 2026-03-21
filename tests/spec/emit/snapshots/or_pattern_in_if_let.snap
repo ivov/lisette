@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(x: int) -> string {\n  if let 1 | 2 | 3 = x {\n    \"small\"\n  } else {\n    \"large\"\n  }\n}\n"
+---
+package main
+
+func test(x int) string {
+	if x == 1 || x == 2 || x == 3 {
+		return "small"
+	}
+	return "large"
+}

@@ -1,0 +1,63 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === lib/mod.go ===
+package lib
+
+import "fmt"
+
+func MakeResult2Ok2[T any, E any](arg0 T) Result2[T, E] {
+	return Result2[T, E]{Tag: Result2Ok2, Ok2: arg0}
+}
+
+func MakeResult2Err2[T any, E any](arg0 E) Result2[T, E] {
+	return Result2[T, E]{Tag: Result2Err2, Err2: arg0}
+}
+
+type Result2Tag int
+
+const (
+	Result2Ok2 Result2Tag = iota
+	Result2Err2
+)
+
+type Result2[T any, E any] struct {
+	Tag  Result2Tag
+	Ok2  T
+	Err2 E
+}
+
+func (r Result2[T, E]) String() string {
+	switch r.Tag {
+	case Result2Ok2:
+		return fmt.Sprintf("Result2.Ok2(%v)", r.Ok2)
+	case Result2Err2:
+		return fmt.Sprintf("Result2.Err2(%v)", r.Err2)
+	default:
+		return fmt.Sprintf("Result2(%d)", r.Tag)
+	}
+}
+
+func Ok2[T any, E any](value T) Result2[T, E] {
+	return MakeResult2Ok2[T, E](value)
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/lib"
+)
+
+func main() {
+	r := lib.Ok2[int, string](42)
+	if r.Tag == lib.Result2Ok2 {
+		v := r.Ok2
+		fmt.Println(v)
+	} else {
+		e := r.Err2
+		fmt.Println(e)
+	}
+}

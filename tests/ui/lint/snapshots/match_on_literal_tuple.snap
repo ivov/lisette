@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Ineffective match
+   ╭─[test.lis:3:9]
+ 2 │ fn main() {
+ 3 │   match (1, 2) {
+   ·         ───┬──
+   ·            ╰── already known
+ 4 │     _ => (),
+   ╰────
+  help: Matching on a literal is ineffective, because this always succeeds. Did you mean to match on a variable? · code: [lint.match_on_literal]

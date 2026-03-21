@@ -1,0 +1,338 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\n    (\"status\", code, _) => print(\"Status code:\", code),\n    (_, _, true)        => print(\"Active\"),\n    _                   => print(\"Other\"),\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "triple",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 9,
+                        byte_length: 6,
+                    },
+                },
+                annotation: Some(
+                    Tuple {
+                        elements: [
+                            Constructor {
+                                name: "string",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 18,
+                                    byte_length: 6,
+                                },
+                            },
+                            Constructor {
+                                name: "int",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 26,
+                                    byte_length: 3,
+                                },
+                            },
+                            Constructor {
+                                name: "bool",
+                                params: [],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 31,
+                                    byte_length: 4,
+                                },
+                            },
+                        ],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 17,
+                            byte_length: 19,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Match {
+                    subject: Identifier {
+                        value: "triple",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 48,
+                            byte_length: 6,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: Tuple {
+                                elements: [
+                                    Literal {
+                                        literal: String(
+                                            "status",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 62,
+                                            byte_length: 8,
+                                        },
+                                    },
+                                    Identifier {
+                                        identifier: "code",
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 72,
+                                            byte_length: 4,
+                                        },
+                                    },
+                                    WildCard {
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 78,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 61,
+                                    byte_length: 19,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 84,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "Status code:",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 90,
+                                            byte_length: 14,
+                                        },
+                                    },
+                                    Identifier {
+                                        value: "code",
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 106,
+                                            byte_length: 4,
+                                        },
+                                        binding_id: None,
+                                        qualified: None,
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 84,
+                                    byte_length: 27,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: Tuple {
+                                elements: [
+                                    WildCard {
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 118,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                    WildCard {
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 121,
+                                            byte_length: 1,
+                                        },
+                                    },
+                                    Literal {
+                                        literal: Boolean(
+                                            true,
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 124,
+                                            byte_length: 4,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 117,
+                                    byte_length: 12,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 140,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "Active",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 146,
+                                            byte_length: 8,
+                                        },
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 140,
+                                    byte_length: 15,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: WildCard {
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 161,
+                                    byte_length: 1,
+                                },
+                            },
+                            expression: Call {
+                                expression: Identifier {
+                                    value: "print",
+                                    ty: Variable(
+                                        -1,
+                                    ),
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 184,
+                                        byte_length: 5,
+                                    },
+                                    binding_id: None,
+                                    qualified: None,
+                                },
+                                args: [
+                                    Literal {
+                                        literal: String(
+                                            "Other",
+                                        ),
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 190,
+                                            byte_length: 7,
+                                        },
+                                    },
+                                ],
+                                type_args: [],
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 184,
+                                    byte_length: 14,
+                                },
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 42,
+                        byte_length: 161,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 38,
+                byte_length: 167,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 204,
+        },
+    },
+]

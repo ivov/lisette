@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { let f = |x| x + 1; }"
+---
+fn test() {
+  let f = |x| x + 1
+}

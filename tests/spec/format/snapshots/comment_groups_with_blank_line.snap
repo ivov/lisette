@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: // first group\n\n// second group\nfn foo() {}"
+---
+// first group
+
+// second group
+fn foo() {}

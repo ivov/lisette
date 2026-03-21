@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(pair: (Option<int>, Option<int>)) -> int {\n  let (Some(x), Some(y)) | (Some(y), Some(x)) = pair else { return 0; };\n  x + y\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(pair lisette.Tuple2[lisette.Option[int], lisette.Option[int]]) int {
+	var x int
+	var y int
+	if pair.First.Tag == lisette.OptionSome && pair.Second.Tag == lisette.OptionSome {
+		x = pair.First.SomeVal
+		y = pair.Second.SomeVal
+	} else if pair.First.Tag == lisette.OptionSome && pair.Second.Tag == lisette.OptionSome {
+		y = pair.First.SomeVal
+		x = pair.Second.SomeVal
+	} else {
+		return 0
+	}
+	return x + y
+}

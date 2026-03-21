@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> int {\n  42\n}\n"
+---
+package main
+
+func test() int {
+	return 42
+}

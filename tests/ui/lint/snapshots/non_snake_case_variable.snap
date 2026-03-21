@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Miscased name
+   ╭─[test.lis:3:7]
+ 2 │ fn main() {
+ 3 │   let userId = 42;
+   ·       ───┬──
+   ·          ╰── expected snake_case
+ 4 │   let _ = userId;
+   ╰────
+  help: Rename to `user_id` · code: [lint.non_snake_case_variable]

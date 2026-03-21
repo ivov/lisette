@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nenum Carrier {\n  C { p: Ref<int> },\n}\n\nfn bump(c: Carrier) -> int {\n  match c {\n    Carrier.C { p } => {\n      p.* = 1\n      9\n    },\n  }\n}\n\nfn first(a: int, _b: int) -> int { a }\n\nfn main() {\n  let mut i = 0\n  let m = [[10], [20]]\n  let c = Carrier.C { p: &i }\n  let x = first(m[i][0], [bump(c)][0])\n  let _ = x\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeCarrierC(arg0 *int) Carrier {
+	return Carrier{Tag: CarrierC, P: arg0}
+}
+
+type CarrierTag int
+
+const (
+	CarrierC CarrierTag = iota
+)
+
+type Carrier struct {
+	Tag CarrierTag
+	P   *int
+}
+
+func (c Carrier) String() string {
+	switch c.Tag {
+	case CarrierC:
+		return fmt.Sprintf("Carrier.C { p: %v }", c.P)
+	default:
+		return fmt.Sprintf("Carrier(%d)", c.Tag)
+	}
+}
+
+func bump(c Carrier) int {
+	p := c.P
+	*p = 1
+	return 9
+}
+
+func first(a, _ int) int {
+	return a
+}
+
+func main() {
+	i := 0
+	m := [][]int{[]int{10}, []int{20}}
+	c := Carrier{
+		Tag: CarrierC,
+		P:   &i,
+	}
+	_ = first(m[i][0], []int{bump(c)}[0])
+}

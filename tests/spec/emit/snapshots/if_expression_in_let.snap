@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test(x: int) -> int {\n  let result = if x > 0 { x * 2 } else { 0 };\n  result\n}\n"
+---
+package main
+
+func test(x int) int {
+	if x > 0 {
+		return x * 2
+	}
+	return 0
+}

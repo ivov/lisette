@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:3:22]
+ 2 │ fn test() {
+ 3 │   let x: Result<int, > = 5;
+   ·                      ┬
+   ·                      ╰── expected type
+ 4 │   let y = 10;
+   ╰────
+  help: Add a type or remove the trailing comma · code: [parse.syntax_error]

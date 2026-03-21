@@ -1,0 +1,1 @@
+../../../tree-sitter-lisette/queries/injections.scm

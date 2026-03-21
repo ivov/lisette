@@ -1,0 +1,8 @@
+fn test(x: int) -> string {
+  match x {
+    -5 => "negative five",
+    -1 => "negative one",
+    0 => "zero",
+    _ => "other",
+  }
+}

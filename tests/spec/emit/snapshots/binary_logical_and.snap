@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test() -> bool {\n  true && false\n}\n"
+---
+package main
+
+func test() bool {
+	return true && false
+}

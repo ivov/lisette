@@ -1,0 +1,33 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Pair(int, int)\nstruct Wrap(Pair)\n\nfn main() {\n  let mut w = Wrap(Pair(0, 0))\n  let mut p = w.0\n  p.1 = 9\n  w = Wrap(p)\n  let _ = w.0.1\n}\n"
+---
+package main
+
+import "fmt"
+
+type Pair struct {
+	F0 int
+	F1 int
+}
+
+func (p Pair) String() string {
+	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
+}
+
+type Wrap Pair
+
+func (w Wrap) String() string {
+	return fmt.Sprintf("Wrap(%v)", Pair(w))
+}
+
+func main() {
+	w := Wrap(Pair{
+		F0: 0,
+		F1: 0,
+	})
+	p := Pair(w)
+	p.F1 = 9
+	w = Wrap(p)
+	_ = Pair(w).F1
+}

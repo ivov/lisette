@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { some_function(first_argument, second_argument, third_argument, fourth_argument, fifth_argument) }"
+---
+fn test() {
+  some_function(
+    first_argument,
+    second_argument,
+    third_argument,
+    fourth_argument,
+    fifth_argument,
+  )
+}

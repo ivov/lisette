@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid number literal
+   ╭─[test.lis:1:11]
+ 1 │ let x = 42_
+   ·           ┬
+   ·           ╰── trailing underscore
+   ╰────
+  help: Remove the trailing underscore · code: [lex.number_trailing_underscore]

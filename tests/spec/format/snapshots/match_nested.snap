@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { match x { Some(a) => match a { 1 => \"one\", _ => \"other\" }, None => \"none\" } }"
+---
+fn test() {
+  match x {
+    Some(a) => match a {
+      1 => "one",
+      _ => "other",
+    },
+    None => "none",
+  }
+}

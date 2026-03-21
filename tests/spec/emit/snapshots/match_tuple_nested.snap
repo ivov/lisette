@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let nested = ((1, 2), 3);\n  match nested {\n    ((1, 2), 3) => 6,\n    ((x, y), z) => x + y + z,\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	nested := lisette.MakeTuple2(lisette.MakeTuple2(1, 2), 3)
+	if nested.First.First == 1 && nested.First.Second == 2 && nested.Second == 3 {
+		return 6
+	}
+	x := nested.First.First
+	y := nested.First.Second
+	z := nested.Second
+	return x + y + z
+}

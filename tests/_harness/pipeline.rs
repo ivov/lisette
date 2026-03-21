@@ -1,0 +1,283 @@
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+
+use diagnostics::{DiagnosticSink, LisetteDiagnostic};
+use ecow::EcoString;
+use semantics::{checker::Checker, pattern_analysis, store::Store};
+use stdlib::get_go_stdlib_typedef;
+use syntax::{
+    ast::Expression,
+    desugar,
+    lex::Lexer,
+    parse::Parser,
+    program::{
+        CoercionInfo, Definition, File, FileImport, MutationInfo, ResolutionInfo, UnusedInfo,
+        Visibility,
+    },
+};
+
+use super::init_prelude;
+
+use crate::_harness::register_test_builtins;
+
+use super::TEST_MODULE_ID;
+use super::wrap::{TEST_WRAPPER_NAME, wrap};
+
+pub struct TestPipeline {
+    source: String,
+    raw_source: String,
+    wrapped: bool,
+}
+
+impl TestPipeline {
+    pub fn new(source: &str) -> Self {
+        Self {
+            source: source.to_string(),
+            raw_source: source.to_string(),
+            wrapped: false,
+        }
+    }
+
+    pub fn wrapped(mut self) -> Self {
+        self.wrapped = true;
+        self.source = wrap(&self.raw_source);
+        self
+    }
+
+    pub fn compile(self) -> CompiledTest {
+        let lex_result = Lexer::new(&self.source, 0).lex();
+        if lex_result.failed() {
+            panic!("Lexing failed in test: {:?}", lex_result.errors);
+        }
+
+        let parse_result = Parser::new(lex_result.tokens, &self.source).parse();
+        if parse_result.failed() {
+            panic!("Parsing failed in test: {:?}", parse_result.errors);
+        }
+
+        let desugar_result = desugar::desugar(parse_result.ast);
+        if !desugar_result.errors.is_empty() {
+            panic!("Desugaring failed in test: {:?}", desugar_result.errors);
+        }
+
+        CompiledTest {
+            ast: desugar_result.ast,
+            wrapped: self.wrapped,
+        }
+    }
+}
+
+pub struct CompiledTest {
+    ast: Vec<Expression>,
+    wrapped: bool,
+}
+
+impl CompiledTest {
+    pub fn run_inference(self) -> InferenceResult {
+        let mut store = Store::new();
+        store.add_module(TEST_MODULE_ID);
+
+        let sink = DiagnosticSink::new();
+
+        init_prelude(&mut store);
+
+        let (typed_ast, definitions, unused, mutations, coercions, resolutions, ufcs_methods) = {
+            let mut checker = Checker::new(&mut store, &sink);
+            checker
+                .ufcs_methods
+                .extend(semantics::prelude::compute_prelude_ufcs(checker.store));
+            checker.cursor.module_id = TEST_MODULE_ID.to_string();
+            register_test_builtins(&mut checker);
+            checker.put_prelude_in_scope();
+
+            let imports: Vec<FileImport> = self
+                .ast
+                .iter()
+                .filter_map(|item| {
+                    if let Expression::ModuleImport {
+                        name,
+                        name_span,
+                        alias,
+                        span,
+                    } = item
+                    {
+                        if let Some(go_pkg) = name.strip_prefix("go:")
+                            && let Some(typedef) = get_go_stdlib_typedef(go_pkg)
+                        {
+                            checker.parse_and_register_go_module(name, typedef);
+                        }
+                        Some(FileImport {
+                            name: name.clone(),
+                            name_span: *name_span,
+                            alias: alias.clone(),
+                            span: *span,
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            checker.put_imported_modules_in_scope(&imports);
+
+            checker.register_types_and_values(&self.ast, &Visibility::Local);
+
+            // Store AST in module so compute_module_ufcs can scan impl blocks (condition 3)
+            let test_file_id = checker.store.new_file_id();
+            checker.store.store_file(
+                TEST_MODULE_ID,
+                File::new(
+                    TEST_MODULE_ID,
+                    "test.lis",
+                    "",
+                    self.ast.clone(),
+                    test_file_id,
+                ),
+            );
+            {
+                let module = checker
+                    .store
+                    .get_module(TEST_MODULE_ID)
+                    .expect("test module must exist");
+                let ufcs_entries =
+                    semantics::call_classification::compute_module_ufcs(module, TEST_MODULE_ID);
+                checker.ufcs_methods.extend(ufcs_entries);
+            }
+
+            let mut typed_ast = vec![];
+
+            for expression in self.ast {
+                let type_var = checker.new_type_var();
+                let typed_expression = checker.infer_expression(expression, &type_var);
+                typed_ast.push(typed_expression);
+
+                if checker.failed() {
+                    break;
+                }
+            }
+
+            checker.run_post_inference_checks();
+            semantics::checker::infer::checks::check_interface_visibility(
+                checker.store,
+                TEST_MODULE_ID,
+                &sink,
+            );
+
+            if !checker.failed() {
+                let pattern_ctx = pattern_analysis::Context::new(
+                    checker.store,
+                    &checker.facts.or_pattern_error_spans,
+                );
+                for expression in &typed_ast {
+                    pattern_analysis::check(expression, &pattern_ctx, checker.sink);
+                }
+                checker.facts.pattern_issues = pattern_ctx.take_issues();
+            }
+
+            if self.wrapped {
+                let has_hoisted = typed_ast.len() > 1
+                    && typed_ast.iter().any(|expr| {
+                        matches!(expr, Expression::Function { name, .. } if name == TEST_WRAPPER_NAME)
+                    });
+
+                if has_hoisted {
+                    typed_ast = typed_ast
+                        .into_iter()
+                        .filter_map(|expr| {
+                            if let Expression::Function { ref name, .. } = expr
+                                && name == TEST_WRAPPER_NAME
+                            {
+                                return Some(unwrap_test_wrapper(expr));
+                            }
+                            None
+                        })
+                        .collect();
+                } else {
+                    typed_ast = typed_ast.into_iter().map(unwrap_test_wrapper).collect();
+                }
+            }
+
+            let definitions: HashMap<EcoString, Definition> = checker
+                .store
+                .modules
+                .values()
+                .flat_map(|m| m.definitions.iter())
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+
+            let mut unused = UnusedInfo::default();
+            let mut mutations = MutationInfo::default();
+            for (&binding_id, b) in checker.facts.bindings.iter() {
+                if !b.used {
+                    unused.mark_binding_unused(b.span);
+                }
+                if b.mutated {
+                    mutations.mark_binding_mutated(binding_id);
+                }
+            }
+
+            let coercions = std::mem::take(&mut checker.coercions);
+            let resolutions = std::mem::take(&mut checker.resolutions);
+            let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
+
+            (
+                typed_ast,
+                definitions,
+                unused,
+                mutations,
+                coercions,
+                resolutions,
+                ufcs_methods,
+            )
+        };
+
+        InferenceResult {
+            ast: typed_ast,
+            errors: sink.take(),
+            definitions,
+            module_id: TEST_MODULE_ID.to_string(),
+            unused,
+            mutations,
+            coercions,
+            resolutions,
+            ufcs_methods,
+        }
+    }
+}
+
+pub struct InferenceResult {
+    pub ast: Vec<Expression>,
+    pub errors: Vec<LisetteDiagnostic>,
+    pub definitions: HashMap<EcoString, Definition>,
+    pub module_id: String,
+    pub unused: UnusedInfo,
+    pub mutations: MutationInfo,
+    pub coercions: CoercionInfo,
+    pub resolutions: ResolutionInfo,
+    pub ufcs_methods: HashSet<(String, String)>,
+}
+
+fn unwrap_test_wrapper(expression: Expression) -> Expression {
+    let Expression::Function { name, .. } = &expression else {
+        return expression;
+    };
+
+    if name != TEST_WRAPPER_NAME {
+        return expression;
+    }
+
+    let Expression::Function { body, .. } = expression else {
+        unreachable!()
+    };
+
+    let Expression::Block { items, .. } = *body else {
+        panic!(
+            "Expected Block as body of {} wrapper function",
+            TEST_WRAPPER_NAME
+        );
+    };
+
+    items
+        .into_iter()
+        .next_back()
+        .expect("Expected at least one expression in wrapped test function body")
+}

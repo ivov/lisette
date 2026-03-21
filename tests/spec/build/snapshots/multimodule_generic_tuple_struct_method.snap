@@ -1,0 +1,30 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/types"
+
+func main() {
+	w := types.Wrapper[int]{F0: 42}
+	_ = w.Unwrap()
+}
+
+
+// === types/lib.go ===
+package types
+
+import "fmt"
+
+type Wrapper[T any] struct {
+	F0 T
+}
+
+func (w Wrapper[T]) String() string {
+	return fmt.Sprintf("Wrapper(%v)", w.F0)
+}
+
+func (w Wrapper[T]) Unwrap() T {
+	return w.F0
+}

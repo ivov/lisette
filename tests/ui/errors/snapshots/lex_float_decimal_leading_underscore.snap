@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid number literal
+   ╭─[test.lis:1:11]
+ 1 │ let x = 3._14
+   ·           ┬
+   ·           ╰── leading underscore
+   ╰────
+  help: Remove the underscore after the decimal point · code: [lex.number_decimal_leading_underscore]

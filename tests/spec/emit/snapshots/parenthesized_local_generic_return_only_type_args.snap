@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn make<T>() -> Slice<T> {\n  Slice.new<T>()\n}\n\nfn test() -> Slice<int> {\n  (make)()\n}\n"
+---
+package main
+
+func make_[T any]() []T {
+	return []T{}
+}
+
+func test() []int {
+	return make_[int]()
+}

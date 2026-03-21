@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn main() {\n  let ch = Channel.new<int>()\n  select {\n    match ch.receive() {\n      Some(_) => { let _ = 0; },\n      None => { let _ = 1; },\n    }\n  }\n}\n"
+---
+package main
+
+func main() {
+	ch := make(chan int)
+	select {
+	case _, ok := <-ch:
+		if ok {
+			_ = 0
+		} else {
+			_ = 1
+		}
+	}
+}

@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:8]
+ 1 │ 
+ 2 │ fn f<T:>() {}
+   ·        ┬
+   ·        ╰── expected bound after `:`
+   ╰────
+  help: Provide a bound like `T: Display` · code: [parse.syntax_error]

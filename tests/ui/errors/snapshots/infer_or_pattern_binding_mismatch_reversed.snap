@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid or-pattern
+   ╭─[test.lis:4:17]
+ 3 │   match opt {
+ 4 │     None | Some(x) => x,
+   ·                 ┬
+   ·                 ╰── only bound here
+ 5 │   }
+   ╰────
+  help: Variable x is not bound in all alternatives. Use a wildcard `_` instead of a binding, or ensure all alternatives bind the same variable · code: [infer.or_pattern_binding_mismatch]

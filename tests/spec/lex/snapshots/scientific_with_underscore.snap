@@ -1,0 +1,26 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: 1_000e10"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Float,
+            text: "1_000e10",
+            byte_offset: 0,
+            byte_length: 8,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 8,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

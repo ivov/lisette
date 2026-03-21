@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:path\"\n\nfn use_split(f: fn(string) -> (string, string), p: string) -> string {\n  let (dir, file) = f(p)\n  f\"{dir}/{file}\"\n}\n\nfn main() {\n  let r = use_split(path.Split, \"/foo/bar.txt\")\n  let _ = r\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"path"
+)
+
+func use_split(f func(string) lisette.Tuple2[string, string], p string) string {
+	tmp_1 := f(p)
+	dir := tmp_1.First
+	file := tmp_1.Second
+	return fmt.Sprintf("%v/%v", dir, file)
+}
+
+func main() {
+	r := use_split(func(arg0 string) lisette.Tuple2[string, string] {
+		ret_1, ret_2 := path.Split(arg0)
+		return lisette.MakeTuple2(ret_1, ret_2)
+	}, "/foo/bar.txt")
+	_ = r
+}

@@ -1,0 +1,10 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid import
+   ╭─[main.lis:1:1]
+ 1 │ import "prelude"
+   · ────────┬───────
+   ·         ╰── prelude is automatically available
+   ╰────
+  help: Remove this import. Use e.g. `Option` or `prelude.Option` directly · code: [resolve.cannot_import_prelude]

@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn test() -> int {\n  let r = 0..5;\n  let mut sum = 0;\n  for i in r {\n    sum = sum + i;\n  };\n  sum\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() int {
+	r := lisette.Range[int]{
+		Start: 0,
+		End:   5,
+	}
+	sum := 0
+	for i := r.Start; i < r.End; i++ {
+		sum += i
+	}
+	return sum
+}

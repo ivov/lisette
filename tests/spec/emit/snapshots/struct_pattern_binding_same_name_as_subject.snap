@@ -1,0 +1,31 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct Big { a: int, b: int, c: int, d: int }\n\nfn test() -> int {\n  let b = Big { a: 1, b: 2, c: 3, d: 4 };\n  match b {\n    Big { a, b, .. } => a + b,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Big struct {
+	a int
+	b int
+	c int
+	d int
+}
+
+func (b Big) String() string {
+	return fmt.Sprintf("Big { a: %v, b: %v, c: %v, d: %v }", b.a, b.b, b.c, b.d)
+}
+
+func test() int {
+	b := Big{
+		a: 1,
+		b: 2,
+		c: 3,
+		d: 4,
+	}
+	subject_1 := b
+	a := subject_1.a
+	b_2 := subject_1.b
+	return a + b_2
+}

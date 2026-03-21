@@ -1,0 +1,158 @@
+================================================================================
+Identifier pattern
+================================================================================
+
+let x = 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (integer_literal)))
+
+================================================================================
+Tuple pattern
+================================================================================
+
+let (a, b) = pair
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (tuple_pattern
+      (identifier)
+      (identifier))
+    value: (identifier)))
+
+================================================================================
+Tuple struct pattern
+================================================================================
+
+match opt { Some(x) => x, None => 0 }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      value: (identifier)
+      body: (match_block
+        (match_arm
+          pattern: (match_pattern
+            (tuple_struct_pattern
+              type: (identifier)
+              (identifier)))
+          value: (identifier))
+        (match_arm
+          pattern: (match_pattern
+            (identifier))
+          value: (integer_literal))))))
+
+================================================================================
+Struct pattern
+================================================================================
+
+match p { Point { x, y } => x + y }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      value: (identifier)
+      body: (match_block
+        (match_arm
+          pattern: (match_pattern
+            (struct_pattern
+              type: (type_identifier)
+              (field_pattern
+                name: (shorthand_field_identifier))
+              (field_pattern
+                name: (shorthand_field_identifier))))
+          value: (binary_expression
+            left: (identifier)
+            right: (identifier)))))))
+
+================================================================================
+Slice pattern
+================================================================================
+
+match items { [] => 0, [first, ..rest] => first }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      value: (identifier)
+      body: (match_block
+        (match_arm
+          pattern: (match_pattern
+            (slice_pattern))
+          value: (integer_literal))
+        (match_arm
+          pattern: (match_pattern
+            (slice_pattern
+              (identifier)
+              (remaining_field_pattern
+                (identifier))))
+          value: (identifier))))))
+
+================================================================================
+Or pattern
+================================================================================
+
+match x { 1 | 2 | 3 => "small", _ => "big" }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      value: (identifier)
+      body: (match_block
+        (match_arm
+          pattern: (match_pattern
+            (or_pattern
+              (or_pattern
+                (integer_literal)
+                (integer_literal))
+              (integer_literal)))
+          value: (string_literal
+            (string_content)))
+        (match_arm
+          pattern: (match_pattern)
+          value: (string_literal
+            (string_content)))))))
+
+================================================================================
+Wildcard
+================================================================================
+
+let _ = compute()
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    value: (call_expression
+      function: (identifier)
+      arguments: (arguments))))
+
+================================================================================
+Nested pattern
+================================================================================
+
+let (Some(x), _) = pair
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (tuple_pattern
+      (tuple_struct_pattern
+        type: (identifier)
+        (identifier)))
+    value: (identifier)))

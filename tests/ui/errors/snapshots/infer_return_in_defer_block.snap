@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `return` in `defer` block
+   ╭─[test.lis:4:5]
+ 3 │   defer {
+ 4 │     return 42;
+   ·     ────┬────
+   ·         ╰── not allowed inside `defer` block
+ 5 │   };
+   ╰────
+  help: Remove the `return` as it only exits the `defer` block · code: [infer.return_in_defer_block]

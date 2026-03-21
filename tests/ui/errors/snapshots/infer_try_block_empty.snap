@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Empty `try` block
+   ╭─[test.lis:3:16]
+ 2 │ fn test() {
+ 3 │   let result = try {};
+   ·                ─┬─
+   ·                 ╰── empty
+ 4 │ }
+   ╰────
+  help: Ensure the `try` block contains at least one expression · code: [infer.try_block_empty]

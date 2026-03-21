@@ -1,0 +1,193 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nenum Color { Red, Blue }\nfn test(c: Color) -> int {\n  match c {\n    (Red | Blue) => 1,\n  }\n}\n"
+---
+[
+    Enum {
+        doc: None,
+        attributes: [],
+        name: "Color",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 5,
+        },
+        generics: [],
+        variants: [
+            EnumVariant {
+                doc: None,
+                name: "Red",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 14,
+                    byte_length: 3,
+                },
+                fields: Unit,
+            },
+            EnumVariant {
+                doc: None,
+                name: "Blue",
+                name_span: Span {
+                    file_id: 0,
+                    byte_offset: 19,
+                    byte_length: 4,
+                },
+                fields: Unit,
+            },
+        ],
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 24,
+        },
+    },
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 29,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [
+            Binding {
+                pattern: Identifier {
+                    identifier: "c",
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 34,
+                        byte_length: 1,
+                    },
+                },
+                annotation: Some(
+                    Constructor {
+                        name: "Color",
+                        params: [],
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 37,
+                            byte_length: 5,
+                        },
+                    },
+                ),
+                typed_pattern: None,
+                ty: Variable(
+                    -1,
+                ),
+            },
+        ],
+        return_annotation: Constructor {
+            name: "int",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 47,
+                byte_length: 3,
+            },
+        },
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Match {
+                    subject: Identifier {
+                        value: "c",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 61,
+                            byte_length: 1,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: Or {
+                                patterns: [
+                                    EnumVariant {
+                                        identifier: "Red",
+                                        fields: [],
+                                        rest: false,
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 70,
+                                            byte_length: 3,
+                                        },
+                                    },
+                                    EnumVariant {
+                                        identifier: "Blue",
+                                        fields: [],
+                                        rest: false,
+                                        ty: Variable(
+                                            -1,
+                                        ),
+                                        span: Span {
+                                            file_id: 0,
+                                            byte_offset: 76,
+                                            byte_length: 4,
+                                        },
+                                    },
+                                ],
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 70,
+                                    byte_length: 10,
+                                },
+                            },
+                            expression: Literal {
+                                literal: Integer {
+                                    value: 1,
+                                    text: None,
+                                },
+                                ty: Variable(
+                                    -1,
+                                ),
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 85,
+                                    byte_length: 1,
+                                },
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 55,
+                        byte_length: 36,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 51,
+                byte_length: 42,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 26,
+            byte_length: 67,
+        },
+    },
+]

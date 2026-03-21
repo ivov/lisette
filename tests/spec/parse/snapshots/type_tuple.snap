@@ -1,0 +1,80 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \ntype Pair = (int, string);\ntype Unit = ();\n"
+---
+[
+    TypeAlias {
+        doc: None,
+        name: "Pair",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 6,
+            byte_length: 4,
+        },
+        generics: [],
+        annotation: Tuple {
+            elements: [
+                Constructor {
+                    name: "int",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 14,
+                        byte_length: 3,
+                    },
+                },
+                Constructor {
+                    name: "string",
+                    params: [],
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 19,
+                        byte_length: 6,
+                    },
+                },
+            ],
+            span: Span {
+                file_id: 0,
+                byte_offset: 13,
+                byte_length: 13,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 25,
+        },
+    },
+    TypeAlias {
+        doc: None,
+        name: "Unit",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 33,
+            byte_length: 4,
+        },
+        generics: [],
+        annotation: Constructor {
+            name: "Unit",
+            params: [],
+            span: Span {
+                file_id: 0,
+                byte_offset: 0,
+                byte_length: 0,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        visibility: Private,
+        span: Span {
+            file_id: 0,
+            byte_offset: 28,
+            byte_length: 14,
+        },
+    },
+]

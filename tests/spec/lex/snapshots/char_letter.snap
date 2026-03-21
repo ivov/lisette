@@ -1,0 +1,26 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: 'b'"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Char,
+            text: "'b'",
+            byte_offset: 0,
+            byte_length: 3,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 3,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

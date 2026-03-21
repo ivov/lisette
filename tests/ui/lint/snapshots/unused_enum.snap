@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused type
+   ╭─[test.lis:2:6]
+ 1 │ 
+ 2 │ enum UnusedColor {
+   ·      ─────┬─────
+   ·           ╰── never used
+ 3 │   Red,
+   ╰────
+  help: Use or remove this type · code: [lint.unused_type]

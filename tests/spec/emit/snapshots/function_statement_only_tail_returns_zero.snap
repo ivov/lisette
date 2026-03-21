@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \nfn f() -> int {\n  let x = 1\n}\n\nfn test() -> int {\n  f()\n}\n"
+---
+package main
+
+func f() int {
+	_ = 1
+	return 0
+}
+
+func test() int {
+	return f()
+}

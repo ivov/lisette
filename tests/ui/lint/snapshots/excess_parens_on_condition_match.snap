@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unnecessary parens
+   ╭─[test.lis:4:17]
+ 3 │   let x = 5;
+ 4 │   let _ = match (x) {
+   ·                 ─┬─
+   ·                  ╰── remove parens
+ 5 │     0 => 0,
+   ╰────
+  help: Lisette does not require parens around `match` conditions · code: [lint.excess_parens_on_condition]
