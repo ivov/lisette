@@ -12,7 +12,7 @@ fn main() {
     let manifest_path = Path::new(&manifest_dir);
 
     let mut prelude_contents: BTreeSet<(String, String)> = BTreeSet::new();
-    let prelude_dlis_path = manifest_path.join("../../prelude/prelude.d.lis");
+    let prelude_dlis_path = manifest_path.join("prelude.d.lis");
     let prelude_source =
         fs::read_to_string(&prelude_dlis_path).expect("prelude/prelude.d.lis not found");
     prelude_contents.insert(("prelude.d.lis".to_string(), prelude_source));
