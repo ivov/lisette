@@ -7,3 +7,14 @@ git_release_enable = false
 name = "lisette"
 git_tag_enable = true
 git_release_enable = true
+changelog_update = true
+changelog_path = "./CHANGELOG.md"
+changelog_include = [
+  "lisette-syntax",
+  "lisette-semantics",
+  "lisette-diagnostics",
+  "lisette-emit",
+  "lisette-format",
+  "lisette-stdlib",
+  "lisette-lsp",
+]
