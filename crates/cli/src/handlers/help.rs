@@ -23,7 +23,8 @@ Commands:
     `lsp`      Start the LSP server
     `help`     Print this message
 
-Hint: Run `lis help <command>` to learn more about a command.",
+Hint: Run `lis help <command>` to learn more about a command.
+      New to Lisette? See https://lisette.run/quickstart",
         VERSION, GO_VERSION
     ));
 }
