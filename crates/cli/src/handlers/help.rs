@@ -187,7 +187,7 @@ enums, structs, pattern matching, error handling, closures, Go interop, and conc
         "doc" => print_help(
             "`lis doc` [query]
 
-Explore the prelude — types, methods, and builtin functions available without imports.
+Explore the prelude and Go standard library.
 
 Arguments:
     [query]              Type or type.method to look up (omit to list all)
@@ -195,12 +195,11 @@ Arguments:
 
 Examples:
     `lis doc`                          List all prelude types and functions
-    `lis doc` {Option:g}                   Show `Option` definition and its methods
-    `lis doc` {Option.map:g}               Show the `map` method on `Option`
-    `lis doc` {Slice:g}                    Show `Slice` definition and its methods
-    `lis doc` {go:strings:g}               Browse the `strings` Go package
-    `lis doc` `-s split`                 Search for `split` across prelude and Go stdlib
-    `lis doc` `-s contains`              Find all `contains` methods and functions",
+    `lis doc` {Option:g}                   Show {Option:g} definition and its methods
+    `lis doc` {Option.map:g}               Show the {map:g} method on {Option:g}
+    `lis doc` {Slice:g}                    Show {Slice:g} definition and its methods
+    `lis doc` {go:strings:g}               Browse the {strings:g} Go package
+    `lis doc` `-s` {split:g}                 Search for {split:g} across prelude and Go stdlib",
         ),
 
         "help" => print_help(
