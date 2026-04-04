@@ -178,13 +178,12 @@ pub struct LisetteDiagnostic {
     severity: Severity,
     code: Option<String>,
     file_id: Option<u32>,
+    use_color: bool,
 }
 
 impl fmt::Display for LisetteDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let use_color = std::env::var("NO_COLOR").is_err();
-
-        if use_color {
+        if self.use_color {
             let styled_message = match self.severity {
                 Severity::Error => {
                     format_with_backticks(&self.message, true, |s| format!("{}", s.red().bold()))
@@ -210,11 +209,12 @@ struct HelpText<'a> {
     help: Option<&'a str>,
     note: Option<&'a str>,
     diagnostic_code: Option<&'a str>,
+    use_color: bool,
 }
 
 impl fmt::Display for HelpText<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let use_color = std::env::var("NO_COLOR").is_err();
+        let use_color = self.use_color;
         let has_code = self.diagnostic_code.is_some();
 
         let combined = match (self.help, self.note) {
@@ -264,11 +264,12 @@ impl Diagnostic for LisetteDiagnostic {
             help: self.help.as_deref(),
             note: self.note.as_deref(),
             diagnostic_code,
+            use_color: self.use_color,
         }))
     }
 
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
-        let use_color = std::env::var("NO_COLOR").is_err();
+        let use_color = self.use_color;
         let severity = self.severity;
 
         let formatted_labels = self.labels.iter().map(move |span| {
@@ -323,6 +324,7 @@ impl LisetteDiagnostic {
             severity: Severity::Error,
             code: None,
             file_id: None,
+            use_color: false,
         }
     }
 
@@ -335,7 +337,13 @@ impl LisetteDiagnostic {
             severity: Severity::Warning,
             code: None,
             file_id: None,
+            use_color: false,
         }
+    }
+
+    pub fn with_color(mut self, use_color: bool) -> Self {
+        self.use_color = use_color;
+        self
     }
 
     pub fn with_span_label(mut self, span: &Span, text: impl Into<String>) -> Self {

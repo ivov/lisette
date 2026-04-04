@@ -18,14 +18,14 @@ build-debug:
     cargo build
 
 test:
-    NO_COLOR=1 cargo test -p tests --test suite
-    NO_COLOR=1 cargo test -p tests --test lsp
+    cargo test -p tests --test suite
+    cargo test -p tests --test lsp
 
 test-infer:
-    NO_COLOR=1 cargo test -p tests --test suite infer_tests
+    cargo test -p tests --test suite infer_tests
 
 test-watch:
-    NO_COLOR=1 cargo watch -x "test -p tests --test suite"
+    cargo watch -x "test -p tests --test suite"
 
 test-review:
     cargo insta review
@@ -34,7 +34,7 @@ test-accept:
     cargo insta accept --all
 
 test-e2e:
-    NO_COLOR=1 cargo test -p tests --test suite e2e
+    cargo test -p tests --test suite e2e
 
 test-cov:
     cargo llvm-cov -p tests --test suite --test lsp --html --open

@@ -110,9 +110,11 @@ fn render(
     diagnostic: &LisetteDiagnostic,
     source: &IndexedSource,
     filename: &str,
+    use_color: bool,
 ) {
     let report = diagnostic
         .clone()
+        .with_color(use_color)
         .with_source_code(source.clone(), filename.to_string());
     let mut output = String::new();
     if handler.render_report(&mut output, report.as_ref()).is_ok() {
@@ -182,7 +184,7 @@ pub fn render_all(
         };
         for error in &errors {
             let (src, name) = get_cached_source(error.file_id(), &mut source_cache);
-            render(&handler, error, &src, &name);
+            render(&handler, error, &src, &name, use_color);
         }
     }
 
@@ -194,7 +196,7 @@ pub fn render_all(
         };
         for warning in &warnings {
             let (src, name) = get_cached_source(warning.file_id(), &mut source_cache);
-            render(&handler, warning, &src, &name);
+            render(&handler, warning, &src, &name, use_color);
         }
     }
 

@@ -71,7 +71,7 @@ jobs:
         run: just lint
 
       - name: Test
-        run: NO_COLOR=1 cargo test -p tests --test suite -- --format terse
+        run: cargo test -p tests --test suite -- --format terse
 
       - name: Build
         run: just build
