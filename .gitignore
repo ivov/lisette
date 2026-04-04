@@ -1,4 +1,3 @@
-.cargo
 /target
 .DS_Store
 tests/e2e/target/
