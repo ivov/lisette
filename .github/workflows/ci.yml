@@ -85,7 +85,16 @@ jobs:
       - name: Test prelude Go module
         run: cd prelude && go test ./...
 
-      - uses: taiki-e/install-action@cargo-shear
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-shear@1.6.0
 
       - name: Check unused dependencies
         run: cargo shear
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.19.0
+
+      - name: Check dependency advisories, licenses, and sources
+        run: cargo deny check
