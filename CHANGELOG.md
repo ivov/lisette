@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.3](https://github.com/ivov/lisette/compare/lisette-v0.1.2...lisette-v0.1.3) - 2026-04-04
+
+### Added
+
+- add version override to bindgen stdlib command
+
+### Fixed
+
+- guard against stack overflow from chained postfix operators
+- decouple diagnostic coloring from environment ([#6](https://github.com/ivov/lisette/pull/6))
+- detect typed nils in Go interface wrapping
+
+### Other
+
+- match nested files in lefthook format check glob
+- regenerate stdlib typedefs
+
 ## [0.1.2](https://github.com/ivov/lisette/compare/lisette-v0.1.1...lisette-v0.1.2) - 2026-03-31
 
 ### Added
