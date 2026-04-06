@@ -11,7 +11,7 @@ cargo install lisette
 2. Set up your editor:
 
 - **VS Code** (1.95): Install the [`lisette` extension](https://marketplace.visualstudio.com/items?itemName=ivov.lisette).
-- **Zed**: The extension is [pending review](https://github.com/zed-industries/extensions/pull/2330) in the Zed extensions registry. Until then you can [install it locally](https://github.com/ivov/lisette/tree/main/editors/zed#development) as a dev extension.
+- **Zed**: The extension is [pending review](https://github.com/zed-industries/extensions/pull/5334) in the Zed extensions registry. Until then you can [install it locally](https://github.com/ivov/lisette/tree/main/editors/zed#development) as a dev extension.
 - **Neovim** (0.11): Add to `~/.config/nvim/lua/plugins/lisette.lua`
 
 ```lua
