@@ -351,8 +351,7 @@ impl Builder {
 
   /// Write appends the contents of p to b's buffer.
   /// Write always returns len(p), nil.
-  #[allow(unused_result)]
-  fn Write(self: Ref<Builder>, p: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<Builder>, p: Slice<uint8>) -> Partial<int, error>
 
   /// WriteByte appends the byte c to b's buffer.
   /// The returned error is always nil.
@@ -376,10 +375,10 @@ impl Reader {
   fn Len(self: Ref<Reader>) -> int
 
   /// Read implements the [io.Reader] interface.
-  fn Read(self: Ref<Reader>, mut b: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<Reader>, mut b: Slice<uint8>) -> Partial<int, error>
 
   /// ReadAt implements the [io.ReaderAt] interface.
-  fn ReadAt(self: Ref<Reader>, mut b: Slice<uint8>, off: int64) -> Result<int, error>
+  fn ReadAt(self: Ref<Reader>, mut b: Slice<uint8>, off: int64) -> Partial<int, error>
 
   /// ReadByte implements the [io.ByteReader] interface.
   fn ReadByte(self: Ref<Reader>) -> Result<uint8, error>

@@ -188,7 +188,7 @@ impl Rand {
   /// Read generates len(p) random bytes and writes them into p. It
   /// always returns len(p) and a nil error.
   /// Read should not be called concurrently with any other Rand method.
-  fn Read(self: Ref<Rand>, mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<Rand>, mut p: Slice<uint8>) -> Partial<int, error>
 
   /// Seed uses the provided seed value to initialize the generator to a deterministic state.
   /// Seed should not be called concurrently with any other [Rand] method.

@@ -81,5 +81,5 @@ impl Section {
   /// Open returns a new ReadSeeker reading the Plan 9 a.out section.
   fn Open(self: Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Result<int, error>
+  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Partial<int, error>
 }

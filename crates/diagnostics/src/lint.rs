@@ -14,6 +14,7 @@ pub enum UnusedExpressionKind {
     Literal,
     Result,
     Option,
+    Partial,
     Value,
 }
 
@@ -23,6 +24,7 @@ impl UnusedExpressionKind {
             Self::Literal => "unused_literal",
             Self::Result => "unused_result",
             Self::Option => "unused_option",
+            Self::Partial => "unused_partial",
             Self::Value => "unused_value",
         }
     }
@@ -157,6 +159,16 @@ pub fn discarded_option_in_tail(span: &Span, return_type: &str) -> LisetteDiagno
         ))
 }
 
+pub fn discarded_partial_in_tail(span: &Span, return_type: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("`Partial` is silently discarded")
+        .with_lint_code("unused_partial")
+        .with_span_label(span, "partial result will go unnoticed")
+        .with_help(format!(
+            "Handle this `Partial` with `match`, explicitly discard it with `let _ = ...`, or return it by adding `-> {}` to the function signature",
+            return_type
+        ))
+}
+
 pub fn unused_expression(span: &Span, kind: UnusedExpressionKind) -> LisetteDiagnostic {
     let (code, msg, label, help) = match kind {
         UnusedExpressionKind::Literal => (
@@ -176,6 +188,12 @@ pub fn unused_expression(span: &Span, kind: UnusedExpressionKind) -> LisetteDiag
             "Unused Option",
             "this `Option` is discarded",
             "Handle this `Option`, or explicitly discard it with `let _ = ...`",
+        ),
+        UnusedExpressionKind::Partial => (
+            "unused_partial",
+            "`Partial` is silently discarded",
+            "partial result will go unnoticed",
+            "Handle this `Partial` with `match`, or explicitly discard it with `let _ = ...`",
         ),
         UnusedExpressionKind::Value => (
             "unused_value",

@@ -31,6 +31,7 @@ type TypeOverrides struct {
 	BoolAsFlag       map[string][]string            `json:"bool_as_flag"`
 	DirectError      map[string][]string            `json:"direct_error"`
 	NilableError     map[string][]string            `json:"nilable_error"`
+	PartialResult    map[string][]string            `json:"partial_result"`
 	MutatesParam     map[string]map[string][]string `json:"mutates_param"`
 }
 
@@ -124,6 +125,17 @@ func (c *Config) MutatingParams(pkg, name string) []string {
 		return nil
 	}
 	return funcs[name] // nil if not found
+}
+
+// IsPartialResult returns true if the given function or method in the given
+// package returns (T, error) where both values may be simultaneously meaningful,
+// so the return type should be Partial<T, error> instead of Result<T, error>.
+func (c *Config) IsPartialResult(pkg, name string) bool {
+	names, ok := lookupWithGlob(c.Overrides.Types.PartialResult, pkg)
+	if !ok {
+		return false
+	}
+	return matchesWildcard(names, name)
 }
 
 // HasDirectError returns true if the given function returns error as a value

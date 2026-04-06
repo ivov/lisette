@@ -107,6 +107,32 @@ fn validate(input: Input) -> Result<Input, ValidationError> {
 
 📚 See [`10-methods.md`](10-methods.md)
 
+
+
+## Partial results
+
+Some operations return both a value and an error simultaneously. For example, Go's `io.Reader.Read` may return `(n > 0, io.EOF)`, meaning "n bytes were read and the stream ended." Lisette models these partial results as `Partial<T, E>`:
+
+```rs
+match reader.Read(buf) {
+  Partial.Ok(n) => process(buf[..n]),
+  Partial.Both(n, err) => {
+    process(buf[..n])
+    if err == io.EOF { return Ok(()) }
+    return Err(err)
+  },
+  Partial.Err(err) => return Err(err),
+}
+```
+
+`Partial` has three variants:
+
+- `Partial.Ok(T)`, where the operation succeeded with no error.
+- `Partial.Err(E)`, where the operation failed with no useful value.
+- `Partial.Both(T, E)`, where the operation produced a value _and_ an error.
+
+The `?` operator is incompatible with `Partial`. Use `match` to handle all three cases explicitly.
+
 ## No `unwrap()`
 
 Lisette deliberately omits `unwrap()`. To extract a value, use:

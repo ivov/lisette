@@ -67,8 +67,8 @@ pub struct Project {
 /// Interface embedding
 pub interface ReadWriteCloser {
   fn Close() -> Result<(), error>
-  fn Read(mut p: Slice<uint8>) -> Result<int, error>
-  fn Write(p: Slice<uint8>) -> Result<int, error>
+  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
+  fn Write(p: Slice<uint8>) -> Partial<int, error>
 }
 
 /// Shadowing: Shadower declares its own GetID, so Base.GetID should not be promoted
@@ -113,5 +113,5 @@ impl Shadower {
 }
 
 impl Wrapper {
-  fn Read(self, mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error>
 }

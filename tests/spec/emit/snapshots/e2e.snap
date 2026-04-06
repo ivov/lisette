@@ -595,4 +595,14 @@ pointer_receiver_struct_literal: PASS
 pointer_receiver_constructor: PASS
 pointer_receiver_method_expr: PASS
 
+// partial
+
+partial_ok: PASS
+partial_err: PASS
+partial_both: PASS
+partial_match_all_variants: PASS
+partial_unwrap_or: PASS
+partial_is_ok: PASS
+partial_is_both: PASS
+
 All tests completed

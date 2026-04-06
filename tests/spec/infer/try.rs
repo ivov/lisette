@@ -155,6 +155,19 @@ fn propagate_on_non_result_or_option() {
 }
 
 #[test]
+fn propagate_on_partial() {
+    infer(
+        r#"
+    fn test() -> Result<int, string> {
+      let p: Partial<int, string> = Partial.Ok(42);
+      p?
+    }
+        "#,
+    )
+    .assert_infer_code("propagate_on_partial");
+}
+
+#[test]
 fn propagate_result_type_mismatch_error() {
     infer(
         r#"

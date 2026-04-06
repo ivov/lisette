@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use `?` on `Partial`
+   ╭─[test.lis:4:3]
+ 3 │   let p: Partial<int, string> = Partial.Ok(42)
+ 4 │   p?
+   ·   ─┬
+   ·    ╰── `Partial` requires explicit `match`
+ 5 │ }
+   ╰────
+  help: The `?` operator is incompatible with `Partial` because it has three variants. Use `match` to handle `Ok`, `Err`, and `Both` explicitly · code: [infer.propagate_on_partial]

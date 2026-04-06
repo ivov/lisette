@@ -178,7 +178,7 @@ impl ReadWriter {
   /// To read exactly len(p) bytes, use io.ReadFull(b, p).
   /// If the underlying [Reader] can return a non-zero count with io.EOF,
   /// then this Read method can do so as well; see the [io.Reader] docs.
-  fn Read(self, mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error>
 
   /// ReadByte reads and returns a single byte.
   /// If no byte is available, returns an error.
@@ -260,8 +260,7 @@ impl ReadWriter {
   /// It returns the number of bytes written.
   /// If nn < len(p), it also returns an error explaining
   /// why the write is short.
-  #[allow(unused_result)]
-  fn Write(self, p: Slice<uint8>) -> Result<int, error>
+  fn Write(self, p: Slice<uint8>) -> Partial<int, error>
 
   /// WriteByte writes a single byte.
   fn WriteByte(self, c: uint8) -> Result<(), error>
@@ -311,7 +310,7 @@ impl Reader {
   /// To read exactly len(p) bytes, use io.ReadFull(b, p).
   /// If the underlying [Reader] can return a non-zero count with io.EOF,
   /// then this Read method can do so as well; see the [io.Reader] docs.
-  fn Read(self: Ref<Reader>, mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<Reader>, mut p: Slice<uint8>) -> Partial<int, error>
 
   /// ReadByte reads and returns a single byte.
   /// If no byte is available, returns an error.
@@ -482,8 +481,7 @@ impl Writer {
   /// It returns the number of bytes written.
   /// If nn < len(p), it also returns an error explaining
   /// why the write is short.
-  #[allow(unused_result)]
-  fn Write(self: Ref<Writer>, p: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<Writer>, p: Slice<uint8>) -> Partial<int, error>
 
   /// WriteByte writes a single byte.
   fn WriteByte(self: Ref<Writer>, c: uint8) -> Result<(), error>

@@ -5628,3 +5628,27 @@ fn main() {
     let result = infer_module("main", fs);
     assert_multimodule_infer_error_snapshot!(result, source);
 }
+
+#[test]
+fn infer_propagate_on_partial() {
+    let input = r#"
+fn test() -> Result<int, string> {
+  let p: Partial<int, string> = Partial.Ok(42)
+  p?
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn match_non_exhaustive_partial() {
+    let input = r#"
+fn test(p: Partial<int, string>) -> int {
+  match p {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

@@ -44,18 +44,19 @@ Primitive types are identical in Lisette and Go:
 
 Compound types are different:
 
-| Lisette        | Go                     |
-| -------------- | ---------------------- |
-| `Slice<T>`     | `[]T`                  |
-| `Map<K, V>`    | `map[K]V`              |
-| `Ref<T>`       | `*T`                   |
-| `Result<T, E>` | `(T, error)` or `error`|
-| `Option<T>`    | `(T, bool)`            |
-| `Channel<T>`   | `chan T`               |
-| `Sender<T>`    | `chan<- T`             |
-| `Receiver<T>`  | `<-chan T`             |
-| `VarArgs<T>`   | `...T`                 |
-| `Unknown`      | `any` or `interface{}` |
+| Lisette         | Go                           |
+| --------------- | ---------------------------- |
+| `Slice<T>`      | `[]T`                        |
+| `Map<K, V>`     | `map[K]V`                    |
+| `Ref<T>`        | `*T`                         |
+| `Result<T, E>`  | `(T, error)` or `error`      |
+| `Partial<T, E>` | `(T, error)` (non-exclusive) |
+| `Option<T>`     | `(T, bool)`                  |
+| `Channel<T>`    | `chan T`                     |
+| `Sender<T>`     | `chan<- T`                   |
+| `Receiver<T>`   | `<-chan T`                   |
+| `VarArgs<T>`    | `...T`                       |
+| `Unknown`       | `any` or `interface{}`       |
 
 ### Named numeric types
 
@@ -141,6 +142,29 @@ fn parse_point(data: Slice<uint8>) -> Result<Point, error> {
 }
 ```
 
+Some Go functions return `(T, error)` where both values are meaningful simultaneously. The most common example is `io.Reader.Read`, whose contract allows returning `(n > 0, io.EOF)`. These cases are declared as `Partial<T, E>`:
+
+```rs
+import "go:io"
+
+fn read_loop(r: io.Reader, mut buf: Slice<uint8>) -> Result<(), error> {
+  loop {
+    match r.Read(buf) {
+      Partial.Ok(n) => process(buf[..n]),
+      Partial.Both(n, err) => {
+        process(buf[..n])
+        if err == io.EOF { return Ok(()) }
+        return Err(err)
+      },
+      Partial.Err(err) => {
+        if err == io.EOF { return Ok(()) }
+        return Err(err)
+      },
+    }
+  }
+}
+```
+
 Go's `(T, bool)` pattern becomes `Option<T>`
 
 ```rust
@@ -221,4 +245,3 @@ Run `lis doc PanicValue` for available methods.
 <td>← <a href="12-modules.md"><code>12-modules.md</code></a></td>
 <td align="right"><a href="14-concurrency.md"><code>14-concurrency.md</code></a> →</td>
 </tr></table>
-

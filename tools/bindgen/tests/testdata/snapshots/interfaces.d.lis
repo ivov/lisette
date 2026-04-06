@@ -30,14 +30,14 @@ pub struct NotFoundError(string)
 
 /// Embedding standard interfaces
 pub interface ReadWriteSeeker {
-  fn Read(mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
   fn Seek(offset: int64, whence: int) -> Result<int64, error>
-  fn Write(p: Slice<uint8>) -> Result<int, error>
+  fn Write(p: Slice<uint8>) -> Partial<int, error>
 }
 
 pub interface ReadWriter {
-  fn Read(mut arg0: Slice<uint8>) -> Result<int, error>
-  fn Write(arg0: Slice<uint8>) -> Result<int, error>
+  fn Read(mut arg0: Slice<uint8>) -> Partial<int, error>
+  fn Write(arg0: Slice<uint8>) -> Partial<int, error>
 }
 
 /// Error-like but with extra method - not an error

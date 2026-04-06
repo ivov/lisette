@@ -153,7 +153,7 @@ pub interface GoStringer {
 /// Scanners may do rune-at-a-time scanning or ask the ScanState
 /// to discover the next space-delimited token.
 pub interface ScanState {
-  fn Read(mut buf: Slice<uint8>) -> Result<int, error>
+  fn Read(mut buf: Slice<uint8>) -> Partial<int, error>
   fn ReadRune() -> Result<(int32, int), error>
   fn SkipSpace()
   fn Token(skipSpace: bool, f: fn(int32) -> bool) -> Result<Slice<uint8>, error>
@@ -176,7 +176,7 @@ pub interface State {
   fn Flag(c: int) -> bool
   fn Precision() -> Option<int>
   fn Width() -> Option<int>
-  fn Write(b: Slice<uint8>) -> Result<int, error>
+  fn Write(b: Slice<uint8>) -> Partial<int, error>
 }
 
 /// Stringer is implemented by any value that has a String method,

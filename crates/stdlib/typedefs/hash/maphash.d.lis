@@ -111,8 +111,7 @@ impl Hash {
 
   /// Write adds b to the sequence of bytes hashed by h.
   /// It always writes all of b and never fails; the count and error result are for implementing [io.Writer].
-  #[allow(unused_result)]
-  fn Write(self: Ref<Hash>, b: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<Hash>, b: Slice<uint8>) -> Partial<int, error>
 
   /// WriteByte adds b to the sequence of bytes hashed by h.
   /// It never fails; the error result is for implementing [io.ByteWriter].

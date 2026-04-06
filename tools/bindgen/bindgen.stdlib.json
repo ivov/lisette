@@ -36,6 +36,10 @@
         "strconv": ["NumError.Unwrap"],
         "text/template": ["ExecError.Unwrap"]
       },
+      "partial_result": {
+        "bufio": ["Scanner.Bytes", "Scanner.Text"],
+        "io": ["ReadAtLeast", "ReadFull"]
+      },
       "nilable_return": {
         "crypto/tls": ["Conn.LocalAddr", "Conn.NetConn", "Conn.RemoteAddr"],
         "database/sql": ["ColumnType.ScanType"],

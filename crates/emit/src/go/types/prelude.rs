@@ -4,6 +4,7 @@ use crate::go::names::go_name;
 pub(crate) enum PreludeType {
     Option,
     Result,
+    Partial,
     Range,
     RangeInclusive,
     RangeFrom,
@@ -23,6 +24,7 @@ impl PreludeType {
         match name {
             "Option" => Some(Self::Option),
             "Result" => Some(Self::Result),
+            "Partial" => Some(Self::Partial),
             "Range" => Some(Self::Range),
             "RangeInclusive" => Some(Self::RangeInclusive),
             "RangeFrom" => Some(Self::RangeFrom),
@@ -47,6 +49,7 @@ impl PreludeType {
         match self {
             Self::Option => "Option",
             Self::Result => "Result",
+            Self::Partial => "Partial",
             Self::Range => "Range",
             Self::RangeInclusive => "RangeInclusive",
             Self::RangeFrom => "RangeFrom",
@@ -60,6 +63,11 @@ impl PreludeType {
         match self {
             Self::Option => Some(&[VariantInfo { name: "Some" }, VariantInfo { name: "None" }]),
             Self::Result => Some(&[VariantInfo { name: "Ok" }, VariantInfo { name: "Err" }]),
+            Self::Partial => Some(&[
+                VariantInfo { name: "Ok" },
+                VariantInfo { name: "Err" },
+                VariantInfo { name: "Both" },
+            ]),
             Self::Range
             | Self::RangeInclusive
             | Self::RangeFrom
@@ -74,7 +82,7 @@ impl PreludeType {
     }
 
     pub(crate) fn enum_types() -> &'static [PreludeType] {
-        &[Self::Option, Self::Result]
+        &[Self::Option, Self::Result, Self::Partial]
     }
 
     pub(crate) fn make_function_entries(&self) -> impl Iterator<Item = (String, String)> + '_ {

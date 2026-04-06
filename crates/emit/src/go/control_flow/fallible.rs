@@ -6,13 +6,19 @@ use syntax::types::Type;
 pub(crate) const OPTION_SOME_FIELD: &str = "SomeVal";
 pub(crate) const RESULT_OK_FIELD: &str = "OkVal";
 pub(crate) const RESULT_ERR_FIELD: &str = "ErrVal";
+pub(crate) const PARTIAL_OK_FIELD: &str = "OkVal";
+pub(crate) const PARTIAL_ERR_FIELD: &str = "ErrVal";
 
 pub(crate) const RESULT_OK_TAG: &str = "lisette.ResultOk";
 pub(crate) const OPTION_SOME_TAG: &str = "lisette.OptionSome";
+pub(crate) const PARTIAL_OK_TAG: &str = "lisette.PartialOk";
+pub(crate) const PARTIAL_ERR_TAG: &str = "lisette.PartialErr";
 const RESULT_OK_CTOR: &str = "lisette.MakeResultOk";
 const OPTION_SOME_CTOR: &str = "lisette.MakeOptionSome";
 const RESULT_ERR_CTOR: &str = "lisette.MakeResultErr";
 const OPTION_NONE_CTOR: &str = "lisette.MakeOptionNone";
+pub(crate) const PARTIAL_OK_CTOR: &str = "lisette.MakePartialOk";
+pub(crate) const PARTIAL_BOTH_CTOR: &str = "lisette.MakePartialBoth";
 
 pub(crate) struct Fallible {
     kind: FallibleKind,

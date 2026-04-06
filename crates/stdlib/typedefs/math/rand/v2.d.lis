@@ -137,7 +137,7 @@ impl ChaCha8 {
   /// If calls to Read and Uint64 are interleaved, the order in which bits are
   /// returned by the two is undefined, and Read may return bits generated before
   /// the last call to Uint64.
-  fn Read(self: Ref<ChaCha8>, mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<ChaCha8>, mut p: Slice<uint8>) -> Partial<int, error>
 
   /// Seed resets the ChaCha8 to behave the same way as NewChaCha8(seed).
   fn Seed(self: Ref<ChaCha8>, seed: Slice<uint8>)

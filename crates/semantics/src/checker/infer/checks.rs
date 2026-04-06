@@ -24,6 +24,8 @@ impl Checker<'_, '_> {
             Some(UnusedExpressionKind::Result)
         } else if ty.is_option() {
             Some(UnusedExpressionKind::Option)
+        } else if ty.is_partial() {
+            Some(UnusedExpressionKind::Partial)
         } else if !ty.is_unit() && !ty.is_variable() && !ty.is_never() {
             Some(UnusedExpressionKind::Value)
         } else {

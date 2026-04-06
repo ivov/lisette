@@ -504,12 +504,12 @@ pub struct Buffers(Slice<Slice<uint8>>)
 pub interface Conn {
   fn Close() -> Result<(), error>
   fn LocalAddr() -> Addr
-  fn Read(mut b: Slice<uint8>) -> Result<int, error>
+  fn Read(mut b: Slice<uint8>) -> Partial<int, error>
   fn RemoteAddr() -> Addr
   fn SetDeadline(t: time.Time) -> Result<(), error>
   fn SetReadDeadline(t: time.Time) -> Result<(), error>
   fn SetWriteDeadline(t: time.Time) -> Result<(), error>
-  fn Write(b: Slice<uint8>) -> Result<int, error>
+  fn Write(b: Slice<uint8>) -> Partial<int, error>
 }
 
 /// DNSConfigError represents an error reading the machine's DNS configuration.
@@ -825,7 +825,7 @@ impl Buffers {
   /// 
   /// Read modifies the slice v as well as v[i] for 0 <= i < len(v),
   /// but does not modify v[i][j] for any i, j.
-  fn Read(self: Ref<Buffers>, mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<Buffers>, mut p: Slice<uint8>) -> Partial<int, error>
 
   /// WriteTo writes contents of the buffers to w.
   /// 
@@ -1032,7 +1032,7 @@ impl IPConn {
   fn LocalAddr(self: Ref<IPConn>) -> Addr
 
   /// Read implements the Conn Read method.
-  fn Read(self: Ref<IPConn>, mut b: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<IPConn>, mut b: Slice<uint8>) -> Partial<int, error>
 
   /// ReadFrom implements the [PacketConn] ReadFrom method.
   fn ReadFrom(self: Ref<IPConn>, mut b: Slice<uint8>) -> Result<(int, Addr), error>
@@ -1076,8 +1076,7 @@ impl IPConn {
   fn SyscallConn(self: Ref<IPConn>) -> Result<syscall.RawConn, error>
 
   /// Write implements the Conn Write method.
-  #[allow(unused_result)]
-  fn Write(self: Ref<IPConn>, b: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<IPConn>, b: Slice<uint8>) -> Partial<int, error>
 
   /// WriteMsgIP writes a message to addr via c, copying the payload from
   /// b and the associated out-of-band data from oob. It returns the
@@ -1370,7 +1369,7 @@ impl TCPConn {
   fn MultipathTCP(self: Ref<TCPConn>) -> Result<bool, error>
 
   /// Read implements the Conn Read method.
-  fn Read(self: Ref<TCPConn>, mut b: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<TCPConn>, mut b: Slice<uint8>) -> Partial<int, error>
 
   /// ReadFrom implements the [io.ReaderFrom] ReadFrom method.
   fn ReadFrom(self: Ref<TCPConn>, r: io.Reader) -> Result<int64, error>
@@ -1438,8 +1437,7 @@ impl TCPConn {
   fn SyscallConn(self: Ref<TCPConn>) -> Result<syscall.RawConn, error>
 
   /// Write implements the Conn Write method.
-  #[allow(unused_result)]
-  fn Write(self: Ref<TCPConn>, b: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<TCPConn>, b: Slice<uint8>) -> Partial<int, error>
 
   /// WriteTo implements the io.WriterTo WriteTo method.
   fn WriteTo(self: Ref<TCPConn>, w: io.Writer) -> Result<int64, error>
@@ -1525,7 +1523,7 @@ impl UDPConn {
   fn LocalAddr(self: Ref<UDPConn>) -> Addr
 
   /// Read implements the Conn Read method.
-  fn Read(self: Ref<UDPConn>, mut b: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<UDPConn>, mut b: Slice<uint8>) -> Partial<int, error>
 
   /// ReadFrom implements the [PacketConn] ReadFrom method.
   fn ReadFrom(self: Ref<UDPConn>, mut b: Slice<uint8>) -> Result<(int, Addr), error>
@@ -1583,8 +1581,7 @@ impl UDPConn {
   fn SyscallConn(self: Ref<UDPConn>) -> Result<syscall.RawConn, error>
 
   /// Write implements the Conn Write method.
-  #[allow(unused_result)]
-  fn Write(self: Ref<UDPConn>, b: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<UDPConn>, b: Slice<uint8>) -> Partial<int, error>
 
   /// WriteMsgUDP writes a message to addr via c if c isn't connected, or
   /// to c's remote address if c is connected (in which case addr must be
@@ -1662,7 +1659,7 @@ impl UnixConn {
   fn LocalAddr(self: Ref<UnixConn>) -> Addr
 
   /// Read implements the Conn Read method.
-  fn Read(self: Ref<UnixConn>, mut b: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<UnixConn>, mut b: Slice<uint8>) -> Partial<int, error>
 
   /// ReadFrom implements the [PacketConn].ReadFrom method.
   fn ReadFrom(self: Ref<UnixConn>, mut b: Slice<uint8>) -> Result<(int, Addr), error>
@@ -1710,8 +1707,7 @@ impl UnixConn {
   fn SyscallConn(self: Ref<UnixConn>) -> Result<syscall.RawConn, error>
 
   /// Write implements the Conn Write method.
-  #[allow(unused_result)]
-  fn Write(self: Ref<UnixConn>, b: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<UnixConn>, b: Slice<uint8>) -> Partial<int, error>
 
   /// WriteMsgUnix writes a message to addr via c, copying the payload
   /// from b and the associated out-of-band data from oob. It returns the

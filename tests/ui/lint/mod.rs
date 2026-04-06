@@ -3116,3 +3116,50 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn unused_partial() {
+    assert_lint_snapshot!(
+        r#"
+fn get_partial() -> Partial<int, string> {
+  Partial.Ok(42)
+}
+
+fn main() {
+  get_partial()
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn unused_partial_in_tail_position() {
+    assert_lint_snapshot!(
+        r#"
+fn get_partial() -> Partial<int, string> {
+  Partial.Ok(42)
+}
+
+fn main() {
+  get_partial()
+}
+"#
+    );
+}
+
+#[test]
+fn unused_partial_handled_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn get_partial() -> Partial<int, string> {
+  Partial.Ok(42)
+}
+
+fn main() {
+  let _ = get_partial()
+  ()
+}
+"#
+    );
+}

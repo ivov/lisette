@@ -181,7 +181,7 @@ impl Emitter<'_> {
             .iter()
             .filter_map(|(key, definition)| {
                 if let Definition::Enum { name, variants, .. } = definition {
-                    if name == "Option" || name == "Result" {
+                    if name == "Option" || name == "Result" || name == "Partial" {
                         return None;
                     }
                     Some((key.to_string(), name.clone(), variants.clone()))

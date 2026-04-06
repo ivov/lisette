@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/partial.rs
+description: "input: \nfn test() -> Partial<int, string> {\n  Partial.Err(\"fail\")\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Partial[int, string] {
+	return lisette.MakePartialErr[int, string]("fail")
+}

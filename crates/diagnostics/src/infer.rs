@@ -837,6 +837,17 @@ pub fn tuple_literal_required_in_loop(span: Span) -> LisetteDiagnostic {
         .with_help("Use `(key, value)` destructuring pattern for map or enumerated iteration")
 }
 
+pub fn propagate_on_partial(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot use `?` on `Partial`")
+        .with_infer_code("propagate_on_partial")
+        .with_span_label(&span, "`Partial` requires explicit `match`")
+        .with_help(
+            "The `?` operator is incompatible with `Partial` because it has \
+             three variants. Use `match` to handle `Ok`, `Err`, and `Both` \
+             explicitly.",
+        )
+}
+
 pub fn try_requires_result_or_option(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Type mismatch")
         .with_infer_code("try_requires_result_or_option")

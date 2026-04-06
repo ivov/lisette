@@ -2,8 +2,10 @@ package convert
 
 import (
 	"fmt"
+	"go/importer"
 	"go/types"
 	"strings"
+	"sync"
 )
 
 // ReturnsToLisette converts a Go function's return types to Lisette.
@@ -46,6 +48,13 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		innerType := inner.LisetteType
 		if inner.SkipReason != nil {
 			innerType = "Unknown"
+		}
+		if (conv.cfg != nil && conv.cfg.IsPartialResult(conv.currentPkgPath, qualifiedName)) ||
+			isPartialIOMethod(signature, qualifiedName) {
+			return TypeResult{
+				LisetteType: fmt.Sprintf("Partial<%s, error>", innerType),
+				SkipReason:  inner.SkipReason,
+			}
 		}
 		return TypeResult{
 			LisetteType: fmt.Sprintf("Result<%s, error>", innerType),
@@ -169,18 +178,97 @@ func isPointerToErrorImpl(t types.Type) bool {
 	return types.Implements(types.NewPointer(named), errorIface)
 }
 
+var errorIfaceOnce sync.Once
 var cachedErrorIface *types.Interface
-var cachedErrorIfaceOnce bool
 
 func universeErrorInterface() *types.Interface {
-	if cachedErrorIfaceOnce {
-		return cachedErrorIface
+	errorIfaceOnce.Do(func() {
+		errorObj := types.Universe.Lookup("error")
+		if errorObj == nil {
+			return
+		}
+		cachedErrorIface, _ = errorObj.Type().Underlying().(*types.Interface)
+	})
+	return cachedErrorIface
+}
+
+// partialIOMethod maps io interface names to their methods that return
+// non-exclusive (T, error) results.
+var partialIOMethods = map[string]string{
+	"io.Reader":   "Read",
+	"io.Writer":   "Write",
+	"io.ReaderAt": "ReadAt",
+	"io.WriterAt": "WriteAt",
+}
+
+// isPartialIOMethod returns true if the method's receiver type implements
+// io.Reader, io.Writer, io.ReaderAt, or io.WriterAt, and the method is the
+// corresponding interface method. These methods return (T, error) where both
+// values may be simultaneously meaningful.
+func isPartialIOMethod(signature *types.Signature, qualifiedName string) bool {
+	recv := signature.Recv()
+	if recv == nil {
+		return false
 	}
-	cachedErrorIfaceOnce = true
-	errorObj := types.Universe.Lookup("error")
-	if errorObj == nil {
+
+	dot := strings.IndexByte(qualifiedName, '.')
+	if dot < 0 {
+		return false
+	}
+	methodName := qualifiedName[dot+1:]
+
+	recvType := recv.Type()
+	if ptr, ok := recvType.(*types.Pointer); ok {
+		recvType = ptr.Elem()
+	}
+	named, ok := recvType.(*types.Named)
+	if !ok {
+		return false
+	}
+
+	for ifacePath, ifaceMethod := range partialIOMethods {
+		if methodName != ifaceMethod {
+			continue
+		}
+		iface := lookupIOInterface(ifacePath)
+		if iface == nil {
+			continue
+		}
+		if types.Implements(named, iface) || types.Implements(types.NewPointer(named), iface) {
+			return true
+		}
+	}
+
+	return false
+}
+
+var cachedIOInterfaces sync.Map
+
+func lookupIOInterface(qualifiedName string) *types.Interface {
+	if val, ok := cachedIOInterfaces.Load(qualifiedName); ok {
+		return val.(*types.Interface)
+	}
+
+	dot := strings.LastIndexByte(qualifiedName, '.')
+	if dot < 0 {
 		return nil
 	}
-	cachedErrorIface, _ = errorObj.Type().Underlying().(*types.Interface)
-	return cachedErrorIface
+	pkgPath := qualifiedName[:dot]
+	name := qualifiedName[dot+1:]
+
+	pkg, err := importer.Default().Import(pkgPath)
+	if err != nil {
+		return nil
+	}
+
+	obj := pkg.Scope().Lookup(name)
+	if obj == nil {
+		return nil
+	}
+
+	iface, _ := obj.Type().Underlying().(*types.Interface)
+	if iface != nil {
+		cachedIOInterfaces.Store(qualifiedName, iface)
+	}
+	return iface
 }

@@ -64,12 +64,15 @@ Other Go types map to Lisette types based on context.
 
 ### Error handling
 
-`(T, error)` in a return type maps to `Result<T, error>`:
+`(T, error)` in a return type usually maps to `Result<T, error>`:
 
-| Go return type    | Lisette return type       |
-| ----------------- | ------------------------- |
-| `(T, error)`      | `Result<T, error>`        |
-| `(T1, T2, error)` | `Result<(T1, T2), error>` |
+| Go return type                | Lisette return type         |
+| ----------------------------- | --------------------------- |
+| `(T, error)`                  | `Result<T, error>`          |
+| `(T, error)` (non-exclusive)  | `Partial<T, error>`         |
+| `(T1, T2, error)`             | `Result<(T1, T2), error>`   |
+
+Some Go functions return `(T, error)` where both values may be simultaneously meaningful, such as `io.Reader.Read`. These map to `Partial<T, error>` instead of `Result<T, error>`. Bindgen detects this automatically for methods on types implementing `io.Reader`, `io.Writer`, `io.ReaderAt`, and `io.WriterAt`. Other functions can be marked manually via the `partial_result` config override.
 
 When `error` is the sole return type, it typically maps to `Result<(), error>`. Two exceptions: functions that create errors (e.g. `errors.New`) return `error` directly, and methods that unwrap errors (e.g. `Unwrap`, `Err`, `Cause`) return `Option<error>`.
 
@@ -186,6 +189,13 @@ Bindgen accepts a config file with per-package overrides:
       // e.g. `errors.Unwrap` returns `Option<error>`
       "nilable_error": {
         "errors": ["Unwrap"],
+      },
+
+      // Map `(T, error)` to `Partial<T, error>` instead of `Result<T, error>`
+      // for Go functions where both return values are simultaneously meaningful.
+      // e.g. `io.ReadAtLeast` returns `Partial<int, error>`
+      "partial_result": {
+        "io": ["ReadAtLeast", "ReadFull"],
       },
 
       // Keep `(T, bool)` as tuple instead of `Option<T>`

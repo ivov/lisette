@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] `Partial` is silently discarded
+   ╭─[test.lis:7:3]
+ 6 │ fn main() {
+ 7 │   get_partial()
+   ·   ──────┬──────
+   ·         ╰── partial result will go unnoticed
+ 8 │   ()
+   ╰────
+  help: Handle this `Partial` with `match`, or explicitly discard it with `let _ = ...` · code: [lint.unused_partial]

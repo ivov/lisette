@@ -169,6 +169,7 @@ pub struct UnusedExpressionFact {
 pub enum DiscardedTailKind {
     Result,
     Option,
+    Partial,
 }
 
 #[derive(Debug, Clone)]

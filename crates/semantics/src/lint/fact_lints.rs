@@ -79,6 +79,12 @@ fn check_unused_expressions(ctx: &LintContext, diagnostics: &mut Vec<LisetteDiag
 fn check_discarded_tail_expressions(ctx: &LintContext, diagnostics: &mut Vec<LisetteDiagnostic>) {
     for fact in &ctx.facts.discarded_tail_expressions {
         match fact.kind {
+            DiscardedTailKind::Partial => {
+                diagnostics.push(diagnostics::lint::discarded_partial_in_tail(
+                    &fact.span,
+                    &fact.return_type,
+                ));
+            }
             DiscardedTailKind::Result => {
                 diagnostics.push(diagnostics::lint::discarded_result_in_tail(
                     &fact.span,

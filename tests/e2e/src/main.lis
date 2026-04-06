@@ -4097,5 +4097,84 @@ fn main() {
   report("pointer_receiver_constructor", test_pointer_receiver_constructor(), 100);
   report("pointer_receiver_method_expr", test_pointer_receiver_method_expr(), 100);
 
+  section("partial");
+  report("partial_ok", test_partial_ok(), 42);
+  report("partial_err", test_partial_err(), 0);
+  report("partial_both", test_partial_both(), 42);
+  report("partial_match_all_variants", test_partial_match_all_variants(), 100);
+  report("partial_unwrap_or", test_partial_unwrap_or(), 99);
+  report("partial_is_ok", test_partial_is_ok(), 1);
+  report("partial_is_both", test_partial_is_both(), 1);
+
   fmt.Print("\nAll tests completed\n")
+}
+
+fn make_partial_ok() -> Partial<int, string> {
+  Partial.Ok(42)
+}
+
+fn make_partial_err() -> Partial<int, string> {
+  Partial.Err("fail")
+}
+
+fn make_partial_both() -> Partial<int, string> {
+  Partial.Both(42, "eof")
+}
+
+fn test_partial_ok() -> int {
+  match make_partial_ok() {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+    Partial.Both(n, _) => n,
+  }
+}
+
+fn test_partial_err() -> int {
+  match make_partial_err() {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+    Partial.Both(n, _) => n,
+  }
+}
+
+fn test_partial_both() -> int {
+  match make_partial_both() {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+    Partial.Both(n, _) => n,
+  }
+}
+
+fn test_partial_match_all_variants() -> int {
+  let ok = make_partial_ok()
+  let err = make_partial_err()
+  let both = make_partial_both()
+  let a = match ok {
+    Partial.Ok(n) => n,
+    _ => 0,
+  }
+  let b = match err {
+    Partial.Err(_) => 16,
+    _ => 0,
+  }
+  let c = match both {
+    Partial.Both(n, _) => n,
+    _ => 0,
+  }
+  a + b + c
+}
+
+fn test_partial_unwrap_or() -> int {
+  let ok = make_partial_ok()
+  let err = make_partial_err()
+  let both = make_partial_both()
+  ok.unwrap_or(0) + err.unwrap_or(15) + both.unwrap_or(0)
+}
+
+fn test_partial_is_ok() -> int {
+  if make_partial_ok().is_ok() { 1 } else { 0 }
+}
+
+fn test_partial_is_both() -> int {
+  if make_partial_both().is_both() { 1 } else { 0 }
 }

@@ -1560,3 +1560,56 @@ fn test(e: Event) -> int {
 "#;
     infer(input).assert_no_errors();
 }
+
+#[test]
+fn test_partial_exhaustive_all_variants() {
+    let input = r#"
+fn test(p: Partial<int, string>) -> int {
+  match p {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+    Partial.Both(n, _) => n,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_partial_non_exhaustive_missing_both() {
+    let input = r#"
+fn test(p: Partial<int, string>) -> int {
+  match p {
+    Partial.Ok(n) => n,
+    Partial.Err(_) => 0,
+  }
+}
+"#;
+    infer(input).assert_exhaustiveness_error();
+}
+
+#[test]
+fn test_partial_non_exhaustive_missing_err() {
+    let input = r#"
+fn test(p: Partial<int, string>) -> int {
+  match p {
+    Partial.Ok(n) => n,
+    Partial.Both(n, _) => n,
+  }
+}
+"#;
+    infer(input).assert_exhaustiveness_error();
+}
+
+#[test]
+fn test_partial_exhaustive_with_wildcard() {
+    let input = r#"
+fn test(p: Partial<int, string>) -> int {
+  match p {
+    Partial.Ok(n) => n,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}

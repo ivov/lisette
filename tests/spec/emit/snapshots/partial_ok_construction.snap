@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/partial.rs
+description: "input: \nfn test() -> Partial<int, string> {\n  Partial.Ok(42)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test() lisette.Partial[int, string] {
+	return lisette.MakePartialOk[int, string](42)
+}

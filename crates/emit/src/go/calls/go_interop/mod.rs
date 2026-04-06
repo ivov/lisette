@@ -17,6 +17,9 @@ pub(crate) enum GoCallStrategy {
     CommaOk,
     /// Single return of pointer/interface type → Option<Ref<T>> via nil check.
     NullableReturn,
+    /// (T, error) → Partial<T, error>. Non-exclusive returns where both value and error
+    /// may be simultaneously meaningful (e.g. io.Reader.Read).
+    Partial,
 }
 
 impl GoCallStrategy {
@@ -31,6 +34,10 @@ impl Emitter<'_> {
         return_ty: &Type,
         go_hints: &[String],
     ) -> Option<GoCallStrategy> {
+        if return_ty.is_partial() {
+            return Some(GoCallStrategy::Partial);
+        }
+
         if return_ty.is_result() {
             return Some(GoCallStrategy::Result);
         }
@@ -111,6 +118,9 @@ impl Emitter<'_> {
             }
             GoCallStrategy::NullableReturn => {
                 self.emit_go_single_return_option_wrapped(output, expression, result_ty)
+            }
+            GoCallStrategy::Partial => {
+                self.emit_go_partial_call_wrapped(output, expression, result_ty)
             }
         }
     }

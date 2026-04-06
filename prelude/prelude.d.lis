@@ -202,6 +202,49 @@ impl<T, E> Result<T, E> {
   fn or_else<F>(self, f: fn(E) -> Result<T, F>) -> Result<T, F>
 }
 
+/// A result from an operation where both a value and an error may be
+/// simultaneously meaningful. Used for Go functions like `io.Reader.Read`
+/// where `(n > 0, io.EOF)` means "n bytes were read and the stream ended."
+///
+/// Unlike `Result`, the `?` operator is not supported on `Partial`.
+/// Use `match` to handle all three cases explicitly.
+enum Partial<T, E> {
+  Ok(T),
+  Err(E),
+  Both(T, E),
+}
+
+impl<T, E> Partial<T, E> {
+  /// Returns `true` if this is `Ok`.
+  fn is_ok(self) -> bool
+
+  /// Returns `true` if this is `Err`.
+  fn is_err(self) -> bool
+
+  /// Returns `true` if this is `Both`.
+  fn is_both(self) -> bool
+
+  /// Returns `Some(value)` if `Ok` or `Both`, otherwise `None`.
+  fn ok(self) -> Option<T>
+
+  /// Returns `Some(error)` if `Err` or `Both`, otherwise `None`.
+  fn err(self) -> Option<E>
+
+  /// Returns the value if `Ok` or `Both`, otherwise `default`.
+  fn unwrap_or(self, default: T) -> T
+
+  /// Returns the value if `Ok` or `Both`, otherwise `f(error)`.
+  fn unwrap_or_else(self, f: fn(E) -> T) -> T
+
+  /// Transforms the value. `Ok(v)` becomes `Ok(f(v))`,
+  /// `Both(v, e)` becomes `Both(f(v), e)`, `Err(e)` is unchanged.
+  fn map<U>(self, f: fn(T) -> U) -> Partial<U, E>
+
+  /// Transforms the error. `Err(e)` becomes `Err(f(e))`,
+  /// `Both(v, e)` becomes `Both(v, f(e))`, `Ok(v)` is unchanged.
+  fn map_err<F>(self, f: fn(E) -> F) -> Partial<T, F>
+}
+
 /// A growable, indexable sequence of elements. Equivalent to Go's `[]T`.
 ///
 /// Example:

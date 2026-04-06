@@ -133,6 +133,5 @@ impl Writer {
   /// Write writes buf to the writer b.
   /// The only errors returned are ones encountered
   /// while writing to the underlying output stream.
-  #[allow(unused_result)]
-  fn Write(self: Ref<Writer>, buf: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<Writer>, buf: Slice<uint8>) -> Partial<int, error>
 }

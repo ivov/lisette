@@ -741,7 +741,7 @@ impl Conn {
   /// must be set for both Read and [Conn.Write] before Read is called when the handshake
   /// has not yet completed. See [Conn.SetDeadline], [Conn.SetReadDeadline], and
   /// [Conn.SetWriteDeadline].
-  fn Read(self: Ref<Conn>, mut b: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<Conn>, mut b: Slice<uint8>) -> Partial<int, error>
 
   /// RemoteAddr returns the remote network address.
   fn RemoteAddr(self: Ref<Conn>) -> Option<net.Addr>
@@ -771,8 +771,7 @@ impl Conn {
   /// must be set for both [Conn.Read] and Write before Write is called when the handshake
   /// has not yet completed. See [Conn.SetDeadline], [Conn.SetReadDeadline], and
   /// [Conn.SetWriteDeadline].
-  #[allow(unused_result)]
-  fn Write(self: Ref<Conn>, b: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<Conn>, b: Slice<uint8>) -> Partial<int, error>
 }
 
 impl ConnectionState {

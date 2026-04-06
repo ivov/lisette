@@ -510,26 +510,23 @@ impl Checker<'_, '_> {
                 && let Some(callee_return_ty) = Self::get_call_return_type(&inferred_item)
             {
                 let resolved = callee_return_ty.resolve();
-                let lint_name = if resolved.is_result() {
-                    Some("unused_result")
+                let classification = if resolved.is_result() {
+                    Some(("unused_result", DiscardedTailKind::Result))
                 } else if resolved.is_option() {
-                    Some("unused_option")
+                    Some(("unused_option", DiscardedTailKind::Option))
+                } else if resolved.is_partial() {
+                    Some(("unused_partial", DiscardedTailKind::Partial))
                 } else {
                     None
                 };
 
-                if let Some(lint_name) = lint_name {
+                if let Some((lint_name, kind)) = classification {
                     let allowed_lints = callee_name
                         .as_ref()
                         .map(|name| self.callee_allowed_lints(name, &inferred_item))
                         .unwrap_or_default();
 
                     if !allowed_lints.contains(&lint_name.to_string()) {
-                        let kind = if resolved.is_result() {
-                            DiscardedTailKind::Result
-                        } else {
-                            DiscardedTailKind::Option
-                        };
                         self.facts
                             .add_discarded_tail(item_span, kind, resolved.to_string());
                     }

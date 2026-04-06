@@ -143,6 +143,5 @@ impl Writer {
   fn Warning(self: Ref<Writer>, m: string) -> Result<(), error>
 
   /// Write sends a log message to the syslog daemon.
-  #[allow(unused_result)]
-  fn Write(self: Ref<Writer>, b: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<Writer>, b: Slice<uint8>) -> Partial<int, error>
 }

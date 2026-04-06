@@ -372,6 +372,10 @@ impl Type {
         self.has_name("Option")
     }
 
+    pub fn is_partial(&self) -> bool {
+        self.has_name("Partial")
+    }
+
     pub fn is_unit(&self) -> bool {
         matches!(self.resolve(), Type::Constructor { ref id, .. } if id.as_ref() == "**nominal.Unit")
     }
@@ -701,17 +705,21 @@ impl Type {
 
     pub fn ok_type(&self) -> Type {
         debug_assert!(
-            self.is_result() || self.is_option(),
-            "ok_type called on non-Result/Option type"
+            self.is_result() || self.is_option() || self.is_partial(),
+            "ok_type called on non-Result/Option/Partial type"
         );
-        self.inner().expect("Result/Option should have inner type")
+        self.inner()
+            .expect("Result/Option/Partial should have inner type")
     }
 
     pub fn err_type(&self) -> Type {
-        debug_assert!(self.is_result(), "err_type called on non-Result type");
+        debug_assert!(
+            self.is_result() || self.is_partial(),
+            "err_type called on non-Result/Partial type"
+        );
         self.get_type_params()
             .and_then(|args| args.get(1).cloned())
-            .expect("Result should have error type")
+            .expect("Result/Partial should have error type")
     }
 }
 

@@ -371,7 +371,7 @@ impl Buffer {
   /// is drained. The return value n is the number of bytes read. If the
   /// buffer has no data to return, err is [io.EOF] (unless len(p) is zero);
   /// otherwise it is nil.
-  fn Read(self: Ref<Buffer>, mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<Buffer>, mut p: Slice<uint8>) -> Partial<int, error>
 
   /// ReadByte reads and returns the next byte from the buffer.
   /// If no byte is available, it returns error [io.EOF].
@@ -438,8 +438,7 @@ impl Buffer {
   /// Write appends the contents of p to the buffer, growing the buffer as
   /// needed. The return value n is the length of p; err is always nil. If the
   /// buffer becomes too large, Write will panic with [ErrTooLarge].
-  #[allow(unused_result)]
-  fn Write(self: Ref<Buffer>, p: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<Buffer>, p: Slice<uint8>) -> Partial<int, error>
 
   /// WriteByte appends the byte c to the buffer, growing the buffer as needed.
   /// The returned error is always nil, but is included to match [bufio.Writer]'s
@@ -474,10 +473,10 @@ impl Reader {
   fn Len(self: Ref<Reader>) -> int
 
   /// Read implements the [io.Reader] interface.
-  fn Read(self: Ref<Reader>, mut b: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<Reader>, mut b: Slice<uint8>) -> Partial<int, error>
 
   /// ReadAt implements the [io.ReaderAt] interface.
-  fn ReadAt(self: Ref<Reader>, mut b: Slice<uint8>, off: int64) -> Result<int, error>
+  fn ReadAt(self: Ref<Reader>, mut b: Slice<uint8>, off: int64) -> Partial<int, error>
 
   /// ReadByte implements the [io.ByteReader] interface.
   fn ReadByte(self: Ref<Reader>) -> Result<uint8, error>

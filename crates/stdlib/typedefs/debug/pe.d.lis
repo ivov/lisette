@@ -538,7 +538,7 @@ impl Section {
   /// to the returned reader will return a non-nil error.
   fn Open(self: Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Result<int, error>
+  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Partial<int, error>
 }
 
 impl StringTable {

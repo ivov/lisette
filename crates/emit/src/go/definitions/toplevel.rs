@@ -477,7 +477,7 @@ impl Emitter<'_> {
         generics: &[Generic],
         attributes: &[Attribute],
     ) -> Option<String> {
-        if matches!(name, "Option" | "Result") {
+        if matches!(name, "Option" | "Result" | "Partial") {
             return None;
         }
 

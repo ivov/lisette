@@ -1,6 +1,7 @@
 use crate::Emitter;
 use crate::go::control_flow::fallible::{
-    Fallible, FallibleEmitter, OPTION_SOME_TAG, RESULT_OK_TAG,
+    Fallible, FallibleEmitter, OPTION_SOME_TAG, PARTIAL_BOTH_CTOR, PARTIAL_ERR_TAG,
+    PARTIAL_OK_CTOR, PARTIAL_OK_TAG, RESULT_OK_TAG,
 };
 use crate::go::is_order_sensitive;
 use crate::go::names::go_name;
@@ -38,6 +39,69 @@ impl Emitter<'_> {
         write_line!(output, "{} := {}", temp_vars.join(", "), call_str);
 
         self.emit_tuple_from_vars(output, &temp_vars, ty)
+    }
+
+    pub(super) fn emit_go_partial_call_wrapped(
+        &mut self,
+        output: &mut String,
+        call_expression: &Expression,
+        partial_ty: &Type,
+    ) -> String {
+        self.flags.needs_stdlib = true;
+
+        let Expression::Call {
+            expression: callee,
+            args,
+            type_args,
+            span,
+            ..
+        } = call_expression
+        else {
+            unreachable!("emit_go_partial_call_wrapped called with non-call expression");
+        };
+
+        let call_str = self.emit_call(output, callee, args, type_args, None, *span);
+        self.emit_partial_wrapping(output, &call_str, partial_ty)
+    }
+
+    pub(super) fn emit_partial_wrapping(
+        &mut self,
+        output: &mut String,
+        call_str: &str,
+        partial_ty: &Type,
+    ) -> String {
+        let ok_ty = partial_ty.ok_type();
+        let err_ty = partial_ty.err_type();
+        let ok_ty_str = self.go_type_as_string(&ok_ty);
+        let err_ty_str = self.go_type_as_string(&err_ty);
+        let pkg = go_name::GO_STDLIB_PKG;
+
+        let (err_var, val_var) = self.extract_go_returns(output, call_str, &ok_ty);
+
+        let type_params = format!("{}, {}", ok_ty_str, err_ty_str);
+        let result_ty_str = format!("{pkg}.Partial[{type_params}]");
+        let result_var = self.fresh_var(Some("result"));
+        self.declare(&result_var);
+
+        write_line!(output, "var {} {}", result_var, result_ty_str);
+        write_line!(output, "if {} != nil {{", err_var);
+        write_line!(
+            output,
+            "{} = {PARTIAL_BOTH_CTOR}[{type_params}]({}, {})",
+            result_var,
+            val_var,
+            err_var
+        );
+        output.push_str("} else {\n");
+        write_line!(
+            output,
+            "{} = {PARTIAL_OK_CTOR}[{type_params}]({})",
+            result_var,
+            val_var
+        );
+        output.push_str("}\n");
+
+        result_var
     }
 
     pub(super) fn emit_go_result_call_wrapped(
@@ -361,6 +425,9 @@ impl Emitter<'_> {
                 write_line!(body, "{} := {}", temp_vars.join(", "), call_str);
                 self.emit_tuple_from_vars(&mut body, &temp_vars, &return_type)
             }
+            GoCallStrategy::Partial => {
+                self.emit_partial_wrapping(&mut body, &call_str, &return_type)
+            }
         };
 
         write_line!(body, "return {}", result_var);
@@ -429,6 +496,22 @@ impl Emitter<'_> {
                 );
                 (format!("({ok_ty_str}, {err_ty_str})"), b)
             }
+        } else if return_type.is_partial() {
+            // Partial<T, error> → func(...) (T, error)
+            let ok_ty = return_type.ok_type();
+            let err_ty = return_type.err_type();
+            let ok_ty_str = self.go_type_as_string(&ok_ty);
+            let err_ty_str = self.go_type_as_string(&err_ty);
+            let res = self.fresh_var(Some("res"));
+            self.declare(&res);
+
+            let b = format!(
+                "{res} := {call_str}\n\
+                 if {res}.Tag == {PARTIAL_OK_TAG} {{\nreturn {res}.OkVal, nil\n}}\n\
+                 if {res}.Tag == {PARTIAL_ERR_TAG} {{\nreturn *new({ok_ty_str}), {res}.ErrVal\n}}\n\
+                 return {res}.OkVal, {res}.ErrVal\n"
+            );
+            (format!("({ok_ty_str}, {err_ty_str})"), b)
         } else if return_type.is_option() {
             // Option<T> → func(...) (T, bool)
             let inner_ty_str = self.go_type_as_string(&return_type.ok_type());

@@ -25,7 +25,7 @@ impl Emitter<'_> {
                     ..
                 } = definition
                 {
-                    if name == "Option" || name == "Result" {
+                    if name == "Option" || name == "Result" || name == "Partial" {
                         return None;
                     }
                     Some((id.to_string(), generics.clone(), variants.clone()))
@@ -107,6 +107,16 @@ impl Emitter<'_> {
             return match (variant, index) {
                 ("Ok", 0) => fallible::RESULT_OK_FIELD.to_string(),
                 ("Err", 0) => fallible::RESULT_ERR_FIELD.to_string(),
+                _ => variant.to_string(),
+            };
+        }
+
+        if resolved.is_partial() {
+            return match (variant, index) {
+                ("Ok", 0) => fallible::PARTIAL_OK_FIELD.to_string(),
+                ("Err", 0) => fallible::PARTIAL_ERR_FIELD.to_string(),
+                ("Both", 0) => fallible::PARTIAL_OK_FIELD.to_string(),
+                ("Both", 1) => fallible::PARTIAL_ERR_FIELD.to_string(),
                 _ => variant.to_string(),
             };
         }

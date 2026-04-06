@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/partial.rs
+description: "input: \nfn test(p: Partial<int, string>) -> Partial<int, string> {\n  p.map(|n| n * 2)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(p lisette.Partial[int, string]) lisette.Partial[int, string] {
+	return lisette.PartialMap(p, func(n int) int {
+		return n * 2
+	})
+}

@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/partial.rs
+description: "input: \nfn test(p: Partial<int, string>) -> int {\n  p.unwrap_or(0)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(p lisette.Partial[int, string]) int {
+	return p.UnwrapOr(0)
+}

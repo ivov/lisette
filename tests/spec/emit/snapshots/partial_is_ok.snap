@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/partial.rs
+description: "input: \nfn test(p: Partial<int, string>) -> bool {\n  p.is_ok()\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(p lisette.Partial[int, string]) bool {
+	return p.IsOk()
+}

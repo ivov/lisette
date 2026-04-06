@@ -19,7 +19,7 @@ pub struct Writer {
 
 impl Reader {
   /// Read reads and decodes quoted-printable data from the underlying reader.
-  fn Read(self: Ref<Reader>, mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(self: Ref<Reader>, mut p: Slice<uint8>) -> Partial<int, error>
 }
 
 impl Writer {
@@ -31,6 +31,5 @@ impl Writer {
   /// Write encodes p using quoted-printable encoding and writes it to the
   /// underlying [io.Writer]. It limits line length to 76 characters. The encoded
   /// bytes are not necessarily flushed until the [Writer] is closed.
-  #[allow(unused_result)]
-  fn Write(self: Ref<Writer>, p: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<Writer>, p: Slice<uint8>) -> Partial<int, error>
 }

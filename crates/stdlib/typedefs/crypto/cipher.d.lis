@@ -86,7 +86,7 @@ pub struct StreamWriter {
 }
 
 impl StreamReader {
-  fn Read(self, mut dst: Slice<uint8>) -> Result<int, error>
+  fn Read(self, mut dst: Slice<uint8>) -> Partial<int, error>
 }
 
 impl StreamWriter {
@@ -95,6 +95,5 @@ impl StreamWriter {
   #[allow(unused_result)]
   fn Close(self) -> Result<(), error>
 
-  #[allow(unused_result)]
-  fn Write(self, src: Slice<uint8>) -> Result<int, error>
+  fn Write(self, src: Slice<uint8>) -> Partial<int, error>
 }

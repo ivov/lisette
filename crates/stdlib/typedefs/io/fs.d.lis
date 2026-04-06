@@ -116,7 +116,7 @@ pub interface FS {
 /// A file may implement [io.ReaderAt] or [io.Seeker] as optimizations.
 pub interface File {
   fn Close() -> Result<(), error>
-  fn Read(mut arg0: Slice<uint8>) -> Result<int, error>
+  fn Read(mut arg0: Slice<uint8>) -> Partial<int, error>
   fn Stat() -> Result<FileInfo, error>
 }
 
@@ -163,7 +163,7 @@ pub interface ReadDirFS {
 /// but if so ReadDir should return an error for non-directories.)
 pub interface ReadDirFile {
   fn Close() -> Result<(), error>
-  fn Read(mut arg0: Slice<uint8>) -> Result<int, error>
+  fn Read(mut arg0: Slice<uint8>) -> Partial<int, error>
   fn ReadDir(n: int) -> Result<Slice<DirEntry>, error>
   fn Stat() -> Result<FileInfo, error>
 }

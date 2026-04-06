@@ -25,6 +25,11 @@ impl Checker<'_, '_> {
         let new_expression = self.infer_expression(*expression, &tried_ty);
         let resolved_tried_ty = new_expression.get_type().resolve();
 
+        if resolved_tried_ty.is_partial() {
+            self.sink
+                .push(diagnostics::infer::propagate_on_partial(span));
+        }
+
         let try_block_types = if let Some(ctx) = self.scopes.lookup_try_block_context() {
             let is_result = resolved_tried_ty.is_result();
             let is_option = resolved_tried_ty.is_option();
@@ -47,7 +52,7 @@ impl Checker<'_, '_> {
             let ok_ty = ctx.ok_ty.clone();
             let err_ty = ctx.err_ty.clone();
 
-            if !is_result && !is_option {
+            if !is_result && !is_option && !resolved_tried_ty.is_partial() {
                 self.sink
                     .push(diagnostics::infer::try_requires_result_or_option(span));
             }
@@ -160,6 +165,8 @@ impl Checker<'_, '_> {
             self.unify(&expected_return, &fn_return_ty, &span);
             self.unify(expected_ty, &some_ty, &span);
             some_ty
+        } else if tried_ty.is_partial() {
+            Type::Error
         } else {
             self.sink
                 .push(diagnostics::infer::try_requires_result_or_option(span));

@@ -46,7 +46,7 @@ pub struct ReadError {
 /// If the passed in [io.Reader] does not also have ReadByte,
 /// the [NewReader] will introduce its own buffering.
 pub interface Reader {
-  fn Read(mut p: Slice<uint8>) -> Result<int, error>
+  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
   fn ReadByte() -> Result<uint8, error>
 }
 
@@ -119,6 +119,5 @@ impl Writer {
 
   /// Write writes data to w, which will eventually write the
   /// compressed form of data to its underlying writer.
-  #[allow(unused_result)]
-  fn Write(self: Ref<Writer>, data: Slice<uint8>) -> Result<int, error>
+  fn Write(self: Ref<Writer>, data: Slice<uint8>) -> Partial<int, error>
 }
