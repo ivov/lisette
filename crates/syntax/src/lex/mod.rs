@@ -754,6 +754,24 @@ impl<'source> Lexer<'source> {
         }
     }
 
+    /// Consume up to 2 more octal digits after the first has already been read.
+    fn consume_octal_escape(&mut self, first_digit: u8) -> u16 {
+        let mut value: u16 = (first_digit - b'0') as u16;
+        for _ in 0..2 {
+            if self.at_eof() {
+                break;
+            }
+            match self.current_byte() {
+                d @ b'0'..=b'7' => {
+                    value = value * 8 + (d - b'0') as u16;
+                    self.next();
+                }
+                _ => break,
+            }
+        }
+        value
+    }
+
     fn lex_string_literal(&mut self) -> Token<'source> {
         let start_offset = self.current_offset;
 
@@ -766,7 +784,18 @@ impl<'source> Lexer<'source> {
             let byte = self.current_byte();
             if escaped {
                 match byte {
-                    b'n' | b't' | b'r' | b'0' | b'\\' | b'"' | b'x' | b'u' | b'U' => {}
+                    b'0'..=b'7' => {
+                        let escape_start = self.current_offset - 1;
+                        self.next();
+                        let value = self.consume_octal_escape(byte);
+                        if value > 255 {
+                            let escape_len = self.current_offset - escape_start;
+                            self.error_octal_escape_out_of_range(escape_start, escape_len);
+                        }
+                        escaped = false;
+                        continue;
+                    }
+                    b'n' | b't' | b'r' | b'\\' | b'"' | b'x' | b'u' | b'U' => {}
                     b'\'' => {}
                     _ => {
                         self.error_invalid_escape(start_offset, self.current_char());
@@ -981,9 +1010,18 @@ impl<'source> Lexer<'source> {
 
             match byte {
                 b'\\' if !self.at_eof() => {
+                    let escape_start = self.current_offset;
                     self.next();
                     if !self.at_eof() {
+                        let b = self.current_byte();
                         self.next();
+                        if matches!(b, b'0'..=b'7') {
+                            let value = self.consume_octal_escape(b);
+                            if value > 255 {
+                                let escape_len = self.current_offset - escape_start;
+                                self.error_octal_escape_out_of_range(escape_start, escape_len);
+                            }
+                        }
                     }
                 }
                 b'{' if self.peek_byte() == b'{' => {
@@ -1069,7 +1107,17 @@ impl<'source> Lexer<'source> {
             }
 
             match self.current_byte() {
-                b'n' | b't' | b'r' | b'0' | b'\\' | b'\'' | b'x' => {
+                b'0'..=b'7' => {
+                    let escape_start = self.current_offset - 1;
+                    let first = self.current_byte();
+                    self.next();
+                    let value = self.consume_octal_escape(first);
+                    if value > 255 {
+                        let escape_len = self.current_offset - escape_start;
+                        self.error_octal_escape_out_of_range(escape_start, escape_len);
+                    }
+                }
+                b'n' | b't' | b'r' | b'\\' | b'\'' | b'x' => {
                     self.next();
                 }
                 _ => {

@@ -476,14 +476,10 @@ impl Emitter<'_> {
             }
             Literal::Boolean(b) => b.to_string(),
             Literal::String(s) => {
-                let s = s.replace("\\0", "\\x00");
-                let s = convert_unicode_escapes(&s);
-                format!("\"{}\"", s)
+                format!("\"{}\"", convert_escape_sequences(s))
             }
             Literal::Char(c) => {
-                let c = c.replace("\\0", "\\x00");
-                let c = convert_unicode_escapes(&c);
-                format!("'{}'", c)
+                format!("'{}'", convert_escape_sequences(c))
             }
             Literal::FormatString(parts) => self.emit_format_string(output, parts),
             Literal::Slice(elems) => {
@@ -536,6 +532,7 @@ impl Emitter<'_> {
             match part {
                 FormatStringPart::Text(text) => {
                     let unescaped = text.replace("{{", "{").replace("}}", "}");
+                    let unescaped = convert_escape_sequences(&unescaped);
                     if has_interpolation {
                         format_string.push_str(&unescaped.replace('%', "%%"));
                     } else {
@@ -773,24 +770,43 @@ impl Emitter<'_> {
     }
 }
 
-pub(crate) fn convert_unicode_escapes(s: &str) -> String {
+pub(crate) fn convert_escape_sequences(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
-        if c == '\\' && chars.peek() == Some(&'u') && {
-            // Peek ahead for `u{`
-            let mut lookahead = chars.clone();
-            lookahead.next(); // skip 'u'
-            lookahead.peek() == Some(&'{')
-        } {
-            chars.next(); // consume 'u'
-            chars.next(); // consume '{'
-            let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
-            let codepoint = u32::from_str_radix(&hex, 16).unwrap_or(0);
-            if codepoint <= 0xFFFF {
-                write!(result, "\\u{:04X}", codepoint).unwrap();
+        if c == '\\' {
+            if chars.peek() == Some(&'\\') {
+                result.push('\\');
+                result.push('\\');
+                chars.next();
+            } else if matches!(chars.peek(), Some('0'..='7')) {
+                let mut value: u16 = 0;
+                for _ in 0..3 {
+                    match chars.peek() {
+                        Some(&d @ '0'..='7') => {
+                            value = value * 8 + (d as u16 - b'0' as u16);
+                            chars.next();
+                        }
+                        _ => break,
+                    }
+                }
+                write!(result, "\\x{:02x}", value).unwrap();
+            } else if chars.peek() == Some(&'u') && {
+                let mut lookahead = chars.clone();
+                lookahead.next();
+                lookahead.peek() == Some(&'{')
+            } {
+                chars.next(); // consume 'u'
+                chars.next(); // consume '{'
+                let hex: String = chars.by_ref().take_while(|&c| c != '}').collect();
+                let codepoint = u32::from_str_radix(&hex, 16).unwrap_or(0);
+                if codepoint <= 0xFFFF {
+                    write!(result, "\\u{:04X}", codepoint).unwrap();
+                } else {
+                    write!(result, "\\U{:08X}", codepoint).unwrap();
+                }
             } else {
-                write!(result, "\\U{:08X}", codepoint).unwrap();
+                result.push(c);
             }
         } else {
             result.push(c);

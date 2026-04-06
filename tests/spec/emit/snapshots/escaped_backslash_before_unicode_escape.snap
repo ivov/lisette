@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> string {\n  \"\\\\u{0041}\"\n}\n"
+---
+package main
+
+func test() string {
+	return "\\u{0041}"
+}

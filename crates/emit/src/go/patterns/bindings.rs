@@ -3,7 +3,7 @@ use syntax::program::Definition;
 use syntax::types::Type;
 
 use crate::Emitter;
-use crate::go::expressions::values::convert_unicode_escapes;
+use crate::go::expressions::values::convert_escape_sequences;
 use crate::go::names::generics;
 use crate::go::patterns::decision_tree::{collect_pattern_info, emit_tree_bindings};
 use crate::go::write_line;
@@ -20,14 +20,10 @@ pub(crate) fn emit_pattern_literal(literal: &Literal) -> String {
         Literal::Float { value, text } => text.clone().unwrap_or_else(|| value.to_string()),
         Literal::Boolean(b) => b.to_string(),
         Literal::String(s) => {
-            let s = s.replace("\\0", "\\x00");
-            let s = convert_unicode_escapes(&s);
-            format!("\"{}\"", s)
+            format!("\"{}\"", convert_escape_sequences(s))
         }
         Literal::Char(c) => {
-            let c = c.replace("\\0", "\\x00");
-            let c = convert_unicode_escapes(&c);
-            format!("'{}'", c)
+            format!("'{}'", convert_escape_sequences(c))
         }
         Literal::Imaginary(_) | Literal::FormatString(_) | Literal::Slice(_) => {
             unreachable!("FormatString, Slice, and Imaginary are not valid pattern literals")
