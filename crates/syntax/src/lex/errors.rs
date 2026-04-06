@@ -195,8 +195,20 @@ impl<'source> Lexer<'source> {
         )
         .with_lex_code("invalid_escape_sequence")
         .with_help(
-            "Valid escapes are `\\n`, `\\t`, `\\r`, `\\0`, `\\\\`, `\\'`, and `\\xHH` (hex)",
+            "Valid escapes are `\\n`, `\\t`, `\\r`, `\\\\`, `\\'`, `\\xHH` (hex), and `\\ooo` (octal)",
         );
+        self.errors.push(error);
+    }
+
+    pub(super) fn error_octal_escape_out_of_range(&mut self, offset: usize, length: usize) {
+        let span = self.span(offset as u32, length as u32);
+        let error = ParseError::new(
+            "Octal escape out of range",
+            span,
+            "octal escape value exceeds maximum (0o377 / 0xFF)",
+        )
+        .with_lex_code("octal_escape_out_of_range")
+        .with_help("Octal escapes must be in the range `\\0` to `\\377` (0x00 to 0xFF)");
         self.errors.push(error);
     }
 

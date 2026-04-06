@@ -162,6 +162,12 @@ fn lex_invalid_escape() {
 }
 
 #[test]
+fn lex_octal_escape_out_of_range() {
+    let input = r#"let x = "\400""#;
+    assert_lex_error_snapshot!(input);
+}
+
+#[test]
 fn lex_number_trailing_underscore() {
     let input = r#"let x = 42_"#;
     assert_lex_error_snapshot!(input);

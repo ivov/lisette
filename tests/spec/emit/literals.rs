@@ -403,6 +403,86 @@ fn test() -> rune {
 }
 
 #[test]
+fn octal_escape_esc_in_string() {
+    let input = r#"
+fn test() -> string {
+  "\033"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn octal_escape_esc_in_char() {
+    let input = r#"
+fn test() -> rune {
+  '\033'
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn octal_escape_single_digit() {
+    let input = r#"
+fn test() -> string {
+  "\7"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn octal_escape_two_digit() {
+    let input = r#"
+fn test() -> string {
+  "\33"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn octal_escape_max() {
+    let input = r#"
+fn test() -> string {
+  "\377"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn octal_escape_followed_by_non_octal() {
+    let input = r#"
+fn test() -> string {
+  "\08abc"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn escaped_backslash_before_octal_digits() {
+    let input = r#"
+fn test() -> string {
+  "\\033"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn escaped_backslash_before_unicode_escape() {
+    let input = r#"
+fn test() -> string {
+  "\\u{0041}"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unicode_escape_in_string() {
     let input = r#"
 fn test() -> string {
