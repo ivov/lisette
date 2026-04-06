@@ -17,10 +17,10 @@ name = "lisette-lsp"
 path = "src/main.rs"
 
 [dependencies]
-syntax = { package = "lisette-syntax", version = "0.1.2", path = "../syntax" }
-semantics = { package = "lisette-semantics", version = "0.1.2", path = "../semantics" }
-diagnostics = { package = "lisette-diagnostics", version = "0.1.2", path = "../diagnostics" }
-format = { package = "lisette-format", version = "0.1.2", path = "../format" }
+syntax = { package = "lisette-syntax", version = "0.1.3", path = "../syntax" }
+semantics = { package = "lisette-semantics", version = "0.1.3", path = "../semantics" }
+diagnostics = { package = "lisette-diagnostics", version = "0.1.3", path = "../diagnostics" }
+format = { package = "lisette-format", version = "0.1.3", path = "../format" }
 ecow.workspace = true
 tower-lsp = "0.20"
 tokio = { version = "1", features = ["full"] }
