@@ -10,7 +10,7 @@ type W[T any] struct {
 	F0 T
 }
 
-func (w W[T]) String() string {
+func (w W[T]) GoString() string {
 	return fmt.Sprintf("W(%v)", w.F0)
 }
 

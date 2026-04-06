@@ -13,7 +13,7 @@ type Wrapper struct {
 	mu s.Mutex
 }
 
-func (w Wrapper) String() string {
+func (w Wrapper) GoString() string {
 	return fmt.Sprintf("Wrapper { mu: %v }", w.mu)
 }
 

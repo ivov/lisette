@@ -27,7 +27,7 @@ type Result2[T any, E any] struct {
 	Err2 E
 }
 
-func (r Result2[T, E]) String() string {
+func (r Result2[T, E]) GoString() string {
 	switch r.Tag {
 	case Result2Ok2:
 		return fmt.Sprintf("Result2.Ok2(%v)", r.Ok2)

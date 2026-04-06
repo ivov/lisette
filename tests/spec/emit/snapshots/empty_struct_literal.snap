@@ -6,7 +6,7 @@ package main
 
 type Empty struct{}
 
-func (e Empty) String() string {
+func (e Empty) GoString() string {
 	return "Empty"
 }
 

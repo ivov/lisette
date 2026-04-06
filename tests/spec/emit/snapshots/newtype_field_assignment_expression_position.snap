@@ -8,7 +8,7 @@ import "fmt"
 
 type New int
 
-func (n New) String() string {
+func (n New) GoString() string {
 	return fmt.Sprintf("New(%v)", int(n))
 }
 

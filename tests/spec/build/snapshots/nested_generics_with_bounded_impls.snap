@@ -14,7 +14,7 @@ type Label struct {
 	text string
 }
 
-func (l Label) String() string {
+func (l Label) GoString() string {
 	return fmt.Sprintf("Label { text: %v }", l.text)
 }
 
@@ -72,7 +72,7 @@ type Pair[A traits.Showable, B traits.Showable] struct {
 	Second B
 }
 
-func (p Pair[A, B]) String() string {
+func (p Pair[A, B]) GoString() string {
 	return fmt.Sprintf("Pair { first: %v, second: %v }", p.First, p.Second)
 }
 
@@ -89,7 +89,7 @@ type Tagged[T traits.Showable] struct {
 	Label string
 }
 
-func (t Tagged[T]) String() string {
+func (t Tagged[T]) GoString() string {
 	return fmt.Sprintf("Tagged { value: %v, label: %v }", t.Value, t.Label)
 }
 

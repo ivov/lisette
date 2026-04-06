@@ -13,7 +13,7 @@ type Key struct {
 	k string
 }
 
-func (k Key) String() string {
+func (k Key) GoString() string {
 	return fmt.Sprintf("Key { k: %v }", k.k)
 }
 
@@ -21,7 +21,7 @@ type Box struct {
 	x int
 }
 
-func (b Box) String() string {
+func (b Box) GoString() string {
 	return fmt.Sprintf("Box { x: %v }", b.x)
 }
 

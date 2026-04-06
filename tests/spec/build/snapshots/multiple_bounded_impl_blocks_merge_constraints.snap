@@ -19,7 +19,7 @@ type Container[T any] struct {
 	label string
 }
 
-func (c Container[T]) String() string {
+func (c Container[T]) GoString() string {
 	return fmt.Sprintf("Container { value: %v, label: %v }", c.value, c.label)
 }
 
@@ -36,7 +36,7 @@ type Item struct {
 	count int
 }
 
-func (i Item) String() string {
+func (i Item) GoString() string {
 	return fmt.Sprintf("Item { name: %v, count: %v }", i.name, i.count)
 }
 

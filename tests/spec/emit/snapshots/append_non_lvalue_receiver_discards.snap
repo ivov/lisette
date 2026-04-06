@@ -10,7 +10,7 @@ type Items struct {
 	items []int
 }
 
-func (i Items) String() string {
+func (i Items) GoString() string {
 	return fmt.Sprintf("Items { items: %v }", i.items)
 }
 

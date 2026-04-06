@@ -17,7 +17,7 @@ type Text struct {
 	content string
 }
 
-func (t Text) String() string {
+func (t Text) GoString() string {
 	return fmt.Sprintf("Text { content: %v }", t.content)
 }
 
@@ -25,7 +25,7 @@ type Number struct {
 	value int
 }
 
-func (n Number) String() string {
+func (n Number) GoString() string {
 	return fmt.Sprintf("Number { value: %v }", n.value)
 }
 

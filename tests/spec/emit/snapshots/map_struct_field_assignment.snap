@@ -11,7 +11,7 @@ type Player struct {
 	score int
 }
 
-func (p Player) String() string {
+func (p Player) GoString() string {
 	return fmt.Sprintf("Player { name: %v, score: %v }", p.name, p.score)
 }
 

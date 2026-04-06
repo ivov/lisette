@@ -10,7 +10,7 @@ type StringBuilder struct {
 	Content string
 }
 
-func (s StringBuilder) String() string {
+func (s StringBuilder) GoString() string {
 	return fmt.Sprintf("StringBuilder { content: %v }", s.Content)
 }
 

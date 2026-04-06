@@ -8,7 +8,7 @@ import "fmt"
 
 type UserId int
 
-func (u UserId) String() string {
+func (u UserId) GoString() string {
 	return fmt.Sprintf("UserId(%v)", int(u))
 }
 

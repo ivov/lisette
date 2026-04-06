@@ -8,7 +8,7 @@ func noop() {}
 
 type Box struct{}
 
-func (b Box) String() string {
+func (b Box) GoString() string {
 	return "Box"
 }
 

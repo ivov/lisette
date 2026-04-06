@@ -28,7 +28,7 @@ type Tree[T any] struct {
 	Right *Tree[T]
 }
 
-func (t Tree[T]) String() string {
+func (t Tree[T]) GoString() string {
 	switch t.Tag {
 	case TreeLeaf:
 		return fmt.Sprintf("Tree.Leaf(%v)", t.Leaf)

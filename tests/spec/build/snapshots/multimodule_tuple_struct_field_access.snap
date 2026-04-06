@@ -35,7 +35,7 @@ import "fmt"
 
 type UserId int
 
-func (u UserId) String() string {
+func (u UserId) GoString() string {
 	return fmt.Sprintf("UserId(%v)", int(u))
 }
 
@@ -44,7 +44,7 @@ type Point struct {
 	F1 int
 }
 
-func (p Point) String() string {
+func (p Point) GoString() string {
 	return fmt.Sprintf("Point(%v, %v)", p.F0, p.F1)
 }
 
@@ -53,6 +53,6 @@ type Pair[A any, B any] struct {
 	F1 B
 }
 
-func (p Pair[A, B]) String() string {
+func (p Pair[A, B]) GoString() string {
 	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
 }

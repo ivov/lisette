@@ -11,7 +11,7 @@ type Point2D struct {
 	F1 int
 }
 
-func (p Point2D) String() string {
+func (p Point2D) GoString() string {
 	return fmt.Sprintf("Point2D(%v, %v)", p.F0, p.F1)
 }
 

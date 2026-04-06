@@ -30,7 +30,7 @@ type Dir struct {
 	Tag DirTag
 }
 
-func (d Dir) String() string {
+func (d Dir) GoString() string {
 	switch d.Tag {
 	case DirNorth:
 		return "Dir.North"

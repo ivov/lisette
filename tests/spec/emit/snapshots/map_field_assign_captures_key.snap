@@ -10,7 +10,7 @@ type Pair struct {
 	x int
 }
 
-func (p Pair) String() string {
+func (p Pair) GoString() string {
 	return fmt.Sprintf("Pair { x: %v }", p.x)
 }
 

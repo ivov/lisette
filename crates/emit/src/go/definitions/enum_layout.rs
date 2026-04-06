@@ -5,7 +5,7 @@ use syntax::ast::{EnumVariant, Generic};
 
 pub(crate) const ENUM_TAG_FIELD: &str = "Tag";
 
-pub(crate) const ENUM_STRINGER_METHOD: &str = "String";
+pub(crate) const ENUM_STRINGER_METHOD: &str = "GoString";
 
 #[derive(Debug, Clone)]
 pub(crate) struct EnumLayout {
@@ -214,14 +214,14 @@ impl EnumLayout {
         output.join("\n")
     }
 
-    pub(crate) fn emit_string_method(&self, receiver_generics: &str) -> String {
+    pub(crate) fn emit_go_string_method(&self, receiver_generics: &str) -> String {
         let receiver = crate::go::utils::receiver_name(&self.enum_name);
         let go_type_name = go_name::escape_keyword(&self.enum_name);
         let receiver_type = format!("{}{}", go_type_name, receiver_generics);
 
         let mut lines = Vec::new();
         lines.push(format!(
-            "func ({receiver} {receiver_type}) String() string {{"
+            "func ({receiver} {receiver_type}) GoString() string {{"
         ));
         lines.push(format!("switch {receiver}.Tag {{"));
 

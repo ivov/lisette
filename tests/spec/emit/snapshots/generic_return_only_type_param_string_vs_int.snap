@@ -27,7 +27,7 @@ type Validated[T any] struct {
 	Invalid string
 }
 
-func (v Validated[T]) String() string {
+func (v Validated[T]) GoString() string {
 	switch v.Tag {
 	case ValidatedValid:
 		return fmt.Sprintf("Validated.Valid(%v)", v.Valid)
@@ -43,7 +43,7 @@ type ValidationResult[T any] struct {
 	field_name string
 }
 
-func (v ValidationResult[T]) String() string {
+func (v ValidationResult[T]) GoString() string {
 	return fmt.Sprintf("ValidationResult { value: %v, field_name: %v }", v.value, v.field_name)
 }
 

@@ -18,7 +18,7 @@ type Secret struct {
 	Value int
 }
 
-func (s Secret) String() string {
+func (s Secret) GoString() string {
 	return fmt.Sprintf("Secret { value: %v }", s.Value)
 }
 

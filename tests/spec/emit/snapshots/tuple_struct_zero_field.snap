@@ -6,7 +6,7 @@ package main
 
 type Marker struct{}
 
-func (m Marker) String() string {
+func (m Marker) GoString() string {
 	return "Marker"
 }
 

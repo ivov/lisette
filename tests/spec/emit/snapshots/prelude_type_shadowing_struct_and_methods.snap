@@ -11,7 +11,7 @@ type Span struct {
 	end   int
 }
 
-func (s Span) String() string {
+func (s Span) GoString() string {
 	return fmt.Sprintf("Span { start: %v, end: %v }", s.start, s.end)
 }
 

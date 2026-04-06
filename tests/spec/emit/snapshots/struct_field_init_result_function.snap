@@ -13,7 +13,7 @@ type Container struct {
 	res lisette.Result[int, string]
 }
 
-func (c Container) String() string {
+func (c Container) GoString() string {
 	return fmt.Sprintf("Container { res: %v }", c.res)
 }
 

@@ -292,7 +292,7 @@ impl Emitter<'_> {
             } else {
                 None
             };
-            let string_method = self.emit_tuple_struct_string_method(
+            let string_method = self.emit_tuple_struct_go_string_method(
                 name,
                 &receiver_generics,
                 fields.len(),
@@ -371,7 +371,7 @@ impl Emitter<'_> {
         };
 
         let string_method =
-            self.emit_struct_string_method(name, &receiver_generics, &go_field_names);
+            self.emit_struct_go_string_method(name, &receiver_generics, &go_field_names);
         if !go_field_names.is_empty() {
             self.ensure_imported.insert("fmt".to_string());
         }
@@ -410,7 +410,7 @@ impl Emitter<'_> {
         )
     }
 
-    fn emit_struct_string_method(
+    fn emit_struct_go_string_method(
         &self,
         name: &str,
         receiver_generics: &str,
@@ -421,7 +421,7 @@ impl Emitter<'_> {
         let receiver_type = format!("{go_type_name}{receiver_generics}");
         if fields.is_empty() {
             return format!(
-                "func ({receiver} {receiver_type}) String() string {{\nreturn \"{name}\"\n}}"
+                "func ({receiver} {receiver_type}) GoString() string {{\nreturn \"{name}\"\n}}"
             );
         }
         let format_parts: Vec<String> =
@@ -431,13 +431,13 @@ impl Emitter<'_> {
             .map(|(_, go)| format!("{receiver}.{go}"))
             .collect();
         format!(
-            "func ({receiver} {receiver_type}) String() string {{\nreturn fmt.Sprintf(\"{name} {{ {} }}\", {})\n}}",
+            "func ({receiver} {receiver_type}) GoString() string {{\nreturn fmt.Sprintf(\"{name} {{ {} }}\", {})\n}}",
             format_parts.join(", "),
             args.join(", ")
         )
     }
 
-    fn emit_tuple_struct_string_method(
+    fn emit_tuple_struct_go_string_method(
         &self,
         name: &str,
         receiver_generics: &str,
@@ -449,7 +449,7 @@ impl Emitter<'_> {
         let receiver_type = format!("{go_type_name}{receiver_generics}");
         if field_count == 0 {
             return format!(
-                "func ({receiver} {receiver_type}) String() string {{\nreturn \"{name}\"\n}}"
+                "func ({receiver} {receiver_type}) GoString() string {{\nreturn \"{name}\"\n}}"
             );
         }
         if let Some(underlying) = underlying_go_type {
@@ -457,7 +457,7 @@ impl Emitter<'_> {
                 return String::new();
             }
             return format!(
-                "func ({receiver} {receiver_type}) String() string {{\nreturn fmt.Sprintf(\"{name}(%v)\", {underlying}({receiver}))\n}}"
+                "func ({receiver} {receiver_type}) GoString() string {{\nreturn fmt.Sprintf(\"{name}(%v)\", {underlying}({receiver}))\n}}"
             );
         }
         let placeholders: Vec<&str> = (0..field_count).map(|_| "%v").collect();
@@ -465,7 +465,7 @@ impl Emitter<'_> {
             .map(|i| format!("{receiver}.F{i}"))
             .collect();
         format!(
-            "func ({receiver} {receiver_type}) String() string {{\nreturn fmt.Sprintf(\"{name}({})\", {})\n}}",
+            "func ({receiver} {receiver_type}) GoString() string {{\nreturn fmt.Sprintf(\"{name}({})\", {})\n}}",
             placeholders.join(", "),
             args.join(", ")
         )
@@ -496,7 +496,7 @@ impl Emitter<'_> {
         let layout = self.module.enum_layouts.get(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);
         result.push_str("\n\n");
-        result.push_str(&layout.emit_string_method(&receiver_generics));
+        result.push_str(&layout.emit_go_string_method(&receiver_generics));
         if has_json {
             result.push_str("\n\n");
             result.push_str(&layout.emit_json_methods(&receiver_generics));

@@ -10,7 +10,7 @@ type C struct {
 	value int
 }
 
-func (c C) String() string {
+func (c C) GoString() string {
 	return fmt.Sprintf("C { value: %v }", c.value)
 }
 

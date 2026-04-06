@@ -8,7 +8,7 @@ import "fmt"
 
 type Wrapper int
 
-func (w Wrapper) String() string {
+func (w Wrapper) GoString() string {
 	return fmt.Sprintf("Wrapper(%v)", int(w))
 }
 

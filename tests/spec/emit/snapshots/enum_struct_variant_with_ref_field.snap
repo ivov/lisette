@@ -29,7 +29,7 @@ type Tree struct {
 	Right *Tree
 }
 
-func (t Tree) String() string {
+func (t Tree) GoString() string {
 	switch t.Tag {
 	case TreeLeaf:
 		return fmt.Sprintf("Tree.Leaf(%v)", t.Leaf)

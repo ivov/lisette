@@ -51,6 +51,6 @@ type Item struct {
 	Value int
 }
 
-func (i Item) String() string {
+func (i Item) GoString() string {
 	return fmt.Sprintf("Item { name: %v, value: %v }", i.Name, i.Value)
 }

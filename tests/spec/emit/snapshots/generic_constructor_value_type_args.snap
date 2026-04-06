@@ -21,7 +21,7 @@ type Wrap[T any] struct {
 	W   T
 }
 
-func (w Wrap[T]) String() string {
+func (w Wrap[T]) GoString() string {
 	switch w.Tag {
 	case WrapW:
 		return fmt.Sprintf("Wrap.W(%v)", w.W)

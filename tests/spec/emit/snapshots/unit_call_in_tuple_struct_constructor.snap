@@ -13,7 +13,7 @@ type P struct {
 	F1 int
 }
 
-func (p P) String() string {
+func (p P) GoString() string {
 	return fmt.Sprintf("P(%v, %v)", p.F0, p.F1)
 }
 

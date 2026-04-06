@@ -6,7 +6,7 @@ package main
 
 type S struct{}
 
-func (s S) String() string {
+func (s S) GoString() string {
 	return "S"
 }
 

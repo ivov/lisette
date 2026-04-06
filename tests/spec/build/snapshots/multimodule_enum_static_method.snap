@@ -40,7 +40,7 @@ type Color struct {
 	Tag ColorTag
 }
 
-func (c Color) String() string {
+func (c Color) GoString() string {
 	switch c.Tag {
 	case ColorRed:
 		return "Color.Red"

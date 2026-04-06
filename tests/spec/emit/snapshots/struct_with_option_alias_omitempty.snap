@@ -16,6 +16,6 @@ type User struct {
 	Email lisette.Option[string] `json:"email,omitempty,omitzero"`
 }
 
-func (u User) String() string {
+func (u User) GoString() string {
 	return fmt.Sprintf("User { name: %v, email: %v }", u.Name, u.Email)
 }

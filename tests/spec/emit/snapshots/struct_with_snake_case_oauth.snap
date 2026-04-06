@@ -10,6 +10,6 @@ type Auth struct {
 	OAuth2Token string `json:"oauth2_token"`
 }
 
-func (a Auth) String() string {
+func (a Auth) GoString() string {
 	return fmt.Sprintf("Auth { OAuth2Token: %v }", a.OAuth2Token)
 }

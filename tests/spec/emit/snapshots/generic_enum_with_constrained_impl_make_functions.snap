@@ -31,7 +31,7 @@ type Either[L Displayable, R Displayable] struct {
 	Right R
 }
 
-func (e Either[L, R]) String() string {
+func (e Either[L, R]) GoString() string {
 	switch e.Tag {
 	case EitherLeft:
 		return fmt.Sprintf("Either.Left(%v)", e.Left)
@@ -57,7 +57,7 @@ type Name struct {
 	value string
 }
 
-func (n Name) String() string {
+func (n Name) GoString() string {
 	return fmt.Sprintf("Name { value: %v }", n.value)
 }
 

@@ -10,7 +10,7 @@ type H struct {
 	ptr *int
 }
 
-func (h H) String() string {
+func (h H) GoString() string {
 	return fmt.Sprintf("H { ptr: %v }", h.ptr)
 }
 

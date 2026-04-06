@@ -35,7 +35,7 @@ type NetworkResult struct {
 	Error int
 }
 
-func (n NetworkResult) String() string {
+func (n NetworkResult) GoString() string {
 	switch n.Tag {
 	case NetworkResultSuccess:
 		return "NetworkResult.Success"

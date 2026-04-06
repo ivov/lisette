@@ -40,7 +40,7 @@ type Circle struct {
 	Radius float64
 }
 
-func (c Circle) String() string {
+func (c Circle) GoString() string {
 	return fmt.Sprintf("Circle { radius: %v }", c.Radius)
 }
 
@@ -58,7 +58,7 @@ type ShapeKind struct {
 	Height     float64
 }
 
-func (s ShapeKind) String() string {
+func (s ShapeKind) GoString() string {
 	switch s.Tag {
 	case ShapeKindCircleKind:
 		return fmt.Sprintf("ShapeKind.CircleKind(%v)", s.CircleKind)

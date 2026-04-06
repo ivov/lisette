@@ -24,7 +24,7 @@ type Shape struct {
 	Height int
 }
 
-func (s Shape) String() string {
+func (s Shape) GoString() string {
 	switch s.Tag {
 	case ShapeRectangle:
 		return fmt.Sprintf("Shape.Rectangle { x: %v, y: %v, width: %v, height: %v }", s.X, s.Y, s.Width, s.Height)

@@ -10,7 +10,7 @@ type Holder struct {
 	p *int
 }
 
-func (h Holder) String() string {
+func (h Holder) GoString() string {
 	return fmt.Sprintf("Holder { p: %v }", h.p)
 }
 
@@ -19,7 +19,7 @@ type Carrier struct {
 	np *int
 }
 
-func (c Carrier) String() string {
+func (c Carrier) GoString() string {
 	return fmt.Sprintf("Carrier { h: %v, np: %v }", c.h, c.np)
 }
 

@@ -11,7 +11,7 @@ func MakeASTNodeNumber(arg0 int) ASTNode {
 }
 
 func MakeASTNodeString(arg0 string) ASTNode {
-	return ASTNode{Tag: ASTNodeString, ASTNodeString_: arg0}
+	return ASTNode{Tag: ASTNodeString, String: arg0}
 }
 
 func MakeASTNodeNull() ASTNode {
@@ -27,17 +27,17 @@ const (
 )
 
 type ASTNode struct {
-	Tag            ASTNodeTag
-	Number         int
-	ASTNodeString_ string
+	Tag    ASTNodeTag
+	Number int
+	String string
 }
 
-func (a ASTNode) String() string {
+func (a ASTNode) GoString() string {
 	switch a.Tag {
 	case ASTNodeNumber:
 		return fmt.Sprintf("ASTNode.Number(%v)", a.Number)
 	case ASTNodeString:
-		return fmt.Sprintf("ASTNode.String(%v)", a.ASTNodeString_)
+		return fmt.Sprintf("ASTNode.String(%v)", a.String)
 	case ASTNodeNull:
 		return "ASTNode.Null"
 	default:
@@ -51,7 +51,7 @@ func visit(node ASTNode) string {
 		n := node.Number
 		return fmt.Sprintf("number:%v", n)
 	case ASTNodeString:
-		s := node.ASTNodeString_
+		s := node.String
 		return fmt.Sprintf("string:%v", s)
 	default:
 		return "null"

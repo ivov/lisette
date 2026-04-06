@@ -10,7 +10,7 @@ type Adder struct {
 	base int
 }
 
-func (a Adder) String() string {
+func (a Adder) GoString() string {
 	return fmt.Sprintf("Adder { base: %v }", a.base)
 }
 

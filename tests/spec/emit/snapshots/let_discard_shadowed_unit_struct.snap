@@ -6,7 +6,7 @@ package main
 
 type Blank struct{}
 
-func (b Blank) String() string {
+func (b Blank) GoString() string {
 	return "Blank"
 }
 

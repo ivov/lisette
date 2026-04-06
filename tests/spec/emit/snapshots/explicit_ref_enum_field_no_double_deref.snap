@@ -27,7 +27,7 @@ type List[T any] struct {
 	Cons1 *List[T]
 }
 
-func (l List[T]) String() string {
+func (l List[T]) GoString() string {
 	switch l.Tag {
 	case ListCons:
 		return fmt.Sprintf("List.Cons(%v, %v)", l.Cons0, l.Cons1)

@@ -11,7 +11,7 @@ type Name struct {
 	last  string
 }
 
-func (n Name) String() string {
+func (n Name) GoString() string {
 	return fmt.Sprintf("Name { first: %v, last: %v }", n.first, n.last)
 }
 

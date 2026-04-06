@@ -13,7 +13,7 @@ type Box[T ifaces.Showable] struct {
 	Value T
 }
 
-func (b Box[T]) String() string {
+func (b Box[T]) GoString() string {
 	return fmt.Sprintf("Box { value: %v }", b.Value)
 }
 
@@ -42,7 +42,7 @@ type Item struct {
 	name string
 }
 
-func (i Item) String() string {
+func (i Item) GoString() string {
 	return fmt.Sprintf("Item { name: %v }", i.name)
 }
 

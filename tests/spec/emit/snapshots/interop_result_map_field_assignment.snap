@@ -14,7 +14,7 @@ type Holder struct {
 	f func(string) lisette.Result[int, error]
 }
 
-func (h Holder) String() string {
+func (h Holder) GoString() string {
 	return fmt.Sprintf("Holder { f: %v }", h.f)
 }
 

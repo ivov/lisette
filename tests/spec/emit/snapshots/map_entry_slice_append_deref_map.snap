@@ -10,7 +10,7 @@ type Box struct {
 	items []int
 }
 
-func (b Box) String() string {
+func (b Box) GoString() string {
 	return fmt.Sprintf("Box { items: %v }", b.items)
 }
 

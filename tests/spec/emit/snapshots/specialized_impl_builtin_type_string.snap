@@ -10,7 +10,7 @@ type Wrapper[T any] struct {
 	value T
 }
 
-func (w Wrapper[T]) String() string {
+func (w Wrapper[T]) GoString() string {
 	return fmt.Sprintf("Wrapper { value: %v }", w.value)
 }
 

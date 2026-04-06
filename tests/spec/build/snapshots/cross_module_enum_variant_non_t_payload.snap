@@ -27,7 +27,7 @@ type Result2[T any] struct {
 	Failure string
 }
 
-func (r Result2[T]) String() string {
+func (r Result2[T]) GoString() string {
 	switch r.Tag {
 	case Result2Success:
 		return fmt.Sprintf("Result2.Success(%v)", r.Success)

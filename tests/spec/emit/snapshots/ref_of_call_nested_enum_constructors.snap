@@ -28,7 +28,7 @@ type Expr struct {
 	Add1 *Expr
 }
 
-func (e Expr) String() string {
+func (e Expr) GoString() string {
 	switch e.Tag {
 	case ExprNum:
 		return fmt.Sprintf("Expr.Num(%v)", e.Num)

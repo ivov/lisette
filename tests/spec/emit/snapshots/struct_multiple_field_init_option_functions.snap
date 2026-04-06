@@ -14,7 +14,7 @@ type MultiWrapper struct {
 	second lisette.Option[string]
 }
 
-func (m MultiWrapper) String() string {
+func (m MultiWrapper) GoString() string {
 	return fmt.Sprintf("MultiWrapper { first: %v, second: %v }", m.first, m.second)
 }
 

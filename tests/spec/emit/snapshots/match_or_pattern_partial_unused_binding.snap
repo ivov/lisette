@@ -35,7 +35,7 @@ type E struct {
 	B   lisette.Tuple2[int, int]
 }
 
-func (e E) String() string {
+func (e E) GoString() string {
 	switch e.Tag {
 	case EA:
 		return fmt.Sprintf("E.A(%v)", e.A)

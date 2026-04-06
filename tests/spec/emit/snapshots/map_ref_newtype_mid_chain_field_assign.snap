@@ -10,13 +10,13 @@ type Inner struct {
 	x int
 }
 
-func (i Inner) String() string {
+func (i Inner) GoString() string {
 	return fmt.Sprintf("Inner { x: %v }", i.x)
 }
 
 type Wrap Inner
 
-func (w Wrap) String() string {
+func (w Wrap) GoString() string {
 	return fmt.Sprintf("Wrap(%v)", Inner(w))
 }
 
@@ -24,7 +24,7 @@ type Outer struct {
 	w *Wrap
 }
 
-func (o Outer) String() string {
+func (o Outer) GoString() string {
 	return fmt.Sprintf("Outer { w: %v }", o.w)
 }
 

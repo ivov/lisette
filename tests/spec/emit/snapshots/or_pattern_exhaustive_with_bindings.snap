@@ -33,7 +33,7 @@ type Shape struct {
 	Triangle int
 }
 
-func (s Shape) String() string {
+func (s Shape) GoString() string {
 	switch s.Tag {
 	case ShapeCircle:
 		return fmt.Sprintf("Shape.Circle(%v)", s.Circle)

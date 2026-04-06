@@ -20,7 +20,7 @@ type Point struct {
 	y float64
 }
 
-func (p Point) String() string {
+func (p Point) GoString() string {
 	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
 }
 

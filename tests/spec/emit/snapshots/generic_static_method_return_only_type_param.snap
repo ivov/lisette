@@ -11,7 +11,7 @@ type Container[T any] struct {
 	name  string
 }
 
-func (c Container[T]) String() string {
+func (c Container[T]) GoString() string {
 	return fmt.Sprintf("Container { items: %v, name: %v }", c.items, c.name)
 }
 

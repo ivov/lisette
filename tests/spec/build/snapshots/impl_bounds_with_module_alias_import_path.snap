@@ -21,7 +21,7 @@ type Box[T I.Printable] struct {
 	value T
 }
 
-func (b Box[T]) String() string {
+func (b Box[T]) GoString() string {
 	return fmt.Sprintf("Box { value: %v }", b.value)
 }
 
@@ -33,7 +33,7 @@ type Name struct {
 	name string
 }
 
-func (n Name) String() string {
+func (n Name) GoString() string {
 	return fmt.Sprintf("Name { name: %v }", n.name)
 }
 

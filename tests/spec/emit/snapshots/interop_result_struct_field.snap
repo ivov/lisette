@@ -14,7 +14,7 @@ type Parser struct {
 	parse func(string) lisette.Result[int, error]
 }
 
-func (p Parser) String() string {
+func (p Parser) GoString() string {
 	return fmt.Sprintf("Parser { parse: %v }", p.parse)
 }
 

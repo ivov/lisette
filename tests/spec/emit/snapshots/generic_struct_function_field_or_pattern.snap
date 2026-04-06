@@ -18,7 +18,7 @@ type Handler[T any] struct {
 	callback func(T) int
 }
 
-func (h Handler[T]) String() string {
+func (h Handler[T]) GoString() string {
 	return fmt.Sprintf("Handler { callback: %v }", h.callback)
 }
 
@@ -35,7 +35,7 @@ type E struct {
 	B   Handler[string]
 }
 
-func (e E) String() string {
+func (e E) GoString() string {
 	switch e.Tag {
 	case EA:
 		return fmt.Sprintf("E.A(%v)", e.A)

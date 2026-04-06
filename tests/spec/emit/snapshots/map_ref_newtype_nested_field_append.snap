@@ -10,13 +10,13 @@ type Inner struct {
 	items []int
 }
 
-func (i Inner) String() string {
+func (i Inner) GoString() string {
 	return fmt.Sprintf("Inner { items: %v }", i.items)
 }
 
 type Wrap Inner
 
-func (w Wrap) String() string {
+func (w Wrap) GoString() string {
 	return fmt.Sprintf("Wrap(%v)", Inner(w))
 }
 

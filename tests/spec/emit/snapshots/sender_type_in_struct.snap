@@ -10,7 +10,7 @@ type Producer struct {
 	output chan<- int
 }
 
-func (p Producer) String() string {
+func (p Producer) GoString() string {
 	return fmt.Sprintf("Producer { output: %v }", p.output)
 }
 

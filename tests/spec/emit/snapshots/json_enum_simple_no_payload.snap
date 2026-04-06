@@ -33,7 +33,7 @@ type Status struct {
 	Tag StatusTag
 }
 
-func (s Status) String() string {
+func (s Status) GoString() string {
 	switch s.Tag {
 	case StatusActive:
 		return "Status.Active"

@@ -11,7 +11,7 @@ type Wrap struct {
 	F1 int
 }
 
-func (w Wrap) String() string {
+func (w Wrap) GoString() string {
 	return fmt.Sprintf("Wrap(%v, %v)", w.F0, w.F1)
 }
 

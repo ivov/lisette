@@ -13,7 +13,7 @@ type Thing struct {
 	name string
 }
 
-func (t Thing) String() string {
+func (t Thing) GoString() string {
 	return fmt.Sprintf("Thing { name: %v }", t.name)
 }
 

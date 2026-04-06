@@ -30,7 +30,7 @@ type Tag struct {
 	Tag TagTag
 }
 
-func (t Tag) String() string {
+func (t Tag) GoString() string {
 	switch t.Tag {
 	case TagA:
 		return "Tag.A"

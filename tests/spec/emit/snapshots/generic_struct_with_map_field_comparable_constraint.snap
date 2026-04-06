@@ -10,6 +10,6 @@ type Cache[K comparable, V any] struct {
 	data map[K]V
 }
 
-func (c Cache[K, V]) String() string {
+func (c Cache[K, V]) GoString() string {
 	return fmt.Sprintf("Cache { data: %v }", c.data)
 }

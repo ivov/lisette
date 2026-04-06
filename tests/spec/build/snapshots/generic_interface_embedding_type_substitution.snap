@@ -24,7 +24,7 @@ type Score struct {
 	val  int
 }
 
-func (s Score) String() string {
+func (s Score) GoString() string {
 	return fmt.Sprintf("Score { name: %v, val: %v }", s.name, s.val)
 }
 

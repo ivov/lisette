@@ -20,7 +20,7 @@ type Marker struct {
 	Tag MarkerTag
 }
 
-func (m Marker) String() string {
+func (m Marker) GoString() string {
 	switch m.Tag {
 	case MarkerValue:
 		return "Marker.Value"

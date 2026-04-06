@@ -13,7 +13,7 @@ type Big struct {
 	d int
 }
 
-func (b Big) String() string {
+func (b Big) GoString() string {
 	return fmt.Sprintf("Big { a: %v, b: %v, c: %v, d: %v }", b.a, b.b, b.c, b.d)
 }
 

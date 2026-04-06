@@ -10,6 +10,6 @@ type User struct {
 	Name string `custom:"foo" validate:"required"`
 }
 
-func (u User) String() string {
+func (u User) GoString() string {
 	return fmt.Sprintf("User { name: %v }", u.Name)
 }

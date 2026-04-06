@@ -32,7 +32,7 @@ type Val struct {
 	B   int
 }
 
-func (v Val) String() string {
+func (v Val) GoString() string {
 	switch v.Tag {
 	case ValA:
 		return fmt.Sprintf("Val.A(%v)", v.A)

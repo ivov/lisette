@@ -8,7 +8,7 @@ import "fmt"
 
 type Wrap int
 
-func (w Wrap) String() string {
+func (w Wrap) GoString() string {
 	return fmt.Sprintf("Wrap(%v)", int(w))
 }
 
