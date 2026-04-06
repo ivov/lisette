@@ -1,3 +1,4 @@
+use crate::facts::DiscardedTailKind;
 use crate::lint::{LintContext, LintRule};
 use diagnostics::LisetteDiagnostic;
 
@@ -77,16 +78,19 @@ fn check_unused_expressions(ctx: &LintContext, diagnostics: &mut Vec<LisetteDiag
 
 fn check_discarded_tail_expressions(ctx: &LintContext, diagnostics: &mut Vec<LisetteDiagnostic>) {
     for fact in &ctx.facts.discarded_tail_expressions {
-        if fact.is_result {
-            diagnostics.push(diagnostics::lint::discarded_result_in_tail(
-                &fact.span,
-                &fact.return_type,
-            ));
-        } else {
-            diagnostics.push(diagnostics::lint::discarded_option_in_tail(
-                &fact.span,
-                &fact.return_type,
-            ));
+        match fact.kind {
+            DiscardedTailKind::Result => {
+                diagnostics.push(diagnostics::lint::discarded_result_in_tail(
+                    &fact.span,
+                    &fact.return_type,
+                ));
+            }
+            DiscardedTailKind::Option => {
+                diagnostics.push(diagnostics::lint::discarded_option_in_tail(
+                    &fact.span,
+                    &fact.return_type,
+                ));
+            }
         }
     }
 }

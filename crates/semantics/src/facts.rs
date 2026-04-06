@@ -90,10 +90,10 @@ impl Facts {
             .push(UnusedExpressionFact { span, kind });
     }
 
-    pub fn add_discarded_tail(&mut self, span: Span, is_result: bool, return_type: String) {
+    pub fn add_discarded_tail(&mut self, span: Span, kind: DiscardedTailKind, return_type: String) {
         self.discarded_tail_expressions.push(DiscardedTailFact {
             span,
-            is_result,
+            kind,
             return_type,
         });
     }
@@ -165,10 +165,16 @@ pub struct UnusedExpressionFact {
     pub kind: UnusedExpressionKind,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiscardedTailKind {
+    Result,
+    Option,
+}
+
 #[derive(Debug, Clone)]
 pub struct DiscardedTailFact {
     pub span: Span,
-    pub is_result: bool,
+    pub kind: DiscardedTailKind,
     pub return_type: String,
 }
 

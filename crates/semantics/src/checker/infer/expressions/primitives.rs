@@ -7,6 +7,7 @@ use syntax::types::Type;
 use super::super::Checker;
 use super::super::checks::{check_is_non_addressable, check_non_addressable_assignment_target};
 use crate::checker::PostInferenceCheck;
+use crate::facts::DiscardedTailKind;
 
 /// Checks whether an assignment target expression contains a deref (`.* `)
 /// anywhere in its chain. For example, `p.*.x` is a `DotAccess` wrapping a
@@ -524,11 +525,13 @@ impl Checker<'_, '_> {
                         .unwrap_or_default();
 
                     if !allowed_lints.contains(&lint_name.to_string()) {
-                        self.facts.add_discarded_tail(
-                            item_span,
-                            resolved.is_result(),
-                            resolved.to_string(),
-                        );
+                        let kind = if resolved.is_result() {
+                            DiscardedTailKind::Result
+                        } else {
+                            DiscardedTailKind::Option
+                        };
+                        self.facts
+                            .add_discarded_tail(item_span, kind, resolved.to_string());
                     }
                 }
             }
