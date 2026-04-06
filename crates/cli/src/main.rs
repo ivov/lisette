@@ -23,10 +23,14 @@ fn main() {
             std::process::exit(1);
         }
         Err(command::ParseError::UnknownCommand(cmd)) => {
+            let hint = match command::Command::suggest(&cmd) {
+                Some(suggestion) => format!("Did you mean `{}`?", suggestion),
+                None => "Run `lis help` for available commands".to_string(),
+            };
             cli_error!(
                 "Unknown command",
                 format!("`{}` is not a lis command", cmd),
-                "Run `lis help` for available commands"
+                hint
             );
             std::process::exit(1);
         }

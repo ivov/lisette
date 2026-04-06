@@ -275,4 +275,13 @@ impl Command {
             _ => Err(ParseError::UnknownCommand(command)),
         }
     }
+
+    pub fn suggest(typo: &str) -> Option<String> {
+        const COMMANDS: &[&str] = &[
+            "new", "build", "run", "format", "check", "clean", "help", "version", "add", "remove",
+            "list", "learn", "doc",
+        ];
+        let candidates: Vec<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
+        diagnostics::infer::find_similar_name(typo, &candidates)
+    }
 }
