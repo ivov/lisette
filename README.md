@@ -19,7 +19,7 @@ Quietly practical:
 - Interop with Go standard library
 - Linter, formatter, 250+ diagnostics
 - Fast incremental compiler, readable Go
-- LSP support for VSCode, Neovim, and Zed
+- LSP support for VSCode, Neovim, Zed and Helix
 
 ## Quick tour
 
