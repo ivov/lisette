@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.4](https://github.com/ivov/lisette/compare/lisette-v0.1.3...lisette-v0.1.4) - 2026-04-07
+
+### Added
+
+- *(editors)* add info for helix ([#21](https://github.com/ivov/lisette/pull/21))
+
+### Fixed
+
+- add typo suggestions for CLI subcommands ([#23](https://github.com/ivov/lisette/pull/23))
+- support octal escape sequences ([#22](https://github.com/ivov/lisette/pull/22))
+- ice when calling generic type as function ([#28](https://github.com/ivov/lisette/pull/28))
+- skip auto-generated stringer on user string + goString
+- swap string method for go string method ([#17](https://github.com/ivov/lisette/pull/17))
+
+### Other
+
+- bump stdlib typedefs to v0.1.4
+
 ## [0.1.3](https://github.com/ivov/lisette/compare/lisette-v0.1.2...lisette-v0.1.3) - 2026-04-06
 
 ### Added
