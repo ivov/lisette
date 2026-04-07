@@ -85,7 +85,6 @@ html, body {
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
-  position: relative; /* anchor for the popover */
 }
 
 .toolbar-center {
@@ -158,91 +157,6 @@ html, body {
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-
-/* ─── Nav links (desktop) ─────────────────── */
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.nav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-decoration: none;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-  white-space: nowrap;
-}
-
-.nav-link:hover {
-  color: var(--text-primary);
-  background: var(--bg-elevated);
-  border-color: var(--border);
-}
-
-/* ─── Nav menu (mobile hamburger) ─────────── */
-#nav-menu-btn {
-  display: none; /* hidden on desktop */
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-#nav-menu-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
-#nav-menu-popover {
-  position: absolute;
-  top: calc(var(--toolbar-height) - 6px);
-  right: 12px;
-  z-index: 100;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.15);
-  padding: 6px;
-  min-width: 180px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-#nav-menu-popover[hidden] {
-  display: none;
-}
-
-.nav-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-  text-decoration: none;
-  border-radius: 6px;
-  transition: background 0.1s;
-}
-
-.nav-menu-item:hover {
-  background: var(--bg-elevated);
 }
 
 /* ─── Status ──────────────────────────────── */
@@ -504,10 +418,6 @@ html, body {
   /* Row 1: brand (left) + status (right) */
   .toolbar-left  { flex: 1; min-width: 0; }
   .toolbar-right { flex: none; gap: 8px; }
-
-  /* On mobile: hide desktop nav links, show hamburger button */
-  .nav-links    { display: none; }
-  #nav-menu-btn { display: flex; }
 
   /* Row 2: action buttons, full width */
   .toolbar-center {
