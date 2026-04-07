@@ -84,3 +84,7 @@ regenerate-stdlib-typedefs version="":
     just build # recompile compiler to embed updated typedefs
     ./target/release/lis check crates/stdlib/typedefs/
     just format
+
+# Build the playground and write output to docs/play/ (served at lisette.run/play)
+rebuild-playground:
+    cd playground && npm install && npm run build:wasm && npm run build

@@ -1,0 +1,26 @@
+{
+  "name": "lisette-playground",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "build:wasm": "cd wasm && wasm-pack build --target web --out-dir ../public/wasm",
+    "build:all": "npm run build:wasm && npm run build"
+  },
+  "dependencies": {
+    "monaco-editor": "^0.52.2",
+    "monaco-editor-textmate": "^4.0.0",
+    "onigasm": "^2.2.5",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.3.1",
+    "vite-plugin-monaco-editor": "^1.1.0"
+  }
+}
