@@ -555,10 +555,18 @@ impl Checker<'_, '_> {
             return result;
         }
 
-        if let Type::Constructor { id, .. } = ty
+        if let Type::Constructor { id, params, .. } = ty
             && let Some(Definition::TypeAlias { ty: alias_ty, .. }) = self.store.get_definition(id)
         {
-            let resolved = alias_ty.resolve();
+            let concrete_alias_ty = match alias_ty {
+                Type::Forall { vars, body } => {
+                    let map: SubstitutionMap =
+                        vars.iter().cloned().zip(params.iter().cloned()).collect();
+                    substitute(body, &map)
+                }
+                other => other.clone(),
+            };
+            let resolved = concrete_alias_ty.resolve();
             if let Type::Constructor {
                 underlying_ty: Some(underlying),
                 ..

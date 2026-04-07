@@ -1835,6 +1835,18 @@ fn calling_string_produces_error() {
 }
 
 #[test]
+fn calling_generic_type_constructor_no_ice() {
+    infer(
+        r#"
+    fn main() {
+      Slice<byte>()
+    }
+        "#,
+    )
+    .assert_infer_code("not_callable");
+}
+
+#[test]
 fn immediate_closure_application_infers_param_type() {
     infer(
         r#"{
