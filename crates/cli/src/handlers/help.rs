@@ -21,6 +21,9 @@ Commands:
     `doc`      Explore the prelude and Go stdlib
     `help`     Print this message
 
+Shell:
+    `completions`  Generate shell completion scripts (bash, zsh, fish)
+
 Hint: Run `lis help <command>` to learn more about a command.
       New to Lisette? See https://lisette.run/quickstart",
         VERSION, GO_VERSION
