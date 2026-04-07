@@ -10,7 +10,7 @@ type Holder struct {
 	p *int
 }
 
-func (h Holder) GoString() string {
+func (h Holder) String() string {
 	return fmt.Sprintf("Holder { p: %v }", h.p)
 }
 

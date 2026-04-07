@@ -10,7 +10,7 @@ type Carrier struct {
 	p *int
 }
 
-func (c Carrier) GoString() string {
+func (c Carrier) String() string {
 	return fmt.Sprintf("Carrier { p: %v }", c.p)
 }
 

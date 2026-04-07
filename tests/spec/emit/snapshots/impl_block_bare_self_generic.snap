@@ -10,7 +10,7 @@ type Container[T any] struct {
 	value T
 }
 
-func (c Container[T]) GoString() string {
+func (c Container[T]) String() string {
 	return fmt.Sprintf("Container { value: %v }", c.value)
 }
 

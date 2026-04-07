@@ -14,7 +14,7 @@ type Box struct {
 	value string
 }
 
-func (b Box) GoString() string {
+func (b Box) String() string {
 	return fmt.Sprintf("Box { value: %v }", b.value)
 }
 

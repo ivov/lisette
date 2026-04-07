@@ -22,7 +22,7 @@ type Message struct {
 	Y   int
 }
 
-func (m Message) GoString() string {
+func (m Message) String() string {
 	switch m.Tag {
 	case MessageMove:
 		return fmt.Sprintf("Message.Move { x: %v, y: %v }", m.X, m.Y)

@@ -10,19 +10,19 @@ type Inner struct {
 	x int
 }
 
-func (i Inner) GoString() string {
+func (i Inner) String() string {
 	return fmt.Sprintf("Inner { x: %v }", i.x)
 }
 
 type A Inner
 
-func (a A) GoString() string {
+func (a A) String() string {
 	return fmt.Sprintf("A(%v)", Inner(a))
 }
 
 type B A
 
-func (b B) GoString() string {
+func (b B) String() string {
 	return fmt.Sprintf("B(%v)", A(b))
 }
 

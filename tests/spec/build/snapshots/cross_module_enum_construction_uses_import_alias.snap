@@ -25,7 +25,7 @@ type Color struct {
 	Tag ColorTag
 }
 
-func (c Color) GoString() string {
+func (c Color) String() string {
 	switch c.Tag {
 	case ColorRed:
 		return "Color.Red"

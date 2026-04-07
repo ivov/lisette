@@ -25,7 +25,7 @@ type Name struct {
 	value string
 }
 
-func (n Name) GoString() string {
+func (n Name) String() string {
 	return fmt.Sprintf("Name { value: %v }", n.value)
 }
 

@@ -28,7 +28,7 @@ type Event struct {
 	KeyPress string
 }
 
-func (e Event) GoString() string {
+func (e Event) String() string {
 	switch e.Tag {
 	case EventClick:
 		return fmt.Sprintf("Event.Click(%v, %v)", e.Click0, e.Click1)

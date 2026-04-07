@@ -21,7 +21,7 @@ type Wrapper[T any] struct {
 	F0 T
 }
 
-func (w Wrapper[T]) GoString() string {
+func (w Wrapper[T]) String() string {
 	return fmt.Sprintf("Wrapper(%v)", w.F0)
 }
 

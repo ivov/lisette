@@ -26,7 +26,7 @@ type Transform[T any] struct {
 	Apply func(T) T
 }
 
-func (t Transform[T]) GoString() string {
+func (t Transform[T]) String() string {
 	switch t.Tag {
 	case TransformIdentity:
 		return "Transform.Identity"

@@ -26,7 +26,7 @@ type Container[K comparable, V any] struct {
 	Indexed map[K]V
 }
 
-func (c Container[K, V]) GoString() string {
+func (c Container[K, V]) String() string {
 	switch c.Tag {
 	case ContainerEmpty:
 		return "Container.Empty"

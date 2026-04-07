@@ -27,7 +27,7 @@ type Pair[A any, B any] struct {
 	Both1 B
 }
 
-func (p Pair[A, B]) GoString() string {
+func (p Pair[A, B]) String() string {
 	switch p.Tag {
 	case PairBoth:
 		return fmt.Sprintf("Pair.Both(%v, %v)", p.Both0, p.Both1)

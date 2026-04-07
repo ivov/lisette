@@ -10,7 +10,7 @@ type Inner struct {
 	value int
 }
 
-func (i Inner) GoString() string {
+func (i Inner) String() string {
 	return fmt.Sprintf("Inner { value: %v }", i.value)
 }
 
@@ -19,7 +19,7 @@ type Outer struct {
 	name  string
 }
 
-func (o Outer) GoString() string {
+func (o Outer) String() string {
 	return fmt.Sprintf("Outer { inner: %v, name: %v }", o.inner, o.name)
 }
 

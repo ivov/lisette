@@ -28,7 +28,7 @@ type Node struct {
 	Right *Node
 }
 
-func (n Node) GoString() string {
+func (n Node) String() string {
 	switch n.Tag {
 	case NodeLeaf:
 		return fmt.Sprintf("Node.Leaf { value: %v }", n.Value)

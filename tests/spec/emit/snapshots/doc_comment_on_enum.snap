@@ -31,7 +31,7 @@ type Status struct {
 	Tag StatusTag
 }
 
-func (s Status) GoString() string {
+func (s Status) String() string {
 	switch s.Tag {
 	case StatusPending:
 		return "Status.Pending"

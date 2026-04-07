@@ -12,6 +12,6 @@ type User struct {
 	active bool
 }
 
-func (u User) GoString() string {
+func (u User) String() string {
 	return fmt.Sprintf("User { name: %v, age: %v, active: %v }", u.name, u.age, u.active)
 }

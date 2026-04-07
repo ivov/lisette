@@ -5,7 +5,8 @@ use syntax::ast::{EnumVariant, Generic};
 
 pub(crate) const ENUM_TAG_FIELD: &str = "Tag";
 
-pub(crate) const ENUM_STRINGER_METHOD: &str = "GoString";
+pub(crate) const ENUM_STRINGER_METHOD: &str = "String";
+pub(crate) const ENUM_GO_STRINGER_METHOD: &str = "GoString";
 
 #[derive(Debug, Clone)]
 pub(crate) struct EnumLayout {
@@ -124,21 +125,30 @@ impl EnumLayout {
     ) -> String {
         if is_struct {
             let base = go_name::capitalize_first(field_name);
-            if base == ENUM_TAG_FIELD || base == ENUM_STRINGER_METHOD {
+            if base == ENUM_TAG_FIELD
+                || base == ENUM_STRINGER_METHOD
+                || base == ENUM_GO_STRINGER_METHOD
+            {
                 go_name::escape_keyword(&format!("{}{}", variant_name, base)).into_owned()
             } else {
                 go_name::escape_keyword(&base).into_owned()
             }
         } else if single_field {
             let base = variant_name.to_string();
-            if base == ENUM_TAG_FIELD || base == ENUM_STRINGER_METHOD {
+            if base == ENUM_TAG_FIELD
+                || base == ENUM_STRINGER_METHOD
+                || base == ENUM_GO_STRINGER_METHOD
+            {
                 format!("{}{}_", enum_name, base)
             } else {
                 base
             }
         } else {
             let base = format!("{}{}", variant_name, field_index);
-            if base == ENUM_TAG_FIELD || base == ENUM_STRINGER_METHOD {
+            if base == ENUM_TAG_FIELD
+                || base == ENUM_STRINGER_METHOD
+                || base == ENUM_GO_STRINGER_METHOD
+            {
                 format!("{}{}_{}", enum_name, variant_name, field_index)
             } else {
                 base
@@ -214,14 +224,18 @@ impl EnumLayout {
         output.join("\n")
     }
 
-    pub(crate) fn emit_go_string_method(&self, receiver_generics: &str) -> String {
+    pub(crate) fn emit_stringer_method(
+        &self,
+        receiver_generics: &str,
+        method_name: &str,
+    ) -> String {
         let receiver = crate::go::utils::receiver_name(&self.enum_name);
         let go_type_name = go_name::escape_keyword(&self.enum_name);
         let receiver_type = format!("{}{}", go_type_name, receiver_generics);
 
         let mut lines = Vec::new();
         lines.push(format!(
-            "func ({receiver} {receiver_type}) GoString() string {{"
+            "func ({receiver} {receiver_type}) {method_name}() string {{"
         ));
         lines.push(format!("switch {receiver}.Tag {{"));
 

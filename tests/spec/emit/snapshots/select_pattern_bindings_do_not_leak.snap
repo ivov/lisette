@@ -10,7 +10,7 @@ type Point struct {
 	x int
 }
 
-func (p Point) GoString() string {
+func (p Point) String() string {
 	return fmt.Sprintf("Point { x: %v }", p.x)
 }
 

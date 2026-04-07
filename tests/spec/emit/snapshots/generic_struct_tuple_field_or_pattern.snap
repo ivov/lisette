@@ -21,7 +21,7 @@ type Pair[T any] struct {
 	coords lisette.Tuple2[T, T]
 }
 
-func (p Pair[T]) GoString() string {
+func (p Pair[T]) String() string {
 	return fmt.Sprintf("Pair { coords: %v }", p.coords)
 }
 
@@ -38,7 +38,7 @@ type E struct {
 	B   Pair[int]
 }
 
-func (e E) GoString() string {
+func (e E) String() string {
 	switch e.Tag {
 	case EA:
 		return fmt.Sprintf("E.A(%v)", e.A)

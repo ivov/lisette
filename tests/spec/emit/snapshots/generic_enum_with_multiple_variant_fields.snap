@@ -27,7 +27,7 @@ type Either[L any, R any] struct {
 	Right R
 }
 
-func (e Either[L, R]) GoString() string {
+func (e Either[L, R]) String() string {
 	switch e.Tag {
 	case EitherLeft:
 		return fmt.Sprintf("Either.Left(%v)", e.Left)

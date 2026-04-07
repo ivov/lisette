@@ -10,7 +10,7 @@ type Counter struct {
 	x int
 }
 
-func (c Counter) GoString() string {
+func (c Counter) String() string {
 	return fmt.Sprintf("Counter { x: %v }", c.x)
 }
 

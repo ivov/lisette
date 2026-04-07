@@ -15,7 +15,7 @@ type Labeled[T Displayable] struct {
 	value T
 }
 
-func (l Labeled[T]) GoString() string {
+func (l Labeled[T]) String() string {
 	return fmt.Sprintf("Labeled { label: %v, value: %v }", l.label, l.value)
 }
 

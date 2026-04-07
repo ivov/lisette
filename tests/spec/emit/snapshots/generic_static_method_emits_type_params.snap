@@ -10,7 +10,7 @@ type Stack[T any] struct {
 	items []T
 }
 
-func (s Stack[T]) GoString() string {
+func (s Stack[T]) String() string {
 	return fmt.Sprintf("Stack { items: %v }", s.items)
 }
 

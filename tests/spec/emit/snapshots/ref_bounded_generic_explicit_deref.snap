@@ -14,7 +14,7 @@ type Person struct {
 	name string
 }
 
-func (p Person) GoString() string {
+func (p Person) String() string {
 	return fmt.Sprintf("Person { name: %v }", p.name)
 }
 

@@ -8,13 +8,13 @@ import "fmt"
 
 type A int
 
-func (a A) GoString() string {
+func (a A) String() string {
 	return fmt.Sprintf("A(%v)", int(a))
 }
 
 type B A
 
-func (b B) GoString() string {
+func (b B) String() string {
 	return fmt.Sprintf("B(%v)", A(b))
 }
 

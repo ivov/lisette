@@ -10,7 +10,7 @@ type Consumer struct {
 	input <-chan int
 }
 
-func (c Consumer) GoString() string {
+func (c Consumer) String() string {
 	return fmt.Sprintf("Consumer { input: %v }", c.input)
 }
 

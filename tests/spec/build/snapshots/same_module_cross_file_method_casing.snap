@@ -21,7 +21,7 @@ type Point struct {
 	Y float64
 }
 
-func (p Point) GoString() string {
+func (p Point) String() string {
 	return fmt.Sprintf("Point { x: %v, y: %v }", p.X, p.Y)
 }
 
@@ -37,7 +37,7 @@ type Builder struct {
 	Y float64
 }
 
-func (b Builder) GoString() string {
+func (b Builder) String() string {
 	return fmt.Sprintf("Builder { x: %v, y: %v }", b.X, b.Y)
 }
 

@@ -13,7 +13,7 @@ type Box struct {
 	x int
 }
 
-func (b Box) GoString() string {
+func (b Box) String() string {
 	return fmt.Sprintf("Box { x: %v }", b.x)
 }
 

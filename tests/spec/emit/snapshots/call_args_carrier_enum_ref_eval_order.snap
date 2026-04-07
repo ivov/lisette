@@ -21,7 +21,7 @@ type Carrier struct {
 	P   *int
 }
 
-func (c Carrier) GoString() string {
+func (c Carrier) String() string {
 	switch c.Tag {
 	case CarrierC:
 		return fmt.Sprintf("Carrier.C { p: %v }", c.P)

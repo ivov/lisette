@@ -8,7 +8,7 @@ import "fmt"
 
 type Resource struct{}
 
-func (r Resource) GoString() string {
+func (r Resource) String() string {
 	return "Resource"
 }
 

@@ -14,7 +14,7 @@ type User struct {
 	Middle_name string `json:"middleName,omitempty"`
 }
 
-func (u User) GoString() string {
+func (u User) String() string {
 	return fmt.Sprintf("User { first_name: %v, middle_name: %v }", u.First_name, u.Middle_name)
 }
 

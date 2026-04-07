@@ -27,7 +27,7 @@ type E struct {
 	B   int
 }
 
-func (e E) GoString() string {
+func (e E) String() string {
 	switch e.Tag {
 	case EA:
 		return fmt.Sprintf("E.A(%v)", e.A)

@@ -14,7 +14,7 @@ type Node struct {
 	Next  lisette.Option[int]
 }
 
-func (n Node) GoString() string {
+func (n Node) String() string {
 	return fmt.Sprintf("Node { value: %v, next: %v }", n.Value, n.Next)
 }
 

@@ -41,7 +41,7 @@ type Event struct {
 	Y   int
 }
 
-func (e Event) GoString() string {
+func (e Event) String() string {
 	switch e.Tag {
 	case EventClick:
 		return fmt.Sprintf("Event.Click { x: %v, y: %v }", e.X, e.Y)

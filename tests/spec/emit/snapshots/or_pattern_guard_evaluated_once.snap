@@ -27,7 +27,7 @@ type Res struct {
 	Err int
 }
 
-func (r Res) GoString() string {
+func (r Res) String() string {
 	switch r.Tag {
 	case ResOk:
 		return fmt.Sprintf("Res.Ok(%v)", r.Ok)

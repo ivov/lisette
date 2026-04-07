@@ -10,7 +10,7 @@ type default_ struct {
 	value int
 }
 
-func (d default_) GoString() string {
+func (d default_) String() string {
 	return fmt.Sprintf("default { value: %v }", d.value)
 }
 

@@ -10,7 +10,7 @@ type Outer struct {
 	items *[]int
 }
 
-func (o Outer) GoString() string {
+func (o Outer) String() string {
 	return fmt.Sprintf("Outer { items: %v }", o.items)
 }
 

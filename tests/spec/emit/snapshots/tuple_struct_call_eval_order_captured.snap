@@ -11,7 +11,7 @@ type Pair struct {
 	F1 int
 }
 
-func (p Pair) GoString() string {
+func (p Pair) String() string {
 	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
 }
 

@@ -13,7 +13,7 @@ type Container struct {
 	Items []sub.Item
 }
 
-func (c Container) GoString() string {
+func (c Container) String() string {
 	return fmt.Sprintf("Container { items: %v }", c.Items)
 }
 
@@ -32,7 +32,7 @@ type Item struct {
 	Score int
 }
 
-func (i Item) GoString() string {
+func (i Item) String() string {
 	return fmt.Sprintf("Item { name: %v, score: %v }", i.Name, i.Score)
 }
 

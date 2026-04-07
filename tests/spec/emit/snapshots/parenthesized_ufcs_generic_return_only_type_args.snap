@@ -6,7 +6,7 @@ package main
 
 type Factory struct{}
 
-func (f Factory) GoString() string {
+func (f Factory) String() string {
 	return "Factory"
 }
 

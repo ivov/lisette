@@ -11,7 +11,7 @@ type Pair[A any, B any] struct {
 	F1 B
 }
 
-func (p Pair[A, B]) GoString() string {
+func (p Pair[A, B]) String() string {
 	return fmt.Sprintf("Pair(%v, %v)", p.F0, p.F1)
 }
 

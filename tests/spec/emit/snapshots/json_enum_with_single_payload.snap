@@ -35,7 +35,7 @@ type Shape struct {
 	Square float64
 }
 
-func (s Shape) GoString() string {
+func (s Shape) String() string {
 	switch s.Tag {
 	case ShapeCircle:
 		return fmt.Sprintf("Shape.Circle(%v)", s.Circle)

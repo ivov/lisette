@@ -14,7 +14,7 @@ type S struct {
 	value int
 }
 
-func (s S) GoString() string {
+func (s S) String() string {
 	return fmt.Sprintf("S { value: %v }", s.value)
 }
 

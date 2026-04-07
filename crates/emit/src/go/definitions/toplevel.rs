@@ -10,9 +10,34 @@ use syntax::ast::{
     ParentInterface, Pattern, Span, StructFieldDefinition, StructKind, TypedPattern, UnaryOperator,
     Visibility,
 };
+use syntax::program::Definition;
 use syntax::types::Type;
 
 impl Emitter<'_> {
+    /// Returns `"GoString"` if the user has defined a `string` method on this type
+    /// (so their method takes `String` and the auto-generated one becomes `GoString`),
+    /// otherwise returns `"String"` for the default auto-generated stringer.
+    fn stringer_method_name(&self, name: &str) -> &'static str {
+        let qualified = format!("{}.{}", self.current_module, name);
+        let has_user_string = self
+            .ctx
+            .definitions
+            .get(qualified.as_str())
+            .and_then(|def| match def {
+                Definition::Struct { methods, .. }
+                | Definition::Enum { methods, .. }
+                | Definition::ValueEnum { methods, .. }
+                | Definition::TypeAlias { methods, .. } => Some(methods),
+                _ => None,
+            })
+            .map_or(false, |m| m.contains_key("string"));
+        if has_user_string {
+            "GoString"
+        } else {
+            "String"
+        }
+    }
+
     fn change_go_builtin_methods(
         &mut self,
         function_definition: &FunctionDefinition,
@@ -292,11 +317,13 @@ impl Emitter<'_> {
             } else {
                 None
             };
-            let string_method = self.emit_tuple_struct_go_string_method(
+            let stringer_name = self.stringer_method_name(name);
+            let string_method = self.emit_tuple_struct_stringer_method(
                 name,
                 &receiver_generics,
                 fields.len(),
                 underlying_go_type.as_deref(),
+                stringer_name,
             );
             // Zero-field structs return a literal without fmt.Sprintf, so also skip fmt.
             if !string_method.is_empty() {
@@ -370,8 +397,9 @@ impl Emitter<'_> {
             )
         };
 
+        let stringer_name = self.stringer_method_name(name);
         let string_method =
-            self.emit_struct_go_string_method(name, &receiver_generics, &go_field_names);
+            self.emit_struct_stringer_method(name, &receiver_generics, &go_field_names, stringer_name);
         if !go_field_names.is_empty() {
             self.ensure_imported.insert("fmt".to_string());
         }
@@ -410,18 +438,19 @@ impl Emitter<'_> {
         )
     }
 
-    fn emit_struct_go_string_method(
+    fn emit_struct_stringer_method(
         &self,
         name: &str,
         receiver_generics: &str,
         fields: &[(String, String)],
+        method_name: &str,
     ) -> String {
         let receiver = crate::go::utils::receiver_name(name);
         let go_type_name = go_name::escape_keyword(name);
         let receiver_type = format!("{go_type_name}{receiver_generics}");
         if fields.is_empty() {
             return format!(
-                "func ({receiver} {receiver_type}) GoString() string {{\nreturn \"{name}\"\n}}"
+                "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn \"{name}\"\n}}"
             );
         }
         let format_parts: Vec<String> =
@@ -431,25 +460,26 @@ impl Emitter<'_> {
             .map(|(_, go)| format!("{receiver}.{go}"))
             .collect();
         format!(
-            "func ({receiver} {receiver_type}) GoString() string {{\nreturn fmt.Sprintf(\"{name} {{ {} }}\", {})\n}}",
+            "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn fmt.Sprintf(\"{name} {{ {} }}\", {})\n}}",
             format_parts.join(", "),
             args.join(", ")
         )
     }
 
-    fn emit_tuple_struct_go_string_method(
+    fn emit_tuple_struct_stringer_method(
         &self,
         name: &str,
         receiver_generics: &str,
         field_count: usize,
         underlying_go_type: Option<&str>,
+        method_name: &str,
     ) -> String {
         let receiver = crate::go::utils::receiver_name(name);
         let go_type_name = go_name::escape_keyword(name);
         let receiver_type = format!("{go_type_name}{receiver_generics}");
         if field_count == 0 {
             return format!(
-                "func ({receiver} {receiver_type}) GoString() string {{\nreturn \"{name}\"\n}}"
+                "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn \"{name}\"\n}}"
             );
         }
         if let Some(underlying) = underlying_go_type {
@@ -457,7 +487,7 @@ impl Emitter<'_> {
                 return String::new();
             }
             return format!(
-                "func ({receiver} {receiver_type}) GoString() string {{\nreturn fmt.Sprintf(\"{name}(%v)\", {underlying}({receiver}))\n}}"
+                "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn fmt.Sprintf(\"{name}(%v)\", {underlying}({receiver}))\n}}"
             );
         }
         let placeholders: Vec<&str> = (0..field_count).map(|_| "%v").collect();
@@ -465,7 +495,7 @@ impl Emitter<'_> {
             .map(|i| format!("{receiver}.F{i}"))
             .collect();
         format!(
-            "func ({receiver} {receiver_type}) GoString() string {{\nreturn fmt.Sprintf(\"{name}({})\", {})\n}}",
+            "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn fmt.Sprintf(\"{name}({})\", {})\n}}",
             placeholders.join(", "),
             args.join(", ")
         )
@@ -496,7 +526,8 @@ impl Emitter<'_> {
         let layout = self.module.enum_layouts.get(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);
         result.push_str("\n\n");
-        result.push_str(&layout.emit_go_string_method(&receiver_generics));
+        let stringer_name = self.stringer_method_name(name);
+        result.push_str(&layout.emit_stringer_method(&receiver_generics, stringer_name));
         if has_json {
             result.push_str("\n\n");
             result.push_str(&layout.emit_json_methods(&receiver_generics));

@@ -27,7 +27,7 @@ type List[T any] struct {
 	Cons1 *List[T]
 }
 
-func (l List[T]) GoString() string {
+func (l List[T]) String() string {
 	switch l.Tag {
 	case ListNil:
 		return "List.Nil"

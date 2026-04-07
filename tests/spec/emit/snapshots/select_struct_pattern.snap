@@ -11,7 +11,7 @@ type Message struct {
 	data int
 }
 
-func (m Message) GoString() string {
+func (m Message) String() string {
 	return fmt.Sprintf("Message { id: %v, data: %v }", m.id, m.data)
 }
 

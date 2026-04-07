@@ -30,7 +30,7 @@ type Shape struct {
 	Rectangle1 float64
 }
 
-func (s Shape) GoString() string {
+func (s Shape) String() string {
 	switch s.Tag {
 	case ShapeRectangle:
 		return fmt.Sprintf("Shape.Rectangle(%v, %v)", s.Rectangle0, s.Rectangle1)

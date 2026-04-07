@@ -13,7 +13,7 @@ type MyError struct {
 	msg string
 }
 
-func (m MyError) GoString() string {
+func (m MyError) String() string {
 	return fmt.Sprintf("MyError { msg: %v }", m.msg)
 }
 

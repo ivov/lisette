@@ -10,7 +10,7 @@ type IntList struct {
 	items []int
 }
 
-func (i IntList) GoString() string {
+func (i IntList) String() string {
 	return fmt.Sprintf("IntList { items: %v }", i.items)
 }
 

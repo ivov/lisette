@@ -10,7 +10,7 @@ type Box[T any] struct {
 	value T
 }
 
-func (b Box[T]) GoString() string {
+func (b Box[T]) String() string {
 	return fmt.Sprintf("Box { value: %v }", b.value)
 }
 
