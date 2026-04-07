@@ -30,7 +30,7 @@ impl Emitter<'_> {
                 | Definition::TypeAlias { methods, .. } => Some(methods),
                 _ => None,
             })
-            .map_or(false, |m| m.contains_key("string"));
+            .is_some_and(|m| m.contains_key("string"));
         if has_user_string {
             "GoString"
         } else {
@@ -398,8 +398,12 @@ impl Emitter<'_> {
         };
 
         let stringer_name = self.stringer_method_name(name);
-        let string_method =
-            self.emit_struct_stringer_method(name, &receiver_generics, &go_field_names, stringer_name);
+        let string_method = self.emit_struct_stringer_method(
+            name,
+            &receiver_generics,
+            &go_field_names,
+            stringer_name,
+        );
         if !go_field_names.is_empty() {
             self.ensure_imported.insert("fmt".to_string());
         }
