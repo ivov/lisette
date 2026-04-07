@@ -200,6 +200,20 @@ Examples:
     `lis doc` `-s` {split:g}                 Search for {split:g} across prelude and Go stdlib",
         ),
 
+        "completions" => print_help(
+            "`lis completions` <shell>
+
+Generate shell completion scripts.
+
+Arguments:
+    <shell>    Shell to generate completions for (`bash`, `zsh`, or `fish`)
+
+Usage:
+    `lis completions bash` > ~/.local/share/bash-completion/completions/lis
+    `lis completions zsh`  > ~/.zfunc/_lis
+    `lis completions fish` > ~/.config/fish/completions/lis.fish",
+        ),
+
         "help" => print_help(
             "`lis help` <command>
 
