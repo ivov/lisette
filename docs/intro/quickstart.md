@@ -26,6 +26,8 @@ return {
 }
 ```
 
+- **Helix**: See the [setup instructions](../../editors/helix/README.md#installation).
+
 ## Try it out
 
 Generate a sample task manager project:
