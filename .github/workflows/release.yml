@@ -35,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -58,3 +59,17 @@ jobs:
           git tag "prelude/v${COMPILER_VERSION}" 2>/dev/null || true
           git push origin "prelude/v${COMPILER_VERSION}"
           curl -sf "https://proxy.golang.org/github.com/ivov/lisette/prelude/@v/v${COMPILER_VERSION}.info" > /dev/null || true
+
+      - name: Comment on released PRs
+        if: steps.release.outputs.releases_created == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASES: ${{ steps.release.outputs.releases }}
+        run: |
+          for release in $(echo "$RELEASES" | jq -r -c '.[]'); do
+            TAG=$(echo "$release" | jq -r '.tag')
+            for pr in $(echo "$release" | jq -r '.prs[].number'); do
+              gh pr comment "$pr" --body "Released in [\`${TAG}\`](https://github.com/ivov/lisette/releases/tag/${TAG})"
+            done
+          done
