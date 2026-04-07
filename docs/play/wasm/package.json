@@ -1,0 +1,16 @@
+{
+  "name": "lisette-wasm",
+  "type": "module",
+  "description": "WebAssembly bindings for the Lisette compiler",
+  "version": "0.1.0",
+  "files": [
+    "lisette_wasm_bg.wasm",
+    "lisette_wasm.js",
+    "lisette_wasm.d.ts"
+  ],
+  "main": "lisette_wasm.js",
+  "types": "lisette_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
