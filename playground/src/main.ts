@@ -50,31 +50,6 @@ const drawerToggle   = document.getElementById("drawer-toggle")!;
 const tabBtns        = document.querySelectorAll<HTMLButtonElement>(".tab-btn[data-tab]");
 const tabPanels      = document.querySelectorAll<HTMLElement>(".tab-panel");
 
-// ─── Nav menu popover (mobile) ────────────────────────────────────────────────
-const navMenuBtn     = document.getElementById("nav-menu-btn")!;
-const navMenuPopover = document.getElementById("nav-menu-popover")!;
-
-navMenuBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const open = !navMenuPopover.hidden;
-  navMenuPopover.hidden = open;
-  navMenuBtn.setAttribute("aria-expanded", String(!open));
-});
-
-// Close when clicking outside
-document.addEventListener("click", () => {
-  if (!navMenuPopover.hidden) {
-    navMenuPopover.hidden = true;
-    navMenuBtn.setAttribute("aria-expanded", "false");
-  }
-});
-
-// Close when a menu link is activated
-navMenuPopover.addEventListener("click", () => {
-  navMenuPopover.hidden = true;
-  navMenuBtn.setAttribute("aria-expanded", "false");
-});
-
 // ─── Mobile drawer ─────────────────────────────────────────────────────────────
 const isMobile = () => window.matchMedia("(max-width: 640px)").matches;
 
