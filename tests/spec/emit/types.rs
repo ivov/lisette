@@ -2372,3 +2372,63 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn struct_user_string_method_emits_go_string() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+impl Point {
+  pub fn string(self) -> string {
+    "custom"
+  }
+}
+
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  let _ = p
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_struct_user_string_method_emits_go_string() {
+    let input = r#"
+struct UserId(int)
+
+impl UserId {
+  pub fn string(self) -> string {
+    "custom"
+  }
+}
+
+fn main() {
+  let u = UserId(1)
+  let _ = u
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_user_string_method_emits_go_string() {
+    let input = r#"
+enum Color {
+  Red,
+  Blue,
+}
+
+impl Color {
+  pub fn string(self) -> string {
+    "custom"
+  }
+}
+
+fn main() {
+  let c = Color.Red
+  let _ = c
+}
+"#;
+    assert_emit_snapshot!(input);
+}
