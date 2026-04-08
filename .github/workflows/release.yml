@@ -60,7 +60,7 @@ jobs:
           git push origin "prelude/v${COMPILER_VERSION}"
           curl -sf "https://proxy.golang.org/github.com/ivov/lisette/prelude/@v/v${COMPILER_VERSION}.info" > /dev/null || true
 
-      - name: Comment on released PRs
+      - name: Comment on released PRs and issues
         if: steps.release.outputs.releases_created == 'true'
         continue-on-error: true
         env:
@@ -69,7 +69,15 @@ jobs:
         run: |
           for release in $(echo "$RELEASES" | jq -r -c '.[]'); do
             TAG=$(echo "$release" | jq -r '.tag')
+            RELEASE_LINK="[\`${TAG}\`](https://github.com/ivov/lisette/releases/tag/${TAG})"
+            declare -A COMMENTED_ISSUES
             for pr in $(echo "$release" | jq -r '.prs[].number'); do
-              gh pr comment "$pr" --body "Released in [\`${TAG}\`](https://github.com/ivov/lisette/releases/tag/${TAG})"
+              gh pr comment "$pr" --body "Released in ${RELEASE_LINK}"
+              for issue in $(gh pr view "$pr" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'); do
+                if [[ -z "${COMMENTED_ISSUES[$issue]:-}" ]]; then
+                  gh issue comment "$issue" --body "Addressed in ${RELEASE_LINK}"
+                  COMMENTED_ISSUES[$issue]=1
+                fi
+              done
             done
           done
