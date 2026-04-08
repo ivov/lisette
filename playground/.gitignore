@@ -1,0 +1,16 @@
+node_modules/
+.DS_Store
+*.tsbuildinfo
+
+# wasm-pack build artefacts (committed: public/wasm/ is source-controlled after build)
+wasm/target/
+wasm/pkg/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+/.playwright-cli/
+/wasm/.playwright-cli/

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>Lisette Playground</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="toolbar">
+        <div class="toolbar-left">
+          <a href="https://lisette.run" target="_blank" rel="noopener" class="brand">
+            <span class="brand-name">Lisette</span>
+            <span class="brand-tag">Playground</span>
+          </a>
+        </div>
+        <div class="toolbar-center">
+          <button id="btn-run" class="btn btn-primary" title="Run (Ctrl+Enter)">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 1.5v11l10-5.5L2 1.5z"/></svg>
+            Run
+          </button>
+          <button id="btn-format" class="btn btn-secondary" title="Format (Alt+Shift+F)">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h10M2 7h7M2 10h5"/></svg>
+            Format
+          </button>
+          <button id="btn-check" class="btn btn-secondary" title="Type check">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 7l3 3 7-6"/></svg>
+            Check
+          </button>
+        </div>
+        <div class="toolbar-right">
+          <span id="status-indicator" class="status-idle">Ready</span>
+        </div>
+      </header>
+
+      <main id="main-layout">
+        <div id="editor-pane">
+          <div id="editor-container"></div>
+        </div>
+        <div id="pane-resizer" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+        <div id="output-pane">
+          <div id="output-tabs">
+            <button class="tab-btn active" data-tab="output">Output</button>
+            <button class="tab-btn" data-tab="go-source">Go Source</button>
+            <button class="tab-btn" data-tab="diagnostics">Diagnostics</button>
+            <button id="drawer-toggle" aria-label="Toggle output panel">
+              <svg id="drawer-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 9 7 5 11 9"/>
+              </svg>
+            </button>
+          </div>
+          <div id="output-content">
+            <div class="tab-panel active" id="tab-output">
+              <pre id="output-text" class="output-pre"><span class="output-hint">Press Run (Ctrl+Enter) to execute your Lisette code.</span></pre>
+            </div>
+            <div class="tab-panel" id="tab-go-source">
+              <div id="go-source-editor-container"></div>
+            </div>
+            <div class="tab-panel" id="tab-diagnostics">
+              <div id="diagnostics-list" class="diagnostics-container"></div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <div id="wasm-loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>Loading Lisette compiler…</p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-exclude = ["editors/zed"]
+exclude = ["editors/zed", "playground/wasm"]
 members = [
     "crates/semantics",
     "crates/cli",
