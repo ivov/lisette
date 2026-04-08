@@ -73,10 +73,10 @@ jobs:
             RELEASE_LINK="[\`${TAG}\`](https://github.com/ivov/lisette/releases/tag/${TAG})"
             declare -A COMMENTED_ISSUES
             for pr in $(echo "$release" | jq -r '.prs[].number'); do
-              gh pr comment "$pr" --body "Released in ${RELEASE_LINK}"
-              for issue in $(gh pr view "$pr" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'); do
+              gh pr comment "$pr" --body "Released in ${RELEASE_LINK}" || true
+              for issue in $(gh pr view "$pr" --json closingIssuesReferences --jq '.closingIssuesReferences[].number' || true); do
                 if [[ -z "${COMMENTED_ISSUES[$issue]:-}" ]]; then
-                  gh issue comment "$issue" --body "Addressed in ${RELEASE_LINK}"
+                  gh issue comment "$issue" --body "Addressed in ${RELEASE_LINK}" || true
                   COMMENTED_ISSUES[$issue]=1
                 fi
               done
