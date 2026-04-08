@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.5](https://github.com/ivov/lisette/compare/lisette-v0.1.4...lisette-v0.1.5) - 2026-04-08
+
+### Fixed
+
+- skip pattern analysis on import cycle ([#34](https://github.com/ivov/lisette/pull/34))
+- interface subtype satisfaction through type variables ([#31](https://github.com/ivov/lisette/pull/31))
+
+### Other
+
+- bump stdlib typedefs to v0.1.5
+
 ## [0.1.4](https://github.com/ivov/lisette/compare/lisette-v0.1.3...lisette-v0.1.4) - 2026-04-07
 
 ### Added
