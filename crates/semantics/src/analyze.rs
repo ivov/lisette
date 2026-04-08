@@ -224,15 +224,17 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         )
     };
 
-    let pattern_ctx = pattern_analysis::Context::new(&store, &facts.or_pattern_error_spans);
-    for module in store.modules.values() {
-        for file in module.files.values() {
-            for expression in &file.items {
-                pattern_analysis::check(expression, &pattern_ctx, &sink);
+    if !has_pre_check_errors {
+        let pattern_ctx = pattern_analysis::Context::new(&store, &facts.or_pattern_error_spans);
+        for module in store.modules.values() {
+            for file in module.files.values() {
+                for expression in &file.items {
+                    pattern_analysis::check(expression, &pattern_ctx, &sink);
+                }
             }
         }
+        facts.pattern_issues = pattern_ctx.take_issues();
     }
-    facts.pattern_issues = pattern_ctx.take_issues();
 
     let errors = sink.take();
 

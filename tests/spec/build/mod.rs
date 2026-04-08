@@ -3640,3 +3640,47 @@ fn main() {
         result.errors
     );
 }
+
+#[test]
+fn self_import_cycle_with_match_reports_cycle_error() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "mod",
+        "mod.lis",
+        r#"
+import "mod"
+
+enum Enum {
+  Variant,
+}
+
+fn foo(e: Enum) {
+  match e {
+    Enum.Variant => {},
+  }
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "mod"
+"#,
+    );
+
+    let result = compile_check(fs);
+
+    let has_cycle_error = result
+        .errors
+        .iter()
+        .any(|e| e.to_string().contains("Import cycle"));
+
+    assert!(
+        has_cycle_error,
+        "Expected import cycle error, got: {:?}",
+        result.errors
+    );
+}
