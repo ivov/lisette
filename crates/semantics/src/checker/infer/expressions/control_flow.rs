@@ -5,7 +5,56 @@ use syntax::types::Type;
 use super::super::Checker;
 use super::super::checks::check_binding_pattern;
 
+/// Result of reconciling branch types. `Widened` means the common type is a
+/// later branch's type (a supertype of the first), not the first branch's type.
+enum BranchReconciliation {
+    FirstBranch,
+    Widened(Type),
+    Failed,
+}
+
 impl Checker<'_, '_> {
+    fn reconcile_branch_types(
+        &mut self,
+        branch_types: &[Type],
+        span: &Span,
+    ) -> BranchReconciliation {
+        if branch_types.len() < 2 {
+            return BranchReconciliation::FirstBranch;
+        }
+
+        let mut common = branch_types[0].clone();
+        let mut widened_to: Option<Type> = None;
+
+        for next in &branch_types[1..] {
+            let diag_count = self.sink.len();
+            if self
+                .speculatively(|this| this.try_unify(&common, next, span))
+                .is_ok()
+            {
+                continue;
+            }
+            self.sink.truncate(diag_count);
+
+            if self
+                .speculatively(|this| this.try_unify(next, &common, span))
+                .is_ok()
+            {
+                common = next.clone();
+                widened_to = Some(common.clone());
+                continue;
+            }
+            self.sink.truncate(diag_count);
+
+            return BranchReconciliation::Failed;
+        }
+
+        match widened_to {
+            Some(ty) => BranchReconciliation::Widened(ty),
+            None => BranchReconciliation::FirstBranch,
+        }
+    }
+
     fn ensure_subject_matchable(&mut self, ty: &Type, span: &Span) {
         match ty {
             _ if ty.is_unknown() => {
@@ -108,23 +157,32 @@ impl Checker<'_, '_> {
             let resolved_consequence = consequence_ty.resolve();
             let resolved_alternative = alternative_ty.resolve();
 
-            if self
-                .try_unify(&consequence_ty, &alternative_ty, &span)
-                .is_err()
+            match self
+                .reconcile_branch_types(&[consequence_ty.clone(), alternative_ty.clone()], &span)
             {
-                self.sink.push(diagnostics::infer::branch_type_mismatch(
-                    &resolved_consequence,
-                    consequence_span,
-                    &resolved_alternative,
-                    alternative_span,
-                ));
+                BranchReconciliation::FirstBranch => {
+                    self.unify(expected_ty, &consequence_ty, &consequence_span);
+                }
+                BranchReconciliation::Widened(ref ty) => {
+                    self.unify(expected_ty, ty, &alternative_span);
+                }
+                BranchReconciliation::Failed => {
+                    let _ = self.try_unify(&consequence_ty, &alternative_ty, &span);
+                    self.sink.push(diagnostics::infer::branch_type_mismatch(
+                        &resolved_consequence,
+                        consequence_span,
+                        &resolved_alternative,
+                        alternative_span,
+                    ));
+                    self.unify(expected_ty, &consequence_ty, &consequence_span);
+                }
             }
-
-            self.unify(expected_ty, &consequence_ty, &new_consequence.get_span());
         }
 
         let result_ty = if has_no_else {
             self.type_unit()
+        } else if is_expression && !expected_is_concrete {
+            expected_ty.resolve()
         } else {
             consequence_ty
         };
@@ -177,6 +235,8 @@ impl Checker<'_, '_> {
             }
         }
 
+        let needs_reconciliation = !arms_independent && result_ty.resolve().is_variable();
+
         let new_arms = arms
             .into_iter()
             .map(|a| {
@@ -193,7 +253,7 @@ impl Checker<'_, '_> {
                 });
 
                 let independent_ty;
-                let arm_expected = if arms_independent {
+                let arm_expected = if arms_independent || needs_reconciliation {
                     independent_ty = self.new_type_var();
                     &independent_ty
                 } else {
@@ -216,10 +276,28 @@ impl Checker<'_, '_> {
             })
             .collect::<Vec<_>>();
 
-        // In statement position, set the match's type from the first arm so the
-        // expression still has a well-defined type for inspection, even though
-        // arms are not required to agree.
-        if is_statement && let Some(first_arm) = new_arms.first() {
+        if needs_reconciliation {
+            let arm_types: Vec<Type> = new_arms.iter().map(|a| a.expression.get_type()).collect();
+
+            match self.reconcile_branch_types(&arm_types, &span) {
+                BranchReconciliation::FirstBranch => {
+                    if let Some(first) = arm_types.first() {
+                        self.unify(&result_ty, first, &span);
+                    }
+                }
+                BranchReconciliation::Widened(ty) => {
+                    self.unify(&result_ty, &ty, &span);
+                }
+                BranchReconciliation::Failed => {
+                    debug_assert!(arm_types.len() >= 2);
+                    let _ = self.try_unify(&arm_types[0], &arm_types[1], &span);
+                    self.unify(&result_ty, &arm_types[0], &span);
+                }
+            }
+        } else if is_statement && let Some(first_arm) = new_arms.first() {
+            // In statement position, set the match's type from the first arm so the
+            // expression still has a well-defined type for inspection, even though
+            // arms are not required to agree.
             let first_ty = first_arm.expression.get_type();
             let _ = self.try_unify(&result_ty, &first_ty, &span);
         }

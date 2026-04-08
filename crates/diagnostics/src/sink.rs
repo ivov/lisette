@@ -38,6 +38,10 @@ impl DiagnosticSink {
         self.diagnostics.take()
     }
 
+    pub fn truncate(&self, len: usize) {
+        self.diagnostics.borrow_mut().truncate(len);
+    }
+
     pub fn extend(&self, diagnostics: impl IntoIterator<Item = LisetteDiagnostic>) {
         self.diagnostics.borrow_mut().extend(diagnostics);
     }

@@ -2239,3 +2239,272 @@ fn numeric_int_literal_coerces_in_ordering() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn interface_subtype_satisfies_supertype() {
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface ReadCloser {
+      fn Read() -> int
+      fn Close() -> int
+    }
+
+    fn take_reader(r: Reader) -> int {
+      r.Read()
+    }
+
+    fn give_read_closer() -> ReadCloser {
+      panic("stub")
+    }
+
+    fn main() {
+      let rc = give_read_closer()
+      take_reader(rc)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_subtype_satisfies_supertype_in_return_type() {
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface ReadCloser {
+      fn Read() -> int
+      fn Close() -> int
+    }
+
+    fn give_read_closer() -> ReadCloser {
+      panic("stub")
+    }
+
+    fn get_reader() -> Reader {
+      give_read_closer()
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_subtype_satisfies_supertype_direct() {
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface ReadCloser {
+      fn Read() -> int
+      fn Close() -> int
+    }
+
+    fn take_reader(r: Reader) -> int {
+      r.Read()
+    }
+
+    fn take_read_closer(rc: ReadCloser) {
+      take_reader(rc)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_supertype_does_not_satisfy_subtype() {
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface ReadCloser {
+      fn Read() -> int
+      fn Close() -> int
+    }
+
+    fn take_read_closer(rc: ReadCloser) -> int {
+      rc.Read()
+    }
+
+    fn give_reader() -> Reader {
+      panic("stub")
+    }
+
+    fn main() {
+      let r = give_reader()
+      take_read_closer(r)
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn if_branches_interface_subtype_either_order() {
+    // Subtype in first branch, supertype in second.
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface ReadCloser {
+      fn Read() -> int
+      fn Close() -> int
+    }
+
+    fn get_reader() -> Reader { panic("stub") }
+    fn get_read_closer() -> ReadCloser { panic("stub") }
+
+    fn main() {
+      let x = true
+      let a = if x { get_read_closer() } else { get_reader() }
+      a.Read()
+    }
+        "#,
+    )
+    .assert_no_errors();
+
+    // Supertype in first branch, subtype in second.
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface ReadCloser {
+      fn Read() -> int
+      fn Close() -> int
+    }
+
+    fn get_reader() -> Reader { panic("stub") }
+    fn get_read_closer() -> ReadCloser { panic("stub") }
+
+    fn main() {
+      let x = true
+      let a = if x { get_reader() } else { get_read_closer() }
+      a.Read()
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn if_branches_incompatible_interfaces_rejected() {
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface Writer {
+      fn Write() -> int
+    }
+
+    fn get_reader() -> Reader { panic("stub") }
+    fn get_writer() -> Writer { panic("stub") }
+
+    fn main() {
+      let x = true
+      let a = if x { get_reader() } else { get_writer() }
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn match_branches_interface_subtype_either_order() {
+    // Subtype in first arm, supertype in second.
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface ReadCloser {
+      fn Read() -> int
+      fn Close() -> int
+    }
+
+    fn get_reader() -> Reader { panic("stub") }
+    fn get_read_closer() -> ReadCloser { panic("stub") }
+
+    fn main() {
+      let x = 1
+      let a = match x {
+        1 => get_read_closer(),
+        _ => get_reader(),
+      }
+      a.Read()
+    }
+        "#,
+    )
+    .assert_no_errors();
+
+    // Supertype in first arm, subtype in second.
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface ReadCloser {
+      fn Read() -> int
+      fn Close() -> int
+    }
+
+    fn get_reader() -> Reader { panic("stub") }
+    fn get_read_closer() -> ReadCloser { panic("stub") }
+
+    fn main() {
+      let x = 1
+      let a = match x {
+        1 => get_reader(),
+        _ => get_read_closer(),
+      }
+      a.Read()
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn match_branches_incompatible_interfaces_rejected() {
+    infer(
+        r#"
+    interface Reader {
+      fn Read() -> int
+    }
+
+    interface Writer {
+      fn Write() -> int
+    }
+
+    fn get_reader() -> Reader { panic("stub") }
+    fn get_writer() -> Writer { panic("stub") }
+
+    fn main() {
+      let x = 1
+      let a = match x {
+        1 => get_reader(),
+        _ => get_writer(),
+      }
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}

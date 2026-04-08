@@ -56,10 +56,8 @@ impl Checker<'_, '_> {
             _ if matches!(r2, Type::Never) => Ok(()),
             _ if matches!(r1, Type::Never) => Err(UnifyError::TypeMismatch),
 
-            // Type variables link to Error, propagating it through inference
-            (Variable(type_var), other) | (other, Variable(type_var)) => {
-                self.unify_type_variable(type_var, other, span)
-            }
+            (Variable(type_var), other) => self.unify_type_variable(type_var, other, span, false),
+            (other, Variable(type_var)) => self.unify_type_variable(type_var, other, span, true),
 
             // Error after Variable: variables absorb Error via linking above;
             // non-variable vs Error succeeds silently
@@ -128,13 +126,18 @@ impl Checker<'_, '_> {
         type_var: &Rc<RefCell<TypeVariableState>>,
         other_ty: &Type,
         span: &Span,
+        var_on_right: bool,
     ) -> Result<(), UnifyError> {
         let state = type_var.borrow();
         match &*state {
             TypeVariableState::Link(ty) => {
                 let ty = ty.clone();
                 drop(state);
-                self.try_unify(&ty, other_ty, span)
+                if var_on_right {
+                    self.try_unify(other_ty, &ty, span)
+                } else {
+                    self.try_unify(&ty, other_ty, span)
+                }
             }
             TypeVariableState::Unbound { id, hint } => {
                 let id = *id;
@@ -276,21 +279,21 @@ impl Checker<'_, '_> {
                     if let Variable(type_var) = t1
                         && type_var.borrow().is_unbound()
                     {
-                        self.unify_type_variable(type_var, &Type::Never, span)?;
+                        self.unify_type_variable(type_var, &Type::Never, span, false)?;
                     }
                 }
                 _ if matches!(r1, Type::Never) => {
                     if let Variable(type_var) = t2
                         && type_var.borrow().is_unbound()
                     {
-                        self.unify_type_variable(type_var, &Type::Never, span)?;
+                        self.unify_type_variable(type_var, &Type::Never, span, false)?;
                     } else if !matches!(r2, Type::Never) && !r2.is_variable() {
                         return Err(UnifyError::TypeMismatch);
                     }
                 }
 
                 (Variable(type_var), other) | (other, Variable(type_var)) => {
-                    self.unify_type_variable(type_var, other, span)?;
+                    self.unify_type_variable(type_var, other, span, false)?;
                 }
                 (Type::Parameter(name1), Type::Parameter(name2)) if name1 == name2 => {}
                 (
