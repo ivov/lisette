@@ -84,6 +84,8 @@ regenerate-stdlib-typedefs version="":
     just build # recompile compiler to embed updated typedefs
     ./target/release/lis check crates/stdlib/typedefs/
     just format
+    git add crates/stdlib/
+    LEFTHOOK=0 git commit -m "chore: bump stdlib typedefs{{ if version != "" { " to v" + version } else { "" } }}"
 
 # Build the playground and write output to docs/play/ (served at lisette.run/play)
 rebuild-playground:
