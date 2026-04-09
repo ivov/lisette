@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.6](https://github.com/ivov/lisette/compare/lisette-v0.1.5...lisette-v0.1.6) - 2026-04-09
+
+### Feat
+
+- add `completions` CLI command ([#39](https://github.com/ivov/lisette/pull/39))
+
+### Fix
+
+- minor cli adjustments ([#40](https://github.com/ivov/lisette/pull/40))
+- deduplicate diagnostics for const type annotations
+- deduplicate diagnostics for function signature annotations
+- resolve non-generic type aliases as qualifiers cross-module ([#37](https://github.com/ivov/lisette/pull/37))
+
 ## [0.1.5](https://github.com/ivov/lisette/compare/lisette-v0.1.4...lisette-v0.1.5) - 2026-04-08
 
 ### Fixed

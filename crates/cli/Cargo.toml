@@ -18,13 +18,13 @@ name = "lis"
 path = "src/main.rs"
 
 [dependencies]
-semantics = { package = "lisette-semantics", version = "0.1.5", path = "../semantics" }
-syntax = { package = "lisette-syntax", version = "0.1.5", path = "../syntax" }
-diagnostics = { package = "lisette-diagnostics", version = "0.1.5", path = "../diagnostics" }
-format = { package = "lisette-format", version = "0.1.5", path = "../format" }
-emit = { package = "lisette-emit", version = "0.1.5", path = "../emit" }
-stdlib = { package = "lisette-stdlib", version = "0.1.5", path = "../stdlib" }
-lsp = { package = "lisette-lsp", version = "0.1.5", path = "../lsp" }
+semantics = { package = "lisette-semantics", version = "0.1.6", path = "../semantics" }
+syntax = { package = "lisette-syntax", version = "0.1.6", path = "../syntax" }
+diagnostics = { package = "lisette-diagnostics", version = "0.1.6", path = "../diagnostics" }
+format = { package = "lisette-format", version = "0.1.6", path = "../format" }
+emit = { package = "lisette-emit", version = "0.1.6", path = "../emit" }
+stdlib = { package = "lisette-stdlib", version = "0.1.6", path = "../stdlib" }
+lsp = { package = "lisette-lsp", version = "0.1.6", path = "../lsp" }
 tokio = { version = "1", features = ["rt-multi-thread", "io-std"] }
 tower-lsp = "0.20"
 owo-colors.workspace = true
