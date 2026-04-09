@@ -67,7 +67,9 @@ pub struct Widget {
 
 impl Builder {
   fn Append(self: Ref<Builder>, data: Slice<uint8>) -> Ref<Builder>
+
   fn Reset(self: Ref<Builder>) -> Ref<Builder>
+
   fn SetTag(self: Ref<Builder>, key: string, val: string) -> Ref<Builder>
 }
 

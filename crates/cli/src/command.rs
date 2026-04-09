@@ -236,9 +236,12 @@ impl Command {
                 let mut version = None;
                 let mut verbose = false;
 
-                for arg in arguments {
+                while let Some(arg) = arguments.next() {
                     match arg.as_str() {
                         "-v" | "--verbose" => verbose = true,
+                        "-o" | "--output" => {
+                            output = arguments.next();
+                        }
                         s if s.starts_with("-o=") || s.starts_with("--output=") => {
                             output = Some(s.split('=').nth(1).unwrap_or("").to_string());
                         }

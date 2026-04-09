@@ -4,9 +4,7 @@ import "models"
 
 /// Prints a list of tasks with a title header.
 pub fn print_tasks(title: string, items: Slice<models.Task>) {
-  if items.is_empty() {
-    return
-  }
+  if items.is_empty() { return }
   fmt.Println(f"\n{title}:")
   for item in items {
     fmt.Println(item.display())

@@ -312,10 +312,13 @@ impl<T> Slice<T> {
 type EnumeratedSlice<T>
 
 impl<T> EnumeratedSlice<T> {
-    fn filter(self, f: fn((int, T)) -> bool) -> Slice<(int, T)>
-    fn map<U>(self, f: fn((int, T)) -> U) -> Slice<U>
-    fn fold<U>(self, accumulator: U, f: fn(U, (int, T)) -> U) -> U
-    fn find(self, f: fn((int, T)) -> bool) -> Option<(int, T)>
+  fn filter(self, f: fn((int, T)) -> bool) -> Slice<(int, T)>
+
+  fn map<U>(self, f: fn((int, T)) -> U) -> Slice<U>
+
+  fn fold<U>(self, accumulator: U, f: fn(U, (int, T)) -> U) -> U
+
+  fn find(self, f: fn((int, T)) -> bool) -> Option<(int, T)>
 }
 
 impl Slice<string> {
@@ -453,7 +456,10 @@ impl<T> Receiver<T> {
 ///   for i in 0..5 {
 ///     fmt.Println(i)
 ///   }
-pub struct Range<T> { pub start: T, pub end: T }
+pub struct Range<T> {
+  pub start: T,
+  pub end: T,
+}
 
 /// A closed range from `start` to `end` (inclusive).
 ///
@@ -461,7 +467,10 @@ pub struct Range<T> { pub start: T, pub end: T }
 ///   for i in 0..=5 {
 ///     fmt.Println(i)
 ///   }
-pub struct RangeInclusive<T> { pub start: T, pub end: T }
+pub struct RangeInclusive<T> {
+  pub start: T,
+  pub end: T,
+}
 
 /// A range from `start` with no upper bound.
 ///
@@ -469,19 +478,25 @@ pub struct RangeInclusive<T> { pub start: T, pub end: T }
 ///   for i in 0.. {
 ///     if i >= 10 { break }
 ///   }
-pub struct RangeFrom<T> { pub start: T }
+pub struct RangeFrom<T> {
+  pub start: T,
+}
 
 /// A range from the beginning up to `end` (exclusive).
 ///
 /// Example:
 ///   let first_three = items[..3]
-pub struct RangeTo<T> { pub end: T }
+pub struct RangeTo<T> {
+  pub end: T,
+}
 
 /// A range from the beginning up to `end` (inclusive).
 ///
 /// Example:
 ///   let up_to_three = items[..=3]
-pub struct RangeToInclusive<T> { pub end: T }
+pub struct RangeToInclusive<T> {
+  pub end: T,
+}
 
 // -----------------------
 //     Special types

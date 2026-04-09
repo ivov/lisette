@@ -151,7 +151,7 @@ Arguments:
     <package>    Go package path to generate bindings for (e.g., `fmt`, `net/http`)
 
 Options:
-    `-o`, `--output`=<path>    Output file path (default: <package>`.d.lis`)
+    `-o`, `--output` <path>    Output file path (default: <package>`.d.lis`)
     `-f`, `--force`            Regenerate even if output exists
     `-v`, `--verbose`          Show verbose output
 
