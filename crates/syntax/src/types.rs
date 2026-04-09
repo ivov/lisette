@@ -935,9 +935,7 @@ impl Type {
                     .collect(),
                 return_type: Box::new(return_type.resolve()),
             },
-            Type::Forall { .. } => {
-                unreachable!("Forall types are always instantiated before resolve")
-            }
+            Type::Forall { body, .. } => body.resolve(),
             Type::Tuple(elements) => Type::Tuple(elements.iter().map(|e| e.resolve()).collect()),
             Type::Parameter(_) | Type::Error => self.clone(),
             Type::Never => Type::Never,

@@ -29,6 +29,11 @@ fuzz_target!(|data: &[u8]| {
     checker.cursor.module_id = "fuzz".to_string();
     checker.put_prelude_in_scope();
 
+    checker.register_types_and_values(
+        &desugar_result.ast,
+        &lisette_syntax::ast::Visibility::Private,
+    );
+
     for expression in desugar_result.ast {
         let type_var = checker.new_type_var();
         let _ = checker.infer_expression(expression, &type_var);
