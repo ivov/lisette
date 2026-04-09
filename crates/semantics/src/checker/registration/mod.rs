@@ -504,12 +504,14 @@ impl Checker<'_, '_> {
 
         let qualified_name = self.qualify_name(identifier);
 
+        let before = self.sink.len();
         let const_ty = if let Some(annotation) = maybe_annotation {
             self.convert_to_type(annotation, span)
         } else {
             self.type_from_literal_expression(expression)
                 .unwrap_or_else(|| self.new_type_var())
         };
+        self.sink.truncate(before);
 
         let item_visibility = self.compute_item_visibility(syntactic_visibility, visibility);
 
