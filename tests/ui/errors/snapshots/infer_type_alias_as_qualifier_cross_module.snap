@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot use type alias as qualifier
+  [error] Member not found
    ╭─[main.lis:7:23]
  6 │ fn main() {
  7 │   let s: Slice<int> = B.make()
-   ·                       ┬
-   ·                       ╰── `B` is a type alias for `Box`
+   ·                       ───┬──
+   ·                          ╰── no member `make` on type `Box`
  8 │   let _ = s
    ╰────
-  help: Use the original type directly: `Box.make` · code: [infer.type_alias_as_qualifier]
+  help: Ensure the field or method is defined on this type · code: [infer.member_not_found]

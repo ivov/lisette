@@ -64,34 +64,38 @@ impl Checker<'_, '_> {
                 .store
                 .get_definition(&qualified_root)
                 .and_then(|definition| {
-                    if let Definition::TypeAlias { ty: alias_ty, .. } = definition {
-                        let underlying = match alias_ty {
-                            Type::Forall { body, .. } => body.as_ref(),
-                            other => other,
-                        };
-                        if let Type::Constructor { id, params, .. } = underlying
-                            && params.is_empty()
-                            && id.as_str() != qualified_root.as_str()
-                        {
-                            return id.split('.').next_back().map(|s| s.to_string());
-                        }
+                    if let Definition::TypeAlias { ty: alias_ty, .. } = definition
+                        && let Type::Constructor { id, params, .. } = alias_ty.unwrap_forall()
+                        && params.is_empty()
+                        && id.as_str() != qualified_root.as_str()
+                    {
+                        return Some(id.to_string());
                     }
                     None
                 });
 
-            if let Some(resolved_name) = alias_target {
-                let alias_path = format!("{}.{}", resolved_name, member);
-                if self.lookup_type(&alias_path).is_some() {
-                    return self.infer_expression(
-                        Expression::Identifier {
-                            value: alias_path.into(),
-                            ty: Type::uninferred(),
-                            span,
-                            binding_id: None,
-                            qualified: None,
-                        },
-                        expected_ty,
-                    );
+            if let Some(resolved_id) = alias_target {
+                let mut paths = Vec::with_capacity(2);
+                if let Some(short_name) = resolved_id.split('.').next_back()
+                    && short_name != resolved_id
+                {
+                    paths.push(format!("{}.{}", short_name, member));
+                }
+                paths.push(format!("{}.{}", resolved_id, member));
+
+                for path in paths {
+                    if self.lookup_type(&path).is_some() {
+                        return self.infer_expression(
+                            Expression::Identifier {
+                                value: path.into(),
+                                ty: Type::uninferred(),
+                                span,
+                                binding_id: None,
+                                qualified: None,
+                            },
+                            expected_ty,
+                        );
+                    }
                 }
             }
         }
@@ -102,23 +106,27 @@ impl Checker<'_, '_> {
                 self.store.get_definition(&qualified_root)
         {
             let underlying = alias_ty.unwrap_forall();
-            let type_name = if let Type::Constructor { id, .. } = underlying {
-                id.split('.').next_back().unwrap_or(id).to_string()
-            } else {
-                "the original type".to_string()
-            };
-            self.sink.push(diagnostics::infer::type_alias_as_qualifier(
-                root,
-                &type_name,
-                &member,
-                expression.get_span(),
-            ));
-            return Expression::DotAccess {
-                expression,
-                member,
-                ty: expected_ty.clone(),
-                span,
-            };
+            let is_generic = matches!(alias_ty, Type::Forall { .. })
+                || matches!(underlying, Type::Constructor { params, .. } if !params.is_empty());
+            if is_generic {
+                let type_name = if let Type::Constructor { id, .. } = underlying {
+                    id.split('.').next_back().unwrap_or(id).to_string()
+                } else {
+                    "the original type".to_string()
+                };
+                self.sink.push(diagnostics::infer::type_alias_as_qualifier(
+                    root,
+                    &type_name,
+                    &member,
+                    expression.get_span(),
+                ));
+                return Expression::DotAccess {
+                    expression,
+                    member,
+                    ty: expected_ty.clone(),
+                    span,
+                };
+            }
         }
 
         self.infer_dot_access(expression, member, span, expected_ty)

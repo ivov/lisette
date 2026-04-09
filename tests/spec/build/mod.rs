@@ -3684,3 +3684,46 @@ import "mod"
         result.errors
     );
 }
+
+#[test]
+fn cross_module_type_alias_as_qualifier() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "types",
+        "types.lis",
+        r#"
+pub enum Color {
+  Red,
+  Green,
+  Blue,
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "types"
+
+type C = types.Color
+
+fn main() {
+  let x = C.Red
+  match x {
+    C.Red => {},
+    C.Green => {},
+    C.Blue => {},
+  }
+}
+"#,
+    );
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}

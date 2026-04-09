@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Cannot use type alias as qualifier
+  [error] Cannot use generic type alias as qualifier
    ╭─[test.lis:4:30]
  3 │ fn main() {
  4 │   let f: fn(int) -> O<int> = O.Some
    ·                              ┬
-   ·                              ╰── `O` is a type alias for `Option`
+   ·                              ╰── `O` aliases `Option`
  5 │   let _ = f
    ╰────
-  help: Use the original type directly: `Option.Some` · code: [infer.type_alias_as_qualifier]
+  help: Aliases for types with generic parameters are not supported as qualifiers. Use the original type directly: `Option.Some` · code: [infer.type_alias_as_qualifier]

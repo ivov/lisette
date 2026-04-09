@@ -2102,14 +2102,14 @@ pub fn type_alias_as_qualifier(
     member: &str,
     span: Span,
 ) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Cannot use type alias as qualifier")
+    LisetteDiagnostic::error("Cannot use generic type alias as qualifier")
         .with_infer_code("type_alias_as_qualifier")
         .with_span_label(
             &span,
-            format!("`{}` is a type alias for `{}`", alias, underlying),
+            format!("`{}` aliases `{}`", alias, underlying),
         )
         .with_help(format!(
-            "Use the original type directly: `{}.{}`",
+            "Aliases for types with generic parameters are not supported as qualifiers. Use the original type directly: `{}.{}`",
             underlying, member
         ))
 }
