@@ -213,8 +213,12 @@ Arguments:
 
 Usage:
     `lis completions bash` > ~/.local/share/bash-completion/completions/lis
-    `lis completions zsh`  > ~/.zfunc/_lis
-    `lis completions fish` > ~/.config/fish/completions/lis.fish",
+    `lis completions fish` > ~/.config/fish/completions/lis.fish
+
+    For zsh, add to ~/.zshrc (before compinit):
+        fpath=(~/.zfunc $fpath)
+    Then generate:
+        mkdir -p ~/.zfunc && `lis completions zsh` > ~/.zfunc/_lis",
         ),
 
         "help" => print_help(
