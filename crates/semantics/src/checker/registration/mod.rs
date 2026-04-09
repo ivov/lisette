@@ -669,6 +669,8 @@ impl Checker<'_, '_> {
             }
         }
 
+        let before = self.sink.len();
+
         let param_types: Vec<Type> = function
             .params
             .iter()
@@ -685,6 +687,8 @@ impl Checker<'_, '_> {
             Annotation::Unknown => self.type_unit(),
             _ => self.convert_to_type(&function.annotation, span),
         };
+
+        self.sink.truncate(before);
 
         self.scopes.pop();
 
