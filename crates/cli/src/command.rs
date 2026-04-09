@@ -49,6 +49,9 @@ pub enum Command {
         query: String,
     },
     Learn,
+    Completions {
+        shell: Option<String>,
+    },
 }
 
 #[derive(Debug)]
@@ -201,6 +204,10 @@ impl Command {
 
             "learn" => Ok(Command::Learn),
 
+            "completions" => Ok(Command::Completions {
+                shell: arguments.next(),
+            }),
+
             "doc" => {
                 let mut search = false;
                 let mut query = None;
@@ -278,8 +285,20 @@ impl Command {
 
     pub fn suggest(typo: &str) -> Option<String> {
         const COMMANDS: &[&str] = &[
-            "new", "build", "run", "format", "check", "clean", "help", "version", "add", "remove",
-            "list", "learn", "doc",
+            "new",
+            "build",
+            "run",
+            "format",
+            "check",
+            "clean",
+            "help",
+            "version",
+            "add",
+            "remove",
+            "list",
+            "learn",
+            "doc",
+            "completions",
         ];
         let candidates: Vec<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
         diagnostics::infer::find_similar_name(typo, &candidates)

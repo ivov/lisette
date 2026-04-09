@@ -91,6 +91,7 @@ fn main() {
         Command::Doc { query } => handlers::doc(query),
         Command::DocSearch { query } => handlers::doc_search(&query),
         Command::Learn => handlers::learn(),
+        Command::Completions { shell } => handlers::completions(shell),
     };
 
     std::process::exit(exit_code);

@@ -21,6 +21,9 @@ Commands:
     `doc`      Explore the prelude and Go stdlib
     `help`     Print this message
 
+Shell:
+    `completions`  Generate shell completion scripts (bash, zsh, fish)
+
 Hint: Run `lis help <command>` to learn more about a command.
       New to Lisette? See https://lisette.run/quickstart",
         VERSION, GO_VERSION
@@ -198,6 +201,20 @@ Examples:
     `lis doc` {Slice:g}                    Show {Slice:g} definition and its methods
     `lis doc` {go:strings:g}               Browse the {strings:g} Go package
     `lis doc` `-s` {split:g}                 Search for {split:g} across prelude and Go stdlib",
+        ),
+
+        "completions" => print_help(
+            "`lis completions` <shell>
+
+Generate shell completion scripts.
+
+Arguments:
+    <shell>    Shell to generate completions for (`bash`, `zsh`, or `fish`)
+
+Usage:
+    `lis completions bash` > ~/.local/share/bash-completion/completions/lis
+    `lis completions zsh`  > ~/.zfunc/_lis
+    `lis completions fish` > ~/.config/fish/completions/lis.fish",
         ),
 
         "help" => print_help(
