@@ -31,10 +31,6 @@ pub enum Command {
     Add {
         dependency: String,
     },
-    Remove {
-        dependency: String,
-    },
-    List,
     Lsp,
     Bindgen {
         package: String,
@@ -190,16 +186,6 @@ impl Command {
                 }),
             },
 
-            "remove" => match arguments.next() {
-                Some(dependency) => Ok(Command::Remove { dependency }),
-                None => Err(ParseError::MissingArgument {
-                    command: "remove",
-                    argument: "dependency",
-                }),
-            },
-
-            "list" => Ok(Command::List),
-
             "lsp" => Ok(Command::Lsp),
 
             "learn" => Ok(Command::Learn),
@@ -294,8 +280,6 @@ impl Command {
             "help",
             "version",
             "add",
-            "remove",
-            "list",
             "learn",
             "doc",
             "completions",

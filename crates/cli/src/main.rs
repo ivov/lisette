@@ -79,8 +79,6 @@ fn main() {
             0
         }
         Command::Add { dependency } => handlers::add(&dependency),
-        Command::Remove { dependency } => handlers::remove(&dependency),
-        Command::List => handlers::list(),
         Command::Lsp => handlers::lsp(),
         Command::Bindgen {
             package,

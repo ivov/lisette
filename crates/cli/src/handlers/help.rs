@@ -136,21 +136,6 @@ Arguments:
     <dependency>    Dependency to add (e.g., `github.com/user/repo`)",
         ),
 
-        "remove" | "rm" => print_help(
-            "`lis remove` <dependency>
-
-Remove a dependency from the project.
-
-Arguments:
-    <dependency>    Dependency to remove (e.g., `github.com/user/repo`)",
-        ),
-
-        "list" => print_help(
-            "`lis list`
-
-List all dependencies in the project.",
-        ),
-
         "lsp" => print_help(
             "`lis lsp`
 
