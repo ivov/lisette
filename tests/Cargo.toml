@@ -12,6 +12,7 @@ diagnostics = { package = "lisette-diagnostics", path = "../crates/diagnostics" 
 format = { package = "lisette-format", path = "../crates/format" }
 emit = { package = "lisette-emit", path = "../crates/emit" }
 stdlib = { package = "lisette-stdlib", path = "../crates/stdlib" }
+deps = { package = "lisette-deps", path = "../crates/deps" }
 lsp = { package = "lisette-lsp", path = "../crates/lsp" }
 ecow.workspace = true
 rustc-hash.workspace = true

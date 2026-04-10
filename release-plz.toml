@@ -17,6 +17,7 @@ changelog_include = [
   "lisette-emit",
   "lisette-format",
   "lisette-stdlib",
+  "lisette-deps",
   "lisette-lsp",
 ]
 

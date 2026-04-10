@@ -20,6 +20,7 @@ path = "src/main.rs"
 syntax = { package = "lisette-syntax", version = "0.1.6", path = "../syntax" }
 semantics = { package = "lisette-semantics", version = "0.1.6", path = "../semantics" }
 diagnostics = { package = "lisette-diagnostics", version = "0.1.6", path = "../diagnostics" }
+deps = { package = "lisette-deps", version = "0.1.6", path = "../deps" }
 format = { package = "lisette-format", version = "0.1.6", path = "../format" }
 ecow.workspace = true
 tower-lsp = "0.20"

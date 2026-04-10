@@ -89,6 +89,7 @@ impl CompiledTest {
             register_test_builtins(&mut checker);
             checker.put_prelude_in_scope();
 
+            let go_resolver = deps::GoDepResolver::default();
             let imports: Vec<FileImport> = self
                 .ast
                 .iter()
@@ -103,7 +104,7 @@ impl CompiledTest {
                         if let Some(go_pkg) = name.strip_prefix("go:")
                             && let Some(typedef) = get_go_stdlib_typedef(go_pkg)
                         {
-                            checker.parse_and_register_go_module(name, typedef);
+                            checker.parse_and_register_go_module(name, typedef, &go_resolver);
                         }
                         Some(FileImport {
                             name: name.clone(),

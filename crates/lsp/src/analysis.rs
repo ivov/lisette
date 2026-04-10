@@ -3,6 +3,7 @@ use std::sync::Arc;
 use miette::Diagnostic as MietteDiagnostic;
 use tower_lsp::lsp_types::*;
 
+use deps::GoDepResolver;
 use diagnostics::LisetteDiagnostic;
 use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
 use syntax::desugar;
@@ -87,6 +88,15 @@ impl SharedState {
             .map(Into::into)
             .collect();
 
+        let (go_resolver, manifest_error) = if config.standalone_mode {
+            (GoDepResolver::default(), None)
+        } else {
+            match GoDepResolver::from_project(&config.root) {
+                Ok(r) => (r, None),
+                Err(msg) => (GoDepResolver::default(), Some(msg)),
+            }
+        };
+
         let (mut result, facts) = analyze(AnalyzeInput {
             config: SemanticConfig {
                 run_lints: !has_parse_errors,
@@ -103,12 +113,19 @@ impl SharedState {
                 Some(config.root.clone())
             },
             compile_phase: CompilePhase::Check,
+            go_resolver,
         });
 
         if has_parse_errors {
             let mut all_errors = parse_errors;
             all_errors.append(&mut result.errors);
             result.errors = all_errors;
+        }
+
+        if let Some(msg) = manifest_error {
+            result
+                .errors
+                .push(LisetteDiagnostic::error(msg).with_resolve_code("manifest_error"));
         }
 
         Ok(AnalysisSnapshot::new(
@@ -172,7 +189,10 @@ impl SharedState {
             .errors
             .iter()
             .chain(&snapshot.result.lints)
-            .filter(|d| d.file_id() == Some(file_id))
+            .filter(|d| {
+                let fid = d.file_id();
+                fid == Some(file_id) || fid.is_none()
+            })
             .map(|d| convert_diagnostic(d, line_index))
             .collect()
     }

@@ -5,6 +5,8 @@ use diagnostics::{DiagnosticSink, SemanticResult};
 use syntax::ast::Expression;
 use syntax::program::{File, ModuleInfo, MutationInfo, UnusedInfo};
 
+use deps::GoDepResolver;
+
 use crate::cache::{
     CompiledModule, compute_module_hash, get_dependency_module_hashes,
     go_stdlib::{self, load_cached_go_module},
@@ -20,7 +22,6 @@ use crate::module_graph::build_module_graph;
 use crate::pattern_analysis;
 use crate::prelude::parse_and_register_prelude;
 use crate::store::{ENTRY_MODULE_ID, Store};
-use stdlib::get_go_stdlib_typedef;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompilePhase {
@@ -44,6 +45,7 @@ pub struct AnalyzeInput<'a> {
     pub ast: Vec<Expression>,
     pub project_root: Option<PathBuf>,
     pub compile_phase: CompilePhase,
+    pub go_resolver: GoDepResolver,
 }
 
 pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
@@ -79,6 +81,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         &entry_module,
         &sink,
         input.config.standalone_mode,
+        &input.go_resolver,
     );
 
     for cycle in &graph_result.cycles {
@@ -134,8 +137,10 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                     }
                 }
                 // Cache miss: parse and register
-                if let Some(typedef) = get_go_stdlib_typedef(go_pkg) {
-                    checker.parse_and_register_go_module(&module_id, typedef);
+                if let deps::GoTypedefResult::Found { source, .. } =
+                    input.go_resolver.resolve(go_pkg)
+                {
+                    checker.parse_and_register_go_module(&module_id, &source, &input.go_resolver);
                 }
                 continue;
             }

@@ -7,6 +7,14 @@ use semantics::store::Store;
 
 use crate::_harness::filesystem::MockFileSystem;
 
+fn default_resolver() -> deps::GoDepResolver {
+    deps::GoDepResolver::default()
+}
+
+fn has_diagnostic_code(sink: &DiagnosticSink, code: &str) -> bool {
+    sink.take().iter().any(|d| d.code_str() == Some(code))
+}
+
 #[test]
 fn kahn_simple_dependency_chain() {
     let mut edges = HashMap::default();
@@ -84,7 +92,14 @@ fn graph_simple_dependency() {
     store.module_ids.push("lib".to_string());
 
     let sink = DiagnosticSink::new();
-    let result = build_module_graph(&mut store, Some(&fs), "main", &sink, false);
+    let result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        "main",
+        &sink,
+        false,
+        &default_resolver(),
+    );
 
     assert!(result.cycles.is_empty());
     assert!(!sink.has_errors());
@@ -106,7 +121,14 @@ fn graph_missing_module() {
     store.module_ids.push("main".to_string());
 
     let sink = DiagnosticSink::new();
-    let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false);
+    let _result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        "main",
+        &sink,
+        false,
+        &default_resolver(),
+    );
 
     assert!(sink.has_errors());
 }
@@ -124,7 +146,128 @@ fn graph_cycle_detection() {
     store.module_ids.push("c".to_string());
 
     let sink = DiagnosticSink::new();
-    let result = build_module_graph(&mut store, Some(&fs), "a", &sink, false);
+    let result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        "a",
+        &sink,
+        false,
+        &default_resolver(),
+    );
 
     assert!(!result.cycles.is_empty());
+}
+
+#[test]
+fn graph_standalone_third_party_go_import_uses_module_not_found() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", r#"import "go:github.com/gorilla/mux""#);
+
+    let mut store = Store::new();
+    store.module_ids.push("main".to_string());
+
+    let sink = DiagnosticSink::new();
+    let _result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        "main",
+        &sink,
+        true, // standalone mode
+        &default_resolver(),
+    );
+
+    assert!(sink.has_errors());
+    assert!(has_diagnostic_code(&sink, "resolve.module_not_found"));
+}
+
+#[test]
+fn graph_project_third_party_go_import_undeclared() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", r#"import "go:github.com/gorilla/mux""#);
+
+    let mut store = Store::new();
+    store.module_ids.push("main".to_string());
+
+    let sink = DiagnosticSink::new();
+    let _result = build_module_graph(
+        &mut store,
+        Some(&fs),
+        "main",
+        &sink,
+        false, // project mode
+        &default_resolver(),
+    );
+
+    assert!(sink.has_errors());
+    assert!(has_diagnostic_code(&sink, "resolve.undeclared_go_import"));
+}
+
+#[test]
+fn graph_declared_dep_missing_typedef() {
+    use std::collections::BTreeMap;
+
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", r#"import "go:github.com/gorilla/mux""#);
+
+    let mut store = Store::new();
+    store.module_ids.push("main".to_string());
+
+    // Declare the dep in the resolver but do not place any .d.lis file on disk
+    let mut go_deps = BTreeMap::new();
+    go_deps.insert(
+        "github.com/gorilla/mux".to_string(),
+        deps::GoDependency {
+            version: "v1.8.0".to_string(),
+            via: None,
+        },
+    );
+    let resolver = deps::GoDepResolver::new(go_deps, None, None);
+
+    let sink = DiagnosticSink::new();
+    let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
+
+    assert!(sink.has_errors());
+    assert!(has_diagnostic_code(&sink, "resolve.missing_go_typedef"));
+}
+
+#[test]
+fn resolver_project_override_takes_precedence_over_cache() {
+    use std::collections::BTreeMap;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let project_root = tmp.path();
+
+    // Set up override and cache with different content
+    let override_dir = project_root.join(".lisette/deps/go/github.com/gorilla/mux@v1.8.0");
+    std::fs::create_dir_all(&override_dir).unwrap();
+    std::fs::write(override_dir.join("mux.d.lis"), "// override version\n").unwrap();
+
+    let cache_dir = tmp
+        .path()
+        .join("fake_home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::write(cache_dir.join("mux.d.lis"), "// cache version\n").unwrap();
+
+    let mut go_deps = BTreeMap::new();
+    go_deps.insert(
+        "github.com/gorilla/mux".to_string(),
+        deps::GoDependency {
+            version: "v1.8.0".to_string(),
+            via: None,
+        },
+    );
+
+    let resolver = deps::GoDepResolver::new(
+        go_deps,
+        Some(project_root.to_path_buf()),
+        Some(tmp.path().join("fake_home").to_string_lossy().to_string()),
+    );
+
+    match resolver.resolve("github.com/gorilla/mux") {
+        deps::GoTypedefResult::Found { source, origin } => {
+            assert_eq!(origin, deps::TypedefOrigin::ProjectOverride);
+            assert!(source.contains("override version"));
+        }
+        other => panic!("Expected Found with ProjectOverride, got {:?}", other),
+    }
 }
