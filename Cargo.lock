@@ -494,9 +494,7 @@ dependencies = [
  "lisette-syntax",
  "owo-colors",
  "rustc-hash",
- "serde",
  "tokio",
- "toml",
  "tower-lsp",
 ]
 
