@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type not found
+   ╭─[test.lis:2:15]
+ 1 │ 
+ 2 │ struct Foo<T: Undefined> {}
+   ·               ────┬────
+   ·                   ╰── type not found in scope
+   ╰────
+  help: Define or import this type · code: [resolve.type_not_found]

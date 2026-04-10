@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type not found
+   ╭─[test.lis:2:13]
+ 1 │ 
+ 2 │ type Foo<T: Undefined> = T
+   ·             ────┬────
+   ·                 ╰── type not found in scope
+   ╰────
+  help: Define or import this type · code: [resolve.type_not_found]

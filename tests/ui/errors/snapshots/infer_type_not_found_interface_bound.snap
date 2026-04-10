@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type not found
+   ╭─[test.lis:2:18]
+ 1 │ 
+ 2 │ interface Foo<T: Undefined> {
+   ·                  ────┬────
+   ·                      ╰── type not found in scope
+ 3 │   fn get(self) -> T
+   ╰────
+  help: Define or import this type · code: [resolve.type_not_found]
