@@ -129,14 +129,15 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
 
         for module_id in order {
             if let Some(go_pkg) = module_id.strip_prefix("go:") {
-                if let Some(ref cache) = go_cache {
-                    // Load this module + transitive deps from cache
+                let is_third_party = deps::has_domain(go_pkg);
+
+                if !is_third_party && let Some(ref cache) = go_cache {
                     load_cached_go_module(checker.store, &module_id, cache);
                     if checker.store.is_visited(&module_id) {
                         continue;
                     }
                 }
-                // Cache miss: parse and register
+
                 if let deps::GoTypedefResult::Found { source, .. } =
                     input.go_resolver.resolve(go_pkg)
                 {
@@ -202,7 +203,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                 .store
                 .modules
                 .keys()
-                .filter(|id| id.starts_with("go:"))
+                .filter(|id| id.strip_prefix("go:").is_some_and(|p| !deps::has_domain(p)))
                 .cloned()
                 .collect();
             let needs_save = !all_go_modules.is_empty()

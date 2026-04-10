@@ -137,17 +137,18 @@ impl Checker<'_, '_> {
         let receiver_qualified_name = receiver_ty.get_qualified_name();
         let module_id = self.cursor.module_id.clone();
 
-        if let Some(dot_position) = receiver_qualified_name.find('.') {
-            let type_module = &receiver_qualified_name[..dot_position];
-            if type_module != module_id {
-                self.sink.push(diagnostics::infer::impl_on_foreign_type(
-                    type_name,
-                    type_module,
-                    *span,
-                ));
-                self.scopes.pop();
-                return;
-            }
+        if let Some(type_module) = self
+            .store
+            .module_for_qualified_name(&receiver_qualified_name)
+            && type_module != module_id
+        {
+            self.sink.push(diagnostics::infer::impl_on_foreign_type(
+                type_name,
+                type_module,
+                *span,
+            ));
+            self.scopes.pop();
+            return;
         }
 
         let mut impl_bounds: Vec<syntax::types::Bound> = Vec::new();

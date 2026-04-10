@@ -271,3 +271,389 @@ fn resolver_project_override_takes_precedence_over_cache() {
         other => panic!("Expected Found with ProjectOverride, got {:?}", other),
     }
 }
+
+#[test]
+fn store_get_definition_domain_style_go_module() {
+    let mut store = Store::new();
+    store.add_module("go:github.com/gorilla/mux");
+
+    let module = store.get_module_mut("go:github.com/gorilla/mux").unwrap();
+    module.definitions.insert(
+        "go:github.com/gorilla/mux.Router".into(),
+        syntax::program::Definition::Struct {
+            visibility: syntax::program::Visibility::Public,
+            ty: syntax::types::Type::Constructor {
+                id: "go:github.com/gorilla/mux.Router".into(),
+                params: vec![],
+                underlying_ty: None,
+            },
+            name: "Router".into(),
+            name_span: syntax::ast::Span::dummy(),
+            generics: vec![],
+            fields: vec![],
+            kind: syntax::ast::StructKind::Record,
+            methods: Default::default(),
+            constructor: None,
+            doc: None,
+        },
+    );
+
+    // Must find the definition despite dots in the module path
+    let def = store.get_definition("go:github.com/gorilla/mux.Router");
+    assert!(
+        def.is_some(),
+        "get_definition must resolve domain-style Go module qualified names"
+    );
+}
+
+#[test]
+fn store_module_for_qualified_name_domain_style() {
+    let mut store = Store::new();
+    store.add_module("go:github.com/gorilla/mux");
+    store.add_module("go:net/http");
+    store.add_module("mymod");
+
+    assert_eq!(
+        store.module_for_qualified_name("go:github.com/gorilla/mux.Router"),
+        Some("go:github.com/gorilla/mux"),
+    );
+    assert_eq!(
+        store.module_for_qualified_name("go:net/http.Request"),
+        Some("go:net/http"),
+    );
+    assert_eq!(
+        store.module_for_qualified_name("mymod.MyType"),
+        Some("mymod"),
+    );
+    // Value enum variant: three dot-separated segments
+    assert_eq!(
+        store.module_for_qualified_name("go:github.com/gorilla/mux.Method.Get"),
+        Some("go:github.com/gorilla/mux"),
+    );
+}
+
+#[test]
+fn stdlib_cache_excludes_third_party_modules() {
+    // The stdlib cache save filters modules by id.starts_with("go:") and
+    // !id.contains('/') after stripping "go:". Third-party modules like
+    // "go:github.com/gorilla/mux" contain '/' and must be excluded.
+    let third_party = "go:github.com/gorilla/mux";
+    let stdlib = "go:net/http";
+
+    // The canonical check: deps::has_domain returns true for third-party
+    // paths (dot in first segment), false for stdlib paths.
+    let is_stdlib_go = |id: &str| id.strip_prefix("go:").is_some_and(|p| !deps::has_domain(p));
+
+    assert!(!is_stdlib_go(third_party));
+    assert!(is_stdlib_go(stdlib));
+    assert!(is_stdlib_go("go:fmt"));
+    assert!(is_stdlib_go("go:crypto/tls"));
+}
+
+#[test]
+fn store_module_for_qualified_name_major_version_suffix() {
+    let mut store = Store::new();
+    store.add_module("go:github.com/jackc/pgx/v5");
+
+    assert_eq!(
+        store.module_for_qualified_name("go:github.com/jackc/pgx/v5.Conn"),
+        Some("go:github.com/jackc/pgx/v5"),
+    );
+    // Must not match a shorter prefix that is not registered
+    assert_eq!(
+        store.module_for_qualified_name("go:github.com/jackc/pgx.Row"),
+        None,
+    );
+}
+
+#[test]
+fn store_module_for_qualified_name_nested_subpackage() {
+    let mut store = Store::new();
+    store.add_module("go:github.com/gorilla/mux");
+
+    // Subpackage types are qualified under the same module
+    assert_eq!(
+        store.module_for_qualified_name("go:github.com/gorilla/mux.Router"),
+        Some("go:github.com/gorilla/mux"),
+    );
+    // Method on a type: three segments after module prefix
+    assert_eq!(
+        store.module_for_qualified_name("go:github.com/gorilla/mux.Router.ServeHTTP"),
+        Some("go:github.com/gorilla/mux"),
+    );
+}
+
+#[test]
+fn resolver_root_vs_subpackage_typedef_lookup() {
+    use std::collections::BTreeMap;
+
+    let tmp = tempfile::tempdir().unwrap();
+
+    // Set up cache with root package and subpackage
+    let root_dir = tmp
+        .path()
+        .join("home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
+    let sub_dir = root_dir.join("middleware");
+    std::fs::create_dir_all(&sub_dir).unwrap();
+    std::fs::write(root_dir.join("mux.d.lis"), "// root\n").unwrap();
+    std::fs::write(sub_dir.join("middleware.d.lis"), "// sub\n").unwrap();
+
+    let mut go_deps = BTreeMap::new();
+    go_deps.insert(
+        "github.com/gorilla/mux".to_string(),
+        deps::GoDependency {
+            version: "v1.8.0".to_string(),
+            via: None,
+        },
+    );
+    let resolver = deps::GoDepResolver::new(
+        go_deps,
+        None,
+        Some(tmp.path().join("home").to_string_lossy().to_string()),
+    );
+
+    // Root package resolves to root .d.lis
+    match resolver.resolve("github.com/gorilla/mux") {
+        deps::GoTypedefResult::Found { source, .. } => {
+            assert!(source.contains("root"));
+        }
+        other => panic!("Root package: expected Found, got {:?}", other),
+    }
+
+    // Subpackage resolves to subpackage .d.lis
+    match resolver.resolve("github.com/gorilla/mux/middleware") {
+        deps::GoTypedefResult::Found { source, .. } => {
+            assert!(source.contains("sub"));
+        }
+        other => panic!("Subpackage: expected Found, got {:?}", other),
+    }
+}
+
+#[test]
+fn resolver_override_vs_cache_precedence() {
+    use std::collections::BTreeMap;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let project_root = tmp.path().join("project");
+    std::fs::create_dir_all(&project_root).unwrap();
+
+    // Override (higher priority)
+    let override_dir = project_root.join(".lisette/deps/go/github.com/gorilla/mux@v1.8.0");
+    std::fs::create_dir_all(&override_dir).unwrap();
+    std::fs::write(override_dir.join("mux.d.lis"), "// override\n").unwrap();
+
+    // Cache (lower priority)
+    let cache_dir = tmp
+        .path()
+        .join("home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::write(cache_dir.join("mux.d.lis"), "// cache\n").unwrap();
+
+    let mut go_deps = BTreeMap::new();
+    go_deps.insert(
+        "github.com/gorilla/mux".to_string(),
+        deps::GoDependency {
+            version: "v1.8.0".to_string(),
+            via: None,
+        },
+    );
+    let resolver = deps::GoDepResolver::new(
+        go_deps,
+        Some(project_root),
+        Some(tmp.path().join("home").to_string_lossy().to_string()),
+    );
+
+    // Override must win over cache
+    match resolver.resolve("github.com/gorilla/mux") {
+        deps::GoTypedefResult::Found { source, origin } => {
+            assert_eq!(origin, deps::TypedefOrigin::ProjectOverride);
+            assert!(source.contains("override"));
+        }
+        other => panic!("Expected ProjectOverride, got {:?}", other),
+    }
+}
+
+/// Impl block on a third-party Go struct must not be rejected as foreign.
+/// Regression: methods.rs used `find('.')` to extract the module from a
+/// qualified name, which broke on `go:github.com/gorilla/mux.Router`.
+#[test]
+fn third_party_go_struct_impl_methods_registered() {
+    use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
+    use semantics::loader::Loader;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let cache_dir = tmp
+        .path()
+        .join("home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::write(
+        cache_dir.join("mux.d.lis"),
+        "pub struct Router {}\nimpl Router {\n    fn route(self, path: string) -> string\n}\npub fn new_router() -> Router\n",
+    )
+    .unwrap();
+
+    let mut go_deps = std::collections::BTreeMap::new();
+    go_deps.insert(
+        "github.com/gorilla/mux".to_string(),
+        deps::GoDependency {
+            version: "v1.8.0".to_string(),
+            via: None,
+        },
+    );
+    let resolver = deps::GoDepResolver::new(
+        go_deps,
+        None,
+        Some(tmp.path().join("home").to_string_lossy().to_string()),
+    );
+
+    let source = r#"
+import "go:github.com/gorilla/mux"
+
+fn main() {
+    let r = mux.new_router()
+    r.route("/api")
+}
+"#;
+
+    struct NoLoader;
+    impl Loader for NoLoader {
+        fn scan_folder(&self, _: &str) -> rustc_hash::FxHashMap<String, String> {
+            rustc_hash::FxHashMap::default()
+        }
+    }
+
+    let build_result = syntax::build_ast(source, 0);
+    let (result, _) = analyze(AnalyzeInput {
+        config: SemanticConfig {
+            run_lints: false,
+            standalone_mode: false,
+            load_siblings: false,
+        },
+        loader: &NoLoader,
+        source: source.to_string(),
+        filename: "main.lis".to_string(),
+        ast: build_result.ast,
+        project_root: None,
+        compile_phase: CompilePhase::Check,
+        go_resolver: resolver,
+    });
+
+    let impl_errors: Vec<_> = result
+        .errors
+        .iter()
+        .filter(|e| {
+            e.code_str()
+                .is_some_and(|c| c == "infer.impl_on_foreign_type")
+        })
+        .collect();
+
+    assert!(
+        impl_errors.is_empty(),
+        "impl block on third-party Go struct must not be rejected as foreign: {:?}",
+        impl_errors,
+    );
+
+    let method_errors: Vec<_> = result
+        .errors
+        .iter()
+        .filter(|e| e.code_str().is_some_and(|c| c == "infer.member_not_found"))
+        .collect();
+
+    assert!(
+        method_errors.is_empty(),
+        "method call on third-party Go struct must resolve: {:?}",
+        method_errors,
+    );
+}
+
+/// Third-party Go modules must not be saved into the stdlib definition
+/// cache. Regression: analyze.rs filtered by `starts_with("go:")` which
+/// included third-party modules, causing stale cache entries to bypass
+/// the resolver on subsequent runs.
+#[test]
+fn stdlib_cache_save_load_excludes_third_party() {
+    use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
+    use semantics::loader::Loader;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let cache_dir = tmp
+        .path()
+        .join("home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::write(cache_dir.join("mux.d.lis"), "pub const VERSION: string\n").unwrap();
+
+    let mut go_deps = std::collections::BTreeMap::new();
+    go_deps.insert(
+        "github.com/gorilla/mux".to_string(),
+        deps::GoDependency {
+            version: "v1.8.0".to_string(),
+            via: None,
+        },
+    );
+    let resolver = deps::GoDepResolver::new(
+        go_deps,
+        None,
+        Some(tmp.path().join("home").to_string_lossy().to_string()),
+    );
+
+    let source = r#"
+import "go:github.com/gorilla/mux"
+
+fn main() {
+    mux.VERSION
+}
+"#;
+
+    struct NoLoader;
+    impl Loader for NoLoader {
+        fn scan_folder(&self, _: &str) -> rustc_hash::FxHashMap<String, String> {
+            rustc_hash::FxHashMap::default()
+        }
+    }
+
+    let build_result = syntax::build_ast(source, 0);
+
+    // First run — registers third-party module
+    let (result1, _) = analyze(AnalyzeInput {
+        config: SemanticConfig {
+            run_lints: false,
+            standalone_mode: false,
+            load_siblings: false,
+        },
+        loader: &NoLoader,
+        source: source.to_string(),
+        filename: "main.lis".to_string(),
+        ast: build_result.ast.clone(),
+        project_root: None,
+        compile_phase: CompilePhase::Check,
+        go_resolver: resolver.clone(),
+    });
+
+    assert!(
+        result1.errors.is_empty(),
+        "first run should succeed: {:?}",
+        result1.errors,
+    );
+
+    // Second run — must still succeed (not load stale cache for third-party)
+    let (result2, _) = analyze(AnalyzeInput {
+        config: SemanticConfig {
+            run_lints: false,
+            standalone_mode: false,
+            load_siblings: false,
+        },
+        loader: &NoLoader,
+        source: source.to_string(),
+        filename: "main.lis".to_string(),
+        ast: build_result.ast,
+        project_root: None,
+        compile_phase: CompilePhase::Check,
+        go_resolver: resolver,
+    });
+
+    assert!(
+        result2.errors.is_empty(),
+        "second run must not fail from stale stdlib cache: {:?}",
+        result2.errors,
+    );
+}

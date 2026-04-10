@@ -214,7 +214,10 @@ pub fn typedef_path_in(
 }
 
 /// A Go package path has a domain if its first segment contains a dot.
-fn has_domain(pkg: &str) -> bool {
+/// This is the canonical stdlib vs third-party distinction: stdlib paths
+/// like `net/http` or `fmt` never have dots in the first segment, while
+/// third-party paths like `github.com/gorilla/mux` always do.
+pub fn has_domain(pkg: &str) -> bool {
     pkg.split('/')
         .next()
         .is_some_and(|first| first.contains('.'))
