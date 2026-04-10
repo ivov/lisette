@@ -44,6 +44,38 @@ pub fn test_file_not_supported(filename: &str) -> LisetteDiagnostic {
         .with_help("Files ending in `_test.lis` are reserved for future testing support. Rename this file to compile it.")
 }
 
+pub fn undeclared_go_import(go_pkg: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Undeclared Go dependency")
+        .with_resolve_code("undeclared_go_import")
+        .with_span_label(&span, "not in lisette.toml")
+        .with_help(format!(
+            "Run `lis add {}` to add this dependency, or add it manually to `[dependencies.go]` in `lisette.toml`",
+            go_pkg
+        ))
+}
+
+pub fn missing_go_typedef(
+    go_pkg: &str,
+    module: &str,
+    version: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Missing Go typedef")
+        .with_resolve_code("missing_go_typedef")
+        .with_span_label(&span, "no .d.lis file found")
+        .with_help(format!(
+            "Package `{}` is declared via `{}` {} but no typedef was found. Run `lis sync` to generate it.",
+            go_pkg, module, version
+        ))
+}
+
+pub fn unreadable_go_typedef(path: &std::path::Path, error: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Failed to read Go typedef")
+        .with_resolve_code("unreadable_go_typedef")
+        .with_span_label(&span, "typedef exists but could not be read")
+        .with_help(format!("Failed to read `{}`: {}", path.display(), error,))
+}
+
 pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
     let modules: Vec<_> = path[..path.len() - 1].to_vec();
 

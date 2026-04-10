@@ -5,7 +5,7 @@ mod types;
 
 use rustc_hash::FxHashMap as HashMap;
 
-use stdlib::get_go_stdlib_typedef;
+use deps::GoDepResolver;
 use syntax::ast::{
     Annotation, Attribute, AttributeArg, EnumVariant, Expression, FunctionDefinition, Generic,
     Span, StructKind, Visibility as SyntacticVisibility,
@@ -145,10 +145,15 @@ impl Checker<'_, '_> {
         self.ufcs_methods.extend(ufcs_entries);
     }
 
-    /// Register a Go stdlib module. Unlike regular modules, Go modules:
-    /// - Export everything as public
-    /// - Don't put their own module in scope (no self-references like `MyModule.Type`)
-    pub fn parse_and_register_go_module(&mut self, module_id: &str, source: &str) {
+    /// Register a Go module (stdlib or third-party). Unlike regular modules,
+    /// Go modules export everything as public and do not put their own module
+    /// in scope (no self-references like `MyModule.Type`).
+    pub fn parse_and_register_go_module(
+        &mut self,
+        module_id: &str,
+        source: &str,
+        go_resolver: &GoDepResolver,
+    ) {
         if self.store.is_visited(module_id) {
             return;
         }
@@ -179,8 +184,8 @@ impl Checker<'_, '_> {
         for import in &imports {
             if let Some(go_pkg) = import.name.strip_prefix("go:") {
                 let import_module_id = format!("go:{}", go_pkg);
-                if let Some(import_source) = get_go_stdlib_typedef(go_pkg) {
-                    self.parse_and_register_go_module(&import_module_id, import_source);
+                if let deps::GoTypedefResult::Found { source, .. } = go_resolver.resolve(go_pkg) {
+                    self.parse_and_register_go_module(&import_module_id, &source, go_resolver);
                 }
             }
         }

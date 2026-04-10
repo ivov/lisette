@@ -103,6 +103,7 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         load_siblings: false,
         debug,
         project_root: None,
+        go_resolver: deps::GoDepResolver::default(),
     };
 
     struct NoLoader;
@@ -139,7 +140,7 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         return 1;
     }
 
-    if let Err(e) = go_cli::write_go_mod(&temp_dir, "lis-standalone") {
+    if let Err(e) = go_cli::write_go_mod(&temp_dir, "lis-standalone", &compile_config.go_resolver) {
         cli_error!("Failed to run standalone file", e, "Check file permissions");
         return 1;
     }

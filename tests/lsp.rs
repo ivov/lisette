@@ -9826,3 +9826,82 @@ async fn goto_definition_type_alias_in_struct_call() {
 
     client.shutdown().await;
 }
+
+#[tokio::test]
+async fn diagnostics_invalid_manifest_surfaces_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    // Write an invalid lisette.toml (missing required [project] section)
+    std::fs::write(root.join("lisette.toml"), "[invalid]\nfoo = 1\n").unwrap();
+
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+
+    let content = "fn main() { 1 }";
+    std::fs::write(src.join("main.lis"), content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, content).await;
+
+    let diagnostics = client.await_diagnostics().await;
+
+    let has_manifest_error = diagnostics.iter().any(|d| {
+        d.severity == Some(DiagnosticSeverity::ERROR)
+            && d.code.as_ref().is_some_and(
+                |c| matches!(c, NumberOrString::String(s) if s == "resolve.manifest_error"),
+            )
+    });
+
+    assert!(
+        has_manifest_error,
+        "invalid lisette.toml should produce a manifest_error diagnostic, got: {diagnostics:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn diagnostics_toolchain_mismatch_surfaces_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    // Pin a lis version that does not match the running binary
+    std::fs::write(
+        root.join("lisette.toml"),
+        "[project]\nname = \"test\"\nversion = \"0.1.0\"\n\n[toolchain]\nlis = \"99.99.99\"\n",
+    )
+    .unwrap();
+
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+
+    let content = "fn main() { 1 }";
+    std::fs::write(src.join("main.lis"), content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+
+    let main_uri = Url::from_file_path(src.join("main.lis"))
+        .unwrap()
+        .to_string();
+    client.open(&main_uri, content).await;
+
+    let diagnostics = client.await_diagnostics().await;
+
+    let has_toolchain_error = diagnostics.iter().any(|d| {
+        d.severity == Some(DiagnosticSeverity::ERROR) && d.message.contains("Toolchain mismatch")
+    });
+
+    assert!(
+        has_toolchain_error,
+        "toolchain version mismatch should produce a diagnostic, got: {diagnostics:?}"
+    );
+
+    client.shutdown().await;
+}

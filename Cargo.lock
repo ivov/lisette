@@ -484,6 +484,7 @@ checksum = "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039"
 name = "lisette"
 version = "0.1.6"
 dependencies = [
+ "lisette-deps",
  "lisette-diagnostics",
  "lisette-emit",
  "lisette-format",
@@ -493,10 +494,17 @@ dependencies = [
  "lisette-syntax",
  "owo-colors",
  "rustc-hash",
- "serde",
  "tokio",
- "toml",
  "tower-lsp",
+]
+
+[[package]]
+name = "lisette-deps"
+version = "0.1.6"
+dependencies = [
+ "lisette-stdlib",
+ "serde",
+ "toml",
 ]
 
 [[package]]
@@ -533,6 +541,7 @@ version = "0.1.6"
 dependencies = [
  "dashmap 6.1.0",
  "ecow",
+ "lisette-deps",
  "lisette-diagnostics",
  "lisette-format",
  "lisette-semantics",
@@ -549,6 +558,7 @@ version = "0.1.6"
 dependencies = [
  "bincode",
  "ecow",
+ "lisette-deps",
  "lisette-diagnostics",
  "lisette-stdlib",
  "lisette-syntax",
@@ -980,6 +990,7 @@ dependencies = [
  "ecow",
  "futures",
  "insta",
+ "lisette-deps",
  "lisette-diagnostics",
  "lisette-emit",
  "lisette-format",

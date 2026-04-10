@@ -21,6 +21,7 @@ lisette-syntax      = { git = "https://github.com/ivov/lisette", package = "lise
 lisette-semantics   = { git = "https://github.com/ivov/lisette", package = "lisette-semantics" }
 lisette-emit        = { git = "https://github.com/ivov/lisette", package = "lisette-emit" }
 lisette-diagnostics = { git = "https://github.com/ivov/lisette", package = "lisette-diagnostics" }
+lisette-deps        = { git = "https://github.com/ivov/lisette", package = "lisette-deps" }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

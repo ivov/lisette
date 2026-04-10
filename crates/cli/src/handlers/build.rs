@@ -2,24 +2,11 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
-use serde::Deserialize;
-
 use crate::cli_error;
 use crate::go_cli;
 use diagnostics::render::{self, Filter};
 use lisette::fs::LocalFileSystem;
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
-
-#[derive(Deserialize)]
-struct Manifest {
-    project: Project,
-}
-
-#[derive(Deserialize)]
-struct Project {
-    name: String,
-    version: String,
-}
 
 pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
     if let Err(code) = crate::go_cli::require_go() {
@@ -35,10 +22,18 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
         return 1;
     }
 
-    let manifest = match read_manifest(project_path) {
-        Ok(m) => m,
-        Err(()) => return 1,
-    };
+    let (manifest, go_resolver) =
+        match deps::GoDepResolver::from_project_with_manifest(project_path) {
+            Ok(pair) => pair,
+            Err(msg) => {
+                cli_error!(
+                    "Failed to compile Lisette project to Go",
+                    msg,
+                    "Run `lis new <name>` to create a project, or fix `lisette.toml`"
+                );
+                return 1;
+            }
+        };
 
     let main_lis = project_path.join("src/main.lis");
     let go_module_name = &manifest.project.name;
@@ -86,6 +81,7 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
         load_siblings: true,
         debug,
         project_root: Some(project_path.to_path_buf()),
+        go_resolver: go_resolver.clone(),
     };
 
     let source_dir = main_lis.parent().and_then(|p| p.to_str()).unwrap_or(".");
@@ -128,7 +124,7 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
         return 1;
     }
 
-    if let Err(e) = go_cli::write_go_mod(&target_dir, &compile_config.go_module) {
+    if let Err(e) = go_cli::write_go_mod(&target_dir, &compile_config.go_module, &go_resolver) {
         cli_error!(
             "Failed to compile Lisette project to Go",
             e,
@@ -236,28 +232,4 @@ fn validate_project(project_path: &Path) -> bool {
     }
 
     true
-}
-
-fn read_manifest(project_path: &Path) -> Result<Manifest, ()> {
-    let toml_path = project_path.join("lisette.toml");
-
-    let content = match fs::read_to_string(&toml_path) {
-        Ok(c) => c,
-        Err(_) => {
-            cli_error!(
-                "Failed to compile Lisette project to Go",
-                format!("No `lisette.toml` manifest in `{}`", project_path.display()),
-                "Run `lis new <name>` to create a project"
-            );
-            return Err(());
-        }
-    };
-
-    toml::from_str(&content).map_err(|e| {
-        cli_error!(
-            "Failed to compile Lisette project to Go",
-            format!("Invalid `lisette.toml` manifest: {}", e),
-            "Fix the TOML syntax in `lisette.toml`"
-        );
-    })
 }

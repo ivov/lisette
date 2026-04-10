@@ -2,13 +2,13 @@ pub mod kahn;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use deps::{GoDepResolver, GoTypedefResult};
 use syntax::ast::Span;
 use syntax::program::File;
 
 use crate::loader::Loader;
 use crate::store::Store;
 use diagnostics::DiagnosticSink;
-use stdlib::get_go_stdlib_typedef;
 
 pub type ModuleId = String;
 
@@ -28,6 +28,7 @@ pub fn build_module_graph(
     entry_module: &str,
     sink: &DiagnosticSink,
     standalone_mode: bool,
+    go_resolver: &GoDepResolver,
 ) -> ModuleGraphResult {
     let mut edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
     let mut to_visit = vec![entry_module.to_string()];
@@ -41,8 +42,14 @@ pub fn build_module_graph(
         }
         visited.insert(module_id.clone());
 
-        let (imports_with_spans, module_files) =
-            collect_imports(&module_id, store, loader, sink, standalone_mode);
+        let (imports_with_spans, module_files) = collect_imports(
+            &module_id,
+            store,
+            loader,
+            sink,
+            standalone_mode,
+            go_resolver,
+        );
 
         let module_exists = !module_files.is_empty()
             || store.has(&module_id)
@@ -51,7 +58,7 @@ pub fn build_module_graph(
 
         if !module_exists {
             if let Some(span) = import_spans.get(&module_id) {
-                let is_go_stdlib = get_go_stdlib_typedef(&module_id).is_some();
+                let is_go_stdlib = stdlib::get_go_stdlib_typedef(&module_id).is_some();
 
                 let src_prefix_hint = module_id
                     .strip_prefix("src/")
@@ -133,6 +140,7 @@ fn collect_imports(
     loader: Option<&dyn Loader>,
     sink: &DiagnosticSink,
     standalone_mode: bool,
+    go_resolver: &GoDepResolver,
 ) -> (HashMap<ModuleId, Span>, Vec<File>) {
     let mut imports = HashMap::default();
 
@@ -159,20 +167,51 @@ fn collect_imports(
         }
 
         if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
-            if get_go_stdlib_typedef(go_pkg).is_some() {
-                imports.insert(file_import.name.to_string(), file_import.name_span);
-                continue;
+            match go_resolver.resolve(go_pkg) {
+                GoTypedefResult::Found { .. } => {
+                    imports.insert(file_import.name.to_string(), file_import.name_span);
+                }
+                GoTypedefResult::UnknownStdlib => {
+                    sink.push(diagnostics::module_graph::module_not_found(
+                        &file_import.name,
+                        file_import.name_span,
+                        false,
+                        standalone_mode,
+                        None,
+                    ));
+                }
+                GoTypedefResult::UndeclaredImport => {
+                    if standalone_mode {
+                        sink.push(diagnostics::module_graph::module_not_found(
+                            &file_import.name,
+                            file_import.name_span,
+                            false,
+                            true,
+                            None,
+                        ));
+                    } else {
+                        sink.push(diagnostics::module_graph::undeclared_go_import(
+                            go_pkg,
+                            file_import.name_span,
+                        ));
+                    }
+                }
+                GoTypedefResult::MissingTypedef { module, version } => {
+                    sink.push(diagnostics::module_graph::missing_go_typedef(
+                        go_pkg,
+                        &module,
+                        &version,
+                        file_import.name_span,
+                    ));
+                }
+                GoTypedefResult::UnreadableTypedef { path, error } => {
+                    sink.push(diagnostics::module_graph::unreadable_go_typedef(
+                        &path,
+                        &error,
+                        file_import.name_span,
+                    ));
+                }
             }
-
-            // @TODO: Check cache at ~/.lisette (and other spots)
-
-            sink.push(diagnostics::module_graph::module_not_found(
-                &file_import.name,
-                file_import.name_span,
-                false,
-                standalone_mode,
-                None,
-            ));
             continue;
         }
 

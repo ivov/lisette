@@ -217,6 +217,7 @@ fn run_analysis(code: &str) -> AnalysisResult {
         filename: PLAYGROUND_FILE.to_string(),
         ast: ast_result.ast,
         project_root: None,
+        go_resolver: lisette_deps::GoDepResolver::default(),
         compile_phase: CompilePhase::Check,
     };
 

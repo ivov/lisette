@@ -9,6 +9,7 @@ members = [
     "crates/format",
     "crates/emit",
     "crates/stdlib",
+    "crates/deps",
     "crates/lsp",
     "tests",
 ]

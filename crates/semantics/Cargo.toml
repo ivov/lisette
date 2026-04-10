@@ -15,6 +15,7 @@ doctest = false
 syntax = { package = "lisette-syntax", version = "0.1.6", path = "../syntax", features = ["serde"] }
 diagnostics = { package = "lisette-diagnostics", version = "0.1.6", path = "../diagnostics" }
 stdlib = { package = "lisette-stdlib", version = "0.1.6", path = "../stdlib" }
+deps = { package = "lisette-deps", version = "0.1.6", path = "../deps" }
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
 ecow = "0.2"

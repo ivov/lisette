@@ -24,10 +24,9 @@ diagnostics = { package = "lisette-diagnostics", version = "0.1.6", path = "../d
 format = { package = "lisette-format", version = "0.1.6", path = "../format" }
 emit = { package = "lisette-emit", version = "0.1.6", path = "../emit" }
 stdlib = { package = "lisette-stdlib", version = "0.1.6", path = "../stdlib" }
+deps = { package = "lisette-deps", version = "0.1.6", path = "../deps" }
 lsp = { package = "lisette-lsp", version = "0.1.6", path = "../lsp" }
 tokio = { version = "1", features = ["rt-multi-thread", "io-std"] }
 tower-lsp = "0.20"
 owo-colors.workspace = true
 rustc-hash.workspace = true
-toml = "0.9.10"
-serde = { workspace = true, features = ["derive"] }
