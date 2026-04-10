@@ -263,6 +263,15 @@ impl<'r, 's> Checker<'r, 's> {
         }
     }
 
+    /// Validate that all bound annotations on generics refer to types that exist in scope.
+    pub(crate) fn validate_generic_bounds(&mut self, generics: &[Generic], span: &Span) {
+        for g in generics {
+            for b in &g.bounds {
+                self.convert_to_type(b, span);
+            }
+        }
+    }
+
     /// Resolve a simple name (e.g., "Sunday") to a public definition in an imported module.
     /// First tries direct match (`module_id.name`), then falls back to searching
     /// for nested definitions (e.g., `module_id.Weekday.Sunday`) preferring top-level

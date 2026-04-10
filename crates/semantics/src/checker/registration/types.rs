@@ -26,6 +26,11 @@ impl Checker<'_, '_> {
             .expect("enum type must exist")
             .clone();
 
+        self.scopes.push();
+        self.put_in_scope(generics);
+        self.validate_generic_bounds(generics, span);
+        self.scopes.pop();
+
         let new_variants: Vec<_> = variants
             .iter()
             .map(|v| self.resolve_enum_variant_fields(v, generics, span))
@@ -383,6 +388,7 @@ impl Checker<'_, '_> {
 
         self.scopes.push();
         self.put_in_scope(generics);
+        self.validate_generic_bounds(generics, span);
 
         let new_fields: Vec<StructFieldDefinition> = fields
             .iter()
@@ -634,6 +640,7 @@ impl Checker<'_, '_> {
         self.scopes.push();
 
         self.put_in_scope(generics);
+        self.validate_generic_bounds(generics, span);
 
         let body_ty = self.convert_to_type(annotation, span);
 

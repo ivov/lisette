@@ -270,6 +270,7 @@ impl Checker<'_, '_> {
     ) {
         self.scopes.push();
         self.put_in_scope(generics);
+        self.validate_generic_bounds(generics, span);
 
         let new_parents = parents
             .iter()

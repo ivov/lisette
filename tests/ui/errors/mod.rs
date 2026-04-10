@@ -1074,6 +1074,42 @@ fn test() {
 }
 
 #[test]
+fn infer_type_not_found_struct_bound() {
+    let input = r#"
+struct Foo<T: Undefined> {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_not_found_enum_bound() {
+    let input = r#"
+enum Foo<T: Undefined> {
+  Bar(T)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_not_found_interface_bound() {
+    let input = r#"
+interface Foo<T: Undefined> {
+  fn get(self) -> T
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_not_found_type_alias_bound() {
+    let input = r#"
+type Foo<T: Undefined> = T
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_variable_not_found_no_suggestion() {
     let input = r#"
 fn test() {
