@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.7](https://github.com/ivov/lisette/compare/lisette-v0.1.6...lisette-v0.1.7) - 2026-04-11
+
+### Chore
+
+- include license file in published crates ([#48](https://github.com/ivov/lisette/pull/48))
+
+### Feat
+
+- publish bindgen as a Go module ([#47](https://github.com/ivov/lisette/pull/47))
+- compiler awareness of third-party Go deps ([#44](https://github.com/ivov/lisette/pull/44))
+
+### Fix
+
+- resolve Forall gracefully and add registration to fuzz target
+- validate type parameter bounds on type definitions ([#43](https://github.com/ivov/lisette/pull/43))
+
 ## [0.1.6](https://github.com/ivov/lisette/compare/lisette-v0.1.5...lisette-v0.1.6) - 2026-04-09
 
 ### Feat
