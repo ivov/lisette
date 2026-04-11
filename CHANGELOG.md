@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/ivov/lisette/compare/lisette-v0.1.7...lisette-v0.1.8) - 2026-04-11
+
+### Refactor
+
+- reorganize deps crate
+- simplify bindgen invocation
+- simplify typedef resolver ([#50](https://github.com/ivov/lisette/pull/50))
+
 ## [0.1.7](https://github.com/ivov/lisette/compare/lisette-v0.1.6...lisette-v0.1.7) - 2026-04-11
 
 ### Chore
