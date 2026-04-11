@@ -138,8 +138,9 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                     }
                 }
 
-                if let deps::GoTypedefResult::Found { source, .. } =
-                    input.go_resolver.resolve(go_pkg)
+                if let deps::GoTypedefResult::Found {
+                    content: source, ..
+                } = input.go_resolver.find_typedef_content(go_pkg)
                 {
                     checker.parse_and_register_go_module(&module_id, &source, &input.go_resolver);
                 }

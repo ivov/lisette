@@ -184,7 +184,10 @@ impl Checker<'_, '_> {
         for import in &imports {
             if let Some(go_pkg) = import.name.strip_prefix("go:") {
                 let import_module_id = format!("go:{}", go_pkg);
-                if let deps::GoTypedefResult::Found { source, .. } = go_resolver.resolve(go_pkg) {
+                if let deps::GoTypedefResult::Found {
+                    content: source, ..
+                } = go_resolver.find_typedef_content(go_pkg)
+                {
                     self.parse_and_register_go_module(&import_module_id, &source, go_resolver);
                 }
             }

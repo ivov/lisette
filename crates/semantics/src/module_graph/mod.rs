@@ -167,7 +167,7 @@ fn collect_imports(
         }
 
         if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
-            match go_resolver.resolve(go_pkg) {
+            match go_resolver.find_typedef_content(go_pkg) {
                 GoTypedefResult::Found { .. } => {
                     imports.insert(file_import.name.to_string(), file_import.name_span);
                 }

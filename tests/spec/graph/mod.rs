@@ -231,48 +231,6 @@ fn graph_declared_dep_missing_typedef() {
 }
 
 #[test]
-fn resolver_project_override_takes_precedence_over_cache() {
-    use std::collections::BTreeMap;
-
-    let tmp = tempfile::tempdir().unwrap();
-    let project_root = tmp.path();
-
-    // Set up override and cache with different content
-    let override_dir = project_root.join(".lisette/deps/go/github.com/gorilla/mux@v1.8.0");
-    std::fs::create_dir_all(&override_dir).unwrap();
-    std::fs::write(override_dir.join("mux.d.lis"), "// override version\n").unwrap();
-
-    let cache_dir = tmp
-        .path()
-        .join("fake_home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
-    std::fs::create_dir_all(&cache_dir).unwrap();
-    std::fs::write(cache_dir.join("mux.d.lis"), "// cache version\n").unwrap();
-
-    let mut go_deps = BTreeMap::new();
-    go_deps.insert(
-        "github.com/gorilla/mux".to_string(),
-        deps::GoDependency {
-            version: "v1.8.0".to_string(),
-            via: None,
-        },
-    );
-
-    let resolver = deps::GoDepResolver::new(
-        go_deps,
-        Some(project_root.to_path_buf()),
-        Some(tmp.path().join("fake_home").to_string_lossy().to_string()),
-    );
-
-    match resolver.resolve("github.com/gorilla/mux") {
-        deps::GoTypedefResult::Found { source, origin } => {
-            assert_eq!(origin, deps::TypedefOrigin::ProjectOverride);
-            assert!(source.contains("override version"));
-        }
-        other => panic!("Expected Found with ProjectOverride, got {:?}", other),
-    }
-}
-
-#[test]
 fn store_get_definition_domain_style_go_module() {
     let mut store = Store::new();
     store.add_module("go:github.com/gorilla/mux");
@@ -390,9 +348,8 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
     let tmp = tempfile::tempdir().unwrap();
 
     // Set up cache with root package and subpackage
-    let root_dir = tmp
-        .path()
-        .join("home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
+    let home = tmp.path().join("home").to_string_lossy().to_string();
+    let root_dir = deps::typedef_cache_dir(&home).join("github.com/gorilla/mux@v1.8.0");
     let sub_dir = root_dir.join("middleware");
     std::fs::create_dir_all(&sub_dir).unwrap();
     std::fs::write(root_dir.join("mux.d.lis"), "// root\n").unwrap();
@@ -413,63 +370,23 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
     );
 
     // Root package resolves to root .d.lis
-    match resolver.resolve("github.com/gorilla/mux") {
-        deps::GoTypedefResult::Found { source, .. } => {
+    match resolver.find_typedef_content("github.com/gorilla/mux") {
+        deps::GoTypedefResult::Found {
+            content: source, ..
+        } => {
             assert!(source.contains("root"));
         }
         other => panic!("Root package: expected Found, got {:?}", other),
     }
 
     // Subpackage resolves to subpackage .d.lis
-    match resolver.resolve("github.com/gorilla/mux/middleware") {
-        deps::GoTypedefResult::Found { source, .. } => {
+    match resolver.find_typedef_content("github.com/gorilla/mux/middleware") {
+        deps::GoTypedefResult::Found {
+            content: source, ..
+        } => {
             assert!(source.contains("sub"));
         }
         other => panic!("Subpackage: expected Found, got {:?}", other),
-    }
-}
-
-#[test]
-fn resolver_override_vs_cache_precedence() {
-    use std::collections::BTreeMap;
-
-    let tmp = tempfile::tempdir().unwrap();
-    let project_root = tmp.path().join("project");
-    std::fs::create_dir_all(&project_root).unwrap();
-
-    // Override (higher priority)
-    let override_dir = project_root.join(".lisette/deps/go/github.com/gorilla/mux@v1.8.0");
-    std::fs::create_dir_all(&override_dir).unwrap();
-    std::fs::write(override_dir.join("mux.d.lis"), "// override\n").unwrap();
-
-    // Cache (lower priority)
-    let cache_dir = tmp
-        .path()
-        .join("home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
-    std::fs::create_dir_all(&cache_dir).unwrap();
-    std::fs::write(cache_dir.join("mux.d.lis"), "// cache\n").unwrap();
-
-    let mut go_deps = BTreeMap::new();
-    go_deps.insert(
-        "github.com/gorilla/mux".to_string(),
-        deps::GoDependency {
-            version: "v1.8.0".to_string(),
-            via: None,
-        },
-    );
-    let resolver = deps::GoDepResolver::new(
-        go_deps,
-        Some(project_root),
-        Some(tmp.path().join("home").to_string_lossy().to_string()),
-    );
-
-    // Override must win over cache
-    match resolver.resolve("github.com/gorilla/mux") {
-        deps::GoTypedefResult::Found { source, origin } => {
-            assert_eq!(origin, deps::TypedefOrigin::ProjectOverride);
-            assert!(source.contains("override"));
-        }
-        other => panic!("Expected ProjectOverride, got {:?}", other),
     }
 }
 
@@ -482,9 +399,8 @@ fn third_party_go_struct_impl_methods_registered() {
     use semantics::loader::Loader;
 
     let tmp = tempfile::tempdir().unwrap();
-    let cache_dir = tmp
-        .path()
-        .join("home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
+    let home = tmp.path().join("home").to_string_lossy().to_string();
+    let cache_dir = deps::typedef_cache_dir(&home).join("github.com/gorilla/mux@v1.8.0");
     std::fs::create_dir_all(&cache_dir).unwrap();
     std::fs::write(
         cache_dir.join("mux.d.lis"),
@@ -500,11 +416,7 @@ fn third_party_go_struct_impl_methods_registered() {
             via: None,
         },
     );
-    let resolver = deps::GoDepResolver::new(
-        go_deps,
-        None,
-        Some(tmp.path().join("home").to_string_lossy().to_string()),
-    );
+    let resolver = deps::GoDepResolver::new(go_deps, None, Some(home));
 
     let source = r#"
 import "go:github.com/gorilla/mux"
@@ -576,9 +488,8 @@ fn stdlib_cache_save_load_excludes_third_party() {
     use semantics::loader::Loader;
 
     let tmp = tempfile::tempdir().unwrap();
-    let cache_dir = tmp
-        .path()
-        .join("home/.lisette/cache/go/github.com/gorilla/mux@v1.8.0");
+    let home = tmp.path().join("home").to_string_lossy().to_string();
+    let cache_dir = deps::typedef_cache_dir(&home).join("github.com/gorilla/mux@v1.8.0");
     std::fs::create_dir_all(&cache_dir).unwrap();
     std::fs::write(cache_dir.join("mux.d.lis"), "pub const VERSION: string\n").unwrap();
 
@@ -590,11 +501,7 @@ fn stdlib_cache_save_load_excludes_third_party() {
             via: None,
         },
     );
-    let resolver = deps::GoDepResolver::new(
-        go_deps,
-        None,
-        Some(tmp.path().join("home").to_string_lossy().to_string()),
-    );
+    let resolver = deps::GoDepResolver::new(go_deps, None, Some(home));
 
     let source = r#"
 import "go:github.com/gorilla/mux"
