@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ivov/lisette/tools/bindgen/internal/extract"
+	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
 var reservedKeywords = map[string]bool{

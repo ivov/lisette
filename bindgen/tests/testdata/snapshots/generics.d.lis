@@ -48,10 +48,7 @@ pub interface Transformer<T> {
 
 impl<T> Container<T> {
   fn Add(self: Ref<Container<T>>, item: T)
-
   fn Get(self: Ref<Container<T>>, index: int) -> T
-
   fn IsEmpty(self) -> bool
-
   fn Len(self: Ref<Container<T>>) -> int
 }

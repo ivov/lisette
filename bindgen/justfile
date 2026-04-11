@@ -8,7 +8,7 @@ alias lf := lintfix
 alias cov := test-cov
 
 build:
-    go build -o bin ./cmd/bindgen
+    go build -o bin .
 
 check: lint format-check test
     go vet ./...

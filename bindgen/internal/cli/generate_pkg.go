@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 
-	"github.com/ivov/lisette/tools/bindgen/internal/config"
-	"github.com/ivov/lisette/tools/bindgen/internal/extract"
+	"github.com/ivov/lisette/bindgen/internal/config"
+	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
 // GeneratePkg generates a `.d.lis` file for a Go package path.

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ivov/lisette/tools/bindgen/internal/cli"
+	"github.com/ivov/lisette/bindgen/internal/cli"
 )
 
 var update = flag.Bool("update", false, "update snapshot files")

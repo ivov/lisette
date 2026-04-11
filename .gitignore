@@ -1,9 +1,9 @@
 /target
 .DS_Store
 tests/e2e/target/
-tools/bindgen/bin/*
-!tools/bindgen/bin/.gitkeep
-tools/bindgen/tests/coverage*
+bindgen/bin/*
+!bindgen/bin/.gitkeep
+bindgen/tests/coverage*
 editors/vscode/node_modules/
 editors/vscode/dist/
 editors/vscode/*.vsix

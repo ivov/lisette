@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/ivov/lisette/tools/bindgen/internal/cli"
+	"github.com/ivov/lisette/bindgen/internal/cli"
 )
 
 func main() {
