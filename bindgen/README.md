@@ -1,8 +1,15 @@
 # bindgen
 
+Bindings generator for [Lisette](https://lisette.run), a language inspired by Rust that compiles to Go.
+
+> [!IMPORTANT]
+> Do **not** install or use this tool directly. It is intended for internal use by the Lisette compiler.
+
+## How it works
+
 Lisette's bindings generator
 
-- reads the public API for one or multiple Go packages,
+- reads the public API for one or more Go packages,
 - maps those Go symbols to Lisette types, and
 - emits `.d.lis` type definition files.
 
@@ -24,18 +31,24 @@ in `strconv.d.lis`.
 
 ## Usage
 
-To generate bindings for all Go stdlib packages
+The following commands are for local dev only. First build the binary from the Lisette project root:
 
 ```bash
-./bindgen stdlib \
-  -config bindgen.stdlib.json \
+cd bindgen && just build
+```
+
+To generate bindings for the Go stdlib:
+
+```bash
+bindgen/bin/bindgen stdlib \
+  -config bindgen/bindgen.stdlib.json \
   -outdir crates/stdlib/typedefs
 ```
 
-To generate bindings for a Go third-party package:
+To generate bindings for a third-party Go dependency:
 
 ```bash
-./bindgen pkg github.com/gorilla/mux \
+bindgen/bin/bindgen pkg github.com/gorilla/mux \
   -config my-config.json
 ```
 

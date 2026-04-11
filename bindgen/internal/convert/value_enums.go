@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ivov/lisette/tools/bindgen/internal/extract"
+	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
 type ValueEnumInfo struct {

@@ -76,16 +76,18 @@ fuzz-infer duration="300":
 check-stdlib-typedefs:
     cargo run -p lisette -- check crates/stdlib/typedefs/
 
-regenerate-stdlib-typedefs version="":
-    cd tools/bindgen && just build
+generate-stdlib-typedefs version:
+    cd bindgen && just build
     just build # make binary to run bindgen
     ./target/release/lis bindgen stdlib {{version}}
     ./target/release/lis format crates/stdlib/typedefs/
     just build # recompile compiler to embed updated typedefs
     ./target/release/lis check crates/stdlib/typedefs/
     just format
+
+commit-stdlib-typedefs version:
     git add crates/stdlib/
-    LEFTHOOK=0 git commit -m "chore: bump stdlib typedefs{{ if version != "" { " to v" + version } else { "" } }}"
+    LEFTHOOK=0 git commit -m "chore: bump stdlib typedefs to v{{version}}"
 
 # Build the playground and write output to docs/play/ (served at lisette.run/play)
 rebuild-playground:

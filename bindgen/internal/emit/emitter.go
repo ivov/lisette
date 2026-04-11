@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ivov/lisette/tools/bindgen/internal/config"
-	"github.com/ivov/lisette/tools/bindgen/internal/convert"
-	"github.com/ivov/lisette/tools/bindgen/internal/extract"
+	"github.com/ivov/lisette/bindgen/internal/config"
+	"github.com/ivov/lisette/bindgen/internal/convert"
+	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
 type stats struct {

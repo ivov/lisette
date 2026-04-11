@@ -8,10 +8,10 @@ const BINDGEN_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Returns the path to the bindgen binary for user-facing `lis bindgen <pkg>`.
 ///
 /// Resolution order:
-/// 1. `tools/bindgen/bin/bindgen` — dev builds (present in source tree)
+/// 1. `bindgen/bin/bindgen` — dev builds (present in source tree)
 /// 2. `~/.lisette/bin/bindgen` — user installs (built from embedded source)
 fn resolve_bindgen_binary() -> Option<PathBuf> {
-    let dev_path = Path::new("tools/bindgen/bin/bindgen");
+    let dev_path = Path::new("bindgen/bin/bindgen");
     if dev_path.exists() {
         return Some(dev_path.to_path_buf());
     }
@@ -28,7 +28,7 @@ fn resolve_bindgen_binary() -> Option<PathBuf> {
         return Some(bin_path);
     }
 
-    let source_dir = Path::new("tools/bindgen");
+    let source_dir = Path::new("bindgen");
     if source_dir.join("go.mod").exists() {
         if let Err(e) = std::fs::create_dir_all(&cache_dir) {
             eprintln!("warning: failed to create cache dir: {}", e);
@@ -38,7 +38,7 @@ fn resolve_bindgen_binary() -> Option<PathBuf> {
         eprintln!("Building bindgen...");
 
         let status = Command::new("go")
-            .args(["build", "-o", &bin_path.to_string_lossy(), "./cmd/bindgen"])
+            .args(["build", "-o", &bin_path.to_string_lossy(), "."])
             .current_dir(source_dir)
             .status();
 
@@ -72,11 +72,11 @@ pub fn bindgen(
     }
 
     if package == "stdlib" {
-        let source_dir = Path::new("tools/bindgen");
+        let source_dir = Path::new("bindgen");
         if !source_dir.exists() {
             cli_error!(
                 "Failed to generate std bindings",
-                "Bindgen source not found at `tools/bindgen`",
+                "Bindgen source not found at `bindgen`",
                 "Run this command from the Lisette project root"
             );
             return 1;
@@ -169,13 +169,13 @@ fn bindgen_std(source_dir: &Path, version: Option<String>, verbose: bool) -> i32
 
     let absolute_out_dir = cwd.join(out_dir).to_string_lossy().to_string();
     let config_path = cwd
-        .join("tools/bindgen/bindgen.stdlib.json")
+        .join("bindgen/bindgen.stdlib.json")
         .to_string_lossy()
         .to_string();
 
     let mut args = vec![
         "run".to_string(),
-        "./cmd/bindgen".to_string(),
+        ".".to_string(),
         "stdlib".to_string(),
         "--config".to_string(),
         config_path,
@@ -202,7 +202,7 @@ fn bindgen_std(source_dir: &Path, version: Option<String>, verbose: bool) -> i32
             cli_error!(
                 "Failed to generate std bindings",
                 format!("Bindgen exited with code {:?}", status.code()),
-                "Check the Go tool builds with `cd tools/bindgen && just build`"
+                "Check the Go tool builds with `cd bindgen && just build`"
             );
             1
         }

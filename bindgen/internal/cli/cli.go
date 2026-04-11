@@ -2,17 +2,17 @@ package cli
 
 import (
 	"context"
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
-	"regexp"
+	"runtime/debug"
 	"strings"
 
-	"github.com/ivov/lisette/tools/bindgen/internal/config"
-	"github.com/ivov/lisette/tools/bindgen/internal/convert"
-	"github.com/ivov/lisette/tools/bindgen/internal/emit"
-	"github.com/ivov/lisette/tools/bindgen/internal/extract"
+	"github.com/ivov/lisette/bindgen/internal/config"
+	"github.com/ivov/lisette/bindgen/internal/convert"
+	"github.com/ivov/lisette/bindgen/internal/emit"
+	"github.com/ivov/lisette/bindgen/internal/extract"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -21,71 +21,20 @@ type GeneratePkgResult struct {
 	Summary string
 }
 
-var (
-	lisVersion = "dev"
-	goVersion  = "unknown"
-)
+var lisVersion = "dev"
+
+//go:embed metadata/go-version
+var goVersion string
 
 func init() {
-	if lisVer, goVer, err := loadProjectMetadata(); err == nil {
-		lisVersion = lisVer
-		goVersion = goVer
-	}
-}
+	goVersion = strings.TrimSpace(goVersion)
 
-func loadProjectMetadata() (lisVer, goVer string, err error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", "", err
-	}
-
-	for {
-		cargoPath := filepath.Join(dir, "Cargo.toml")
-		goVersionPath := filepath.Join(dir, "go-version")
-		if _, err := os.Stat(cargoPath); err == nil {
-			content, err := os.ReadFile(cargoPath)
-			if err != nil {
-				return "", "", err
-			}
-			lisVer = extractTomlValue(string(content), "[workspace.package]", "version")
-			goVerBytes, err := os.ReadFile(goVersionPath)
-			if err != nil {
-				return "", "", fmt.Errorf("failed to read go-version: %w", err)
-			}
-			goVer = strings.TrimSpace(string(goVerBytes))
-			return lisVer, goVer, nil
+	// When run via go run ...@vX.Y.Z, the module tag is authoritative.
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if v := info.Main.Version; v != "" && v != "(devel)" {
+			lisVersion = strings.TrimPrefix(v, "v")
 		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", "", fmt.Errorf("failed to find Cargo.toml")
-		}
-		dir = parent
 	}
-}
-
-func extractTomlValue(content, section, key string) string {
-	_, after, ok1 := strings.Cut(content, section)
-	if !ok1 {
-		return ""
-	}
-
-	afterSection := after
-
-	before, _, ok2 := strings.Cut(afterSection, "\n[")
-	var sectionContent string
-	if !ok2 {
-		sectionContent = afterSection
-	} else {
-		sectionContent = before
-	}
-
-	re := regexp.MustCompile(regexp.QuoteMeta(key) + `\s*=\s*"([^"]+)"`)
-	match := re.FindStringSubmatch(sectionContent)
-	if len(match) < 2 {
-		return ""
-	}
-	return match[1]
 }
 
 func PrintUsage() {

@@ -94,7 +94,6 @@ pub struct Wrapper {
 impl Base {
   /// GetID returns the ID
   fn GetID(self) -> int
-
   /// SetName sets the name
   fn SetName(self: Ref<Base>, name: string)
 }
@@ -102,7 +101,6 @@ impl Base {
 impl Extended {
   /// GetID returns the ID
   fn GetID(self) -> int
-
   /// SetName sets the name
   fn SetName(self: Ref<Extended>, name: string)
 }
@@ -110,7 +108,6 @@ impl Extended {
 impl Shadower {
   /// GetID overrides the promoted method from Base
   fn GetID(self) -> string
-
   /// SetName sets the name
   fn SetName(self: Ref<Shadower>, name: string)
 }

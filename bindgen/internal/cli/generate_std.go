@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ivov/lisette/tools/bindgen/internal/config"
-	"github.com/ivov/lisette/tools/bindgen/internal/extract"
+	"github.com/ivov/lisette/bindgen/internal/config"
+	"github.com/ivov/lisette/bindgen/internal/extract"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/tools/go/packages"
 )
