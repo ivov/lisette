@@ -1,68 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use crate::cli_error;
 
-const BINDGEN_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Returns the path to the bindgen binary for user-facing `lis bindgen <pkg>`.
-///
-/// Resolution order:
-/// 1. `bindgen/bin/bindgen` — dev builds (present in source tree)
-/// 2. `~/.lisette/bin/bindgen` — user installs (built from embedded source)
-fn resolve_bindgen_binary() -> Option<PathBuf> {
-    let dev_path = Path::new("bindgen/bin/bindgen");
-    if dev_path.exists() {
-        return Some(dev_path.to_path_buf());
-    }
-
-    let home = std::env::var("HOME").ok()?;
-    let cache_dir = PathBuf::from(&home).join(".lisette").join("bin");
-    let bin_path = cache_dir.join("bindgen");
-    let version_path = cache_dir.join("bindgen.version");
-
-    if bin_path.exists()
-        && let Ok(cached_version) = std::fs::read_to_string(&version_path)
-        && cached_version.trim() == BINDGEN_VERSION
-    {
-        return Some(bin_path);
-    }
-
-    let source_dir = Path::new("bindgen");
-    if source_dir.join("go.mod").exists() {
-        if let Err(e) = std::fs::create_dir_all(&cache_dir) {
-            eprintln!("warning: failed to create cache dir: {}", e);
-            return None;
-        }
-
-        eprintln!("Building bindgen...");
-
-        let status = Command::new("go")
-            .args(["build", "-o", &bin_path.to_string_lossy(), "."])
-            .current_dir(source_dir)
-            .status();
-
-        match status {
-            Ok(s) if s.success() => {
-                let _ = std::fs::write(&version_path, BINDGEN_VERSION);
-                return Some(bin_path);
-            }
-            Ok(_) => {
-                eprintln!("warning: failed to build bindgen");
-                return None;
-            }
-            Err(e) => {
-                eprintln!("warning: failed to run `go build`: {}", e);
-                return None;
-            }
-        }
-    }
-
-    None
-}
-
 pub fn bindgen(
-    package: &str,
+    target_pkg: &str,
     output: Option<String>,
     version: Option<String>,
     verbose: bool,
@@ -71,7 +13,7 @@ pub fn bindgen(
         return code;
     }
 
-    if package == "stdlib" {
+    if target_pkg == "stdlib" {
         let source_dir = Path::new("bindgen");
         if !source_dir.exists() {
             cli_error!(
@@ -84,35 +26,23 @@ pub fn bindgen(
         return bindgen_std(source_dir, version, verbose);
     }
 
-    let bin_path = match resolve_bindgen_binary() {
-        Some(path) => path,
-        None => {
-            cli_error!(
-                "Failed to generate bindings",
-                "Bindgen binary not found",
-                "Check Go installation with `go version`"
-            );
-            return 1;
-        }
-    };
-
-    bindgen_pkg(&bin_path, package, output, verbose)
+    bindgen_pkg(target_pkg, output, verbose)
 }
 
-fn bindgen_pkg(bin_path: &Path, package: &str, output: Option<String>, verbose: bool) -> i32 {
+fn bindgen_pkg(target_pkg: &str, output: Option<String>, verbose: bool) -> i32 {
     let output_path = match output {
         Some(path) => path,
         None => {
-            let filename = package.replace('/', "_");
+            let filename = target_pkg.replace('/', "_");
             format!("{}.d.lis", filename)
         }
     };
 
     if verbose {
-        eprintln!("Generating bindings for {} -> {}", package, output_path);
+        eprintln!("Generating bindings for {} -> {}", target_pkg, output_path);
     }
 
-    let result = Command::new(bin_path).args(["pkg", package]).output();
+    let result = crate::go_cli::build_bindgen_command(target_pkg).output();
 
     match result {
         Ok(output) if output.status.success() => {
