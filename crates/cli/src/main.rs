@@ -43,12 +43,12 @@ fn main() {
             );
             std::process::exit(1);
         }
-        Err(command::ParseError::UnexpectedArgument { message, hint }) => {
-            cli_error!(
-                message,
-                "The `doc` command takes a single query argument",
-                hint
-            );
+        Err(command::ParseError::UnexpectedArgument {
+            message,
+            reason,
+            hint,
+        }) => {
+            cli_error!(message, reason, hint);
             std::process::exit(1);
         }
     };

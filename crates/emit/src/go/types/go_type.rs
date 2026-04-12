@@ -152,8 +152,8 @@ impl Emitter<'_> {
             return result;
         }
 
-        if let Some((module, _)) = qualified_name.split_once('.')
-            && let Some(go_path) = module.strip_prefix(go_name::GO_IMPORT_PREFIX)
+        if let Some(rest) = qualified_name.strip_prefix(go_name::GO_IMPORT_PREFIX)
+            && let Some((go_path, _)) = rest.rsplit_once('.')
         {
             let mut result = if params.is_empty() {
                 GoType::with_go_import(name, go_path.to_string())
@@ -243,8 +243,16 @@ impl Emitter<'_> {
     }
 
     fn unqualify_name(&self, id: &str) -> String {
-        let Some((module, unqualified)) = id.split_once('.') else {
-            return go_name::escape_keyword(id).into_owned();
+        let (module, unqualified) = if let Some(rest) = id.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+            let Some((path, ty)) = rest.rsplit_once('.') else {
+                return go_name::escape_keyword(id).into_owned();
+            };
+            (&id[..go_name::GO_IMPORT_PREFIX.len() + path.len()], ty)
+        } else {
+            let Some(split) = id.split_once('.') else {
+                return go_name::escape_keyword(id).into_owned();
+            };
+            split
         };
 
         if unqualified == "Unknown" {

@@ -7,6 +7,17 @@ include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 use deps::TypedefLocator;
 use emit::PRELUDE_IMPORT_PATH;
 
+pub fn go_command() -> Command {
+    let mut c = Command::new("go");
+    // Isolate from any user-side env that would change Go's mode against
+    // lisette's `target/`: a stray `go.work` (workspace mode) or a stray
+    // `GOFLAGS=-mod=vendor` (vendor mode) both turn into multi-line errors
+    // for unrelated `lis add` invocations otherwise.
+    c.env("GOWORK", "off");
+    c.env("GOFLAGS", "");
+    c
+}
+
 pub fn require_go() -> Result<(), i32> {
     match go_status() {
         GoStatus::Ready => Ok(()),
@@ -155,7 +166,7 @@ pub fn ensure_go_sum(dir: &Path) -> Result<(), String> {
 
 pub fn prewarm_module_cache() {
     let prelude_version = env!("CARGO_PKG_VERSION");
-    let _ = Command::new("go")
+    let _ = go_command()
         .args([
             "mod",
             "download",
@@ -167,7 +178,7 @@ pub fn prewarm_module_cache() {
 }
 
 fn go_mod_tidy(path: &Path) -> Result<(), String> {
-    let output = Command::new("go")
+    let output = go_command()
         .args(["mod", "tidy"])
         .current_dir(path)
         .output()

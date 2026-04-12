@@ -14,7 +14,6 @@ const BINDGEN_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct GoModuleInfo {
     pub path: String,
     pub version: String,
-    pub dir: String,
 }
 
 /// A directory with a `go.mod` that `go` commands run against.
@@ -36,7 +35,7 @@ impl<'a> GoWorkspace<'a> {
     /// Run a `go` subcommand and return its stdout on success.
     fn run_go(&self, args: &[&str]) -> Result<String, String> {
         let cmd_display = format!("go {}", args.join(" "));
-        let output = Command::new("go")
+        let output = crate::go_cli::go_command()
             .args(args)
             .current_dir(self.root)
             .output()
@@ -44,7 +43,7 @@ impl<'a> GoWorkspace<'a> {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("`{}` failed: {}", cmd_display, stderr.trim()));
+            return Err(translate_go_error(args, stderr.trim()));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -80,14 +79,36 @@ impl<'a> GoWorkspace<'a> {
         Ok(GoModuleInfo {
             path: value["Path"].as_str().unwrap_or("").to_string(),
             version: value["Version"].as_str().unwrap_or("").to_string(),
-            dir: value["Dir"].as_str().unwrap_or("").to_string(),
         })
     }
 
+    /// Resolve a module's `@latest` alias to a concrete version.
+    ///
+    /// Uses `-mod=mod` so Go is allowed to refresh `go.sum` if the proxy
+    /// returns a version that matches the existing pin (a plain readonly
+    /// `go list -m -json X@latest` errors with `updates to go.sum needed`
+    /// in that case).
+    pub fn query_latest_version(&self, module_path: &str) -> Result<String, String> {
+        let target = format!("{}@latest", module_path);
+        let stdout = self.run_go(&["list", "-mod=mod", "-m", "-json", &target])?;
+        let value: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|e| format!("Failed to parse Go module JSON: {}", e))?;
+        let version = value["Version"].as_str().unwrap_or("").to_string();
+        if version.is_empty() {
+            return Err(format!("`go list -m -json {}` returned no version", target));
+        }
+        Ok(version)
+    }
+
     /// List all public packages in a Go module.
+    ///
+    /// Uses `-mod=mod` so the BFS reconcile can add newly-discovered transitives
+    /// to `target/go.mod` while resolving the package list. Without it, deep
+    /// graphs (otel, gRPC) hit `updates to go.mod needed; to update it: go mod
+    /// tidy` mid-walk and abort the whole add.
     pub fn list_packages(&self, module_path: &str) -> Result<Vec<String>, String> {
         let pattern = format!("{}/...", module_path);
-        let stdout = self.run_go(&["list", "-e", &pattern])?;
+        let stdout = self.run_go(&["list", "-mod=mod", "-e", &pattern])?;
         let packages: Vec<String> = stdout
             .lines()
             .filter(|l| !l.is_empty())
@@ -111,10 +132,10 @@ impl<'a> GoWorkspace<'a> {
     /// github.com/gorilla/mux            → github.com/gorilla/mux
     /// ```
     ///
-    /// Requires a prior `go get` so the module is in `target/go.mod`.
+    /// Requires the module to be in the build graph (direct or indirect).
     pub fn find_containing_module(&self, pkg_path: &str) -> Result<GoModuleInfo, String> {
         if let Ok(info) = self.query_module(pkg_path)
-            && !info.dir.is_empty()
+            && !info.path.is_empty()
         {
             return Ok(info);
         }
@@ -123,7 +144,7 @@ impl<'a> GoWorkspace<'a> {
         while let Some(pos) = path.rfind('/') {
             path = &path[..pos];
             if let Ok(info) = self.query_module(path)
-                && !info.dir.is_empty()
+                && !info.path.is_empty()
             {
                 return Ok(info);
             }
@@ -146,7 +167,7 @@ impl<'a> GoWorkspace<'a> {
             c
         } else {
             let bindgen_at_version = format!("{}@v{}", BINDGEN_GO_MODULE, BINDGEN_VERSION);
-            let mut c = Command::new("go");
+            let mut c = crate::go_cli::go_command();
             c.args(["run", &bindgen_at_version, "pkg", package]);
             c
         };
@@ -240,6 +261,207 @@ impl<'a> GoWorkspace<'a> {
 
         Ok(third_party_deps)
     }
+}
+
+/// Translate raw `go` stderr into a one-line message for the common failure modes.
+///
+/// Falls back to the trimmed stderr verbatim if no pattern matches, so callers
+/// never lose information.
+fn translate_go_error(args: &[&str], stderr: &str) -> String {
+    let target = args
+        .iter()
+        .find(|a| {
+            !a.starts_with('-')
+                && **a != "get"
+                && **a != "list"
+                && **a != "-m"
+                && **a != "-json"
+                && **a != "-e"
+        })
+        .copied()
+        .unwrap_or("");
+    let module = target.rsplit_once('@').map(|(m, _)| m).unwrap_or(target);
+
+    if stderr.contains("unknown revision") {
+        return format!("Version not found for `{}`", target);
+    }
+    if stderr.contains("Repository not found") || stderr.contains("repository not found") {
+        return format!("Module `{}` not found", module);
+    }
+    if stderr.contains("no matching versions for query") {
+        return format!("No matching versions found for `{}`", target);
+    }
+    if let Some(corrected) = extract_post_v_path(stderr) {
+        return format!(
+            "`{}` is a v2+ Go module and requires the major-version suffix `{}` (try `{}@<version>`)",
+            module, corrected, corrected
+        );
+    }
+    if stderr.contains("module declares its path as") {
+        if let Some((declared, required)) = extract_path_mismatch(stderr) {
+            return format!(
+                "Module path mismatch: `{}` was required, but the upstream module declares its path as `{}` (try `{}` instead). If `{}` is in your `lisette.toml`, fix it there.",
+                required, declared, declared, required
+            );
+        }
+        return format!(
+            "Module path mismatch: `{}` does not match the module's declared path",
+            module
+        );
+    }
+    if stderr.contains("malformed module path") {
+        return format!(
+            "`{}` is not a valid module path. If this is a Go package import path, use the module root instead (e.g. `k8s.io/api`, not `k8s.io/api/core/v1`)",
+            module
+        );
+    }
+    if stderr.contains("errors parsing go.mod") {
+        if let Some(culprit) = extract_invalid_pin(stderr) {
+            return format!(
+                "`lisette.toml` has an invalid Go version for `{}` (`{}`); fix the pin and retry",
+                culprit.0, culprit.1
+            );
+        }
+        return "`lisette.toml` contains an invalid Go version; fix the offending pin and retry"
+            .to_string();
+    }
+    // Must precede the generic `invalid version` branch below; Go's
+    // `invalid version control suffix` error string contains `invalid version`
+    // as a substring and would otherwise hit the wrong branch.
+    if stderr.contains("invalid version control suffix") {
+        return format!(
+            "`{}` is not a valid Go module path (do not include `.git` or other VCS suffixes)",
+            module
+        );
+    }
+    if stderr.contains("invalid version") || stderr.contains("should be v0 or v1") {
+        return format!(
+            "Invalid Go module version in `{}` (must look like `v1.2.3`)",
+            target
+        );
+    }
+    if stderr.contains("invalid github.com import path") {
+        return format!(
+            "`{}` is not a valid github.com import path (github only allows letters, digits, and `.-_`)",
+            module
+        );
+    }
+    if let Some((found, missing)) = extract_missing_subpackage(stderr) {
+        return format!(
+            "Module `{}` exists but does not contain package `{}`; v1 Go modules do not use a `/v1` suffix (only v2+ require the major-version suffix)",
+            found, missing
+        );
+    }
+    if stderr.contains("no required module provides package")
+        || stderr.contains("cannot find module providing package")
+    {
+        return format!("No module provides package `{}`", module);
+    }
+    if stderr.contains("existing contents have changed since last read") {
+        return "Another `lis add` is in progress against this project; wait for it to finish and retry".to_string();
+    }
+    if stderr.contains("unable to access") || stderr.contains("requested URL returned error: 4") {
+        return format!(
+            "Module `{}` is unreachable (the host returned an error)",
+            module
+        );
+    }
+    if stderr.contains("module lookup disabled by GOPROXY") {
+        return format!(
+            "Module `{}` is not in the local cache and `GOPROXY=off` disables remote lookups; unset `GOPROXY` or set it to a working proxy",
+            module
+        );
+    }
+    if stderr.contains("modules disabled by GO111MODULE") {
+        return "`GO111MODULE=off` disables Go modules entirely; unset `GO111MODULE` (Go modules are required by lisette)".to_string();
+    }
+    if stderr.contains("-insecure flag is no longer supported") {
+        return "`-insecure` is no longer a valid Go flag; remove it from `GOFLAGS` or set `GOINSECURE` instead".to_string();
+    }
+    if stderr.contains("unrecognized import path") {
+        return format!(
+            "`{}` is not a recognized Go module path; the host does not serve `go-import` metadata",
+            module
+        );
+    }
+    if stderr.contains("updates to go.mod needed") {
+        return format!(
+            "Resolving `{}` requires updates to `target/go.mod` that lisette could not perform; please file an issue",
+            target
+        );
+    }
+
+    let cmd_display = format!("go {}", args.join(" "));
+    format!("`{}` failed: {}", cmd_display, stderr)
+}
+
+/// Pull `(module_path, version)` out of a `go.mod` parse error like
+/// `require github.com/gorilla/mux: version "v999.999.999" invalid: ...`.
+fn extract_invalid_pin(stderr: &str) -> Option<(String, String)> {
+    let line = stderr
+        .lines()
+        .find(|l| l.contains("require ") && l.contains("version "))?;
+    let after_require = line.split("require ").nth(1)?;
+    let module = after_require.split(':').next()?.trim().to_string();
+    let after_version = line.split("version \"").nth(1)?;
+    let version = after_version.split('"').next()?.to_string();
+    Some((module, version))
+}
+
+/// Pull the corrected module path out of a `go.mod has post-vN module path
+/// "github.com/foo/bar/vN" at revision vN.x.y` error.
+fn extract_post_v_path(stderr: &str) -> Option<String> {
+    let after = stderr.split("post-v").nth(1)?;
+    let after_quote = after.split("module path \"").nth(1)?;
+    let path = after_quote.split('"').next()?;
+    Some(path.to_string())
+}
+
+/// Pull `(declared, required)` out of a Go path-mismatch error:
+///
+/// ```text
+/// module declares its path as: golang.org/x/example
+///         but was required as: github.com/golang/example
+/// ```
+fn extract_path_mismatch(stderr: &str) -> Option<(String, String)> {
+    let declared = stderr
+        .lines()
+        .find_map(|l| l.split("module declares its path as:").nth(1))?
+        .trim()
+        .to_string();
+    let required = stderr
+        .lines()
+        .find_map(|l| l.split("but was required as:").nth(1))?
+        .trim()
+        .to_string();
+    if declared.is_empty() || required.is_empty() {
+        return None;
+    }
+    Some((declared, required))
+}
+
+/// Pull `(found_module, missing_package)` out of a Go missing-subpackage error:
+///
+/// ```text
+/// module github.com/gorilla/mux@v1.8.0 found, but does not contain package github.com/gorilla/mux/v1
+/// ```
+fn extract_missing_subpackage(stderr: &str) -> Option<(String, String)> {
+    let after_module = stderr.split("module ").nth(1)?;
+    let found = after_module
+        .split('@')
+        .next()
+        .or_else(|| after_module.split(' ').next())?
+        .trim()
+        .to_string();
+    let after_pkg = stderr.split("does not contain package ").nth(1)?;
+    let missing = after_pkg
+        .split(|c: char| c.is_whitespace())
+        .next()?
+        .to_string();
+    if found.is_empty() || missing.is_empty() {
+        return None;
+    }
+    Some((found, missing))
 }
 
 fn extract_third_party_imports(typedef: &str) -> Vec<String> {

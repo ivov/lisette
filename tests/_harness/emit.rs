@@ -4,15 +4,27 @@ use syntax::program::File;
 use super::pipeline::TestPipeline;
 
 pub fn emit_with_debug_info(raw_source: &str) -> EmitResult {
-    emit_inner(raw_source, Some(raw_source))
+    emit_inner(raw_source, Some(raw_source), &[])
 }
 
 pub fn emit(raw_source: &str) -> EmitResult {
-    emit_inner(raw_source, None)
+    emit_inner(raw_source, None, &[])
 }
 
-fn emit_inner(raw_source: &str, source_for_debug: Option<&str>) -> EmitResult {
-    let compiled = TestPipeline::new(raw_source).wrapped().compile();
+pub fn emit_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> EmitResult {
+    emit_inner(raw_source, None, typedefs)
+}
+
+fn emit_inner(
+    raw_source: &str,
+    source_for_debug: Option<&str>,
+    extra_go_typedefs: &[(&str, &str)],
+) -> EmitResult {
+    let mut pipeline = TestPipeline::new(raw_source).wrapped();
+    for (name, source) in extra_go_typedefs {
+        pipeline = pipeline.with_go_typedef(name, source);
+    }
+    let compiled = pipeline.compile();
 
     let result = compiled.run_inference();
 

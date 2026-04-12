@@ -1,7 +1,13 @@
+use std::io::IsTerminal;
+use std::sync::LazyLock;
+
 use owo_colors::OwoColorize;
 
+static USE_COLOR: LazyLock<bool> =
+    LazyLock::new(|| std::env::var("NO_COLOR").is_err() && std::io::stderr().is_terminal());
+
 pub fn use_color() -> bool {
-    std::env::var("NO_COLOR").is_err()
+    *USE_COLOR
 }
 
 pub fn format_elapsed(elapsed: std::time::Duration) -> String {
@@ -189,15 +195,35 @@ pub fn print_add_success(
     version: &str,
     edges: &std::collections::HashMap<String, Vec<String>>,
     versions: &std::collections::HashMap<String, String>,
+    upgraded_directs: &[(&str, &str, &str)],
 ) {
     eprintln!();
 
     let colored = use_color();
+    for (path, old, new) in upgraded_directs {
+        if colored {
+            eprintln!(
+                "  ↑ Upgraded {} {} → {}",
+                path.green(),
+                old.blue(),
+                new.blue()
+            );
+        } else {
+            eprintln!("  ↑ Upgraded {} {} → {}", path, old, new);
+        }
+    }
+    if !upgraded_directs.is_empty() {
+        eprintln!();
+    }
+
     if colored {
         eprintln!("  ✓ Added {} {}", module_path.green(), version.blue());
     } else {
         eprintln!("  ✓ Added {} {}", module_path, version);
     }
+
+    let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+    visited.insert(module_path.to_string());
 
     let empty: Vec<String> = Vec::new();
     let children = edges.get(module_path).unwrap_or(&empty);
@@ -205,7 +231,15 @@ pub fn print_add_success(
     sorted.sort();
     for (i, child) in sorted.iter().enumerate() {
         let is_last = i == sorted.len() - 1;
-        print_tree_node(child, "    ", is_last, edges, versions, colored);
+        print_tree_node(
+            child,
+            "    ",
+            is_last,
+            edges,
+            versions,
+            colored,
+            &mut visited,
+        );
     }
 }
 
@@ -216,14 +250,33 @@ fn print_tree_node(
     edges: &std::collections::HashMap<String, Vec<String>>,
     versions: &std::collections::HashMap<String, String>,
     colored: bool,
+    visited: &mut std::collections::HashSet<String>,
 ) {
     let branch = if is_last { "└─ " } else { "├─ " };
     let version = versions.get(node).map(String::as_str).unwrap_or("");
+    let already_seen = !visited.insert(node.to_string());
 
     if colored {
-        eprintln!("{}{}{} {}", prefix, branch, node.green(), version.blue());
+        if already_seen {
+            eprintln!(
+                "{}{}{} {} {}",
+                prefix,
+                branch,
+                node.green(),
+                version.blue(),
+                "(*)".dimmed()
+            );
+        } else {
+            eprintln!("{}{}{} {}", prefix, branch, node.green(), version.blue());
+        }
+    } else if already_seen {
+        eprintln!("{}{}{} {} (*)", prefix, branch, node, version);
     } else {
         eprintln!("{}{}{} {}", prefix, branch, node, version);
+    }
+
+    if already_seen {
+        return;
     }
 
     let empty: Vec<String> = Vec::new();
@@ -240,6 +293,7 @@ fn print_tree_node(
             edges,
             versions,
             colored,
+            visited,
         );
     }
 }

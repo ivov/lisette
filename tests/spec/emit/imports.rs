@@ -1,4 +1,4 @@
-use crate::assert_emit_snapshot;
+use crate::{assert_emit_snapshot, assert_emit_snapshot_with_go_typedefs};
 
 #[test]
 fn import_single() {
@@ -163,4 +163,35 @@ fn test() {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn third_party_go_import_path_emitted_in_full() {
+    let input = r#"
+import "go:github.com/bwmarrin/discordgo"
+
+fn test() {
+  let s = discordgo.Session{}
+  let _ = s
+}
+"#;
+    let typedef = r#"
+pub struct Session {}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:github.com/bwmarrin/discordgo", typedef)]);
+}
+
+#[test]
+fn third_party_go_type_uses_short_package_qualifier() {
+    let input = r#"
+import "go:github.com/bwmarrin/discordgo"
+
+fn make() -> Ref<discordgo.Session> {
+  &discordgo.Session{}
+}
+"#;
+    let typedef = r#"
+pub struct Session {}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:github.com/bwmarrin/discordgo", typedef)]);
 }

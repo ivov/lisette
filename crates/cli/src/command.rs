@@ -60,6 +60,7 @@ pub enum ParseError {
     UnknownFlag(String),
     UnexpectedArgument {
         message: String,
+        reason: String,
         hint: String,
     },
 }
@@ -179,7 +180,16 @@ impl Command {
             "version" => Ok(Command::Version),
 
             "add" => match arguments.next() {
-                Some(dependency) => Ok(Command::Add { dependency }),
+                Some(dependency) => {
+                    if let Some(extra) = arguments.next() {
+                        return Err(ParseError::UnexpectedArgument {
+                            message: format!("unexpected argument `{}`", extra),
+                            reason: "`lis add` accepts a single dependency".to_string(),
+                            hint: "Run `lis add` once per dep".to_string(),
+                        });
+                    }
+                    Ok(Command::Add { dependency })
+                }
                 None => Err(ParseError::MissingArgument {
                     command: "add",
                     argument: "dependency",
@@ -223,6 +233,7 @@ impl Command {
                     if let (Some(q), Some(item)) = (&query, &extra) {
                         return Err(ParseError::UnexpectedArgument {
                             message: format!("unexpected argument `{}`", item),
+                            reason: "The `doc` command takes a single query argument".to_string(),
                             hint: format!("Did you mean `lis doc {}.{}`?", q, item),
                         });
                     }

@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"go:github.com/bwmarrin/discordgo\"\n\nfn test() {\n  let s = discordgo.Session{}\n  let _ = s\n}\n"
+---
+package main
+
+import "github.com/bwmarrin/discordgo"
+
+func test() {
+	_ = discordgo.Session{}
+}

@@ -26,6 +26,7 @@ pub struct TestPipeline {
     source: String,
     raw_source: String,
     wrapped: bool,
+    extra_go_typedefs: Vec<(String, String)>,
 }
 
 impl TestPipeline {
@@ -34,12 +35,19 @@ impl TestPipeline {
             source: source.to_string(),
             raw_source: source.to_string(),
             wrapped: false,
+            extra_go_typedefs: Vec::new(),
         }
     }
 
     pub fn wrapped(mut self) -> Self {
         self.wrapped = true;
         self.source = wrap(&self.raw_source);
+        self
+    }
+
+    pub fn with_go_typedef(mut self, module_name: &str, typedef_source: &str) -> Self {
+        self.extra_go_typedefs
+            .push((module_name.to_string(), typedef_source.to_string()));
         self
     }
 
@@ -62,6 +70,7 @@ impl TestPipeline {
         CompiledTest {
             ast: desugar_result.ast,
             wrapped: self.wrapped,
+            extra_go_typedefs: self.extra_go_typedefs,
         }
     }
 }
@@ -69,6 +78,7 @@ impl TestPipeline {
 pub struct CompiledTest {
     ast: Vec<Expression>,
     wrapped: bool,
+    extra_go_typedefs: Vec<(String, String)>,
 }
 
 impl CompiledTest {
@@ -101,10 +111,16 @@ impl CompiledTest {
                         span,
                     } = item
                     {
-                        if let Some(go_pkg) = name.strip_prefix("go:")
-                            && let Some(typedef) = get_go_stdlib_typedef(go_pkg)
-                        {
-                            checker.parse_and_register_go_module(name, typedef, &locator);
+                        if let Some(go_pkg) = name.strip_prefix("go:") {
+                            if let Some(typedef) = get_go_stdlib_typedef(go_pkg) {
+                                checker.parse_and_register_go_module(name, typedef, &locator);
+                            } else if let Some((_, typedef)) = self
+                                .extra_go_typedefs
+                                .iter()
+                                .find(|(n, _)| n.as_str() == name.as_str())
+                            {
+                                checker.parse_and_register_go_module(name, typedef, &locator);
+                            }
                         }
                         Some(FileImport {
                             name: name.clone(),

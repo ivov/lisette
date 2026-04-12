@@ -11,6 +11,15 @@ pub fn new_project(name: &str) -> i32 {
         .and_then(|n| n.to_str())
         .unwrap_or(name);
 
+    if let Err(msg) = deps::validate_project_name(project_name) {
+        cli_error!(
+            "Invalid project name",
+            msg,
+            "Choose a different project name"
+        );
+        return 1;
+    }
+
     if is_go_stdlib_package(project_name) {
         cli_error!(
             "Invalid project name",

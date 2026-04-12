@@ -92,10 +92,28 @@ impl Manifest {
 pub fn parse_manifest(project_root: &Path) -> Result<Manifest, String> {
     let project_toml_path = project_root.join("lisette.toml");
 
-    let content = fs::read_to_string(&project_toml_path)
+    let bytes = fs::read(&project_toml_path)
         .map_err(|_| format!("No `lisette.toml` manifest in `{}`", project_root.display()))?;
+    let content =
+        strip_bom_to_str(&bytes).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))?;
 
-    toml::from_str(&content).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))
+    toml::from_str(content).map_err(|e| format!("Invalid `lisette.toml` manifest: {}", e))
+}
+
+pub fn validate_project_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("project name is empty".to_string());
+    }
+    if let Some(bad) = name
+        .chars()
+        .find(|c| !(c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '~')))
+    {
+        return Err(format!(
+            "`{}` contains `{}`, which is not allowed in a project name (only ASCII letters, digits, and `.-_~`)",
+            name, bad
+        ));
+    }
+    Ok(())
 }
 
 pub fn check_toolchain_version(manifest: &Manifest) -> Result<(), String> {
@@ -114,6 +132,50 @@ pub fn check_toolchain_version(manifest: &Manifest) -> Result<(), String> {
     Ok(())
 }
 
+const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
+
+fn strip_bom_to_str(bytes: &[u8]) -> Result<&str, std::str::Utf8Error> {
+    let body = bytes.strip_prefix(UTF8_BOM).unwrap_or(bytes);
+    std::str::from_utf8(body)
+}
+
+struct ManifestEncoding {
+    had_bom: bool,
+    had_crlf: bool,
+}
+
+fn open_manifest(path: &Path) -> Result<(ManifestEncoding, toml_edit::DocumentMut), String> {
+    let bytes = fs::read(path).map_err(|e| format!("Failed to read `lisette.toml`: {}", e))?;
+    let had_bom = bytes.starts_with(UTF8_BOM);
+    let content =
+        strip_bom_to_str(&bytes).map_err(|e| format!("Failed to read `lisette.toml`: {}", e))?;
+    let had_crlf = content.contains("\r\n");
+    let manifest: toml_edit::DocumentMut = content
+        .parse()
+        .map_err(|e| format!("Failed to parse `lisette.toml`: {}", e))?;
+    Ok((ManifestEncoding { had_bom, had_crlf }, manifest))
+}
+
+fn save_manifest(
+    path: &Path,
+    encoding: &ManifestEncoding,
+    manifest: &toml_edit::DocumentMut,
+) -> Result<(), String> {
+    let mut serialized = manifest.to_string();
+    if encoding.had_crlf {
+        serialized = serialized.replace('\n', "\r\n");
+    }
+    if encoding.had_bom {
+        let mut out = Vec::with_capacity(UTF8_BOM.len() + serialized.len());
+        out.extend_from_slice(UTF8_BOM);
+        out.extend_from_slice(serialized.as_bytes());
+        fs::write(path, out)
+    } else {
+        fs::write(path, serialized)
+    }
+    .map_err(|e| format!("Failed to write `lisette.toml`: {}", e))
+}
+
 /// Add or update a Go dependency in `lisette.toml`.
 ///
 /// ```text
@@ -126,31 +188,9 @@ pub fn upsert_go_dep(
     version: &str,
     via: Option<Vec<String>>,
 ) -> Result<(), String> {
-    let manifest_toml_path = project_root.join("lisette.toml");
-    let manifest_content = fs::read_to_string(&manifest_toml_path)
-        .map_err(|e| format!("Failed to read `lisette.toml`: {}", e))?;
-
-    let mut manifest: toml_edit::DocumentMut = manifest_content
-        .parse()
-        .map_err(|e| format!("Failed to parse `lisette.toml`: {}", e))?;
-
-    if manifest.get("dependencies").is_none() {
-        let mut table = toml_edit::Table::new();
-        table.set_implicit(true);
-        manifest.insert("dependencies", toml_edit::Item::Table(table));
-    }
-
-    let deps = manifest["dependencies"]
-        .as_table_mut()
-        .ok_or("Invalid `lisette.toml`: `dependencies` is not a table")?;
-
-    if deps.get("go").is_none() {
-        deps.insert("go", toml_edit::Item::Table(toml_edit::Table::new()));
-    }
-
-    let go = deps["go"]
-        .as_table_mut()
-        .ok_or("Invalid `lisette.toml`: `dependencies.go` is not a table")?;
+    let path = project_root.join("lisette.toml");
+    let (encoding, mut manifest) = open_manifest(&path)?;
+    let go = ensure_go_deps_table(&mut manifest)?;
 
     match via {
         Some(mut via_list) => {
@@ -173,20 +213,12 @@ pub fn upsert_go_dep(
         }
     }
 
-    fs::write(&manifest_toml_path, manifest.to_string())
-        .map_err(|e| format!("Failed to write `lisette.toml`: {}", e))?;
-
-    Ok(())
+    save_manifest(&path, &encoding, &manifest)
 }
 
 pub fn remove_go_dep(project_root: &Path, go_dep_path: &str) -> Result<(), String> {
-    let manifest_toml_path = project_root.join("lisette.toml");
-    let manifest_content = fs::read_to_string(&manifest_toml_path)
-        .map_err(|e| format!("Failed to read `lisette.toml`: {}", e))?;
-
-    let mut manifest: toml_edit::DocumentMut = manifest_content
-        .parse()
-        .map_err(|e| format!("Failed to parse `lisette.toml`: {}", e))?;
+    let path = project_root.join("lisette.toml");
+    let (encoding, mut manifest) = open_manifest(&path)?;
 
     if let Some(deps) = manifest
         .get_mut("dependencies")
@@ -196,8 +228,24 @@ pub fn remove_go_dep(project_root: &Path, go_dep_path: &str) -> Result<(), Strin
         go.remove(go_dep_path);
     }
 
-    fs::write(&manifest_toml_path, manifest.to_string())
-        .map_err(|e| format!("Failed to write `lisette.toml`: {}", e))?;
+    save_manifest(&path, &encoding, &manifest)
+}
 
-    Ok(())
+fn ensure_go_deps_table(
+    manifest: &mut toml_edit::DocumentMut,
+) -> Result<&mut toml_edit::Table, String> {
+    if manifest.get("dependencies").is_none() {
+        let mut table = toml_edit::Table::new();
+        table.set_implicit(true);
+        manifest.insert("dependencies", toml_edit::Item::Table(table));
+    }
+    let deps = manifest["dependencies"]
+        .as_table_mut()
+        .ok_or("Invalid `lisette.toml`: `dependencies` is not a table")?;
+    if deps.get("go").is_none() {
+        deps.insert("go", toml_edit::Item::Table(toml_edit::Table::new()));
+    }
+    deps["go"]
+        .as_table_mut()
+        .ok_or_else(|| "Invalid `lisette.toml`: `dependencies.go` is not a table".to_string())
 }

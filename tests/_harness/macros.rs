@@ -215,6 +215,22 @@ macro_rules! assert_emit_snapshot {
 }
 
 #[macro_export]
+macro_rules! assert_emit_snapshot_with_go_typedefs {
+    ($input:expr, $typedefs:expr) => {
+        let emit_result = $crate::_harness::emit::emit_with_go_typedefs($input, $typedefs);
+        let go_code = emit_result.go_code();
+
+        insta::with_settings!({
+            description => format!("input: {}", $input),
+            prepend_module_to_snapshot => false,
+            omit_expression => true,
+        }, {
+            insta::assert_snapshot!(go_code);
+        });
+    };
+}
+
+#[macro_export]
 macro_rules! assert_lint_snapshot {
     ($source:expr) => {
         let warnings = $crate::_harness::lint::lint($source);

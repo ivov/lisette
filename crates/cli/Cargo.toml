@@ -28,6 +28,7 @@ deps = { package = "lisette-deps", version = "0.1.8", path = "../deps" }
 lsp = { package = "lisette-lsp", version = "0.1.8", path = "../lsp" }
 tokio = { version = "1", features = ["rt-multi-thread", "io-std"] }
 tower-lsp = "0.20"
+fs2 = "0.4"
 owo-colors.workspace = true
 rustc-hash.workspace = true
 serde_json.workspace = true
