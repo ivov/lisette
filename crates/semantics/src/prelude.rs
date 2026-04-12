@@ -44,7 +44,8 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &DiagnosticSink) {
     checker.put_unprefixed_module_in_scope(PRELUDE_MODULE_ID);
 
     for file in module.all_typedefs() {
-        checker.register_types(&file.items);
+        checker.register_type_definitions(&file.items);
+        checker.register_impl_blocks(&file.items);
         checker.register_values(&file.items, &Visibility::Public);
     }
 

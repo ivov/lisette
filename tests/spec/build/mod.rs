@@ -3729,6 +3729,34 @@ fn main() {
 }
 
 #[test]
+fn impl_block_in_separate_file_from_struct() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", "fn main() {}");
+    fs.add_file(ENTRY_MODULE_ID, "a.lis", "pub struct Foo {}");
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "z.lis",
+        r#"
+impl Foo {
+  pub fn method(self) {}
+}
+
+pub fn bazzle(f: Foo) {
+  f.method()
+}
+"#,
+    );
+
+    let result = compile_check(fs);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn relative_import_path_is_rejected() {
     let mut fs = MockFileSystem::new();
 
