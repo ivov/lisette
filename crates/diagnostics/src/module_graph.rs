@@ -31,6 +31,15 @@ pub fn module_not_found(
         .with_help(help)
 }
 
+pub fn invalid_module_path(module_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Invalid module path `{}`", module_name))
+        .with_resolve_code("invalid_module_path")
+        .with_span_label(&span, "module paths cannot contain `.`")
+        .with_help(
+            "Project imports use bare folder names like `import \"util\"` or `import \"nested/deep/module\"`. Relative-path syntax (`./sub`, `../sub`) is not supported.",
+        )
+}
+
 pub fn cannot_import_prelude(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
         .with_resolve_code("cannot_import_prelude")

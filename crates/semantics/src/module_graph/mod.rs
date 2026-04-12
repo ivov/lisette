@@ -209,6 +209,14 @@ fn collect_imports(
             continue;
         }
 
+        if file_import.name.contains('.') {
+            sink.push(diagnostics::module_graph::invalid_module_path(
+                &file_import.name,
+                file_import.name_span,
+            ));
+            continue;
+        }
+
         imports
             .entry(file_import.name.to_string())
             .or_insert(file_import.name_span);

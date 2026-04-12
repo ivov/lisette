@@ -3727,3 +3727,25 @@ fn main() {
         result.errors
     );
 }
+
+#[test]
+fn relative_import_path_is_rejected() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"import "./sub"
+
+fn main() {}
+"#,
+    );
+    fs.add_file("./sub", "lib.lis", "pub struct Foo {}\n");
+
+    let result = compile_check(fs);
+    assert_eq!(result.errors.len(), 1);
+    assert_eq!(
+        result.errors[0].code_str(),
+        Some("resolve.invalid_module_path")
+    );
+}
