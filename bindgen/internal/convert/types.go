@@ -249,6 +249,12 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 	isExternal := false
 	pkgPrefix := ""
 	if pkg != nil && conv != nil && pkg.Path() != conv.currentPkgPath {
+		if isInternalPackagePath(pkg.Path()) {
+			return TypeResult{SkipReason: &SkipReason{
+				Code:    "internal-package-ref",
+				Message: fmt.Sprintf("references type from internal package %q", pkg.Path()),
+			}}
+		}
 		isExternal = true
 		pkgPrefix = pkg.Name()
 		conv.trackExternalPkg(pkg.Path(), pkg.Name())
@@ -345,6 +351,20 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 	default:
 		return toLisetteRecursive(t, seen, conv)
 	}
+}
+
+func isInternalPackagePath(path string) bool {
+	if path == "internal" {
+		return true
+	}
+	if strings.HasPrefix(path, "internal/") {
+		return true
+	}
+	if strings.HasSuffix(path, "/internal") {
+		return true
+	}
+
+	return strings.Contains(path, "/internal/")
 }
 
 func isErrorInterface(_interface *types.Interface) bool {
