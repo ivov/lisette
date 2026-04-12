@@ -129,7 +129,31 @@ impl Checker<'_, '_> {
                     .items,
             );
 
-            self.register_types(&items);
+            self.register_type_definitions(&items);
+
+            self.store
+                .get_file_mut(*file_id)
+                .expect("file must exist after registration")
+                .items = items;
+        }
+
+        for (file_id, imports) in &file_data {
+            self.reset_scopes();
+            self.cursor.file_id = Some(*file_id);
+
+            self.put_prelude_in_scope();
+            self.put_unprefixed_module_in_scope(id);
+            self.put_imported_modules_in_scope(imports);
+
+            let items = std::mem::take(
+                &mut self
+                    .store
+                    .get_file_mut(*file_id)
+                    .expect("file must exist for registration")
+                    .items,
+            );
+
+            self.register_impl_blocks(&items);
             self.register_values(&items, &Visibility::Private);
 
             self.store
@@ -218,7 +242,8 @@ impl Checker<'_, '_> {
 
     pub fn register_types_and_values(&mut self, items: &[Expression], visibility: &Visibility) {
         self.register_type_names(items, visibility);
-        self.register_types(items);
+        self.register_type_definitions(items);
+        self.register_impl_blocks(items);
         self.register_values(items, visibility);
     }
 
@@ -324,7 +349,7 @@ impl Checker<'_, '_> {
         entries
     }
 
-    pub fn register_types(&mut self, items: &[Expression]) {
+    pub fn register_type_definitions(&mut self, items: &[Expression]) {
         for item in items {
             match item {
                 Expression::Enum {
@@ -356,13 +381,6 @@ impl Checker<'_, '_> {
                     doc,
                     ..
                 } => self.populate_struct(name, name_span, generics, fields, *kind, span, doc),
-                Expression::ImplBlock {
-                    annotation,
-                    methods,
-                    generics,
-                    span,
-                    ..
-                } => self.populate_impl_methods(annotation, generics, methods, span),
                 Expression::Interface {
                     name,
                     name_span,
@@ -391,6 +409,21 @@ impl Checker<'_, '_> {
                     ..
                 } => self.populate_type_alias(name, name_span, generics, annotation, span, doc),
                 _ => (),
+            }
+        }
+    }
+
+    pub fn register_impl_blocks(&mut self, items: &[Expression]) {
+        for item in items {
+            if let Expression::ImplBlock {
+                annotation,
+                methods,
+                generics,
+                span,
+                ..
+            } = item
+            {
+                self.populate_impl_methods(annotation, generics, methods, span);
             }
         }
     }
