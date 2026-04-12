@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.8](https://github.com/ivov/lisette/compare/lisette-v0.1.7...lisette-v0.1.8) - 2026-04-12
+
+- feat: groundwork for lis add command ([#55](https://github.com/ivov/lisette/pull/55)) ([`e4a15e7`](https://github.com/ivov/lisette/commit/e4a15e7a4937ad498d21f67a20b0e86f1e717596))
+- refactor: reorganize deps crate ([`09beac3`](https://github.com/ivov/lisette/commit/09beac374f09f4766d67598a203d41eabf8a70bd))
+- refactor: simplify bindgen invocation ([`262cc20`](https://github.com/ivov/lisette/commit/262cc20c20cad53d61415b0538f4cf9be7a65dc2))
+- fix: reject relative-path imports with clear diagnostic ([#58](https://github.com/ivov/lisette/pull/58)) ([`21389f0`](https://github.com/ivov/lisette/commit/21389f0264e60da9d7dcf8eb6d8398bd2c82c810))
+- fix: register impl blocks after sibling-file type definitions ([#57](https://github.com/ivov/lisette/pull/57)) ([`85a0d5f`](https://github.com/ivov/lisette/commit/85a0d5fe72f1c226fe8a59eacb33c2d7a9667359))
+- refactor: simplify typedef resolver ([#50](https://github.com/ivov/lisette/pull/50)) ([`07a7a45`](https://github.com/ivov/lisette/commit/07a7a453b2deeef6660a5e2f56f66801af3012bc))
+
 ## [0.1.7](https://github.com/ivov/lisette/compare/lisette-v0.1.6...lisette-v0.1.7) - 2026-04-11
 
 ### Chore
