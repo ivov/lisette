@@ -4,6 +4,7 @@ mod go_cli;
 mod handlers;
 mod output;
 mod panic;
+mod workspace;
 
 use command::Command;
 

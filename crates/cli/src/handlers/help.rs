@@ -127,15 +127,6 @@ Arguments:
 Abbreviation: `x`",
         ),
 
-        "add" => print_help(
-            "`lis add` <dependency>
-
-Add a dependency to the project.
-
-Arguments:
-    <dependency>    Dependency to add (e.g., `github.com/user/repo`)",
-        ),
-
         "lsp" => print_help(
             "`lis lsp`
 

@@ -42,11 +42,12 @@ fn bindgen_pkg(target_pkg: &str, output: Option<String>, verbose: bool) -> i32 {
         eprintln!("Generating bindings for {} -> {}", target_pkg, output_path);
     }
 
-    let result = crate::go_cli::build_bindgen_command(target_pkg).output();
+    // lis bindgen writes to a user-specified path, not the typedef cache
+    let workspace = crate::workspace::GoWorkspace::new(Path::new("."), Path::new(""));
 
-    match result {
-        Ok(output) if output.status.success() => {
-            if let Err(e) = std::fs::write(&output_path, &output.stdout) {
+    match workspace.run_bindgen(target_pkg) {
+        Ok(content) => {
+            if let Err(e) = std::fs::write(&output_path, &content) {
                 cli_error!(
                     "Failed to write bindings",
                     format!("Could not write to {}: {}", output_path, e),
@@ -58,19 +59,10 @@ fn bindgen_pkg(target_pkg: &str, output: Option<String>, verbose: bool) -> i32 {
             eprintln!("  ✓ Generated bindings: {}", output_path);
             0
         }
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(msg) => {
             cli_error!(
                 "Failed to generate bindings",
-                format!("Bindgen exited with code {:?}", output.status.code()),
-                stderr.trim().to_string()
-            );
-            1
-        }
-        Err(e) => {
-            cli_error!(
-                "Failed to run bindgen",
-                e.to_string(),
+                msg,
                 "Check Go installation with `go version`"
             );
             1

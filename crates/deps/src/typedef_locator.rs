@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::project_manifest::{GoDependency, Manifest, check_toolchain_version, parse_manifest};
-use crate::{GoPackageRef, typedef_cache_dir};
+use crate::{GoModule, GoPackage, typedef_cache_dir};
 
 #[derive(Debug)]
 pub enum TypedefLocatorResult {
@@ -76,9 +76,9 @@ impl TypedefLocator {
 
     /// Returns the `.d.lis` content for a Go package (without `go:` prefix).
     /// Checks embedded stdlib typedefs first, then the on-disk cache.
-    pub fn find_typedef_content(&self, go_pkg: &str) -> TypedefLocatorResult {
-        if crate::is_stdlib(go_pkg) {
-            return match stdlib::get_go_stdlib_typedef(go_pkg) {
+    pub fn find_typedef_content(&self, package_path: &str) -> TypedefLocatorResult {
+        if crate::is_stdlib(package_path) {
+            return match stdlib::get_go_stdlib_typedef(package_path) {
                 Some(source) => TypedefLocatorResult::Found {
                     content: Cow::Borrowed(source),
                     origin: TypedefOrigin::Stdlib,
@@ -87,7 +87,7 @@ impl TypedefLocator {
             };
         }
 
-        let Some((module_path, dep)) = self.find_module_for_pkg(go_pkg) else {
+        let Some((module_path, dep)) = self.find_module_for_pkg(package_path) else {
             return TypedefLocatorResult::UndeclaredImport;
         };
 
@@ -100,13 +100,15 @@ impl TypedefLocator {
             };
         };
 
-        let pkg_ref = GoPackageRef {
-            module_path,
-            version,
-            package_path: go_pkg,
+        let pkg = GoPackage {
+            module: GoModule {
+                path: module_path,
+                version,
+            },
+            package: package_path,
         };
         let typedef_cache_dir = typedef_cache_dir(home_path);
-        let typedef_path = pkg_ref.build_typedef_path(&typedef_cache_dir);
+        let typedef_path = pkg.typedef_path(&typedef_cache_dir);
 
         match std::fs::read_to_string(&typedef_path) {
             Ok(source) => TypedefLocatorResult::Found {

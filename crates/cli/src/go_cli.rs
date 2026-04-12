@@ -180,24 +180,3 @@ fn go_mod_tidy(path: &Path) -> Result<(), String> {
 
     Ok(())
 }
-
-const BINDGEN_GO_MODULE: &str = "github.com/ivov/lisette/bindgen";
-const BINDGEN_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Return a `Command` to run bindgen on a target package.
-///
-/// - For local dev, runs: `bindgen/bin/bindgen pkg {target_pkg}`
-/// - For end users, runs: `go run github.com/ivov/lisette/bindgen@v{version} pkg {target_pkg}`
-pub fn build_bindgen_command(target_pkg: &str) -> Command {
-    let bindgen_dev_path = Path::new("bindgen/bin/bindgen");
-    if let Ok(bin) = bindgen_dev_path.canonicalize() {
-        let mut cmd = Command::new(bin);
-        cmd.args(["pkg", target_pkg]);
-        return cmd;
-    }
-
-    let bindgen_published_path = format!("{}@v{}", BINDGEN_GO_MODULE, BINDGEN_VERSION);
-    let mut cmd = Command::new("go");
-    cmd.args(["run", &bindgen_published_path, "pkg", target_pkg]);
-    cmd
-}

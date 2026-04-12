@@ -120,8 +120,7 @@ pub fn check_toolchain_version(manifest: &Manifest) -> Result<(), String> {
 /// "github.com/gorilla/mux" = "v1.8.0"
 /// "github.com/gorilla/context" = { version = "v1.1.1", via = ["github.com/gorilla/mux"] }
 /// ```
-#[allow(dead_code)]
-pub fn write_go_dep_to_manifest(
+pub fn upsert_go_dep(
     project_root: &Path,
     module_path: &str,
     version: &str,
@@ -180,8 +179,7 @@ pub fn write_go_dep_to_manifest(
     Ok(())
 }
 
-#[allow(dead_code)]
-pub fn remove_go_dep_from_manifest(project_root: &Path, go_dep_path: &str) -> Result<(), String> {
+pub fn remove_go_dep(project_root: &Path, go_dep_path: &str) -> Result<(), String> {
     let manifest_toml_path = project_root.join("lisette.toml");
     let manifest_content = fs::read_to_string(&manifest_toml_path)
         .map_err(|e| format!("Failed to read `lisette.toml`: {}", e))?;

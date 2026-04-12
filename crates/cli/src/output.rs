@@ -1,3 +1,5 @@
+use owo_colors::OwoColorize;
+
 pub fn use_color() -> bool {
     std::env::var("NO_COLOR").is_err()
 }
@@ -12,7 +14,6 @@ pub fn format_elapsed(elapsed: std::time::Duration) -> String {
     };
 
     if use_color() {
-        use owo_colors::OwoColorize;
         format!("{}", format!("({})", time_str).dimmed())
     } else {
         format!("({})", time_str)
@@ -23,8 +24,6 @@ pub fn format_backticks(text: &str, use_color: bool) -> String {
     if !use_color {
         return text.to_string();
     }
-
-    use owo_colors::OwoColorize;
 
     let mut result = String::new();
     let mut chars = text.char_indices().peekable();
@@ -95,8 +94,6 @@ fn format_help_text(text: &str, use_color: bool) -> String {
         }
         return out;
     }
-
-    use owo_colors::OwoColorize;
 
     let mut result = String::new();
     let mut chars = text.char_indices().peekable();
@@ -170,6 +167,88 @@ pub fn capitalize_first(s: &str) -> String {
     match chars.next() {
         None => String::new(),
         Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+pub fn print_preview_notice() {
+    eprintln!();
+    if use_color() {
+        eprintln!(
+            "  ! Support for third-party Go dependencies is in {}",
+            "early preview".yellow().underline()
+        );
+    } else {
+        eprintln!("  ! Support for third-party Go dependencies is in early preview");
+    }
+    eprintln!("  ! Please report issues at: https://github.com/ivov/lisette/issues");
+    eprintln!();
+}
+
+pub fn print_add_success(
+    module_path: &str,
+    version: &str,
+    edges: &std::collections::HashMap<String, Vec<String>>,
+    versions: &std::collections::HashMap<String, String>,
+) {
+    eprintln!();
+
+    let colored = use_color();
+    if colored {
+        eprintln!("  ✓ Added {} {}", module_path.green(), version.blue());
+    } else {
+        eprintln!("  ✓ Added {} {}", module_path, version);
+    }
+
+    let empty: Vec<String> = Vec::new();
+    let children = edges.get(module_path).unwrap_or(&empty);
+    let mut sorted: Vec<&String> = children.iter().collect();
+    sorted.sort();
+    for (i, child) in sorted.iter().enumerate() {
+        let is_last = i == sorted.len() - 1;
+        print_tree_node(child, "    ", is_last, edges, versions, colored);
+    }
+}
+
+fn print_tree_node(
+    node: &str,
+    prefix: &str,
+    is_last: bool,
+    edges: &std::collections::HashMap<String, Vec<String>>,
+    versions: &std::collections::HashMap<String, String>,
+    colored: bool,
+) {
+    let branch = if is_last { "└─ " } else { "├─ " };
+    let version = versions.get(node).map(String::as_str).unwrap_or("");
+
+    if colored {
+        eprintln!("{}{}{} {}", prefix, branch, node.green(), version.blue());
+    } else {
+        eprintln!("{}{}{} {}", prefix, branch, node, version);
+    }
+
+    let empty: Vec<String> = Vec::new();
+    let children = edges.get(node).unwrap_or(&empty);
+    let mut sorted: Vec<&String> = children.iter().collect();
+    sorted.sort();
+    let child_prefix = format!("{}{}", prefix, if is_last { "   " } else { "│  " });
+    for (i, child) in sorted.iter().enumerate() {
+        let child_is_last = i == sorted.len() - 1;
+        print_tree_node(
+            child,
+            &child_prefix,
+            child_is_last,
+            edges,
+            versions,
+            colored,
+        );
+    }
+}
+
+pub fn print_progress(msg: &str) {
+    if use_color() {
+        eprintln!("  · {}", msg.dimmed());
+    } else {
+        eprintln!("  · {}", msg);
     }
 }
 
