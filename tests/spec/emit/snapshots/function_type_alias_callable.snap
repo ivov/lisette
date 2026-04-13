@@ -4,7 +4,7 @@ description: "input: \ntype Transformer = fn(int) -> int\n\nfn apply(t: Transfor
 ---
 package main
 
-type Transformer = func(int) int
+type Transformer func(int) int
 
 func apply(t Transformer, val int) int {
 	return t(val)

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Wrong argument count
+   ╭─[test.lis:6:11]
+ 5 │   let f = |x: int| x * 2
+ 6 │   let _ = Transformer(f, f)
+   ·           ────────┬────────
+   ·                   ╰── expected 1 argument, found 2
+ 7 │ }
+   ╰────
+  help: Type conversion `Transformer(value)` takes exactly one argument — the value to convert · code: [infer.type_conversion_arity]

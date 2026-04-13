@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-type F = func(string) lisette.Result[int, error]
+type F func(string) lisette.Result[int, error]
 
 func main() {
 	f := func(_ string) lisette.Result[int, error] {

@@ -589,6 +589,10 @@ string_range_slicing: PASS
 
 go_import_not_shadowed_by_transitive: PASS
 
+// go fn-alias type conversion
+
+handlerfunc_conversion: PASS
+
 // go pointer receiver
 
 pointer_receiver_struct_literal: PASS

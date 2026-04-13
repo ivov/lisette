@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, StructKind};
 use syntax::program::{CallKind, Definition, NativeTypeKind};
-use syntax::types::{Bound, SubstitutionMap, Type, substitute};
+use syntax::types::{Bound, SubstitutionMap, Type, substitute, unqualified_name};
 
 use super::super::Checker;
 use super::super::checks::check_binding_pattern;
@@ -221,6 +221,19 @@ impl Checker<'_, '_> {
         let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
         let (callee_ty, new_type_args) =
             self.instantiate_callee_type(&forall_ty, &type_args, &callee_expression, &span);
+
+        if let Some(underlying_fn) = self.try_as_type_conversion(&callee_expression, &callee_ty) {
+            return self.infer_type_conversion_call(
+                callee_expression,
+                callee_ty,
+                underlying_fn,
+                args,
+                new_type_args,
+                span,
+                expected_ty,
+            );
+        }
+
         let (param_types, param_mutability, return_ty, bounds) =
             self.extract_call_signature(callee_ty, args.len(), &callee_expression);
 
@@ -577,6 +590,96 @@ impl Checker<'_, '_> {
         }
 
         None
+    }
+
+    fn try_as_type_conversion(&self, callee: &Expression, callee_ty: &Type) -> Option<Type> {
+        let Type::Constructor {
+            id,
+            underlying_ty: Some(underlying),
+            ..
+        } = callee_ty
+        else {
+            return None;
+        };
+
+        if !matches!(underlying.as_ref(), Type::Function { .. }) {
+            return None;
+        }
+
+        if !matches!(
+            self.store.get_definition(id),
+            Some(Definition::TypeAlias { .. })
+        ) {
+            return None;
+        }
+
+        let is_bare_type_name = match callee.unwrap_parens() {
+            Expression::Identifier { binding_id, .. } => binding_id.is_none(),
+            Expression::DotAccess {
+                expression: base, ..
+            } => matches!(
+                base.get_type().resolve(),
+                Type::Constructor { id, .. } if id.starts_with("@import/")
+            ),
+            _ => false,
+        };
+
+        if !is_bare_type_name {
+            return None;
+        }
+
+        Some(underlying.as_ref().clone())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn infer_type_conversion_call(
+        &mut self,
+        callee_expression: Expression,
+        named_ty: Type,
+        underlying_fn: Type,
+        args: Vec<Expression>,
+        type_args: Vec<Annotation>,
+        span: Span,
+        expected_ty: &Type,
+    ) -> Expression {
+        if args.len() != 1 {
+            let Type::Constructor { id, .. } = &named_ty else {
+                unreachable!("type_conversion_underlying only fires for Constructor callees")
+            };
+            self.sink.push(diagnostics::infer::type_conversion_arity(
+                unqualified_name(id),
+                args.len(),
+                span,
+            ));
+            let new_args: Vec<Expression> = args
+                .into_iter()
+                .map(|arg| self.with_value_context(|s| s.infer_expression(arg, &Type::Error)))
+                .collect();
+            self.unify(expected_ty, &Type::Error, &span);
+            self.resolutions.mark_call(span, CallKind::Regular);
+            return Expression::Call {
+                expression: callee_expression.into(),
+                args: new_args,
+                type_args,
+                ty: Type::Error,
+                span,
+            };
+        }
+
+        let arg = args.into_iter().next().unwrap();
+        let new_arg = self.with_value_context(|s| s.infer_expression(arg, &underlying_fn));
+        self.check_not_temp_producing(&new_arg);
+
+        self.unify(expected_ty, &named_ty, &span);
+        self.resolutions.mark_call(span, CallKind::Regular);
+
+        Expression::Call {
+            expression: callee_expression.into(),
+            args: vec![new_arg],
+            type_args,
+            ty: named_ty,
+            span,
+        }
     }
 
     fn infer_call_arguments(

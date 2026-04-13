@@ -4,7 +4,7 @@ description: "input: \ntype IntPredicate = fn(int) -> bool\n\nfn apply(f: IntPre
 ---
 package main
 
-type IntPredicate = func(int) bool
+type IntPredicate func(int) bool
 
 func apply(f IntPredicate, x int) bool {
 	return f(x)

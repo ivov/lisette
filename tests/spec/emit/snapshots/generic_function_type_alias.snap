@@ -4,7 +4,7 @@ description: "input: \ntype Transform<T> = fn(T) -> T\n\nfn apply_transform<T>(v
 ---
 package main
 
-type Transform[T any] = func(T) T
+type Transform[T any] func(T) T
 
 func apply_transform[T any](val T, f Transform[T]) T {
 	return f(val)

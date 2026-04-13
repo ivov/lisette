@@ -1,6 +1,7 @@
 import "go:bytes"
 import "go:fmt"
 import httpx "go:net/http"
+import "go:net/http/httptest"
 import "go:math"
 import "go:path"
 import "go:strconv"
@@ -3514,6 +3515,20 @@ fn test_go_import_not_shadowed_by_transitive() -> int {
   if c.is_none() { 100 } else { 0 }
 }
 
+fn serve(h: httpx.Handler) -> int {
+  let rec = httptest.NewRecorder()
+  let req = httptest.NewRequest("GET", "/", bytes.NewBufferString(""))
+  h.ServeHTTP(rec, req)
+  rec.Code
+}
+
+fn test_handlerfunc_conversion() -> int {
+  let h = httpx.HandlerFunc(|w: httpx.ResponseWriter, _r: Ref<httpx.Request>| {
+    w.WriteHeader(httpx.StatusNoContent)
+  })
+  if serve(h) == httpx.StatusNoContent { 100 } else { 0 }
+}
+
 // Pointer receiver on struct literal (value type) — needs `mut`
 fn test_pointer_receiver_struct_literal() -> int {
   let mut wg = sync.WaitGroup {}
@@ -4113,6 +4128,9 @@ fn main() {
     test_go_import_not_shadowed_by_transitive(),
     100,
   )
+
+  section("go fn-alias type conversion")
+  report("handlerfunc_conversion", test_handlerfunc_conversion(), 100)
 
   section("go pointer receiver")
   report(

@@ -4,7 +4,7 @@ description: "input: \ntype IntFn = fn(int) -> int\n\nfn apply(f: Ref<IntFn>, x:
 ---
 package main
 
-type IntFn = func(int) int
+type IntFn func(int) int
 
 func apply(f *IntFn, x int) int {
 	return (*f)(x)

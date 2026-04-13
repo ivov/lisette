@@ -556,19 +556,32 @@ impl Emitter<'_> {
         generics: &[Generic],
         ty: &Type,
     ) -> String {
+        let is_fn_alias;
         let underlying = match ty {
             Type::Forall { body, .. } => match body.as_ref() {
                 Type::Constructor {
                     underlying_ty: Some(inner),
                     ..
-                } if matches!(inner.as_ref(), Type::Function { .. }) => inner.as_ref(),
-                other => other,
+                } if matches!(inner.as_ref(), Type::Function { .. }) => {
+                    is_fn_alias = true;
+                    inner.as_ref()
+                }
+                other => {
+                    is_fn_alias = false;
+                    other
+                }
             },
             Type::Constructor {
                 underlying_ty: Some(inner),
                 ..
-            } if matches!(inner.as_ref(), Type::Function { .. }) => inner.as_ref(),
-            _ => ty,
+            } if matches!(inner.as_ref(), Type::Function { .. }) => {
+                is_fn_alias = true;
+                inner.as_ref()
+            }
+            _ => {
+                is_fn_alias = false;
+                ty
+            }
         };
         let ty_string = self.go_type_as_string(underlying);
 
@@ -586,10 +599,12 @@ impl Emitter<'_> {
             Self::collect_map_key_generics(std::iter::once(underlying), &generic_names);
         let generics_string = self.generics_to_string_with_map_keys(generics, &map_key_generics);
 
+        let separator = if is_fn_alias { " " } else { " = " };
         format!(
-            "type {}{} = {}",
+            "type {}{}{}{}",
             go_name::escape_keyword(name),
             generics_string,
+            separator,
             ty_string
         )
     }
