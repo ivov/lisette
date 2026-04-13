@@ -18,6 +18,7 @@ impl LintRule for FactLintGroup {
         check_discarded_tail_expressions(ctx, &mut diagnostics);
         check_overused_references(ctx, &mut diagnostics);
         check_unused_type_params(ctx, &mut diagnostics);
+        check_type_params_only_in_bound(ctx, &mut diagnostics);
         check_always_failing_try_blocks(ctx, &mut diagnostics);
         check_expression_only_fstrings(ctx, &mut diagnostics);
 
@@ -116,6 +117,17 @@ fn check_unused_type_params(ctx: &LintContext, diagnostics: &mut Vec<LisetteDiag
             continue;
         }
         diagnostics.push(diagnostics::lint::unused_type_parameter(&fact.span));
+    }
+}
+
+fn check_type_params_only_in_bound(ctx: &LintContext, diagnostics: &mut Vec<LisetteDiagnostic>) {
+    for fact in &ctx.facts.type_params_only_in_bound {
+        if fact.is_typedef {
+            continue;
+        }
+        diagnostics.push(diagnostics::lint::type_param_only_in_bound(
+            &fact.span, &fact.name,
+        ));
     }
 }
 

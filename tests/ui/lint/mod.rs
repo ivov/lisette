@@ -2041,6 +2041,76 @@ fn main() {
 }
 
 #[test]
+fn type_param_only_in_bound_warns() {
+    assert_lint_snapshot!(
+        r#"
+pub interface Cloner<T: Cloner<T>> {
+  fn clone(self) -> T
+}
+
+pub fn squiggle<A: Cloner<B>, B>(_: A) {}
+"#
+    );
+}
+
+#[test]
+fn type_param_in_bound_and_used_as_parameter_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Cloner<T: Cloner<T>> {
+  fn clone(self) -> T
+}
+
+struct Foo{}
+
+impl Foo {
+  fn clone(self) -> Foo { Foo{} }
+}
+
+pub fn squiggle<A: Cloner<B>, B>(_: A, _: B) {}
+
+fn main() {
+  squiggle(Foo{}, Foo{})
+}
+"#
+    );
+}
+
+#[test]
+fn type_param_in_bound_and_used_as_return_type_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Cloner<T: Cloner<T>> {
+  fn clone(self) -> T
+}
+
+struct Foo{}
+
+impl Foo {
+  fn clone(self) -> Foo { Foo{} }
+}
+
+pub fn squiggle<A: Cloner<B>, B>(a: A) -> B {
+  a.clone()
+}
+"#
+    );
+}
+
+#[test]
+fn type_param_only_in_bound_underscore_prefix_suppressed() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Cloner<T: Cloner<T>> {
+  fn clone(self) -> T
+}
+
+pub fn squiggle<A: Cloner<_B>, _B>(_: A) {}
+"#
+    );
+}
+
+#[test]
 fn interface_used_as_struct_type_parameter_constraint_no_warning() {
     assert_no_lint_warnings!(
         r#"

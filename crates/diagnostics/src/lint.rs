@@ -232,6 +232,16 @@ pub fn unused_type_parameter(span: &Span) -> LisetteDiagnostic {
         .with_help("Remove the unused type parameter or use it in the signature")
 }
 
+pub fn type_param_only_in_bound(span: &Span, name: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Type parameter only used in bound")
+        .with_lint_code("type_param_only_in_bound")
+        .with_span_label(
+            span,
+            format!("`{}` is only used inside another parameter's bound", name),
+        )
+        .with_help("Remove it, or use it in a parameter type, return type, or bound left-hand side")
+}
+
 pub fn ineffective_try_block(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Ineffective `try` block")
         .with_lint_code("try_block_no_success_path")

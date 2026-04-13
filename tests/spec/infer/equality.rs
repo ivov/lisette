@@ -2508,3 +2508,51 @@ fn match_branches_incompatible_interfaces_rejected() {
     )
     .assert_infer_code("interface_not_implemented");
 }
+
+#[test]
+fn self_referential_fbound_accepts_matching_type() {
+    infer(
+        r#"
+        pub interface Cloner<T: Cloner<T>> {
+          fn clone(self) -> T
+        }
+
+        struct Foo{}
+
+        impl Foo {
+          fn clone(self) -> Foo { Foo{} }
+        }
+
+        fn squiggle<A: Cloner<B>, B>(_: A, _: B) {}
+
+        fn main() {
+          squiggle(Foo{}, Foo{})
+        }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn self_referential_fbound_rejects_mismatched_type() {
+    infer(
+        r#"
+        pub interface Cloner<T: Cloner<T>> {
+          fn clone(self) -> T
+        }
+
+        struct Foo{}
+
+        impl Foo {
+          fn clone(self) -> Foo { Foo{} }
+        }
+
+        fn squiggle<A: Cloner<B>, B>(_: A, _: B) {}
+
+        fn main() {
+          squiggle(Foo{}, "hello")
+        }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}

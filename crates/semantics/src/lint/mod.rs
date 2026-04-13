@@ -48,6 +48,7 @@ pub enum Lint {
     InternalTypeLeak,
     UnnecessaryReference,
     UnusedTypeParameter,
+    TypeParamOnlyInBound,
     RestOnlySlicePattern,
     NonPascalCaseType,
     NonPascalCaseTypeParameter,

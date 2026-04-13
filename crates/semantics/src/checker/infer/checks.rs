@@ -1,3 +1,4 @@
+use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::UnusedExpressionKind;
@@ -121,6 +122,39 @@ impl Checker<'_, '_> {
                     is_typedef,
                 );
             }
+        }
+    }
+
+    pub(crate) fn check_type_params_only_in_bound(&mut self, generics: &[Generic], fn_ty: &Type) {
+        if generics.is_empty() {
+            return;
+        }
+        let bounds = fn_ty.get_bounds();
+        if bounds.is_empty() {
+            return;
+        }
+        let (Some(params), Some(return_type)) =
+            (fn_ty.get_function_params(), fn_ty.get_function_ret())
+        else {
+            return;
+        };
+
+        let only_in_bound =
+            collect_type_params_only_in_bound(generics, params, return_type, bounds);
+        if only_in_bound.is_empty() {
+            return;
+        }
+
+        let is_typedef = self.is_d_lis();
+        for generic in generics {
+            if generic.name.starts_with('_') || !only_in_bound.contains(&generic.name) {
+                continue;
+            }
+            self.facts.add_type_param_only_in_bound(
+                generic.name.to_string(),
+                generic.span,
+                is_typedef,
+            );
         }
     }
 
@@ -879,4 +913,36 @@ pub fn check_interface_visibility(
             }
         }
     }
+}
+
+/// Returns generic names that appear inside some `bound.ty` and nowhere else
+/// in the signature — not in a parameter, the return type, or as a bound's
+/// subject.
+fn collect_type_params_only_in_bound(
+    generics: &[Generic],
+    params: &[Type],
+    return_type: &Type,
+    bounds: &[Bound],
+) -> HashSet<EcoString> {
+    let mut unseen_outside_constraint: HashSet<EcoString> =
+        generics.iter().map(|g| g.name.clone()).collect();
+    for param in params {
+        param.remove_found_type_names(&mut unseen_outside_constraint);
+    }
+    return_type.remove_found_type_names(&mut unseen_outside_constraint);
+    for bound in bounds {
+        bound
+            .generic
+            .remove_found_type_names(&mut unseen_outside_constraint);
+    }
+
+    let mut unseen_anywhere = unseen_outside_constraint.clone();
+    for bound in bounds {
+        bound.ty.remove_found_type_names(&mut unseen_anywhere);
+    }
+
+    unseen_outside_constraint
+        .into_iter()
+        .filter(|name| !unseen_anywhere.contains(name))
+        .collect()
 }

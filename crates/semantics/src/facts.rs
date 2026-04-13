@@ -13,6 +13,7 @@ pub struct Facts {
     pub discarded_tail_expressions: Vec<DiscardedTailFact>,
     pub overused_references: Vec<OverusedReferenceFact>,
     pub unused_type_params: Vec<UnusedTypeParamFact>,
+    pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<Span>,
     /// Spans of or-patterns with binding errors, used to suppress contradictory lints.
@@ -111,6 +112,15 @@ impl Facts {
         });
     }
 
+    pub fn add_type_param_only_in_bound(&mut self, name: String, span: Span, is_typedef: bool) {
+        self.type_params_only_in_bound
+            .push(TypeParamOnlyInBoundFact {
+                name,
+                span,
+                is_typedef,
+            });
+    }
+
     pub fn add_always_failing_try_block(&mut self, span: Span) {
         self.always_failing_try_blocks.push(span);
     }
@@ -187,6 +197,13 @@ pub struct OverusedReferenceFact {
 
 #[derive(Debug, Clone)]
 pub struct UnusedTypeParamFact {
+    pub name: String,
+    pub span: Span,
+    pub is_typedef: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeParamOnlyInBoundFact {
     pub name: String,
     pub span: Span,
     pub is_typedef: bool,
