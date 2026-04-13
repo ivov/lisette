@@ -230,6 +230,20 @@ pub fn self_in_static_method(span: Span) -> LisetteDiagnostic {
         .with_help("Add a `self` parameter to the method if you need an instance method")
 }
 
+pub fn static_method_called_on_instance(
+    method_name: &str,
+    type_name: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Static method called on instance")
+        .with_infer_code("static_method_on_instance")
+        .with_span_label(&span, format!("`{}` is a static method", method_name))
+        .with_help(format!(
+            "Call it as `{}.{}(...)` on the type, not on an instance",
+            type_name, method_name
+        ))
+}
+
 pub fn function_or_value_not_found_in_module(name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Name not found")
         .with_resolve_code("not_found_in_module")

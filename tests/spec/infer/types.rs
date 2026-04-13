@@ -803,6 +803,60 @@ fn multiple_static_methods() {
 }
 
 #[test]
+fn static_method_called_on_self_is_error() {
+    infer(
+        r#"
+        struct Foo {}
+        impl Foo {
+          fn bar() {}
+          fn baz(self) {
+            self.bar()
+          }
+        }
+        "#,
+    )
+    .assert_infer_code("static_method_on_instance");
+}
+
+#[test]
+fn static_method_called_on_instance_binding_is_error() {
+    infer(
+        r#"
+        struct Counter { value: int }
+        impl Counter {
+          fn new(start: int) -> Counter {
+            Counter { value: start }
+          }
+        }
+        fn main() {
+          let c = Counter.new(1)
+          c.new(2)
+        }
+        "#,
+    )
+    .assert_infer_code("static_method_on_instance");
+}
+
+#[test]
+fn static_method_called_on_type_alias_still_works() {
+    infer(
+        r#"
+        struct Counter { value: int }
+        type CounterAlias = Counter
+        impl Counter {
+          fn new(start: int) -> Counter {
+            Counter { value: start }
+          }
+        }
+        fn main() {
+          let _ = CounterAlias.new(1)
+        }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn generic_option_some() {
     infer(
         r#"{
