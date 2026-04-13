@@ -11,7 +11,7 @@ use syntax::ast::{
     Visibility,
 };
 use syntax::program::Definition;
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 
 impl Emitter<'_> {
     /// Returns the name for the auto-generated stringer method, or `None` if no
@@ -639,7 +639,8 @@ impl Emitter<'_> {
             }
         }
 
-        let generics_str = self.generics_to_string_with_map_keys(generics, &map_key_generics);
+        let filtered = strip_self_referential_bounds(generics, name);
+        let generics_str = self.generics_to_string_with_map_keys(&filtered, &map_key_generics);
 
         let mut output = Vec::new();
         output.push(format!(
@@ -954,4 +955,27 @@ fn is_option_type(ty: &Type) -> bool {
         Type::Constructor { id, .. } => id == "Option" || id.ends_with(".Option"),
         _ => false,
     }
+}
+
+fn bound_references_interface(annotation: &Annotation, interface_name: &str) -> bool {
+    let Annotation::Constructor { name, .. } = annotation else {
+        return false;
+    };
+    unqualified_name(name) == interface_name
+}
+
+fn strip_self_referential_bounds(generics: &[Generic], interface_name: &str) -> Vec<Generic> {
+    generics
+        .iter()
+        .map(|g| Generic {
+            name: g.name.clone(),
+            bounds: g
+                .bounds
+                .iter()
+                .filter(|ann| !bound_references_interface(ann, interface_name))
+                .cloned()
+                .collect(),
+            span: g.span,
+        })
+        .collect()
 }

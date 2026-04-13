@@ -370,6 +370,28 @@ fn test() {
 }
 
 #[test]
+fn interface_self_referential_fbound_erased() {
+    let input = r#"
+pub interface Cloner<T: Cloner<T>> {
+  fn clone(self) -> T
+}
+
+struct Foo{}
+
+impl Foo {
+  fn clone(self) -> Foo { Foo{} }
+}
+
+fn squiggle<A: Cloner<B>, B>(_: A, _: B) {}
+
+fn main() {
+  squiggle(Foo{}, Foo{})
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interface_self_param_stripped() {
     let input = r#"
 interface Greetable {

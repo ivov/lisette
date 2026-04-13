@@ -1,0 +1,11 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Type parameter only used in bound
+   ╭─[test.lis:6:31]
+ 5 │ 
+ 6 │ pub fn squiggle<A: Cloner<B>, B>(_: A) {}
+   ·                               ┬
+   ·                               ╰── `B` is only used inside another parameter's bound
+   ╰────
+  help: Remove it, or use it in a parameter type, return type, or bound left-hand side · code: [lint.type_param_only_in_bound]

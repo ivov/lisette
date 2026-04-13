@@ -126,6 +126,7 @@ impl Checker<'_, '_> {
         );
 
         self.check_unused_type_parameters(&generics, &base_fn_ty);
+        self.check_type_params_only_in_bound(&generics, &base_fn_ty);
 
         let fn_forall_ty = if generics.is_empty() {
             base_fn_ty.clone()

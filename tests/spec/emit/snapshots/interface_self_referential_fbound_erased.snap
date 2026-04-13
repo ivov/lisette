@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \npub interface Cloner<T: Cloner<T>> {\n  fn clone(self) -> T\n}\n\nstruct Foo{}\n\nimpl Foo {\n  fn clone(self) -> Foo { Foo{} }\n}\n\nfn squiggle<A: Cloner<B>, B>(_: A, _: B) {}\n\nfn main() {\n  squiggle(Foo{}, Foo{})\n}\n"
+---
+package main
+
+type Cloner[T any] interface {
+	Clone() T
+}
+
+type Foo struct{}
+
+func (f Foo) String() string {
+	return "Foo"
+}
+
+func (f Foo) Clone() Foo {
+	return Foo{}
+}
+
+func squiggle[A Cloner[B], B any](_ A, _ B) {}
+
+func main() {
+	squiggle(Foo{}, Foo{})
+}
