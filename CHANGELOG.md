@@ -2,6 +2,14 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.9](https://github.com/ivov/lisette/compare/lisette-v0.1.8...lisette-v0.1.9) - 2026-04-13
+
+- fix: harden lis add command [#64](https://github.com/ivov/lisette/pull/64) [`f8df4fb`](https://github.com/ivov/lisette/commit/f8df4fb9a35c01d5ec4f00d8345cfa0bde464a50)
+- fix: integer literal edge cases and unicode escape validation [`3b7a2b9`](https://github.com/ivov/lisette/commit/3b7a2b9ca650984bf2547ebc8c24a72f51a7abd5)
+- fix: reject static method called on an instance [#69](https://github.com/ivov/lisette/pull/69) [`efacd5f`](https://github.com/ivov/lisette/commit/efacd5f42a9f349806c7fd2c8096abe017ebebe7)
+- fix: erase self-referential bounds on interface type parameters [#68](https://github.com/ivov/lisette/pull/68) [`a92f8df`](https://github.com/ivov/lisette/commit/a92f8df96afa360f1b5fb3ee3450b30f44d94379)
+- fix: allow type alias to fn as type conversion [#65](https://github.com/ivov/lisette/pull/65) [`b806427`](https://github.com/ivov/lisette/commit/b806427096288fc2b39051eae4aaa7e518c06298)
+
 ## [0.1.8](https://github.com/ivov/lisette/compare/lisette-v0.1.7...lisette-v0.1.8) - 2026-04-12
 
 - chore: render changelog as flat list of all commits [`08d6a72`](https://github.com/ivov/lisette/commit/08d6a72e6f83d97b1a9e531b639554432f7eefde)
