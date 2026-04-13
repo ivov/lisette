@@ -10,7 +10,7 @@ import (
 	"strconv"
 )
 
-type F = func(string) lisette.Result[int, error]
+type F func(string) lisette.Result[int, error]
 
 type Pair struct {
 	F0 F

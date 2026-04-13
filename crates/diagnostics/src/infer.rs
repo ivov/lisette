@@ -1168,6 +1168,23 @@ pub fn not_callable(ty: &Type, span: Span) -> LisetteDiagnostic {
         .with_help(help)
 }
 
+pub fn type_conversion_arity(
+    type_name: &str,
+    actual_count: usize,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Wrong argument count")
+        .with_infer_code("type_conversion_arity")
+        .with_span_label(
+            &span,
+            format!("expected 1 argument, found {}", actual_count),
+        )
+        .with_help(format!(
+            "Type conversion `{}(value)` takes exactly one argument — the value to convert",
+            type_name
+        ))
+}
+
 #[derive(Debug, Clone)]
 pub struct InterfaceViolation {
     pub interface_name: String,

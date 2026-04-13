@@ -1002,6 +1002,19 @@ fn test() {
 }
 
 #[test]
+fn infer_type_conversion_arity() {
+    let input = r#"
+type Transformer = fn(int) -> int
+
+fn test() {
+  let f = |x: int| x * 2
+  let _ = Transformer(f, f)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_struct_member_not_found_with_suggestion() {
     let input = r#"
 struct Point { x: int, y: int }

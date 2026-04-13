@@ -747,6 +747,24 @@ fn simple_type_alias() {
 }
 
 #[test]
+fn fn_type_alias_conversion_call() {
+    infer(
+        r#"
+    type Transformer = fn(int) -> int
+
+    fn apply(t: Transformer, x: int) -> int {
+      t(x)
+    }
+
+    fn test() -> int {
+      apply(Transformer(|x| x * 2), 21)
+    }
+        "#,
+    )
+    .assert_last_function_type(vec![], int_type());
+}
+
+#[test]
 fn type_alias_in_function_param() {
     infer(
         r#"

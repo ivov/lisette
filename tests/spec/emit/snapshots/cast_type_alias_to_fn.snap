@@ -4,7 +4,7 @@ description: "input: \ntype Handler = fn(int) -> string\n\nfn my_handler(x: int)
 ---
 package main
 
-type Handler = func(int) string
+type Handler func(int) string
 
 func my_handler(_ int) string {
 	return "ok"
