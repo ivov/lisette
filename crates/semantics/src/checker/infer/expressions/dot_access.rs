@@ -1,7 +1,7 @@
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::{Definition, DotAccessKind, ReceiverCoercion};
-use syntax::types::{Type, substitute};
+use syntax::types::{Type, substitute, unqualified_name};
 
 use super::super::Checker;
 use super::super::checks::check_is_non_addressable;
@@ -242,6 +242,28 @@ impl Checker<'_, '_> {
         type_module != self.cursor.module_id
             && type_module != "prelude"
             && !type_module.starts_with("go:")
+    }
+
+    fn is_type_level_receiver(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier {
+                binding_id: None,
+                qualified: Some(qname),
+                ..
+            } => self
+                .store
+                .get_definition(qname)
+                .is_some_and(Definition::is_type_definition),
+            Expression::DotAccess {
+                expression: inner, ..
+            } => {
+                matches!(
+                    inner.get_type().shallow_resolve(),
+                    Type::Constructor { id, .. } if id.starts_with("@import/")
+                )
+            }
+            _ => false,
+        }
     }
 
     fn get_available_member_names(&self, ty: &Type) -> Vec<String> {
@@ -873,9 +895,24 @@ impl Checker<'_, '_> {
         let method_ty = method_ty.clone();
         let name_span = *name_span;
         let is_public = visibility.is_public();
+        let type_simple_name = unqualified_name(&id);
+
+        if !self.is_type_level_receiver(args.expression) {
+            let member_len = args.member_name.len() as u32;
+            let member_span = Span {
+                file_id: args.span.file_id,
+                byte_offset: args.span.byte_offset + args.span.byte_length - member_len,
+                byte_length: member_len,
+            };
+            self.sink
+                .push(diagnostics::infer::static_method_called_on_instance(
+                    args.member_name,
+                    type_simple_name,
+                    member_span,
+                ));
+        }
 
         if self.is_foreign_type(&id) && !is_public {
-            let type_simple_name = id.rsplit('.').next().unwrap_or(&id);
             self.sink.push(diagnostics::infer::private_method_access(
                 args.member_name,
                 type_simple_name,
@@ -887,7 +924,7 @@ impl Checker<'_, '_> {
             self.facts.add_usage(*args.span, definition_span);
         }
 
-        let type_name_len = id.rsplit('.').next().unwrap_or(&id).len() as u32;
+        let type_name_len = type_simple_name.len() as u32;
         self.track_name_usage(&id, args.span, type_name_len);
 
         let (method_ty, _) = self.instantiate(&method_ty);
