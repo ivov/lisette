@@ -83,6 +83,12 @@ fn char_escaped_tab() {
 }
 
 #[test]
+fn char_escaped_bell() {
+    let input = "'\\a'";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
 fn char_escaped_backslash() {
     let input = "'\\\\'";
     assert_lex_snapshot!(input);
@@ -397,6 +403,18 @@ fn string_literal_empty() {
 #[test]
 fn string_literal_with_escaped_char() {
     let input = "\"hello\\nworld\\t\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn string_literal_with_bell_escape() {
+    let input = "\"\\x1b]11;?\\a\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn string_literal_with_c_style_escapes() {
+    let input = "\"\\a\\b\\f\\v\"";
     assert_lex_snapshot!(input);
 }
 

@@ -195,7 +195,7 @@ impl<'source> Lexer<'source> {
         )
         .with_lex_code("invalid_escape_sequence")
         .with_help(
-            "Valid escapes are `\\n`, `\\t`, `\\r`, `\\\\`, `\\'`, `\\xHH` (hex), `\\ooo` (octal), and `\\u{HEX}` (unicode)",
+            "Valid escapes are `\\a`, `\\b`, `\\f`, `\\n`, `\\r`, `\\t`, `\\v`, `\\\\`, `\\'`, `\\xHH` (hex), `\\ooo` (octal), and `\\u{HEX}` (unicode)",
         );
         self.errors.push(error);
     }

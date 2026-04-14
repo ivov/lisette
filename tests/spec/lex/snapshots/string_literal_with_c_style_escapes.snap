@@ -1,0 +1,26 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: \"\\a\\b\\f\\v\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: String,
+            text: "\"\\a\\b\\f\\v\"",
+            byte_offset: 0,
+            byte_length: 10,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 10,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

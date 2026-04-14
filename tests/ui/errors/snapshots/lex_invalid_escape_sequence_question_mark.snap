@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                 ╰── `\?` is not a valid escape
  4 │ }
    ╰────
-  help: Valid escapes are `\n`, `\t`, `\r`, `\\`, `\'`, `\xHH` (hex), `\ooo` (octal), and `\u{HEX}` (unicode) · code: [lex.invalid_escape_sequence]
+  help: Valid escapes are `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v`, `\\`, `\'`, `\xHH` (hex), `\ooo` (octal), and `\u{HEX}` (unicode) · code: [lex.invalid_escape_sequence]

@@ -843,7 +843,8 @@ impl<'source> Lexer<'source> {
                         escaped = false;
                         continue;
                     }
-                    b'n' | b't' | b'r' | b'\\' | b'"' | b'x' | b'U' => {}
+                    b'a' | b'b' | b'f' | b'n' | b'r' | b't' | b'v' | b'\\' | b'"' | b'x' | b'U' => {
+                    }
                     b'\'' => {}
                     _ => {
                         self.error_invalid_escape(self.current_char());
@@ -1167,7 +1168,7 @@ impl<'source> Lexer<'source> {
                         self.error_octal_escape_out_of_range(escape_start, escape_len);
                     }
                 }
-                b'n' | b't' | b'r' | b'\\' | b'\'' | b'x' => {
+                b'a' | b'b' | b'f' | b'n' | b'r' | b't' | b'v' | b'\\' | b'\'' | b'x' => {
                     self.next();
                 }
                 _ => {
