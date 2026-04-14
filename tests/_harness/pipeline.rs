@@ -90,7 +90,16 @@ impl CompiledTest {
 
         init_prelude(&mut store);
 
-        let (typed_ast, definitions, unused, mutations, coercions, resolutions, ufcs_methods) = {
+        let (
+            typed_ast,
+            definitions,
+            unused,
+            mutations,
+            coercions,
+            resolutions,
+            ufcs_methods,
+            go_package_names,
+        ) = {
             let mut checker = Checker::new(&mut store, &sink);
             checker
                 .ufcs_methods
@@ -235,6 +244,7 @@ impl CompiledTest {
             let coercions = std::mem::take(&mut checker.coercions);
             let resolutions = std::mem::take(&mut checker.resolutions);
             let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
+            let go_package_names = checker.store.go_package_names.clone();
 
             (
                 typed_ast,
@@ -244,6 +254,7 @@ impl CompiledTest {
                 coercions,
                 resolutions,
                 ufcs_methods,
+                go_package_names,
             )
         };
 
@@ -257,6 +268,7 @@ impl CompiledTest {
             coercions,
             resolutions,
             ufcs_methods,
+            go_package_names,
         }
     }
 }
@@ -271,6 +283,7 @@ pub struct InferenceResult {
     pub coercions: CoercionInfo,
     pub resolutions: ResolutionInfo,
     pub ufcs_methods: HashSet<(String, String)>,
+    pub go_package_names: HashMap<String, String>,
 }
 
 fn unwrap_test_wrapper(expression: Expression) -> Expression {

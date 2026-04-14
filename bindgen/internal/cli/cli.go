@@ -146,7 +146,7 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 	}
 
 	emitter := emit.NewEmitter(cfg, pkg.PkgPath)
-	emitter.EmitHeader(displayPath, lisetteVersion, goVersion)
+	emitter.EmitHeader(displayPath, pkg.Name, lisetteVersion, goVersion)
 
 	emitter.EmitImports(converter.ExternalPkgs())
 

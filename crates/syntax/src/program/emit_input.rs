@@ -226,4 +226,5 @@ pub struct EmitInput {
     pub resolutions: ResolutionInfo,
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
+    pub go_package_names: HashMap<String, String>,
 }

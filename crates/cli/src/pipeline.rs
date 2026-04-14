@@ -77,7 +77,7 @@ pub fn compile(
         locator: config.locator.clone(),
     });
 
-    let sources: HashMap<u32, SourceInfo> = semantic_result
+    let mut sources: HashMap<u32, SourceInfo> = semantic_result
         .files
         .iter()
         .map(|(file_id, file)| {
@@ -90,6 +90,13 @@ pub fn compile(
             )
         })
         .collect();
+
+    for (file_id, typedef) in &semantic_result.typedef_sources {
+        sources.entry(*file_id).or_insert_with(|| SourceInfo {
+            source: typedef.source.clone(),
+            filename: typedef.filename.clone(),
+        });
+    }
 
     let failed = semantic_result.failed();
     let errors = semantic_result.errors.clone();

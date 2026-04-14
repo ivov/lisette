@@ -25,7 +25,16 @@ pub struct RefLintGroup;
 impl LintRule for RefLintGroup {
     fn check(&self, ctx: &LintContext) -> Vec<LisetteDiagnostic> {
         ctx.module
-            .map(|module| run_ref_lints(module, ctx.files, ctx.config, ctx.facts).diagnostics)
+            .map(|module| {
+                run_ref_lints(
+                    module,
+                    ctx.files,
+                    ctx.go_package_names,
+                    ctx.config,
+                    ctx.facts,
+                )
+                .diagnostics
+            })
             .unwrap_or_default()
     }
 }
@@ -39,6 +48,7 @@ pub struct RefLintResult {
 pub fn run_ref_lints(
     module: &Module,
     files: &HashMap<u32, File>,
+    go_package_names: &HashMap<String, String>,
     config: &LintConfig,
     facts: &Facts,
 ) -> RefLintResult {
@@ -47,9 +57,9 @@ pub fn run_ref_lints(
     let mut unused_definition_spans = Vec::new();
     let mut graph = ReferenceGraph::new();
 
-    collect_items(module, files, &mut graph);
+    collect_items(module, files, go_package_names, &mut graph);
 
-    let alias_map = AliasMap::build(module, files);
+    let alias_map = AliasMap::build(module, files, go_package_names);
     for file in files.values() {
         for item in &file.items {
             extract_references(module, item, &mut graph, &alias_map);
@@ -100,7 +110,12 @@ pub fn run_ref_lints(
     }
 }
 
-fn collect_items(module: &Module, files: &HashMap<u32, File>, graph: &mut ReferenceGraph) {
+fn collect_items(
+    module: &Module,
+    files: &HashMap<u32, File>,
+    go_package_names: &HashMap<String, String>,
+    graph: &mut ReferenceGraph,
+) {
     for file in files.values() {
         for item in &file.items {
             match item {
@@ -121,7 +136,7 @@ fn collect_items(module: &Module, files: &HashMap<u32, File>, graph: &mut Refere
                         span: *span,
                     };
 
-                    if let Some(effective) = file_import.effective_alias() {
+                    if let Some(effective) = file_import.effective_alias(go_package_names) {
                         let id = ModuleItemId::new(&module.id, &effective);
                         graph.add_import(id, *name_span);
                     }

@@ -13,6 +13,9 @@ pub struct Store {
     pub module_ids: Vec<ModuleId>,
     /// file ID -> module ID
     pub files: HashMap<u32, String>,
+    /// Go module ID -> Go package name, from the typedef `// Package:` directive.
+    /// Present only when the package name differs from the final path segment.
+    pub go_package_names: HashMap<String, String>,
     visited_modules: HashSet<String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
     next_file_id: Cell<u32>,
@@ -42,6 +45,7 @@ impl Store {
             files: Default::default(),
             modules,
             module_ids,
+            go_package_names: Default::default(),
             visited_modules: Default::default(),
             next_file_id: Cell::new(2), // 0 = entry, 1 = prelude
         }

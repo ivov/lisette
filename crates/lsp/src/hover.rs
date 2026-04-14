@@ -325,7 +325,7 @@ fn resolve_dot_access_doc(
         _ => return None,
     };
 
-    let module_name = find_module_by_alias(file, alias)?;
+    let module_name = find_module_by_alias(file, alias, &snapshot.result.go_package_names)?;
 
     let qualified = if matches!(expression, Expression::DotAccess { .. }) {
         if let Some(dotted) = expression.as_dotted_path()

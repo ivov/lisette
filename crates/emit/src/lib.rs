@@ -36,6 +36,7 @@ pub struct TestEmitConfig<'a> {
     pub coercions: &'a CoercionInfo,
     pub resolutions: &'a ResolutionInfo,
     pub ufcs_methods: &'a HashSet<(String, String)>,
+    pub go_package_names: &'a HashMap<String, String>,
 }
 
 struct EmitContext<'a> {
@@ -45,6 +46,7 @@ struct EmitContext<'a> {
     coercions: &'a CoercionInfo,
     resolutions: &'a ResolutionInfo,
     ufcs_methods: &'a HashSet<(String, String)>,
+    go_package_names: &'a HashMap<String, String>,
     entry_module: ModuleId,
     go_module: String,
     options: EmitOptions,
@@ -162,6 +164,7 @@ impl<'a> Emitter<'a> {
                 coercions: &analysis.coercions,
                 resolutions: &analysis.resolutions,
                 ufcs_methods: &analysis.ufcs_methods,
+                go_package_names: &analysis.go_package_names,
                 entry_module: analysis.entry_module_id.to_string(),
                 go_module: go_module.to_string(),
                 options: options.clone(),
@@ -207,6 +210,7 @@ impl<'a> Emitter<'a> {
             coercions: config.coercions,
             resolutions: config.resolutions,
             ufcs_methods: config.ufcs_methods,
+            go_package_names: config.go_package_names,
             entry_module: config.module_id.to_string(),
             go_module: config.go_module.to_string(),
             options: EmitOptions { debug },
@@ -486,7 +490,11 @@ impl<'a> Emitter<'a> {
 
             let unused_imports =
                 Self::unused_imports_for_current_module(self.ctx.unused, &self.current_module);
-            let mut import_builder = ImportBuilder::new(&self.ctx.go_module, unused_imports);
+            let mut import_builder = ImportBuilder::new(
+                &self.ctx.go_module,
+                unused_imports,
+                self.ctx.go_package_names,
+            );
             import_builder.collect_from_file(file);
 
             let ensure_imported = std::mem::take(&mut self.ensure_imported);

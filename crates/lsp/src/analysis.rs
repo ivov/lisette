@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use miette::Diagnostic as MietteDiagnostic;
+use rustc_hash::FxHashMap;
 use tower_lsp::lsp_types::*;
 
 use deps::TypedefLocator;
@@ -31,9 +32,13 @@ pub(crate) fn offset_in_span(offset: u32, span: &syntax::ast::Span) -> bool {
 }
 
 /// Look up the module name for an import alias in a file.
-pub(crate) fn find_module_by_alias(file: &syntax::program::File, alias: &str) -> Option<String> {
+pub(crate) fn find_module_by_alias(
+    file: &syntax::program::File,
+    alias: &str,
+    go_package_names: &FxHashMap<String, String>,
+) -> Option<String> {
     file.imports().into_iter().find_map(|import| {
-        if import.effective_alias().as_deref() == Some(alias) {
+        if import.effective_alias(go_package_names).as_deref() == Some(alias) {
             Some(import.name.to_string())
         } else {
             None

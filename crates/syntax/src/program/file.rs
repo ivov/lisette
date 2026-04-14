@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::hash::BuildHasher;
+
 use ecow::EcoString;
 
 use crate::ast::{Expression, ImportAlias, Span};
@@ -20,19 +23,27 @@ pub struct FileImport {
 }
 
 impl FileImport {
-    pub fn effective_alias(&self) -> Option<String> {
+    pub fn effective_alias<S: BuildHasher>(
+        &self,
+        go_package_names: &HashMap<String, String, S>,
+    ) -> Option<String> {
         match &self.alias {
             Some(ImportAlias::Named(name, _)) => Some(name.to_string()),
             Some(ImportAlias::Blank(_)) => None,
-            None => Some(
-                self.name
-                    .strip_prefix("go:")
-                    .unwrap_or(&self.name)
-                    .split('/')
-                    .next_back()
-                    .unwrap_or(&self.name)
-                    .to_string(),
-            ),
+            None => {
+                if let Some(pkg_name) = go_package_names.get(self.name.as_str()) {
+                    return Some(pkg_name.clone());
+                }
+                Some(
+                    self.name
+                        .strip_prefix("go:")
+                        .unwrap_or(&self.name)
+                        .split('/')
+                        .next_back()
+                        .unwrap_or(&self.name)
+                        .to_string(),
+                )
+            }
         }
     }
 }

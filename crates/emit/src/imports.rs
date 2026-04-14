@@ -8,15 +8,21 @@ use syntax::program::{File, FileImport, ModuleId};
 pub struct ImportBuilder<'a> {
     go_module: &'a str,
     unused_imports: &'a HashSet<EcoString>,
+    go_package_names: &'a HashMap<String, String>,
     imports: HashMap<String, String>,
     dropped_aliases: HashMap<String, String>,
 }
 
 impl<'a> ImportBuilder<'a> {
-    pub fn new(go_module: &'a str, unused_imports: &'a HashSet<EcoString>) -> Self {
+    pub fn new(
+        go_module: &'a str,
+        unused_imports: &'a HashSet<EcoString>,
+        go_package_names: &'a HashMap<String, String>,
+    ) -> Self {
         Self {
             go_module,
             unused_imports,
+            go_package_names,
             imports: HashMap::default(),
             dropped_aliases: HashMap::default(),
         }
@@ -27,17 +33,18 @@ impl<'a> ImportBuilder<'a> {
             let is_blank = matches!(import.alias, Some(ImportAlias::Blank(_)));
 
             if !is_blank
-                && let Some(ref alias) = import.effective_alias()
+                && let Some(ref alias) = import.effective_alias(self.go_package_names)
                 && self.unused_imports.contains(alias.as_str())
             {
-                let (path, go_alias) = resolve_import(&import, self.go_module);
+                let (path, go_alias) =
+                    resolve_import(&import, self.go_module, self.go_package_names);
                 if !go_alias.is_empty() {
                     self.dropped_aliases.insert(path, go_alias);
                 }
                 continue;
             }
 
-            let (path, alias) = resolve_import(&import, self.go_module);
+            let (path, alias) = resolve_import(&import, self.go_module, self.go_package_names);
             self.imports.insert(path, alias);
         }
     }
@@ -110,7 +117,11 @@ impl<'a> ImportBuilder<'a> {
     }
 }
 
-fn resolve_import(import: &FileImport, go_module: &str) -> (String, String) {
+fn resolve_import(
+    import: &FileImport,
+    go_module: &str,
+    go_package_names: &HashMap<String, String>,
+) -> (String, String) {
     let go_path = import
         .name
         .strip_prefix(go_name::GO_IMPORT_PREFIX)
@@ -120,8 +131,11 @@ fn resolve_import(import: &FileImport, go_module: &str) -> (String, String) {
     let go_alias = match &import.alias {
         Some(ImportAlias::Named(a, _)) => a.to_string(),
         Some(ImportAlias::Blank(_)) => "_".to_string(),
-        None if go_name::is_go_import(&import.name) => String::new(),
-        None => import.effective_alias().unwrap_or_default(),
+        None if go_name::is_go_import(&import.name) => go_package_names
+            .get(import.name.as_str())
+            .cloned()
+            .unwrap_or_default(),
+        None => import.effective_alias(go_package_names).unwrap_or_default(),
     };
 
     (go_path, go_alias)

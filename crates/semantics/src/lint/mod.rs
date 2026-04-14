@@ -90,6 +90,7 @@ pub struct LintContext<'a> {
     pub is_d_lis: bool,
     /// Files for this module (used by ref_lints for cross-file analysis)
     pub files: &'a HashMap<u32, File>,
+    pub go_package_names: &'a HashMap<String, String>,
 }
 
 fn all_lint_rules() -> Vec<Box<dyn LintRule>> {
@@ -101,6 +102,7 @@ fn all_lint_rules() -> Vec<Box<dyn LintRule>> {
 }
 
 pub fn lint_all_modules(store: &Store, facts: &Facts, sink: &DiagnosticSink) -> UnusedInfo {
+    let go_package_names = &store.go_package_names;
     let config = LintConfig::default();
     let mut unused = UnusedInfo::default();
 
@@ -115,6 +117,7 @@ pub fn lint_all_modules(store: &Store, facts: &Facts, sink: &DiagnosticSink) -> 
             config: &config,
             is_d_lis: false,
             files: &empty_files,
+            go_package_names,
         };
         let mut diagnostics = FactLintGroup.check(&ctx);
         diagnostics.sort_by_key(|d| d.primary_offset());
@@ -127,7 +130,7 @@ pub fn lint_all_modules(store: &Store, facts: &Facts, sink: &DiagnosticSink) -> 
         if module.is_internal() {
             continue;
         }
-        lint_module(module, facts, &config, sink, &mut unused);
+        lint_module(module, go_package_names, facts, &config, sink, &mut unused);
     }
 
     for b in facts.bindings.values() {
@@ -141,13 +144,15 @@ pub fn lint_all_modules(store: &Store, facts: &Facts, sink: &DiagnosticSink) -> 
 
 fn lint_module(
     module: &Module,
+    go_package_names: &HashMap<String, String>,
     facts: &Facts,
     config: &LintConfig,
     sink: &DiagnosticSink,
     unused: &mut UnusedInfo,
 ) {
     // Module-level lints (reference graph analysis)
-    let ref_result = ref_lints::run_ref_lints(module, &module.files, config, facts);
+    let ref_result =
+        ref_lints::run_ref_lints(module, &module.files, go_package_names, config, facts);
     if !ref_result.unused_import_aliases.is_empty() {
         unused.imports_by_module.insert(
             module.id.clone().into(),
@@ -174,6 +179,7 @@ fn lint_module(
             config,
             is_d_lis: file.is_d_lis(),
             files: &module.files,
+            go_package_names,
         };
 
         let mut diagnostics = AstLintGroup.check(&ctx);
