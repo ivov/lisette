@@ -157,7 +157,7 @@ fn lex_empty_char() {
 
 #[test]
 fn lex_invalid_escape() {
-    let input = r#"let x = '\v'"#;
+    let input = r#"let x = '\q'"#;
     assert_lex_error_snapshot!(input);
 }
 
