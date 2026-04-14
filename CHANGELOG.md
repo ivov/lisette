@@ -5,6 +5,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 ## [0.1.10](https://github.com/ivov/lisette/compare/lisette-v0.1.9...lisette-v0.1.10) - 2026-04-14
 
 - docs: mention goland in homepage [`834c1d3`](https://github.com/ivov/lisette/commit/834c1d31e734012da93f77af18f851376ce12b39)
+- feat: goland support [#76](https://github.com/ivov/lisette/pull/76) [`59ef661`](https://github.com/ivov/lisette/commit/59ef6616272b29483f5ef5edfd6edac159c1176d)
 - fix: default Go import alias to declared package name [#72](https://github.com/ivov/lisette/pull/72) [`af71eca`](https://github.com/ivov/lisette/commit/af71ecacc5fbe85ec02851aa12244be3202f6b59)
 - fix: accept \a \b \f \v escape sequences in string and rune literals [#73](https://github.com/ivov/lisette/pull/73) [`7b7d7ce`](https://github.com/ivov/lisette/commit/7b7d7ce4d8bd8b8d5ae1c8dc828fcc4a5377dee5)
 
