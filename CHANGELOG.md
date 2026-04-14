@@ -2,6 +2,16 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.11](https://github.com/ivov/lisette/compare/lisette-v0.1.10...lisette-v0.1.11) - 2026-04-14
+
+- fix: only translate invalid version errors pinned to user target [`76c0037`](https://github.com/ivov/lisette/commit/76c0037a584f22b1d9835e935d5a61b37397ec4d)
+- fix: reject unparseable bindgen output before caching in lis add [`e6fbc1f`](https://github.com/ivov/lisette/commit/e6fbc1f34a7314561980f7007eae8e946d8c5ade)
+- fix: prune stale .go files from target on rebuild [#82](https://github.com/ivov/lisette/pull/82) [`25c1d58`](https://github.com/ivov/lisette/commit/25c1d5807f04c032d24376e400208dcebe3d01dd)
+- fix: stop prefixing commit hashes with v in lis add [`47196ec`](https://github.com/ivov/lisette/commit/47196ecf0bd4fb4a1bc932f2eae6b9b6db53d2d6)
+- fix: report missing repo segment in github.com module path [`00f297c`](https://github.com/ivov/lisette/commit/00f297c7f9bdf7b5738375705cb9bdce6c29fdab)
+- fix: distinguish package-local Option/Result/Partial from prelude [`3342aa8`](https://github.com/ivov/lisette/commit/3342aa8360830474a035f70a58c3cb071cb6cccb)
+- fix: preserve snake_case field name on ref receiver access [#80](https://github.com/ivov/lisette/pull/80) [`1fa6205`](https://github.com/ivov/lisette/commit/1fa6205d26c5ea94996091660f90caca6eb39842)
+
 ## [0.1.10](https://github.com/ivov/lisette/compare/lisette-v0.1.9...lisette-v0.1.10) - 2026-04-14
 
 - docs: mention goland in homepage [`834c1d3`](https://github.com/ivov/lisette/commit/834c1d31e734012da93f77af18f851376ce12b39)
