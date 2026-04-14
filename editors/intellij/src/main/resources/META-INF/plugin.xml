@@ -1,0 +1,35 @@
+<idea-plugin>
+    <id>run.lisette.plugin</id>
+    <name>Lisette</name>
+    <version>0.1.0</version>
+    <vendor email="ivov.src@gmail.com" url="https://lisette.run">Iván Ovejero</vendor>
+
+    <description><![CDATA[
+        Language support for <a href="https://lisette.run">Lisette</a> in GoLand, IntelliJ IDEA Ultimate, and other LSP-capable JetBrains IDEs.
+        <br/><br/>
+        Backed by the <code>lis lsp</code> language server. Requires the <code>lis</code> CLI to be installed and on your <code>PATH</code>.
+        <br/><br/>
+        Features provided via LSP: diagnostics, hover, go-to-definition, find references, code completion, signature help, document formatting, and document symbols. Syntax highlighting is provided by the same TextMate grammar used by the VSCode extension.
+        <br/><br/>
+        Rename refactoring (<code>⇧F6</code>) is not wired up: JetBrains' LSP API does not bridge <code>textDocument/rename</code> as of IntelliJ Platform 2024.3. Use Find Usages (<code>⌥F7</code>) as a workaround.
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <b>0.1.0</b> — Initial release. Syntax highlighting via the Lisette TextMate grammar plus LSP-backed diagnostics, hover, goto, references, completion, signature help, formatting, and document symbols.
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.textmate</depends>
+    <depends optional="true" config-file="lsp.xml">com.intellij.modules.lsp</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType
+            name="Lisette"
+            language="Lisette"
+            extensions="lis"
+            implementationClass="run.lisette.intellij.LisetteFileType"
+            fieldName="INSTANCE"/>
+        <textmate.bundleProvider
+            implementation="run.lisette.intellij.LisetteTextMateBundleProvider"/>
+    </extensions>
+</idea-plugin>

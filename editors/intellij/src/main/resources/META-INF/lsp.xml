@@ -1,0 +1,6 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <platform.lsp.serverSupportProvider
+            implementation="run.lisette.intellij.LisetteLspServerSupportProvider"/>
+    </extensions>
+</idea-plugin>
