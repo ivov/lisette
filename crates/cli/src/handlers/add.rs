@@ -230,7 +230,7 @@ fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> {
         version
     } else if version.starts_with('v') || version.starts_with('V') {
         format!("v{}", &version[1..])
-    } else if version.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+    } else if looks_like_bare_semver(&version) {
         format!("v{}", version)
     } else {
         // Pass through branch names, commit hashes, HEAD, etc. unchanged so
@@ -267,6 +267,15 @@ fn looks_like_version(s: &str) -> bool {
     }
     let stripped = s.strip_prefix('v').unwrap_or(s);
     !stripped.is_empty() && stripped.chars().next().is_some_and(|c| c.is_ascii_digit())
+}
+
+fn looks_like_bare_semver(s: &str) -> bool {
+    let core = s.split(['-', '+']).next().unwrap_or("");
+    if core.is_empty() {
+        return false;
+    }
+    core.split('.')
+        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Detect common shapes that look like a published module path but are not:
