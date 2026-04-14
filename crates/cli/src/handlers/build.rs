@@ -5,7 +5,7 @@ use std::time::Instant;
 use crate::cli_error;
 use crate::go_cli;
 use diagnostics::render::{self, Filter};
-use lisette::fs::LocalFileSystem;
+use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 
 pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
@@ -155,6 +155,20 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
             );
             return 1;
         }
+    }
+
+    let produced: Vec<&str> = result
+        .output
+        .iter()
+        .map(|file| file.name.as_str())
+        .collect();
+    if let Err(e) = prune_orphan_go_files(&target_dir, &produced) {
+        cli_error!(
+            "Failed to compile Lisette project to Go",
+            format!("Failed to prune stale Go files: {}", e),
+            "Check file permissions"
+        );
+        return 1;
     }
 
     if let Err(e) = go_cli::go_fmt(&target_dir) {
