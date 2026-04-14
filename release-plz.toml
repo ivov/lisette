@@ -3,6 +3,21 @@ changelog_update = false
 git_tag_enable = false
 git_release_enable = false
 semver_check = false
+pr_body = """
+{%- for release in releases -%}
+{%- if release.changelog -%}
+{%- set lines = release.changelog | split(pat="
+") -%}
+{%- set heading_bare = lines[0] | split(pat=" - ") | first -%}
+{%- set marker = "[" ~ release.next_version ~ "](" -%}
+{%- set heading = heading_bare | replace(from=marker, to="[" ~ release.next_version ~ " (upcoming)](") -%}
+{%- set rest = lines | slice(start=1) | join(sep="
+") -%}
+{{ heading }}
+{{ rest }}
+{%- endif -%}
+{%- endfor -%}
+"""
 
 [[package]]
 name = "lisette"
