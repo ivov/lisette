@@ -1518,6 +1518,27 @@ fn test() {
 }
 
 #[test]
+fn ref_receiver_preserves_snake_case_in_public_field() {
+    let input = r#"
+struct Foo {
+  pub bar_baz: string,
+}
+
+impl Foo {
+  fn show(self: Ref<Foo>) -> string {
+    self.bar_baz
+  }
+}
+
+fn test() {
+  let mut foo = Foo { bar_baz: "quux" }
+  let _ = foo.show()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn ref_map() {
     let input = r#"
 fn test(m: Ref<Map<string, int>>) {

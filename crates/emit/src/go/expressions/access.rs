@@ -154,6 +154,7 @@ impl Emitter<'_> {
 
         let is_prelude_type = expression_ty
             .resolve()
+            .strip_refs()
             .get_qualified_id()
             .is_some_and(|id| id.starts_with(go_name::PRELUDE_PREFIX));
 
