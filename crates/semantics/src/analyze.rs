@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::path::PathBuf;
 
-use diagnostics::{DiagnosticSink, SemanticResult};
+use diagnostics::{DiagnosticSink, SemanticResult, TypedefSource};
 use syntax::ast::Expression;
 use syntax::program::{File, ModuleInfo, MutationInfo, UnusedInfo};
 
@@ -290,6 +290,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     let mut files = HashMap::default();
     let mut definitions = HashMap::default();
     let mut modules = HashMap::default();
+    let mut typedef_sources = HashMap::default();
 
     for (mod_id, module) in store.modules {
         let is_internal = module.is_internal();
@@ -297,6 +298,15 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         definitions.extend(module.definitions);
 
         if is_internal {
+            typedef_sources.extend(module.typedefs.into_iter().map(|(id, file)| {
+                (
+                    id,
+                    TypedefSource {
+                        source: file.source,
+                        filename: file.name,
+                    },
+                )
+            }));
             continue;
         }
 
@@ -327,6 +337,8 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         resolutions,
         cached_modules,
         ufcs_methods,
+        typedef_sources,
+        go_package_names: store.go_package_names,
     };
 
     (result, facts)

@@ -195,3 +195,47 @@ pub struct Session {}
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:github.com/bwmarrin/discordgo", typedef)]);
 }
+
+#[test]
+fn versioned_go_module_uses_package_directive_as_alias() {
+    let input = r#"
+import "go:example.com/bubbletea/v2"
+
+fn make() -> Ref<tea.Program> {
+  &tea.Program{}
+}
+"#;
+    let typedef = r#"// Package: tea
+
+pub struct Program {}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/bubbletea/v2", typedef)]);
+}
+
+#[test]
+fn two_versioned_modules_with_distinct_package_names_coexist() {
+    let input = r#"
+import "go:example.com/bubbletea/v2"
+import "go:example.com/lipgloss/v2"
+
+fn make() -> Ref<tea.Program> {
+  let _ = lipgloss.Style{}
+  &tea.Program{}
+}
+"#;
+    let tea_typedef = r#"// Package: tea
+
+pub struct Program {}
+"#;
+    let lipgloss_typedef = r#"// Package: lipgloss
+
+pub struct Style {}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(
+        input,
+        &[
+            ("go:example.com/bubbletea/v2", tea_typedef),
+            ("go:example.com/lipgloss/v2", lipgloss_typedef),
+        ]
+    );
+}

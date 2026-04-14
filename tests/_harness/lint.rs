@@ -89,6 +89,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     let module = checker.store.get_module(TEST_MODULE_ID).unwrap();
     let file = module.files.get(&file_id).unwrap();
 
+    let go_package_names = checker.store.go_package_names.clone();
     let lint_ctx = lint::LintContext {
         ast: &file.items,
         facts: &checker.facts,
@@ -96,6 +97,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         config: &lint_config,
         is_d_lis: file.is_d_lis(),
         files: &module.files,
+        go_package_names: &go_package_names,
     };
     let lint_sink = DiagnosticSink::new();
     lint::lint_file(&lint_ctx, &lint_sink);

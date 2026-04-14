@@ -15,7 +15,11 @@ pub struct AliasMap {
 }
 
 impl AliasMap {
-    pub fn build(module: &Module, files: &HashMap<u32, File>) -> Self {
+    pub fn build(
+        module: &Module,
+        files: &HashMap<u32, File>,
+        go_package_names: &HashMap<String, String>,
+    ) -> Self {
         let mut aliases = HashMap::default();
 
         for file in files.values() {
@@ -23,7 +27,7 @@ impl AliasMap {
                 if matches!(import.alias, Some(ImportAlias::Blank(_))) {
                     continue;
                 }
-                if let Some(effective) = import.effective_alias() {
+                if let Some(effective) = import.effective_alias(go_package_names) {
                     aliases.insert(effective.clone(), ModuleItemId::new(&module.id, &effective));
                 }
             }

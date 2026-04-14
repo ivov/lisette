@@ -15,6 +15,22 @@ use syntax::types::Type;
 
 use super::Checker;
 
+pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
+    for line in source.lines().take(10) {
+        let line = line.trim_start();
+        if let Some(rest) = line.strip_prefix("// Package:") {
+            let name = rest.trim();
+            if !name.is_empty() {
+                return Some(name.to_string());
+            }
+        }
+        if !line.starts_with("//") && !line.is_empty() {
+            break;
+        }
+    }
+    None
+}
+
 pub(super) fn extract_go_name(attributes: &[Attribute]) -> Option<String> {
     attributes
         .iter()
@@ -184,6 +200,14 @@ impl Checker<'_, '_> {
 
         self.store.mark_visited(module_id);
         self.store.add_module(module_id);
+
+        if let Some(pkg_name) = extract_package_directive(source)
+            && module_id.rsplit('/').next() != Some(pkg_name.as_str())
+        {
+            self.store
+                .go_package_names
+                .insert(module_id.to_string(), pkg_name);
+        }
 
         let file_id = self.store.new_file_id();
         let filename = format!("{}.d.lis", module_id.replace('/', "_"));

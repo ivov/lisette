@@ -49,6 +49,7 @@ fn emit_inner(
         coercions: &result.coercions,
         resolutions: &result.resolutions,
         ufcs_methods: &result.ufcs_methods,
+        go_package_names: &result.go_package_names,
     };
     let mut emitter = Emitter::new_for_tests(&config, source_for_debug);
     let emitted_files = emitter.emit_files(&[&file], &result.module_id);

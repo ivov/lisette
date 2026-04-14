@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use syntax::ast::{Expression, MatchArm, Pattern, TypedPattern};
 
 use crate::analysis::find_module_by_alias;
@@ -73,7 +74,10 @@ pub(crate) fn resolve_dot_access_definition(
             })
             .or_else(|| {
                 file.imports().into_iter().find_map(|import| {
-                    if import.effective_alias().is_none() {
+                    if import
+                        .effective_alias(&snapshot.result.go_package_names)
+                        .is_none()
+                    {
                         let qualified = format!("{}.{}", import.name, name);
                         snapshot
                             .definitions()
@@ -108,7 +112,9 @@ pub(crate) fn resolve_dot_access_definition(
             }
         ) {
             resolve_by_type()
-        } else if let Some(module_name) = find_module_by_alias(file, root_identifier) {
+        } else if let Some(module_name) =
+            find_module_by_alias(file, root_identifier, &snapshot.result.go_package_names)
+        {
             if module_name.starts_with("go:") {
                 return None;
             }
@@ -129,7 +135,9 @@ pub(crate) fn resolve_dot_access_definition(
         ..
     } = expression.unwrap_parens()
     {
-        if let Some(module_name) = find_module_by_alias(file, value.as_str()) {
+        if let Some(module_name) =
+            find_module_by_alias(file, value.as_str(), &snapshot.result.go_package_names)
+        {
             if module_name.starts_with("go:") {
                 return None;
             }
@@ -152,9 +160,10 @@ pub(crate) fn resolve_dot_access_definition(
 pub(crate) fn resolve_import_span(
     name: &str,
     file: &syntax::program::File,
+    go_package_names: &FxHashMap<String, String>,
 ) -> Option<syntax::ast::Span> {
     file.imports().into_iter().find_map(|import| {
-        if import.effective_alias().as_deref() == Some(name) {
+        if import.effective_alias(go_package_names).as_deref() == Some(name) {
             Some(import.span)
         } else {
             None

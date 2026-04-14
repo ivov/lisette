@@ -277,8 +277,10 @@ impl LanguageServer for Backend {
                     let prefix = &value.as_str()[..cursor_in_value.min(value.len())];
                     if !prefix.contains('.') {
                         let first = value.split('.').next().unwrap_or(value);
-                        if let Some(span) = lookup_definition_span(first, file, &snapshot)
-                            .or_else(|| resolve_import_span(first, file))
+                        if let Some(span) =
+                            lookup_definition_span(first, file, &snapshot).or_else(|| {
+                                resolve_import_span(first, file, &snapshot.result.go_package_names)
+                            })
                             && let Some(uri) = snapshot.get_uri(span.file_id)
                             && let Some(idx) = snapshot.get_line_index(span.file_id)
                         {
@@ -351,7 +353,7 @@ impl LanguageServer for Backend {
 
             syntax::ast::Expression::Identifier { value, .. } => {
                 lookup_definition_span(value, file, &snapshot)
-                    .or_else(|| resolve_import_span(value, file))
+                    .or_else(|| resolve_import_span(value, file, &snapshot.result.go_package_names))
             }
 
             syntax::ast::Expression::Match { arms, .. } => {
@@ -1075,10 +1077,11 @@ impl LanguageServer for Backend {
         };
 
         if let Some(module_name) = get_module_prefix(&file.source, offset as usize)
-            && let Some(imp) = file
-                .imports()
-                .iter()
-                .find(|imp| imp.effective_alias().as_deref() == Some(module_name))
+            && let Some(imp) = file.imports().iter().find(|imp| {
+                imp.effective_alias(&snapshot.result.go_package_names)
+                    .as_deref()
+                    == Some(module_name)
+            })
         {
             let mut items = Vec::new();
             for (qname, definition) in snapshot.definitions().iter() {
@@ -1251,7 +1254,7 @@ impl LanguageServer for Backend {
 
         for import in file.imports() {
             let alias = import
-                .effective_alias()
+                .effective_alias(&snapshot.result.go_package_names)
                 .unwrap_or_else(|| import.name.to_string());
             items.push(CompletionItem {
                 label: alias,

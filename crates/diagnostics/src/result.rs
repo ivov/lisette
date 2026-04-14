@@ -8,6 +8,11 @@ use syntax::program::{
 
 use crate::LisetteDiagnostic;
 
+pub struct TypedefSource {
+    pub source: String,
+    pub filename: String,
+}
+
 pub struct SemanticResult {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<EcoString, Definition>,
@@ -21,6 +26,8 @@ pub struct SemanticResult {
     pub resolutions: ResolutionInfo,
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
+    pub typedef_sources: HashMap<u32, TypedefSource>,
+    pub go_package_names: HashMap<String, String>,
 }
 
 impl SemanticResult {
@@ -38,6 +45,8 @@ impl SemanticResult {
             resolutions: ResolutionInfo::default(),
             cached_modules: HashSet::default(),
             ufcs_methods: HashSet::default(),
+            typedef_sources: HashMap::default(),
+            go_package_names: HashMap::default(),
         }
     }
 
@@ -57,6 +66,7 @@ impl SemanticResult {
             resolutions: self.resolutions,
             cached_modules: self.cached_modules,
             ufcs_methods: self.ufcs_methods,
+            go_package_names: self.go_package_names,
         }
     }
 }

@@ -7,6 +7,7 @@ use stdlib::get_go_stdlib_typedef;
 
 use super::types::CachedDefinition;
 use super::{COMPILER_VERSION_HASH, GO_STDLIB_HASH};
+use crate::checker::registration::extract_package_directive;
 use crate::store::Store;
 
 #[derive(Serialize, Deserialize)]
@@ -128,6 +129,16 @@ pub fn load_cached_go_module(store: &mut Store, module_id: &str, cache: &GoStdli
 fn register_cached_go_module(store: &mut Store, module_id: &str, cached: &GoModuleCache) {
     store.add_module(module_id);
     store.mark_visited(module_id);
+
+    if let Some(go_pkg) = module_id.strip_prefix("go:")
+        && let Some(source) = get_go_stdlib_typedef(go_pkg)
+        && let Some(pkg_name) = extract_package_directive(source)
+        && module_id.rsplit('/').next() != Some(pkg_name.as_str())
+    {
+        store
+            .go_package_names
+            .insert(module_id.to_string(), pkg_name);
+    }
 
     // Go modules don't need files registered — they're internal and filtered out
     // of diagnostic rendering. We use an empty file_ids slice for span restoration

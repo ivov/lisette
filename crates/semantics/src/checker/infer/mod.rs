@@ -62,7 +62,7 @@ impl Checker<'_, '_> {
         let alias_to_path: HashMap<String, String> = imports
             .iter()
             .filter_map(|imp| {
-                imp.effective_alias()
+                imp.effective_alias(&self.store.go_package_names)
                     .map(|alias| (alias, imp.name.to_string()))
             })
             .collect();

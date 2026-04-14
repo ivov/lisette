@@ -1,5 +1,5 @@
 pub mod infer;
-mod registration;
+pub(crate) mod registration;
 pub mod scopes;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -538,7 +538,7 @@ impl<'r, 's> Checker<'r, 's> {
                 continue;
             }
 
-            let Some(effective) = import.effective_alias() else {
+            let Some(effective) = import.effective_alias(&self.store.go_package_names) else {
                 continue;
             };
 

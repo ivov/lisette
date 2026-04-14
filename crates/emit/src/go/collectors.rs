@@ -68,14 +68,15 @@ impl Emitter<'_> {
     pub(crate) fn collect_module_aliases(&mut self, files: &[&File]) {
         for file in files {
             for import in file.imports() {
-                if let Some(alias) = import.effective_alias() {
-                    self.module
-                        .reverse_module_aliases
-                        .insert(alias.clone(), import.name.to_string());
-                    self.module
-                        .module_aliases
-                        .insert(import.name.to_string(), alias);
-                }
+                let Some(alias) = import.effective_alias(self.ctx.go_package_names) else {
+                    continue;
+                };
+                self.module
+                    .reverse_module_aliases
+                    .insert(alias.clone(), import.name.to_string());
+                self.module
+                    .module_aliases
+                    .insert(import.name.to_string(), alias);
             }
         }
     }
