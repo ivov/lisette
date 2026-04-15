@@ -524,6 +524,11 @@ impl Emitter<'_> {
             } else {
                 value
             };
+            let value = if let Some(field_ty) = self.lookup_struct_field_ty(ty, &f.name) {
+                self.maybe_wrap_as_go_interface(value, &f.value.get_type(), &field_ty)
+            } else {
+                value
+            };
             field_names.push(field_name);
             field_values.push(value);
         }

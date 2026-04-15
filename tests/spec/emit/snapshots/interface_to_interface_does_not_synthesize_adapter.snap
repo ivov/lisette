@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: "input: \nimport \"go:io\"\n\nfn narrow(rwc: io.ReadWriteCloser) -> io.Reader {\n  rwc\n}\n\nfn main() {\n  let _ = narrow\n}\n"
+---
+package main
+
+import "io"
+
+func narrow(rwc io.ReadWriteCloser) io.Reader {
+	return rwc
+}
+
+func main() {
+	_ = narrow
+}

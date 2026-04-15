@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: "input: \nimport \"go:io\"\n\nstruct Doubler {}\n\nimpl Doubler {\n  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error> {\n    Partial.Ok(0)\n  }\n}\n\nstruct Wrapper {\n  reader: io.Reader,\n}\n\nfn main() {\n  let d = Doubler {}\n  let w = Wrapper { reader: d }\n  let _ = w\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"io"
+)
+
+type Doubler struct{}
+
+func (d Doubler) String() string {
+	return "Doubler"
+}
+
+func (d Doubler) Read(_ []uint8) lisette.Partial[int, error] {
+	return lisette.MakePartialOk[int, error](0)
+}
+
+type Wrapper struct {
+	reader io.Reader
+}
+
+func (w Wrapper) String() string {
+	return fmt.Sprintf("Wrapper { reader: %v }", w.reader)
+}
+
+func main() {
+	d := Doubler{}
+	_ = Wrapper{reader: _lisAdapter_Doubler_Reader_0{inner: d}}
+}
+
+type _lisAdapter_Doubler_Reader_0 struct {
+	inner Doubler
+}
+
+func (a _lisAdapter_Doubler_Reader_0) Read(arg0 []uint8) (int, error) {
+	res_1 := a.inner.Read(arg0)
+	if res_1.Tag == lisette.PartialOk {
+		return res_1.OkVal, nil
+	}
+	if res_1.Tag == lisette.PartialErr {
+		return *new(int), res_1.ErrVal
+	}
+	return res_1.OkVal, res_1.ErrVal
+}

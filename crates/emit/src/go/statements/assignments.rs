@@ -98,7 +98,12 @@ impl Emitter<'_> {
                     );
                     write_line!(output, "{} = {}", target_str, unwrapped);
                 } else {
-                    write_line!(output, "{} = {}", target_str, rhs_staged.value);
+                    let adapted = self.maybe_wrap_as_go_interface(
+                        rhs_staged.value,
+                        &value.get_type(),
+                        &target.get_type(),
+                    );
+                    write_line!(output, "{} = {}", target_str, adapted);
                 }
             }
             Expression::Break { value, .. } => {

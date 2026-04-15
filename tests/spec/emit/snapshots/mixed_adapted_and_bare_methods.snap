@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: "input: \nimport \"go:example.com/mixed\"\n\nstruct Svc {}\n\nimpl Svc {\n  fn Load(self, key: string) -> Result<int, error> {\n    Ok(1)\n  }\n  fn Name(self) -> string {\n    \"svc\"\n  }\n}\n\nfn run(s: mixed.Service) -> string {\n  s.Name()\n}\n\nfn main() {\n  let s = Svc {}\n  let _ = run(s as mixed.Service)\n}\n"
+---
+package main
+
+import (
+	"example.com/mixed"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Svc struct{}
+
+func (s Svc) String() string {
+	return "Svc"
+}
+
+func (s Svc) Load(_ string) lisette.Result[int, error] {
+	return lisette.MakeResultOk[int, error](1)
+}
+
+func (s Svc) Name() string {
+	return "svc"
+}
+
+func run(s mixed.Service) string {
+	return s.Name()
+}
+
+func main() {
+	s := Svc{}
+	_ = run(_lisAdapter_Svc_Service_0{inner: s})
+}
+
+type _lisAdapter_Svc_Service_0 struct {
+	inner Svc
+}
+
+func (a _lisAdapter_Svc_Service_0) Load(arg0 string) (int, error) {
+	res_1 := a.inner.Load(arg0)
+	if res_1.Tag == lisette.ResultOk {
+		return res_1.OkVal, nil
+	}
+	return *new(int), res_1.ErrVal
+}
+
+func (a _lisAdapter_Svc_Service_0) Name() string {
+	return a.inner.Name()
+}

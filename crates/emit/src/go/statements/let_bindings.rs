@@ -186,6 +186,12 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         } else {
             let value_expression = self.emitter.emit_value(output, self.value);
 
+            let value_expression = self.emitter.maybe_wrap_as_go_interface(
+                value_expression,
+                &self.value.get_type(),
+                &self.binding.ty,
+            );
+
             let value_expression = if self.is_mutable_subslice_binding() {
                 self.emitter.flags.needs_slices = true;
                 format!("slices.Clone({})", value_expression)

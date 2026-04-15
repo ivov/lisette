@@ -441,6 +441,132 @@ impl Emitter<'_> {
         )
     }
 
+    pub(crate) fn emit_return_adapter(
+        &mut self,
+        inner_call: &str,
+        lisette_return_type: &Type,
+    ) -> Option<(String, String)> {
+        let return_type = lisette_return_type.resolve();
+        self.flags.needs_stdlib = true;
+
+        if return_type.is_result() {
+            let ok_ty = return_type.ok_type();
+            let err_ty = return_type.err_type();
+            let err_ty_str = self.go_type_as_string(&err_ty);
+            let res = self.fresh_var(Some("res"));
+            self.declare(&res);
+
+            let mut b = format!("{res} := {inner_call}\n");
+            if ok_ty.is_unit() {
+                // Result<(), error> → error
+                let ok_tag = RESULT_OK_TAG;
+                write_line!(
+                    b,
+                    "if {res}.Tag == {ok_tag} {{\nreturn nil\n}}\nreturn {res}.ErrVal"
+                );
+                return Some((err_ty_str, b));
+            }
+            // Result<T, error> → (T, error)
+            let ok_ty_str = self.go_type_as_string(&ok_ty);
+            let ok_tag = RESULT_OK_TAG;
+            write_line!(
+                b,
+                "if {res}.Tag == {ok_tag} {{\nreturn {res}.OkVal, nil\n}}\n\
+                 return *new({ok_ty_str}), {res}.ErrVal"
+            );
+            return Some((format!("({ok_ty_str}, {err_ty_str})"), b));
+        }
+
+        if return_type.is_partial() {
+            // Partial<T, error> → (T, error)
+            let ok_ty = return_type.ok_type();
+            let err_ty = return_type.err_type();
+            let ok_ty_str = self.go_type_as_string(&ok_ty);
+            let err_ty_str = self.go_type_as_string(&err_ty);
+            let res = self.fresh_var(Some("res"));
+            self.declare(&res);
+
+            let b = format!(
+                "{res} := {inner_call}\n\
+                 if {res}.Tag == {PARTIAL_OK_TAG} {{\nreturn {res}.OkVal, nil\n}}\n\
+                 if {res}.Tag == {PARTIAL_ERR_TAG} {{\nreturn *new({ok_ty_str}), {res}.ErrVal\n}}\n\
+                 return {res}.OkVal, {res}.ErrVal\n"
+            );
+            return Some((format!("({ok_ty_str}, {err_ty_str})"), b));
+        }
+
+        if return_type.is_option() {
+            let inner = return_type.ok_type();
+            let is_nilable = self.resolve_to_function_type(&inner).is_some()
+                || self.is_nullable_option(&return_type);
+            if is_nilable {
+                // Option<fn>, Option<Ref<T>>, Option<Interface> → bare nilable Go type
+                let go_ret = self.go_type_as_string(&inner);
+                let opt = self.fresh_var(Some("opt"));
+                self.declare(&opt);
+                let some_tag = OPTION_SOME_TAG;
+                let b = format!(
+                    "{opt} := {inner_call}\n\
+                     if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal\n}}\n\
+                     return nil\n"
+                );
+                return Some((go_ret, b));
+            }
+
+            let inner_ty_str = self.go_type_as_string(&inner);
+            let opt = self.fresh_var(Some("opt"));
+            self.declare(&opt);
+
+            let some_tag = OPTION_SOME_TAG;
+            let b = format!(
+                "{opt} := {inner_call}\n\
+                 if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal, true\n}}\n\
+                 return *new({inner_ty_str}), false\n"
+            );
+            return Some((format!("({inner_ty_str}, bool)"), b));
+        }
+
+        if let Some(arity) = return_type.tuple_arity()
+            && arity >= 2
+        {
+            let tuple_params: Vec<Type> = match &return_type {
+                Type::Tuple(elements) => elements.clone(),
+                Type::Constructor { params, .. } => params.clone(),
+                _ => return None,
+            };
+            let tup = self.fresh_var(Some("tup"));
+            self.declare(&tup);
+
+            let mut body = format!("{tup} := {inner_call}\n");
+            let mut ret_types: Vec<String> = Vec::with_capacity(arity);
+            let mut field_exprs: Vec<String> = Vec::with_capacity(arity);
+
+            for (i, slot_ty) in tuple_params.iter().enumerate() {
+                let raw_field = format!("{tup}.{}", TUPLE_FIELDS[i]);
+                match self.emit_return_adapter(&raw_field, slot_ty) {
+                    Some((inner_ret, inner_body)) => {
+                        let sub = self.fresh_var(Some("sub"));
+                        self.declare(&sub);
+                        body.push_str(&format!(
+                            "{sub} := func() {inner_ret} {{\n{inner_body}}}()\n"
+                        ));
+                        field_exprs.push(sub);
+                        ret_types.push(inner_ret);
+                    }
+                    None => {
+                        ret_types.push(self.go_type_as_string(slot_ty));
+                        field_exprs.push(raw_field);
+                    }
+                }
+            }
+
+            body.push_str(&format!("return {}\n", field_exprs.join(", ")));
+            return Some((format!("({})", ret_types.join(", ")), body));
+        }
+
+        None
+    }
+
     pub(crate) fn emit_lisette_callback_wrapper(
         &mut self,
         output: &mut String,
@@ -467,84 +593,17 @@ impl Emitter<'_> {
 
         let call_str = format!("{}({})", cb_var, arg_names.join(", "));
 
-        self.flags.needs_stdlib = true;
-
-        let (go_ret, body) = if return_type.is_result() {
-            let ok_ty = return_type.ok_type();
-            let err_ty = return_type.err_type();
-            let err_ty_str = self.go_type_as_string(&err_ty);
-            let res = self.fresh_var(Some("res"));
-            self.declare(&res);
-
-            let mut b = format!("{res} := {call_str}\n");
-            if ok_ty.is_unit() {
-                // Result<(), error> → func(...) error
-                let ok_tag = RESULT_OK_TAG;
-                write_line!(
-                    b,
-                    "if {res}.Tag == {ok_tag} {{\nreturn nil\n}}\nreturn {res}.ErrVal"
-                );
-                (err_ty_str, b)
-            } else {
-                // Result<T, error> → func(...) (T, error)
-                let ok_ty_str = self.go_type_as_string(&ok_ty);
-                let ok_tag = RESULT_OK_TAG;
-                write_line!(
-                    b,
-                    "if {res}.Tag == {ok_tag} {{\nreturn {res}.OkVal, nil\n}}\n\
-                     return *new({ok_ty_str}), {res}.ErrVal"
-                );
-                (format!("({ok_ty_str}, {err_ty_str})"), b)
-            }
-        } else if return_type.is_partial() {
-            // Partial<T, error> → func(...) (T, error)
-            let ok_ty = return_type.ok_type();
-            let err_ty = return_type.err_type();
-            let ok_ty_str = self.go_type_as_string(&ok_ty);
-            let err_ty_str = self.go_type_as_string(&err_ty);
-            let res = self.fresh_var(Some("res"));
-            self.declare(&res);
-
-            let b = format!(
-                "{res} := {call_str}\n\
-                 if {res}.Tag == {PARTIAL_OK_TAG} {{\nreturn {res}.OkVal, nil\n}}\n\
-                 if {res}.Tag == {PARTIAL_ERR_TAG} {{\nreturn *new({ok_ty_str}), {res}.ErrVal\n}}\n\
-                 return {res}.OkVal, {res}.ErrVal\n"
-            );
-            (format!("({ok_ty_str}, {err_ty_str})"), b)
-        } else if return_type.is_option() {
-            // Option<T> → func(...) (T, bool)
-            let inner_ty_str = self.go_type_as_string(&return_type.ok_type());
-            let opt = self.fresh_var(Some("opt"));
-            self.declare(&opt);
-
-            let some_tag = OPTION_SOME_TAG;
-            let b = format!(
-                "{opt} := {call_str}\n\
-                 if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal, true\n}}\n\
-                 return *new({inner_ty_str}), false\n"
-            );
-            (format!("({inner_ty_str}, bool)"), b)
-        } else if let Some(arity) = return_type.tuple_arity()
-            && arity >= 2
+        // Option<fn> adaptation only fires in interface-method shims. Here
+        // a closure-valued Option means the caller owns the nil check.
+        if let Type::Constructor { id, params: ps, .. } = &return_type
+            && id == "Option"
+            && let Some(inner) = ps.first()
+            && matches!(inner.resolve(), Type::Function { .. })
         {
-            // Tuple<T1, T2, ...> → func(...) (T1, T2, ...)
-            let tuple_params = match &return_type {
-                Type::Constructor { params, .. } => params,
-                _ => return fn_value.to_string(),
-            };
-            let ret_types: Vec<String> = tuple_params
-                .iter()
-                .map(|t| self.go_type_as_string(t))
-                .collect();
-            let tup = self.fresh_var(Some("tup"));
-            self.declare(&tup);
-            let fields: Vec<String> = (0..arity)
-                .map(|i| format!("{tup}.{}", TUPLE_FIELDS[i]))
-                .collect();
-            let b = format!("{tup} := {call_str}\nreturn {}\n", fields.join(", "));
-            (format!("({})", ret_types.join(", ")), b)
-        } else {
+            return fn_value.to_string();
+        }
+
+        let Some((go_ret, body)) = self.emit_return_adapter(&call_str, &return_type) else {
             return fn_value.to_string();
         };
 

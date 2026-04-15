@@ -2,6 +2,7 @@ mod concurrency;
 mod control_flow;
 mod expressions;
 mod functions;
+mod go_interface_adapter;
 mod imports;
 mod interop_matrix;
 mod line_directives;

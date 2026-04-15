@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: "input: \nimport \"go:example.com/store\"\n\nstruct Store {}\n\nimpl Store {\n  fn Find(self, key: string) -> Option<Ref<store.Entry>> {\n    None\n  }\n}\n\nfn use_store(s: store.Storage) {\n  let _ = s\n}\n\nfn main() {\n  let s = Store {}\n  use_store(s as store.Storage)\n}\n"
+---
+package main
+
+import (
+	"example.com/store"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Store struct{}
+
+func (s Store) String() string {
+	return "Store"
+}
+
+func (s Store) Find(_ string) lisette.Option[*store.Entry] {
+	return lisette.MakeOptionNone[*store.Entry]()
+}
+
+func use_store(s store.Storage) {
+	_ = s
+}
+
+func main() {
+	s := Store{}
+	use_store(_lisAdapter_Store_Storage_0{inner: s})
+}
+
+type _lisAdapter_Store_Storage_0 struct {
+	inner Store
+}
+
+func (a _lisAdapter_Store_Storage_0) Find(arg0 string) *store.Entry {
+	opt_1 := a.inner.Find(arg0)
+	if opt_1.Tag == lisette.OptionSome {
+		return opt_1.SomeVal
+	}
+	return nil
+}

@@ -48,7 +48,7 @@ pub fn Notify(c: Sender<os.Signal>, sig: VarArgs<os.Signal>)
 /// The stop function releases resources associated with it, so code should
 /// call stop as soon as the operations running in this Context complete and
 /// signals no longer need to be diverted to the context.
-pub fn NotifyContext(parent: context.Context, signals: VarArgs<os.Signal>) -> (context.Context, context.CancelFunc)
+pub fn NotifyContext(parent: context.Context, signals: VarArgs<os.Signal>) -> (context.Context, Option<context.CancelFunc>)
 
 /// Reset undoes the effect of any prior calls to [Notify] for the provided
 /// signals.

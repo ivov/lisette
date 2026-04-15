@@ -25,7 +25,7 @@
 /// 
 /// If the iterator panics during a call to next (or stop),
 /// then next (or stop) itself panics with the same value.
-pub fn Pull<V>(seq: Seq<V>) -> (fn() -> Option<V>, fn() -> ())
+pub fn Pull<V>(seq: Seq<V>) -> (Option<fn() -> Option<V>>, Option<fn() -> ()>)
 
 /// Pull2 converts the “push-style” iterator sequence seq
 /// into a “pull-style” iterator accessed by the two functions
@@ -49,7 +49,7 @@ pub fn Pull<V>(seq: Seq<V>) -> (fn() -> Option<V>, fn() -> ())
 /// 
 /// If the iterator panics during a call to next (or stop),
 /// then next (or stop) itself panics with the same value.
-pub fn Pull2<K, V>(seq: Seq2<K, V>) -> (fn() -> Option<(K, V)>, fn() -> ())
+pub fn Pull2<K, V>(seq: Seq2<K, V>) -> (Option<fn() -> Option<(K, V)>>, Option<fn() -> ()>)
 
 /// Seq is an iterator over sequences of individual values.
 /// When called as seq(yield), seq calls yield(v) for each value v in the sequence,

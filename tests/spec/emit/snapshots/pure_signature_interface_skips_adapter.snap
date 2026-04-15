@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: "input: \nimport \"go:example.com/simple\"\n\nstruct Greeter {}\n\nimpl Greeter {\n  fn Greet(self, name: string) -> string {\n    name\n  }\n}\n\nfn call(g: simple.Greeter) -> string {\n  g.Greet(\"world\")\n}\n\nfn main() {\n  let g = Greeter {}\n  let _ = call(g as simple.Greeter)\n}\n"
+---
+package main
+
+import "example.com/simple"
+
+type Greeter struct{}
+
+func (g Greeter) String() string {
+	return "Greeter"
+}
+
+func (g Greeter) Greet(name string) string {
+	return name
+}
+
+func call(g simple.Greeter) string {
+	return g.Greet("world")
+}
+
+func main() {
+	g := Greeter{}
+	_ = call(g)
+}

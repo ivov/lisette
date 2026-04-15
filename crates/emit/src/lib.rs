@@ -107,6 +107,9 @@ pub struct Emitter<'a> {
 
     current_module: ModuleId,
 
+    synthesized_adapter_types: HashMap<(EcoString, EcoString), String>,
+    pending_adapter_types: Vec<String>,
+
     // Per-file accumulated state (reset between files)
     flags: EmitFlags,
     ensure_imported: HashSet<ModuleId>,
@@ -243,6 +246,8 @@ impl<'a> Emitter<'a> {
                 assign_targets: HashSet::default(),
             },
             current_module: current_module.to_string(),
+            synthesized_adapter_types: HashMap::default(),
+            pending_adapter_types: Vec::new(),
             flags: EmitFlags::default(),
             ensure_imported: HashSet::default(),
             position: Position::Expression,
@@ -478,6 +483,8 @@ impl<'a> Emitter<'a> {
                 }
             }
 
+            self.pending_adapter_types.clear();
+
             for expression in &file.items {
                 self.scope.next_var = 0;
                 self.scope.bindings.reset();
@@ -486,6 +493,10 @@ impl<'a> Emitter<'a> {
                 if !code.is_empty() {
                     source.collect_with_blank(code);
                 }
+            }
+
+            for adapter_decl in std::mem::take(&mut self.pending_adapter_types) {
+                source.collect_with_blank(adapter_decl);
             }
 
             let unused_imports =

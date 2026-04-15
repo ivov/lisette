@@ -87,13 +87,13 @@ pub fn FieldsFunc(s: string, f: fn(int32) -> bool) -> Slice<string>
 /// Unicode code points satisfying f(c).
 /// The iterator yields the same strings that would be returned by [FieldsFunc](s),
 /// but without constructing the slice.
-pub fn FieldsFuncSeq(s: string, f: fn(int32) -> bool) -> iter.Seq<string>
+pub fn FieldsFuncSeq(s: string, f: fn(int32) -> bool) -> Option<iter.Seq<string>>
 
 /// FieldsSeq returns an iterator over substrings of s split around runs of
 /// whitespace characters, as defined by [unicode.IsSpace].
 /// The iterator yields the same strings that would be returned by [Fields](s),
 /// but without constructing the slice.
-pub fn FieldsSeq(s: string) -> iter.Seq<string>
+pub fn FieldsSeq(s: string) -> Option<iter.Seq<string>>
 
 /// HasPrefix reports whether the string s begins with prefix.
 pub fn HasPrefix(s: string, prefix: string) -> bool
@@ -145,7 +145,7 @@ pub fn LastIndexFunc(s: string, f: fn(int32) -> bool) -> int
 /// If s is empty, the iterator yields no lines at all.
 /// If s does not end in a newline, the final yielded line will not end in a newline.
 /// It returns a single-use iterator.
-pub fn Lines(s: string) -> iter.Seq<string>
+pub fn Lines(s: string) -> Option<iter.Seq<string>>
 
 /// Map returns a copy of the string s with all its characters modified
 /// according to the mapping function. If mapping returns a negative value, the character is
@@ -219,7 +219,7 @@ pub fn SplitAfterN(s: string, sep: string, n: int) -> Slice<string>
 /// The iterator yields the same strings that would be returned by [SplitAfter](s, sep),
 /// but without constructing the slice.
 /// It returns a single-use iterator.
-pub fn SplitAfterSeq(s: string, sep: string) -> iter.Seq<string>
+pub fn SplitAfterSeq(s: string, sep: string) -> Option<iter.Seq<string>>
 
 /// SplitN slices s into substrings separated by sep and returns a slice of
 /// the substrings between those separators.
@@ -239,7 +239,7 @@ pub fn SplitN(s: string, sep: string, n: int) -> Slice<string>
 /// The iterator yields the same strings that would be returned by [Split](s, sep),
 /// but without constructing the slice.
 /// It returns a single-use iterator.
-pub fn SplitSeq(s: string, sep: string) -> iter.Seq<string>
+pub fn SplitSeq(s: string, sep: string) -> Option<iter.Seq<string>>
 
 /// Title returns a copy of the string s with all Unicode letters that begin words
 /// mapped to their Unicode title case.
