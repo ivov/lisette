@@ -5,7 +5,7 @@ use std::process::Command;
 include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 
 use deps::TypedefLocator;
-use emit::PRELUDE_IMPORT_PATH;
+use emit::{OutputFile, PRELUDE_IMPORT_PATH};
 
 pub fn go_command() -> Command {
     let mut c = Command::new("go");
@@ -149,6 +149,56 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
     }
 
     let _ = fs::remove_dir_all(dir.join("lisette"));
+
+    Ok(())
+}
+
+pub fn write_go_outputs(dir: &Path, files: &[OutputFile], heading: &str) -> Result<(), i32> {
+    for file in files {
+        let go_file_path = dir.join(&file.name);
+        let go_code = file.to_go();
+
+        if let Some(parent) = go_file_path.parent()
+            && let Err(e) = fs::create_dir_all(parent)
+        {
+            crate::cli_error!(
+                heading,
+                format!("Failed to create directory `{}`: {}", parent.display(), e),
+                "Check directory permissions"
+            );
+            return Err(1);
+        }
+
+        if let Err(e) = fs::write(&go_file_path, &go_code) {
+            crate::cli_error!(
+                heading,
+                format!("Failed to write `{}`: {}", go_file_path.display(), e),
+                "Check file permissions"
+            );
+            return Err(1);
+        }
+    }
+    Ok(())
+}
+
+pub fn finalize_go_dir(dir: &Path, heading: &str) -> Result<(), i32> {
+    if let Err(e) = go_fmt(dir) {
+        crate::cli_error!(
+            heading,
+            format!("Go format failed: {}", e),
+            "Check Go installation with `go version`"
+        );
+        return Err(1);
+    }
+
+    if let Err(e) = ensure_go_sum(dir) {
+        crate::cli_error!(
+            heading,
+            format!("Failed to resolve Go dependencies: {}", e),
+            "Check Go installation and network connectivity"
+        );
+        return Err(1);
+    }
 
     Ok(())
 }
