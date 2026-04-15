@@ -10,8 +10,10 @@ cargo install lisette
 
 2. Set up your editor:
 
-- **VS Code** (1.95): Install the [`lisette` extension](https://marketplace.visualstudio.com/items?itemName=ivov.lisette).
+- **VS Code** (1.95): Search for "Lisette" in the extensions panel and install.
 - **Zed** (0.205.4): Search for "Lisette" in the extensions panel and install.
+- **Goland** (2026.1): Search for "Lisette" in "Settings → Plugins" and install.
+- **Helix**: See the [setup instructions](../../editors/helix/README.md#installation).
 - **Neovim** (0.11): Add to `~/.config/nvim/lua/plugins/lisette.lua`
 
 ```lua
@@ -25,8 +27,6 @@ return {
   end,
 }
 ```
-
-- **Helix**: See the [setup instructions](../../editors/helix/README.md#installation).
 
 ## Try it out
 
