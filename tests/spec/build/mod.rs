@@ -3863,3 +3863,60 @@ fn main() {
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
+
+#[test]
+fn multi_file_module_bootstrap_imports_stdlib() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "foo",
+        "foo.lis",
+        r#"
+pub struct Foo {
+  pub value: int
+}
+
+impl Foo {
+  pub fn new(v: int) -> Foo { Foo { value: v } }
+}
+"#,
+    );
+
+    fs.add_file(
+        "types",
+        "enums.lis",
+        r#"
+import "foo"
+
+pub enum MyEnum {
+  Maybe(Option<foo.Foo>),
+}
+"#,
+    );
+
+    fs.add_file(
+        "types",
+        "helpers.lis",
+        r#"
+pub fn ping() -> int { 1 }
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "foo"
+import "types"
+import "go:fmt"
+
+fn main() {
+  let f = foo.Foo.new(42)
+  let _ = types.MyEnum.Maybe(Option.Some(f))
+  fmt.Println("OK")
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}

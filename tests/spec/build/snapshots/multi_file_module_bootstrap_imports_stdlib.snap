@@ -1,0 +1,87 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === foo/foo.go ===
+package foo
+
+import "fmt"
+
+type Foo struct {
+	Value int
+}
+
+func (f Foo) String() string {
+	return fmt.Sprintf("Foo { value: %v }", f.Value)
+}
+
+func Foo_New(v int) Foo {
+	return Foo{Value: v}
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"github.com/user/myproject/foo"
+	"github.com/user/myproject/types"
+)
+
+func main() {
+	f := foo.Foo_New(42)
+	_ = types.MakeMyEnumMaybe(lisette.MakeOptionSome(f))
+	fmt.Println("OK")
+}
+
+
+// === types/bootstrap.go ===
+package types
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"github.com/user/myproject/foo"
+)
+
+func MakeMyEnumMaybe(arg0 lisette.Option[foo.Foo]) MyEnum {
+	return MyEnum{Tag: MyEnumMaybe, Maybe: arg0}
+}
+
+
+// === types/enums.go ===
+package types
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"github.com/user/myproject/foo"
+)
+
+type MyEnumTag int
+
+const (
+	MyEnumMaybe MyEnumTag = iota
+)
+
+type MyEnum struct {
+	Tag   MyEnumTag
+	Maybe lisette.Option[foo.Foo]
+}
+
+func (m MyEnum) String() string {
+	switch m.Tag {
+	case MyEnumMaybe:
+		return fmt.Sprintf("MyEnum.Maybe(%v)", m.Maybe)
+	default:
+		return fmt.Sprintf("MyEnum(%d)", m.Tag)
+	}
+}
+
+
+// === types/helpers.go ===
+package types
+
+func Ping() int {
+	return 1
+}

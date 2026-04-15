@@ -477,6 +477,9 @@ impl<'a> Emitter<'a> {
             }
 
             import_builder.extend_with_modules(&self.ensure_imported);
+            if self.flags.needs_stdlib {
+                import_builder.require_stdlib();
+            }
             import_builder.filter_unreferenced(&bootstrap_source_str);
 
             output_files.push(OutputFile {

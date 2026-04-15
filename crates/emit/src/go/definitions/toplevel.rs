@@ -525,6 +525,21 @@ impl Emitter<'_> {
         if !self.module.enum_layouts.contains_key(&enum_id) {
             return None;
         }
+
+        let variant_field_types: Vec<Type> = if let Some(Definition::Enum { variants, .. }) =
+            self.ctx.definitions.get(enum_id.as_str())
+        {
+            variants
+                .iter()
+                .flat_map(|v| v.fields.iter().map(|f| f.ty.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        for ty in &variant_field_types {
+            let _ = self.go_type_as_string(ty);
+        }
+
         let generics = self.merge_impl_bounds(name, generics);
         let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
         let map_key_generics = self.enum_map_key_generics(&enum_id, &generic_names);
