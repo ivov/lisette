@@ -285,6 +285,7 @@ impl Emitter<'_> {
                 }
                 _ => {
                     let expression_string = self.emit_value(output, last);
+                    let expression_string = self.adapt_to_assign_target(last, expression_string);
                     write_line!(output, "{} = {}", var, expression_string);
                 }
             }
@@ -391,9 +392,21 @@ impl Emitter<'_> {
             }
             _ => {
                 let expression_string = self.emit_value(output, last);
+                let expression_string = self.adapt_return_to_context(last, expression_string);
                 write_line!(output, "{}return {}", directive, expression_string);
             }
         }
+    }
+
+    pub(crate) fn adapt_to_assign_target(
+        &mut self,
+        expression: &Expression,
+        emitted: String,
+    ) -> String {
+        let Some(target) = self.assign_target_ty.clone() else {
+            return emitted;
+        };
+        self.maybe_wrap_as_go_interface(emitted, &expression.get_type(), &target)
     }
 
     pub(crate) fn emit_in_position(&mut self, output: &mut String, expression: &Expression) {

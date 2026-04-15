@@ -48,6 +48,20 @@ func isNilableGoType(t types.Type) bool {
 	return false
 }
 
+// isNilableGoFunctionType returns true if the Go type is a function
+// type (bare signature or a named alias of a signature). Function
+// values are always nilable in Go.
+func isNilableGoFunctionType(t types.Type) bool {
+	switch t := t.(type) {
+	case *types.Signature:
+		return true
+	case *types.Named:
+		_, ok := t.Underlying().(*types.Signature)
+		return ok
+	}
+	return false
+}
+
 func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter) TypeResult {
 	if seen[t] {
 		return TypeResult{LisetteType: "Unknown"}

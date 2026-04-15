@@ -190,8 +190,20 @@ impl Emitter<'_> {
             output.push_str("return\n");
         } else if !self.emit_wrapped_return(output, expression) {
             let expression_string = self.emit_value(output, expression);
+            let expression_string = self.adapt_return_to_context(expression, expression_string);
             write_line!(output, "return {}", expression_string);
         }
+    }
+
+    pub(crate) fn adapt_return_to_context(
+        &mut self,
+        expression: &Expression,
+        emitted: String,
+    ) -> String {
+        let Some(return_ty) = self.current_return_context.clone() else {
+            return emitted;
+        };
+        self.maybe_wrap_as_go_interface(emitted, &expression.get_type(), &return_ty)
     }
 
     /// Emit a return statement with Result/Option wrapping if applicable.

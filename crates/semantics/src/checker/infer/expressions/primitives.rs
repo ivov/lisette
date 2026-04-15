@@ -377,8 +377,8 @@ impl Checker<'_, '_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        let expected_elements: Vec<Type> = match expected_ty {
-            Type::Tuple(elems) if elems.len() == elements.len() => elems.clone(),
+        let expected_elements: Vec<Type> = match expected_ty.resolve() {
+            Type::Tuple(elems) if elems.len() == elements.len() => elems,
             _ => elements.iter().map(|_| self.new_type_var()).collect(),
         };
 

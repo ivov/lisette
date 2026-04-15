@@ -252,12 +252,16 @@ impl Checker<'_, '_> {
         // Speculatively unify the expected type with the return type before
         // checking arguments, so e.g. `Some(Text{})` with expected `Option<Printable>`
         // constrains T = Printable and the argument coerces via interface satisfaction.
-        // Guarded to interface type params only to avoid affecting numeric literal inference.
+        // Also fires for Go-imported named types so that `Some(tea.Quit)` in
+        // context `Option<tea.Cmd>` constrains T = tea.Cmd instead of
+        // collapsing to the Cmd alias's underlying function shape. Guarded
+        // to named types to avoid affecting numeric literal inference.
         if self.is_generic_callee(&callee_expression)
             && !expected_ty.resolve().is_variable()
             && !expected_ty.is_ignored()
             && self.is_enum_type(&return_ty.resolve())
-            && self.has_interface_type_param(expected_ty)
+            && (self.has_interface_type_param(expected_ty)
+                || self.has_go_named_type_param(expected_ty))
         {
             let _ = self.speculatively(|this| this.try_unify(expected_ty, &return_ty, &span));
         }

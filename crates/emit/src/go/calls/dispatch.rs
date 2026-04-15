@@ -333,7 +333,9 @@ impl Emitter<'_> {
             && let Type::Constructor { id, params, .. } = call_result_ty.resolve()
             && (id == "prelude.Option" || id == "prelude.Result")
             && !params.is_empty()
-            && params.iter().any(|p| self.as_interface(p).is_some())
+            && params
+                .iter()
+                .any(|p| self.as_interface(p).is_some() || self.is_go_function_alias(p))
         {
             type_args_string = self.format_type_args(&params);
         }
@@ -403,7 +405,11 @@ impl Emitter<'_> {
             return format!("&{}", temp);
         }
 
-        self.emit_composite_value(output, arg)
+        let value = self.emit_composite_value(output, arg);
+        match effective_param_ty {
+            Some(target) => self.maybe_wrap_as_go_interface(value, &arg.get_type(), target),
+            None => value,
+        }
     }
 
     fn effective_param_type<'a>(

@@ -263,7 +263,7 @@ pub fn ProxyFromEnvironment(req: Ref<Request>) -> Result<Ref<url.URL>, error>
 
 /// ProxyURL returns a proxy function (for use in a [Transport])
 /// that always returns the same URL.
-pub fn ProxyURL(fixedURL: Ref<url.URL>) -> fn(Ref<Request>) -> Result<Ref<url.URL>, error>
+pub fn ProxyURL(fixedURL: Ref<url.URL>) -> Option<fn(Ref<Request>) -> Result<Ref<url.URL>, error>>
 
 /// ReadRequest reads and parses an incoming request from b.
 /// 

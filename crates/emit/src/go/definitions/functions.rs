@@ -65,6 +65,7 @@ impl Emitter<'_> {
         self.with_position(Position::Tail, |this| {
             if !requires_temp_var(last) {
                 let expression = this.emit_value(output, last);
+                let expression = this.adapt_return_to_context(last, expression);
                 output.push_str(&this.wrap_value(&expression));
             } else {
                 match last {

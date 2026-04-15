@@ -240,17 +240,52 @@ impl Emitter<'_> {
             Expression::RecoverBlock { items, ty, .. } => {
                 self.emit_recover_block(output, items, ty)
             }
-            Expression::Tuple { elements, .. } => {
+            Expression::Tuple { elements, ty, .. } => {
                 let stages: Vec<Staged> =
                     elements.iter().map(|e| self.stage_composite(e)).collect();
                 let elem_expressions = self.sequence(output, stages, "_v");
 
+                let slot_types: Vec<Type> = match ty.resolve() {
+                    Type::Tuple(slots) => slots,
+                    _ => Vec::new(),
+                };
+
+                let elem_expressions: Vec<String> = elements
+                    .iter()
+                    .zip(elem_expressions)
+                    .enumerate()
+                    .map(|(i, (expr, emitted))| match slot_types.get(i) {
+                        Some(slot) => {
+                            self.maybe_wrap_as_go_interface(emitted, &expr.get_type(), slot)
+                        }
+                        None => emitted,
+                    })
+                    .collect();
+
                 self.flags.needs_stdlib = true;
-                format!(
-                    "lisette.MakeTuple{}({})",
-                    elem_expressions.len(),
-                    elem_expressions.join(", ")
-                )
+                let arity = elem_expressions.len();
+
+                let needs_explicit_type_args = !slot_types.is_empty()
+                    && slot_types.iter().any(|t| self.as_interface(t).is_some());
+
+                if needs_explicit_type_args {
+                    let slot_ty_strs: Vec<String> = slot_types
+                        .iter()
+                        .map(|t| self.go_type_as_string(t))
+                        .collect();
+                    format!(
+                        "lisette.MakeTuple{}[{}]({})",
+                        arity,
+                        slot_ty_strs.join(", "),
+                        elem_expressions.join(", ")
+                    )
+                } else {
+                    format!(
+                        "lisette.MakeTuple{}({})",
+                        arity,
+                        elem_expressions.join(", ")
+                    )
+                }
             }
             Expression::If { ty, .. }
             | Expression::Match { ty, .. }
@@ -324,7 +359,8 @@ impl Emitter<'_> {
                 Some(Definition::Interface { .. })
             )
         {
-            return inner;
+            let source_ty = expression.get_type();
+            return self.maybe_wrap_as_go_interface(inner, &source_ty, ty);
         }
 
         let go_type = self.annotation_to_go_type(target_type);
@@ -486,12 +522,22 @@ impl Emitter<'_> {
                 let stages: Vec<Staged> = elems.iter().map(|e| self.stage_composite(e)).collect();
                 let elements = self.sequence(output, stages, "_v");
 
-                let elem_ty = self.go_type_as_string(
-                    ty.get_type_params()
-                        .expect("Slice type must have type args")
-                        .first()
-                        .expect("Slice type must have element type"),
-                );
+                let elem_lisette_ty = ty
+                    .get_type_params()
+                    .expect("Slice type must have type args")
+                    .first()
+                    .expect("Slice type must have element type")
+                    .clone();
+                let elem_ty = self.go_type_as_string(&elem_lisette_ty);
+
+                let elements: Vec<String> = elems
+                    .iter()
+                    .zip(elements)
+                    .map(|(expr, emitted)| {
+                        self.maybe_wrap_as_go_interface(emitted, &expr.get_type(), &elem_lisette_ty)
+                    })
+                    .collect();
+
                 if elements.len() > 1 && elements.iter().any(|e| e.len() > 30) {
                     let indented = elements
                         .iter()

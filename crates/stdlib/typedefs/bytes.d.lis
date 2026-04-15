@@ -90,13 +90,13 @@ pub fn FieldsFunc(s: Slice<uint8>, f: fn(int32) -> bool) -> Slice<Slice<uint8>>
 /// Unicode code points satisfying f(c).
 /// The iterator yields the same subslices that would be returned by [FieldsFunc](s),
 /// but without constructing a new slice containing the subslices.
-pub fn FieldsFuncSeq(s: Slice<uint8>, f: fn(int32) -> bool) -> iter.Seq<Slice<uint8>>
+pub fn FieldsFuncSeq(s: Slice<uint8>, f: fn(int32) -> bool) -> Option<iter.Seq<Slice<uint8>>>
 
 /// FieldsSeq returns an iterator over subslices of s split around runs of
 /// whitespace characters, as defined by [unicode.IsSpace].
 /// The iterator yields the same subslices that would be returned by [Fields](s),
 /// but without constructing a new slice containing the subslices.
-pub fn FieldsSeq(s: Slice<uint8>) -> iter.Seq<Slice<uint8>>
+pub fn FieldsSeq(s: Slice<uint8>) -> Option<iter.Seq<Slice<uint8>>>
 
 /// HasPrefix reports whether the byte slice s begins with prefix.
 pub fn HasPrefix(s: Slice<uint8>, prefix: Slice<uint8>) -> bool
@@ -154,7 +154,7 @@ pub fn LastIndexFunc(s: Slice<uint8>, f: fn(int32) -> bool) -> int
 /// If s is empty, the iterator yields no lines at all.
 /// If s does not end in a newline, the final yielded line will not end in a newline.
 /// It returns a single-use iterator.
-pub fn Lines(s: Slice<uint8>) -> iter.Seq<Slice<uint8>>
+pub fn Lines(s: Slice<uint8>) -> Option<iter.Seq<Slice<uint8>>>
 
 /// Map returns a copy of the byte slice s with all its characters modified
 /// according to the mapping function. If mapping returns a negative value, the character is
@@ -220,7 +220,7 @@ pub fn SplitAfterN(s: Slice<uint8>, sep: Slice<uint8>, n: int) -> Slice<Slice<ui
 /// The iterator yields the same subslices that would be returned by [SplitAfter](s, sep),
 /// but without constructing a new slice containing the subslices.
 /// It returns a single-use iterator.
-pub fn SplitAfterSeq(s: Slice<uint8>, sep: Slice<uint8>) -> iter.Seq<Slice<uint8>>
+pub fn SplitAfterSeq(s: Slice<uint8>, sep: Slice<uint8>) -> Option<iter.Seq<Slice<uint8>>>
 
 /// SplitN slices s into subslices separated by sep and returns a slice of
 /// the subslices between those separators.
@@ -237,7 +237,7 @@ pub fn SplitN(s: Slice<uint8>, sep: Slice<uint8>, n: int) -> Slice<Slice<uint8>>
 /// The iterator yields the same subslices that would be returned by [Split](s, sep),
 /// but without constructing a new slice containing the subslices.
 /// It returns a single-use iterator.
-pub fn SplitSeq(s: Slice<uint8>, sep: Slice<uint8>) -> iter.Seq<Slice<uint8>>
+pub fn SplitSeq(s: Slice<uint8>, sep: Slice<uint8>) -> Option<iter.Seq<Slice<uint8>>>
 
 /// Title treats s as UTF-8-encoded bytes and returns a copy with all Unicode letters that begin
 /// words mapped to their title case.

@@ -156,8 +156,12 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// Checks if a type is a generic container (Option, Result) with interface type parameters.
-    /// Used to determine when to use the expected type for codegen instead of the inferred type.
+    /// Checks if a type is a generic container (Option, Result) whose
+    /// type parameter needs the expected type to flow through for
+    /// codegen: Go interfaces (for method-set satisfaction) or
+    /// Go-imported named types (for Go generic instantiation preserving
+    /// alias names like `tea.Cmd` instead of collapsing to the
+    /// underlying `func() Msg`).
     pub fn is_generic_container_with_interface(&self, ty: &Type) -> bool {
         let Type::Constructor { id, params, .. } = ty.resolve() else {
             return false;
@@ -169,7 +173,7 @@ impl Checker<'_, '_> {
 
         params.iter().any(|p| {
             if let Type::Constructor { id, .. } = p.resolve() {
-                self.store.get_interface(&id).is_some()
+                self.store.get_interface(&id).is_some() || id.starts_with("go:")
             } else {
                 false
             }
@@ -184,6 +188,20 @@ impl Checker<'_, '_> {
         params.iter().any(|p| {
             if let Type::Constructor { id, .. } = p.resolve() {
                 self.store.get_interface(&id).is_some()
+            } else {
+                false
+            }
+        })
+    }
+
+    pub fn has_go_named_type_param(&self, ty: &Type) -> bool {
+        let Type::Constructor { params, .. } = ty.resolve() else {
+            return false;
+        };
+
+        params.iter().any(|p| {
+            if let Type::Constructor { id, .. } = p.resolve() {
+                id.starts_with("go:")
             } else {
                 false
             }

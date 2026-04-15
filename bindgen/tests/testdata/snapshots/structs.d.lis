@@ -6,7 +6,7 @@
 import "go:io"
 
 /// Function that returns a function
-pub fn MakeAdder(x: int) -> fn(int) -> int
+pub fn MakeAdder(x: int) -> Option<fn(int) -> int>
 
 pub fn ReturnsAnon() -> Unknown
 

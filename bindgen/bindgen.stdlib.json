@@ -329,6 +329,7 @@
       "non_nilable_return": {
         "container/list": ["List.PushBack", "List.PushFront"],
         "container/ring": ["Ring.Next", "Ring.Prev"],
+        "context": ["AfterFunc"],
         "crypto/ecdh": ["PrivateKey.PublicKey"],
         "crypto/elliptic": ["Curve.Params", "CurveParams.Params"],
         "go/doc/comment": ["Parser.Parse"],
@@ -348,6 +349,7 @@
         "hash/crc32": ["IEEETable"],
         "net/http/httptest": ["ResponseRecorder.Result", "Server.Client"],
         "os/exec": ["CommandContext"],
+        "sync": ["OnceFunc", "OnceValue", "OnceValues"],
         "time": ["AfterFunc", "FixedZone", "Time.Location"]
       },
       "non_nilable_var": {
