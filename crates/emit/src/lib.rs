@@ -461,10 +461,28 @@ impl<'a> Emitter<'a> {
                 bootstrap_source.collect_with_blank(function.clone());
             }
 
+            let bootstrap_source_str = bootstrap_source.render();
+
+            let unused_imports =
+                Self::unused_imports_for_current_module(self.ctx.unused, &self.current_module);
+            let mut import_builder = ImportBuilder::new(
+                &self.ctx.go_module,
+                unused_imports,
+                self.ctx.go_package_names,
+            );
+
+            // Collect imports from all files in the module to get aliased imports
+            for file in files {
+                import_builder.collect_from_file(file);
+            }
+
+            import_builder.extend_with_modules(&self.ensure_imported);
+            import_builder.filter_unreferenced(&bootstrap_source_str);
+
             output_files.push(OutputFile {
                 name: "bootstrap.go".to_string(),
-                imports: HashMap::default(),
-                source: bootstrap_source.render(),
+                imports: import_builder.build(),
+                source: bootstrap_source_str,
                 package_name: package_name.clone(),
             });
         }
