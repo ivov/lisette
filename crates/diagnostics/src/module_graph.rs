@@ -73,8 +73,8 @@ pub fn missing_go_typedef(
         .with_resolve_code("missing_go_typedef")
         .with_span_label(&span, "no .d.lis file found")
         .with_help(format!(
-            "Package `{}` is declared via `{}` {} but no typedef was found. Run `lis sync` to generate it.",
-            go_pkg, module, version
+            "Package `{}` is declared via `{}` {} but no typedef was found. Run `lis check` to regenerate all typedefs, or `lis add {}@{}` to regenerate this one.",
+            go_pkg, module, version, module, version
         ))
 }
 

@@ -35,6 +35,7 @@ pub struct CompileResult {
     pub errors: Vec<LisetteDiagnostic>,
     pub lints: Vec<LisetteDiagnostic>,
     pub sources: HashMap<u32, SourceInfo>,
+    pub user_file_count: usize,
 }
 
 pub fn compile(
@@ -59,6 +60,7 @@ pub fn compile(
             errors,
             lints: vec![],
             sources,
+            user_file_count: 1,
         };
     }
 
@@ -76,6 +78,8 @@ pub fn compile(
         compile_phase: config.target_phase,
         locator: config.locator.clone(),
     });
+
+    let user_file_count = semantic_result.files.len();
 
     let mut sources: HashMap<u32, SourceInfo> = semantic_result
         .files
@@ -108,6 +112,7 @@ pub fn compile(
             errors,
             lints,
             sources,
+            user_file_count,
         };
     }
 
@@ -124,5 +129,6 @@ pub fn compile(
         errors,
         lints,
         sources,
+        user_file_count,
     }
 }

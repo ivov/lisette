@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use crate::cli_error;
 use crate::go_cli;
+use crate::typedef_regen::generate_missing_typedefs;
 use diagnostics::render::{self, Filter};
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
@@ -33,6 +34,10 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
             return 1;
         }
     };
+
+    if let Err(code) = generate_missing_typedefs(project_path, &manifest) {
+        return code;
+    }
 
     let main_lis = project_path.join("src/main.lis");
     let go_module_name = &manifest.project.name;
@@ -103,7 +108,7 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
                 .get(&file_id)
                 .map(|info| (info.source.clone(), info.filename.clone()))
         },
-        result.sources.len(),
+        result.user_file_count,
         &filter,
         &main_lis_source,
         &filename,

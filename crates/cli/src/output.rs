@@ -306,6 +306,14 @@ pub fn print_progress(msg: &str) {
     }
 }
 
+pub fn print_warning(msg: &str) {
+    if use_color() {
+        eprintln!("  {} {}", "!".yellow(), msg);
+    } else {
+        eprintln!("  ! {}", msg);
+    }
+}
+
 pub fn print_help(text: &str) {
     println!();
     println!("{}", format_help_text(text, use_color()));
