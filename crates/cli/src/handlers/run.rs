@@ -145,47 +145,14 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         return 1;
     }
 
-    for file in &result.output {
-        let go_file_path = temp_dir.join(&file.name);
-        let go_code = file.to_go();
+    let heading = "Failed to run standalone file";
 
-        if let Some(parent) = go_file_path.parent()
-            && let Err(e) = fs::create_dir_all(parent)
-        {
-            cli_error!(
-                "Failed to run standalone file",
-                format!("Failed to create directory `{}`: {}", parent.display(), e),
-                "Check directory permissions"
-            );
-            return 1;
-        }
-
-        if let Err(e) = fs::write(&go_file_path, &go_code) {
-            cli_error!(
-                "Failed to run standalone file",
-                format!("Failed to write `{}`: {}", go_file_path.display(), e),
-                "Check file permissions"
-            );
-            return 1;
-        }
+    if let Err(code) = go_cli::write_go_outputs(&temp_dir, &result.output, heading) {
+        return code;
     }
 
-    if let Err(e) = go_cli::go_fmt(&temp_dir) {
-        cli_error!(
-            "Failed to run standalone file",
-            format!("Go format failed: {}", e),
-            "Check Go installation with `go version`"
-        );
-        return 1;
-    }
-
-    if let Err(e) = go_cli::ensure_go_sum(&temp_dir) {
-        cli_error!(
-            "Failed to run standalone file",
-            format!("Failed to resolve Go dependencies: {}", e),
-            "Check Go installation and network connectivity"
-        );
-        return 1;
+    if let Err(code) = go_cli::finalize_go_dir(&temp_dir, heading) {
+        return code;
     }
 
     let mut cmd = Command::new("go");
