@@ -2,6 +2,14 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.12](https://github.com/ivov/lisette/compare/lisette-v0.1.11...lisette-v0.1.12) - 2026-04-15
+
+- refactor: extract shared go output + finalize helpers [#91](https://github.com/ivov/lisette/pull/91) [`b4ceb49`](https://github.com/ivov/lisette/commit/b4ceb49c7914a926590fd2fd5b505f55e5238c02)
+- fix: regenerate missing Go typedefs before check/build/run [#88](https://github.com/ivov/lisette/pull/88) [`cc6912b`](https://github.com/ivov/lisette/commit/cc6912be7cd3ef069468d1b668c81d72dff58bcb)
+- fix: emit named empty Go interfaces as Lisette interfaces [#86](https://github.com/ivov/lisette/pull/86) [`029bb6e`](https://github.com/ivov/lisette/commit/029bb6e55888f0ac59acc9293250e1a88f4ee9b8)
+- fix: synthesize Go interface adapters for Lisette impls [#92](https://github.com/ivov/lisette/pull/92) [`ccea037`](https://github.com/ivov/lisette/commit/ccea03769210d8995102686e58065710f7318d41)
+- fix: emit missing imports for enum variant payload types [#83](https://github.com/ivov/lisette/pull/83) [`c663661`](https://github.com/ivov/lisette/commit/c6636612d7da8f5933f222484655bebc80750251)
+
 ## [0.1.11](https://github.com/ivov/lisette/compare/lisette-v0.1.10...lisette-v0.1.11) - 2026-04-14
 
 - fix: only translate invalid version errors pinned to user target [`76c0037`](https://github.com/ivov/lisette/commit/76c0037a584f22b1d9835e935d5a61b37397ec4d)
