@@ -1,0 +1,143 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === bar/bar.go ===
+package bar
+
+import "fmt"
+
+type Bar struct {
+	Name string
+}
+
+func (b Bar) String() string {
+	return fmt.Sprintf("Bar { name: %v }", b.Name)
+}
+
+
+// === foo/foo.go ===
+package foo
+
+import "fmt"
+
+type Foo struct {
+	Value int
+}
+
+func (f Foo) String() string {
+	return fmt.Sprintf("Foo { value: %v }", f.Value)
+}
+
+func Foo_New(v int) Foo {
+	return Foo{Value: v}
+}
+
+
+// === gizmo/gizmo.go ===
+package gizmo
+
+import "fmt"
+
+type Widget struct {
+	Name string
+}
+
+func (w Widget) String() string {
+	return fmt.Sprintf("Widget { name: %v }", w.Name)
+}
+
+
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/foo"
+	"github.com/user/myproject/types"
+)
+
+func main() {
+	f := foo.Foo_New(42)
+	_ = types.MakeMyEnumSingle(f)
+	fmt.Println("OK")
+}
+
+
+// === types/bootstrap.go ===
+package types
+
+import (
+	"github.com/user/myproject/bar"
+	"github.com/user/myproject/foo"
+	g "github.com/user/myproject/gizmo"
+)
+
+func MakeMyEnumSingle(arg0 foo.Foo) MyEnum {
+	return MyEnum{Tag: MyEnumSingle, Single: arg0}
+}
+
+func MakeMyEnumMulti(arg0 foo.Foo, arg1 bar.Bar) MyEnum {
+	return MyEnum{Tag: MyEnumMulti, Multi0: arg0, Multi1: arg1}
+}
+
+func MakeMyEnumContainerSlice(arg0 []foo.Foo) MyEnum {
+	return MyEnum{Tag: MyEnumContainerSlice, ContainerSlice: arg0}
+}
+
+func MakeMyEnumAliased(arg0 g.Widget) MyEnum {
+	return MyEnum{Tag: MyEnumAliased, Aliased: arg0}
+}
+
+
+// === types/enums.go ===
+package types
+
+import (
+	"fmt"
+	"github.com/user/myproject/bar"
+	"github.com/user/myproject/foo"
+	g "github.com/user/myproject/gizmo"
+)
+
+type MyEnumTag int
+
+const (
+	MyEnumSingle MyEnumTag = iota
+	MyEnumMulti
+	MyEnumContainerSlice
+	MyEnumAliased
+)
+
+type MyEnum struct {
+	Tag            MyEnumTag
+	Single         foo.Foo
+	Multi0         foo.Foo
+	Multi1         bar.Bar
+	ContainerSlice []foo.Foo
+	Aliased        g.Widget
+}
+
+func (m MyEnum) String() string {
+	switch m.Tag {
+	case MyEnumSingle:
+		return fmt.Sprintf("MyEnum.Single(%v)", m.Single)
+	case MyEnumMulti:
+		return fmt.Sprintf("MyEnum.Multi(%v, %v)", m.Multi0, m.Multi1)
+	case MyEnumContainerSlice:
+		return fmt.Sprintf("MyEnum.ContainerSlice(%v)", m.ContainerSlice)
+	case MyEnumAliased:
+		return fmt.Sprintf("MyEnum.Aliased(%v)", m.Aliased)
+	default:
+		return fmt.Sprintf("MyEnum(%d)", m.Tag)
+	}
+}
+
+
+// === types/helpers.go ===
+package types
+
+import "github.com/user/myproject/foo"
+
+func Make_something() foo.Foo {
+	return foo.Foo_New(99)
+}

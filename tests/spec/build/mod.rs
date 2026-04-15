@@ -3777,3 +3777,146 @@ fn main() {}
         Some("resolve.invalid_module_path")
     );
 }
+
+#[test]
+fn multi_file_module_bootstrap_imports() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "foo",
+        "foo.lis",
+        r#"
+pub struct Foo {
+  pub value: int
+}
+
+impl Foo {
+  pub fn new(v: int) -> Foo { Foo { value: v } }
+}
+"#,
+    );
+
+    fs.add_file(
+        "bar",
+        "bar.lis",
+        r#"
+pub struct Bar {
+  pub name: string
+}
+"#,
+    );
+
+    fs.add_file(
+        "gizmo",
+        "gizmo.lis",
+        r#"
+pub struct Widget {
+  pub name: string
+}
+"#,
+    );
+
+    fs.add_file(
+        "types",
+        "enums.lis",
+        r#"
+import "foo"
+import "bar"
+import g "gizmo"
+
+pub enum MyEnum {
+  Single(foo.Foo),
+  Multi(foo.Foo, bar.Bar),
+  ContainerSlice(Slice<foo.Foo>),
+  Aliased(g.Widget),
+}
+"#,
+    );
+
+    fs.add_file(
+        "types",
+        "helpers.lis",
+        r#"
+import "foo"
+
+pub fn make_something() -> foo.Foo {
+  foo.Foo.new(99)
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "foo"
+import "types"
+import "go:fmt"
+
+fn main() {
+  let f = foo.Foo.new(42)
+  let _ = types.MyEnum.Single(f)
+  fmt.Println("OK")
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn multi_file_module_bootstrap_imports_stdlib() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "foo",
+        "foo.lis",
+        r#"
+pub struct Foo {
+  pub value: int
+}
+
+impl Foo {
+  pub fn new(v: int) -> Foo { Foo { value: v } }
+}
+"#,
+    );
+
+    fs.add_file(
+        "types",
+        "enums.lis",
+        r#"
+import "foo"
+
+pub enum MyEnum {
+  Maybe(Option<foo.Foo>),
+}
+"#,
+    );
+
+    fs.add_file(
+        "types",
+        "helpers.lis",
+        r#"
+pub fn ping() -> int { 1 }
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "foo"
+import "types"
+import "go:fmt"
+
+fn main() {
+  let f = foo.Foo.new(42)
+  let _ = types.MyEnum.Maybe(Option.Some(f))
+  fmt.Println("OK")
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
