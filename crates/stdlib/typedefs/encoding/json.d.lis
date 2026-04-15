@@ -330,7 +330,7 @@ pub struct SyntaxError {
 ///   - [Number], for JSON numbers
 ///   - string, for JSON string literals
 ///   - nil, for JSON null
-pub struct Token(Unknown)
+pub interface Token {}
 
 /// An UnmarshalFieldError describes a JSON object key that
 /// led to an unexported (and therefore unwritable) struct field.

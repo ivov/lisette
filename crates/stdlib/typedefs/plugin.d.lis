@@ -37,7 +37,7 @@ pub type Plugin
 /// 	}
 /// 	*v.(*int) = 7
 /// 	f.(func())() // prints "Hello, number 7"
-pub struct Symbol(Unknown)
+pub interface Symbol {}
 
 impl Plugin {
   /// Lookup searches for a symbol named symName in plugin p.

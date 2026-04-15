@@ -15,7 +15,7 @@ pub fn DefaultLookupPackage(name: string) -> Option<string>
 
 /// A Block is block-level content in a doc comment,
 /// one of [*Code], [*Heading], [*List], or [*Paragraph].
-pub type Block
+pub interface Block {}
 
 /// A Code is a preformatted code block.
 pub struct Code {
@@ -107,7 +107,7 @@ pub struct Printer {
 
 /// A Text is text-level content in a doc comment,
 /// one of [Plain], [Italic], [*Link], or [*DocLink].
-pub type Text
+pub interface Text {}
 
 impl DocLink {
   /// DefaultURL constructs and returns the documentation URL for l,

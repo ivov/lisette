@@ -308,7 +308,7 @@ pub struct TagPathError {
 
 /// A Token is an interface holding one of the token types:
 /// [StartElement], [EndElement], [CharData], [Comment], [ProcInst], or [Directive].
-pub struct Token(Unknown)
+pub interface Token {}
 
 /// A TokenReader is anything that can decode a stream of XML tokens, including a
 /// [Decoder].

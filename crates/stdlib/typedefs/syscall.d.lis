@@ -1425,7 +1425,7 @@ pub struct RouteMessage {
 /// RoutingMessage represents a routing message.
 /// 
 /// Deprecated: Use golang.org/x/net/route instead.
-pub type RoutingMessage
+pub interface RoutingMessage {}
 
 pub struct RtMetrics {
   pub Locks: uint32,
@@ -1476,7 +1476,7 @@ pub struct Rusage {
   pub Nivcsw: int64,
 }
 
-pub type Sockaddr
+pub interface Sockaddr {}
 
 pub struct SockaddrDatalink {
   pub Len: uint8,

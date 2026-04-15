@@ -344,7 +344,7 @@ pub interface Validator {
 /// in this package. This is used, for example, when a user selects a cursor
 /// such as "select cursor(select * from my_table) from dual". If the [Rows]
 /// from the select is closed, the cursor [Rows] will also be closed.
-pub struct Value(Unknown)
+pub interface Value {}
 
 /// ValueConverter is the interface providing the ConvertValue method.
 /// 

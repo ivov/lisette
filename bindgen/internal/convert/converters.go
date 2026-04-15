@@ -317,15 +317,13 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		}
 
 	case *types.Interface:
-		if u.Empty() {
-			result.LisetteType = "Unknown"
-		} else if isErrorInterface(u) {
+		if isErrorInterface(u) {
 			result.LisetteType = "error"
-		} else {
-			methods := c.extractInterfaceMethods(u, result.Name)
-			if methods != nil {
-				result.InterfaceMethods = methods
-			}
+		} else if u.Empty() {
+			result.IsInterface = true
+		} else if methods, ok := c.extractInterfaceMethods(u, result.Name); ok {
+			result.IsInterface = true
+			result.InterfaceMethods = methods
 		}
 
 	case *types.Basic:
@@ -944,11 +942,18 @@ func (c *Converter) analyzeMajorityPointerTypes() {
 	}
 }
 
-func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeName string) []InterfaceMethod {
+// extractInterfaceMethods walks a Go interface's exported methods and converts
+// each to a Lisette InterfaceMethod. The second return value reports whether
+// the interface is representable at all: false when an embedded union or an
+// unrepresentable param/return type is encountered, true otherwise. A true
+// return with an empty slice means the interface has no exported methods
+// (e.g. empty interface or all methods unexported) and should be emitted as
+// `pub interface Name {}`.
+func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeName string) ([]InterfaceMethod, bool) {
 	if _interface.NumEmbeddeds() > 0 {
 		for embedded := range _interface.EmbeddedTypes() {
 			if _, isUnion := embedded.(*types.Union); isUnion {
-				return nil
+				return nil, false
 			}
 		}
 	}
@@ -962,7 +967,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 
 		signature, ok := method.Type().(*types.Signature)
 		if !ok {
-			return nil
+			return nil, false
 		}
 
 		mutParams := c.cfg.MutatingParams(c.currentPkgPath, typeName+"."+method.Name())
@@ -972,7 +977,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 			param := signature.Params().At(j)
 			paramType := ToLisette(param.Type(), c)
 			if paramType.SkipReason != nil {
-				return nil // Cannot represent this interface
+				return nil, false
 			}
 
 			name := param.Name()
@@ -990,7 +995,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 
 		returnType := ReturnsToLisette(signature, c, typeName+"."+method.Name())
 		if returnType.SkipReason != nil {
-			return nil // Cannot represent this interface
+			return nil, false
 		}
 
 		methods = append(methods, InterfaceMethod{
@@ -1002,9 +1007,5 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		})
 	}
 
-	if len(methods) == 0 {
-		return nil
-	}
-
-	return methods
+	return methods, true
 }

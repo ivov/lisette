@@ -180,13 +180,18 @@ pub fn print_preview_notice() {
     eprintln!();
     if use_color() {
         eprintln!(
-            "  ! Support for third-party Go dependencies is in {}",
-            "early preview".yellow().underline()
+            "  ! You are running an unfinished feature: {}",
+            "lis add".bright_magenta()
+        );
+        eprintln!(
+            "  ! Support for third-party Go dependencies is {}",
+            "not yet stable".yellow().underline()
         );
     } else {
-        eprintln!("  ! Support for third-party Go dependencies is in early preview");
+        eprintln!("  ! You are running an unfinished feature: lis add");
+        eprintln!("  ! Support for third-party Go dependencies is not yet stable");
     }
-    eprintln!("  ! Please report issues at: https://github.com/ivov/lisette/issues");
+    eprintln!("  ! Bug reports are welcome: https://github.com/ivov/lisette/issues");
     eprintln!();
 }
 

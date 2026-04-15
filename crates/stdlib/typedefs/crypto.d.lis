@@ -89,7 +89,7 @@ pub interface Decrypter {
   fn Public() -> PublicKey
 }
 
-pub struct DecrypterOpts(Unknown)
+pub interface DecrypterOpts {}
 
 /// MessageSigner is an interface for an opaque private key that can be used for
 /// signing operations where the message is not pre-hashed by the caller.
@@ -121,7 +121,7 @@ pub interface MessageSigner {
 /// 
 /// as well as purpose-specific interfaces such as [Signer] and [Decrypter], which
 /// can be used for increased type safety within applications.
-pub struct PrivateKey(Unknown)
+pub interface PrivateKey {}
 
 /// PublicKey represents a public key using an unspecified algorithm.
 /// 
@@ -133,7 +133,7 @@ pub struct PrivateKey(Unknown)
 /// 	}
 /// 
 /// which can be used for increased type safety within applications.
-pub struct PublicKey(Unknown)
+pub interface PublicKey {}
 
 /// Signer is an interface for an opaque private key that can be used for
 /// signing operations. For example, an RSA key kept in a hardware module.

@@ -325,7 +325,7 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 
 	typeName := result.Name
 
-	if len(result.InterfaceMethods) > 0 {
+	if result.IsInterface {
 		var signature strings.Builder
 		signature.WriteString("pub interface ")
 		signature.WriteString(typeName)
@@ -336,36 +336,40 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 			signature.WriteString(">")
 		}
 
-		signature.WriteString(" {\n")
-		for _, m := range result.InterfaceMethods {
-			if m.CommaOk {
-				signature.WriteString("  #[go(comma_ok)]\n")
-			}
-			if m.ArrayReturn {
-				signature.WriteString("  #[go(array_return)]\n")
-			}
-			signature.WriteString("  fn ")
-			signature.WriteString(m.Name)
-			signature.WriteString("(")
-
-			var params []string
-			for _, p := range m.Params {
-				if p.Mutable {
-					params = append(params, fmt.Sprintf("mut %s: %s", p.Name, p.Type))
-				} else {
-					params = append(params, fmt.Sprintf("%s: %s", p.Name, p.Type))
+		if len(result.InterfaceMethods) == 0 {
+			signature.WriteString(" {}")
+		} else {
+			signature.WriteString(" {\n")
+			for _, m := range result.InterfaceMethods {
+				if m.CommaOk {
+					signature.WriteString("  #[go(comma_ok)]\n")
 				}
-			}
-			signature.WriteString(strings.Join(params, ", "))
-			signature.WriteString(")")
+				if m.ArrayReturn {
+					signature.WriteString("  #[go(array_return)]\n")
+				}
+				signature.WriteString("  fn ")
+				signature.WriteString(m.Name)
+				signature.WriteString("(")
 
-			if m.ReturnType != "" && m.ReturnType != "()" {
-				signature.WriteString(" -> ")
-				signature.WriteString(m.ReturnType)
+				var params []string
+				for _, p := range m.Params {
+					if p.Mutable {
+						params = append(params, fmt.Sprintf("mut %s: %s", p.Name, p.Type))
+					} else {
+						params = append(params, fmt.Sprintf("%s: %s", p.Name, p.Type))
+					}
+				}
+				signature.WriteString(strings.Join(params, ", "))
+				signature.WriteString(")")
+
+				if m.ReturnType != "" && m.ReturnType != "()" {
+					signature.WriteString(" -> ")
+					signature.WriteString(m.ReturnType)
+				}
+				signature.WriteString("\n")
 			}
-			signature.WriteString("\n")
+			signature.WriteString("}")
 		}
-		signature.WriteString("}")
 
 		e.buf.WriteString(signature.String())
 		e.buf.WriteString("\n\n")

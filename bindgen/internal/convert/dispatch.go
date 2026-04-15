@@ -23,6 +23,7 @@ type ConvertResult struct {
 	Variants         []EnumVariant     // for enums (via iota)
 	ConstValue       string            // for constants
 	SkipReason       *SkipReason
+	IsInterface      bool // true when this type should be emitted as `pub interface`
 	IsTypeAlias      bool // true for Go type aliases (type X = Y)
 	CommaOk          bool // true when return is from (T, bool) comma-ok with nilable T
 	ArrayReturn      bool // true when Go type is [N]T but Lisette type is Slice<T>

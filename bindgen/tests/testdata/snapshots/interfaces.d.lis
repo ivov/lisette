@@ -7,7 +7,7 @@
 pub fn Validate(s: string) -> Result<(), error>
 
 /// Empty interface alias
-pub struct Any(Unknown)
+pub interface Any {}
 
 /// Nilable comma-ok method on interface
 pub interface Cache {
@@ -16,7 +16,7 @@ pub interface Cache {
   fn Set(key: string, value: Ref<Node>)
 }
 
-pub struct Empty(Unknown)
+pub interface Empty {}
 
 /// Error interface - should be detected as error
 pub struct MyError(error)
