@@ -130,7 +130,7 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
                 .get(&file_id)
                 .map(|info| (info.source.clone(), info.filename.clone()))
         },
-        result.sources.len(),
+        result.user_file_count,
         &filter,
         &source,
         file,

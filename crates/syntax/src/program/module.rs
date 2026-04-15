@@ -67,6 +67,10 @@ impl Module {
     pub fn is_internal(&self) -> bool {
         self.id == "prelude" || self.id == "**nominal" || self.id.starts_with("go:")
     }
+
+    pub fn is_empty_stub(&self) -> bool {
+        self.files.is_empty() && self.typedefs.is_empty() && self.definitions.is_empty()
+    }
 }
 
 pub struct ModuleInfo {

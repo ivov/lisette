@@ -550,6 +550,10 @@ impl Checker<'_, '_> {
     }
 
     pub(super) fn error_name_not_found(&mut self, variable_name: &str, span: Span) {
+        if self.imports.failed_imports.contains(variable_name) {
+            return;
+        }
+
         let mut available_names = self.scopes.collect_all_value_names();
 
         let module = self

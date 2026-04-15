@@ -64,6 +64,9 @@ pub struct ImportState {
     pub prefix_to_module: HashMap<String, String>,
     /// Modules whose exports are available without prefix (current module and prelude)
     pub unprefixed_imports: HashSet<String>,
+    /// Effective aliases (e.g. `mux`) of imports whose underlying module
+    /// failed to load (missing typedef, undeclared, module_not_found, etc.).
+    pub failed_imports: HashSet<String>,
 }
 
 impl ImportState {
@@ -84,6 +87,7 @@ impl ImportState {
             self.prefix_to_module.insert("prelude".to_string(), m);
         }
         self.unprefixed_imports.clear();
+        self.failed_imports.clear();
     }
 }
 
@@ -556,7 +560,9 @@ impl<'r, 's> Checker<'r, 's> {
 
             seen_aliases.insert(effective.clone(), import.name.to_string());
 
-            if !self.store.has(&import.name) {
+            let module = self.store.get_module(&import.name);
+            if module.is_none() || module.is_some_and(Module::is_empty_stub) {
+                self.imports.failed_imports.insert(effective);
                 continue;
             }
 

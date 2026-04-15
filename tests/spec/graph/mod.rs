@@ -227,7 +227,21 @@ fn graph_declared_dep_missing_typedef() {
     let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
 
     assert!(sink.has_errors());
-    assert!(has_diagnostic_code(&sink, "resolve.missing_go_typedef"));
+
+    let diags = sink.take();
+    let missing = diags
+        .iter()
+        .find(|d| d.code_str() == Some("resolve.missing_go_typedef"))
+        .expect("missing_go_typedef diagnostic");
+    let help = missing.plain_help().unwrap_or("");
+    assert!(
+        help.contains("lis check"),
+        "help should suggest `lis check` to regenerate all typedefs, got: {help}",
+    );
+    assert!(
+        help.contains("lis add github.com/gorilla/mux@v1.8.0"),
+        "help should suggest `lis add <module>@<version>` for targeted regen, got: {help}",
+    );
 }
 
 #[test]

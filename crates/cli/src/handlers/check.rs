@@ -9,6 +9,7 @@ use lisette::fs::LocalFileSystem;
 use lisette::pipeline::{CompileConfig, CompilePhase, CompileResult, compile};
 
 use crate::cli_error;
+use crate::typedef_regen::generate_missing_typedefs;
 
 pub fn check(path: Option<String>, errors_only: bool, warnings_only: bool) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
@@ -61,13 +62,17 @@ fn check_project(project_path: &Path, filter: &Filter) -> i32 {
         return 1;
     }
 
-    let locator = match TypedefLocator::from_project(project_path) {
-        Ok(r) => r,
+    let (manifest, locator) = match deps::TypedefLocator::from_project_with_manifest(project_path) {
+        Ok(pair) => pair,
         Err(msg) => {
             cli_error!("Failed to check project", msg, "Fix `lisette.toml`");
             return 1;
         }
     };
+
+    if let Err(code) = generate_missing_typedefs(project_path, &manifest) {
+        return code;
+    }
 
     check_single_file(&src_main, filter, true, locator)
 }
@@ -92,7 +97,7 @@ fn check_single_file(
                 .get(&file_id)
                 .map(|info| (info.source.clone(), info.filename.clone()))
         },
-        result.sources.len(),
+        result.user_file_count,
         filter,
         &source,
         &filename,
@@ -200,14 +205,14 @@ fn check_loose_dir(dir: &Path, filter: &Filter) -> i32 {
                     .get(&file_id)
                     .map(|info| (info.source.clone(), info.filename.clone()))
             },
-            result.sources.len(),
+            result.user_file_count,
             filter,
             &source,
             &filename,
         );
         total_errors += counts.errors;
         total_warnings += counts.warnings;
-        total_files += result.sources.len();
+        total_files += result.user_file_count;
     }
 
     let elapsed = start.elapsed();
