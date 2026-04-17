@@ -1848,6 +1848,24 @@ fn test() {
 }
 
 #[test]
+fn match_guard_with_integer_literal_and_catchall() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  for i in 0..10 {
+    match i {
+      d if d < 5 => fmt.Println("low"),
+      5 =>          fmt.Println("five"),
+      d =>          fmt.Println("high"),
+    }
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_in_statement_position_followed_by_statement() {
     let input = r#"
 import "go:fmt"

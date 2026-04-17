@@ -691,6 +691,9 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
 
             Decision::Switch { .. } => {
                 self.emit_switch(output, tree, ctx.arm_position);
+                if !ctx.use_direct_return && !output_ends_with_diverge(output) {
+                    write_line!(output, "break {}", ctx.label);
+                }
             }
 
             Decision::Unreachable => {}
