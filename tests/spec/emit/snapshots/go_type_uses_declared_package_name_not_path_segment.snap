@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"go:example.com/ultraviolet\"\n\nfn handle(_msg: uv.Event) {\n}\n"
+---
+package main
+
+import uv "example.com/ultraviolet"
+
+func handle(_ uv.Event) {}

@@ -241,6 +241,21 @@ pub struct Style {}
 }
 
 #[test]
+fn go_type_uses_declared_package_name_not_path_segment() {
+    let input = r#"
+import "go:example.com/ultraviolet"
+
+fn handle(_msg: uv.Event) {
+}
+"#;
+    let typedef = r#"// Package: uv
+
+pub struct Event {}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/ultraviolet", typedef)]);
+}
+
+#[test]
 fn package_local_option_alias_does_not_collide_with_prelude_option() {
     // Regression: a Go module that declares its own `type Option = ...`
     // (e.g. the functional-options pattern) would trip `Type::is_option`

@@ -98,6 +98,9 @@ impl Emitter<'_> {
         if let Some(alias) = self.module.module_aliases.get(module) {
             return alias.clone();
         }
+        if let Some(pkg_name) = self.ctx.go_package_names.get(module) {
+            return pkg_name.clone();
+        }
         let path = module
             .strip_prefix(go_name::GO_IMPORT_PREFIX)
             .unwrap_or(module);
