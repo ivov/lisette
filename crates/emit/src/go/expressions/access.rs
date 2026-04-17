@@ -657,7 +657,7 @@ impl Emitter<'_> {
     }
 
     fn add_enum_imports_if_needed(&mut self, name: &str, enum_id: &str) {
-        let enum_module = enum_id.split('.').next().unwrap_or("");
+        let enum_module = go_name::module_of_type_id(enum_id);
 
         if enum_module != self.current_module {
             self.require_module_import(enum_module);

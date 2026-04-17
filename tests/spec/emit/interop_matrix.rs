@@ -827,6 +827,85 @@ fn main() {
 }
 
 #[test]
+fn interop_value_enum_match_arm_aliased() {
+    let input = r#"
+import t "go:time"
+
+fn describe(d: t.Duration) -> string {
+  match d {
+    t.Duration.Second => "one second",
+    t.Duration.Minute => "one minute",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_value_enum_match_arm_nested_module() {
+    let input = r#"
+import "go:debug/dwarf"
+
+fn describe(a: dwarf.Attr) -> string {
+  match a {
+    dwarf.Attr.AttrArtificial => "artificial",
+    dwarf.Attr.AttrByteSize   => "byte size",
+    _ => "other",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_tuple_tail_concrete_in_go_interface_slot() {
+    let input = r#"
+import "go:fmt"
+
+struct Counter {
+  count: int,
+}
+
+impl Counter {
+  fn String(self) -> string {
+    f"{self.count}"
+  }
+}
+
+fn make_pair(c: Counter) -> (fmt.Stringer, int) {
+  (c, c.count)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_tuple_explicit_return_concrete_in_go_interface_slot() {
+    let input = r#"
+import "go:fmt"
+
+struct Counter {
+  count: int,
+}
+
+impl Counter {
+  fn String(self) -> string {
+    f"{self.count}"
+  }
+}
+
+fn make_pair(c: Counter, positive: bool) -> (fmt.Stringer, int) {
+  if positive {
+    return (Counter { count: c.count + 1 }, c.count)
+  }
+  (c, c.count)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn interop_aliased_import_type_reference() {
     let input = r#"
 import t "go:time"

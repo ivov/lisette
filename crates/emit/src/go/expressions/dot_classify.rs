@@ -24,7 +24,7 @@ impl Emitter<'_> {
             _ => return None,
         };
 
-        let (module_key, _type_name) = enum_id.split_once('.')?;
+        let module_key = go_name::module_of_type_id(&enum_id);
 
         let qualifier = self.go_pkg_qualifier(module_key);
 
@@ -104,7 +104,7 @@ impl Emitter<'_> {
 
         let make_fn_name = self.module.make_functions.get(&constructor_key)?.clone();
 
-        let enum_module = enum_id.split('.').next().unwrap_or("");
+        let enum_module = go_name::module_of_type_id(enum_id);
         let needs_qualifier = enum_module != self.current_module;
 
         let needs_type_args = ret_params.len() > fn_params.len();

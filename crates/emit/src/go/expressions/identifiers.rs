@@ -346,9 +346,10 @@ impl Emitter<'_> {
         }
 
         let variant_name = go_name::unqualified_name(name);
-        let module = enum_id.split('.').next()?;
+        let module = go_name::module_of_type_id(enum_id.as_str());
+        let qualifier = self.go_pkg_qualifier(module);
 
-        Some(format!("{}.{}", module, variant_name))
+        Some(format!("{}.{}", qualifier, variant_name))
     }
 
     /// Check if an identifier refers to a public function in the current module.

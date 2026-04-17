@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport t \"go:time\"\n\nfn describe(d: t.Duration) -> string {\n  match d {\n    t.Duration.Second => \"one second\",\n    t.Duration.Minute => \"one minute\",\n    _ => \"other\",\n  }\n}\n"
+---
+package main
+
+import t "time"
+
+func describe(d t.Duration) string {
+	switch d {
+	case t.Second:
+		return "one second"
+	case t.Minute:
+		return "one minute"
+	default:
+		return "other"
+	}
+}

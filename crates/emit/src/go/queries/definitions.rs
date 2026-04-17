@@ -124,6 +124,16 @@ impl Emitter<'_> {
         )
     }
 
+    pub(crate) fn is_go_value_enum(&self, ty: &Type) -> bool {
+        let Type::Constructor { id, .. } = ty.resolve().strip_refs() else {
+            return false;
+        };
+        matches!(
+            self.ctx.definitions.get(id.as_str()),
+            Some(Definition::ValueEnum { .. })
+        )
+    }
+
     pub(crate) fn get_newtype_underlying(&self, ty: &Type) -> Option<Type> {
         let Type::Constructor { id, .. } = ty.resolve().strip_refs() else {
             return None;

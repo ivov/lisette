@@ -693,6 +693,25 @@ fn collect_enum_variant_checks(
         return;
     }
 
+    if emitter.is_go_value_enum(ty) {
+        let Type::Constructor { id, .. } = ty.resolve().strip_refs() else {
+            return;
+        };
+        let variant_name = go_name::unqualified_name(identifier);
+        let module = go_name::module_of_type_id(id.as_str());
+        let qualifier = emitter.go_pkg_qualifier(module);
+        let go_literal = if qualifier.is_empty() || qualifier == emitter.current_module() {
+            variant_name.to_string()
+        } else {
+            format!("{}.{}", qualifier, variant_name)
+        };
+        collector.checks.push(Check::Literal {
+            path: path.clone(),
+            go_literal,
+        });
+        return;
+    }
+
     collect_tagged_enum_checks(emitter, path, &variant_data, collector);
 }
 

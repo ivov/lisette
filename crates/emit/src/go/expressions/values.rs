@@ -245,10 +245,24 @@ impl Emitter<'_> {
                     elements.iter().map(|e| self.stage_composite(e)).collect();
                 let elem_expressions = self.sequence(output, stages, "_v");
 
-                let slot_types: Vec<Type> = match ty.resolve() {
+                let inferred_slot_types: Vec<Type> = match ty.resolve() {
                     Type::Tuple(slots) => slots,
                     _ => Vec::new(),
                 };
+
+                let slot_types: Vec<Type> = self
+                    .position
+                    .is_tail()
+                    .then_some(self.current_return_context.as_ref())
+                    .flatten()
+                    .and_then(|ret| {
+                        if let Type::Tuple(slots) = ret.resolve() {
+                            (slots.len() == inferred_slot_types.len()).then_some(slots)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(inferred_slot_types);
 
                 let elem_expressions: Vec<String> = elements
                     .iter()

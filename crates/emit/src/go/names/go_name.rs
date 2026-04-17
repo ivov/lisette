@@ -43,6 +43,16 @@ pub(crate) fn go_package_name(module: &str) -> &str {
     module.rsplit('/').next().unwrap_or(module)
 }
 
+pub(crate) fn module_of_type_id(id: &str) -> &str {
+    if let Some(slash_pos) = id.rfind('/') {
+        let after_slash = slash_pos + 1;
+        if let Some(dot_offset) = id[after_slash..].find('.') {
+            return &id[..after_slash + dot_offset];
+        }
+    }
+    id.split('.').next().unwrap_or(id)
+}
+
 pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
     let has_bad_chars = name.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_');
     let starts_with_digit = name.starts_with(|c: char| c.is_ascii_digit());
@@ -161,7 +171,7 @@ pub(crate) fn variant_by_id(
     module_alias: Option<&str>,
 ) -> ResolvedName {
     let is_prelude = enum_id.starts_with(PRELUDE_PREFIX);
-    let enum_module = enum_id.split('.').next().unwrap_or("");
+    let enum_module = module_of_type_id(enum_id);
     let enum_name = enum_id.split('.').next_back().unwrap_or(enum_id);
     let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
 

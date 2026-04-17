@@ -189,7 +189,8 @@ impl Emitter<'_> {
             }
             output.push_str("return\n");
         } else if !self.emit_wrapped_return(output, expression) {
-            let expression_string = self.emit_value(output, expression);
+            let expression_string =
+                self.with_position(Position::Tail, |this| this.emit_value(output, expression));
             let expression_string = self.adapt_return_to_context(expression, expression_string);
             write_line!(output, "return {}", expression_string);
         }
