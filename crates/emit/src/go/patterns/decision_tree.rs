@@ -712,6 +712,14 @@ fn collect_enum_variant_checks(
         return;
     }
 
+    if emitter.as_enum(ty).is_none() && identifier.contains('.') {
+        collector.checks.push(Check::Literal {
+            path: path.clone(),
+            go_literal: identifier.to_string(),
+        });
+        return;
+    }
+
     collect_tagged_enum_checks(emitter, path, &variant_data, collector);
 }
 

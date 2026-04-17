@@ -1033,3 +1033,26 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn interop_err_sentinel_pattern() {
+    let input = r#"
+import "go:bufio"
+import "go:fmt"
+import "go:io"
+import "go:os"
+
+fn main() {
+  let reader = bufio.NewReader(os.Stdin)
+  while true {
+    let r = match reader.ReadRune() {
+      Ok((r, _)) => r,
+      Err(io.EOF) => break,
+      Err(_) => panic("error"),
+    }
+    fmt.Printf("%c", r)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

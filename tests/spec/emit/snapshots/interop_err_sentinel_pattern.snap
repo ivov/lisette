@@ -1,0 +1,38 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:bufio\"\nimport \"go:fmt\"\nimport \"go:io\"\nimport \"go:os\"\n\nfn main() {\n  let reader = bufio.NewReader(os.Stdin)\n  while true {\n    let r = match reader.ReadRune() {\n      Ok((r, _)) => r,\n      Err(io.EOF) => break,\n      Err(_) => panic(\"error\"),\n    }\n    fmt.Printf(\"%c\", r)\n  }\n}\n"
+---
+package main
+
+import (
+	"bufio"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"io"
+	"os"
+)
+
+func main() {
+	reader := bufio.NewReader(os.Stdin)
+loop_1:
+	for {
+		var r_2 int32
+		ret_4, ret_5, ret_6 := reader.ReadRune()
+		tup_7 := lisette.MakeTuple2(ret_4, ret_5)
+		var subject_3 lisette.Result[lisette.Tuple2[int32, int], error]
+		if ret_6 != nil {
+			subject_3 = lisette.MakeResultErr[lisette.Tuple2[int32, int], error](ret_6)
+		} else {
+			subject_3 = lisette.MakeResultOk[lisette.Tuple2[int32, int], error](tup_7)
+		}
+		if subject_3.Tag == lisette.ResultOk {
+			r_2 = subject_3.OkVal.First
+		} else {
+			if subject_3.ErrVal == io.EOF {
+				break loop_1
+			}
+			panic("error")
+		}
+		fmt.Printf("%c", r_2)
+	}
+}
