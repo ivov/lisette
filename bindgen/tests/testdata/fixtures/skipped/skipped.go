@@ -58,12 +58,12 @@ type HasUnsafe struct {
 
 // Nested anonymous structs - tests skip propagation in toLisetteInner
 type NestedAnon struct {
-	SliceAnon  []struct{ X int }         // Slice with skipped elem
-	ArrayAnon  [4]struct{ X int }        // Array with skipped elem
-	MapKeyAnon map[struct{ X int }]int   // Map with skipped key
-	MapValAnon map[int]struct{ X int }   // Map with skipped value
-	PtrAnon    *struct{ X int }          // Pointer to skipped type
-	ChanAnon   chan struct{ X int }      // Chan with skipped elem
+	SliceAnon  []struct{ X int }       // Slice with skipped elem
+	ArrayAnon  [4]struct{ X int }      // Array with skipped elem
+	MapKeyAnon map[struct{ X int }]int // Map with skipped key
+	MapValAnon map[int]struct{ X int } // Map with skipped value
+	PtrAnon    *struct{ X int }        // Pointer to skipped type
+	ChanAnon   chan struct{ X int }    // Chan with skipped elem
 }
 
 // Named function type referencing an unrepresentable type; must emit as an

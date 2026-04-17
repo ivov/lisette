@@ -14,7 +14,7 @@ pub fn BadResultReturn() -> Result<Unknown, error>
 
 pub fn BadUnsafeFunc(p: Unknown)
 
-pub fn MakeOpaqueFunc() -> Option<OpaqueFunc>
+pub fn MakeOpaqueFunc() -> OpaqueFunc
 
 // SKIPPED: SkippedMin - constraint:comparable
 // type constraint T cannot be represented

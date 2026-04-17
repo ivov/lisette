@@ -14,10 +14,11 @@ func ReturnsToLisette(signature *types.Signature, conv *Converter, qualifiedName
 	return returnsToLisetteRecursive(signature, make(map[types.Type]bool), conv, qualifiedName)
 }
 
-// Wrap a function-typed Lisette return in Option unless the symbol is
-// annotated as non-nilable. Every Go function value is nilable.
+// Wrap a bare function-typed Lisette return in Option unless the symbol is
+// annotated as non-nilable. Named function types (type Opt func(...)) are
+// not wrapped — only bare signatures are nilable.
 func maybeWrapNilableFunction(t types.Type, lisetteType string, conv *Converter, qualifiedName string) string {
-	if !isNilableGoFunctionType(t) {
+	if _, ok := t.(*types.Signature); !ok {
 		return lisetteType
 	}
 	if conv != nil && conv.cfg != nil && conv.cfg.IsNonNilableReturn(conv.currentPkgPath, qualifiedName) {

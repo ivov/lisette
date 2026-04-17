@@ -1,8 +1,8 @@
 package constants
 
 const (
-	IntConst    = 42
-	StringConst = "hello"
+	IntConst        = 42
+	StringConst     = "hello"
 	TypedConst  int = 100
 )
 
