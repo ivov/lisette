@@ -159,7 +159,7 @@ pub fn PackageExports(pkg: Ref<Package>) -> bool
 /// 
 /// For greater control over the traversal of each subtree, use
 /// [Inspect] or [PreorderStack].
-pub fn Preorder(root: Node) -> Option<iter.Seq<Node>>
+pub fn Preorder(root: Node) -> iter.Seq<Node>
 
 /// PreorderStack traverses the tree rooted at root,
 /// calling f before visiting each node.

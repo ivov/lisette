@@ -4,8 +4,8 @@ package param_sanitization
 func UseAs(as int) int { return as }
 
 // Lisette-only keywords as param names
-func UseLoop(loop int) int { return loop }
-func UseTask(task string) string { return task }
+func UseLoop(loop int) int         { return loop }
+func UseTask(task string) string   { return task }
 func UseRecover(recover bool) bool { return recover }
 
 // Uppercase param name (Go convention) lowercased for Lisette

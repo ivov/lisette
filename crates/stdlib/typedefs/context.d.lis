@@ -43,7 +43,7 @@ pub fn TODO() -> Context
 /// 
 /// Canceling this context releases resources associated with it, so code should
 /// call cancel as soon as the operations running in this [Context] complete.
-pub fn WithCancel(parent: Context) -> (Context, Option<CancelFunc>)
+pub fn WithCancel(parent: Context) -> (Context, CancelFunc)
 
 /// WithCancelCause behaves like [WithCancel] but returns a [CancelCauseFunc] instead of a [CancelFunc].
 /// Calling cancel with a non-nil error (the "cause") records that error in ctx;
@@ -56,7 +56,7 @@ pub fn WithCancel(parent: Context) -> (Context, Option<CancelFunc>)
 /// 	cancel(myError)
 /// 	ctx.Err() // returns context.Canceled
 /// 	context.Cause(ctx) // returns myError
-pub fn WithCancelCause(parent: Context) -> (Context, Option<CancelCauseFunc>)
+pub fn WithCancelCause(parent: Context) -> (Context, CancelCauseFunc)
 
 /// WithDeadline returns a derived context that points to the parent context
 /// but has the deadline adjusted to be no later than d. If the parent's
@@ -67,12 +67,12 @@ pub fn WithCancelCause(parent: Context) -> (Context, Option<CancelCauseFunc>)
 /// 
 /// Canceling this context releases resources associated with it, so code should
 /// call cancel as soon as the operations running in this [Context] complete.
-pub fn WithDeadline(parent: Context, d: time.Time) -> (Context, Option<CancelFunc>)
+pub fn WithDeadline(parent: Context, d: time.Time) -> (Context, CancelFunc)
 
 /// WithDeadlineCause behaves like [WithDeadline] but also sets the cause of the
 /// returned Context when the deadline is exceeded. The returned [CancelFunc] does
 /// not set the cause.
-pub fn WithDeadlineCause(parent: Context, d: time.Time, cause: error) -> (Context, Option<CancelFunc>)
+pub fn WithDeadlineCause(parent: Context, d: time.Time, cause: error) -> (Context, CancelFunc)
 
 /// WithTimeout returns WithDeadline(parent, time.Now().Add(timeout)).
 /// 
@@ -84,12 +84,12 @@ pub fn WithDeadlineCause(parent: Context, d: time.Time, cause: error) -> (Contex
 /// 		defer cancel()  // releases resources if slowOperation completes before timeout elapses
 /// 		return slowOperation(ctx)
 /// 	}
-pub fn WithTimeout(parent: Context, timeout: time.Duration) -> (Context, Option<CancelFunc>)
+pub fn WithTimeout(parent: Context, timeout: time.Duration) -> (Context, CancelFunc)
 
 /// WithTimeoutCause behaves like [WithTimeout] but also sets the cause of the
 /// returned Context when the timeout expires. The returned [CancelFunc] does
 /// not set the cause.
-pub fn WithTimeoutCause(parent: Context, timeout: time.Duration, cause: error) -> (Context, Option<CancelFunc>)
+pub fn WithTimeoutCause(parent: Context, timeout: time.Duration, cause: error) -> (Context, CancelFunc)
 
 pub fn WithValue(parent: Context, key: Unknown, val: Unknown) -> Context
 

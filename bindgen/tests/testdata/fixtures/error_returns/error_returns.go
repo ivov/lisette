@@ -14,9 +14,9 @@ func (e *PtrError) Error() string { return "ptr error" }
 type Widget struct{ ID int }
 
 // Single *T returns where T implements error → should become "error"
-func NewAppError() *AppError    { return &AppError{Code: 1} }
-func NewPtrError() *PtrError    { return &PtrError{Detail: "x"} }
-func WrapAppError() *AppError   { return &AppError{Code: 2} }
+func NewAppError() *AppError  { return &AppError{Code: 1} }
+func NewPtrError() *PtrError  { return &PtrError{Detail: "x"} }
+func WrapAppError() *AppError { return &AppError{Code: 2} }
 
 // Normal pointer return (not error impl) → should remain Ref<Widget>
 func NewWidget() *Widget { return &Widget{ID: 1} }

@@ -353,7 +353,7 @@ pub fn NewVar(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> Ref
 /// package-level objects, and may be nil.
 pub fn ObjectString(obj: Object, qf: Qualifier) -> string
 
-pub fn RelativeTo(pkg: Ref<Package>) -> Option<Qualifier>
+pub fn RelativeTo(pkg: Ref<Package>) -> Qualifier
 
 /// Satisfies reports whether type V satisfies the constraint T.
 /// 
@@ -1118,7 +1118,7 @@ impl Interface {
   /// EmbeddedTypes returns a go1.23 iterator over the types embedded within an interface.
   /// 
   /// Example: for e := range t.EmbeddedTypes() { ... }
-  fn EmbeddedTypes(self: Ref<Interface>) -> Option<iter.Seq<Type>>
+  fn EmbeddedTypes(self: Ref<Interface>) -> iter.Seq<Type>
 
   /// Empty reports whether t is the empty interface.
   fn Empty(self: Ref<Interface>) -> bool
@@ -1131,7 +1131,7 @@ impl Interface {
   /// an interface, ordered by Id.
   /// 
   /// Example: for m := range t.ExplicitMethods() { ... }
-  fn ExplicitMethods(self: Ref<Interface>) -> Option<iter.Seq<Ref<Func>>>
+  fn ExplicitMethods(self: Ref<Interface>) -> iter.Seq<Ref<Func>>
 
   /// IsComparable reports whether each type in interface t's type set is comparable.
   fn IsComparable(self: Ref<Interface>) -> bool
@@ -1157,7 +1157,7 @@ impl Interface {
   /// interface, ordered by Id.
   /// 
   /// Example: for m := range t.Methods() { ... }
-  fn Methods(self: Ref<Interface>) -> Option<iter.Seq<Ref<Func>>>
+  fn Methods(self: Ref<Interface>) -> iter.Seq<Ref<Func>>
 
   /// NumEmbeddeds returns the number of embedded types in interface t.
   fn NumEmbeddeds(self: Ref<Interface>) -> int
@@ -1227,7 +1227,7 @@ impl MethodSet {
   /// Methods returns a go1.23 iterator over the methods of a method set.
   /// 
   /// Example: for method := range s.Methods() { ... }
-  fn Methods(self: Ref<MethodSet>) -> Option<iter.Seq<Ref<Selection>>>
+  fn Methods(self: Ref<MethodSet>) -> iter.Seq<Ref<Selection>>
 
   fn String(self: Ref<MethodSet>) -> string
 }
@@ -1254,7 +1254,7 @@ impl Named {
   /// Methods returns a go1.23 iterator over the declared methods of a named type.
   /// 
   /// Example: for m := range t.Methods() { ... }
-  fn Methods(self: Ref<Named>) -> Option<iter.Seq<Ref<Func>>>
+  fn Methods(self: Ref<Named>) -> iter.Seq<Ref<Func>>
 
   /// NumMethods returns the number of explicit methods defined for t.
   fn NumMethods(self: Ref<Named>) -> int
@@ -1417,7 +1417,7 @@ impl Scope {
   /// Children returns a go1.23 iterator over the child scopes nested within scope s.
   /// 
   /// Example: for child := range scope.Children() { ... }
-  fn Children(self: Ref<Scope>) -> Option<iter.Seq<Ref<Scope>>>
+  fn Children(self: Ref<Scope>) -> iter.Seq<Ref<Scope>>
 
   /// Contains reports whether pos is within the scope's extent.
   /// The result is guaranteed to be valid only if the type-checked
@@ -1579,7 +1579,7 @@ impl Struct {
   /// Fields returns a go1.23 iterator over the fields of a struct type.
   /// 
   /// Example: for field := range s.Fields() { ... }
-  fn Fields(self: Ref<Struct>) -> Option<iter.Seq<Ref<Var>>>
+  fn Fields(self: Ref<Struct>) -> iter.Seq<Ref<Var>>
 
   /// NumFields returns the number of fields in the struct (including blank and embedded fields).
   fn NumFields(self: Ref<Struct>) -> int
@@ -1614,7 +1614,7 @@ impl Tuple {
   /// Variables returns a go1.23 iterator over the variables of a tuple type.
   /// 
   /// Example: for v := range tuple.Variables() { ... }
-  fn Variables(self: Ref<Tuple>) -> Option<iter.Seq<Ref<Var>>>
+  fn Variables(self: Ref<Tuple>) -> iter.Seq<Ref<Var>>
 }
 
 impl TypeAndValue {
@@ -1662,7 +1662,7 @@ impl TypeList {
   /// Types returns a go1.23 iterator over the elements of a list of types.
   /// 
   /// Example: for t := range l.Types() { ... }
-  fn Types(self: Ref<TypeList>) -> Option<iter.Seq<Type>>
+  fn Types(self: Ref<TypeList>) -> iter.Seq<Type>
 }
 
 impl TypeName {
@@ -1736,7 +1736,7 @@ impl TypeParamList {
   /// TypeParams returns a go1.23 iterator over a list of type parameters.
   /// 
   /// Example: for tparam := range l.TypeParams() { ... }
-  fn TypeParams(self: Ref<TypeParamList>) -> Option<iter.Seq<Ref<TypeParam>>>
+  fn TypeParams(self: Ref<TypeParamList>) -> iter.Seq<Ref<TypeParam>>
 }
 
 impl Union {
@@ -1749,7 +1749,7 @@ impl Union {
   /// Terms returns a go1.23 iterator over the terms of a union.
   /// 
   /// Example: for term := range union.Terms() { ... }
-  fn Terms(self: Ref<Union>) -> Option<iter.Seq<Ref<Term>>>
+  fn Terms(self: Ref<Union>) -> iter.Seq<Ref<Term>>
 
   fn Underlying(self: Ref<Union>) -> Type
 }

@@ -28,6 +28,6 @@ func (b *BadReceiver) DoSomething() {}
 type A struct{}
 type B struct{}
 
-func GetValue() string    { return "" }
-func (a A) GetValue() int { return 0 }
+func GetValue() string     { return "" }
+func (a A) GetValue() int  { return 0 }
 func (b B) GetValue() bool { return false }
