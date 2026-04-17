@@ -53,6 +53,19 @@ match rx.receive() {
 }
 ```
 
+For signaling without a value — the Go `chan struct{}` pattern — use `Channel<()>`:
+
+```rust
+let done = Channel.new<()>()
+
+task { 
+  do_work()
+  done.send(())
+}
+
+done.receive()  // blocks until the task signals completion
+```
+
 Run `lis doc Channel` for the full method list.
 
 ## `select`
