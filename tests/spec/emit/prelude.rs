@@ -31,6 +31,26 @@ fn test(s: string, sub: string) -> bool {
 }
 
 #[test]
+fn string_byte_at() {
+    let input = r#"
+fn test(s: string, i: int) -> byte {
+  s.byte_at(i)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_rune_at() {
+    let input = r#"
+fn test(s: string, i: int) -> rune {
+  s.rune_at(i)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_new() {
     let input = r#"
 fn test() -> Slice<int> {

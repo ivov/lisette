@@ -107,6 +107,24 @@ impl Checker<'_, '_> {
                     self.type_map(key_ty.clone(), element_ty.clone()),
                 )
             }
+            "string" => {
+                let receiver = if let Expression::Identifier { value, .. } = &collection_expression
+                {
+                    value.as_str()
+                } else {
+                    "s"
+                };
+                self.sink.push(diagnostics::infer::string_not_indexable(
+                    collection_expression.get_span(),
+                    receiver,
+                ));
+                return Expression::IndexedAccess {
+                    expression: collection_expression.into(),
+                    index: index_expression.into(),
+                    ty: Type::Error,
+                    span,
+                };
+            }
             _ => {
                 self.sink
                     .push(diagnostics::infer::only_slices_and_maps_indexable(

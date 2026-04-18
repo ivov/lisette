@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot index into `string`
+   ╭─[test.lis:3:3]
+ 2 │ fn test(s: string) -> byte {
+ 3 │   s[0]
+   ·   ┬
+   ·   ╰── not indexable
+ 4 │ }
+   ╰────
+  help: Use `s.rune_at(i)` to get a `rune`, or `s.byte_at(i)` to get a `byte` · code: [infer.string_not_indexable]

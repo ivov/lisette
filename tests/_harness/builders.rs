@@ -32,6 +32,10 @@ pub fn rune_type() -> Type {
     Type::rune()
 }
 
+pub fn byte_type() -> Type {
+    Type::byte()
+}
+
 pub fn unit_type() -> Type {
     Type::unit()
 }

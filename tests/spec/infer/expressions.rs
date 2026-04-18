@@ -1863,6 +1863,21 @@ fn range_variable_slice_index() {
 }
 
 #[test]
+fn string_integer_index_errors() {
+    infer(r#"{ let s = "hello"; s[3] }"#).assert_infer_code("string_not_indexable");
+}
+
+#[test]
+fn string_byte_at_returns_byte() {
+    infer(r#"{ let s = "hello"; s.byte_at(3) }"#).assert_type(byte_type());
+}
+
+#[test]
+fn string_rune_at_returns_rune() {
+    infer(r#"{ let s = "hello"; s.rune_at(3) }"#).assert_type_char();
+}
+
+#[test]
 fn defer_in_closure_inside_loop() {
     infer(
         r#"
