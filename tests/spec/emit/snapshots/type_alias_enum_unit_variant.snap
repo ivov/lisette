@@ -45,6 +45,6 @@ func (c Color) String() string {
 
 type MyColor = Color
 
-func test() Color {
+func test() MyColor {
 	return MakeColorRed()
 }

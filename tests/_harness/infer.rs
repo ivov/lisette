@@ -351,7 +351,7 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
             Type::Constructor {
                 id: id1,
                 params: args1,
-                ..
+                underlying_ty: u1,
             },
             Type::Constructor {
                 id: id2,
@@ -361,12 +361,21 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
         ) => {
             let name1 = id1.rsplit('.').next().unwrap_or("");
             let name2 = id2.rsplit('.').next().unwrap_or("");
-            name1 == name2
+            if name1 == name2
                 && args1.len() == args2.len()
                 && args1
                     .iter()
                     .zip(args2.iter())
                     .all(|(a1, a2)| types_equal(a1, a2))
+            {
+                return true;
+            }
+            if let Some(u) = u1
+                && types_equal(u, &resolved_t2)
+            {
+                return true;
+            }
+            false
         }
 
         (

@@ -1019,7 +1019,7 @@ impl Type {
     pub fn is_aliased_numeric_type(&self) -> bool {
         match self {
             Type::Constructor { underlying_ty, .. } => {
-                underlying_ty.is_some() && !self.is_numeric()
+                underlying_ty.is_some() && !self.is_numeric() && self.has_underlying_numeric_type()
             }
             _ => false,
         }

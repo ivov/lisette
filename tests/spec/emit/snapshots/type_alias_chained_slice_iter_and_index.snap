@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ntype Numbers = Slice<int>\ntype MoreNumbers = Numbers\n\nfn first(nums: MoreNumbers) -> int {\n  nums[0]\n}\n\nfn sum(nums: MoreNumbers) -> int {\n  let mut total = 0\n  for n in nums {\n    total += n\n  }\n  total\n}\n"
+---
+package main
+
+type Numbers = []int
+
+type MoreNumbers = Numbers
+
+func first(nums MoreNumbers) int {
+	return nums[0]
+}
+
+func sum(nums MoreNumbers) int {
+	total := 0
+	for _, n := range nums {
+		total += n
+	}
+	return total
+}

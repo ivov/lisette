@@ -174,6 +174,22 @@ impl Checker<'_, '_> {
         };
 
         if symbol1 != symbol2 {
+            if let Constructor {
+                underlying_ty: Some(u),
+                ..
+            } = t1
+                && self.try_unify(u, t2, span).is_ok()
+            {
+                return Ok(());
+            }
+            if let Constructor {
+                underlying_ty: Some(u),
+                ..
+            } = t2
+                && self.try_unify(t1, u, span).is_ok()
+            {
+                return Ok(());
+            }
             return self.try_coerce_or_satisfy_interface(t1, t2, span);
         }
 

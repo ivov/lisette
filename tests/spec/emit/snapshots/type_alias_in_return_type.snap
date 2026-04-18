@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nstruct Point { pub x: int, pub y: int }\n\ntype Location = Point\n\nfn get_x(loc: Location) -> int {\n  loc.x\n}\n"
+description: "input: \nstruct Point { pub x: int, pub y: int }\n\ntype Location = Point\n\nfn origin() -> Location {\n  Point { x: 0, y: 0 }\n}\n"
 ---
 package main
 
@@ -17,6 +17,9 @@ func (p Point) String() string {
 
 type Location = Point
 
-func get_x(loc Location) int {
-	return loc.X
+func origin() Location {
+	return Point{
+		X: 0,
+		Y: 0,
+	}
 }

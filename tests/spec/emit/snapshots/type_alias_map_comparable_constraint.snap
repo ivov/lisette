@@ -6,7 +6,7 @@ package main
 
 type KeyVal[K comparable, V any] = map[K]V
 
-func test() map[string]int {
+func test() KeyVal[string, int] {
 	m := make(map[string]int)
 	m["a"] = 1
 	return m

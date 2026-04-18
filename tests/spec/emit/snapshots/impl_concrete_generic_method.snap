@@ -42,7 +42,7 @@ func (e Either[L, R]) String() string {
 	}
 }
 
-func Either_describe(self Either[int, string]) string {
+func Either_describe(self Either[MyInt, MyString]) MyString {
 	if self.Tag == EitherLeft {
 		n := self.Left
 		return fmt.Sprintf("int(%d)", n)
