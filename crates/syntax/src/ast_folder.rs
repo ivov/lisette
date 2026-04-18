@@ -475,6 +475,19 @@ pub(crate) trait AstFolder {
                 }
             }
 
+            Literal {
+                literal: crate::ast::Literal::Slice(elements),
+                ty,
+                span,
+            } => {
+                let folded_elements = self.fold_vec(elements)?;
+                Literal {
+                    literal: crate::ast::Literal::Slice(folded_elements),
+                    ty,
+                    span,
+                }
+            }
+
             Range {
                 start,
                 end,
