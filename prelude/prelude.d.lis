@@ -580,8 +580,9 @@ fn real(c: complex128) -> float64
 #[go("imag")]
 fn imaginary(c: complex128) -> float64
 
-/// Terminates the program with the given message.
+/// Terminates the program with the given value.
 ///
 /// Example:
 ///   panic("something went wrong")
-fn panic(msg: string) -> Never
+///   panic(err)
+fn panic(msg: Unknown) -> Never

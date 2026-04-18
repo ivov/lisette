@@ -585,6 +585,16 @@ fn test(x: int) -> int {
 }
 
 #[test]
+fn builtin_panic_with_error() {
+    let input = r#"
+fn test(err: error) {
+  panic(err)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn string_is_empty_negated() {
     let input = r#"
 fn test(s: string) -> bool {

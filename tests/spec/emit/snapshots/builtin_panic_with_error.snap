@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test(err: error) {\n  panic(err)\n}\n"
+---
+package main
+
+func test(err error) {
+	panic(err)
+}
