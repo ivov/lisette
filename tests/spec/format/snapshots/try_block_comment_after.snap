@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn foo() {\n  try {}\n  // comment\n}"
+---
+fn foo() {
+  try {} // comment
+}

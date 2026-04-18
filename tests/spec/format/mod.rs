@@ -433,6 +433,26 @@ fn impl_empty() {
 }
 
 #[test]
+fn impl_comment_before_method() {
+    assert_format_snapshot!("struct Foo {}\n\nimpl Foo {\n  // test\n  fn foo() {}\n}");
+}
+
+#[test]
+fn impl_comment_after_method() {
+    assert_format_snapshot!("struct Foo {}\n\nimpl Foo {\n  fn foo() {}\n  // test\n}");
+}
+
+#[test]
+fn try_block_comment_after() {
+    assert_format_snapshot!("fn foo() {\n  try {}\n  // comment\n}");
+}
+
+#[test]
+fn recover_block_comment_after() {
+    assert_format_snapshot!("fn foo() {\n  recover {}\n  // comment\n}");
+}
+
+#[test]
 fn import_single() {
     assert_format_snapshot!("import \"go:fmt\"");
 }

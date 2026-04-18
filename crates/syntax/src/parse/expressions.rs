@@ -534,18 +534,14 @@ impl<'source> Parser<'source> {
             }
         }
 
-        if self.is(RightCurlyBrace) {
-            self.next();
-        } else {
-            self.error_unclosed_block(&start);
-        }
+        let span = self.close_brace_span(start, start);
 
         self.leave_recursion();
 
         Expression::Block {
             ty: Type::uninferred(),
             items,
-            span: self.span_from_tokens(start),
+            span,
         }
     }
 
@@ -1139,11 +1135,7 @@ impl<'source> Parser<'source> {
             }
         }
 
-        if self.is(RightCurlyBrace) {
-            self.next();
-        } else {
-            self.error_unclosed_block(&brace_token);
-        }
+        let span = self.close_brace_span(start, brace_token);
 
         self.leave_recursion();
 
@@ -1151,7 +1143,7 @@ impl<'source> Parser<'source> {
             items,
             ty: Type::uninferred(),
             try_keyword_span,
-            span: self.span_from_tokens(start),
+            span,
         }
     }
 
@@ -1215,11 +1207,7 @@ impl<'source> Parser<'source> {
             }
         }
 
-        if self.is(RightCurlyBrace) {
-            self.next();
-        } else {
-            self.error_unclosed_block(&brace_token);
-        }
+        let span = self.close_brace_span(start, brace_token);
 
         self.leave_recursion();
 
@@ -1227,7 +1215,7 @@ impl<'source> Parser<'source> {
             items,
             ty: Type::uninferred(),
             recover_keyword_span,
-            span: self.span_from_tokens(start),
+            span,
         }
     }
 

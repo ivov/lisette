@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Foo {}\n\nimpl Foo {\n  // test\n  fn foo() {}\n}"
+---
+struct Foo {}
+
+impl Foo {
+  // test
+  fn foo() {}
+}

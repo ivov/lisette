@@ -227,11 +227,12 @@ impl<'a> Formatter<'a> {
                 annotation,
                 generics,
                 methods,
+                span,
                 ..
             } => (
                 Document::Sequence(vec![]),
                 Visibility::Private,
-                self.impl_block(annotation, generics, methods),
+                self.impl_block(annotation, generics, methods, span.end()),
             ),
 
             Expression::Const {
@@ -1534,6 +1535,7 @@ impl<'a> Formatter<'a> {
         annotation: &'a Annotation,
         generics: &'a [Generic],
         methods: &'a [Expression],
+        impl_end: u32,
     ) -> Document<'a> {
         let generics_doc = Self::generics(generics);
         let header = Document::str("impl")
@@ -1545,11 +1547,31 @@ impl<'a> Formatter<'a> {
             return header.append(" {}");
         }
 
-        let methods_docs: Vec<_> = methods.iter().map(|m| self.definition(m)).collect();
-        Self::braced_body(
-            header,
-            join(methods_docs, concat([Document::Newline, Document::Newline])),
-        )
+        let mut docs = Vec::with_capacity(methods.len() * 5);
+
+        for (i, m) in methods.iter().enumerate() {
+            let start = m.get_span().byte_offset;
+
+            if i > 0 {
+                docs.push(Document::Newline);
+                docs.push(Document::Newline);
+            }
+
+            if let Some(comment_doc) = self.comments.take_comments_before(start) {
+                docs.push(comment_doc.force_break());
+                docs.push(Document::Newline);
+            }
+
+            docs.push(self.definition(m));
+        }
+
+        if let Some(trailing) = self.comments.take_comments_before(impl_end) {
+            docs.push(Document::Newline);
+            docs.push(Document::Newline);
+            docs.push(trailing.force_break());
+        }
+
+        Self::braced_body(header, concat(docs))
     }
 
     fn const_definition(

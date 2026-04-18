@@ -489,6 +489,10 @@ impl Span {
     pub fn is_dummy(&self) -> bool {
         self.byte_length == 0
     }
+
+    pub fn end(&self) -> u32 {
+        self.byte_offset + self.byte_length
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

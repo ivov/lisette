@@ -594,6 +594,22 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
+    fn close_brace_span(&mut self, start: Token<'source>, error_anchor: Token<'source>) -> Span {
+        if self.is(RightCurlyBrace) {
+            let close = self.current_token();
+            self.next();
+            let end = close.byte_offset + close.byte_length;
+            Span::new(
+                self.file_id,
+                start.byte_offset,
+                end.saturating_sub(start.byte_offset),
+            )
+        } else {
+            self.error_unclosed_block(&error_anchor);
+            self.span_from_tokens(start)
+        }
+    }
+
     fn error_unclosed_block(&mut self, open_brace: &Token) {
         let span = ast::Span::new(self.file_id, open_brace.byte_offset, open_brace.byte_length);
         let error = ParseError::new("Unclosed block", span, "opening brace here")
