@@ -117,7 +117,7 @@ pub fn Executable() -> Result<string, error>
 /// The program terminates immediately; deferred functions are not run.
 /// 
 /// For portability, the status code should be in the range [0, 125].
-pub fn Exit(code: int)
+pub fn Exit(code: int) -> Never
 
 /// Expand replaces ${var} or $var in the string based on the mapping function.
 /// For example, [os.ExpandEnv](s) is equivalent to [os.Expand](s, [os.Getenv]).
