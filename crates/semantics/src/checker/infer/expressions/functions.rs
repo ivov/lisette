@@ -92,11 +92,16 @@ impl Checker<'_, '_> {
             }
         }
 
-        let expected_params = expected_ty.get_function_params().unwrap_or_default();
+        let resolved_expected = expected_ty.resolve();
+        let expected_params = resolved_expected.get_function_params().unwrap_or_default();
         let new_params = self.infer_function_params(params, expected_params, true);
 
-        let return_ty =
-            self.infer_return_type(&return_annotation, expected_ty, &span, self.type_unit());
+        let return_ty = self.infer_return_type(
+            &return_annotation,
+            &resolved_expected,
+            &span,
+            self.type_unit(),
+        );
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
@@ -167,12 +172,19 @@ impl Checker<'_, '_> {
     ) -> Expression {
         self.scopes.push();
 
-        let expected_params = expected_ty.get_function_params().unwrap_or_default();
+        // Resolve type variables so that a Go function alias bound via speculative
+        // unification (e.g. T = tea.Cmd) is visible as its underlying function shape.
+        let resolved_expected = expected_ty.resolve();
+        let expected_params = resolved_expected.get_function_params().unwrap_or_default();
         let new_params = self.infer_function_params(params, expected_params, false);
 
         let default_return = self.new_type_var();
-        let return_ty =
-            self.infer_return_type(&return_annotation, expected_ty, &span, default_return);
+        let return_ty = self.infer_return_type(
+            &return_annotation,
+            &resolved_expected,
+            &span,
+            default_return,
+        );
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 

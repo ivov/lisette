@@ -1059,6 +1059,25 @@ fn main() {
 }
 
 #[test]
+fn interop_nullable_function_alias_some_lambda() {
+    let input = r#"
+import "go:example.com/scheduler"
+
+fn main() {
+  let n = 42
+  let cmd: Option<scheduler.Cmd> = Some(|| n)
+  let _ = cmd
+}
+"#;
+    let typedef = r#"
+pub type Cmd = fn() -> int
+
+pub fn MakeCmd() -> Option<Cmd>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/scheduler", typedef)]);
+}
+
+#[test]
 fn interop_nullable_function_alias_direct_call() {
     let input = r#"
 import "go:example.com/scheduler"
