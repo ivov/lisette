@@ -1,4 +1,5 @@
 use crate::assert_emit_snapshot;
+use crate::assert_emit_snapshot_with_go_typedefs;
 
 #[test]
 fn interop_result_direct_call() {
@@ -1055,4 +1056,25 @@ fn main() {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_nullable_function_alias_direct_call() {
+    let input = r#"
+import "go:example.com/scheduler"
+
+fn main() {
+  let cmd = scheduler.MakeCmd()
+  match cmd {
+    Some(c) => { let _ = c },
+    None => {},
+  }
+}
+"#;
+    let typedef = r#"
+pub type Cmd = fn() -> string
+
+pub fn MakeCmd() -> Option<Cmd>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/scheduler", typedef)]);
 }

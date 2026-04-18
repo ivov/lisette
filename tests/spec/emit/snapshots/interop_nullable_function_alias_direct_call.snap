@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:example.com/scheduler\"\n\nfn main() {\n  let cmd = scheduler.MakeCmd()\n  match cmd {\n    Some(c) => { let _ = c },\n    None => {},\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/scheduler"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	raw_1 := scheduler.MakeCmd()
+	var cmd lisette.Option[scheduler.Cmd]
+	if raw_1 != nil {
+		cmd = lisette.MakeOptionSome[scheduler.Cmd](raw_1)
+	} else {
+		cmd = lisette.MakeOptionNone[scheduler.Cmd]()
+	}
+	if cmd.Tag == lisette.OptionSome {
+		_ = cmd.SomeVal
+	}
+}
