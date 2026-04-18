@@ -40,6 +40,7 @@ description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      brea
                                         qualified: None,
                                     },
                                     args: [],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

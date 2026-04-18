@@ -86,6 +86,7 @@ description: "input: fn test() { (1 + 2) |> double; }"
                             },
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

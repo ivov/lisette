@@ -80,6 +80,7 @@ description: "input: fn test() { x |> f |> g |> h; }"
                                             qualified: None,
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -91,6 +92,7 @@ description: "input: fn test() { x |> f |> g |> h; }"
                                     },
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,
@@ -102,6 +104,7 @@ description: "input: fn test() { x |> f |> g |> h; }"
                             },
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

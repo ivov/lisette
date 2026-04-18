@@ -99,6 +99,7 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                                     },
                                 },
                                 args: [],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

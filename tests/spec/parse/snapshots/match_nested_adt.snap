@@ -170,6 +170,7 @@ description: "input: \nfn test(opt_res: Option<Result<int, string>>) {\n  match 
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -260,6 +261,7 @@ description: "input: \nfn test(opt_res: Option<Result<int, string>>) {\n  match 
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -314,6 +316,7 @@ description: "input: \nfn test(opt_res: Option<Result<int, string>>) {\n  match 
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

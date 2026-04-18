@@ -55,6 +55,7 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                     qualified: None,
                                 },
                                 args: [],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -152,6 +153,7 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

@@ -201,6 +201,7 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                                     qualified: None,
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,

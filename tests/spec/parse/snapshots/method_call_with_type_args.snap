@@ -61,6 +61,7 @@ description: "input: \nfn test() { obj.method<int>(arg); }\n"
                             qualified: None,
                         },
                     ],
+                    spread: None,
                     type_args: [
                         Constructor {
                             name: "int",

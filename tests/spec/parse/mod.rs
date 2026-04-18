@@ -3466,3 +3466,35 @@ fn test() -> Slice<string> {
 "#;
     assert_parse_snapshot!(input);
 }
+
+#[test]
+fn call_with_spread_arg() {
+    let input = r#"
+fn test() { func(..xs); }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn call_with_leading_args_and_spread_arg() {
+    let input = r#"
+fn test() { func(a, b, ..xs); }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn call_with_spread_arg_trailing_comma() {
+    let input = r#"
+fn test() { func(..xs,); }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn call_with_leading_args_and_spread_arg_trailing_comma() {
+    let input = r#"
+fn test() { func(a, b, ..xs,); }
+"#;
+    assert_parse_snapshot!(input);
+}

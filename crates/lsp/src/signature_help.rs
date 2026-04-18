@@ -7,7 +7,10 @@ pub(crate) fn handle(items: &[Expression], offset: u32) -> Option<SignatureHelp>
     let call_expression = find_enclosing_call(items, offset)?;
 
     let Expression::Call {
-        expression, args, ..
+        expression,
+        args,
+        spread,
+        ..
     } = call_expression
     else {
         return None;
@@ -38,13 +41,21 @@ pub(crate) fn handle(items: &[Expression], offset: u32) -> Option<SignatureHelp>
     let param_strs: Vec<String> = display_params.iter().map(|p| p.to_string()).collect();
     let signature = format!("fn {func_name}({}) -> {return_type}", param_strs.join(", "));
 
-    let active_param = args
-        .iter()
-        .filter(|a| {
-            let s = a.get_span();
-            s.byte_offset + s.byte_length <= offset
-        })
-        .count() as u32;
+    let spread_contains_cursor = spread.as_ref().as_ref().is_some_and(|s| {
+        let span = s.get_span();
+        span.byte_offset <= offset && offset < span.byte_offset + span.byte_length
+    });
+
+    let active_param = if spread_contains_cursor {
+        args.len() as u32
+    } else {
+        args.iter()
+            .filter(|a| {
+                let s = a.get_span();
+                s.byte_offset + s.byte_length <= offset
+            })
+            .count() as u32
+    };
 
     let param_infos: Vec<ParameterInformation> = param_strs
         .into_iter()

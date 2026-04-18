@@ -64,6 +64,7 @@ description: "input: fn test() { x |> add(5); }"
                             },
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

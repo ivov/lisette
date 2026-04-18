@@ -134,11 +134,17 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Diagn
         Expression::Identifier { .. } => {}
 
         Expression::Call {
-            expression, args, ..
+            expression,
+            args,
+            spread,
+            ..
         } => {
             check(expression, ctx, sink);
             for e in args {
                 check(e, ctx, sink);
+            }
+            if let Some(spread_expr) = spread.as_ref() {
+                check(spread_expr, ctx, sink);
             }
         }
 

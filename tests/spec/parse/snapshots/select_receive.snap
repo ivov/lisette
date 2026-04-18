@@ -112,6 +112,7 @@ description: "input: \nfn test(ch: Receiver<int>) {\n  select {\n    let x = ch 
                                             qualified: None,
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

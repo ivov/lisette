@@ -76,6 +76,7 @@ impl Emitter<'_> {
         function: &Expression,
         args: &[Expression],
         type_args: &[Annotation],
+        spread: Option<&Expression>,
     ) -> String {
         let Expression::DotAccess {
             expression: receiver,
@@ -104,7 +105,8 @@ impl Emitter<'_> {
         }
         let all_values = self.sequence(output, all_stages, "_arg");
         let receiver_arg = all_values[0].clone();
-        let emitted_args: Vec<String> = all_values[1..].to_vec();
+        let mut emitted_args: Vec<String> = all_values[1..].to_vec();
+        self.append_spread_arg(output, &mut emitted_args, spread);
 
         let receiver_arg = match coercion {
             Some(ReceiverCoercion::AutoAddress) => {
@@ -165,6 +167,7 @@ impl Emitter<'_> {
         type_args: &[Annotation],
         method: &str,
         is_public: bool,
+        spread: Option<&Expression>,
     ) -> String {
         let go_method = if is_public {
             let mut chars = method.chars();
@@ -179,7 +182,8 @@ impl Emitter<'_> {
         let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
         let emitted_all = self.sequence(output, stages, "_arg");
         let receiver = emitted_all[0].clone();
-        let emitted_rest: Vec<String> = emitted_all[1..].to_vec();
+        let mut emitted_rest: Vec<String> = emitted_all[1..].to_vec();
+        self.append_spread_arg(output, &mut emitted_rest, spread);
 
         let type_args_string = self.format_type_args_from_annotations(type_args);
 

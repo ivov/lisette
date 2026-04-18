@@ -63,6 +63,7 @@ description: "input: \nfn test() { func<A, B, C>(x, y); }\n"
                             qualified: None,
                         },
                     ],
+                    spread: None,
                     type_args: [
                         Constructor {
                             name: "A",

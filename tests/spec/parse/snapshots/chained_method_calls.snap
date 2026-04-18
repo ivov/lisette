@@ -65,6 +65,7 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                                     },
                                 },
                                 args: [],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -86,6 +87,7 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                             },
                         },
                         args: [],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

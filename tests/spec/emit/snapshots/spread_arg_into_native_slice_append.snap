@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {\n  s.append(..more)\n}\n"
+---
+package main
+
+func test(s, more []int) []int {
+	return append(s, more...)
+}

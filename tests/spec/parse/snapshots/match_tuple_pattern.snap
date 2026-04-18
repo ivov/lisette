@@ -147,6 +147,7 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -232,6 +233,7 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -317,6 +319,7 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -409,6 +412,7 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

@@ -74,10 +74,13 @@ fn walk_expression(
         Expression::Call {
             expression: callee,
             args,
+            spread,
             type_args,
             ..
         } => {
-            walk_call(module, callee, args, type_args, graph, alias_map, ctx);
+            walk_call(
+                module, callee, args, spread, type_args, graph, alias_map, ctx,
+            );
         }
 
         Expression::StructCall {
@@ -361,10 +364,12 @@ fn walk_identifier(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk_call(
     module: &Module,
     callee: &Expression,
     args: &[Expression],
+    spread: &Option<Expression>,
     type_args: &[Annotation],
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
@@ -384,6 +389,9 @@ fn walk_call(
     walk_expression(module, callee, graph, alias_map, ctx);
     for arg in args {
         walk_expression(module, arg, graph, alias_map, ctx);
+    }
+    if let Some(spread_expr) = spread {
+        walk_expression(module, spread_expr, graph, alias_map, ctx);
     }
     if let Some(from) = ctx {
         for type_arg in type_args {

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid spread argument
+   ╭─[test.lis:5:3]
+ 4 │ fn test(rest: Slice<fn(string) -> int>) {
+ 5 │   Callback(..rest)
+   ·   ────────┬───────
+   ·           ╰── this function does not accept variadic arguments
+ 6 │ }
+   ╰────
+  help: Only functions with a `VarArgs<T>` parameter accept a spread argument · code: [infer.spread_on_non_variadic]

@@ -1,0 +1,83 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() { func(..xs); }\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Variable(
+            -1,
+        ),
+        visibility: Private,
+        body: Block {
+            items: [
+                Call {
+                    expression: Identifier {
+                        value: "func",
+                        ty: Variable(
+                            -1,
+                        ),
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 13,
+                            byte_length: 4,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    args: [],
+                    spread: Some(
+                        Identifier {
+                            value: "xs",
+                            ty: Variable(
+                                -1,
+                            ),
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 20,
+                                byte_length: 2,
+                            },
+                            binding_id: None,
+                            qualified: None,
+                        },
+                    ),
+                    type_args: [],
+                    ty: Variable(
+                        -1,
+                    ),
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 13,
+                        byte_length: 10,
+                    },
+                },
+            ],
+            ty: Variable(
+                -1,
+            ),
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 15,
+            },
+        },
+        ty: Variable(
+            -1,
+        ),
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 25,
+        },
+    },
+]

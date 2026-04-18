@@ -62,6 +62,7 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                                     qualified: None,
                                 },
                                 args: [],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

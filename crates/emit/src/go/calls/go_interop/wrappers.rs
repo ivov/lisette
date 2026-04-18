@@ -20,19 +20,11 @@ impl Emitter<'_> {
         call_expression: &Expression,
         arity: usize,
     ) -> String {
-        let Expression::Call {
-            expression: callee,
-            args,
-            type_args,
-            ty,
-            span,
-            ..
-        } = call_expression
-        else {
+        let Expression::Call { ty, .. } = call_expression else {
             unreachable!("emit_go_tuple_call_wrapped called with non-call expression");
         };
 
-        let call_str = self.emit_call(output, callee, args, type_args, None, *span);
+        let call_str = self.emit_call(output, call_expression, None);
 
         let temp_vars = self.create_temp_vars("ret", arity);
 
@@ -49,18 +41,7 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        let Expression::Call {
-            expression: callee,
-            args,
-            type_args,
-            span,
-            ..
-        } = call_expression
-        else {
-            unreachable!("emit_go_partial_call_wrapped called with non-call expression");
-        };
-
-        let call_str = self.emit_call(output, callee, args, type_args, None, *span);
+        let call_str = self.emit_call(output, call_expression, None);
         self.emit_partial_wrapping(output, &call_str, partial_ty)
     }
 
@@ -112,18 +93,7 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        let Expression::Call {
-            expression: callee,
-            args,
-            type_args,
-            span,
-            ..
-        } = call_expression
-        else {
-            unreachable!("emit_go_result_call_wrapped called with non-call expression");
-        };
-
-        let call_str = self.emit_call(output, callee, args, type_args, None, *span);
+        let call_str = self.emit_call(output, call_expression, None);
         self.emit_result_wrapping(output, &call_str, result_ty)
     }
 

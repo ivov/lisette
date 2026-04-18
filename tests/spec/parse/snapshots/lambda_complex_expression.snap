@@ -217,6 +217,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                                 },
                             },
                         ],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

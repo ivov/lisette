@@ -159,6 +159,7 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -246,6 +247,7 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                             qualified: None,
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -297,6 +299,7 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                             },
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

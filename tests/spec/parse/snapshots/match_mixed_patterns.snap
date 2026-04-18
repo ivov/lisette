@@ -266,6 +266,7 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -342,6 +343,7 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -441,6 +443,7 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -503,6 +506,7 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -571,6 +575,7 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -633,6 +638,7 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -687,6 +693,7 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

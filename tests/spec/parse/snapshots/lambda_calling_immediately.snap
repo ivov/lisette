@@ -130,6 +130,7 @@ description: "input: \nfn test() {\n  let result = (|x| x + 1)(5);\n}\n"
                                 },
                             },
                         ],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

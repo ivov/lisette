@@ -70,6 +70,7 @@ description: "input: \nfn test() {\n  let result = recover {\n    let x = foo();
                                         qualified: None,
                                     },
                                     args: [],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

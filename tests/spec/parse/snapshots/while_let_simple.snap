@@ -207,6 +207,7 @@ description: "input: \nfn test(items: Slice<Option<int>>) {\n  let mut i = 0;\n 
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
