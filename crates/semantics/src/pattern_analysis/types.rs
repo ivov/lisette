@@ -27,3 +27,5 @@ pub enum NormalizedPattern {
 }
 
 pub type UnionTable = HashMap<TypeName, Union>;
+
+pub const INTERFACE_UNKNOWN_TAG: &str = "__interface_unknown__";

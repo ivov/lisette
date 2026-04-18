@@ -1,4 +1,5 @@
 use super::NormalizedPattern;
+use super::types::INTERFACE_UNKNOWN_TAG;
 use syntax::ast::Literal;
 
 pub fn format_witness(pattern: &NormalizedPattern) -> String {
@@ -29,7 +30,7 @@ pub fn format_witness(pattern: &NormalizedPattern) -> String {
 
             let display_tag = strip_module_prefix(tag);
 
-            if display_tag == "__value_enum_unknown__" {
+            if display_tag == "__value_enum_unknown__" || display_tag == INTERFACE_UNKNOWN_TAG {
                 return "_".to_string();
             }
 
@@ -77,7 +78,7 @@ pub fn format_pattern(pattern: &NormalizedPattern) -> String {
 
             let display_tag = strip_module_prefix(tag);
 
-            if display_tag == "__value_enum_unknown__" {
+            if display_tag == "__value_enum_unknown__" || display_tag == INTERFACE_UNKNOWN_TAG {
                 return "_".to_string();
             }
 

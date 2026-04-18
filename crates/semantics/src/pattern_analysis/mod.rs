@@ -24,6 +24,7 @@ use diagnostics::{DiagnosticSink, IssueKind, PatternIssue};
 use syntax::ast::{
     Expression, Literal, MatchOrigin, Pattern, SelectArmPattern, Span, TypedPattern,
 };
+use syntax::types::Type;
 
 use maranget::is_useful;
 use normalize::normalize_arm;
@@ -49,6 +50,15 @@ impl<'a> PatternAnalysisContext<'a> {
         NormalizationContext {
             store: self.store,
             cache: &self.cache,
+            scrutinee_type: None,
+        }
+    }
+
+    fn normalize_context_for_match(&self, scrutinee_type: Type) -> NormalizationContext<'_> {
+        NormalizationContext {
+            store: self.store,
+            cache: &self.cache,
+            scrutinee_type: Some(scrutinee_type),
         }
     }
 
@@ -161,7 +171,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Diagn
             }
 
             let mut unions = HashMap::default();
-            let norm_ctx = ctx.normalize_context();
+            let norm_ctx = ctx.normalize_context_for_match(subject.get_type());
 
             let unguarded_rows: Vec<Row> = arms
                 .iter()
@@ -522,6 +532,7 @@ pub fn is_pattern_irrefutable(typed_pattern: &TypedPattern, store: &Store) -> bo
     let norm_ctx = NormalizationContext {
         store,
         cache: &cache,
+        scrutinee_type: None,
     };
 
     let mut unions = HashMap::default();

@@ -24,6 +24,7 @@ fn make_type_key(name: &str, type_args: &[Type]) -> String {
 pub struct NormalizationContext<'a> {
     pub store: &'a Store,
     pub cache: &'a InhabitanceCache,
+    pub scrutinee_type: Option<Type>,
 }
 
 pub fn normalize_arm(
@@ -197,6 +198,59 @@ pub fn normalize_typed_pattern(
                         .unwrap_or(Wildcard)
                 })
                 .collect();
+
+            // Interfaces are open: unknown structs can implement them at any time,
+            // so a wildcard after a struct arm is always reachable.
+            if let Some(scrutinee_ty) = &ctx.scrutinee_type {
+                let resolved = scrutinee_ty.resolve();
+                if let Type::Constructor {
+                    id: interface_id,
+                    params: interface_params,
+                    ..
+                } = &resolved
+                    && ctx.store.get_interface(interface_id).is_some()
+                {
+                    let interface_type_name = make_type_key(interface_id, interface_params);
+                    let struct_ctor = Constructor {
+                        tag_id: struct_name.to_string(),
+                        arity: struct_fields.len(),
+                    };
+
+                    if let Some(union) = unions.get_mut(&interface_type_name) {
+                        let mut found = false;
+                        let mut unknown_pos = union.len();
+                        for (i, c) in union.iter().enumerate() {
+                            if c.tag_id == struct_name.as_str() {
+                                found = true;
+                                break;
+                            }
+                            if c.tag_id == INTERFACE_UNKNOWN_TAG {
+                                unknown_pos = i;
+                            }
+                        }
+                        if !found {
+                            union.insert(unknown_pos, struct_ctor);
+                        }
+                    } else {
+                        unions.insert(
+                            interface_type_name.clone(),
+                            vec![
+                                struct_ctor,
+                                Constructor {
+                                    tag_id: INTERFACE_UNKNOWN_TAG.to_string(),
+                                    arity: 0,
+                                },
+                            ],
+                        );
+                    }
+
+                    return NormalizedPattern::Constructor {
+                        type_name: interface_type_name,
+                        tag: struct_name.to_string(),
+                        args: patterns,
+                    };
+                }
+            }
 
             let type_name = make_type_key(struct_name, type_args);
 

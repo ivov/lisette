@@ -1613,3 +1613,52 @@ fn test(p: Partial<int, string>) -> int {
 "#;
     infer(input).assert_no_errors();
 }
+
+#[test]
+fn test_struct_arm_against_interface_wildcard_not_redundant() {
+    let input = r#"
+interface Event {}
+struct ClickEvent { x: int, y: int }
+
+fn handle(event: Event) -> int {
+  match event {
+    ClickEvent { x, .. } => x,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_multiple_struct_arms_against_interface_wildcard_not_redundant() {
+    let input = r#"
+interface Event {}
+struct ClickEvent { x: int, y: int }
+struct KeyEvent { key: string }
+
+fn handle(event: Event) -> int {
+  match event {
+    ClickEvent { x, .. } => x,
+    KeyEvent { .. } => 1,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_struct_arm_against_interface_without_wildcard_is_non_exhaustive() {
+    let input = r#"
+interface Event {}
+struct ClickEvent { x: int, y: int }
+
+fn handle(event: Event) -> int {
+  match event {
+    ClickEvent { x, .. } => x,
+  }
+}
+"#;
+    infer(input).assert_exhaustiveness_error();
+}
