@@ -37,7 +37,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 """
 body = '''
 ## [{{ version }}](https://github.com/ivov/lisette/compare/lisette-v{{ previous.version }}...lisette-v{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
-{% for commit in commits %}
+{% for commit in commits | reverse %}
 {%- set subject = commit.raw_message | split(pat="\n") | first | trim -%}
 {%- set sha = commit.id | truncate(length=7, end="") -%}
 {%- if subject is matching("\(\[#\d+\]\([^)]*\)\)$") -%}
