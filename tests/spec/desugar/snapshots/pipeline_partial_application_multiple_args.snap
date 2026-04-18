@@ -78,6 +78,7 @@ description: "input: fn test() { x |> clamp(0, 100); }"
                             },
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

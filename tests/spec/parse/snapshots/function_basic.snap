@@ -217,6 +217,7 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

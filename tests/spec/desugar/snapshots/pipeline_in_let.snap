@@ -66,6 +66,7 @@ description: "input: fn test() { let result = x |> func; }"
                                 qualified: None,
                             },
                         ],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

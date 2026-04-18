@@ -96,6 +96,7 @@ description: "input: \nfn test() {\n  {\n    let x = 5;\n    x |> double\n  }\n}
                                     qualified: None,
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,

@@ -136,6 +136,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [x] =>
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -184,6 +185,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [x] =>
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

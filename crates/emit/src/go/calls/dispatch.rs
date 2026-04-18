@@ -7,7 +7,7 @@ use crate::go::names::go_name;
 use crate::go::types::native::NativeGoType;
 use crate::go::utils::Staged;
 use crate::go::write_line;
-use syntax::ast::{Annotation, Expression, Span, StructKind, UnaryOperator};
+use syntax::ast::{Annotation, Expression, StructKind, UnaryOperator};
 use syntax::program::{CallKind, Definition};
 use syntax::types::Type;
 
@@ -116,18 +116,27 @@ impl Emitter<'_> {
     pub(crate) fn emit_call(
         &mut self,
         output: &mut String,
-        function: &Expression,
-        args: &[Expression],
-        type_args: &[Annotation],
+        call_expression: &Expression,
         call_ty: Option<&Type>,
-        call_span: Span,
     ) -> String {
-        let function = function.unwrap_parens();
+        let Expression::Call {
+            expression: callee,
+            args,
+            type_args,
+            spread,
+            span: call_span,
+            ..
+        } = call_expression
+        else {
+            unreachable!("emit_call requires a Call expression");
+        };
+        let function = callee.unwrap_parens();
+        let spread = (**spread).as_ref();
 
         let call_kind = self
             .ctx
             .resolutions
-            .get_call(call_span)
+            .get_call(*call_span)
             .filter(|_| !self.is_local_binding(function));
 
         match call_kind {
@@ -142,7 +151,7 @@ impl Emitter<'_> {
                 return self.emit_assert_type(output, function, args, type_args);
             }
             Some(CallKind::UfcsMethod) => {
-                return self.emit_ufcs_call(output, function, args, type_args);
+                return self.emit_ufcs_call(output, function, args, type_args, spread);
             }
             Some(
                 CallKind::NativeConstructor(kind)
@@ -154,6 +163,7 @@ impl Emitter<'_> {
                 let ctx = NativeCallContext {
                     function,
                     args,
+                    spread,
                     type_args,
                     call_ty,
                     native_type: &native_type,
@@ -163,12 +173,14 @@ impl Emitter<'_> {
             }
             Some(CallKind::ReceiverMethodUfcs { is_public }) => {
                 let method = self.extract_receiver_ufcs_method(function);
-                return self.emit_receiver_method_ufcs(output, args, type_args, &method, is_public);
+                return self.emit_receiver_method_ufcs(
+                    output, args, type_args, &method, is_public, spread,
+                );
             }
             _ => {}
         }
 
-        self.emit_regular_call(output, function, args, type_args, call_ty)
+        self.emit_regular_call(output, function, args, type_args, call_ty, spread)
     }
 
     fn extract_native_method_name<'a>(&self, function: &'a Expression) -> &'a str {
@@ -200,6 +212,7 @@ impl Emitter<'_> {
             self.emit_native_method_identifier(
                 output,
                 ctx.args,
+                ctx.spread,
                 ctx.type_args,
                 ctx.native_type,
                 ctx.method,
@@ -214,10 +227,12 @@ impl Emitter<'_> {
         args: &[Expression],
         type_args: &[Annotation],
         call_ty: Option<&Type>,
+        spread: Option<&Expression>,
     ) -> String {
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
             let stages: Vec<Staged> = args.iter().map(|a| self.stage_operand(a)).collect();
-            let args_strings = self.sequence(output, stages, "_arg");
+            let mut args_strings = self.sequence(output, stages, "_arg");
+            self.append_spread_arg(output, &mut args_strings, spread);
             return format!("{}({})", go_name, args_strings.join(", "));
         }
 
@@ -251,8 +266,10 @@ impl Emitter<'_> {
             Expression::DotAccess { expression, .. } if Self::is_go_receiver(expression)
         );
 
-        let args_strings =
+        let mut args_strings =
             self.emit_call_args(output, args, &fn_param_types, &pointer_indices, is_go_call);
+
+        self.append_spread_arg(output, &mut args_strings, spread);
 
         let mut call_str = format!(
             "{}{}({})",
@@ -350,6 +367,17 @@ impl Emitter<'_> {
         }
 
         type_args_string
+    }
+
+    pub(crate) fn append_spread_arg(
+        &mut self,
+        output: &mut String,
+        args_strings: &mut Vec<String>,
+        spread: Option<&Expression>,
+    ) {
+        if let Some(spread_expr) = spread {
+            args_strings.push(format!("{}...", self.emit_operand(output, spread_expr)));
+        }
     }
 
     fn emit_call_args(

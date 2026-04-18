@@ -111,6 +111,7 @@ description: "input: \nfn test() { for i in 0..5 { print(i); } }\n"
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

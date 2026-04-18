@@ -108,6 +108,7 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
                             },
                         },
                         args: [],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

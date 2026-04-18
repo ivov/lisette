@@ -54,6 +54,7 @@ description: "input: \nfn test() {\n  let result = recover {\n    do_something()
                                     qualified: None,
                                 },
                                 args: [],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

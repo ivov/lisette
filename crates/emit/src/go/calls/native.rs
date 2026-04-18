@@ -248,7 +248,8 @@ impl Emitter<'_> {
         }
         let all_values = self.sequence(output, all_stages, "_arg");
         let raw_receiver = all_values[0].clone();
-        let emitted_args: Vec<String> = all_values[1..].to_vec();
+        let mut emitted_args: Vec<String> = all_values[1..].to_vec();
+        self.append_spread_arg(output, &mut emitted_args, ctx.spread);
 
         let is_ref_receiver = expression.get_type().resolve().is_ref();
         let receiver = if is_ref_receiver {
@@ -301,12 +302,14 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         args: &[Expression],
+        spread: Option<&Expression>,
         type_args: &[Annotation],
         native_type: &NativeGoType,
         method: &str,
     ) -> String {
         let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
-        let emitted_args = self.sequence(output, stages, "_arg");
+        let mut emitted_args = self.sequence(output, stages, "_arg");
+        self.append_spread_arg(output, &mut emitted_args, spread);
         if !emitted_args.is_empty() {
             let receiver = &emitted_args[0];
             let remaining_args = &emitted_args[1..];

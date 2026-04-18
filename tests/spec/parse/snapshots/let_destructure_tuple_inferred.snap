@@ -69,6 +69,7 @@ description: "input: \nfn test() {\n  let (a, b) = get_pair();\n}\n"
                             qualified: None,
                         },
                         args: [],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

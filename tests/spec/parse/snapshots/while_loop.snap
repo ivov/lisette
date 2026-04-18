@@ -141,6 +141,7 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

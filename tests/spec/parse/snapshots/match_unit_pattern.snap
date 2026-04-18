@@ -102,6 +102,7 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

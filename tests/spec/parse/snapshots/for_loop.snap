@@ -117,6 +117,7 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

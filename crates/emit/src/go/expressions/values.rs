@@ -179,18 +179,11 @@ impl Emitter<'_> {
                 expression,
                 ..
             } => self.emit_unary_expression(output, operator, expression),
-            Expression::Call {
-                expression: callee,
-                args,
-                type_args,
-                ty,
-                span,
-                ..
-            } => {
+            Expression::Call { ty, .. } => {
                 if let Some(strategy) = self.resolve_go_call_strategy(expression) {
                     self.emit_go_wrapped_call(output, expression, &strategy, ty)
                 } else {
-                    self.emit_call(output, callee, args, type_args, Some(ty), *span)
+                    self.emit_call(output, expression, Some(ty))
                 }
             }
             Expression::DotAccess {

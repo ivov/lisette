@@ -55,6 +55,7 @@ description: "input: \nfn test() {\n  let result = try {\n    do_something()?;\n
                                         qualified: None,
                                     },
                                     args: [],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

@@ -50,6 +50,7 @@ description: "input: fn test() { x |> double; }"
                             qualified: None,
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

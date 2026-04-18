@@ -266,6 +266,7 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

@@ -111,6 +111,7 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                             qualified: None,
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -190,6 +191,7 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

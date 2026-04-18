@@ -101,6 +101,7 @@ description: "input: fn test() { let x = 5; f\"result: {x |> double}\"; }"
                                             qualified: None,
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

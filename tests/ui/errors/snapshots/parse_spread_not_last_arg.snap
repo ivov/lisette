@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:23]
+ 1 │ 
+ 2 │ fn test() { foo(..xs, y); }
+   ·                       ┬
+   ·                       ╰── argument after spread
+   ╰────
+  help: The `..spread` must be the last argument in the call · code: [parse.syntax_error]

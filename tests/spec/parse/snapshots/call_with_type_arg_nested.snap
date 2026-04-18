@@ -36,6 +36,7 @@ description: "input: \nfn test() { func<Map<string, int>>(); }\n"
                         qualified: None,
                     },
                     args: [],
+                    spread: None,
                     type_args: [
                         Constructor {
                             name: "Map",

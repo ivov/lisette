@@ -53,6 +53,7 @@ description: "input: \nfn test() {\n  loop {\n    print(\"forever\");\n  }\n}\n"
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

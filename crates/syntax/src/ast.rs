@@ -550,6 +550,7 @@ pub enum Expression {
     Call {
         expression: Box<Expression>,
         args: Vec<Expression>,
+        spread: Box<Option<Expression>>,
         type_args: Vec<Annotation>,
         ty: Type,
         span: Span,
@@ -1089,8 +1090,15 @@ impl Expression {
             Expression::Unary { expression, .. } => expression.contains_break(),
 
             Expression::Call {
-                expression, args, ..
-            } => expression.contains_break() || args.iter().any(Self::contains_break),
+                expression,
+                args,
+                spread,
+                ..
+            } => {
+                expression.contains_break()
+                    || args.iter().any(Self::contains_break)
+                    || spread.as_ref().as_ref().is_some_and(Self::contains_break)
+            }
 
             Expression::Function { .. } | Expression::Lambda { .. } => false,
 
@@ -1220,10 +1228,16 @@ impl Expression {
             }
             Expression::Identifier { .. } => vec![],
             Expression::Call {
-                expression, args, ..
+                expression,
+                args,
+                spread,
+                ..
             } => {
                 let mut c = vec![expression.as_ref()];
                 c.extend(args);
+                if let Some(s) = spread.as_ref() {
+                    c.push(s);
+                }
                 c
             }
             Expression::If {

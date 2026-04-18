@@ -37,6 +37,7 @@ description: "input: \nfn test() {\n  task compute();\n}\n"
                             qualified: None,
                         },
                         args: [],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

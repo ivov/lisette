@@ -2170,6 +2170,13 @@ pub fn control_flow_in_expression(keyword: &str, span: Span) -> LisetteDiagnosti
     ))
 }
 
+pub fn spread_on_non_variadic(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid spread argument")
+        .with_infer_code("spread_on_non_variadic")
+        .with_span_label(&span, "this function does not accept variadic arguments")
+        .with_help("Only functions with a `VarArgs<T>` parameter accept a spread argument")
+}
+
 pub fn reference_aliases_sibling(ref_span: Span, var_name: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Reference aliases sibling expression")
         .with_infer_code("reference_aliases_sibling")

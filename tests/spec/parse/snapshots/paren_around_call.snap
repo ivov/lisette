@@ -68,6 +68,7 @@ description: "input: \nfn test() { let result = (calculate(5)); }\n"
                                     },
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,

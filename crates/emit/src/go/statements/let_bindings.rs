@@ -483,20 +483,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             })
             .collect();
 
-        let Expression::Call {
-            expression: callee,
-            args,
-            type_args,
-            span,
-            ..
-        } = self.value
-        else {
-            unreachable!("multi-value optimization requires a Call expression");
-        };
-
-        let call_str = self
-            .emitter
-            .emit_call(output, callee, args, type_args, None, *span);
+        let call_str = self.emitter.emit_call(output, self.value, None);
 
         for (identifier, go_name) in planned.iter().flatten() {
             self.emitter.scope.bindings.add(*identifier, go_name);
@@ -808,17 +795,7 @@ impl Emitter<'_> {
             .resolve_go_call_strategy(value)
             .is_some_and(|s| s.is_multi_return())
         {
-            let Expression::Call {
-                expression: callee,
-                args,
-                type_args,
-                span,
-                ..
-            } = value
-            else {
-                unreachable!("resolve_go_call_strategy returned Some but value is not a Call");
-            };
-            let call_str = self.emit_call(output, callee, args, type_args, None, *span);
+            let call_str = self.emit_call(output, value, None);
             write_line!(output, "{}", call_str);
         } else {
             let value_expression = self.emit_operand(output, value);

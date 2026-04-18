@@ -74,6 +74,7 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                             qualified: None,
                         },
                         args: [],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

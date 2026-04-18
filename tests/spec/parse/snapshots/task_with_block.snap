@@ -53,6 +53,7 @@ description: "input: \nfn test() {\n  task {\n    print(\"concurrent task\");\n 
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

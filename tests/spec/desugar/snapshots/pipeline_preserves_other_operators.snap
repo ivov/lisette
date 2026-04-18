@@ -135,6 +135,7 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                                 qualified: None,
                             },
                         ],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

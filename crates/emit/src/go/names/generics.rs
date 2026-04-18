@@ -223,7 +223,10 @@ impl Emitter<'_> {
     fn expression_tree_has_map_key(expression: &Expression, generic_name: &str) -> bool {
         match expression {
             Expression::Call {
-                expression, args, ..
+                expression,
+                args,
+                spread,
+                ..
             } => {
                 Self::is_map_key_type(&expression.get_type(), generic_name)
                     || args
@@ -232,6 +235,10 @@ impl Emitter<'_> {
                     || args
                         .iter()
                         .any(|a| Self::expression_tree_has_map_key(a, generic_name))
+                    || spread.as_ref().as_ref().is_some_and(|s| {
+                        Self::is_map_key_type(&s.get_type(), generic_name)
+                            || Self::expression_tree_has_map_key(s, generic_name)
+                    })
             }
             _ => false,
         }
