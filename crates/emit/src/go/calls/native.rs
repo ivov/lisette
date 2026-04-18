@@ -139,6 +139,20 @@ static INLINE_METHODS: &[InlineRule] = &[
         import: InlineImport::Strings,
     },
     InlineRule {
+        types: &[N::String],
+        method: "byte_at",
+        arity: 1,
+        template: "{r}[{0}]",
+        import: InlineImport::None,
+    },
+    InlineRule {
+        types: &[N::String],
+        method: "rune_at",
+        arity: 1,
+        template: "[]rune({r})[{0}]",
+        import: InlineImport::None,
+    },
+    InlineRule {
         types: &[N::Slice],
         method: "join",
         arity: 1,

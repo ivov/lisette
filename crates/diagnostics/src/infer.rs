@@ -1167,6 +1167,15 @@ pub fn only_slices_and_maps_indexable(ty: &Type, span: Span) -> LisetteDiagnosti
         .with_help("Only `Slice` and `Map` can be indexed into")
 }
 
+pub fn string_not_indexable(span: Span, receiver: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot index into `string`")
+        .with_infer_code("string_not_indexable")
+        .with_span_label(&span, "not indexable")
+        .with_help(format!(
+            "Use `{receiver}.rune_at(i)` to get a `rune`, or `{receiver}.byte_at(i)` to get a `byte`"
+        ))
+}
+
 pub fn not_callable(ty: &Type, span: Span) -> LisetteDiagnostic {
     let help = match (ty.get_underlying(), ty.get_name()) {
         (Some(_), Some(name)) => format!(

@@ -83,6 +83,12 @@ impl string {
 
   /// Returns `true` if the string ends with `suffix`.
   fn ends_with(self, suffix: string) -> bool
+
+  /// Returns the byte at index `i`.
+  fn byte_at(self, i: int) -> byte
+
+  /// Returns the rune at index `i`.
+  fn rune_at(self, i: int) -> rune
 }
 
 // -----------------------
