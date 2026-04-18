@@ -8,13 +8,13 @@ import "go:io"
 pub fn Default() -> Ref<Logger>
 
 /// Fatal is equivalent to [Print] followed by a call to [os.Exit](1).
-pub fn Fatal(v: VarArgs<Unknown>)
+pub fn Fatal(v: VarArgs<Unknown>) -> Never
 
 /// Fatalf is equivalent to [Printf] followed by a call to [os.Exit](1).
-pub fn Fatalf(format: string, v: VarArgs<Unknown>)
+pub fn Fatalf(format: string, v: VarArgs<Unknown>) -> Never
 
 /// Fatalln is equivalent to [Println] followed by a call to [os.Exit](1).
-pub fn Fatalln(v: VarArgs<Unknown>)
+pub fn Fatalln(v: VarArgs<Unknown>) -> Never
 
 /// Flags returns the output flags for the standard logger.
 /// The flag bits are [Ldate], [Ltime], and so on.
@@ -204,13 +204,13 @@ const Ltime = 2
 
 impl Logger {
   /// Fatal is equivalent to l.Print() followed by a call to [os.Exit](1).
-  fn Fatal(self: Ref<Logger>, v: VarArgs<Unknown>)
+  fn Fatal(self: Ref<Logger>, v: VarArgs<Unknown>) -> Never
 
   /// Fatalf is equivalent to l.Printf() followed by a call to [os.Exit](1).
-  fn Fatalf(self: Ref<Logger>, format: string, v: VarArgs<Unknown>)
+  fn Fatalf(self: Ref<Logger>, format: string, v: VarArgs<Unknown>) -> Never
 
   /// Fatalln is equivalent to l.Println() followed by a call to [os.Exit](1).
-  fn Fatalln(self: Ref<Logger>, v: VarArgs<Unknown>)
+  fn Fatalln(self: Ref<Logger>, v: VarArgs<Unknown>) -> Never
 
   /// Flags returns the output flags for the logger.
   /// The flag bits are [Ldate], [Ltime], and so on.
