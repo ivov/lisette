@@ -2,6 +2,24 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.13](https://github.com/ivov/lisette/compare/lisette-v0.1.12...lisette-v0.1.13) - 2026-04-18
+
+- fix: don't wrap named function type returns in Option [#103](https://github.com/ivov/lisette/pull/103) [`0e31195`](https://github.com/ivov/lisette/commit/0e311953357d3a7df4dac182dee7693e2bc7caa7)
+- fix: type os.Exit and log.Fatal* as Never [#120](https://github.com/ivov/lisette/pull/120) [`7dd3e71`](https://github.com/ivov/lisette/commit/7dd3e71960ca51d1477f269d7b17e388f862f9b8)
+- fix: value enum match arms and interface-slotted tuple returns [#101](https://github.com/ivov/lisette/pull/101) [`2791a57`](https://github.com/ivov/lisette/commit/2791a5720d8b42dc79d736f9e7d90925ce8304c7)
+- fix: emit break after switch in guarded match [#104](https://github.com/ivov/lisette/pull/104) [`1644ca0`](https://github.com/ivov/lisette/commit/1644ca04959b517743c299a025a0619d5cfa8a4f)
+- fix: use declared package name over path segment as Go qualifier [#106](https://github.com/ivov/lisette/pull/106) [`09a76f0`](https://github.com/ivov/lisette/commit/09a76f0be5ca203f98b3bbfe94dccdf6c7afc234)
+- fix: emit value equality for Go sentinel patterns like Err(io.EOF) [#108](https://github.com/ivov/lisette/pull/108) [`bf3d0da`](https://github.com/ivov/lisette/commit/bf3d0dab4bd990c80b305453df2212edc51c4cb6)
+- fix: preserve Go interface and alias types in match-arm tuple slots [`d73fdbe`](https://github.com/ivov/lisette/commit/d73fdbe6ae6fe076a6a8fe94799443f0d98a5800)
+- fix: classify nullable Go function aliases as NullableReturn [`d2fd7f6`](https://github.com/ivov/lisette/commit/d2fd7f61022c66aad3cbf755849162c61d96bd1f)
+- fix: don't flag wildcard as redundant in interface match [#121](https://github.com/ivov/lisette/pull/121) [`86dcafd`](https://github.com/ivov/lisette/commit/86dcafd04ab5217137ea5d888a919f46da30743c)
+- fix: treat .d.lis types as public in register_module [`95d5704`](https://github.com/ivov/lisette/commit/95d5704fefecc4c68dfff9bb42f835dc20004cf3)
+- fix: allow closures returning concrete types as Go function aliases [`96b5a31`](https://github.com/ivov/lisette/commit/96b5a3122c85c542176ef7303c63ea70901145cf)
+- fix: formatter moves comments into impl, try, and recover blocks [#115](https://github.com/ivov/lisette/pull/115) [`b7d1f3a`](https://github.com/ivov/lisette/commit/b7d1f3a9508f1fd75eac2cdeaaf151ab6efc08dd)
+- fix: preserve type alias names in emitter output [#122](https://github.com/ivov/lisette/pull/122) [`49a0817`](https://github.com/ivov/lisette/commit/49a081719deeb679dd247b68a984c218bb92705b)
+- feat: add byte_at and rune_at to string [#123](https://github.com/ivov/lisette/pull/123) [`c2188a3`](https://github.com/ivov/lisette/commit/c2188a3aa29f7f15595c50d7aedf35a1f152a2e3)
+- fix: desugar pipeline operator inside slice literals [`198bfaa`](https://github.com/ivov/lisette/commit/198bfaacfd2b644ad7785fcecc9488669c673e58)
+
 ## [0.1.12](https://github.com/ivov/lisette/compare/lisette-v0.1.11...lisette-v0.1.12) - 2026-04-15
 
 - refactor: extract shared go output + finalize helpers [#91](https://github.com/ivov/lisette/pull/91) [`b4ceb49`](https://github.com/ivov/lisette/commit/b4ceb49c7914a926590fd2fd5b505f55e5238c02)
