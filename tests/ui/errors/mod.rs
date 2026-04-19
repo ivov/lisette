@@ -5851,3 +5851,21 @@ fn main() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_immutable_args_to_mut_variadic_param() {
+    let input = r#"
+fn touch(x: int, mut ys: VarArgs<int>) -> int {
+  let _ = ys
+  x
+}
+
+fn main() {
+  let a = 1
+  let b = 2
+  let c = 3
+  let _ = touch(a, b, c)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

@@ -539,7 +539,7 @@ impl Checker<'_, '_> {
     ) -> (Vec<Type>, Vec<bool>, Type, Vec<Bound>) {
         let callee_ty = callee_ty.resolve();
         let bounds = callee_ty.get_bounds().to_vec();
-        let param_mutability = callee_ty.get_param_mutability().to_vec();
+        let mut param_mutability = callee_ty.get_param_mutability().to_vec();
         let is_variadic = callee_ty.is_variadic();
 
         let (param_types, return_ty) = match self.extract_function_type(&callee_ty) {
@@ -548,6 +548,11 @@ impl Checker<'_, '_> {
                     params.pop();
                     while params.len() < arg_count {
                         params.push(variadic_ty.clone());
+                    }
+                    if let Some(&variadic_mut) = param_mutability.last() {
+                        while param_mutability.len() < arg_count {
+                            param_mutability.push(variadic_mut);
+                        }
                     }
                 }
                 (params, return_type)
