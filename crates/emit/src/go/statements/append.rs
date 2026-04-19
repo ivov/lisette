@@ -22,7 +22,7 @@ impl Emitter<'_> {
         is_extend: bool,
     ) -> String {
         let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
-        let emitted_args = self.sequence_with_spread(output, stages, spread, "_arg");
+        let emitted_args = self.sequence_with_spread(output, stages, spread, false, "_arg");
         let args_str = emitted_args.join(", ");
         let suffix = if is_extend { "..." } else { "" };
         format!("{}{}", args_str, suffix)

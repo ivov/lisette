@@ -4,6 +4,7 @@ use syntax::program::Definition;
 
 use crate::Emitter;
 use crate::go::is_order_sensitive;
+use crate::go::names::go_name;
 use crate::go::types::emitter::Position;
 use crate::go::utils::Staged;
 use crate::go::write_line;
@@ -795,6 +796,7 @@ impl Emitter<'_> {
         output: &mut String,
         mut stages: Vec<Staged>,
         spread: Option<&Expression>,
+        wrap_to_any: bool,
         prefix: &str,
     ) -> Vec<String> {
         let spread_idx = spread.map(|s| {
@@ -803,6 +805,10 @@ impl Emitter<'_> {
         });
         let mut values = self.sequence(output, stages, prefix);
         if let Some(i) = spread_idx {
+            if wrap_to_any {
+                self.flags.needs_stdlib = true;
+                values[i] = format!("{}.SliceToAny({})", go_name::GO_STDLIB_PKG, values[i]);
+            }
             values[i].push_str("...");
         }
         values

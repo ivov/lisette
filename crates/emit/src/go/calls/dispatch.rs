@@ -231,7 +231,9 @@ impl Emitter<'_> {
     ) -> String {
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
             let stages: Vec<Staged> = args.iter().map(|a| self.stage_operand(a)).collect();
-            let args_strings = self.sequence_with_spread(output, stages, spread, "_arg");
+            let wrap_to_any = Self::spread_needs_any_wrap(function, spread);
+            let args_strings =
+                self.sequence_with_spread(output, stages, spread, wrap_to_any, "_arg");
             return format!("{}({})", go_name, args_strings.join(", "));
         }
 
@@ -265,6 +267,7 @@ impl Emitter<'_> {
             Expression::DotAccess { expression, .. } if Self::is_go_receiver(expression)
         );
 
+        let wrap_spread_to_any = Self::spread_needs_any_wrap(function, spread);
         let args_strings = self.emit_call_args(
             output,
             args,
@@ -272,6 +275,7 @@ impl Emitter<'_> {
             &pointer_indices,
             is_go_call,
             spread,
+            wrap_spread_to_any,
         );
 
         let mut call_str = format!(
@@ -369,6 +373,7 @@ impl Emitter<'_> {
         type_args_string
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn emit_call_args(
         &mut self,
         output: &mut String,
@@ -377,6 +382,7 @@ impl Emitter<'_> {
         pointer_indices: &HashSet<usize>,
         is_go_call: bool,
         spread: Option<&Expression>,
+        wrap_spread_to_any: bool,
     ) -> Vec<String> {
         let call_arg_ctx = CallArgContext {
             fn_param_types,
@@ -392,7 +398,24 @@ impl Emitter<'_> {
                 Staged::new(setup, value)
             })
             .collect();
-        self.sequence_with_spread(output, stages, spread, "_arg")
+        self.sequence_with_spread(output, stages, spread, wrap_spread_to_any, "_arg")
+    }
+
+    fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> bool {
+        let Some(spread_expr) = spread else {
+            return false;
+        };
+        let Some(variadic_elem) = function.get_type().resolve().is_variadic() else {
+            return false;
+        };
+        if !variadic_elem.is_unknown() {
+            return false;
+        }
+        spread_expr
+            .get_type()
+            .resolve()
+            .inner()
+            .is_some_and(|t| !t.is_unknown())
     }
 
     /// Classify and emit a single call argument.

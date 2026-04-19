@@ -104,7 +104,7 @@ impl Emitter<'_> {
         for arg in args {
             all_stages.push(self.stage_composite(arg));
         }
-        let all_values = self.sequence_with_spread(output, all_stages, spread, "_arg");
+        let all_values = self.sequence_with_spread(output, all_stages, spread, false, "_arg");
         let receiver_arg = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
 
@@ -180,7 +180,7 @@ impl Emitter<'_> {
         };
 
         let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
-        let emitted_all = self.sequence_with_spread(output, stages, spread, "_arg");
+        let emitted_all = self.sequence_with_spread(output, stages, spread, false, "_arg");
         let receiver = emitted_all[0].clone();
         let emitted_rest: Vec<String> = emitted_all[1..].to_vec();
 

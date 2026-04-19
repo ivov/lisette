@@ -1542,6 +1542,19 @@ fn test(mut s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {
 }
 
 #[test]
+fn spread_concrete_slice_into_go_any_variadic_wraps_to_any() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let xs = ["a", "b", "c"]
+  fmt.Println(..xs)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn spread_with_setup_preserves_sibling_eval_order() {
     let input = r#"
 fn side_a() -> int { 1 }

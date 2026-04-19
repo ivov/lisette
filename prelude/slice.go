@@ -87,3 +87,14 @@ func EnumeratedSliceFind[T any](s []T, f func(Tuple2[int, T]) bool) Option[Tuple
 	}
 	return Option[Tuple2[int, T]]{Tag: OptionNone}
 }
+
+func SliceToAny[T any](s []T) []any {
+	if s == nil {
+		return nil
+	}
+	out := make([]any, len(s))
+	for i, v := range s {
+		out[i] = v
+	}
+	return out
+}
