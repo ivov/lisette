@@ -2,6 +2,15 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.14](https://github.com/ivov/lisette/compare/lisette-v0.1.13...lisette-v0.1.14) - 2026-04-19
+
+- fix: support building from source on windows [#130](https://github.com/ivov/lisette/pull/130) [`35c0437`](https://github.com/ivov/lisette/commit/35c04379bf2f4a527ab6d4972ac09af2fe8a2503)
+- fix: keep transitive go imports whose package name differs from path [#134](https://github.com/ivov/lisette/pull/134) [`9843014`](https://github.com/ivov/lisette/commit/9843014edb72cbf47a6f8f80b5e9561e8873cee6)
+- fix: peel type aliases in interface and field checks [#133](https://github.com/ivov/lisette/pull/133) [`3245d95`](https://github.com/ivov/lisette/commit/3245d95be8b8a5e2985b5d1d02c406deab847db9)
+- fix: off-by-one in struct-literal lookahead skipped empty {} [#132](https://github.com/ivov/lisette/pull/132) [`f419749`](https://github.com/ivov/lisette/commit/f4197492391b1bec1dcafedaf9c32ff96e4470a3)
+- feat: add ..expr spread argument syntax for variadic calls [#124](https://github.com/ivov/lisette/pull/124) [`8348b5d`](https://github.com/ivov/lisette/commit/8348b5dab0dc8b2685271796beacc8dafa899a71)
+- fix: unit-body lambda emits nil [#135](https://github.com/ivov/lisette/pull/135) [`ceb7c21`](https://github.com/ivov/lisette/commit/ceb7c2137d21cdf5d53373567381bed1b420d651)
+
 ## [0.1.13](https://github.com/ivov/lisette/compare/lisette-v0.1.12...lisette-v0.1.13) - 2026-04-18
 
 - fix: don't wrap named function type returns in Option [#103](https://github.com/ivov/lisette/pull/103) [`0e31195`](https://github.com/ivov/lisette/commit/0e311953357d3a7df4dac182dee7693e2bc7caa7)
