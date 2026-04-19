@@ -527,8 +527,8 @@ type Never
 /// Zero or more arguments of type `T`. Only valid as the last parameter
 /// of a function. Corresponds to Go's `...T` syntax.
 ///
-/// Example:
-///   fn sum(numbers: VarArgs<int>) -> int
+/// For Go interop only. Consuming the args inside a Lisette function body 
+/// is currently unsupported.
 type VarArgs<T>
 
 /// A value captured from a `recover` block after a panic.
