@@ -345,23 +345,26 @@ impl Emitter<'_> {
     ) -> String {
         let mut type_args_string = self.format_type_args_from_annotations(type_args);
 
+        let slot_ty = self.current_slot_expected_ty.clone();
+
         if type_args_string.is_empty()
             && let Some(inferred) = self.infer_return_only_type_args(function)
         {
-            type_args_string = inferred;
+            type_args_string = slot_ty
+                .as_ref()
+                .and_then(|t| self.prelude_container_type_args(t))
+                .unwrap_or(inferred);
         }
 
-        if type_args_string.is_empty()
-            && let Some(call_result_ty) = call_ty
-            && Self::is_prelude_variant_constructor(function)
-            && let Type::Constructor { id, params, .. } = call_result_ty.resolve()
-            && (id == "prelude.Option" || id == "prelude.Result")
-            && !params.is_empty()
-            && params
-                .iter()
-                .any(|p| self.as_interface(p).is_some() || self.is_go_function_alias(p))
-        {
-            type_args_string = self.format_type_args(&params);
+        if type_args_string.is_empty() && Self::is_prelude_variant_constructor(function) {
+            let candidate = call_ty
+                .and_then(|t| self.prelude_container_type_args(t))
+                .or_else(|| {
+                    slot_ty
+                        .as_ref()
+                        .and_then(|t| self.prelude_container_type_args(t))
+                });
+            type_args_string = candidate.unwrap_or_default();
         }
 
         if !type_args_string.is_empty()
@@ -811,6 +814,23 @@ impl Emitter<'_> {
         } else {
             false
         }
+    }
+
+    pub(crate) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<String> {
+        let resolved = ty.resolve();
+        if !resolved.is_option() && !resolved.is_result() && !resolved.is_partial() {
+            return None;
+        }
+        let Type::Constructor { params, .. } = resolved else {
+            return None;
+        };
+        if params.is_empty() {
+            return None;
+        }
+        params
+            .iter()
+            .any(|p| self.as_interface(p).is_some() || self.is_go_function_alias(p))
+            .then(|| self.format_type_args(&params))
     }
 
     fn is_prelude_variant_constructor(callee: &Expression) -> bool {

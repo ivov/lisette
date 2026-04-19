@@ -235,28 +235,27 @@ impl Emitter<'_> {
                 self.emit_recover_block(output, items, ty)
             }
             Expression::Tuple { elements, ty, .. } => {
-                let stages: Vec<Staged> =
-                    elements.iter().map(|e| self.stage_composite(e)).collect();
-                let elem_expressions = self.sequence(output, stages, "_v");
-
                 let inferred_slot_types: Vec<Type> = match ty.resolve() {
                     Type::Tuple(slots) => slots,
                     _ => Vec::new(),
                 };
 
-                let slot_types: Vec<Type> = self
-                    .position
-                    .is_tail()
-                    .then_some(self.current_return_context.as_ref())
-                    .flatten()
-                    .and_then(|ret| {
-                        if let Type::Tuple(slots) = ret.resolve() {
-                            (slots.len() == inferred_slot_types.len()).then_some(slots)
-                        } else {
-                            None
-                        }
+                let slot_types = self.resolve_tuple_slot_types(inferred_slot_types);
+
+                let stages: Vec<Staged> = elements
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| {
+                        let prev = std::mem::replace(
+                            &mut self.current_slot_expected_ty,
+                            slot_types.get(i).cloned(),
+                        );
+                        let staged = self.stage_composite(e);
+                        self.current_slot_expected_ty = prev;
+                        staged
                     })
-                    .unwrap_or(inferred_slot_types);
+                    .collect();
+                let elem_expressions = self.sequence(output, stages, "_v");
 
                 let elem_expressions: Vec<String> = elements
                     .iter()

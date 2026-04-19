@@ -98,10 +98,18 @@ impl Checker<'_, '_> {
                 .expect("module must exist for declaration");
             let mut entries = Vec::new();
             for file in module.files.values() {
-                entries.extend(self.collect_type_name_entries(&file.items, &Visibility::Private));
+                entries.extend(self.collect_type_name_entries(
+                    &file.items,
+                    &Visibility::Private,
+                    false,
+                ));
             }
             for file in module.all_typedefs() {
-                entries.extend(self.collect_type_name_entries(&file.items, &Visibility::Private));
+                entries.extend(self.collect_type_name_entries(
+                    &file.items,
+                    &Visibility::Private,
+                    true,
+                ));
             }
             entries
         };
@@ -272,7 +280,7 @@ impl Checker<'_, '_> {
     }
 
     pub fn register_type_names(&mut self, items: &[Expression], visibility: &Visibility) {
-        let entries = self.collect_type_name_entries(items, visibility);
+        let entries = self.collect_type_name_entries(items, visibility, self.is_d_lis());
         let module = self
             .store
             .get_module_mut(&self.cursor.module_id)
@@ -289,6 +297,7 @@ impl Checker<'_, '_> {
         &self,
         items: &[Expression],
         visibility: &Visibility,
+        is_typedef: bool,
     ) -> Vec<(String, Definition)> {
         let mut entries = Vec::new();
 
@@ -348,7 +357,7 @@ impl Checker<'_, '_> {
             let item_visibility = match visibility {
                 Visibility::Local => Visibility::Local,
                 _ => {
-                    if syntactic_visibility == SyntacticVisibility::Public || self.is_d_lis() {
+                    if syntactic_visibility == SyntacticVisibility::Public || is_typedef {
                         Visibility::Public
                     } else {
                         Visibility::Private

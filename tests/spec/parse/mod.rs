@@ -2326,6 +2326,24 @@ fn test() {
 }
 
 #[test]
+fn empty_struct_in_call_in_control_flow_header() {
+    let input = r#"
+struct Data {}
+fn foo(d: Data) -> Result<Data, Data> {
+  Ok(d)
+}
+fn test() {
+  if let Err(err) = foo(Data {}) { panic(err) }
+  let _ = match foo(Data {}) {
+    Ok(d) => d,
+    Err(err) => panic(err)
+  };
+}
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
 fn brace_after_binary_is_block() {
     let input = r#"
 fn test() {

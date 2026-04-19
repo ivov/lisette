@@ -244,6 +244,7 @@ thread_local! {
     static INTERNED_UNIT: OnceCell<Type> = const { OnceCell::new() };
     static INTERNED_FLOAT64: OnceCell<Type> = const { OnceCell::new() };
     static INTERNED_RUNE: OnceCell<Type> = const { OnceCell::new() };
+    static INTERNED_BYTE: OnceCell<Type> = const { OnceCell::new() };
 }
 
 impl Type {
@@ -269,6 +270,10 @@ impl Type {
 
     pub fn rune() -> Type {
         INTERNED_RUNE.with(|cell| cell.get_or_init(|| Self::nominal("rune")).clone())
+    }
+
+    pub fn byte() -> Type {
+        INTERNED_BYTE.with(|cell| cell.get_or_init(|| Self::nominal("byte")).clone())
     }
 }
 
@@ -1019,7 +1024,7 @@ impl Type {
     pub fn is_aliased_numeric_type(&self) -> bool {
         match self {
             Type::Constructor { underlying_ty, .. } => {
-                underlying_ty.is_some() && !self.is_numeric()
+                underlying_ty.is_some() && !self.is_numeric() && self.has_underlying_numeric_type()
             }
             _ => false,
         }

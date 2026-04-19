@@ -12,7 +12,7 @@ import (
 type Maybe[T any] = lisette.Option[T]
 
 type User struct {
-	Name  lisette.Option[string] `json:"name,omitempty,omitzero"`
+	Name  Maybe[string]          `json:"name,omitempty,omitzero"`
 	Email lisette.Option[string] `json:"email,omitempty,omitzero"`
 }
 

@@ -31,6 +31,7 @@ type TypeOverrides struct {
 	BoolAsFlag       map[string][]string            `json:"bool_as_flag"`
 	DirectError      map[string][]string            `json:"direct_error"`
 	NilableError     map[string][]string            `json:"nilable_error"`
+	NeverReturn      map[string][]string            `json:"never_return"`
 	PartialResult    map[string][]string            `json:"partial_result"`
 	MutatesParam     map[string]map[string][]string `json:"mutates_param"`
 }
@@ -158,6 +159,16 @@ func (c *Config) HasNilableError(pkg, name string) bool {
 		return false
 	}
 	return slices.Contains(names, name)
+}
+
+// IsNeverReturn returns true if the given function or method in the given
+// package never returns normally (e.g., os.Exit, log.Fatal).
+func (c *Config) IsNeverReturn(pkg, name string) bool {
+	names, ok := lookupWithGlob(c.Overrides.Types.NeverReturn, pkg)
+	if !ok {
+		return false
+	}
+	return matchesWildcard(names, name)
 }
 
 // lookupWithGlob returns all matching names for a package from a map,

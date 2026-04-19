@@ -2,6 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span};
+use syntax::program::Definition;
 use syntax::types::{SubstitutionMap, Type, substitute};
 
 use crate::checker::Checker;
@@ -105,7 +106,16 @@ impl Checker<'_, '_> {
                     ));
                 }
 
-                let resolved_ty = self.instantiate_from_annotations(&generics, &body, params, span);
+                let concrete_args: Vec<Type> = params
+                    .iter()
+                    .map(|arg| self.convert_to_type(arg, span))
+                    .collect();
+                let map: SubstitutionMap = generics
+                    .iter()
+                    .cloned()
+                    .zip(concrete_args.iter().cloned())
+                    .collect();
+                let resolved_ty = substitute(&body, &map);
 
                 // Reject Ref<InterfaceType> — Go pointer-to-interface is invalid
                 if self.is_lis()
@@ -128,6 +138,22 @@ impl Checker<'_, '_> {
                         .and_then(|p| p.first().cloned())
                 {
                     self.check_map_key_comparable(&key_ty, *annotation_span);
+                }
+
+                // Preserve alias name in emitter output. Guard against re-wrapping bodies whose
+                // id already matches (function aliases are pre-wrapped by populate_type_alias).
+                if let Some(Definition::TypeAlias {
+                    annotation: alias_ann,
+                    ..
+                }) = self.store.get_definition(&qualified_name)
+                    && !alias_ann.is_opaque()
+                    && matches!(&resolved_ty, Type::Constructor { id, .. } if id.as_str() != qualified_name.as_str())
+                {
+                    return Type::Constructor {
+                        id: qualified_name.into(),
+                        params: concrete_args,
+                        underlying_ty: Some(Box::new(resolved_ty)),
+                    };
                 }
 
                 resolved_ty

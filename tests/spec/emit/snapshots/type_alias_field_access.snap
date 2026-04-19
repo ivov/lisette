@@ -17,6 +17,6 @@ func (p Point) String() string {
 
 type Location = Point
 
-func get_x(loc Point) int {
+func get_x(loc Location) int {
 	return loc.X
 }

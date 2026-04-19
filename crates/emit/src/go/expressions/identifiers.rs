@@ -95,7 +95,11 @@ impl Emitter<'_> {
 
             match ty {
                 Type::Constructor { params, .. } => {
-                    let type_args = self.format_type_args(params);
+                    let slot_ty = self.current_slot_expected_ty.clone();
+                    let type_args = slot_ty
+                        .as_ref()
+                        .and_then(|t| self.prelude_container_type_args(t))
+                        .unwrap_or_else(|| self.format_type_args(params));
                     return IdentifierKind::UnitConstructor { name, type_args };
                 }
 

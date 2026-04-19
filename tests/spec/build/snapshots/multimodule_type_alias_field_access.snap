@@ -23,7 +23,7 @@ package main
 
 import "github.com/user/myproject/geo"
 
-func get_x(c geo.Point) int {
+func get_x(c geo.Coordinate) int {
 	return c.X
 }
 

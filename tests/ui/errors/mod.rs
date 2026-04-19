@@ -1096,6 +1096,16 @@ fn test() {
 }
 
 #[test]
+fn infer_string_not_indexable() {
+    let input = r#"
+fn test(s: string) -> byte {
+  s[0]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_mismatch_int_string() {
     let input = r#"
 fn test() {

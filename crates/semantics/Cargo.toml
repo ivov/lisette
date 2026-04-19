@@ -12,10 +12,10 @@ repository.workspace = true
 doctest = false
 
 [dependencies]
-syntax = { package = "lisette-syntax", version = "0.1.12", path = "../syntax", features = ["serde"] }
-diagnostics = { package = "lisette-diagnostics", version = "0.1.12", path = "../diagnostics" }
-stdlib = { package = "lisette-stdlib", version = "0.1.12", path = "../stdlib" }
-deps = { package = "lisette-deps", version = "0.1.12", path = "../deps" }
+syntax = { package = "lisette-syntax", version = "0.1.13", path = "../syntax", features = ["serde"] }
+diagnostics = { package = "lisette-diagnostics", version = "0.1.13", path = "../diagnostics" }
+stdlib = { package = "lisette-stdlib", version = "0.1.13", path = "../stdlib" }
+deps = { package = "lisette-deps", version = "0.1.13", path = "../deps" }
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
 ecow = "0.2"

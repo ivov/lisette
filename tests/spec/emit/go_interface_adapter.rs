@@ -470,6 +470,97 @@ pub fn Quit() -> Msg
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/tea", typedef)]);
 }
 
+#[test]
+fn tuple_interface_slot_implicit_coercion_tail_position() {
+    let input = r#"
+import "go:example.com/tea"
+
+struct Model {}
+
+impl Model {
+  fn Init(self) -> Option<tea.Cmd> {
+    None
+  }
+  fn Update(self, msg: tea.Msg) -> (tea.Model, Option<tea.Cmd>) {
+    (self, Some(tea.Quit))
+  }
+  fn View(self) -> string {
+    ""
+  }
+}
+
+fn main() {
+  let _ = tea.NewProgram(Model {} as tea.Model)
+}
+"#;
+    let typedef = r#"// Package: tea
+
+pub interface Msg {}
+
+pub type Cmd = fn() -> Msg
+
+pub interface Model {
+  fn Init() -> Option<Cmd>
+  fn Update(arg0: Msg) -> (Model, Option<Cmd>)
+  fn View() -> string
+}
+
+pub type Program
+
+pub fn NewProgram(model: Model) -> Ref<Program>
+
+pub fn Quit() -> Msg
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/tea", typedef)]);
+}
+
+#[test]
+fn tuple_interface_slot_implicit_coercion_assign_position() {
+    let input = r#"
+import "go:example.com/tea"
+
+struct Model {}
+
+impl Model {
+  fn Init(self) -> Option<tea.Cmd> {
+    None
+  }
+  fn Update(self, msg: tea.Msg) -> (tea.Model, Option<tea.Cmd>) {
+    let result = match msg {
+      _ => (self, Some(tea.Quit)),
+    }
+    result
+  }
+  fn View(self) -> string {
+    ""
+  }
+}
+
+fn main() {
+  let _ = tea.NewProgram(Model {} as tea.Model)
+}
+"#;
+    let typedef = r#"// Package: tea
+
+pub interface Msg {}
+
+pub type Cmd = fn() -> Msg
+
+pub interface Model {
+  fn Init() -> Option<Cmd>
+  fn Update(arg0: Msg) -> (Model, Option<Cmd>)
+  fn View() -> string
+}
+
+pub type Program
+
+pub fn NewProgram(model: Model) -> Ref<Program>
+
+pub fn Quit() -> Msg
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/tea", typedef)]);
+}
+
 // Coverage for scenario 11: interface-to-interface. A Go interface value
 // assigned to another Go interface uses Go's structural conversion; no
 // adapter is synthesized (the `needs_adapter` source-side guard early-

@@ -211,6 +211,12 @@ Bindgen accepts a config file with per-package overrides:
         "io": ["ReadAtLeast", "ReadFull"],
       },
 
+      // Return `Never` instead of `()` for functions that do not return normally
+      // e.g. `os.Exit` returns `Never`
+      "never_return": {
+        "os": ["Exit"],
+      },
+
       // Keep `(T, bool)` as tuple instead of `Option<T>`
       // e.g. `math/big.Rat.Float32` returns `(float32, bool)`
       "bool_as_flag": {

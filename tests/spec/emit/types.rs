@@ -156,6 +156,88 @@ fn get_x(loc: Location) -> int {
 }
 
 #[test]
+fn type_alias_in_return_type() {
+    let input = r#"
+struct Point { pub x: int, pub y: int }
+
+type Location = Point
+
+fn origin() -> Location {
+  Point { x: 0, y: 0 }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn type_alias_generic_in_param_and_return() {
+    let input = r#"
+type Numbers = Slice<int>
+
+fn sum(nums: Numbers) -> int {
+  let mut total = 0
+  for n in nums {
+    total += n
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn type_alias_in_struct_field() {
+    let input = r#"
+struct Inner { pub val: int }
+
+type Wrapper = Inner
+
+struct Outer { pub item: Wrapper }
+
+fn get_val(o: Outer) -> int {
+  o.item.val
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn type_alias_chained() {
+    let input = r#"
+struct Point { pub x: int, pub y: int }
+
+type Location = Point
+type GeoPoint = Location
+
+fn origin() -> GeoPoint {
+  Point { x: 0, y: 0 }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn type_alias_chained_slice_iter_and_index() {
+    let input = r#"
+type Numbers = Slice<int>
+type MoreNumbers = Numbers
+
+fn first(nums: MoreNumbers) -> int {
+  nums[0]
+}
+
+fn sum(nums: MoreNumbers) -> int {
+  let mut total = 0
+  for n in nums {
+    total += n
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn impl_block_generic() {
     let input = r#"
 struct Box<T> { value: T }

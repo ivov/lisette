@@ -31,6 +31,9 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 	results := signature.Results()
 
 	if results.Len() == 0 {
+		if conv != nil && conv.cfg != nil && conv.cfg.IsNeverReturn(conv.currentPkgPath, qualifiedName) {
+			return TypeResult{LisetteType: "Never"}
+		}
 		return TypeResult{LisetteType: "()"}
 	}
 

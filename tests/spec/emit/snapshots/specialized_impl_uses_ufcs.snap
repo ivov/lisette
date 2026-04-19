@@ -16,6 +16,6 @@ func (b Box[T]) String() string {
 	return fmt.Sprintf("Box { val: %v }", b.val)
 }
 
-func Box_doubled(self Box[int]) int {
+func Box_doubled(self Box[MyInt]) MyInt {
 	return self.val * 2
 }

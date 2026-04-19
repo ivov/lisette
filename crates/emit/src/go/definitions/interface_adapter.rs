@@ -114,7 +114,7 @@ impl Emitter<'_> {
         result
     }
 
-    fn needs_adapter(&self, source_ty: &Type, target_ty: &Type) -> Option<AdapterPlan> {
+    pub(crate) fn needs_adapter(&self, source_ty: &Type, target_ty: &Type) -> Option<AdapterPlan> {
         let target = target_ty.resolve();
         let Type::Constructor { id: target_id, .. } = &target else {
             return None;
@@ -292,6 +292,43 @@ impl Emitter<'_> {
         write_line!(decl, "}}");
 
         self.exit_scope();
+    }
+
+    pub(crate) fn resolve_tuple_slot_types(&mut self, inferred: Vec<Type>) -> Vec<Type> {
+        let return_slots = self.current_return_context.as_ref().and_then(|ret| {
+            let Type::Tuple(slots) = ret.resolve() else {
+                return None;
+            };
+            (slots.len() == inferred.len()).then_some(slots)
+        });
+
+        let Some(return_slots) = return_slots else {
+            return inferred;
+        };
+
+        if self.position.is_tail() {
+            return return_slots;
+        }
+
+        return_slots
+            .iter()
+            .zip(inferred.iter())
+            .map(|(declared, inferred_slot)| {
+                if self.needs_adapter(inferred_slot, declared).is_some() {
+                    declared.clone()
+                } else {
+                    let d = declared.resolve();
+                    let i = inferred_slot.resolve();
+                    if d.get_qualified_id().is_some()
+                        && d.get_qualified_id() == i.get_qualified_id()
+                    {
+                        declared.clone()
+                    } else {
+                        inferred_slot.clone()
+                    }
+                }
+            })
+            .collect()
     }
 
     fn adapter_type_name(plan: &AdapterPlan, index: usize) -> String {

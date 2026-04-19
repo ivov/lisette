@@ -132,6 +132,9 @@ pub struct Emitter<'a> {
     /// and returns the raw call string. Set by `emit_go_call_discarded` for discarded calls
     /// where the array-to-slice conversion is unnecessary.
     skip_array_return_wrap: bool,
+    /// Declared slot type during tuple staging; recovers Go alias type args that
+    /// call-site inference loses in assign-position match arms.
+    current_slot_expected_ty: Option<Type>,
 }
 
 impl<'a> Emitter<'a> {
@@ -256,6 +259,7 @@ impl<'a> Emitter<'a> {
             emitting_call_callee: false,
             in_condition: false,
             skip_array_return_wrap: false,
+            current_slot_expected_ty: None,
         }
     }
 

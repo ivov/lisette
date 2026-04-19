@@ -644,9 +644,7 @@ impl Checker<'_, '_> {
 
         let body_ty = self.convert_to_type(annotation, span);
 
-        let is_circular = matches!(&body_ty, Type::Constructor { id, .. } if id == &qualified_name);
-
-        if is_circular {
+        if self.is_alias_body_circular(&body_ty, &qualified_name) {
             self.sink
                 .push(diagnostics::infer::circular_type_alias(name, *span));
         }
@@ -710,5 +708,93 @@ impl Checker<'_, '_> {
                     doc: doc.clone(),
                 },
             );
+    }
+
+    fn is_alias_body_circular(&self, body_ty: &Type, qualified_name: &str) -> bool {
+        if Self::type_contains_name(body_ty, qualified_name) {
+            return true;
+        }
+
+        let mut to_visit: Vec<String> = Vec::new();
+        Self::collect_type_refs(body_ty, &mut to_visit);
+
+        let mut seen: Vec<String> = Vec::new();
+        while let Some(name) = to_visit.pop() {
+            if name == qualified_name {
+                return true;
+            }
+            if seen.contains(&name) {
+                continue;
+            }
+            seen.push(name.clone());
+
+            if let Some(Definition::TypeAlias { ty, .. }) = self.store.get_definition(&name) {
+                let body = ty.unwrap_forall().clone();
+                if Self::type_contains_name(&body, qualified_name) {
+                    return true;
+                }
+                Self::collect_type_refs(&body, &mut to_visit);
+            }
+        }
+
+        false
+    }
+
+    fn type_contains_name(ty: &Type, name: &str) -> bool {
+        match ty {
+            Type::Constructor {
+                id,
+                params,
+                underlying_ty,
+            } => {
+                id.as_str() == name
+                    || params.iter().any(|p| Self::type_contains_name(p, name))
+                    || underlying_ty
+                        .as_deref()
+                        .is_some_and(|u| Self::type_contains_name(u, name))
+            }
+            Type::Tuple(elements) => elements.iter().any(|e| Self::type_contains_name(e, name)),
+            Type::Function {
+                params,
+                return_type,
+                ..
+            } => {
+                params.iter().any(|p| Self::type_contains_name(p, name))
+                    || Self::type_contains_name(return_type, name)
+            }
+            Type::Forall { body, .. } => Self::type_contains_name(body, name),
+            _ => false,
+        }
+    }
+
+    fn collect_type_refs(ty: &Type, refs: &mut Vec<String>) {
+        match ty {
+            Type::Constructor {
+                id,
+                params,
+                underlying_ty,
+            } => {
+                refs.push(id.to_string());
+                params.iter().for_each(|p| Self::collect_type_refs(p, refs));
+                if let Some(u) = underlying_ty {
+                    Self::collect_type_refs(u, refs);
+                }
+            }
+            Type::Tuple(elements) => {
+                elements
+                    .iter()
+                    .for_each(|e| Self::collect_type_refs(e, refs));
+            }
+            Type::Function {
+                params,
+                return_type,
+                ..
+            } => {
+                params.iter().for_each(|p| Self::collect_type_refs(p, refs));
+                Self::collect_type_refs(return_type, refs);
+            }
+            Type::Forall { body, .. } => Self::collect_type_refs(body, refs),
+            _ => {}
+        }
     }
 }

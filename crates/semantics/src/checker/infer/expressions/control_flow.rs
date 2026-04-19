@@ -442,7 +442,7 @@ impl Checker<'_, '_> {
         let iterable_ty = self.new_type_var();
         let new_iterable = self.infer_expression(*iterable, &iterable_ty);
 
-        let resolved_iterable_ty = iterable_ty.resolve();
+        let resolved_iterable_ty = self.peel_alias(&iterable_ty.resolve());
 
         let iterable_ty_name = match resolved_iterable_ty.get_name() {
             Some(name) => name,

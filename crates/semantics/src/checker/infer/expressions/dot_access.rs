@@ -295,13 +295,38 @@ impl Checker<'_, '_> {
 
         let qualified_name = deref_ty.get_qualified_name();
 
+        let struct_name = {
+            let mut name = qualified_name.clone();
+            let mut seen = Vec::new();
+            loop {
+                if seen.contains(&name) {
+                    break;
+                }
+                seen.push(name.clone());
+                let new_name = match self.store.get_definition(&name) {
+                    Some(Definition::TypeAlias { ty, .. }) => {
+                        if let Type::Constructor { id, .. } = ty.unwrap_forall()
+                            && id.as_str() != name.as_str()
+                        {
+                            id.clone()
+                        } else {
+                            break;
+                        }
+                    }
+                    _ => break,
+                };
+                name = new_name;
+            }
+            name
+        };
+
         let Some(Definition::Struct {
             ty: struct_type,
             fields: struct_fields,
             kind: struct_kind,
             generics,
             ..
-        }) = self.store.get_definition(&qualified_name)
+        }) = self.store.get_definition(&struct_name)
         else {
             return None;
         };
@@ -328,7 +353,7 @@ impl Checker<'_, '_> {
 
         self.facts.add_usage(*args.span, field.name_span);
 
-        let struct_module = qualified_name.split('.').next().unwrap_or(&qualified_name);
+        let struct_module = struct_name.split('.').next().unwrap_or(&struct_name);
         let is_cross_module = struct_module != self.cursor.module_id;
 
         if is_cross_module && !field_is_pub {

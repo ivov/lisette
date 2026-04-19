@@ -460,6 +460,26 @@ impl<'r, 's> Checker<'r, 's> {
         Some((qualified_name, ty))
     }
 
+    pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
+        let mut current = ty.clone();
+        while let Type::Constructor {
+            id,
+            underlying_ty: Some(u),
+            ..
+        } = &current
+        {
+            if !self
+                .store
+                .get_definition(id)
+                .is_some_and(|d| matches!(d, Definition::TypeAlias { .. }))
+            {
+                break;
+            }
+            current = *u.clone();
+        }
+        current
+    }
+
     pub(crate) fn get_all_methods(&self, ty: &Type) -> MethodSignatures {
         if let Type::Parameter(name) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();

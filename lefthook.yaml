@@ -21,12 +21,14 @@ pre-commit:
       glob: "bindgen/**/*.go"
       run: just generate-stdlib-typedefs "$(grep '// Lisette:' crates/stdlib/typedefs/fmt.d.lis | awk '{print $3}')" && git diff --exit-code crates/stdlib/
     go-version-sync:
-      glob: "{go-version,prelude/go.mod,bindgen/go.mod,bindgen/internal/cli/metadata/go-version}"
+      glob: "{go-version,prelude/go.mod,bindgen/go.mod,bindgen/internal/cli/metadata/go-version,crates/cli/go-version}"
       run: |
         EXPECTED=$(cat go-version | cut -d. -f1,2)
         PRELUDE=$(grep '^go ' prelude/go.mod | awk '{print $2}')
         BINDGEN=$(grep '^go ' bindgen/go.mod | awk '{print $2}')
         EMBEDDED=$(cat bindgen/internal/cli/metadata/go-version | tr -d '[:space:]')
+        CLI=$(cat crates/cli/go-version | tr -d '[:space:]')
         [ "$EXPECTED" = "$PRELUDE" ] || { echo "Go version mismatch: go-version has $EXPECTED but prelude/go.mod has $PRELUDE"; exit 1; }
         [ "$EXPECTED" = "$BINDGEN" ] || { echo "Go version mismatch: go-version has $EXPECTED but bindgen/go.mod has $BINDGEN"; exit 1; }
         [ "$(cat go-version | tr -d '[:space:]')" = "$EMBEDDED" ] || { echo "Go version mismatch: go-version has $(cat go-version) but bindgen metadata has $EMBEDDED"; exit 1; }
+        [ "$(cat go-version | tr -d '[:space:]')" = "$CLI" ] || { echo "Go version mismatch: go-version has $(cat go-version) but crates/cli/go-version has $CLI"; exit 1; }

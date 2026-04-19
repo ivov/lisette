@@ -16,6 +16,6 @@ func (w Wrapper[T]) String() string {
 
 type W[T any] = Wrapper[T]
 
-func test() Wrapper[int] {
+func test() W[int] {
 	return Wrapper[int]{F0: 5}
 }

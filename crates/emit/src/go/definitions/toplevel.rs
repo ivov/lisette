@@ -967,7 +967,14 @@ impl Emitter<'_> {
 
 fn is_option_type(ty: &Type) -> bool {
     match ty {
-        Type::Constructor { id, .. } => id == "Option" || id.ends_with(".Option"),
+        Type::Constructor {
+            id, underlying_ty, ..
+        } => {
+            if id == "Option" || id.ends_with(".Option") {
+                return true;
+            }
+            underlying_ty.as_deref().is_some_and(is_option_type)
+        }
         _ => false,
     }
 }

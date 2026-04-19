@@ -17,6 +17,10 @@
         "errors": ["New"],
         "fmt": ["Errorf"]
       },
+      "never_return": {
+        "log": ["Fatal", "Fatalf", "Fatalln", "Logger.Fatal", "Logger.Fatalf", "Logger.Fatalln"],
+        "os": ["Exit"]
+      },
       "nilable_error": {
         "bufio": ["Scanner.Err"],
         "context": ["Cause", "Context.Err"],

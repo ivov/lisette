@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Inner { pub val: int }\n\ntype Wrapper = Inner\n\nstruct Outer { pub item: Wrapper }\n\nfn get_val(o: Outer) -> int {\n  o.item.val\n}\n"
+---
+package main
+
+import "fmt"
+
+type Inner struct {
+	Val int
+}
+
+func (i Inner) String() string {
+	return fmt.Sprintf("Inner { val: %v }", i.Val)
+}
+
+type Wrapper = Inner
+
+type Outer struct {
+	Item Wrapper
+}
+
+func (o Outer) String() string {
+	return fmt.Sprintf("Outer { item: %v }", o.Item)
+}
+
+func get_val(o Outer) int {
+	return o.Item.Val
+}

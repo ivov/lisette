@@ -4,6 +4,9 @@ on:
     - cron: "0 4 * * *"
   workflow_dispatch:
 
+permissions:
+  issues: write
+
 jobs:
   fuzz-parse:
     runs-on: ubuntu-latest
@@ -55,6 +58,19 @@ jobs:
           name: fuzz-crash-parse
           path: fuzz/artifacts/
 
+      - name: Create issue on crash
+        if: failure()
+        run: |
+          gh issue create \
+            --repo ivov/lisette \
+            --title "fuzz-parse crash (run ${{ github.run_id }})" \
+            --body "The \`fuzz-parse\` target crashed in a scheduled fuzz run.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Artifact:** \`fuzz-crash-parse\` (attached to the run)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   fuzz-infer:
     runs-on: ubuntu-latest
     steps:
@@ -104,3 +120,16 @@ jobs:
         with:
           name: fuzz-crash-infer
           path: fuzz/artifacts/
+
+      - name: Create issue on crash
+        if: failure()
+        run: |
+          gh issue create \
+            --repo ivov/lisette \
+            --title "fuzz-infer crash (run ${{ github.run_id }})" \
+            --body "The \`fuzz-infer\` target crashed in a scheduled fuzz run.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Artifact:** \`fuzz-crash-infer\` (attached to the run)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

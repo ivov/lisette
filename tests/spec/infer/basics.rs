@@ -958,6 +958,78 @@ fn circular_type_alias_mutual() {
 }
 
 #[test]
+fn circular_type_alias_chain() {
+    infer(
+        r#"
+    type A = B
+    type B = C
+    type C = A
+
+    fn test() -> A {
+      return 42;
+    }
+        "#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
+fn circular_type_alias_slice_param() {
+    infer(
+        r#"
+    type A = Slice<A>
+
+    fn test() -> A {
+      return [];
+    }
+        "#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
+fn circular_type_alias_tuple_element() {
+    infer(
+        r#"
+    type A = (A, int)
+
+    fn test() -> A {
+      return (42, 1);
+    }
+        "#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
+fn circular_type_alias_map_value() {
+    infer(
+        r#"
+    type A = Map<int, A>
+
+    fn test() -> A {
+      return {};
+    }
+        "#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
+fn circular_type_alias_result_param() {
+    infer(
+        r#"
+    type A = Result<int, A>
+
+    fn test() -> A {
+      return Ok(1);
+    }
+        "#,
+    )
+    .assert_circular_type();
+}
+
+#[test]
 fn reference_to_int() {
     infer(
         r#"

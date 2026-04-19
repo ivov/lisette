@@ -17,7 +17,7 @@ func (p Point2D) String() string {
 
 type P = Point2D
 
-func test() Point2D {
+func test() P {
 	return Point2D{
 		F0: 1,
 		F1: 2,
