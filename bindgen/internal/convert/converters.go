@@ -111,7 +111,7 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	if !forceNonNilable {
 		forceNonNilable = c.cfg != nil && c.cfg.IsNonNilableReturn(c.currentPkgPath, result.Name)
 	}
-	if (isSinglePointerReturn && !forceNonNilable) || forceNilable {
+	if (isSinglePointerReturn && !forceNonNilable) || (forceNilable && !returnType.NilableReturnApplied) {
 		result.ReturnType = fmt.Sprintf("Option<%s>", result.ReturnType)
 	}
 
@@ -257,7 +257,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		originalQualified := symbolExport.OriginalTypeName + "." + result.Name
 		methodForceNilable = c.cfg != nil && c.cfg.ShouldWrapNilableReturn(symbolExport.OriginalPkgPath, originalQualified)
 	}
-	if (isSinglePointerReturn && !forceNonNilable) || methodForceNilable {
+	if (isSinglePointerReturn && !forceNonNilable) || (methodForceNilable && !returnType.NilableReturnApplied) {
 		result.ReturnType = fmt.Sprintf("Option<%s>", result.ReturnType)
 	}
 

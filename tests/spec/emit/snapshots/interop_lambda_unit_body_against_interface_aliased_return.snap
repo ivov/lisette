@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:example.com/scheduler\"\n\nfn make() -> scheduler.Cmd {\n  || ()\n}\n\nfn main() {\n  let _ = make()\n}\n"
+---
+package main
+
+import "example.com/scheduler"
+
+func make_() scheduler.Cmd {
+	return func() scheduler.Event {
+		return nil
+	}
+}
+
+func main() {
+	_ = make_()
+}

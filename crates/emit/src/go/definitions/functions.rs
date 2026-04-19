@@ -44,8 +44,11 @@ impl Emitter<'_> {
             if should_return && last.get_type().is_never() && !Self::is_go_never(last) {
                 output.push_str("panic(\"unreachable\")\n");
             }
+            let last_is_unit_expr = !is_statement_only
+                && !matches!(last, Expression::Return { .. })
+                && last.get_type().is_unit();
             if should_return
-                && is_statement_only
+                && (is_statement_only || last_is_unit_expr)
                 && self
                     .current_return_context
                     .as_ref()

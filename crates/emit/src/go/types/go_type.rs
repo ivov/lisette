@@ -307,6 +307,10 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn zero_value(&self, ty: &Type) -> String {
+        if self.as_interface(ty).is_some() {
+            return "nil".to_string();
+        }
+
         let go_ty = self.go_type(ty);
 
         match go_ty.code.as_str() {

@@ -1097,3 +1097,24 @@ pub fn MakeCmd() -> Option<Cmd>
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/scheduler", typedef)]);
 }
+
+#[test]
+fn interop_lambda_unit_body_against_interface_aliased_return() {
+    let input = r#"
+import "go:example.com/scheduler"
+
+fn make() -> scheduler.Cmd {
+  || ()
+}
+
+fn main() {
+  let _ = make()
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+
+pub type Cmd = fn() -> Event
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/scheduler", typedef)]);
+}

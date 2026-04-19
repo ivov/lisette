@@ -125,6 +125,18 @@
         ]
       },
       "nilable_return": {
+        "charm.land/bubbletea/v2": [
+          "Batch",
+          "Sequence",
+          "Model.Init",
+          "Model.Update"
+        ],
+        "github.com/charmbracelet/bubbletea": [
+          "Batch",
+          "Sequence",
+          "Model.Init",
+          "Model.Update"
+        ],
         "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1": [
           "DurationFromInt",
           "DurationFromString"

@@ -13,11 +13,12 @@ type SkipReason struct {
 }
 
 type TypeResult struct {
-	LisetteType   string
-	SkipReason    *SkipReason
-	CommaOk       bool // true when return type comes from a (T, bool) comma-ok pattern
-	ArrayReturn   bool // true when Go type is [N]T but Lisette type is Slice<T>
-	IsDirectError bool // true when *T where T implements error was auto-detected as error value
+	LisetteType          string
+	SkipReason           *SkipReason
+	CommaOk              bool // true when return type comes from a (T, bool) comma-ok pattern
+	ArrayReturn          bool // true when Go type is [N]T but Lisette type is Slice<T>
+	IsDirectError        bool // true when *T where T implements error was auto-detected as error value
+	NilableReturnApplied bool // set when per-element wrapping already occurred; callers must skip whole-return wrap to avoid double-wrapping
 }
 
 func ToLisette(t types.Type, conv *Converter) TypeResult {

@@ -14,17 +14,30 @@ func ReturnsToLisette(signature *types.Signature, conv *Converter, qualifiedName
 	return returnsToLisetteRecursive(signature, make(map[types.Type]bool), conv, qualifiedName)
 }
 
-// Wrap a bare function-typed Lisette return in Option unless the symbol is
-// annotated as non-nilable. Named function types (type Opt func(...)) are
-// not wrapped — only bare signatures are nilable.
-func maybeWrapNilableFunction(t types.Type, lisetteType string, conv *Converter, qualifiedName string) string {
-	if _, ok := t.(*types.Signature); !ok {
-		return lisetteType
+// maybeWrapNilableFunction wraps function-typed returns in Option.
+//
+// Bare signatures are wrapped by default (opt-out via non_nilable_return).
+// Named function types are unwrapped by default (opt-in via nilable_return).
+// The second return is true when wrapping occurred, signalling callers to skip
+// the outer Option wrap in converters.go and avoid double-wrapping.
+func maybeWrapNilableFunction(t types.Type, lisetteType string, conv *Converter, qualifiedName string) (string, bool) {
+	switch t.(type) {
+	case *types.Signature:
+		if conv != nil && conv.cfg != nil && conv.cfg.IsNonNilableReturn(conv.currentPkgPath, qualifiedName) {
+			return lisetteType, false
+		}
+		return fmt.Sprintf("Option<%s>", lisetteType), true
+	case *types.Named:
+		if _, ok := t.Underlying().(*types.Signature); !ok {
+			return lisetteType, false
+		}
+		if conv != nil && conv.cfg != nil && conv.cfg.ShouldWrapNilableReturn(conv.currentPkgPath, qualifiedName) {
+			return fmt.Sprintf("Option<%s>", lisetteType), true
+		}
+		return lisetteType, false
+	default:
+		return lisetteType, false
 	}
-	if conv != nil && conv.cfg != nil && conv.cfg.IsNonNilableReturn(conv.currentPkgPath, qualifiedName) {
-		return lisetteType
-	}
-	return fmt.Sprintf("Option<%s>", lisetteType)
 }
 
 func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]bool, conv *Converter, qualifiedName string) TypeResult {
@@ -56,7 +69,11 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		}
 		elem := toLisetteRecursive(results.At(0).Type(), seen, conv)
 		if elem.SkipReason == nil {
-			elem.LisetteType = maybeWrapNilableFunction(results.At(0).Type(), elem.LisetteType, conv, qualifiedName)
+			wrapped, applied := maybeWrapNilableFunction(results.At(0).Type(), elem.LisetteType, conv, qualifiedName)
+			elem.LisetteType = wrapped
+			if applied {
+				elem.NilableReturnApplied = true
+			}
 		}
 		return elem
 	}
@@ -72,13 +89,15 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 		if (conv.cfg != nil && conv.cfg.IsPartialResult(conv.currentPkgPath, qualifiedName)) ||
 			isPartialIOMethod(signature, qualifiedName) {
 			return TypeResult{
-				LisetteType: fmt.Sprintf("Partial<%s, error>", innerType),
-				SkipReason:  inner.SkipReason,
+				LisetteType:          fmt.Sprintf("Partial<%s, error>", innerType),
+				SkipReason:           inner.SkipReason,
+				NilableReturnApplied: inner.NilableReturnApplied,
 			}
 		}
 		return TypeResult{
-			LisetteType: fmt.Sprintf("Result<%s, error>", innerType),
-			SkipReason:  inner.SkipReason,
+			LisetteType:          fmt.Sprintf("Result<%s, error>", innerType),
+			SkipReason:           inner.SkipReason,
+			NilableReturnApplied: inner.NilableReturnApplied,
 		}
 	}
 
@@ -92,9 +111,10 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 				innerType = "Unknown"
 			}
 			return TypeResult{
-				LisetteType: fmt.Sprintf("Option<%s>", innerType),
-				SkipReason:  inner.SkipReason,
-				CommaOk:     nilable,
+				LisetteType:          fmt.Sprintf("Option<%s>", innerType),
+				SkipReason:           inner.SkipReason,
+				CommaOk:              nilable,
+				NilableReturnApplied: inner.NilableReturnApplied,
 			}
 		}
 	}
@@ -135,7 +155,11 @@ func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Typ
 	if count == 1 {
 		elem := toLisetteRecursive(results.At(start).Type(), seen, conv)
 		if elem.SkipReason == nil {
-			elem.LisetteType = maybeWrapNilableFunction(results.At(start).Type(), elem.LisetteType, conv, qualifiedName)
+			wrapped, applied := maybeWrapNilableFunction(results.At(start).Type(), elem.LisetteType, conv, qualifiedName)
+			elem.LisetteType = wrapped
+			if applied {
+				elem.NilableReturnApplied = true
+			}
 		}
 		return elem
 	}
@@ -148,15 +172,23 @@ func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Typ
 	}
 
 	var elems []string
+	anyApplied := false
 	for i := start; i < end; i++ {
 		elem := toLisetteRecursive(results.At(i).Type(), seen, conv)
 		if elem.SkipReason != nil {
 			return elem
 		}
-		elems = append(elems, maybeWrapNilableFunction(results.At(i).Type(), elem.LisetteType, conv, qualifiedName))
+		wrapped, applied := maybeWrapNilableFunction(results.At(i).Type(), elem.LisetteType, conv, qualifiedName)
+		if applied {
+			anyApplied = true
+		}
+		elems = append(elems, wrapped)
 	}
 
-	return TypeResult{LisetteType: fmt.Sprintf("(%s)", strings.Join(elems, ", "))}
+	return TypeResult{
+		LisetteType:          fmt.Sprintf("(%s)", strings.Join(elems, ", ")),
+		NilableReturnApplied: anyApplied,
+	}
 }
 
 func isErrorType(t types.Type) bool {
