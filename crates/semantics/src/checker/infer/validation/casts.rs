@@ -50,7 +50,8 @@ impl Checker<'_, '_> {
         // Concrete type -> interface: allowed if source satisfies the interface.
         // Used for explicit coercion before wrapping in generic containers,
         // e.g. `Some(my_dog as Animal)` to get `Option<Animal>`.
-        if let Type::Constructor { id, params, .. } = &target_ty
+        let peeled_target = self.store.peel_alias(&target_ty);
+        if let Type::Constructor { id, params, .. } = &peeled_target
             && let Some(interface) = self.store.get_interface(id).cloned()
             && self
                 .satisfies_interface(&source_ty, &interface, params, &span)

@@ -202,12 +202,12 @@ pub fn normalize_typed_pattern(
             // Interfaces are open: unknown structs can implement them at any time,
             // so a wildcard after a struct arm is always reachable.
             if let Some(scrutinee_ty) = &ctx.scrutinee_type {
-                let resolved = scrutinee_ty.resolve();
+                let peeled = ctx.store.peel_alias(&scrutinee_ty.resolve());
                 if let Type::Constructor {
                     id: interface_id,
                     params: interface_params,
                     ..
-                } = &resolved
+                } = &peeled
                     && ctx.store.get_interface(interface_id).is_some()
                 {
                     let interface_type_name = make_type_key(interface_id, interface_params);

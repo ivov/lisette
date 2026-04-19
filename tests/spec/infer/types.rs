@@ -4025,3 +4025,57 @@ fn test() { let _w: Worker = MyWorker { label: "t", count: 0 } }
     )
     .assert_infer_code("interface_not_implemented");
 }
+
+#[test]
+fn cast_to_type_alias_to_interface() {
+    infer(
+        r#"
+interface Named {
+  fn Name() -> string
+}
+type MyNamed = Named
+struct Dog { name: string }
+impl Dog {
+  fn Name(self: Dog) -> string { self.name }
+}
+fn test() -> MyNamed {
+  Dog { name: "Rex" } as MyNamed
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn ref_of_type_alias_to_interface_is_rejected() {
+    infer(
+        r#"
+interface Named {
+  fn Name() -> string
+}
+type MyNamed = Named
+fn takes_ref(_r: Ref<MyNamed>) {}
+"#,
+    )
+    .assert_infer_code("ref_of_interface");
+}
+
+#[test]
+fn generic_type_alias_to_generic_interface_substitutes_methods() {
+    infer(
+        r#"
+interface Container<T> {
+  fn Get() -> T
+}
+type MyContainer<T> = Container<T>
+struct IntBox { n: int }
+impl IntBox {
+  fn Get(self: IntBox) -> int { self.n }
+}
+fn take_int(c: MyContainer<int>) -> int {
+  c.Get()
+}
+"#,
+    )
+    .assert_no_errors();
+}

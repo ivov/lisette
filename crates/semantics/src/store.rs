@@ -210,6 +210,25 @@ impl Store {
         }
     }
 
+    pub fn peel_alias(&self, ty: &Type) -> Type {
+        let mut current = ty.clone();
+        while let Type::Constructor {
+            id,
+            underlying_ty: Some(u),
+            ..
+        } = &current
+        {
+            if !self
+                .get_definition(id)
+                .is_some_and(|d| matches!(d, Definition::TypeAlias { .. }))
+            {
+                break;
+            }
+            current = *u.clone();
+        }
+        current
+    }
+
     pub fn get_own_methods(&self, qualified_name: &str) -> Option<&MethodSignatures> {
         match self.get_definition(qualified_name)? {
             Definition::Struct { methods, .. } => Some(methods),

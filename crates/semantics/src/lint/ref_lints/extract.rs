@@ -659,8 +659,11 @@ fn add_ref(
 }
 
 fn type_name(ty: &Type) -> Option<String> {
-    let ty = ty.resolve().strip_refs();
-    match ty {
+    let mut current = ty.resolve().strip_refs();
+    while let Some(next) = current.get_underlying().cloned() {
+        current = next;
+    }
+    match current {
         Type::Constructor { id, .. } => id.split('.').next_back().map(String::from),
         _ => None,
     }

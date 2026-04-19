@@ -9828,6 +9828,31 @@ async fn goto_definition_type_alias_in_struct_call() {
 }
 
 #[tokio::test]
+async fn goto_definition_field_in_aliased_struct_call() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    client
+        .open(
+            TEST_URI,
+            "struct Point {\n  pub x: int,\n  pub y: int,\n}\n\ntype Alias = Point\n\nfn main() {\n  let p = Alias { x: 1, y: 2 }\n}",
+        )
+        .await;
+
+    let response = client.goto_definition(TEST_URI, 8, 18).await;
+    assert!(
+        response.is_some(),
+        "goto-def on field `x` in aliased struct call should find the underlying struct field"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 1,
+        "goto-def should land on `pub x: int` in the struct definition"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn diagnostics_invalid_manifest_surfaces_error() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();

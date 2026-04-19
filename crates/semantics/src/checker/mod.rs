@@ -460,26 +460,6 @@ impl<'r, 's> Checker<'r, 's> {
         Some((qualified_name, ty))
     }
 
-    pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
-        let mut current = ty.clone();
-        while let Type::Constructor {
-            id,
-            underlying_ty: Some(u),
-            ..
-        } = &current
-        {
-            if !self
-                .store
-                .get_definition(id)
-                .is_some_and(|d| matches!(d, Definition::TypeAlias { .. }))
-            {
-                break;
-            }
-            current = *u.clone();
-        }
-        current
-    }
-
     pub(crate) fn get_all_methods(&self, ty: &Type) -> MethodSignatures {
         if let Type::Parameter(name) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
@@ -489,23 +469,29 @@ impl<'r, 's> Checker<'r, 's> {
                 .get_methods_from_bounds(&qualified_name, &trait_bounds);
         }
 
-        let Type::Constructor { id, .. } = ty.strip_refs().resolve() else {
+        let resolved = ty.strip_refs().resolve();
+        let Type::Constructor { id, .. } = &resolved else {
             return MethodSignatures::default();
         };
 
         // Interfaces need type-arg-dependent generic substitution, skip cache.
-        if self.store.get_interface(&id).is_some() {
+        let peeled = self.store.peel_alias(&resolved);
+        if let Type::Constructor { id: peeled_id, .. } = &peeled
+            && self.store.get_interface(peeled_id).is_some()
+        {
             let empty = HashMap::default();
-            return self.store.get_all_methods(ty, &empty);
+            return self.store.get_all_methods(&peeled, &empty);
         }
 
-        if let Some(cached) = self.method_cache.borrow().get(&id) {
+        if let Some(cached) = self.method_cache.borrow().get(id.as_str()) {
             return cached.clone();
         }
 
         let empty = HashMap::default();
         let methods = self.store.get_all_methods(ty, &empty);
-        self.method_cache.borrow_mut().insert(id, methods.clone());
+        self.method_cache
+            .borrow_mut()
+            .insert(id.clone(), methods.clone());
         methods
     }
 

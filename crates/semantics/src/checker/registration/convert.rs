@@ -122,13 +122,16 @@ impl Checker<'_, '_> {
                     && qualified_name == "prelude.Ref"
                     && params.len() == 1
                     && let Some(inner) = resolved_ty.inner()
-                    && let Some(inner_id) = inner.resolve().get_qualified_id()
-                    && self.store.get_interface(inner_id).is_some()
                 {
-                    self.sink.push(diagnostics::infer::ref_of_interface_type(
-                        &inner,
-                        *annotation_span,
-                    ));
+                    let peeled_inner = self.store.peel_alias(&inner.resolve());
+                    if let Some(inner_id) = peeled_inner.get_qualified_id()
+                        && self.store.get_interface(inner_id).is_some()
+                    {
+                        self.sink.push(diagnostics::infer::ref_of_interface_type(
+                            &inner,
+                            *annotation_span,
+                        ));
+                    }
                 }
 
                 if qualified_name == "prelude.Map"

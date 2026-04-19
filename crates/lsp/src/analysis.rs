@@ -16,12 +16,16 @@ use crate::position::LineIndex;
 use crate::snapshot::AnalysisSnapshot;
 use crate::state::{CachedSnapshot, SharedState};
 
-/// Extract the constructor type name, unwrapping Ref<T> if present.
+/// Extract the constructor type name, unwrapping `Ref<T>` and peeling aliases.
 pub(crate) fn type_name(ty: &syntax::types::Type) -> Option<&str> {
     match ty {
         syntax::types::Type::Constructor { id, params, .. } if id == "prelude.Ref" => {
             params.first().and_then(type_name)
         }
+        syntax::types::Type::Constructor {
+            underlying_ty: Some(u),
+            ..
+        } => type_name(u),
         syntax::types::Type::Constructor { id, .. } => Some(id.as_str()),
         _ => None,
     }
