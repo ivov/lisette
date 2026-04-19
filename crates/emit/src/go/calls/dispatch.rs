@@ -231,8 +231,7 @@ impl Emitter<'_> {
     ) -> String {
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
             let stages: Vec<Staged> = args.iter().map(|a| self.stage_operand(a)).collect();
-            let mut args_strings = self.sequence(output, stages, "_arg");
-            self.append_spread_arg(output, &mut args_strings, spread);
+            let args_strings = self.sequence_with_spread(output, stages, spread, "_arg");
             return format!("{}({})", go_name, args_strings.join(", "));
         }
 
@@ -266,10 +265,14 @@ impl Emitter<'_> {
             Expression::DotAccess { expression, .. } if Self::is_go_receiver(expression)
         );
 
-        let mut args_strings =
-            self.emit_call_args(output, args, &fn_param_types, &pointer_indices, is_go_call);
-
-        self.append_spread_arg(output, &mut args_strings, spread);
+        let args_strings = self.emit_call_args(
+            output,
+            args,
+            &fn_param_types,
+            &pointer_indices,
+            is_go_call,
+            spread,
+        );
 
         let mut call_str = format!(
             "{}{}({})",
@@ -366,17 +369,6 @@ impl Emitter<'_> {
         type_args_string
     }
 
-    pub(crate) fn append_spread_arg(
-        &mut self,
-        output: &mut String,
-        args_strings: &mut Vec<String>,
-        spread: Option<&Expression>,
-    ) {
-        if let Some(spread_expr) = spread {
-            args_strings.push(format!("{}...", self.emit_operand(output, spread_expr)));
-        }
-    }
-
     fn emit_call_args(
         &mut self,
         output: &mut String,
@@ -384,6 +376,7 @@ impl Emitter<'_> {
         fn_param_types: &[Type],
         pointer_indices: &HashSet<usize>,
         is_go_call: bool,
+        spread: Option<&Expression>,
     ) -> Vec<String> {
         let call_arg_ctx = CallArgContext {
             fn_param_types,
@@ -399,7 +392,7 @@ impl Emitter<'_> {
                 Staged::new(setup, value)
             })
             .collect();
-        self.sequence(output, stages, "_arg")
+        self.sequence_with_spread(output, stages, spread, "_arg")
     }
 
     /// Classify and emit a single call argument.

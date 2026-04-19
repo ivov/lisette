@@ -788,6 +788,26 @@ impl Emitter<'_> {
         Staged::new(setup, value)
     }
 
+    /// Like `sequence`, but also stages the spread as a sibling (so its
+    /// setup participates in eval-order) and appends `...` to its value.
+    pub(crate) fn sequence_with_spread(
+        &mut self,
+        output: &mut String,
+        mut stages: Vec<Staged>,
+        spread: Option<&Expression>,
+        prefix: &str,
+    ) -> Vec<String> {
+        let spread_idx = spread.map(|s| {
+            stages.push(self.stage_operand(s));
+            stages.len() - 1
+        });
+        let mut values = self.sequence(output, stages, prefix);
+        if let Some(i) = spread_idx {
+            values[i].push_str("...");
+        }
+        values
+    }
+
     /// Sequence N staged emissions preserving left-to-right eval order.
     ///
     /// When a later sibling produces setup statements (temp vars from if/match/block

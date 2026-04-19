@@ -1540,3 +1540,19 @@ fn test(mut s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn spread_with_setup_preserves_sibling_eval_order() {
+    let input = r#"
+fn side_a() -> int { 1 }
+
+fn get_xs() -> Result<Slice<int>, error> { Ok([1, 2, 3]) }
+
+fn variadic(_first: int, _rest: VarArgs<int>) -> int { 0 }
+
+fn run() -> Result<int, error> {
+  Ok(variadic(side_a(), ..get_xs()?))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
