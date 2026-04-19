@@ -286,7 +286,13 @@ impl Checker<'_, '_> {
             match variadic_elem_ty {
                 Some(elem_ty) => {
                     let expected_slice = self.type_slice(elem_ty);
-                    self.with_value_context(|s| s.infer_expression(spread_expr, &expected_slice))
+                    let inferred = self
+                        .with_value_context(|s| s.infer_expression(spread_expr, &expected_slice));
+                    if param_mutability.last().copied().unwrap_or(false) {
+                        let is_external = self.is_external_callee(&callee_expression);
+                        self.check_arg_against_mut_param(&inferred, is_external);
+                    }
+                    inferred
                 }
                 None => {
                     self.sink
@@ -1139,26 +1145,26 @@ impl Checker<'_, '_> {
     ) {
         let is_external = self.is_external_callee(callee);
         for (i, arg) in args.iter().enumerate() {
-            let is_mut_param = param_mutability.get(i).copied().unwrap_or(false);
-            if !is_mut_param {
-                continue;
+            if param_mutability.get(i).copied().unwrap_or(false) {
+                self.check_arg_against_mut_param(arg, is_external);
             }
+        }
+    }
 
-            if let Some(var_name) = arg.get_var_name() {
-                if !self.scopes.lookup_mutable(&var_name) {
-                    self.sink
-                        .push(diagnostics::infer::immutable_argument_to_mut_param(
-                            &var_name,
-                            arg.get_span(),
-                            is_external,
-                        ));
-                }
-
-                // Mark as mutated so `unnecessary_mut` lint doesn't fire
-                if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
-                    self.facts.mark_mutated(binding_id);
-                }
-            }
+    fn check_arg_against_mut_param(&mut self, arg: &Expression, is_external: bool) {
+        let Some(var_name) = arg.get_var_name() else {
+            return;
+        };
+        if !self.scopes.lookup_mutable(&var_name) {
+            self.sink
+                .push(diagnostics::infer::immutable_argument_to_mut_param(
+                    &var_name,
+                    arg.get_span(),
+                    is_external,
+                ));
+        }
+        if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
+            self.facts.mark_mutated(binding_id);
         }
     }
 }

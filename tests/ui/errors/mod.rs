@@ -5836,3 +5836,18 @@ fn test() { foo(..xs, y); }
 "#;
     assert_parse_error_snapshot!(input);
 }
+
+#[test]
+fn infer_immutable_spread_to_mut_variadic_param() {
+    let input = r#"
+fn touch(mut items: VarArgs<int>) {
+  let _ = items
+}
+
+fn main() {
+  let data = [3, 1, 2]
+  touch(..data)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
