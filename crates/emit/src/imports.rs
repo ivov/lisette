@@ -51,13 +51,16 @@ impl<'a> ImportBuilder<'a> {
 
     pub fn extend_with_modules(&mut self, module_ids: &HashSet<ModuleId>) {
         for module_id in module_ids {
-            if let Some(alias) = self.dropped_aliases.get(module_id) {
-                self.imports
-                    .entry(module_id.clone())
-                    .or_insert_with(|| alias.clone());
-            } else {
-                self.imports.entry(module_id.clone()).or_default();
-            }
+            let alias = self
+                .dropped_aliases
+                .get(module_id)
+                .or_else(|| {
+                    self.go_package_names
+                        .get(&format!("{}{module_id}", go_name::GO_IMPORT_PREFIX))
+                })
+                .cloned()
+                .unwrap_or_default();
+            self.imports.entry(module_id.clone()).or_insert(alias);
         }
     }
 

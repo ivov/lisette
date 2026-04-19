@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"go:example.com/bubbletea\"\n\nstruct Model {}\n\nimpl Model {\n  fn Init(self: Model) -> tea.Cmd {\n    || ()\n  }\n}\n"
+---
+package main
+
+import (
+	tea "example.com/bubbletea"
+	uv "example.com/ultraviolet"
+)
+
+type Model struct{}
+
+func (m Model) String() string {
+	return "Model"
+}
+
+func (m Model) Init() tea.Cmd {
+	return func() uv.Event {
+	}
+}

@@ -109,6 +109,11 @@ impl CompiledTest {
             checker.put_prelude_in_scope();
 
             let locator = deps::TypedefLocator::default();
+
+            for (name, typedef) in &self.extra_go_typedefs {
+                checker.parse_and_register_go_module(name, typedef, &locator);
+            }
+
             let imports: Vec<FileImport> = self
                 .ast
                 .iter()
@@ -120,16 +125,10 @@ impl CompiledTest {
                         span,
                     } = item
                     {
-                        if let Some(go_pkg) = name.strip_prefix("go:") {
-                            if let Some(typedef) = get_go_stdlib_typedef(go_pkg) {
-                                checker.parse_and_register_go_module(name, typedef, &locator);
-                            } else if let Some((_, typedef)) = self
-                                .extra_go_typedefs
-                                .iter()
-                                .find(|(n, _)| n.as_str() == name.as_str())
-                            {
-                                checker.parse_and_register_go_module(name, typedef, &locator);
-                            }
+                        if let Some(go_pkg) = name.strip_prefix("go:")
+                            && let Some(typedef) = get_go_stdlib_typedef(go_pkg)
+                        {
+                            checker.parse_and_register_go_module(name, typedef, &locator);
                         }
                         Some(FileImport {
                             name: name.clone(),

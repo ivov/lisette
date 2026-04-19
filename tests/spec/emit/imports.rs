@@ -256,6 +256,38 @@ pub struct Event {}
 }
 
 #[test]
+fn transitive_go_import_uses_declared_package_name() {
+    let input = r#"
+import "go:example.com/bubbletea"
+
+struct Model {}
+
+impl Model {
+  fn Init(self: Model) -> tea.Cmd {
+    || ()
+  }
+}
+"#;
+    let tea_typedef = r#"// Package: tea
+
+import "go:example.com/ultraviolet"
+
+pub type Cmd = fn() -> uv.Event
+"#;
+    let uv_typedef = r#"// Package: uv
+
+pub interface Event {}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(
+        input,
+        &[
+            ("go:example.com/ultraviolet", uv_typedef),
+            ("go:example.com/bubbletea", tea_typedef),
+        ]
+    );
+}
+
+#[test]
 fn package_local_option_alias_does_not_collide_with_prelude_option() {
     // Regression: a Go module that declares its own `type Option = ...`
     // (e.g. the functional-options pattern) would trip `Type::is_option`
