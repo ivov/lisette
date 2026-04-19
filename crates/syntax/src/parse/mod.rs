@@ -412,7 +412,7 @@ impl<'source> Parser<'source> {
 
     fn has_block_after_struct(&self) -> bool {
         let mut depth = 1;
-        let mut i = 1;
+        let mut i = 0;
         while depth > 0 {
             i += 1;
             if i > MAX_LOOKAHEAD {
