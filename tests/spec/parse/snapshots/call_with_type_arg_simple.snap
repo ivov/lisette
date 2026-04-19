@@ -50,6 +50,7 @@ description: "input: \nfn test() { func<int>(x); }\n"
                             qualified: None,
                         },
                     ],
+                    spread: None,
                     type_args: [
                         Constructor {
                             name: "int",

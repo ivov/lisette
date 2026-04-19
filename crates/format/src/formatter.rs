@@ -422,9 +422,10 @@ impl<'a> Formatter<'a> {
             Expression::Call {
                 expression,
                 args,
+                spread,
                 type_args,
                 ..
-            } => self.call(expression, args, type_args),
+            } => self.call(expression, args, spread, type_args),
 
             Expression::DotAccess {
                 expression, member, ..
@@ -890,6 +891,7 @@ impl<'a> Formatter<'a> {
         &mut self,
         callee: &'a Expression,
         args: &'a [Expression],
+        spread: &'a Option<Expression>,
         type_args: &'a [Annotation],
     ) -> Document<'a> {
         if let Expression::DotAccess {
@@ -902,6 +904,7 @@ impl<'a> Formatter<'a> {
             chain_segments.push(MethodChainSegment {
                 member,
                 args,
+                spread,
                 type_args,
             });
             if chain_segments.len() >= 2 {
@@ -912,7 +915,7 @@ impl<'a> Formatter<'a> {
         let head = self
             .expression(callee)
             .append(Self::format_type_args(type_args));
-        self.format_call_with_head(head, args)
+        self.format_call_with_head(head, args, spread)
     }
 
     fn format_type_args(type_args: &'a [Annotation]) -> Document<'a> {
@@ -930,9 +933,35 @@ impl<'a> Formatter<'a> {
         &mut self,
         head: Document<'a>,
         args: &'a [Expression],
+        spread: &'a Option<Expression>,
     ) -> Document<'a> {
-        if args.is_empty() {
+        if args.is_empty() && spread.is_none() {
             return head.append("()");
+        }
+
+        if let Some(spread_expr) = spread {
+            let spread_doc = Document::str("..").append(self.expression(spread_expr));
+            if args.is_empty() {
+                return head
+                    .append("(")
+                    .append(spread_doc.group().next_break_fits(true))
+                    .append(")")
+                    .next_break_fits(false)
+                    .group();
+            }
+            let init_docs: Vec<_> = args.iter().map(|a| self.expression(a)).collect();
+            let init_doc = join(init_docs, strict_break(",", ", "));
+            return head
+                .append("(")
+                .append(strict_break("", ""))
+                .append(init_doc)
+                .append(strict_break(",", ", "))
+                .append(spread_doc.group().next_break_fits(true))
+                .nest(INDENT_WIDTH)
+                .append(strict_break(",", ""))
+                .append(")")
+                .next_break_fits(false)
+                .group();
         }
 
         let Some((last, init)) = args
@@ -990,7 +1019,7 @@ impl<'a> Formatter<'a> {
                 let head = Document::str(".")
                     .append(seg.member)
                     .append(Self::format_type_args(seg.type_args));
-                strict_break("", "").append(self.format_call_with_head(head, seg.args))
+                strict_break("", "").append(self.format_call_with_head(head, seg.args, seg.spread))
             })
             .collect();
 
@@ -1844,6 +1873,7 @@ impl<'a> Formatter<'a> {
 struct MethodChainSegment<'a> {
     member: &'a str,
     args: &'a [Expression],
+    spread: &'a Option<Expression>,
     type_args: &'a [Annotation],
 }
 
@@ -1854,6 +1884,7 @@ fn collect_method_chain(expression: &Expression) -> (&Expression, Vec<MethodChai
     while let Expression::Call {
         expression,
         args,
+        spread,
         type_args,
         ..
     } = current
@@ -1869,6 +1900,7 @@ fn collect_method_chain(expression: &Expression) -> (&Expression, Vec<MethodChai
         segments.push(MethodChainSegment {
             member,
             args,
+            spread,
             type_args,
         });
         current = inner;

@@ -140,6 +140,7 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -236,6 +237,7 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -332,6 +334,7 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -435,6 +438,7 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

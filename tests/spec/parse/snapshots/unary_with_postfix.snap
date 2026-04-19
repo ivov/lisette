@@ -65,6 +65,7 @@ description: "input: \nfn test() { let result = !obj.method(); }\n"
                                 },
                             },
                             args: [],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,

@@ -108,6 +108,7 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                             },
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -119,6 +120,7 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                     },
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,
@@ -144,6 +146,7 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                             },
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

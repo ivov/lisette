@@ -89,6 +89,7 @@ description: "input: \nfn test(user: User) {\n  let name = user.get_name();\n}\n
                             },
                         },
                         args: [],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

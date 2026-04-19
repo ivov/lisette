@@ -1452,3 +1452,120 @@ fn test() -> Slice<int> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn spread_arg_into_go_variadic() {
+    let input = r#"
+import filepath "go:path/filepath"
+
+fn test(parts: Slice<string>) -> string {
+  filepath.Join(..parts)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn spread_arg_with_leading_args_into_go_variadic() {
+    let input = r#"
+import filepath "go:path/filepath"
+
+fn test(base: string, rest: Slice<string>) -> string {
+  filepath.Join(base, ..rest)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn spread_arg_into_ufcs_method() {
+    let input = r#"
+struct Logger {}
+
+impl Logger {
+  fn push(self, entries: VarArgs<string>) {}
+}
+
+fn test(l: Logger, parts: Slice<string>) {
+  l.push(..parts)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn spread_arg_into_receiver_method_ufcs() {
+    let input = r#"
+struct Logger {}
+
+impl Logger {
+  pub fn push(self, entries: VarArgs<string>) {}
+}
+
+fn test(l: Logger, parts: Slice<string>) {
+  Logger.push(l, ..parts)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn spread_arg_into_native_slice_append() {
+    let input = r#"
+fn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {
+  s.append(..more)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn spread_arg_into_native_slice_append_assignment() {
+    let input = r#"
+fn test(mut s: Slice<int>, more: Slice<int>) -> Slice<int> {
+  s = s.append(..more)
+  s
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn spread_arg_with_leading_args_into_native_slice_append_assignment() {
+    let input = r#"
+fn test(mut s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {
+  s = s.append(extra, ..more)
+  s
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn spread_concrete_slice_into_go_any_variadic_wraps_to_any() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let xs = ["a", "b", "c"]
+  fmt.Println(..xs)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn spread_with_setup_preserves_sibling_eval_order() {
+    let input = r#"
+fn side_a() -> int { 1 }
+
+fn get_xs() -> Result<Slice<int>, error> { Ok([1, 2, 3]) }
+
+fn variadic(_first: int, _rest: VarArgs<int>) -> int { 0 }
+
+fn run() -> Result<int, error> {
+  Ok(variadic(side_a(), ..get_xs()?))
+}
+"#;
+    assert_emit_snapshot!(input);
+}

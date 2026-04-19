@@ -134,6 +134,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..ini
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -187,6 +188,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..ini
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

@@ -322,6 +322,7 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -370,6 +371,7 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

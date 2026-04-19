@@ -45,9 +45,19 @@ impl Checker<'_, '_> {
         // At compound expression nodes, check siblings for conflicts.
         match expression {
             Expression::Call {
-                args, expression, ..
+                args,
+                expression,
+                spread,
+                ..
             } => {
-                self.check_sibling_ref_aliasing_slice(args);
+                if let Some(s) = spread.as_ref().as_ref() {
+                    let mut siblings: Vec<&Expression> = args.iter().collect();
+                    siblings.push(s);
+                    self.check_sibling_ref_aliasing_refs(&siblings);
+                    self.walk_check_ref_aliasing(s);
+                } else {
+                    self.check_sibling_ref_aliasing_slice(args);
+                }
                 self.walk_check_ref_aliasing(expression);
                 for arg in args {
                     self.walk_check_ref_aliasing(arg);

@@ -57,13 +57,16 @@ fn contains_stored_reference_to(expression: &Expression, var_name: &str) -> bool
                 })
         }
         // References in function arguments might be stored (e.g., Some(&x))
-        Expression::Call { args, .. } => args.iter().any(|arg| {
-            if let Expression::Reference { expression, .. } = arg {
-                expression.get_var_name().as_deref() == Some(var_name)
-            } else {
-                contains_stored_reference_to(arg, var_name)
-            }
-        }),
+        Expression::Call { args, spread, .. } => {
+            let check = |expr: &Expression| {
+                if let Expression::Reference { expression, .. } = expr {
+                    expression.get_var_name().as_deref() == Some(var_name)
+                } else {
+                    contains_stored_reference_to(expr, var_name)
+                }
+            };
+            args.iter().any(check) || spread.as_ref().as_ref().is_some_and(check)
+        }
         // Recurse but skip immediately-dereferenced contexts
         Expression::Binary { left, right, .. } => {
             contains_stored_reference_to(left, var_name)

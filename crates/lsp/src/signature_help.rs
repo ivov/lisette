@@ -38,13 +38,15 @@ pub(crate) fn handle(items: &[Expression], offset: u32) -> Option<SignatureHelp>
     let param_strs: Vec<String> = display_params.iter().map(|p| p.to_string()).collect();
     let signature = format!("fn {func_name}({}) -> {return_type}", param_strs.join(", "));
 
-    let active_param = args
+    let raw_active = args
         .iter()
         .filter(|a| {
             let s = a.get_span();
             s.byte_offset + s.byte_length <= offset
         })
         .count() as u32;
+
+    let active_param = raw_active.min((params.len() as u32).saturating_sub(1));
 
     let param_infos: Vec<ParameterInformation> = param_strs
         .into_iter()

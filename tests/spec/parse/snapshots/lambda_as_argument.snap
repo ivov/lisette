@@ -168,6 +168,7 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                                 },
                             },
                         ],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

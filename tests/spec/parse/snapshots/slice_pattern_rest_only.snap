@@ -120,6 +120,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

@@ -345,14 +345,75 @@ impl<'source> Parser<'source> {
         type_args: Vec<Annotation>,
     ) -> Expression {
         let start_offset = expression.get_span().byte_offset;
+        let (args, spread) = self.collect_call_args();
 
         Expression::Call {
             ty: Type::uninferred(),
             expression: expression.into(),
-            args: self.collect_delimited_expressions(LeftParen, RightParen).0,
+            args,
+            spread: spread.into(),
             type_args,
             span: self.span_from_offset(start_offset),
         }
+    }
+
+    fn collect_call_args(&mut self) -> (Vec<Expression>, Option<Expression>) {
+        self.ensure(LeftParen);
+        let mut args = vec![];
+
+        while !self.at_eof() && !self.is(RightParen) {
+            if self.handle_fn_as_lambda_in_call(&mut args) {
+                continue;
+            }
+            if self.at_item_boundary()
+                && !matches!(self.stream.peek_ahead(1).kind, RightParen | Comma)
+            {
+                break;
+            }
+            if self.is(DotDot) {
+                return (args, Some(self.parse_spread_arg()));
+            }
+            args.push(self.parse_expression());
+            self.expect_comma_or(RightParen);
+        }
+
+        self.advance_if(RightParen);
+        (args, None)
+    }
+
+    fn handle_fn_as_lambda_in_call(&mut self, args: &mut Vec<Expression>) -> bool {
+        if !(self.is(Function) && self.stream.peek_ahead(1).kind == LeftParen) {
+            return false;
+        }
+        let start = self.current_token();
+        let span = Span::new(self.file_id, start.byte_offset, start.byte_length + 1);
+        let error = ParseError::new("Syntax error", span, "expected a lambda")
+            .with_parse_code("fn_as_lambda")
+            .with_help("Use a lambda instead: `|x| x * 2`");
+        self.errors.push(error);
+        self.resync_on_error();
+        args.push(Expression::Unit {
+            ty: Type::uninferred(),
+            span,
+        });
+        true
+    }
+
+    fn parse_spread_arg(&mut self) -> Expression {
+        self.ensure(DotDot);
+        let spread = self.parse_expression();
+        self.expect_comma_or(RightParen);
+        if !self.is(RightParen) && !self.at_eof() {
+            self.track_error(
+                "argument after spread",
+                "The `..spread` must be the last argument in the call.",
+            );
+            while !self.at_eof() && !self.is(RightParen) {
+                self.next();
+            }
+        }
+        self.advance_if(RightParen);
+        spread
     }
 
     pub fn parse_type_args(&mut self) -> Vec<Annotation> {

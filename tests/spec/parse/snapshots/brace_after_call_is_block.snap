@@ -139,6 +139,7 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                         qualified: None,
                     },
                     args: [],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

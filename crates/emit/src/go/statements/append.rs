@@ -18,10 +18,11 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         args: &[Expression],
+        spread: Option<&Expression>,
         is_extend: bool,
     ) -> String {
         let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
-        let emitted_args = self.sequence(output, stages, "_arg");
+        let emitted_args = self.sequence_with_spread(output, stages, spread, false, "_arg");
         let args_str = emitted_args.join(", ");
         let suffix = if is_extend { "..." } else { "" };
         format!("{}{}", args_str, suffix)

@@ -183,6 +183,7 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                                     },
                                                 },
                                             ],
+                                            spread: None,
                                             type_args: [],
                                             ty: Variable(
                                                 -1,
@@ -234,6 +235,7 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                                     },
                                                 },
                                             ],
+                                            spread: None,
                                             type_args: [],
                                             ty: Variable(
                                                 -1,

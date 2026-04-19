@@ -41,12 +41,14 @@ pub(crate) trait AstFolder {
             Call {
                 expression,
                 args,
+                spread,
                 type_args,
                 ty,
                 span,
             } => Call {
                 expression: Box::new(self.fold_expression(*expression)?),
                 args: self.fold_vec(args)?,
+                spread: Box::new((*spread).map(|e| self.fold_expression(e)).transpose()?),
                 type_args,
                 ty,
                 span,

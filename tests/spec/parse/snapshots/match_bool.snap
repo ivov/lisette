@@ -91,6 +91,7 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                                     qualified: None,
                                 },
                                 args: [],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -131,6 +132,7 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                                     qualified: None,
                                 },
                                 args: [],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

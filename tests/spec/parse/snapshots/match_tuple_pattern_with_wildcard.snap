@@ -169,6 +169,7 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -246,6 +247,7 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -294,6 +296,7 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

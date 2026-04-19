@@ -219,6 +219,7 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                                     },
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,

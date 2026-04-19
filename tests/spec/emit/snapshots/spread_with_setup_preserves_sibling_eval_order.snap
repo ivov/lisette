@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn side_a() -> int { 1 }\n\nfn get_xs() -> Result<Slice<int>, error> { Ok([1, 2, 3]) }\n\nfn variadic(_first: int, _rest: VarArgs<int>) -> int { 0 }\n\nfn run() -> Result<int, error> {\n  Ok(variadic(side_a(), ..get_xs()?))\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func side_a() int {
+	return 1
+}
+
+func get_xs() lisette.Result[[]int, error] {
+	return lisette.MakeResultOk[[]int, error]([]int{1, 2, 3})
+}
+
+func variadic(_ int, _ ...int) int {
+	return 0
+}
+
+func run() lisette.Result[int, error] {
+	_arg_3 := side_a()
+	check_1 := get_xs()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, error](check_1.ErrVal)
+	}
+	result_2 := check_1.OkVal
+	return lisette.MakeResultOk[int, error](variadic(_arg_3, result_2...))
+}

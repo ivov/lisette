@@ -80,6 +80,7 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                         },
                                     },
                                     args: [],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -160,6 +161,7 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

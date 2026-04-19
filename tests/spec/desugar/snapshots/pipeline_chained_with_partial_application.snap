@@ -79,6 +79,7 @@ description: "input: fn test() { x |> add(5) |> multiply(2); }"
                                     },
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,
@@ -104,6 +105,7 @@ description: "input: fn test() { x |> add(5) |> multiply(2); }"
                             },
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

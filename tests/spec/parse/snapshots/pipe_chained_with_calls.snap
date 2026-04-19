@@ -86,6 +86,7 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                             },
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -135,6 +136,7 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -184,6 +186,7 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                     },
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,

@@ -164,6 +164,7 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                             qualified: None,
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

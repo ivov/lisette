@@ -1662,3 +1662,72 @@ fn handle(event: Event) -> int {
 "#;
     infer(input).assert_exhaustiveness_error();
 }
+
+#[test]
+fn test_struct_arm_against_type_alias_to_interface_wildcard_not_redundant() {
+    let input = r#"
+interface Event {}
+type Msg = Event
+struct ClickEvent { x: int, y: int }
+
+fn handle(msg: Msg) -> int {
+  match msg {
+    ClickEvent { x, .. } => x,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_struct_arm_against_chained_type_alias_to_interface_wildcard_not_redundant() {
+    let input = r#"
+interface Event {}
+type Msg = Event
+type OuterMsg = Msg
+struct ClickEvent { x: int, y: int }
+
+fn handle(msg: OuterMsg) -> int {
+  match msg {
+    ClickEvent { x, .. } => x,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_bare_struct_name_arm_against_interface_wildcard_not_redundant() {
+    let input = r#"
+interface Event {}
+struct ClickEvent { x: int, y: int }
+struct KeyEvent { key: string }
+
+fn handle(e: Event) -> int {
+  match e {
+    ClickEvent { x, .. } => x,
+    KeyEvent => 0,
+    _ => -1,
+  }
+}
+"#;
+    infer(input).assert_no_errors();
+}
+
+#[test]
+fn test_struct_arm_against_type_alias_to_interface_without_wildcard_is_non_exhaustive() {
+    let input = r#"
+interface Event {}
+type Msg = Event
+struct ClickEvent { x: int, y: int }
+
+fn handle(msg: Msg) -> int {
+  match msg {
+    ClickEvent { x, .. } => x,
+  }
+}
+"#;
+    infer(input).assert_exhaustiveness_error();
+}

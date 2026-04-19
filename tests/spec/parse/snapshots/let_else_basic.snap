@@ -167,6 +167,7 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                             qualified: None,
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

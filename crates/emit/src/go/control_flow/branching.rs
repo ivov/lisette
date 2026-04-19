@@ -308,6 +308,7 @@ impl Emitter<'_> {
         let Expression::Call {
             expression: func,
             args,
+            spread,
             ..
         } = last
         else {
@@ -334,7 +335,7 @@ impl Emitter<'_> {
         if receiver_is_lvalue {
             // false: append args never produce RHS temp statements (if/match/block).
             let receiver_lv = self.emit_left_value_capturing(output, unwrapped, false);
-            let args_str = self.emit_append_args(output, args, is_extend);
+            let args_str = self.emit_append_args(output, args, (**spread).as_ref(), is_extend);
             write_line!(output, "{} = append({}, {})", var, receiver_lv, args_str);
         } else {
             let value_str = self.emit_value(output, last);

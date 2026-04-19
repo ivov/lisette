@@ -170,6 +170,7 @@ description: "input: \nfn outer() {\n  fn inner(x: int) -> int {\n    return x *
                             },
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,

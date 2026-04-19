@@ -96,6 +96,7 @@ description: "input: \nfn test() {\n  let (_, status_code): (string, int) = http
                             qualified: None,
                         },
                         args: [],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

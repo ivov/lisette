@@ -124,6 +124,7 @@ impl Desugarer {
             Expression::Identifier { .. } | Expression::DotAccess { .. } => Expression::Call {
                 expression: Box::new(right),
                 args: vec![left],
+                spread: Box::new(None),
                 type_args: vec![],
                 ty: Type::uninferred(),
                 span,
@@ -132,6 +133,7 @@ impl Desugarer {
             Expression::Call {
                 expression,
                 args,
+                spread,
                 type_args,
                 ty,
                 span: _,
@@ -141,6 +143,7 @@ impl Desugarer {
                 Expression::Call {
                     expression,
                     args: new_args,
+                    spread,
                     type_args,
                     ty,
                     span,

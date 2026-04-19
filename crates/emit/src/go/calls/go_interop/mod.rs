@@ -188,11 +188,7 @@ impl Emitter<'_> {
         call_expression: &Expression,
     ) -> Option<String> {
         let Expression::Call {
-            expression: callee,
-            args,
-            type_args,
-            span,
-            ..
+            expression: callee, ..
         } = call_expression
         else {
             return None;
@@ -217,7 +213,7 @@ impl Emitter<'_> {
         }
 
         self.skip_array_return_wrap = has_array_return;
-        let call_str = self.emit_call(output, callee, args, type_args, None, *span);
+        let call_str = self.emit_call(output, call_expression, None);
         self.skip_array_return_wrap = false;
 
         Some(call_str)

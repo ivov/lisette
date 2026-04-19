@@ -106,6 +106,7 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -161,6 +162,7 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -209,6 +211,7 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

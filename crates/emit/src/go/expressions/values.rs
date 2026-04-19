@@ -4,6 +4,7 @@ use syntax::program::Definition;
 
 use crate::Emitter;
 use crate::go::is_order_sensitive;
+use crate::go::names::go_name;
 use crate::go::types::emitter::Position;
 use crate::go::utils::Staged;
 use crate::go::write_line;
@@ -179,18 +180,11 @@ impl Emitter<'_> {
                 expression,
                 ..
             } => self.emit_unary_expression(output, operator, expression),
-            Expression::Call {
-                expression: callee,
-                args,
-                type_args,
-                ty,
-                span,
-                ..
-            } => {
+            Expression::Call { ty, .. } => {
                 if let Some(strategy) = self.resolve_go_call_strategy(expression) {
                     self.emit_go_wrapped_call(output, expression, &strategy, ty)
                 } else {
-                    self.emit_call(output, callee, args, type_args, Some(ty), *span)
+                    self.emit_call(output, expression, Some(ty))
                 }
             }
             Expression::DotAccess {
@@ -792,6 +786,31 @@ impl Emitter<'_> {
         let mut setup = String::new();
         let value = self.emit_composite_value(&mut setup, expression);
         Staged::new(setup, value)
+    }
+
+    /// Like `sequence`, but also stages the spread as a sibling (so its
+    /// setup participates in eval-order) and appends `...` to its value.
+    pub(crate) fn sequence_with_spread(
+        &mut self,
+        output: &mut String,
+        mut stages: Vec<Staged>,
+        spread: Option<&Expression>,
+        wrap_to_any: bool,
+        prefix: &str,
+    ) -> Vec<String> {
+        let spread_idx = spread.map(|s| {
+            stages.push(self.stage_operand(s));
+            stages.len() - 1
+        });
+        let mut values = self.sequence(output, stages, prefix);
+        if let Some(i) = spread_idx {
+            if wrap_to_any {
+                self.flags.needs_stdlib = true;
+                values[i] = format!("{}.SliceToAny({})", go_name::GO_STDLIB_PKG, values[i]);
+            }
+            values[i].push_str("...");
+        }
+        values
     }
 
     /// Sequence N staged emissions preserving left-to-right eval order.

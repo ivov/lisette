@@ -267,6 +267,7 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                     },
                                 },
                                 args: [],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

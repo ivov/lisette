@@ -221,6 +221,7 @@ impl Checker<'_, '_> {
         &mut self,
         expression: Box<Expression>,
         args: Vec<Expression>,
+        spread: Box<Option<Expression>>,
         type_args: Vec<Annotation>,
         span: Span,
         expected_ty: &Type,
@@ -241,11 +242,18 @@ impl Checker<'_, '_> {
                 callee_ty,
                 underlying_fn,
                 args,
+                spread,
                 new_type_args,
                 span,
                 expected_ty,
             );
         }
+
+        let variadic_elem_ty = if spread.is_some() {
+            callee_ty.resolve().is_variadic()
+        } else {
+            None
+        };
 
         let (param_types, param_mutability, return_ty, bounds) =
             self.extract_call_signature(callee_ty, args.len(), &callee_expression);
@@ -284,6 +292,27 @@ impl Checker<'_, '_> {
         }
         self.check_call_arity(&param_types, &new_args, &callee_expression, &span);
         self.check_mut_param_arguments(&new_args, &param_mutability, &callee_expression);
+
+        let new_spread = (*spread).map(|spread_expr| {
+            self.check_not_temp_producing(&spread_expr);
+            match variadic_elem_ty {
+                Some(elem_ty) => {
+                    let expected_slice = self.type_slice(elem_ty);
+                    let inferred = self
+                        .with_value_context(|s| s.infer_expression(spread_expr, &expected_slice));
+                    if param_mutability.last().copied().unwrap_or(false) {
+                        let is_external = self.is_external_callee(&callee_expression);
+                        self.check_arg_against_mut_param(&inferred, is_external);
+                    }
+                    inferred
+                }
+                None => {
+                    self.sink
+                        .push(diagnostics::infer::spread_on_non_variadic(span));
+                    self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error))
+                }
+            }
+        });
 
         // Capture whether expected_ty is unresolved BEFORE
         // unification, because unify will resolve a fresh variable to the
@@ -335,6 +364,7 @@ impl Checker<'_, '_> {
         Expression::Call {
             expression: callee_expression.into(),
             args: new_args,
+            spread: Box::new(new_spread),
             type_args: new_type_args,
             ty: call_ty,
             span,
@@ -521,7 +551,7 @@ impl Checker<'_, '_> {
     ) -> (Vec<Type>, Vec<bool>, Type, Vec<Bound>) {
         let callee_ty = callee_ty.resolve();
         let bounds = callee_ty.get_bounds().to_vec();
-        let param_mutability = callee_ty.get_param_mutability().to_vec();
+        let mut param_mutability = callee_ty.get_param_mutability().to_vec();
         let is_variadic = callee_ty.is_variadic();
 
         let (param_types, return_ty) = match self.extract_function_type(&callee_ty) {
@@ -530,6 +560,11 @@ impl Checker<'_, '_> {
                     params.pop();
                     while params.len() < arg_count {
                         params.push(variadic_ty.clone());
+                    }
+                    if let Some(&variadic_mut) = param_mutability.last() {
+                        while param_mutability.len() < arg_count {
+                            param_mutability.push(variadic_mut);
+                        }
                     }
                 }
                 (params, return_type)
@@ -655,10 +690,17 @@ impl Checker<'_, '_> {
         named_ty: Type,
         underlying_fn: Type,
         args: Vec<Expression>,
+        spread: Box<Option<Expression>>,
         type_args: Vec<Annotation>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
+        if let Some(spread_expr) = *spread {
+            self.sink
+                .push(diagnostics::infer::spread_on_non_variadic(span));
+            self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error));
+        }
+
         if args.len() != 1 {
             let Type::Constructor { id, .. } = &named_ty else {
                 unreachable!("type_conversion_underlying only fires for Constructor callees")
@@ -677,6 +719,7 @@ impl Checker<'_, '_> {
             return Expression::Call {
                 expression: callee_expression.into(),
                 args: new_args,
+                spread: Box::new(None),
                 type_args,
                 ty: Type::Error,
                 span,
@@ -693,6 +736,7 @@ impl Checker<'_, '_> {
         Expression::Call {
             expression: callee_expression.into(),
             args: vec![new_arg],
+            spread: Box::new(None),
             type_args,
             ty: named_ty,
             span,
@@ -1118,26 +1162,26 @@ impl Checker<'_, '_> {
     ) {
         let is_external = self.is_external_callee(callee);
         for (i, arg) in args.iter().enumerate() {
-            let is_mut_param = param_mutability.get(i).copied().unwrap_or(false);
-            if !is_mut_param {
-                continue;
+            if param_mutability.get(i).copied().unwrap_or(false) {
+                self.check_arg_against_mut_param(arg, is_external);
             }
+        }
+    }
 
-            if let Some(var_name) = arg.get_var_name() {
-                if !self.scopes.lookup_mutable(&var_name) {
-                    self.sink
-                        .push(diagnostics::infer::immutable_argument_to_mut_param(
-                            &var_name,
-                            arg.get_span(),
-                            is_external,
-                        ));
-                }
-
-                // Mark as mutated so `unnecessary_mut` lint doesn't fire
-                if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
-                    self.facts.mark_mutated(binding_id);
-                }
-            }
+    fn check_arg_against_mut_param(&mut self, arg: &Expression, is_external: bool) {
+        let Some(var_name) = arg.get_var_name() else {
+            return;
+        };
+        if !self.scopes.lookup_mutable(&var_name) {
+            self.sink
+                .push(diagnostics::infer::immutable_argument_to_mut_param(
+                    &var_name,
+                    arg.get_span(),
+                    is_external,
+                ));
+        }
+        if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
+            self.facts.mark_mutated(binding_id);
         }
     }
 }

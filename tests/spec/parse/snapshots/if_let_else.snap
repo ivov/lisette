@@ -124,6 +124,7 @@ description: "input: \nfn test(opt: Option<int>) {\n  if let Some(x) = opt {\n  
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -175,6 +176,7 @@ description: "input: \nfn test(opt: Option<int>) {\n  if let Some(x) = opt {\n  
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

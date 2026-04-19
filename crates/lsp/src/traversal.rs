@@ -40,8 +40,13 @@ fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Optio
         } => c(value).or_else(|| else_block.as_deref().and_then(c)),
 
         Expression::Call {
-            expression, args, ..
-        } => c(expression).or_else(|| args.iter().find_map(c)),
+            expression,
+            args,
+            spread,
+            ..
+        } => c(expression)
+            .or_else(|| args.iter().find_map(c))
+            .or_else(|| spread.as_ref().as_ref().and_then(c)),
 
         Expression::If {
             condition,

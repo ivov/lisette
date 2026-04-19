@@ -83,13 +83,20 @@ impl Checker<'_, '_> {
             Expression::Call {
                 expression,
                 args: call_args,
+                spread,
                 type_args,
                 span,
                 ..
             } => {
                 let is_panic = matches!(&*expression, Expression::Identifier { value, .. } if value == "panic");
-                let result =
-                    self.infer_function_call(expression, call_args, type_args, span, expected_ty);
+                let result = self.infer_function_call(
+                    expression,
+                    call_args,
+                    spread,
+                    type_args,
+                    span,
+                    expected_ty,
+                );
                 if parent_is_subexpression && is_panic {
                     self.sink
                         .push(diagnostics::infer::never_call_in_expression(span));

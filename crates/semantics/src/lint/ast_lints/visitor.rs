@@ -75,11 +75,17 @@ where
         }
 
         Expression::Call {
-            expression, args, ..
+            expression,
+            args,
+            spread,
+            ..
         } => {
             visit_node(expression, expression_visitor, pattern_visitor);
             for arg in args {
                 visit_node(arg, expression_visitor, pattern_visitor);
+            }
+            if let Some(spread_expr) = spread.as_ref() {
+                visit_node(spread_expr, expression_visitor, pattern_visitor);
             }
         }
 

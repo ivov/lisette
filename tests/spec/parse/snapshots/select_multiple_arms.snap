@@ -147,6 +147,7 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                             qualified: None,
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -201,6 +202,7 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                             },
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -240,6 +242,7 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                             },
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -283,6 +286,7 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                             },
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

@@ -76,6 +76,7 @@ impl Emitter<'_> {
         function: &Expression,
         args: &[Expression],
         type_args: &[Annotation],
+        spread: Option<&Expression>,
     ) -> String {
         let Expression::DotAccess {
             expression: receiver,
@@ -97,12 +98,13 @@ impl Emitter<'_> {
         let coercion = self.ctx.coercions.get_coercion(receiver.get_span());
 
         // Stage receiver + args together for eval-order sequencing
-        let mut all_stages: Vec<Staged> = Vec::with_capacity(1 + args.len());
+        let mut all_stages: Vec<Staged> =
+            Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
         all_stages.push(self.stage_operand(receiver));
         for arg in args {
             all_stages.push(self.stage_composite(arg));
         }
-        let all_values = self.sequence(output, all_stages, "_arg");
+        let all_values = self.sequence_with_spread(output, all_stages, spread, false, "_arg");
         let receiver_arg = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
 
@@ -165,6 +167,7 @@ impl Emitter<'_> {
         type_args: &[Annotation],
         method: &str,
         is_public: bool,
+        spread: Option<&Expression>,
     ) -> String {
         let go_method = if is_public {
             let mut chars = method.chars();
@@ -177,7 +180,7 @@ impl Emitter<'_> {
         };
 
         let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
-        let emitted_all = self.sequence(output, stages, "_arg");
+        let emitted_all = self.sequence_with_spread(output, stages, spread, false, "_arg");
         let receiver = emitted_all[0].clone();
         let emitted_rest: Vec<String> = emitted_all[1..].to_vec();
 

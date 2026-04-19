@@ -55,7 +55,7 @@ Compound types are different:
 | `Channel<T>`    | `chan T`                     |
 | `Sender<T>`     | `chan<- T`                   |
 | `Receiver<T>`   | `<-chan T`                   |
-| `VarArgs<T>`    | `...T`                       |
+| `VarArgs<T>`    | `...T` (call-site only)      |
 | `Unknown`       | `any` or `interface{}`       |
 
 ### Named numeric types
@@ -75,6 +75,26 @@ let ratio = time.Minute / time.Second      // Duration / Duration → int64
 The result type preserves the named type, with one exception: dividing two values of the same named type produces the underlying type (`T / T → U`), since a ratio is dimensionless.
 
 Cross-family arithmetic (e.g., `Duration * float64`) remains an error.
+
+### Variadic parameters
+
+A parameter typed `VarArgs<T>` accepts zero or more arguments of type `T` and must be the last parameter. It corresponds to Go's `...T` and is used to call Go variadic functions like `fmt.Println`:
+
+```rust
+import "go:fmt"
+
+fmt.Println("a", "b", "c")
+```
+
+To pass an existing slice, prefix it with `..`:
+
+```rust
+let parts = ["a", "b", "c"]
+fmt.Println(..parts)
+fmt.Println("prefix:", ..parts)
+```
+
+`..` is only valid as the last argument, and only when the receiving parameter is `VarArgs<T>`. Consuming a `VarArgs<T>` inside a Lisette function body is not currently supported.
 
 ### `Unknown`
 

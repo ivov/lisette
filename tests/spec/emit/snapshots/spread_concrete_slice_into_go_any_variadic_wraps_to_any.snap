@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let xs = [\"a\", \"b\", \"c\"]\n  fmt.Println(..xs)\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	xs := []string{"a", "b", "c"}
+	fmt.Println(lisette.SliceToAny(xs)...)
+}

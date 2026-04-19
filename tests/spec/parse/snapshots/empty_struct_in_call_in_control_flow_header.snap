@@ -122,6 +122,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                             qualified: None,
                         },
                     ],
+                    spread: None,
                     type_args: [],
                     ty: Variable(
                         -1,
@@ -221,6 +222,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                 },
                             },
                         ],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,
@@ -262,6 +264,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                         qualified: None,
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -348,6 +351,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                     },
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,
@@ -448,6 +452,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                             qualified: None,
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

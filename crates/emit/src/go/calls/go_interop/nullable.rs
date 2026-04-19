@@ -11,18 +11,7 @@ impl Emitter<'_> {
         call_expression: &Expression,
         option_ty: &Type,
     ) -> String {
-        let Expression::Call {
-            expression: callee,
-            args,
-            type_args,
-            span,
-            ..
-        } = call_expression
-        else {
-            unreachable!("emit_go_option_call_wrapped called with non-call expression");
-        };
-
-        let call_str = self.emit_call(output, callee, args, type_args, None, *span);
+        let call_str = self.emit_call(output, call_expression, None);
         self.emit_comma_ok_wrapping(output, &call_str, option_ty)
     }
 
@@ -336,18 +325,7 @@ impl Emitter<'_> {
         call_expression: &Expression,
         option_ty: &Type,
     ) -> String {
-        let Expression::Call {
-            expression: callee,
-            args,
-            type_args,
-            span,
-            ..
-        } = call_expression
-        else {
-            unreachable!("emit_go_single_return_option_wrapped called with non-call expression");
-        };
-
-        let call_str = self.emit_call(output, callee, args, type_args, None, *span);
+        let call_str = self.emit_call(output, call_expression, None);
 
         let raw_var = self.fresh_var(Some("raw"));
         self.declare(&raw_var);

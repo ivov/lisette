@@ -47,6 +47,7 @@ description: "input: \nfn test() { Map.new<string, fn(int, int) -> int>(); }\n"
                         },
                     },
                     args: [],
+                    spread: None,
                     type_args: [
                         Constructor {
                             name: "string",

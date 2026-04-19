@@ -5802,3 +5802,80 @@ fn test(p: Partial<int, string>) -> int {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_spread_on_non_variadic() {
+    let input = r#"
+fn takes_int(x: int) {}
+
+fn test(args: Slice<int>) {
+  takes_int(..args)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_spread_missing_required_positional_arg() {
+    let input = r#"
+import url "go:net/url"
+
+fn test(rest: Slice<string>) -> Result<string, error> {
+  url.JoinPath(..rest)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_spread_on_type_conversion() {
+    let input = r#"
+type Callback = fn(string) -> int
+
+fn test(rest: Slice<fn(string) -> int>) {
+  Callback(..rest)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn parse_spread_not_last_arg() {
+    let input = r#"
+fn test() { foo(..xs, y); }
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn infer_immutable_spread_to_mut_variadic_param() {
+    let input = r#"
+fn touch(mut items: VarArgs<int>) {
+  let _ = items
+}
+
+fn main() {
+  let data = [3, 1, 2]
+  touch(..data)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_immutable_args_to_mut_variadic_param() {
+    let input = r#"
+fn touch(x: int, mut ys: VarArgs<int>) -> int {
+  let _ = ys
+  x
+}
+
+fn main() {
+  let a = 1
+  let b = 2
+  let c = 3
+  let _ = touch(a, b, c)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}

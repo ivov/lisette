@@ -245,8 +245,6 @@ impl Emitter<'_> {
         if let Expression::Call {
             expression: call_expression,
             args,
-            type_args,
-            span,
             ..
         } = expression
         {
@@ -277,8 +275,7 @@ impl Emitter<'_> {
                             self.emit_go_wrapped_call(output, expression, &strategy, &return_ty);
                         write_line!(output, "return {}", result_var);
                     } else {
-                        let call =
-                            self.emit_call(output, call_expression, args, type_args, None, *span);
+                        let call = self.emit_call(output, expression, None);
                         write_line!(output, "return {}", call);
                     }
                     return true;

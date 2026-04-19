@@ -72,6 +72,7 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                                 qualified: None,
                                             },
                                             args: [],
+                                            spread: None,
                                             type_args: [],
                                             ty: Variable(
                                                 -1,
@@ -126,6 +127,7 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                     qualified: None,
                                 },
                                 args: [],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,

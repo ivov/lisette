@@ -54,6 +54,7 @@ description: "input: \nfn test() {\n  select {\n    _ => print(\"default\"),\n  
                                             },
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

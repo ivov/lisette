@@ -1068,6 +1068,28 @@ fn main() {
 }
 
 #[test]
+fn struct_field_used_via_type_alias_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Point {
+  x: int,
+  y: int,
+}
+
+type MyPoint = Point
+
+fn read(p: MyPoint) -> int {
+  p.x + p.y
+}
+
+fn main() {
+  read(Point { x: 1, y: 2 })
+}
+"#
+    );
+}
+
+#[test]
 fn unused_enum_variant() {
     assert_lint_snapshot!(
         r#"

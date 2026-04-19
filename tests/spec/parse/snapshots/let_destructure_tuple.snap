@@ -97,6 +97,7 @@ description: "input: \nfn test() {\n  let (a, b): (int, string) = get_pair();\n}
                             qualified: None,
                         },
                         args: [],
+                        spread: None,
                         type_args: [],
                         ty: Variable(
                             -1,

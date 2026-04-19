@@ -1333,3 +1333,13 @@ fn function_with_mut_parameter() {
         "fn process(mut items: Slice<int>, count: int) -> Slice<int> { items }"
     );
 }
+
+#[test]
+fn call_with_spread_arg() {
+    assert_format_snapshot!("fn test() { foo(..args) }");
+}
+
+#[test]
+fn call_with_leading_args_and_spread_arg() {
+    assert_format_snapshot!("fn test() { foo(a, b, ..args) }");
+}

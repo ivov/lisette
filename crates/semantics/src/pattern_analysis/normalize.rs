@@ -27,6 +27,66 @@ pub struct NormalizationContext<'a> {
     pub scrutinee_type: Option<Type>,
 }
 
+fn try_normalize_interface_implementer(
+    ctx: &NormalizationContext,
+    struct_name: &str,
+    arity: usize,
+    args: Vec<NormalizedPattern>,
+    unions: &mut UnionTable,
+) -> Option<NormalizedPattern> {
+    let scrutinee_ty = ctx.scrutinee_type.as_ref()?;
+    let peeled = ctx.store.peel_alias(&scrutinee_ty.resolve());
+    let Type::Constructor {
+        id: interface_id,
+        params: interface_params,
+        ..
+    } = &peeled
+    else {
+        return None;
+    };
+    ctx.store.get_interface(interface_id)?;
+
+    let interface_type_name = make_type_key(interface_id, interface_params);
+    let struct_ctor = Constructor {
+        tag_id: struct_name.to_string(),
+        arity,
+    };
+
+    if let Some(union) = unions.get_mut(&interface_type_name) {
+        let mut found = false;
+        let mut unknown_pos = union.len();
+        for (i, c) in union.iter().enumerate() {
+            if c.tag_id == struct_name {
+                found = true;
+                break;
+            }
+            if c.tag_id == INTERFACE_UNKNOWN_TAG {
+                unknown_pos = i;
+            }
+        }
+        if !found {
+            union.insert(unknown_pos, struct_ctor);
+        }
+    } else {
+        unions.insert(
+            interface_type_name.clone(),
+            vec![
+                struct_ctor,
+                Constructor {
+                    tag_id: INTERFACE_UNKNOWN_TAG.to_string(),
+                    arity: 0,
+                },
+            ],
+        );
+    }
+
+    Some(NormalizedPattern::Constructor {
+        type_name: interface_type_name,
+        tag: struct_name.to_string(),
+        args,
+    })
+}
+
 pub fn normalize_arm(
     arm: &MatchArm,
     unions: &mut UnionTable,
@@ -71,15 +131,34 @@ pub fn normalize_typed_pattern(
             type_args,
             ..
         } => {
-            let patterns = fields
+            let patterns: Vec<NormalizedPattern> = fields
                 .iter()
                 .map(|f| normalize_typed_pattern(f, unions, ctx))
                 .collect();
 
+            let enum_def = ctx.store.get_definition(enum_name);
+
+            if let Some(Definition::Struct {
+                fields: struct_fields,
+                ..
+            }) = enum_def
+            {
+                let arity = struct_fields.len();
+                let mut args = patterns.clone();
+                while args.len() < arity {
+                    args.push(Wildcard);
+                }
+                if let Some(normalized) =
+                    try_normalize_interface_implementer(ctx, enum_name, arity, args, unions)
+                {
+                    return normalized;
+                }
+            }
+
             let type_name = make_type_key(enum_name, type_args);
 
             if unions.get(&type_name).is_none() {
-                let alternatives = match ctx.store.get_definition(enum_name) {
+                let alternatives = match enum_def {
                     Some(Definition::Enum {
                         variants, generics, ..
                     }) => variants
@@ -183,7 +262,7 @@ pub fn normalize_typed_pattern(
             pattern_fields,
             type_args,
         } => {
-            let patterns = struct_fields
+            let patterns: Vec<NormalizedPattern> = struct_fields
                 .iter()
                 .map(|f| {
                     pattern_fields
@@ -199,57 +278,14 @@ pub fn normalize_typed_pattern(
                 })
                 .collect();
 
-            // Interfaces are open: unknown structs can implement them at any time,
-            // so a wildcard after a struct arm is always reachable.
-            if let Some(scrutinee_ty) = &ctx.scrutinee_type {
-                let resolved = scrutinee_ty.resolve();
-                if let Type::Constructor {
-                    id: interface_id,
-                    params: interface_params,
-                    ..
-                } = &resolved
-                    && ctx.store.get_interface(interface_id).is_some()
-                {
-                    let interface_type_name = make_type_key(interface_id, interface_params);
-                    let struct_ctor = Constructor {
-                        tag_id: struct_name.to_string(),
-                        arity: struct_fields.len(),
-                    };
-
-                    if let Some(union) = unions.get_mut(&interface_type_name) {
-                        let mut found = false;
-                        let mut unknown_pos = union.len();
-                        for (i, c) in union.iter().enumerate() {
-                            if c.tag_id == struct_name.as_str() {
-                                found = true;
-                                break;
-                            }
-                            if c.tag_id == INTERFACE_UNKNOWN_TAG {
-                                unknown_pos = i;
-                            }
-                        }
-                        if !found {
-                            union.insert(unknown_pos, struct_ctor);
-                        }
-                    } else {
-                        unions.insert(
-                            interface_type_name.clone(),
-                            vec![
-                                struct_ctor,
-                                Constructor {
-                                    tag_id: INTERFACE_UNKNOWN_TAG.to_string(),
-                                    arity: 0,
-                                },
-                            ],
-                        );
-                    }
-
-                    return NormalizedPattern::Constructor {
-                        type_name: interface_type_name,
-                        tag: struct_name.to_string(),
-                        args: patterns,
-                    };
-                }
+            if let Some(normalized) = try_normalize_interface_implementer(
+                ctx,
+                struct_name,
+                struct_fields.len(),
+                patterns.clone(),
+                unions,
+            ) {
+                return normalized;
             }
 
             let type_name = make_type_key(struct_name, type_args);

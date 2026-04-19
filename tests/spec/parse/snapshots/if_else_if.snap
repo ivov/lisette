@@ -117,6 +117,7 @@ description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large
                                         },
                                     },
                                 ],
+                                spread: None,
                                 type_args: [],
                                 ty: Variable(
                                     -1,
@@ -207,6 +208,7 @@ description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large
                                             },
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,
@@ -258,6 +260,7 @@ description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large
                                             },
                                         },
                                     ],
+                                    spread: None,
                                     type_args: [],
                                     ty: Variable(
                                         -1,

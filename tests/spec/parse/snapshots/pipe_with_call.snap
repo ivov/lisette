@@ -82,6 +82,7 @@ description: "input: \nfn test() { let result = x |> add(5); }\n"
                                     },
                                 },
                             ],
+                            spread: None,
                             type_args: [],
                             ty: Variable(
                                 -1,
