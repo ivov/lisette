@@ -2,6 +2,10 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.15](https://github.com/ivov/lisette/compare/lisette-v0.1.14...lisette-v0.1.15) - 2026-04-19
+
+- fix: emit Go type switch when matching on an interface type [#138](https://github.com/ivov/lisette/pull/138) [`9803025`](https://github.com/ivov/lisette/commit/9803025475bfd7efb70e91176784887a8387d023)
+
 ## [0.1.14](https://github.com/ivov/lisette/compare/lisette-v0.1.13...lisette-v0.1.14) - 2026-04-19
 
 - fix: support building from source on windows [#130](https://github.com/ivov/lisette/pull/130) [`35c0437`](https://github.com/ivov/lisette/commit/35c04379bf2f4a527ab6d4972ac09af2fe8a2503)
