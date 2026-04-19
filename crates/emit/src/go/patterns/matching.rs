@@ -18,13 +18,14 @@ impl Emitter<'_> {
             self.emit_statement(output, subject);
             return;
         }
+        let subject_ty = subject.get_type();
         let subject_var = self.emit_match_subject_var(output, subject, arms);
         let guard = if matches!(subject, Expression::Literal { .. }) {
             None
         } else {
             Some(DiscardGuard::new(output, &subject_var))
         };
-        let tree_emitter = TreeEmitter::new(self, arms, ty, subject_var);
+        let tree_emitter = TreeEmitter::new(self, arms, ty, subject_var, subject_ty);
         tree_emitter.emit(output);
         if let Some(guard) = guard {
             guard.finish(output);

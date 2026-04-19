@@ -88,6 +88,9 @@ pub(crate) enum Check {
     /// Each inner `Vec<Check>` is one alternative (checks ANDed together);
     /// the alternatives are ORed.
     Or { alternatives: Vec<Vec<Check>> },
+    /// Go interface type assertion: the value at `path` implements `go_type`.
+    /// Emitted as a case label in a `switch x := x.(type)` statement.
+    TypeAssert { path: AccessPath, go_type: String },
 }
 
 impl Check {
@@ -143,6 +146,9 @@ impl Check {
                     joined
                 }
             }
+            // Type assertions are emitted via type switches, not boolean conditions.
+            // This path is only reached when a guard prevents switch compilation.
+            Check::TypeAssert { .. } => "false".to_string(),
         }
     }
 
@@ -152,7 +158,8 @@ impl Check {
             Check::EnumTag { path, .. }
             | Check::Literal { path, .. }
             | Check::SliceLenEq { path, .. }
-            | Check::SliceLenGe { path, .. } => Some(path),
+            | Check::SliceLenGe { path, .. }
+            | Check::TypeAssert { path, .. } => Some(path),
             Check::Or { .. } => None,
         }
     }
@@ -173,6 +180,13 @@ impl Check {
     pub(crate) fn as_literal(&self) -> Option<&str> {
         match self {
             Check::Literal { go_literal, .. } => Some(go_literal),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_type_assert(&self) -> Option<&str> {
+        match self {
+            Check::TypeAssert { go_type, .. } => Some(go_type),
             _ => None,
         }
     }
@@ -246,6 +260,8 @@ pub(crate) enum SwitchKind {
     EnumTag,
     /// Switch on value directly — literals, booleans, units
     Value,
+    /// Switch on dynamic Go type — `switch x := x.(type)`
+    TypeSwitch,
 }
 
 /// A single branch in a Switch node.
@@ -320,6 +336,8 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         (SwitchKind::EnumTag, first_check.path()?.clone())
     } else if first_check.as_literal().is_some() {
         (SwitchKind::Value, first_check.path()?.clone())
+    } else if first_check.as_type_assert().is_some() {
+        (SwitchKind::TypeSwitch, first_check.path()?.clone())
     } else {
         return None;
     };
@@ -328,7 +346,8 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         if arm.checks.is_empty() {
             continue;
         }
-        if arm.has_guard {
+        // Type switches handle guards inside the case body; other switches cannot.
+        if arm.has_guard && !matches!(kind, SwitchKind::TypeSwitch) {
             return None;
         }
         let first = arm.checks.first()?;
@@ -336,6 +355,7 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         let is_compatible = match &kind {
             SwitchKind::EnumTag => first.as_enum_tag().is_some(),
             SwitchKind::Value => first.as_literal().is_some() && arm.checks.len() == 1,
+            SwitchKind::TypeSwitch => first.as_type_assert().is_some(),
         };
         if !is_compatible {
             return None;
@@ -365,6 +385,10 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
                 let lit = first_check.as_literal().unwrap();
                 (lit.to_string(), false)
             }
+            SwitchKind::TypeSwitch => {
+                let go_type = first_check.as_type_assert().unwrap();
+                (go_type.to_string(), false)
+            }
         };
 
         let inner_arm = ArmInfo {
@@ -387,10 +411,21 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         .into_iter()
         .map(|label| {
             let (needs_stdlib, inner_arms) = branch_map.remove(&label).unwrap();
+            // For type switches: a guarded arm's failure path must fall through to
+            // the catchall arms so the match stays exhaustive in Go output.
+            let decision = if matches!(kind, SwitchKind::TypeSwitch)
+                && inner_arms.iter().any(|a| a.has_guard)
+            {
+                let mut arms_with_fallback = inner_arms;
+                arms_with_fallback.extend(fallback_arms.iter().cloned());
+                build_tree(arms_with_fallback)
+            } else {
+                build_tree(inner_arms)
+            };
             SwitchBranch {
                 case_label: label,
                 needs_stdlib,
-                decision: build_tree(inner_arms),
+                decision,
             }
         })
         .collect();
@@ -463,13 +498,14 @@ fn build_chain(arms: Vec<ArmInfo>) -> Decision {
 
 /// Recursively walk a pattern, collecting checks and bindings.
 ///
-/// This replaces `traverse_pattern()` + the three visitors. Instead of
-/// running multiple passes, we collect everything in one walk.
+/// `path_ty` is the expected type of the value at `path` — used to detect
+/// when a struct pattern is matched against a Go interface (type switch).
 fn collect_checks_and_bindings(
     emitter: &mut Emitter,
     path: &AccessPath,
     pattern: &Pattern,
     typed: Option<&TypedPattern>,
+    path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
     match pattern {
@@ -496,7 +532,7 @@ fn collect_checks_and_bindings(
         }
 
         Pattern::Struct { .. } => {
-            collect_struct_checks(emitter, path, pattern, typed, collector);
+            collect_struct_checks(emitter, path, pattern, typed, path_ty, collector);
         }
 
         Pattern::Tuple { elements, .. } => {
@@ -513,6 +549,7 @@ fn collect_checks_and_bindings(
                     &field_path,
                     element,
                     typed_elements.get(i).copied().flatten(),
+                    None,
                     collector,
                 );
             }
@@ -548,6 +585,7 @@ fn collect_checks_and_bindings(
                     &elem_path,
                     elem,
                     typed_prefix.get(i).copied().flatten(),
+                    None,
                     collector,
                 );
             }
@@ -564,7 +602,7 @@ fn collect_checks_and_bindings(
         }
 
         Pattern::Or { patterns, .. } => {
-            collect_or_pattern_checks(emitter, path, patterns, typed, pattern, collector);
+            collect_or_pattern_checks(emitter, path, patterns, typed, pattern, path_ty, collector);
         }
     }
 }
@@ -577,6 +615,7 @@ fn collect_or_pattern_checks(
     patterns: &[Pattern],
     typed: Option<&TypedPattern>,
     pattern: &Pattern,
+    path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
     let has_bindings = Emitter::pattern_has_bindings(pattern);
@@ -592,7 +631,7 @@ fn collect_or_pattern_checks(
             .map(|(i, p)| {
                 let mut alt_collector = PatternCollector::new();
                 let tc = typed_alternatives.get(i).copied().flatten();
-                collect_checks_and_bindings(emitter, path, p, tc, &mut alt_collector);
+                collect_checks_and_bindings(emitter, path, p, tc, path_ty, &mut alt_collector);
                 alt_collector.checks
             })
             .collect();
@@ -741,6 +780,7 @@ fn collect_newtype_checks(
             &field_path,
             field,
             variant.typed_children.first().copied().flatten(),
+            None,
             collector,
         );
     }
@@ -761,6 +801,7 @@ fn collect_tuple_struct_checks(
             &field_path,
             field,
             typed_children.get(i).copied().flatten(),
+            None,
             collector,
         );
     }
@@ -835,6 +876,7 @@ fn collect_tagged_enum_checks(
                 &field_path,
                 field,
                 variant.typed_children.get(i).copied().flatten(),
+                None,
                 collector,
             );
         }
@@ -874,6 +916,7 @@ fn collect_struct_checks(
     path: &AccessPath,
     pattern: &Pattern,
     typed: Option<&TypedPattern>,
+    path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
     let Pattern::Struct {
@@ -886,20 +929,30 @@ fn collect_struct_checks(
         return;
     };
 
-    let enum_info = detect_enum_info(emitter, ty, identifier, typed);
-
-    if enum_info.is_some() {
-        let alias = emitter.module_alias_for_type(ty);
-        let resolved = go_name::variant(identifier, ty, emitter.current_module(), alias.as_deref());
-        if resolved.needs_stdlib {
-            emitter.flags.needs_stdlib = true;
-        }
-        collector.checks.push(Check::EnumTag {
+    let enum_info = if path_ty.is_some_and(|st| emitter.as_interface(st).is_some()) {
+        let go_type = emitter.go_type_as_string(ty);
+        collector.checks.push(Check::TypeAssert {
             path: path.clone(),
-            tag_constant: resolved.name.clone(),
-            needs_stdlib: resolved.needs_stdlib,
+            go_type,
         });
-    }
+        None
+    } else {
+        let enum_info = detect_enum_info(emitter, ty, identifier, typed);
+        if enum_info.is_some() {
+            let alias = emitter.module_alias_for_type(ty);
+            let resolved =
+                go_name::variant(identifier, ty, emitter.current_module(), alias.as_deref());
+            if resolved.needs_stdlib {
+                emitter.flags.needs_stdlib = true;
+            }
+            collector.checks.push(Check::EnumTag {
+                path: path.clone(),
+                tag_constant: resolved.name.clone(),
+                needs_stdlib: resolved.needs_stdlib,
+            });
+        }
+        enum_info
+    };
 
     let typed_fields_map: Option<Vec<(&str, Option<&TypedPattern>)>> = match typed {
         Some(TypedPattern::Struct { pattern_fields, .. })
@@ -933,7 +986,14 @@ fn collect_struct_checks(
             enum_info.as_ref(),
             typed_variant_fields,
         );
-        collect_checks_and_bindings(emitter, &field_path, &field.value, typed_child, collector);
+        collect_checks_and_bindings(
+            emitter,
+            &field_path,
+            &field.value,
+            typed_child,
+            None,
+            collector,
+        );
     }
 }
 
@@ -986,6 +1046,7 @@ pub(super) struct ExpandedArm<'a> {
 pub(super) fn compile_expanded_arms<'a>(
     emitter: &mut Emitter,
     expanded: &'a [ExpandedArm<'a>],
+    subject_ty: &Type,
 ) -> Decision {
     let mut arm_infos: Vec<ArmInfo> = expanded
         .iter()
@@ -996,6 +1057,7 @@ pub(super) fn compile_expanded_arms<'a>(
                 &AccessPath::root(),
                 ea.pattern,
                 ea.typed_pattern,
+                Some(subject_ty),
                 &mut collector,
             );
             ArmInfo {
@@ -1045,7 +1107,14 @@ pub(crate) fn collect_pattern_info(
     typed: Option<&TypedPattern>,
 ) -> (Vec<Check>, Vec<PatternBinding>) {
     let mut collector = PatternCollector::new();
-    collect_checks_and_bindings(emitter, &AccessPath::root(), pattern, typed, &mut collector);
+    collect_checks_and_bindings(
+        emitter,
+        &AccessPath::root(),
+        pattern,
+        typed,
+        None,
+        &mut collector,
+    );
     (collector.checks, collector.bindings)
 }
 

@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nimport \"go:example.com/events\"\n\nfn handle(e: events.Event) -> int {\n  match e {\n    events.Click { x, y } => x + y,\n    events.KeyPress { .. } => -1,\n    events.Resize { .. } => 0,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+import "example.com/events"
+
+func handle(e events.Event) int {
+	switch e := e.(type) {
+	case events.Click:
+		x := e.X
+		y := e.Y
+		return x + y
+	case events.KeyPress:
+		return -1
+	case events.Resize:
+		return 0
+	default:
+		return 0
+	}
+}

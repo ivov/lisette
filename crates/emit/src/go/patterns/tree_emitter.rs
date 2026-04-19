@@ -4,8 +4,8 @@ use syntax::types::Type;
 use crate::Emitter;
 use crate::go::control_flow::branching::wrap_if_struct_literal;
 use crate::go::patterns::decision_tree::{
-    ChainTest, Decision, PatternBinding, SwitchKind, compile_expanded_arms, emit_tree_bindings,
-    expand_or_patterns, render_condition,
+    ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind, compile_expanded_arms,
+    emit_tree_bindings, expand_or_patterns, render_condition,
 };
 use crate::go::types::emitter::Position;
 use crate::go::utils::{inline_trivial_bindings, output_ends_with_diverge};
@@ -23,6 +23,7 @@ pub(crate) struct TreeEmitter<'a, 'e> {
     arms: &'a [MatchArm],
     ty: &'a Type,
     subject_var: String,
+    subject_ty: Type,
 }
 
 impl<'a, 'e> TreeEmitter<'a, 'e> {
@@ -31,19 +32,21 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         arms: &'a [MatchArm],
         ty: &'a Type,
         subject_var: String,
+        subject_ty: Type,
     ) -> Self {
         Self {
             emitter,
             arms,
             ty,
             subject_var,
+            subject_ty,
         }
     }
 
     pub(crate) fn emit(mut self, output: &mut String) {
         let pre_len = output.len();
         let expanded = expand_or_patterns(self.arms);
-        let tree = compile_expanded_arms(self.emitter, &expanded);
+        let tree = compile_expanded_arms(self.emitter, &expanded, &self.subject_ty);
 
         let arm_position = self.emitter.compute_arm_position(Some(output), self.ty);
         let position = arm_position.position.clone();
@@ -89,6 +92,10 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             unreachable!("emit_switch called on non-Switch");
         };
 
+        if matches!(kind, SwitchKind::TypeSwitch) {
+            return self.emit_type_switch(output, tree, arm_position);
+        }
+
         let subject_var = self.subject_var.clone();
 
         let switch_expression = match kind {
@@ -100,6 +107,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 let base = path.render(&subject_var);
                 wrap_if_struct_literal(base)
             }
+            SwitchKind::TypeSwitch => unreachable!("handled above"),
         };
 
         if branches.len() == 2
@@ -196,10 +204,42 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
 
         write_line!(output, "switch {} {{", switch_expression);
+        self.emit_switch_body(output, branches, fallback, arm_position, &subject_var, true);
+    }
 
-        // When there's no wildcard fallback and we have branches, emit the last
-        // branch as `default:` instead of `case X:`. This satisfies Go's
-        // "all paths return" requirement without needing `panic("unreachable")`.
+    /// Emit a Go type switch: `switch x := x.(type) { case T: ... default: ... }`.
+    fn emit_type_switch(&mut self, output: &mut String, tree: &Decision, arm_position: &Position) {
+        let Decision::Switch {
+            path,
+            branches,
+            fallback,
+            ..
+        } = tree
+        else {
+            unreachable!("emit_type_switch called on non-Switch");
+        };
+
+        let subject_var = self.subject_var.clone();
+        let base = path.render(&subject_var);
+
+        write_line!(output, "switch {} := {}.(type) {{", base, base);
+        self.emit_switch_body(output, branches, fallback, arm_position, &base, false);
+    }
+
+    /// Emit case branches, the default block, the closing brace, and the
+    /// unreachable guard for a switch that has already emitted its header line.
+    ///
+    /// `track_stdlib`: when true, propagates `needs_stdlib` from branch labels
+    /// (required for enum-tag switches; not needed for type switches).
+    fn emit_switch_body(
+        &mut self,
+        output: &mut String,
+        branches: &[SwitchBranch],
+        fallback: &Option<Box<Decision>>,
+        arm_position: &Position,
+        subject_var: &str,
+        track_stdlib: bool,
+    ) {
         let use_last_as_default = fallback.is_none() && !branches.is_empty();
         let regular_branches = if use_last_as_default {
             &branches[..branches.len() - 1]
@@ -208,20 +248,18 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         };
 
         for branch in regular_branches {
-            if branch.needs_stdlib {
+            if track_stdlib && branch.needs_stdlib {
                 self.emitter.flags.needs_stdlib = true;
             }
             write_line!(output, "case {}:", branch.case_label);
             self.emitter.enter_scope();
-
-            self.emit_decision_in_case(output, &branch.decision, arm_position, &subject_var);
-
+            self.emit_decision_in_case(output, &branch.decision, arm_position, subject_var);
             self.emitter.exit_scope();
         }
 
         let default_decision = if use_last_as_default {
             let last = branches.last().unwrap();
-            if last.needs_stdlib {
+            if track_stdlib && last.needs_stdlib {
                 self.emitter.flags.needs_stdlib = true;
             }
             Some(&last.decision)
@@ -231,7 +269,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         if let Some(decision) = default_decision {
             let pre = output.len();
             self.emitter.enter_scope();
-            self.emit_decision_in_case(output, decision, arm_position, &subject_var);
+            self.emit_decision_in_case(output, decision, arm_position, subject_var);
             self.emitter.exit_scope();
             if output.len() > pre {
                 output.insert_str(pre, "default:\n");

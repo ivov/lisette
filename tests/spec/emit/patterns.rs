@@ -1,4 +1,5 @@
 use crate::assert_emit_snapshot;
+use crate::assert_emit_snapshot_with_go_typedefs;
 
 #[test]
 fn tuple_struct_pattern_in_match() {
@@ -562,4 +563,68 @@ fn main() {
 }
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_on_go_interface_emits_type_switch() {
+    let input = r#"
+import "go:example.com/events"
+
+fn handle(e: events.Event) -> int {
+  match e {
+    events.Click { x, y } => x + y,
+    events.KeyPress { key } => key.length(),
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Click { pub x: int, pub y: int }
+pub struct KeyPress { pub key: string }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}
+
+#[test]
+fn match_on_go_interface_guarded_arm() {
+    let input = r#"
+import "go:example.com/events"
+
+fn handle(e: events.Event, active: bool) -> int {
+  match e {
+    events.Click { x, y } => x + y,
+    events.KeyPress { .. } if active => -1,
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Click { pub x: int, pub y: int }
+pub struct KeyPress { pub key: string }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}
+#[test]
+fn match_on_go_interface_wildcard_only_arm() {
+    let input = r#"
+import "go:example.com/events"
+
+fn handle(e: events.Event) -> int {
+  match e {
+    events.Click { x, y } => x + y,
+    events.KeyPress { .. } => -1,
+    events.Resize { .. } => 0,
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Click { pub x: int, pub y: int }
+pub struct KeyPress { pub key: string }
+pub struct Resize { pub width: int, pub height: int }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
 }
