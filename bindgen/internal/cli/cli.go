@@ -44,7 +44,7 @@ func PrintUsage() {
 	fmt.Fprintf(os.Stderr, "  std -outdir <dir>  Generate bindings for all Go stdlib packages\n")
 }
 
-func RunPkg(args []string) {
+func RunPkg(args []string, defaultCfgJSON []byte) {
 	fs := flag.NewFlagSet("pkg", flag.ExitOnError)
 	configPath := fs.String("config", "", "path to bindgen config file")
 	fs.Usage = func() {
@@ -66,7 +66,7 @@ func RunPkg(args []string) {
 
 	pkgPath := fs.Arg(0)
 
-	cfg, err := config.LoadConfig(*configPath)
+	cfg, err := config.LoadConfig(*configPath, defaultCfgJSON)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: failed to load config: %v\n", err)
 		os.Exit(1)
@@ -85,7 +85,7 @@ func RunPkg(args []string) {
 	}
 }
 
-func RunStd(args []string) {
+func RunStd(args []string, defaultCfgJSON []byte) {
 	fs := flag.NewFlagSet("stdlib", flag.ExitOnError)
 	configPath := fs.String("config", "", "path to bindgen config file")
 	outDir := fs.String("outdir", "", "output directory for generated .d.lis files")
@@ -104,7 +104,7 @@ func RunStd(args []string) {
 		os.Exit(2)
 	}
 
-	cfg, err := config.LoadConfig(*configPath)
+	cfg, err := config.LoadConfig(*configPath, defaultCfgJSON)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: failed to load config: %v\n", err)
 		os.Exit(1)

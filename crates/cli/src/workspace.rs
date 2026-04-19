@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use deps::{GoModule, GoPackage};
@@ -9,8 +9,6 @@ use syntax::parse::Parser;
 
 const BINDGEN_GO_MODULE: &str = "github.com/ivov/lisette/bindgen";
 const BINDGEN_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-const EXTERNAL_CONFIG_JSON: &str = include_str!("../../../bindgen/bindgen.external.json");
 
 /// Information about a Go module from `go list -m -json`.
 pub struct GoModuleInfo {
@@ -158,40 +156,19 @@ impl<'a> GoWorkspace<'a> {
         ))
     }
 
-    fn external_config_path(&self) -> Option<PathBuf> {
-        if self.typedef_cache_dir == Path::new("") {
-            return None;
-        }
-        let path = self.typedef_cache_dir.join("bindgen.external.json");
-        if !path.exists() {
-            fs::write(&path, EXTERNAL_CONFIG_JSON).ok()?;
-        }
-        Some(path)
-    }
-
     /// Run bindgen on a Go package and return the generated typedef content.
     ///
     /// - For local dev, runs: `bindgen/bin/bindgen pkg {package}`
     /// - For end users, runs: `go run github.com/ivov/lisette/bindgen@v{version} pkg {package}`
     pub fn run_bindgen(&self, package: &str) -> Result<String, String> {
-        let config_path = self.external_config_path();
-
         let mut cmd = if let Some(bin) = dev_bindgen_path() {
             let mut c = Command::new(bin);
-            c.arg("pkg");
-            if let Some(ref cfg) = config_path {
-                c.args(["--config", &cfg.to_string_lossy()]);
-            }
-            c.arg(package);
+            c.args(["pkg", package]);
             c
         } else {
             let bindgen_at_version = format!("{}@v{}", BINDGEN_GO_MODULE, BINDGEN_VERSION);
             let mut c = crate::go_cli::go_command();
-            c.args(["run", &bindgen_at_version, "pkg"]);
-            if let Some(ref cfg) = config_path {
-                c.args(["--config", &cfg.to_string_lossy()]);
-            }
-            c.arg(package);
+            c.args(["run", &bindgen_at_version, "pkg", package]);
             c
         };
 

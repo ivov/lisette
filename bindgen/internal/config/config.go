@@ -37,16 +37,21 @@ type TypeOverrides struct {
 }
 
 // LoadConfig loads bindgen configuration from the given path.
-// Returns a zero Config if configPath is empty.
-func LoadConfig(configPath string) (Config, error) {
-	if configPath == "" {
+// Falls back to defaultData when configPath is empty.
+func LoadConfig(configPath string, defaultData []byte) (Config, error) {
+	var data []byte
+	if configPath != "" {
+		var err error
+		data, err = os.ReadFile(configPath)
+		if err != nil {
+			return Config{}, err
+		}
+	} else if len(defaultData) > 0 {
+		data = defaultData
+	} else {
 		return Config{}, nil
 	}
 
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return Config{}, err
-	}
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, err
