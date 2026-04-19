@@ -47,7 +47,7 @@ pub(crate) fn handle(items: &[Expression], offset: u32) -> Option<SignatureHelp>
     });
 
     let active_param = if spread_contains_cursor {
-        args.len() as u32
+        (params.len() as u32).saturating_sub(1)
     } else {
         args.iter()
             .filter(|a| {
