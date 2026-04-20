@@ -2,6 +2,17 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.16](https://github.com/ivov/lisette/compare/lisette-v0.1.15...lisette-v0.1.16) - 2026-04-20
+
+- fix: emit type switch when matching on aliased go interface [#142](https://github.com/ivov/lisette/pull/142) [`97f7f5a`](https://github.com/ivov/lisette/commit/97f7f5a83f6118c33e01d4853947a2f6f3daaa16)
+- fix: emit Go type switch case for or-pattern on interface [#143](https://github.com/ivov/lisette/pull/143) [`478d1bd`](https://github.com/ivov/lisette/commit/478d1bdb0417c37fab0cbc25535360e13ebc66dc)
+- fix: emit type switch for or-pattern on interface with field checks [`d8352ca`](https://github.com/ivov/lisette/commit/d8352ca9d2a060a474205c2e2776d43166069c62)
+- fix: emit explicit guard failure in type switch chain case bodies [`199cdbc`](https://github.com/ivov/lisette/commit/199cdbcf3120628eddc3c8151a70a0a81eefee9d)
+- fix: avoid duplicate var declarations in interface match arms [`c601bf9`](https://github.com/ivov/lisette/commit/c601bf9b341ddb0203c6683cbb50ee7be34d0da5)
+- refactor: flatten guard else in type switch case bodies [`2351ae5`](https://github.com/ivov/lisette/commit/2351ae55fac9f85e78156721506109d5e1d43994)
+- fix: guard else-strip against duplicate var declarations [`6a73446`](https://github.com/ivov/lisette/commit/6a7344659e06543b67f1418c3eb377fa97302b3b)
+- feat: as pattern bindings [#145](https://github.com/ivov/lisette/pull/145) [`4688fd6`](https://github.com/ivov/lisette/commit/4688fd67f6a774fa4857a088a90825f70b8175ae)
+
 ## [0.1.15](https://github.com/ivov/lisette/compare/lisette-v0.1.14...lisette-v0.1.15) - 2026-04-19
 
 - fix: emit Go type switch when matching on an interface type [#138](https://github.com/ivov/lisette/pull/138) [`9803025`](https://github.com/ivov/lisette/commit/9803025475bfd7efb70e91176784887a8387d023)
