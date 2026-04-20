@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:6:24]
+ 5 │   match p {
+ 6 │     Point { x, .. } as _ => x,
+   ·                        ┬
+   ·                        ╰── `_` is not a valid `as` alias
+ 7 │   }
+   ╰────
+  help: Use a named binding, or omit `as _` · code: [parse.syntax_error]

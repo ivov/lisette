@@ -76,6 +76,7 @@ impl Checker<'_, '_> {
                     kind,
                     self.is_d_lis(),
                     is_struct_field,
+                    false,
                 );
                 (
                     Pattern::Identifier { identifier, span },
@@ -194,9 +195,14 @@ impl Checker<'_, '_> {
                 if let RestPattern::Bind { ref name, ref span } = rest {
                     let rest_ty = self.type_slice(element_ty.clone());
                     let is_typedef = self.is_d_lis();
-                    let binding_id =
-                        self.facts
-                            .add_binding(name.to_string(), *span, kind, is_typedef, false);
+                    let binding_id = self.facts.add_binding(
+                        name.to_string(),
+                        *span,
+                        kind,
+                        is_typedef,
+                        false,
+                        false,
+                    );
                     let scope = self.scopes.current_mut();
                     scope.values.insert(name.to_string(), rest_ty);
                     scope.name_to_binding.insert(name.to_string(), binding_id);
@@ -260,13 +266,19 @@ impl Checker<'_, '_> {
                     is_struct_field,
                 );
                 let alias_ty = inner.get_type().unwrap_or_else(|| expected_ty.clone());
+                let name_span = Span::new(
+                    span.file_id,
+                    span.byte_offset + span.byte_length - name.len() as u32,
+                    name.len() as u32,
+                );
                 self.bind_name_in_scope(
                     name.to_string(),
-                    span,
+                    name_span,
                     alias_ty,
                     kind,
                     false,
                     is_struct_field,
+                    true,
                 );
                 (
                     Pattern::AsBinding {
@@ -280,6 +292,7 @@ impl Checker<'_, '_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn bind_name_in_scope(
         &mut self,
         name: String,
@@ -288,10 +301,16 @@ impl Checker<'_, '_> {
         kind: BindingKind,
         is_typedef: bool,
         is_struct_field: bool,
+        is_as_alias: bool,
     ) {
-        let binding_id =
-            self.facts
-                .add_binding(name.clone(), span, kind, is_typedef, is_struct_field);
+        let binding_id = self.facts.add_binding(
+            name.clone(),
+            span,
+            kind,
+            is_typedef,
+            is_struct_field,
+            is_as_alias,
+        );
         let scope = self.scopes.current_mut();
         scope.values.insert(name.clone(), ty);
         scope.name_to_binding.insert(name.clone(), binding_id);

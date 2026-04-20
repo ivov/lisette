@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unused variable
+   ╭─[test.lis:5:16]
+ 4 │   match opt {
+ 5 │     Some(n) as unused => n,
+   ·                ───┬──
+   ·                   ╰── never used
+ 6 │     None => 0,
+   ╰────
+  help: Use this variable or prefix it with an underscore: `_unused` · code: [lint.unused_variable]

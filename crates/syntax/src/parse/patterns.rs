@@ -37,6 +37,12 @@ impl<'source> Parser<'source> {
         if self.advance_if(As) {
             if !self.is(Identifier) {
                 self.track_error("expected identifier after `as`", "Use `as <name>`");
+            } else if self.current_token().text == "_" {
+                self.track_error(
+                    "`_` is not a valid `as` alias",
+                    "Use a named binding, or omit `as _`",
+                );
+                self.next();
             } else {
                 let name: EcoString = self.current_token().text.into();
                 self.next();

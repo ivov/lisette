@@ -191,6 +191,20 @@ fn test(pair: (Point, int), (Point { x, .. } as p, z): (Point, int)) -> int { x 
 }
 
 #[test]
+fn parse_underscore_as_alias() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(p: Point) -> int {
+  match p {
+    Point { x, .. } as _ => x,
+  }
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn infer_uppercase_as_alias() {
     let input = r#"
 struct Point { x: int, y: int }

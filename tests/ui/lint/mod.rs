@@ -13,6 +13,21 @@ fn main() {
 }
 
 #[test]
+fn unused_as_alias_in_match_arm() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let opt: Option<int> = Some(1)
+  match opt {
+    Some(n) as unused => n,
+    None => 0,
+  };
+}
+"#
+    );
+}
+
+#[test]
 fn unused_variable_suppressed_by_underscore() {
     assert_no_lint_warnings!(
         r#"

@@ -28,13 +28,17 @@ impl LintRule for FactLintGroup {
 
 fn check_unused_variables(ctx: &LintContext, diagnostics: &mut Vec<LisetteDiagnostic>) {
     for b in ctx.facts.bindings.values() {
-        if !b.name.starts_with('_') && !b.used && !b.kind.is_param() && !b.kind.is_match_arm() {
-            diagnostics.push(diagnostics::lint::unused_variable(
-                &b.span,
-                &b.name,
-                b.is_struct_field,
-            ));
+        if b.name.starts_with('_') || b.used || b.kind.is_param() {
+            continue;
         }
+        if b.kind.is_match_arm() && !b.is_as_alias {
+            continue;
+        }
+        diagnostics.push(diagnostics::lint::unused_variable(
+            &b.span,
+            &b.name,
+            b.is_struct_field,
+        ));
     }
 }
 

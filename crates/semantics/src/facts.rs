@@ -44,6 +44,7 @@ impl Facts {
         kind: BindingKind,
         is_typedef: bool,
         is_struct_field: bool,
+        is_as_alias: bool,
     ) -> BindingId {
         let id = self.new_binding_id();
         self.bindings.insert(
@@ -56,6 +57,7 @@ impl Facts {
                 mutated: false,
                 is_typedef,
                 is_struct_field,
+                is_as_alias,
             },
         );
         id
@@ -161,6 +163,8 @@ pub struct BindingFact {
     pub is_typedef: bool,
     /// If true, this binding is a shorthand in a struct pattern (e.g., `Point { x }`)
     pub is_struct_field: bool,
+    /// If true, this binding was introduced by an `as` alias (e.g., `Point { .. } as p`)
+    pub is_as_alias: bool,
 }
 
 #[derive(Debug, Clone)]
