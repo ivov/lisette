@@ -1741,6 +1741,11 @@ impl<'a> Formatter<'a> {
                 let pattern_docs: Vec<_> = patterns.iter().map(|p| self.pattern(p)).collect();
                 join(pattern_docs, Document::str(" | "))
             }
+
+            Pattern::AsBinding { pattern, name, .. } => self
+                .pattern(pattern)
+                .append(" as ")
+                .append(Document::string(name.to_string())),
         }
     }
 

@@ -6,7 +6,7 @@ use syntax::program::{CallKind, Definition, NativeTypeKind};
 use syntax::types::{Bound, SubstitutionMap, Type, substitute, unqualified_name};
 
 use super::super::Checker;
-use super::super::checks::check_binding_pattern;
+use super::super::checks::{check_binding_pattern, reject_as_binding_in_irrefutable_context};
 use super::primitives::contains_deref;
 use crate::checker::PostInferenceCheck;
 use crate::checker::scopes::UseContext;
@@ -851,6 +851,8 @@ impl Checker<'_, '_> {
                         .map(|a| self.convert_to_type(a, pattern_span))
                         .unwrap_or_else(|| self.new_type_var())
                 });
+
+                reject_as_binding_in_irrefutable_context(self.sink, &binding.pattern);
 
                 let (new_pattern, typed_pattern) = self.infer_pattern(
                     binding.pattern,

@@ -753,3 +753,96 @@ pub struct KeyPress { pub key: string }
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
 }
+
+#[test]
+fn as_binding_on_concrete_struct() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(p: Point) -> int {
+  match p {
+    Point { x, .. } as pt => x + pt.y,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn as_binding_on_go_interface_type_switch() {
+    let input = r#"
+import "go:example.com/events"
+
+fn handle(e: events.Event) -> int {
+  match e {
+    events.Click {..} as c => c.x + c.y,
+    events.KeyPress {..} as k => k.key.length(),
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Click { pub x: int, pub y: int }
+pub struct KeyPress { pub key: string }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}
+
+#[test]
+fn as_binding_on_tuple_element() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(pair: (Point, int)) -> int {
+  match pair {
+    (Point { x, .. } as p, z) => p.x + z,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn as_binding_on_slice_element() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(pts: Slice<Point>) -> int {
+  match pts {
+    [Point { x, .. } as p, ..] => p.x,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn as_binding_on_enum_variant() {
+    let input = r#"
+enum Status { Good(int), Bad(string) }
+
+fn test(s: Status) -> int {
+  match s {
+    Good(n) as g => n,
+    Bad(_) => -1,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn as_binding_unused_elided() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(p: Point) -> int {
+  match p {
+    Point { x, .. } as _pt => x,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

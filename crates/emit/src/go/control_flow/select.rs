@@ -592,7 +592,15 @@ impl Emitter<'_> {
         None
     }
 
+    fn peel_as_binding(pattern: &Pattern) -> &Pattern {
+        match pattern {
+            Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
+            p => p,
+        }
+    }
+
     fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
+        let pattern = Self::peel_as_binding(pattern);
         if let Pattern::EnumVariant {
             identifier, fields, ..
         } = pattern
@@ -606,6 +614,7 @@ impl Emitter<'_> {
     }
 
     fn is_some_pattern(pattern: &Pattern) -> bool {
+        let pattern = Self::peel_as_binding(pattern);
         if let Pattern::EnumVariant {
             identifier, fields, ..
         } = pattern

@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct Point { x: int, y: int }\n\nfn test(pts: Slice<Point>) -> int {\n  match pts {\n    [Point { x, .. } as p, ..] => p.x,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Point struct {
+	x int
+	y int
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("Point { x: %v, y: %v }", p.x, p.y)
+}
+
+func test(pts []Point) int {
+	if len(pts) >= 1 {
+		p := pts[0]
+		return p.x
+	}
+	return 0
+}

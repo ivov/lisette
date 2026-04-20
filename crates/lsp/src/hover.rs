@@ -146,6 +146,25 @@ pub(crate) fn get_hover_type_and_span(
                 })
             }
 
+            (
+                Pattern::AsBinding {
+                    pattern: inner,
+                    name,
+                    ..
+                },
+                _,
+            ) => {
+                get_pattern_element_type(inner, typed_pattern, fallback_ty, offset).or_else(|| {
+                    let binding_ty = inner.get_type().unwrap_or_else(|| fallback_ty.clone());
+                    let name_span = Span::new(
+                        span.file_id,
+                        span.byte_offset + span.byte_length - name.len() as u32,
+                        name.len() as u32,
+                    );
+                    Some((binding_ty, name_span))
+                })
+            }
+
             _ => None,
         }
     }

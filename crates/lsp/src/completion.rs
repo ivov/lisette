@@ -89,8 +89,12 @@ pub(crate) fn resolve_variable_type(
             binding: let_binding,
             ..
         } => {
-            if matches!(&let_binding.pattern, syntax::ast::Pattern::Identifier { identifier, .. } if identifier == var_name)
-            {
+            let matches_name = match &let_binding.pattern {
+                syntax::ast::Pattern::Identifier { identifier, .. } => identifier == var_name,
+                syntax::ast::Pattern::AsBinding { name, .. } => name == var_name,
+                _ => false,
+            };
+            if matches_name {
                 Some(&let_binding.ty)
             } else {
                 None
@@ -102,8 +106,10 @@ pub(crate) fn resolve_variable_type(
             ..
         } => Some(&for_binding.ty),
         Expression::Function { params, .. } | Expression::Lambda { params, .. } => {
-            let param = params.iter().find(|p| {
-                matches!(&p.pattern, syntax::ast::Pattern::Identifier { identifier, .. } if identifier == var_name)
+            let param = params.iter().find(|p| match &p.pattern {
+                syntax::ast::Pattern::Identifier { identifier, .. } => identifier == var_name,
+                syntax::ast::Pattern::AsBinding { name, .. } => name == var_name,
+                _ => false,
             })?;
             Some(&param.ty)
         }

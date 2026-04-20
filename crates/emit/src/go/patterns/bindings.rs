@@ -69,6 +69,7 @@ impl Emitter<'_> {
                     || matches!(rest, RestPattern::Bind { .. })
             }
             Pattern::Or { patterns, .. } => patterns.iter().any(Self::pattern_has_bindings),
+            Pattern::AsBinding { .. } => true,
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
         }
     }
@@ -92,6 +93,11 @@ impl Emitter<'_> {
             Pattern::Or { patterns, .. } => {
                 patterns.iter().any(|p| Self::pattern_binds_name(p, name))
             }
+            Pattern::AsBinding {
+                pattern,
+                name: as_name,
+                ..
+            } => as_name == name || Self::pattern_binds_name(pattern, name),
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
         }
     }
@@ -121,6 +127,14 @@ impl Emitter<'_> {
             Pattern::Or { patterns, .. } => patterns
                 .iter()
                 .any(|p| self.pattern_has_binding_collisions(p)),
+            p @ Pattern::AsBinding {
+                pattern: inner,
+                name,
+                ..
+            } => {
+                self.pattern_has_binding_collisions(inner)
+                    || (!self.ctx.unused.is_unused_binding(p) && self.is_declared(name))
+            }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
         }
     }
@@ -135,6 +149,7 @@ impl Emitter<'_> {
             Pattern::Tuple { elements, .. } => elements.iter().all(Self::is_catchall_pattern),
             Pattern::Slice { prefix, rest, .. } => prefix.is_empty() && rest.is_present(),
             Pattern::Or { patterns, .. } => patterns.iter().any(Self::is_catchall_pattern),
+            Pattern::AsBinding { pattern, .. } => Self::is_catchall_pattern(pattern),
         }
     }
 
@@ -503,6 +518,30 @@ impl Emitter<'_> {
             (Pattern::Or { patterns, .. }, _) => {
                 if let Some(first) = patterns.first() {
                     self.emit_binding_declarations_with_type(output, first, ty, None);
+                }
+            }
+
+            (
+                p @ Pattern::AsBinding {
+                    pattern: inner,
+                    name,
+                    ..
+                },
+                _,
+            ) => {
+                self.emit_binding_declarations_with_type(output, inner, ty, typed);
+                if let Some(go_name) = self.go_name_for_binding(p) {
+                    let go_name = if self.is_declared(&go_name) {
+                        self.fresh_var(Some(name))
+                    } else {
+                        go_name
+                    };
+                    let go_name = self.scope.bindings.add(name, go_name);
+                    self.declare(&go_name);
+                    let go_ty = self.go_type_as_string(&resolved);
+                    write_line!(output, "var {} {}", go_name, go_ty);
+                } else {
+                    self.scope.bindings.add(name, "_");
                 }
             }
 

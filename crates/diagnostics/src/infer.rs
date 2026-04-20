@@ -790,6 +790,34 @@ pub fn literal_pattern_in_binding(span: Span) -> LisetteDiagnostic {
         .with_help("Use `match` or `if` to compare values")
 }
 
+pub fn as_binding_in_irrefutable_context(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid `as` binding")
+        .with_infer_code("as_binding_in_irrefutable_context")
+        .with_span_label(&span, "`as` is disallowed here")
+        .with_help(
+            "Use `as` only in `match`, `if let`, `while let`, or `Some(value as name)` in `select`",
+        )
+}
+
+pub fn select_some_as_binding_not_supported(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot alias `Some(...)` in select")
+        .with_infer_code("select_some_as_not_supported")
+        .with_span_label(&span, "`as` cannot be placed around `Some(...)`")
+        .with_help(
+            "Place `as` inside `Some(...)` to bind the received value: `Some(value as alias)`",
+        )
+}
+
+pub fn identifier_in_as_binding(inner: &str, alias: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Redundant `as` binding")
+        .with_infer_code("identifier_in_as_binding")
+        .with_span_label(&span, format!("`{}` already binds this value", inner))
+        .with_help(format!(
+            "Use `{}` directly, or rename `{}` to `{}`",
+            alias, inner, alias
+        ))
+}
+
 pub fn or_pattern_in_irrefutable_context(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid or-pattern")
         .with_infer_code("or_pattern_in_irrefutable")

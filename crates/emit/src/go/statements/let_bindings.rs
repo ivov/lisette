@@ -752,6 +752,11 @@ fn pattern_contains_name(pattern: &Pattern, name: &str) -> bool {
                 || matches!(rest, syntax::ast::RestPattern::Bind { name: n, .. } if n == name)
         }
         Pattern::Or { patterns, .. } => patterns.iter().any(|p| pattern_contains_name(p, name)),
+        Pattern::AsBinding {
+            pattern,
+            name: as_name,
+            ..
+        } => as_name == name || pattern_contains_name(pattern, name),
         Pattern::Literal { .. } | Pattern::Unit { .. } | Pattern::WildCard { .. } => false,
     }
 }

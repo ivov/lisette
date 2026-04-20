@@ -787,7 +787,44 @@ pub(crate) fn check_duplicate_bindings(sink: &diagnostics::DiagnosticSink, patte
     }
 }
 
+pub(crate) fn reject_as_binding_in_irrefutable_context(
+    sink: &diagnostics::DiagnosticSink,
+    pattern: &Pattern,
+) {
+    match pattern {
+        Pattern::AsBinding { span, .. } => {
+            sink.push(diagnostics::infer::as_binding_in_irrefutable_context(*span));
+        }
+        Pattern::Tuple { elements, .. } => {
+            for elem in elements {
+                reject_as_binding_in_irrefutable_context(sink, elem);
+            }
+        }
+        Pattern::Struct { fields, .. } => {
+            for field in fields {
+                reject_as_binding_in_irrefutable_context(sink, &field.value);
+            }
+        }
+        Pattern::Slice { prefix, .. } => {
+            for elem in prefix {
+                reject_as_binding_in_irrefutable_context(sink, elem);
+            }
+        }
+        Pattern::EnumVariant { fields, .. } => {
+            for field in fields {
+                reject_as_binding_in_irrefutable_context(sink, field);
+            }
+        }
+        _ => {}
+    }
+}
+
 pub(crate) fn check_binding_pattern(sink: &diagnostics::DiagnosticSink, pattern: &Pattern) {
+    if let Pattern::AsBinding { pattern, .. } = pattern {
+        check_binding_pattern(sink, pattern);
+        return;
+    }
+
     if matches!(pattern, Pattern::Literal { .. }) {
         sink.push(diagnostics::infer::literal_pattern_in_binding(
             pattern.get_span(),

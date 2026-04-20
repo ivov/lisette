@@ -633,6 +633,20 @@ fn collect_checks_and_bindings(
         Pattern::Or { patterns, .. } => {
             collect_or_pattern_checks(emitter, path, patterns, typed, pattern, path_ty, collector);
         }
+
+        p @ Pattern::AsBinding {
+            pattern: inner,
+            name,
+            ..
+        } => {
+            collect_checks_and_bindings(emitter, path, inner, typed, path_ty, collector);
+            let go_name = emitter.go_name_for_binding(p);
+            collector.bindings.push(PatternBinding {
+                lisette_name: name.to_string(),
+                go_name,
+                path: path.clone(),
+            });
+        }
     }
 }
 

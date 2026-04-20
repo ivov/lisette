@@ -37,9 +37,28 @@ impl Checker<'_, '_> {
                     ));
             }
 
+            let inner_arm_pattern = if let Pattern::AsBinding {
+                pattern: inner,
+                span,
+                ..
+            } = &arm.pattern
+            {
+                if let Pattern::EnumVariant { identifier, .. } = inner.as_ref()
+                    && identifier.rsplit('.').next().unwrap_or(identifier) == "Some"
+                {
+                    self.sink
+                        .push(diagnostics::infer::select_some_as_binding_not_supported(
+                            *span,
+                        ));
+                }
+                inner.as_ref()
+            } else {
+                &arm.pattern
+            };
+
             if let Pattern::EnumVariant {
                 identifier, fields, ..
-            } = &arm.pattern
+            } = inner_arm_pattern
             {
                 let variant_name = identifier.rsplit('.').next().unwrap_or(identifier);
 
@@ -104,6 +123,7 @@ impl Checker<'_, '_> {
             Pattern::Struct { fields, .. } => fields
                 .iter()
                 .all(|f| Self::is_irrefutable_select_pattern(&f.value)),
+            Pattern::AsBinding { pattern, .. } => Self::is_irrefutable_select_pattern(pattern),
             _ => false,
         }
     }
@@ -117,22 +137,29 @@ impl Checker<'_, '_> {
         let mut first_receive_span: Option<Span> = None;
 
         for arm in arms {
-            if let SelectArmPattern::Receive { binding, .. } = &arm.pattern
-                && let Pattern::EnumVariant {
-                    identifier, fields, ..
-                } = binding.as_ref()
-            {
-                let variant_name = identifier.rsplit('.').next().unwrap_or(identifier);
-                if variant_name == "Some" && fields.len() == 1 {
-                    if let Some(first_span) = first_receive_span {
-                        self.sink.push(diagnostics::infer::multiple_select_receives(
-                            first_span,
-                            binding.get_span(),
-                        ));
-                        return; // Only report once
-                    } else {
-                        first_receive_span = Some(binding.get_span());
-                    }
+            let SelectArmPattern::Receive { binding, .. } = &arm.pattern else {
+                continue;
+            };
+            let inner = match binding.as_ref() {
+                Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
+                p => p,
+            };
+            let Pattern::EnumVariant {
+                identifier, fields, ..
+            } = inner
+            else {
+                continue;
+            };
+            let variant_name = identifier.rsplit('.').next().unwrap_or(identifier);
+            if variant_name == "Some" && fields.len() == 1 {
+                if let Some(first_span) = first_receive_span {
+                    self.sink.push(diagnostics::infer::multiple_select_receives(
+                        first_span,
+                        binding.get_span(),
+                    ));
+                    return; // Only report once
+                } else {
+                    first_receive_span = Some(binding.get_span());
                 }
             }
         }

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Redundant `as` binding
+   ╭─[test.lis:4:5]
+ 3 │   match x {
+ 4 │     n as m => m,
+   ·     ───┬──
+   ·        ╰── `n` already binds this value
+ 5 │     _ => 0,
+   ╰────
+  help: Use `m` directly, or rename `n` to `m` · code: [infer.identifier_in_as_binding]

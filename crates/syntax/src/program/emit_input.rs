@@ -51,6 +51,7 @@ impl UnusedInfo {
     pub fn is_unused_binding(&self, pattern: &Pattern) -> bool {
         match pattern {
             Pattern::Identifier { span, .. } => self.bindings.contains(&BindingId(*span)),
+            Pattern::AsBinding { span, .. } => self.bindings.contains(&BindingId(*span)),
             _ => false,
         }
     }

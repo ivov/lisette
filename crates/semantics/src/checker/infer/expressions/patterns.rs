@@ -35,6 +35,15 @@ pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)>
             .first()
             .map(collect_pattern_bindings)
             .unwrap_or_default(),
+        Pattern::AsBinding {
+            pattern,
+            name,
+            span,
+        } => {
+            let mut bindings = collect_pattern_bindings(pattern);
+            bindings.push((name.to_string(), *span));
+            bindings
+        }
         Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => vec![],
     }
 }
@@ -59,31 +68,14 @@ impl Checker<'_, '_> {
     ) -> (Pattern, TypedPattern) {
         match pattern {
             Pattern::Identifier { identifier, span } => {
-                let is_typedef = self.is_d_lis();
-                let identifier_str = identifier.to_string();
-                let binding_id = self.facts.add_binding(
-                    identifier_str.clone(),
+                self.bind_name_in_scope(
+                    identifier.to_string(),
                     span,
+                    expected_ty,
                     kind,
-                    is_typedef,
+                    self.is_d_lis(),
                     is_struct_field,
                 );
-
-                let scope = self.scopes.current_mut();
-                scope
-                    .values
-                    .insert(identifier_str.clone(), expected_ty.clone());
-                scope
-                    .name_to_binding
-                    .insert(identifier_str.clone(), binding_id);
-
-                if kind.is_mutable() {
-                    scope
-                        .mutables
-                        .get_or_insert_with(HashSet::default)
-                        .insert(identifier_str);
-                }
-
                 (
                     Pattern::Identifier { identifier, span },
                     TypedPattern::Wildcard,
@@ -226,6 +218,69 @@ impl Checker<'_, '_> {
             Pattern::Or { patterns, span } => {
                 self.infer_or_pattern(patterns, span, expected_ty, kind)
             }
+
+            Pattern::AsBinding {
+                pattern,
+                name,
+                span,
+            } => {
+                if let Pattern::Identifier { identifier, .. } = pattern.as_ref() {
+                    self.sink.push(diagnostics::infer::identifier_in_as_binding(
+                        identifier, &name, span,
+                    ));
+                }
+                let inner_kind = match kind {
+                    BindingKind::Let { .. } => BindingKind::Let { mutable: false },
+                    BindingKind::Parameter { .. } => BindingKind::Parameter { mutable: false },
+                    other => other,
+                };
+                let (inner, typed) = self.infer_pattern_inner(
+                    *pattern,
+                    expected_ty.clone(),
+                    inner_kind,
+                    is_struct_field,
+                );
+                let alias_ty = inner.get_type().unwrap_or_else(|| expected_ty.clone());
+                self.bind_name_in_scope(
+                    name.to_string(),
+                    span,
+                    alias_ty,
+                    kind,
+                    false,
+                    is_struct_field,
+                );
+                (
+                    Pattern::AsBinding {
+                        pattern: Box::new(inner),
+                        name,
+                        span,
+                    },
+                    typed,
+                )
+            }
+        }
+    }
+
+    fn bind_name_in_scope(
+        &mut self,
+        name: String,
+        span: Span,
+        ty: Type,
+        kind: BindingKind,
+        is_typedef: bool,
+        is_struct_field: bool,
+    ) {
+        let binding_id =
+            self.facts
+                .add_binding(name.clone(), span, kind, is_typedef, is_struct_field);
+        let scope = self.scopes.current_mut();
+        scope.values.insert(name.clone(), ty);
+        scope.name_to_binding.insert(name.clone(), binding_id);
+        if kind.is_mutable() {
+            scope
+                .mutables
+                .get_or_insert_with(HashSet::default)
+                .insert(name);
         }
     }
 

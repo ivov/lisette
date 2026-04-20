@@ -113,7 +113,25 @@ impl Checker<'_, '_> {
             Type::Error
         };
 
-        if matches!(binding.as_ref(), Pattern::Identifier { .. }) {
+        let inner_binding: &Pattern = match binding.as_ref() {
+            Pattern::AsBinding { pattern, span, .. } => {
+                let is_some = matches!(pattern.as_ref(), Pattern::EnumVariant { identifier, .. }
+                    if identifier.rsplit('.').next().unwrap_or(identifier) == "Some");
+                if is_some {
+                    self.sink
+                        .push(diagnostics::infer::select_some_as_binding_not_supported(
+                            *span,
+                        ));
+                } else {
+                    self.sink
+                        .push(diagnostics::infer::as_binding_in_irrefutable_context(*span));
+                }
+                pattern.as_ref()
+            }
+            p => p,
+        };
+
+        if matches!(inner_binding, Pattern::Identifier { .. }) {
             self.sink
                 .push(diagnostics::infer::bare_identifier_in_select_receive(
                     &binding.get_span(),
@@ -122,7 +140,7 @@ impl Checker<'_, '_> {
 
         if let Pattern::EnumVariant {
             identifier, fields, ..
-        } = binding.as_ref()
+        } = inner_binding
         {
             let variant_name = identifier.rsplit('.').next().unwrap_or(identifier);
             if variant_name == "None" {

@@ -359,6 +359,10 @@ pub(crate) fn resolve_enum_in_pattern(
             })
         }
 
+        Pattern::AsBinding { pattern, .. } => {
+            resolve_enum_in_pattern(pattern, typed_pattern, offset, file, snapshot)
+        }
+
         _ => None,
     }
 }

@@ -3,7 +3,7 @@ use syntax::ast::{Binding, Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::Type;
 
 use super::super::Checker;
-use super::super::checks::check_binding_pattern;
+use super::super::checks::{check_binding_pattern, reject_as_binding_in_irrefutable_context};
 
 /// Result of reconciling branch types. `Widened` means the common type is a
 /// later branch's type (a supertype of the first), not the first branch's type.
@@ -515,6 +515,8 @@ impl Checker<'_, '_> {
 
         // Push a new scope so the loop variable doesn't shadow outer bindings
         self.scopes.push();
+
+        reject_as_binding_in_irrefutable_context(self.sink, &binding.pattern);
 
         let (inferred_pattern, typed_pattern) = self.infer_pattern(
             binding.pattern,

@@ -179,6 +179,11 @@ pub enum Pattern {
         patterns: Vec<Self>,
         span: Span,
     },
+    AsBinding {
+        pattern: Box<Self>,
+        name: EcoString,
+        span: Span,
+    },
 }
 
 impl Pattern {
@@ -193,6 +198,7 @@ impl Pattern {
             Pattern::Tuple { span, .. } => *span,
             Pattern::Slice { span, .. } => *span,
             Pattern::Or { span, .. } => *span,
+            Pattern::AsBinding { span, .. } => *span,
         }
     }
 
@@ -207,16 +213,18 @@ impl Pattern {
             Pattern::Tuple { .. } => None,
             Pattern::Slice { .. } => None,
             Pattern::Or { .. } => None,
+            Pattern::AsBinding { pattern, .. } => pattern.get_type(),
         }
     }
 
     pub fn is_identifier(&self) -> bool {
-        matches!(self, Pattern::Identifier { .. })
+        matches!(self, Pattern::Identifier { .. } | Pattern::AsBinding { .. })
     }
 
     pub fn get_identifier(&self) -> Option<EcoString> {
         match self {
             Pattern::Identifier { identifier, .. } => Some(identifier.clone()),
+            Pattern::AsBinding { name, .. } => Some(name.clone()),
             _ => None,
         }
     }

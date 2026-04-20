@@ -550,6 +550,9 @@ fn walk_pattern(
                 walk_pattern(module, p, graph, alias_map, ctx);
             }
         }
+        Pattern::AsBinding { pattern, .. } => {
+            walk_pattern(module, pattern, graph, alias_map, ctx);
+        }
         Pattern::Literal { .. }
         | Pattern::Identifier { .. }
         | Pattern::WildCard { .. }

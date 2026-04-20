@@ -6,14 +6,15 @@ use syntax::types::Type;
 
 impl Emitter<'_> {
     pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<String> {
-        if let Pattern::Identifier { identifier, .. } = pattern {
-            if self.ctx.unused.is_unused_binding(pattern) {
-                None
-            } else {
-                Some(identifier.to_string())
-            }
-        } else {
+        let name = match pattern {
+            Pattern::Identifier { identifier, .. } => identifier.as_str(),
+            Pattern::AsBinding { name, .. } => name.as_str(),
+            _ => return None,
+        };
+        if self.ctx.unused.is_unused_binding(pattern) {
             None
+        } else {
+            Some(name.to_string())
         }
     }
 

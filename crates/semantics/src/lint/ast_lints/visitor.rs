@@ -320,5 +320,9 @@ fn visit_pattern<F: FnMut(&Pattern)>(pattern: &Pattern, visitor: &mut F) {
                 visit_pattern(p, visitor);
             }
         }
+
+        Pattern::AsBinding { pattern, .. } => {
+            visit_pattern(pattern, visitor);
+        }
     }
 }

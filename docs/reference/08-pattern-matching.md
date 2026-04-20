@@ -161,6 +161,36 @@ match event {
 
 Or-patterns can only appear at the top level of a match arm. They cannot be nested inside other patterns.
 
+## `as` bindings
+
+Use `as` to capture the matched value:
+
+```rust
+match msg {
+  Message.Move { x, .. } as m => log.insert(x, m),
+  _ => {},
+}
+```
+
+Captured values are available in guards:
+
+```rust
+match opt {
+  Some(Point { x, .. }) as p if x > 0 => transform(p),
+  _ => default,
+}
+```
+
+For or-patterns, place `as` on each alternative:
+
+```rust
+match event {
+  Event.KeyDown(c) as e | Event.KeyUp(c) as e => record(e, c),
+}
+```
+
+`as` is only allowed in `match`, `if let`, and `while let`, and `Some(value as name)` in `select`.
+
 ## Guards
 
 Add `if` after a pattern to require an additional condition:

@@ -4,6 +4,7 @@ use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, Visibility};
 use syntax::types::Type;
 
 use super::super::Checker;
+use super::super::checks::{check_binding_pattern, reject_as_binding_in_irrefutable_context};
 use crate::checker::PostInferenceCheck;
 
 fn is_const_eligible(expression: &Expression) -> bool {
@@ -102,21 +103,24 @@ impl Checker<'_, '_> {
             None
         };
 
+        reject_as_binding_in_irrefutable_context(self.sink, &binding.pattern);
+
         let (inferred_pattern, typed_pattern) =
             self.infer_pattern(binding.pattern, ty.clone(), BindingKind::Let { mutable });
 
-        if matches!(inferred_pattern, Pattern::Literal { .. }) {
-            self.sink
-                .push(diagnostics::infer::literal_pattern_in_binding(
-                    inferred_pattern.get_span(),
-                ));
-        }
-
-        if new_else_block.is_none() && matches!(inferred_pattern, Pattern::Or { .. }) {
-            self.sink
-                .push(diagnostics::infer::or_pattern_in_irrefutable_context(
-                    inferred_pattern.get_span(),
-                ));
+        if new_else_block.is_none() {
+            check_binding_pattern(self.sink, &inferred_pattern);
+        } else {
+            let mut innermost = &inferred_pattern;
+            while let Pattern::AsBinding { pattern, .. } = innermost {
+                innermost = pattern;
+            }
+            if matches!(innermost, Pattern::Literal { .. }) {
+                self.sink
+                    .push(diagnostics::infer::literal_pattern_in_binding(
+                        inferred_pattern.get_span(),
+                    ));
+            }
         }
 
         let new_binding = Binding {

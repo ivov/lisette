@@ -121,6 +121,89 @@ fn test(name: string) {
 }
 
 #[test]
+fn infer_as_binding_in_let() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(p: Point) -> int {
+  let Point { x, .. } as q = p;
+  q.x
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_as_binding_in_for() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(pts: Slice<Point>) {
+  for Point { x, .. } as p in pts {}
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_as_binding_in_param() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(Point { x, .. } as p: Point) -> int { x }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_nested_as_binding_in_let() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(pair: (Point, int)) -> int {
+  let (Point { x, .. } as p, z) = pair;
+  p.x + z
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_nested_as_binding_in_for() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(pairs: Slice<(Point, int)>) {
+  for (Point { x, .. } as p, _) in pairs {}
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_nested_as_binding_in_param() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(pair: (Point, int), (Point { x, .. } as p, z): (Point, int)) -> int { x + z }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_identifier_in_as_binding() {
+    let input = r#"
+fn test(x: int) -> int {
+  match x {
+    n as m => m,
+    _ => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_mut_not_allowed_with_destructuring() {
     let input = r#"
 fn test() {
