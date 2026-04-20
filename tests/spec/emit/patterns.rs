@@ -628,3 +628,66 @@ pub struct Resize { pub width: int, pub height: int }
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
 }
+
+#[test]
+fn match_on_aliased_go_interface_emits_type_switch() {
+    let input = r#"
+import "go:example.com/events"
+
+fn handle(m: events.Msg) -> int {
+  match m {
+    events.Click { x, y } => x + y,
+    events.KeyPress { key } => key.length(),
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub type Msg = Event
+pub struct Click { pub x: int, pub y: int }
+pub struct KeyPress { pub key: string }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}
+
+#[test]
+fn match_on_aliased_lisette_enum_emits_enum_tag_switch() {
+    let input = r#"
+enum Color { Red, Green, Blue }
+
+type Palette = Color
+
+fn describe(p: Palette) -> string {
+  match p {
+    Color.Red => "r",
+    Color.Green => "g",
+    Color.Blue => "b",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn match_on_chained_alias_of_go_interface_emits_type_switch() {
+    let input = r#"
+import "go:example.com/events"
+
+fn handle(m: events.Outer) -> int {
+  match m {
+    events.Click { x, y } => x + y,
+    events.KeyPress { key } => key.length(),
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub type Inner = Event
+pub type Outer = Inner
+pub struct Click { pub x: int, pub y: int }
+pub struct KeyPress { pub key: string }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}

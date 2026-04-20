@@ -30,9 +30,9 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let resolved = struct_ty.resolve();
+        let resolved = self.peel_alias(&struct_ty.resolve().strip_refs());
 
-        let Type::Constructor { id, .. } = resolved.strip_refs() else {
+        let Type::Constructor { id, .. } = &resolved else {
             return false;
         };
 
@@ -154,8 +154,48 @@ impl Emitter<'_> {
         None
     }
 
+    pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
+        let mut current = ty.resolve();
+        let mut seen: Vec<String> = Vec::new();
+        loop {
+            let Type::Constructor { id, .. } = &current else {
+                return current;
+            };
+            if seen.iter().any(|s| s == id.as_str()) {
+                return current;
+            }
+            let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
+                self.ctx.definitions.get(id.as_str())
+            else {
+                return current;
+            };
+            seen.push(id.to_string());
+            current = alias_ty.resolve();
+        }
+    }
+
+    pub(crate) fn peel_alias_id(&self, id: &str) -> String {
+        let mut current = id.to_string();
+        let mut seen: Vec<String> = Vec::new();
+        loop {
+            if seen.iter().any(|s| s == &current) {
+                return current;
+            }
+            let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
+                self.ctx.definitions.get(current.as_str())
+            else {
+                return current;
+            };
+            let Type::Constructor { id: next, .. } = alias_ty.resolve() else {
+                return current;
+            };
+            seen.push(current);
+            current = next.to_string();
+        }
+    }
+
     pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
-        let Type::Constructor { id, .. } = ty.resolve() else {
+        let Type::Constructor { id, .. } = self.peel_alias(ty) else {
             return None;
         };
 
@@ -170,7 +210,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {
-        let Type::Constructor { id, .. } = ty.resolve() else {
+        let Type::Constructor { id, .. } = self.peel_alias(ty) else {
             return None;
         };
 

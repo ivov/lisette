@@ -1,0 +1,57 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nenum Color { Red, Green, Blue }\n\ntype Palette = Color\n\nfn describe(p: Palette) -> string {\n  match p {\n    Color.Red => \"r\",\n    Color.Green => \"g\",\n    Color.Blue => \"b\",\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorGreen() Color {
+	return Color{Tag: ColorGreen}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type ColorTag int
+
+const (
+	ColorRed ColorTag = iota
+	ColorGreen
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) String() string {
+	switch c.Tag {
+	case ColorRed:
+		return "Color.Red"
+	case ColorGreen:
+		return "Color.Green"
+	case ColorBlue:
+		return "Color.Blue"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+type Palette = Color
+
+func describe(p Palette) string {
+	switch p.Tag {
+	case ColorRed:
+		return "r"
+	case ColorGreen:
+		return "g"
+	default:
+		return "b"
+	}
+}

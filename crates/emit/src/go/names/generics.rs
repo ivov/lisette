@@ -111,7 +111,10 @@ impl Emitter<'_> {
         if !visited.insert(id.to_string()) {
             return HashSet::default();
         }
-        let Some(Definition::Interface { definition, .. }) = self.ctx.definitions.get(id) else {
+        let peeled = self.peel_alias_id(id);
+        let Some(Definition::Interface { definition, .. }) =
+            self.ctx.definitions.get(peeled.as_str())
+        else {
             return HashSet::default();
         };
         let names: Vec<&str> = definition

@@ -1,7 +1,5 @@
 use crate::Emitter;
 use crate::go::names::go_name;
-use syntax::program::Definition;
-use syntax::types::Type;
 
 impl Emitter<'_> {
     pub(crate) fn resolve_go_name(&mut self, name: &str) -> String {
@@ -40,16 +38,15 @@ impl Emitter<'_> {
 
     pub(crate) fn resolve_alias_type_name(&self, type_part: &str) -> Option<String> {
         let qualified = format!("{}.{}", self.current_module, type_part);
-        if let Some(Definition::TypeAlias { ty, .. }) = self.ctx.definitions.get(qualified.as_str())
-            && let Type::Constructor { id, .. } = &ty.resolve()
-        {
-            let type_module = id.split('.').next().unwrap_or("");
-            if type_module == self.current_module {
-                return Some(id.split('.').next_back()?.to_string());
-            }
-            return Some(id.to_string());
+        let id = self.peel_alias_id(&qualified);
+        if id == qualified {
+            return None;
         }
-        None
+        let type_module = id.split('.').next().unwrap_or("");
+        if type_module == self.current_module {
+            return Some(id.split('.').next_back()?.to_string());
+        }
+        Some(id)
     }
 
     pub(crate) fn capitalize_static_method_if_public(&self, name: &str) -> String {

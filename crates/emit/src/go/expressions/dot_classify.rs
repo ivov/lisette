@@ -414,13 +414,10 @@ impl Emitter<'_> {
             return None;
         }
 
-        let (qualified_type, _type_name) = if let Definition::TypeAlias {
-            ty: Type::Constructor { id, .. },
-            ..
-        } = definition
-        {
-            let resolved_name = id.rsplit('.').next().unwrap_or(id);
-            (id.to_string(), resolved_name.to_string())
+        let (qualified_type, _type_name) = if matches!(definition, Definition::TypeAlias { .. }) {
+            let id = self.peel_alias_id(&qualified_type);
+            let resolved_name = id.rsplit('.').next().unwrap_or(&id).to_string();
+            (id, resolved_name)
         } else {
             (qualified_type, type_name.to_string())
         };

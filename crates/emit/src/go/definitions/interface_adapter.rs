@@ -71,19 +71,11 @@ impl Emitter<'_> {
                 return Some(under);
             }
         }
-        let Type::Constructor { id, .. } = &resolved else {
-            return None;
-        };
-        match self.ctx.definitions.get(id.as_str()) {
-            Some(Definition::TypeAlias { ty: alias_ty, .. }) => {
-                let aliased = alias_ty.resolve();
-                if matches!(aliased, Type::Function { .. }) {
-                    Some(aliased)
-                } else {
-                    None
-                }
-            }
-            _ => None,
+        let peeled = self.peel_alias(&resolved);
+        if matches!(peeled, Type::Function { .. }) {
+            Some(peeled)
+        } else {
+            None
         }
     }
 
@@ -98,7 +90,7 @@ impl Emitter<'_> {
                 }
             }
             for parent_ty in &current.parents {
-                let parent = parent_ty.resolve();
+                let parent = self.peel_alias(parent_ty);
                 let Type::Constructor { id, .. } = &parent else {
                     continue;
                 };
@@ -115,7 +107,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn needs_adapter(&self, source_ty: &Type, target_ty: &Type) -> Option<AdapterPlan> {
-        let target = target_ty.resolve();
+        let target = self.peel_alias(target_ty);
         let Type::Constructor { id: target_id, .. } = &target else {
             return None;
         };
