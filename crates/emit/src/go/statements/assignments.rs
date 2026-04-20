@@ -6,6 +6,7 @@ use crate::go::types::emitter::Position;
 use crate::go::write_line;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
+use syntax::types::Type;
 
 impl Emitter<'_> {
     pub(crate) fn emit_statement(&mut self, output: &mut String, expression: &Expression) {
@@ -365,7 +366,7 @@ impl Emitter<'_> {
             Expression::DotAccess {
                 expression, member, ..
             } => {
-                let expression_string = if let Expression::Unary {
+                let base_str = if let Expression::Unary {
                     operator: UnaryOperator::Deref,
                     expression: inner,
                     ..
@@ -376,25 +377,7 @@ impl Emitter<'_> {
                     self.emit_operand(output, expression)
                 };
                 let expression_ty = expression.get_type().resolve();
-
-                if let Ok(index) = member.parse::<usize>() {
-                    if let Some(access) = self.try_emit_tuple_struct_field_access(
-                        &expression_string,
-                        &expression_ty,
-                        index,
-                    ) {
-                        return access;
-                    }
-                    let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
-                    return format!("{}.{}", expression_string, field);
-                }
-
-                let field = if self.field_is_public(&expression_ty, member) {
-                    go_name::make_exported(member)
-                } else {
-                    go_name::escape_keyword(member).into_owned()
-                };
-                format!("{}.{}", expression_string, field)
+                self.format_dot_access_lvalue(&base_str, &expression_ty, member)
             }
             Expression::IndexedAccess {
                 expression, index, ..
@@ -417,17 +400,7 @@ impl Emitter<'_> {
                 operator: UnaryOperator::Deref,
                 expression,
                 ..
-            } => {
-                let expression_string = self.emit_operand(output, expression);
-                if matches!(expression.unwrap_parens(), Expression::Call { .. }) {
-                    let tmp = self.fresh_var(Some("ref"));
-                    self.declare(&tmp);
-                    write_line!(output, "{} := {}", tmp, expression_string);
-                    format!("*{}", tmp)
-                } else {
-                    format!("*{}", expression_string)
-                }
-            }
+            } => self.emit_deref_lvalue(output, expression),
             Expression::Call { .. } if expression.get_type().resolve().is_ref() => {
                 let call_str = self.emit_operand(output, expression);
                 let tmp = self.fresh_var(Some("ref"));
@@ -437,6 +410,45 @@ impl Emitter<'_> {
             }
             _ => "_".to_string(),
         }
+    }
+
+    /// Emit `*X` lvalue form, capturing the pointee into a temp if it's a
+    /// call (Go requires an addressable operand for deref-assignment).
+    fn emit_deref_lvalue(&mut self, output: &mut String, pointee: &Expression) -> String {
+        let pointee_string = self.emit_operand(output, pointee);
+        if matches!(pointee.unwrap_parens(), Expression::Call { .. }) {
+            let tmp = self.fresh_var(Some("ref"));
+            self.declare(&tmp);
+            write_line!(output, "{} := {}", tmp, pointee_string);
+            return format!("*{}", tmp);
+        }
+        format!("*{}", pointee_string)
+    }
+
+    /// Format a dot-access lvalue (struct field or tuple element) onto the
+    /// already-emitted base expression. Numeric members route through the
+    /// tuple-struct field helper (newtype unwrap) or positional `Fi` fallback.
+    fn format_dot_access_lvalue(
+        &mut self,
+        base_str: &str,
+        expression_ty: &Type,
+        member: &str,
+    ) -> String {
+        if let Ok(index) = member.parse::<usize>() {
+            if let Some(access) =
+                self.try_emit_tuple_struct_field_access(base_str, expression_ty, index)
+            {
+                return access;
+            }
+            let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
+            return format!("{}.{}", base_str, field);
+        }
+        let field = if self.field_is_public(expression_ty, member) {
+            go_name::make_exported(member)
+        } else {
+            go_name::escape_keyword(member).into_owned()
+        };
+        format!("{}.{}", base_str, field)
     }
 
     /// Emit a left-value, capturing side-effecting subexpressions (index, base)
@@ -511,37 +523,13 @@ impl Emitter<'_> {
                     self.emit_left_value(output, base)
                 };
                 let expression_ty = base.get_type().resolve();
-                if let Ok(index) = member.parse::<usize>() {
-                    if let Some(access) =
-                        self.try_emit_tuple_struct_field_access(&base_str, &expression_ty, index)
-                    {
-                        return access;
-                    }
-                    let field = TUPLE_FIELDS.get(index).expect("oversize tuple arity");
-                    return format!("{}.{}", base_str, field);
-                }
-                let field = if self.field_is_public(&expression_ty, member) {
-                    go_name::make_exported(member)
-                } else {
-                    go_name::escape_keyword(member).into_owned()
-                };
-                format!("{}.{}", base_str, field)
+                self.format_dot_access_lvalue(&base_str, &expression_ty, member)
             }
             Expression::Unary {
                 operator: UnaryOperator::Deref,
                 expression: inner,
                 ..
-            } => {
-                let inner_str = self.emit_operand(output, inner);
-                if matches!(inner.unwrap_parens(), Expression::Call { .. }) {
-                    let tmp = self.fresh_var(Some("ref"));
-                    self.declare(&tmp);
-                    write_line!(output, "{} := {}", tmp, inner_str);
-                    format!("*{}", tmp)
-                } else {
-                    format!("*{}", inner_str)
-                }
-            }
+            } => self.emit_deref_lvalue(output, inner),
             _ => self.emit_left_value(output, expression),
         }
     }

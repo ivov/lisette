@@ -420,121 +420,149 @@ impl Emitter<'_> {
         self.flags.needs_stdlib = true;
 
         if return_type.is_result() {
-            let ok_ty = return_type.ok_type();
-            let err_ty = return_type.err_type();
-            let err_ty_str = self.go_type_as_string(&err_ty);
-            let res = self.fresh_var(Some("res"));
-            self.declare(&res);
+            return Some(self.emit_result_return_adapter(inner_call, &return_type));
+        }
+        if return_type.is_partial() {
+            return Some(self.emit_partial_return_adapter(inner_call, &return_type));
+        }
+        if return_type.is_option() {
+            return Some(self.emit_option_return_adapter(inner_call, &return_type));
+        }
+        if return_type.tuple_arity().is_some_and(|n| n >= 2) {
+            return self.emit_tuple_return_adapter(inner_call, &return_type);
+        }
+        None
+    }
 
-            let mut b = format!("{res} := {inner_call}\n");
-            if ok_ty.is_unit() {
-                // Result<(), error> → error
-                let ok_tag = RESULT_OK_TAG;
-                write_line!(
-                    b,
-                    "if {res}.Tag == {ok_tag} {{\nreturn nil\n}}\nreturn {res}.ErrVal"
-                );
-                return Some((err_ty_str, b));
-            }
-            // Result<T, error> → (T, error)
-            let ok_ty_str = self.go_type_as_string(&ok_ty);
-            let ok_tag = RESULT_OK_TAG;
+    /// `Result<(), error>` → `error`; `Result<T, error>` → `(T, error)`.
+    fn emit_result_return_adapter(
+        &mut self,
+        inner_call: &str,
+        return_type: &Type,
+    ) -> (String, String) {
+        let ok_ty = return_type.ok_type();
+        let err_ty = return_type.err_type();
+        let err_ty_str = self.go_type_as_string(&err_ty);
+        let res = self.fresh_var(Some("res"));
+        self.declare(&res);
+
+        let mut b = format!("{res} := {inner_call}\n");
+        let ok_tag = RESULT_OK_TAG;
+        if ok_ty.is_unit() {
             write_line!(
                 b,
-                "if {res}.Tag == {ok_tag} {{\nreturn {res}.OkVal, nil\n}}\n\
-                 return *new({ok_ty_str}), {res}.ErrVal"
+                "if {res}.Tag == {ok_tag} {{\nreturn nil\n}}\nreturn {res}.ErrVal"
             );
-            return Some((format!("({ok_ty_str}, {err_ty_str})"), b));
+            return (err_ty_str, b);
         }
+        let ok_ty_str = self.go_type_as_string(&ok_ty);
+        write_line!(
+            b,
+            "if {res}.Tag == {ok_tag} {{\nreturn {res}.OkVal, nil\n}}\n\
+             return *new({ok_ty_str}), {res}.ErrVal"
+        );
+        (format!("({ok_ty_str}, {err_ty_str})"), b)
+    }
 
-        if return_type.is_partial() {
-            // Partial<T, error> → (T, error)
-            let ok_ty = return_type.ok_type();
-            let err_ty = return_type.err_type();
-            let ok_ty_str = self.go_type_as_string(&ok_ty);
-            let err_ty_str = self.go_type_as_string(&err_ty);
-            let res = self.fresh_var(Some("res"));
-            self.declare(&res);
+    /// `Partial<T, error>` → `(T, error)`, distinguishing Ok/Err/both branches.
+    fn emit_partial_return_adapter(
+        &mut self,
+        inner_call: &str,
+        return_type: &Type,
+    ) -> (String, String) {
+        let ok_ty = return_type.ok_type();
+        let err_ty = return_type.err_type();
+        let ok_ty_str = self.go_type_as_string(&ok_ty);
+        let err_ty_str = self.go_type_as_string(&err_ty);
+        let res = self.fresh_var(Some("res"));
+        self.declare(&res);
 
-            let b = format!(
-                "{res} := {inner_call}\n\
-                 if {res}.Tag == {PARTIAL_OK_TAG} {{\nreturn {res}.OkVal, nil\n}}\n\
-                 if {res}.Tag == {PARTIAL_ERR_TAG} {{\nreturn *new({ok_ty_str}), {res}.ErrVal\n}}\n\
-                 return {res}.OkVal, {res}.ErrVal\n"
-            );
-            return Some((format!("({ok_ty_str}, {err_ty_str})"), b));
-        }
+        let b = format!(
+            "{res} := {inner_call}\n\
+             if {res}.Tag == {PARTIAL_OK_TAG} {{\nreturn {res}.OkVal, nil\n}}\n\
+             if {res}.Tag == {PARTIAL_ERR_TAG} {{\nreturn *new({ok_ty_str}), {res}.ErrVal\n}}\n\
+             return {res}.OkVal, {res}.ErrVal\n"
+        );
+        (format!("({ok_ty_str}, {err_ty_str})"), b)
+    }
 
-        if return_type.is_option() {
-            let inner = return_type.ok_type();
-            let is_nilable = self.resolve_to_function_type(&inner).is_some()
-                || self.is_nullable_option(&return_type);
-            if is_nilable {
-                // Option<fn>, Option<Ref<T>>, Option<Interface> → bare nilable Go type
-                let go_ret = self.go_type_as_string(&inner);
-                let opt = self.fresh_var(Some("opt"));
-                self.declare(&opt);
-                let some_tag = OPTION_SOME_TAG;
-                let b = format!(
-                    "{opt} := {inner_call}\n\
-                     if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal\n}}\n\
-                     return nil\n"
-                );
-                return Some((go_ret, b));
-            }
+    /// `Option<fn>`/`Option<Ref<T>>`/`Option<Interface>` → bare nilable Go type
+    /// (collapsed because Go's nil already encodes absence). Other payloads use
+    /// the Go-idiomatic `(T, bool)` comma-ok convention.
+    fn emit_option_return_adapter(
+        &mut self,
+        inner_call: &str,
+        return_type: &Type,
+    ) -> (String, String) {
+        let inner = return_type.ok_type();
+        let some_tag = OPTION_SOME_TAG;
+        let opt = self.fresh_var(Some("opt"));
+        self.declare(&opt);
 
-            let inner_ty_str = self.go_type_as_string(&inner);
-            let opt = self.fresh_var(Some("opt"));
-            self.declare(&opt);
-
-            let some_tag = OPTION_SOME_TAG;
+        let is_nilable =
+            self.resolve_to_function_type(&inner).is_some() || self.is_nullable_option(return_type);
+        if is_nilable {
+            let go_ret = self.go_type_as_string(&inner);
             let b = format!(
                 "{opt} := {inner_call}\n\
-                 if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal, true\n}}\n\
-                 return *new({inner_ty_str}), false\n"
+                 if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal\n}}\n\
+                 return nil\n"
             );
-            return Some((format!("({inner_ty_str}, bool)"), b));
+            return (go_ret, b);
         }
 
-        if let Some(arity) = return_type.tuple_arity()
-            && arity >= 2
-        {
-            let tuple_params: Vec<Type> = match &return_type {
-                Type::Tuple(elements) => elements.clone(),
-                Type::Constructor { params, .. } => params.clone(),
-                _ => return None,
-            };
-            let tup = self.fresh_var(Some("tup"));
-            self.declare(&tup);
+        let inner_ty_str = self.go_type_as_string(&inner);
+        let b = format!(
+            "{opt} := {inner_call}\n\
+             if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal, true\n}}\n\
+             return *new({inner_ty_str}), false\n"
+        );
+        (format!("({inner_ty_str}, bool)"), b)
+    }
 
-            let mut body = format!("{tup} := {inner_call}\n");
-            let mut ret_types: Vec<String> = Vec::with_capacity(arity);
-            let mut field_exprs: Vec<String> = Vec::with_capacity(arity);
+    /// Arity-2+ tuple → Go multi-return. Each slot recurses through
+    /// `emit_return_adapter`, wrapping in an IIFE when the slot itself needs
+    /// adapter-style unwrapping. Returns `None` only if the resolved type
+    /// isn't actually a tuple/constructor shape.
+    fn emit_tuple_return_adapter(
+        &mut self,
+        inner_call: &str,
+        return_type: &Type,
+    ) -> Option<(String, String)> {
+        let tuple_params: Vec<Type> = match return_type {
+            Type::Tuple(elements) => elements.clone(),
+            Type::Constructor { params, .. } => params.clone(),
+            _ => return None,
+        };
+        let arity = tuple_params.len();
+        let tup = self.fresh_var(Some("tup"));
+        self.declare(&tup);
 
-            for (i, slot_ty) in tuple_params.iter().enumerate() {
-                let raw_field = format!("{tup}.{}", TUPLE_FIELDS[i]);
-                match self.emit_return_adapter(&raw_field, slot_ty) {
-                    Some((inner_ret, inner_body)) => {
-                        let sub = self.fresh_var(Some("sub"));
-                        self.declare(&sub);
-                        body.push_str(&format!(
-                            "{sub} := func() {inner_ret} {{\n{inner_body}}}()\n"
-                        ));
-                        field_exprs.push(sub);
-                        ret_types.push(inner_ret);
-                    }
-                    None => {
-                        ret_types.push(self.go_type_as_string(slot_ty));
-                        field_exprs.push(raw_field);
-                    }
+        let mut body = format!("{tup} := {inner_call}\n");
+        let mut ret_types: Vec<String> = Vec::with_capacity(arity);
+        let mut field_exprs: Vec<String> = Vec::with_capacity(arity);
+
+        for (i, slot_ty) in tuple_params.iter().enumerate() {
+            let raw_field = format!("{tup}.{}", TUPLE_FIELDS[i]);
+            match self.emit_return_adapter(&raw_field, slot_ty) {
+                Some((inner_ret, inner_body)) => {
+                    let sub = self.fresh_var(Some("sub"));
+                    self.declare(&sub);
+                    body.push_str(&format!(
+                        "{sub} := func() {inner_ret} {{\n{inner_body}}}()\n"
+                    ));
+                    field_exprs.push(sub);
+                    ret_types.push(inner_ret);
+                }
+                None => {
+                    ret_types.push(self.go_type_as_string(slot_ty));
+                    field_exprs.push(raw_field);
                 }
             }
-
-            body.push_str(&format!("return {}\n", field_exprs.join(", ")));
-            return Some((format!("({})", ret_types.join(", ")), body));
         }
 
-        None
+        body.push_str(&format!("return {}\n", field_exprs.join(", ")));
+        Some((format!("({})", ret_types.join(", ")), body))
     }
 
     pub(crate) fn emit_lisette_callback_wrapper(

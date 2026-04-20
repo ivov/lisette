@@ -461,70 +461,126 @@ impl Emitter<'_> {
             })
             .expect("MatchReceive must have Some arm");
 
-        let (case_var, needs_receiver_destructure) = match receiver_var_pattern {
-            Pattern::WildCard { .. } => ("_".to_string(), false),
-            Pattern::Identifier { identifier, .. } => {
-                if let Some(go_name) = self.go_name_for_binding(receiver_var_pattern) {
-                    if self.scope.bindings.get(identifier).is_some() {
-                        (self.fresh_var(Some("recv")), true)
-                    } else {
-                        (self.scope.bindings.add(identifier, go_name), false)
-                    }
-                } else {
-                    ("_".to_string(), false)
-                }
-            }
-            _ => (self.fresh_var(Some("recv")), true),
-        };
+        let (case_var, needs_receiver_destructure) =
+            self.classify_receive_var_pattern(receiver_var_pattern);
 
         let ok_var = self.fresh_ok_var();
         write_line!(output, "case {}, {} := <-{}:", case_var, ok_var, channel);
         let guard = (case_var != "_").then(|| DiscardGuard::new(output, &case_var));
 
-        let pre_some = output.len();
-        self.enter_scope();
-        if needs_receiver_destructure {
+        let some_content = self.render_receive_some_arm(
+            output,
+            some_arm,
+            match_arms,
+            receiver_var_pattern,
+            &case_var,
+            needs_receiver_destructure,
+        );
+        let none_content = self.capture_scoped(output, |this, output| {
+            Emitter::emit_none_arm_body(this, output, match_arms);
+        });
+
+        self.write_receive_arms(
+            output,
+            &ok_var,
+            some_content.as_deref(),
+            none_content.as_deref(),
+        );
+
+        if let Some(guard) = guard {
+            guard.finish(output);
+        }
+
+        self.scope.bindings.restore();
+    }
+
+    /// Map a `Some(pattern)` payload pattern to a case-variable name and a
+    /// flag indicating whether the payload needs decision-tree destructuring
+    /// inside the arm body (as opposed to being bound directly by the
+    /// receive-case header).
+    fn classify_receive_var_pattern(&mut self, pattern: &Pattern) -> (String, bool) {
+        match pattern {
+            Pattern::WildCard { .. } => ("_".to_string(), false),
+            Pattern::Identifier { identifier, .. } => {
+                let Some(go_name) = self.go_name_for_binding(pattern) else {
+                    return ("_".to_string(), false);
+                };
+                if self.scope.bindings.get(identifier).is_some() {
+                    return (self.fresh_var(Some("recv")), true);
+                }
+                (self.scope.bindings.add(identifier, go_name), false)
+            }
+            _ => (self.fresh_var(Some("recv")), true),
+        }
+    }
+
+    /// Render the Some arm's body (including payload destructure when
+    /// needed), returning the captured content so the caller can wrap it in
+    /// an `if ok` guard alongside the None arm.
+    fn render_receive_some_arm(
+        &mut self,
+        output: &mut String,
+        some_arm: &MatchArm,
+        match_arms: &[MatchArm],
+        receiver_var_pattern: &Pattern,
+        case_var: &str,
+        needs_receiver_destructure: bool,
+    ) -> Option<String> {
+        self.capture_scoped(output, |this, output| {
+            if !needs_receiver_destructure {
+                this.emit_in_position(output, &some_arm.expression);
+                return;
+            }
             let inner_typed = Self::unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
             let (checks, bindings) =
-                decision_tree::collect_pattern_info(self, receiver_var_pattern, inner_typed);
+                decision_tree::collect_pattern_info(this, receiver_var_pattern, inner_typed);
             if checks.is_empty() {
-                decision_tree::emit_tree_bindings(self, output, &bindings, &case_var);
-                self.emit_in_position(output, &some_arm.expression);
-            } else {
-                let condition = decision_tree::render_condition(&checks, &case_var);
-                write_line!(output, "if {} {{", condition);
-                decision_tree::emit_tree_bindings(self, output, &bindings, &case_var);
-                self.emit_in_position(output, &some_arm.expression);
-                output.push_str("} else {\n");
-                Emitter::emit_none_arm_body(self, output, match_arms);
-                output.push_str("}\n");
+                decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
+                this.emit_in_position(output, &some_arm.expression);
+                return;
             }
-        } else {
-            self.emit_in_position(output, &some_arm.expression);
-        }
-        self.exit_scope();
-        let some_content = if output.len() > pre_some {
-            let s = output[pre_some..].to_string();
-            output.truncate(pre_some);
-            Some(s)
-        } else {
-            None
-        };
+            let condition = decision_tree::render_condition(&checks, case_var);
+            write_line!(output, "if {} {{", condition);
+            decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
+            this.emit_in_position(output, &some_arm.expression);
+            output.push_str("} else {\n");
+            Emitter::emit_none_arm_body(this, output, match_arms);
+            output.push_str("}\n");
+        })
+    }
 
-        // Render None arm body
-        let pre_none = output.len();
+    /// Emit into a scoped buffer, returning the appended content (or `None`
+    /// if nothing was written). Used when the combine step needs to know
+    /// whether each arm produced any output before emitting the `if ok { ... }`
+    /// scaffolding around it.
+    fn capture_scoped<F>(&mut self, output: &mut String, f: F) -> Option<String>
+    where
+        F: FnOnce(&mut Self, &mut String),
+    {
+        let before = output.len();
         self.enter_scope();
-        Emitter::emit_none_arm_body(self, output, match_arms);
+        f(self, output);
         self.exit_scope();
-        let none_content = if output.len() > pre_none {
-            let s = output[pre_none..].to_string();
-            output.truncate(pre_none);
+        if output.len() > before {
+            let s = output[before..].to_string();
+            output.truncate(before);
             Some(s)
         } else {
             None
-        };
+        }
+    }
 
-        match (&some_content, &none_content) {
+    /// Combine the rendered Some/None arm contents into `if ok { ... } else { ... }`
+    /// scaffolding, collapsing to `if ok`, `if !ok`, or nothing when either arm
+    /// is empty.
+    fn write_receive_arms(
+        &self,
+        output: &mut String,
+        ok_var: &str,
+        some: Option<&str>,
+        none: Option<&str>,
+    ) {
+        match (some, none) {
             (Some(some), Some(none)) => {
                 write_line!(output, "if {} {{", ok_var);
                 output.push_str(some);
@@ -544,12 +600,6 @@ impl Emitter<'_> {
             }
             (None, None) => {}
         }
-
-        if let Some(guard) = guard {
-            guard.finish(output);
-        }
-
-        self.scope.bindings.restore();
     }
 
     fn emit_none_arm_body(emitter: &mut Emitter, output: &mut String, match_arms: &[MatchArm]) {
