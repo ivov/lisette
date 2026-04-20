@@ -375,11 +375,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 if self.emit_guard_header(output, *arm_index) {
                     self.emit_decision_in_case(output, success, arm_position, subject_var);
                     self.emitter.exit_scope();
-                    output.push_str("} else {\n");
-                    self.emitter.enter_scope();
-                    self.emit_decision_in_case(output, failure, arm_position, subject_var);
-                    self.emitter.exit_scope();
-                    output.push_str("}\n");
+                    self.emit_else_or_flat(output, failure, arm_position, subject_var);
                 }
             }
             _ => {
@@ -475,12 +471,22 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
 
                     self.emitter
                         .emit_branch_header(output, &condition, is_catchall, i == 0);
-                    self.emit_chain_decision_body(
-                        output,
-                        &test.decision,
-                        arm_position,
-                        subject_var,
-                    );
+
+                    if matches!(test.decision, Decision::Guard { .. }) {
+                        self.emit_decision_in_case(
+                            output,
+                            &test.decision,
+                            arm_position,
+                            subject_var,
+                        );
+                    } else {
+                        self.emit_chain_decision_body(
+                            output,
+                            &test.decision,
+                            arm_position,
+                            subject_var,
+                        );
+                    }
                 }
 
                 self.emitter.exit_scope();

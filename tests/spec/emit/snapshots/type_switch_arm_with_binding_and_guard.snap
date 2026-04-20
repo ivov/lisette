@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nimport \"go:example.com/events\"\n\nfn handle(e: events.Event, threshold: int) -> int {\n  match e {\n    events.Click { x } if x > threshold => x,\n    events.Click { x } => x + 1,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+import "example.com/events"
+
+func handle(e events.Event, threshold int) int {
+	switch e := e.(type) {
+	case events.Click:
+		x := e.X
+		if x > threshold {
+			return x
+		}
+		x_1 := e.X
+		return x_1 + 1
+	default:
+		return 0
+	}
+}

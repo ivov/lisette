@@ -440,11 +440,13 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         .into_iter()
         .map(|label| {
             let (needs_stdlib, inner_arms) = branch_map.remove(&label).unwrap();
-            // For type switches: a guarded arm's failure path must fall through to
-            // the catchall arms so the match stays exhaustive in Go output.
-            let decision = if matches!(kind, SwitchKind::TypeSwitch)
-                && inner_arms.iter().any(|a| a.has_guard)
-            {
+            // For type switches: if any inner arm can fail (via guard or remaining
+            // checks), the catchall arms must be appended so the case body stays
+            // exhaustive — Go type-switch cases don't fall through automatically.
+            let any_inner_can_fail = inner_arms
+                .iter()
+                .any(|a| a.has_guard || !a.checks.is_empty());
+            let decision = if matches!(kind, SwitchKind::TypeSwitch) && any_inner_can_fail {
                 let mut arms_with_fallback = inner_arms;
                 arms_with_fallback.extend(fallback_arms.iter().cloned());
                 build_tree(arms_with_fallback)
@@ -1085,13 +1087,51 @@ pub(super) struct ExpandedArm<'a> {
     pub has_guard: bool,
 }
 
+fn arm_is_interface_or_with_extras(arm: &ArmInfo) -> bool {
+    if arm.checks.len() != 1 {
+        return false;
+    }
+    let Check::Or { alternatives } = &arm.checks[0] else {
+        return false;
+    };
+    alternatives
+        .iter()
+        .all(|alt| matches!(alt.first(), Some(Check::TypeAssert { .. })))
+        && alternatives.iter().any(|alt| alt.len() > 1)
+}
+
+fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
+    if !arm_infos.iter().any(arm_is_interface_or_with_extras) {
+        return arm_infos;
+    }
+    let mut result = Vec::with_capacity(arm_infos.len());
+    for arm in arm_infos {
+        if arm_is_interface_or_with_extras(&arm) {
+            let Check::Or { alternatives } = &arm.checks[0] else {
+                unreachable!()
+            };
+            for alt in alternatives {
+                result.push(ArmInfo {
+                    arm_index: arm.arm_index,
+                    checks: alt.clone(),
+                    bindings: arm.bindings.clone(),
+                    has_guard: arm.has_guard,
+                });
+            }
+        } else {
+            result.push(arm);
+        }
+    }
+    result
+}
+
 /// Compile expanded arms into a decision tree.
 pub(super) fn compile_expanded_arms<'a>(
     emitter: &mut Emitter,
     expanded: &'a [ExpandedArm<'a>],
     subject_ty: &Type,
 ) -> Decision {
-    let mut arm_infos: Vec<ArmInfo> = expanded
+    let arm_infos: Vec<ArmInfo> = expanded
         .iter()
         .map(|ea| {
             let mut collector = PatternCollector::new();
@@ -1111,6 +1151,8 @@ pub(super) fn compile_expanded_arms<'a>(
             }
         })
         .collect();
+
+    let mut arm_infos = expand_interface_or_checks(arm_infos);
 
     // Propagate unused status across or-pattern alternatives sharing an arm.
     let has_or_patterns = expanded

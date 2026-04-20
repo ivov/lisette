@@ -473,6 +473,8 @@ fn strip_bare_blocks(output: &mut String, pre_len: usize) {
             && lines[j] == "}"
             && is_diverge_line(lines[j - 1])
         {
+            // Skip when an inner `var :=` would collide with an outer reference
+            // ("no new variables on left side of :=" error).
             let has_conflict = lines[i + 1..j].iter().any(|l| {
                 let Some(idx) = l.find(" := ") else {
                     return false;

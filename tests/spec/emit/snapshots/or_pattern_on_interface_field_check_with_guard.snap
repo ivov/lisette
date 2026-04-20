@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nimport \"go:example.com/events\"\n\nfn handle(e: events.Event, active: bool) -> int {\n  match e {\n    events.Click { x: 5 } | events.Scroll { .. } if active => 1,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+import "example.com/events"
+
+func handle(e events.Event, active bool) int {
+	switch e := e.(type) {
+	case events.Click:
+		if e.X == 5 {
+			if active {
+				return 1
+			}
+			return 0
+		}
+		return 0
+	case events.Scroll:
+		if active {
+			return 1
+		}
+		return 0
+	default:
+		return 0
+	}
+}
