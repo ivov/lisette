@@ -1118,3 +1118,24 @@ pub type Cmd = fn() -> Event
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/scheduler", typedef)]);
 }
+
+#[test]
+fn interop_option_of_aliased_interface_uses_is_nil_interface() {
+    let input = r#"
+import "go:example.com/evts"
+import "go:fmt"
+
+fn main() {
+  match evts.Peek() {
+    Some(e) => fmt.Println(e),
+    None => fmt.Println("none"),
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub type Msg = Event
+pub fn Peek() -> Option<Msg>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/evts", typedef)]);
+}

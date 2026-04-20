@@ -360,7 +360,7 @@ impl Emitter<'_> {
     ) -> String {
         let inner = self.emit_operand(output, expression);
 
-        if let Type::Constructor { id, .. } = &ty.resolve()
+        if let Type::Constructor { id, .. } = &self.peel_alias(ty)
             && matches!(
                 self.ctx.definitions.get(id.as_str()),
                 Some(Definition::Interface { .. })

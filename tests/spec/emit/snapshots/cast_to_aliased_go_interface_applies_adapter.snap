@@ -1,0 +1,51 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: "input: \nimport \"go:example.com/svc\"\n\nstruct Loader {}\n\nimpl Loader {\n  fn Load(self, key: string) -> Result<int, error> {\n    Ok(1)\n  }\n}\n\nfn run(s: svc.Alias) -> int {\n  match s.Load(\"k\") {\n    Ok(n) => n,\n    Err(_) => 0,\n  }\n}\n\nfn main() {\n  let l = Loader {}\n  let _ = run(l as svc.Alias)\n}\n"
+---
+package main
+
+import (
+	"example.com/svc"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Loader struct{}
+
+func (l Loader) String() string {
+	return "Loader"
+}
+
+func (l Loader) Load(_ string) lisette.Result[int, error] {
+	return lisette.MakeResultOk[int, error](1)
+}
+
+func run(s svc.Alias) int {
+	ret_2, ret_3 := s.Load("k")
+	var subject_1 lisette.Result[int, error]
+	if ret_3 != nil {
+		subject_1 = lisette.MakeResultErr[int, error](ret_3)
+	} else {
+		subject_1 = lisette.MakeResultOk[int, error](ret_2)
+	}
+	if subject_1.Tag == lisette.ResultOk {
+		return subject_1.OkVal
+	}
+	return 0
+}
+
+func main() {
+	l := Loader{}
+	_ = run(_lisAdapter_Loader_Service_0{inner: l})
+}
+
+type _lisAdapter_Loader_Service_0 struct {
+	inner Loader
+}
+
+func (a _lisAdapter_Loader_Service_0) Load(arg0 string) (int, error) {
+	res_1 := a.inner.Load(arg0)
+	if res_1.Tag == lisette.ResultOk {
+		return res_1.OkVal, nil
+	}
+	return *new(int), res_1.ErrVal
+}

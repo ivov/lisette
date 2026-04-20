@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:example.com/evts\"\nimport \"go:fmt\"\n\nfn main() {\n  match evts.Peek() {\n    Some(e) => fmt.Println(e),\n    None => fmt.Println(\"none\"),\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/evts"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	raw_2 := evts.Peek()
+	var subject_1 lisette.Option[evts.Msg]
+	if !lisette.IsNilInterface(raw_2) {
+		subject_1 = lisette.MakeOptionSome[evts.Msg](raw_2)
+	} else {
+		subject_1 = lisette.MakeOptionNone[evts.Msg]()
+	}
+	if subject_1.Tag == lisette.OptionSome {
+		e := subject_1.SomeVal
+		fmt.Println(e)
+	} else {
+		fmt.Println("none")
+	}
+}

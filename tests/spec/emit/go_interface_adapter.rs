@@ -580,3 +580,75 @@ fn main() {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[]);
 }
+
+#[test]
+fn cast_to_aliased_go_interface_applies_adapter() {
+    let input = r#"
+import "go:example.com/svc"
+
+struct Loader {}
+
+impl Loader {
+  fn Load(self, key: string) -> Result<int, error> {
+    Ok(1)
+  }
+}
+
+fn run(s: svc.Alias) -> int {
+  match s.Load("k") {
+    Ok(n) => n,
+    Err(_) => 0,
+  }
+}
+
+fn main() {
+  let l = Loader {}
+  let _ = run(l as svc.Alias)
+}
+"#;
+    let typedef = r#"
+pub interface Service {
+  fn Load(key: string) -> Result<int, error>
+}
+pub type Alias = Service
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/svc", typedef)]);
+}
+
+#[test]
+fn adapter_collects_methods_from_aliased_parent_interface() {
+    let input = r#"
+import "go:example.com/shapes"
+
+struct Square {}
+
+impl Square {
+  fn Area(self) -> Result<int, error> {
+    Ok(4)
+  }
+  fn Name(self) -> string {
+    "sq"
+  }
+}
+
+fn describe(s: shapes.Shape) -> string {
+  s.Name()
+}
+
+fn main() {
+  let s = Square {}
+  let _ = describe(s as shapes.Shape)
+}
+"#;
+    let typedef = r#"
+pub interface Sized {
+  fn Area() -> Result<int, error>
+}
+pub type SizedAlias = Sized
+pub interface Shape {
+  impl SizedAlias
+  fn Name() -> string
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/shapes", typedef)]);
+}

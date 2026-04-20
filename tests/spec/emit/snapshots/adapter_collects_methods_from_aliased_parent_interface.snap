@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: "input: \nimport \"go:example.com/shapes\"\n\nstruct Square {}\n\nimpl Square {\n  fn Area(self) -> Result<int, error> {\n    Ok(4)\n  }\n  fn Name(self) -> string {\n    \"sq\"\n  }\n}\n\nfn describe(s: shapes.Shape) -> string {\n  s.Name()\n}\n\nfn main() {\n  let s = Square {}\n  let _ = describe(s as shapes.Shape)\n}\n"
+---
+package main
+
+import (
+	"example.com/shapes"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Square struct{}
+
+func (s Square) String() string {
+	return "Square"
+}
+
+func (s Square) Area() lisette.Result[int, error] {
+	return lisette.MakeResultOk[int, error](4)
+}
+
+func (s Square) Name() string {
+	return "sq"
+}
+
+func describe(s shapes.Shape) string {
+	return s.Name()
+}
+
+func main() {
+	s := Square{}
+	_ = describe(_lisAdapter_Square_Shape_0{inner: s})
+}
+
+type _lisAdapter_Square_Shape_0 struct {
+	inner Square
+}
+
+func (a _lisAdapter_Square_Shape_0) Name() string {
+	return a.inner.Name()
+}
+
+func (a _lisAdapter_Square_Shape_0) Area() (int, error) {
+	res_1 := a.inner.Area()
+	if res_1.Tag == lisette.ResultOk {
+		return res_1.OkVal, nil
+	}
+	return *new(int), res_1.ErrVal
+}
