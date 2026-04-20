@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Immutable variable
+    ╭─[test.lis:12:5]
+ 11 │   if let Some(Counter { n, .. } as c) = opt {
+ 12 │     c.bump();
+    ·     ───┬──
+    ·        ╰── cannot mutate an immutable variable
+ 13 │     let _ = n;
+    ╰────
+  help: Pattern bindings are immutable; rebind with `let mut c = c` to mutate · code: [infer.immutable]

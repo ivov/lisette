@@ -191,6 +191,27 @@ fn test(pair: (Point, int), (Point { x, .. } as p, z): (Point, int)) -> int { x 
 }
 
 #[test]
+fn infer_mutate_match_arm_binding() {
+    let input = r#"
+struct Counter { n: int }
+
+impl Counter {
+  fn bump(self: Ref<Counter>) {
+    self.n = self.n + 1
+  }
+}
+
+fn test(opt: Option<Counter>) {
+  if let Some(Counter { n, .. } as c) = opt {
+    c.bump();
+    let _ = n;
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn parse_underscore_as_alias() {
     let input = r#"
 struct Point { x: int, y: int }

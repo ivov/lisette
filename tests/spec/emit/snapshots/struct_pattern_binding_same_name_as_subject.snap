@@ -25,7 +25,9 @@ func test() int {
 		d: 4,
 	}
 	subject_1 := b
-	a := subject_1.a
-	b_2 := subject_1.b
-	return a + b_2
+	{
+		a := subject_1.a
+		b_2 := subject_1.b
+		return a + b_2
+	}
 }

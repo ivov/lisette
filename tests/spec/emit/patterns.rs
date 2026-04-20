@@ -834,6 +834,24 @@ fn test(s: Status) -> int {
 }
 
 #[test]
+fn match_arm_binding_shadows_outer_name() {
+    let input = r#"
+import "go:fmt"
+
+struct Point { x: int, y: int }
+
+fn test(p: Point) -> int {
+  let result = match p {
+    Point { x, .. } as fmt => fmt.x + x,
+  }
+  fmt.Println(result)
+  result
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn as_binding_unused_elided() {
     let input = r#"
 struct Point { x: int, y: int }

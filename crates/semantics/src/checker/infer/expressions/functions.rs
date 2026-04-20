@@ -1150,8 +1150,16 @@ impl Checker<'_, '_> {
             .map(|t| t.resolve().is_ref())
             .unwrap_or(false);
         if !is_deref && !binding_is_ref && !self.scopes.lookup_mutable(&var_name) {
+            let is_match_arm = self
+                .scopes
+                .lookup_binding_id(&var_name)
+                .and_then(|id| self.facts.bindings.get(&id))
+                .is_some_and(|b| b.kind.is_match_arm());
             self.sink.push(diagnostics::infer::disallowed_mutation(
-                &var_name, *span, None,
+                &var_name,
+                *span,
+                None,
+                is_match_arm,
             ));
         }
     }

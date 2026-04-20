@@ -23,8 +23,10 @@ func test() int {
 		F1: 2,
 	}
 	var sum int
-	a_1 := p.F0
-	b_2 := p.F1
-	sum = a_1 + b_2
+	{
+		a_1 := p.F0
+		b_2 := p.F1
+		sum = a_1 + b_2
+	}
 	return a + b + sum
 }

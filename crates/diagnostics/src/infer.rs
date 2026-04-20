@@ -285,6 +285,7 @@ pub fn disallowed_mutation(
     variable_name: &str,
     span: Span,
     self_type_name: Option<&str>,
+    is_match_arm_binding: bool,
 ) -> LisetteDiagnostic {
     if variable_name == "self" {
         if let Some(type_name) = self_type_name {
@@ -300,6 +301,13 @@ pub fn disallowed_mutation(
                 .with_span_label(&span, "receiver is immutable")
                 .with_help("Use `self: Ref<Self>` to make the receiver mutable")
         }
+    } else if is_match_arm_binding {
+        LisetteDiagnostic::error("Immutable variable")
+            .with_infer_code("immutable")
+            .with_span_label(&span, "cannot mutate an immutable variable")
+            .with_help(format!(
+                "Pattern bindings are immutable; rebind with `let mut {variable_name} = {variable_name}` to mutate"
+            ))
     } else {
         LisetteDiagnostic::error("Immutable variable")
             .with_infer_code("immutable")

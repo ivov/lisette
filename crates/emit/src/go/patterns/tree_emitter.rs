@@ -398,14 +398,13 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         result_var: &Option<String>,
     ) {
         let arm = &self.arms[arm_index];
-        let needs_block = self.emitter.pattern_has_binding_collisions(&arm.pattern);
-        let has_bindings = !bindings.is_empty();
+        let emits_any_binding = bindings.iter().any(|b| b.go_name.is_some());
+        let needs_block =
+            emits_any_binding || self.emitter.pattern_has_binding_collisions(&arm.pattern);
 
         if needs_block {
             output.push_str("{\n");
             self.emitter.enter_scope();
-        } else if has_bindings {
-            self.emitter.scope.bindings.save();
         }
 
         let subject_var = self.subject_var.clone();
@@ -419,8 +418,6 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         if needs_block {
             self.emitter.exit_scope();
             output.push_str("}\n");
-        } else if has_bindings {
-            self.emitter.scope.bindings.restore();
         }
     }
 
