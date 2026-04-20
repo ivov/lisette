@@ -360,16 +360,8 @@ impl EnumLayout {
     }
 
     fn emit_unmarshal_json(&self, receiver: &str, receiver_type: &str) -> String {
-        let no_payload: Vec<&VariantLayout> = self
-            .variants
-            .iter()
-            .filter(|v| v.fields.is_empty())
-            .collect();
-        let with_payload: Vec<&VariantLayout> = self
-            .variants
-            .iter()
-            .filter(|v| !v.fields.is_empty())
-            .collect();
+        let (no_payload, with_payload): (Vec<&VariantLayout>, Vec<&VariantLayout>) =
+            self.variants.iter().partition(|v| v.fields.is_empty());
 
         let mut lines = Vec::new();
         lines.push(format!(
@@ -377,118 +369,190 @@ impl EnumLayout {
         ));
 
         if !no_payload.is_empty() {
-            lines.push("var name string".to_string());
-            if !with_payload.is_empty() {
-                lines.push("if err := json.Unmarshal(data, &name); err == nil {".to_string());
-            } else {
-                lines.push("if err := json.Unmarshal(data, &name); err != nil {".to_string());
-                lines.push(format!(
-                    "return fmt.Errorf(\"invalid {} JSON: expected string\")",
-                    self.enum_name
-                ));
-                lines.push("}".to_string());
-            }
-            lines.push("switch name {".to_string());
-            for variant in &no_payload {
-                lines.push(format!("case \"{}\":", variant.name));
-                lines.push(format!("{receiver}.Tag = {}", variant.tag_constant));
-                lines.push("return nil".to_string());
-            }
-            lines.push("default:".to_string());
-            lines.push(format!(
-                "return fmt.Errorf(\"unknown {} variant: %s\", name)",
-                self.enum_name
-            ));
-            lines.push("}".to_string());
-            if !with_payload.is_empty() {
-                lines.push("}".to_string()); // close the `if err == nil` block
-            }
+            self.emit_unmarshal_no_payload_block(
+                &mut lines,
+                &no_payload,
+                !with_payload.is_empty(),
+                receiver,
+            );
         }
 
         if !with_payload.is_empty() {
-            lines.push("var obj map[string]json.RawMessage".to_string());
-            lines.push("if err := json.Unmarshal(data, &obj); err != nil {".to_string());
-            lines.push(format!(
-                "return fmt.Errorf(\"invalid {} JSON\")",
-                self.enum_name
-            ));
-            lines.push("}".to_string());
-            lines.push("for key, val := range obj {".to_string());
-            lines.push("switch key {".to_string());
-
-            for variant in &with_payload {
-                lines.push(format!("case \"{}\":", variant.name));
-                lines.push(format!("{receiver}.Tag = {}", variant.tag_constant));
-
-                if variant.is_struct_variant {
-                    lines.push("var inner map[string]json.RawMessage".to_string());
-                    lines.push("if err := json.Unmarshal(val, &inner); err != nil {".to_string());
-                    lines.push("return err".to_string());
-                    lines.push("}".to_string());
-                    for field in &variant.fields {
-                        lines.push(format!(
-                            "if v, ok := inner[\"{}\"]; ok {{",
-                            field.source_name
-                        ));
-                        lines.push(format!(
-                            "if err := json.Unmarshal(v, &{receiver}.{}); err != nil {{",
-                            field.go_name
-                        ));
-                        lines.push("return err".to_string());
-                        lines.push("}".to_string());
-                        lines.push("}".to_string());
-                    }
-                    lines.push("return nil".to_string());
-                } else if variant.fields.len() == 1 {
-                    lines.push(format!(
-                        "return json.Unmarshal(val, &{receiver}.{})",
-                        variant.fields[0].go_name
-                    ));
-                } else {
-                    lines.push("var arr []json.RawMessage".to_string());
-                    lines.push("if err := json.Unmarshal(val, &arr); err != nil {".to_string());
-                    lines.push("return err".to_string());
-                    lines.push("}".to_string());
-                    lines.push(format!("if len(arr) != {} {{", variant.fields.len()));
-                    lines.push(format!(
-                        "return fmt.Errorf(\"{} expects {} fields, got %d\", len(arr))",
-                        variant.name,
-                        variant.fields.len()
-                    ));
-                    lines.push("}".to_string());
-                    for (i, field) in variant.fields.iter().enumerate() {
-                        if i < variant.fields.len() - 1 {
-                            lines.push(format!(
-                                "if err := json.Unmarshal(arr[{}], &{receiver}.{}); err != nil {{",
-                                i, field.go_name
-                            ));
-                            lines.push("return err".to_string());
-                            lines.push("}".to_string());
-                        } else {
-                            lines.push(format!(
-                                "return json.Unmarshal(arr[{}], &{receiver}.{})",
-                                i, field.go_name
-                            ));
-                        }
-                    }
-                }
-            }
-
-            lines.push("default:".to_string());
-            lines.push(format!(
-                "return fmt.Errorf(\"unknown {} variant: %s\", key)",
-                self.enum_name
-            ));
-            lines.push("}".to_string()); // switch
-            lines.push("}".to_string()); // for
-            lines.push(format!(
-                "return fmt.Errorf(\"empty {} JSON object\")",
-                self.enum_name
-            ));
+            self.emit_unmarshal_with_payload_block(&mut lines, &with_payload, receiver);
         }
 
         lines.push("}".to_string()); // func
 
         lines.join("\n")
+    }
+
+    /// Emit the string-shape decoder: `var name string; switch name { case ... }`
+    /// for variants without payload. Wrapped in `if err == nil` when there are
+    /// also with-payload variants (then we fall through to the object shape);
+    /// otherwise treats a non-string input as a hard error.
+    fn emit_unmarshal_no_payload_block(
+        &self,
+        lines: &mut Vec<String>,
+        no_payload: &[&VariantLayout],
+        has_with_payload: bool,
+        receiver: &str,
+    ) {
+        lines.push("var name string".to_string());
+        if has_with_payload {
+            lines.push("if err := json.Unmarshal(data, &name); err == nil {".to_string());
+        } else {
+            lines.push("if err := json.Unmarshal(data, &name); err != nil {".to_string());
+            lines.push(format!(
+                "return fmt.Errorf(\"invalid {} JSON: expected string\")",
+                self.enum_name
+            ));
+            lines.push("}".to_string());
+        }
+        lines.push("switch name {".to_string());
+        for variant in no_payload {
+            lines.push(format!("case \"{}\":", variant.name));
+            lines.push(format!("{receiver}.Tag = {}", variant.tag_constant));
+            lines.push("return nil".to_string());
+        }
+        lines.push("default:".to_string());
+        lines.push(format!(
+            "return fmt.Errorf(\"unknown {} variant: %s\", name)",
+            self.enum_name
+        ));
+        lines.push("}".to_string());
+        if has_with_payload {
+            lines.push("}".to_string()); // close the `if err == nil` block
+        }
+    }
+
+    /// Emit the object-shape decoder: `var obj map[string]json.RawMessage; for
+    /// key, val := range obj { switch key { ... } }`. Per-variant payload
+    /// decoding is delegated by variant shape (struct / single-field / tuple).
+    fn emit_unmarshal_with_payload_block(
+        &self,
+        lines: &mut Vec<String>,
+        with_payload: &[&VariantLayout],
+        receiver: &str,
+    ) {
+        lines.push("var obj map[string]json.RawMessage".to_string());
+        lines.push("if err := json.Unmarshal(data, &obj); err != nil {".to_string());
+        lines.push(format!(
+            "return fmt.Errorf(\"invalid {} JSON\")",
+            self.enum_name
+        ));
+        lines.push("}".to_string());
+        lines.push("for key, val := range obj {".to_string());
+        lines.push("switch key {".to_string());
+
+        for variant in with_payload {
+            lines.push(format!("case \"{}\":", variant.name));
+            lines.push(format!("{receiver}.Tag = {}", variant.tag_constant));
+            self.emit_unmarshal_variant_payload(lines, variant, receiver);
+        }
+
+        lines.push("default:".to_string());
+        lines.push(format!(
+            "return fmt.Errorf(\"unknown {} variant: %s\", key)",
+            self.enum_name
+        ));
+        lines.push("}".to_string()); // switch
+        lines.push("}".to_string()); // for
+        lines.push(format!(
+            "return fmt.Errorf(\"empty {} JSON object\")",
+            self.enum_name
+        ));
+    }
+
+    /// Dispatch per-variant payload decoding by shape:
+    /// - struct variants decode a nested map keyed by source name,
+    /// - single-field variants unmarshal directly into the one field,
+    /// - multi-field tuple variants validate arity and unmarshal positionally.
+    fn emit_unmarshal_variant_payload(
+        &self,
+        lines: &mut Vec<String>,
+        variant: &VariantLayout,
+        receiver: &str,
+    ) {
+        if variant.is_struct_variant {
+            self.emit_unmarshal_struct_variant(lines, variant, receiver);
+        } else if variant.fields.len() == 1 {
+            self.emit_unmarshal_single_field_variant(lines, variant, receiver);
+        } else {
+            self.emit_unmarshal_tuple_variant(lines, variant, receiver);
+        }
+    }
+
+    fn emit_unmarshal_struct_variant(
+        &self,
+        lines: &mut Vec<String>,
+        variant: &VariantLayout,
+        receiver: &str,
+    ) {
+        lines.push("var inner map[string]json.RawMessage".to_string());
+        lines.push("if err := json.Unmarshal(val, &inner); err != nil {".to_string());
+        lines.push("return err".to_string());
+        lines.push("}".to_string());
+        for field in &variant.fields {
+            lines.push(format!(
+                "if v, ok := inner[\"{}\"]; ok {{",
+                field.source_name
+            ));
+            lines.push(format!(
+                "if err := json.Unmarshal(v, &{receiver}.{}); err != nil {{",
+                field.go_name
+            ));
+            lines.push("return err".to_string());
+            lines.push("}".to_string());
+            lines.push("}".to_string());
+        }
+        lines.push("return nil".to_string());
+    }
+
+    fn emit_unmarshal_single_field_variant(
+        &self,
+        lines: &mut Vec<String>,
+        variant: &VariantLayout,
+        receiver: &str,
+    ) {
+        lines.push(format!(
+            "return json.Unmarshal(val, &{receiver}.{})",
+            variant.fields[0].go_name
+        ));
+    }
+
+    fn emit_unmarshal_tuple_variant(
+        &self,
+        lines: &mut Vec<String>,
+        variant: &VariantLayout,
+        receiver: &str,
+    ) {
+        let arity = variant.fields.len();
+        lines.push("var arr []json.RawMessage".to_string());
+        lines.push("if err := json.Unmarshal(val, &arr); err != nil {".to_string());
+        lines.push("return err".to_string());
+        lines.push("}".to_string());
+        lines.push(format!("if len(arr) != {} {{", arity));
+        lines.push(format!(
+            "return fmt.Errorf(\"{} expects {} fields, got %d\", len(arr))",
+            variant.name, arity,
+        ));
+        lines.push("}".to_string());
+
+        for (i, field) in variant.fields.iter().enumerate() {
+            let is_last = i == arity - 1;
+            if is_last {
+                lines.push(format!(
+                    "return json.Unmarshal(arr[{}], &{receiver}.{})",
+                    i, field.go_name
+                ));
+            } else {
+                lines.push(format!(
+                    "if err := json.Unmarshal(arr[{}], &{receiver}.{}); err != nil {{",
+                    i, field.go_name
+                ));
+                lines.push("return err".to_string());
+                lines.push("}".to_string());
+            }
+        }
     }
 }

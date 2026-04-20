@@ -1,4 +1,8 @@
-use syntax::ast::{Literal, Pattern, RestPattern, StructKind, TypedPattern};
+use syntax::EcoString;
+use syntax::ast::{
+    EnumFieldDefinition, Generic, Literal, Pattern, RestPattern, StructFieldDefinition,
+    StructFieldPattern, StructKind, TypedPattern, VariantFields,
+};
 use syntax::program::Definition;
 use syntax::types::Type;
 
@@ -7,6 +11,41 @@ use crate::expressions::literals::convert_escape_sequences;
 use crate::names::generics;
 use crate::patterns::decision_tree::{collect_pattern_info, emit_tree_bindings};
 use crate::write_line;
+
+/// Shared access to a named, typed field — implemented for both
+/// `StructFieldDefinition` and `EnumFieldDefinition` so the recursion
+/// helpers can iterate either shape without duplication.
+trait FieldDef {
+    fn name(&self) -> &EcoString;
+    fn ty(&self) -> &Type;
+}
+
+impl FieldDef for StructFieldDefinition {
+    fn name(&self) -> &EcoString {
+        &self.name
+    }
+    fn ty(&self) -> &Type {
+        &self.ty
+    }
+}
+
+impl FieldDef for EnumFieldDefinition {
+    fn name(&self) -> &EcoString {
+        &self.name
+    }
+    fn ty(&self) -> &Type {
+        &self.ty
+    }
+}
+
+/// View an enum variant's fields as a slice. `Unit` variants yield an empty
+/// slice, so callers can treat all variant shapes uniformly.
+fn variant_fields_slice(fields: &VariantFields) -> &[EnumFieldDefinition] {
+    match fields {
+        VariantFields::Unit => &[],
+        VariantFields::Tuple(f) | VariantFields::Struct(f) => f,
+    }
+}
 
 pub(crate) fn emit_pattern_literal(literal: &Literal) -> String {
     match literal {
@@ -162,390 +201,388 @@ impl Emitter<'_> {
     ) {
         let resolved = ty.resolve();
 
-        match (pattern, typed) {
-            (Pattern::Identifier { identifier, .. }, _) => {
-                if let Some(go_name) = self.go_name_for_binding(pattern) {
-                    let go_name = if self.is_declared(&go_name) {
-                        self.fresh_var(Some(identifier))
-                    } else {
-                        go_name
-                    };
-                    let go_name = self.scope.bindings.add(identifier, go_name);
-                    self.declare(&go_name);
-                    let go_ty = self.go_type_as_string(&resolved);
-                    write_line!(output, "var {} {}", go_name, go_ty);
-                } else {
-                    self.scope.bindings.add(identifier, "_");
-                }
+        match pattern {
+            Pattern::Identifier { identifier, .. } => {
+                self.declare_pattern_var(output, pattern, identifier, &resolved);
             }
-
-            (Pattern::Tuple { elements, .. }, _) => {
-                let typed_elems = match typed {
-                    Some(TypedPattern::Tuple { elements: te, .. }) => te.as_slice(),
-                    _ => &[],
+            Pattern::Tuple { elements, .. } => {
+                self.emit_tuple_pattern_decls(output, elements, &resolved, typed);
+            }
+            Pattern::Struct {
+                fields, identifier, ..
+            } => {
+                self.emit_struct_pattern_decls(output, fields, identifier, &resolved, typed);
+            }
+            Pattern::EnumVariant {
+                fields,
+                identifier,
+                ty: pattern_ty,
+                ..
+            } => {
+                self.emit_enum_variant_pattern_decls(
+                    output, fields, identifier, pattern_ty, &resolved, typed,
+                );
+            }
+            Pattern::Slice { prefix, rest, .. } => {
+                self.emit_slice_pattern_decls(output, prefix, rest, &resolved, typed);
+            }
+            Pattern::Or { patterns, .. } => {
+                let Some(first) = patterns.first() else {
+                    return;
                 };
-                let elem_types: Option<&[Type]> = match &resolved {
-                    Type::Constructor { params, .. } => Some(params),
-                    Type::Tuple(elems) => Some(elems),
+                let alt = match typed {
+                    Some(TypedPattern::Or { alternatives }) => alternatives.first(),
                     _ => None,
                 };
-                if let Some(types) = elem_types {
-                    for (i, (elem, elem_ty)) in elements.iter().zip(types.iter()).enumerate() {
-                        self.emit_binding_declarations_with_type(
-                            output,
-                            elem,
-                            elem_ty,
-                            typed_elems.get(i),
-                        );
-                    }
-                }
+                self.emit_binding_declarations_with_type(output, first, ty, alt);
             }
-
-            (
-                Pattern::Struct { fields, .. },
-                Some(TypedPattern::Struct {
-                    struct_name,
-                    struct_fields,
-                    pattern_fields: typed_pf,
-                    ..
-                }),
-            ) => {
-                if let Type::Constructor { params, .. } = &resolved
-                    && let Some(Definition::Struct { generics, .. }) =
-                        self.ctx.definitions.get(struct_name.as_str())
-                {
-                    for field_pattern in fields {
-                        if let Some(field_definition) =
-                            struct_fields.iter().find(|f| f.name == field_pattern.name)
-                        {
-                            let field_ty = generics::resolve_field_type(
-                                generics,
-                                params,
-                                &field_definition.ty,
-                            );
-                            let typed_child = typed_pf
-                                .iter()
-                                .find(|(n, _)| n == &field_pattern.name)
-                                .map(|(_, tp)| tp);
-                            self.emit_binding_declarations_with_type(
-                                output,
-                                &field_pattern.value,
-                                &field_ty,
-                                typed_child,
-                            );
-                        }
-                    }
-                }
-            }
-
-            (
-                Pattern::Struct { fields, .. },
-                Some(TypedPattern::EnumStructVariant {
-                    enum_name,
-                    variant_fields,
-                    pattern_fields: typed_pf,
-                    ..
-                }),
-            ) => {
-                if let Type::Constructor { params, .. } = &resolved
-                    && let Some(Definition::Enum { generics, .. }) =
-                        self.ctx.definitions.get(enum_name.as_str())
-                {
-                    for field_pattern in fields {
-                        if let Some(field_definition) =
-                            variant_fields.iter().find(|f| f.name == field_pattern.name)
-                        {
-                            let field_ty = generics::resolve_field_type(
-                                generics,
-                                params,
-                                &field_definition.ty,
-                            );
-                            let typed_child = typed_pf
-                                .iter()
-                                .find(|(n, _)| n == &field_pattern.name)
-                                .map(|(_, tp)| tp);
-                            self.emit_binding_declarations_with_type(
-                                output,
-                                &field_pattern.value,
-                                &field_ty,
-                                typed_child,
-                            );
-                        }
-                    }
-                }
-            }
-
-            (
-                Pattern::Struct {
-                    fields, identifier, ..
-                },
-                _,
-            ) => {
-                if let Type::Constructor { id, params, .. } = &resolved {
-                    if let Some(Definition::Struct {
-                        fields: field_defs,
-                        generics,
-                        ..
-                    }) = self.ctx.definitions.get(id.as_str())
-                    {
-                        for field_pattern in fields {
-                            if let Some(field_definition) =
-                                field_defs.iter().find(|f| f.name == field_pattern.name)
-                            {
-                                let field_ty = generics::resolve_field_type(
-                                    generics,
-                                    params,
-                                    &field_definition.ty,
-                                );
-                                self.emit_binding_declarations_with_type(
-                                    output,
-                                    &field_pattern.value,
-                                    &field_ty,
-                                    None,
-                                );
-                            }
-                        }
-                    } else if let Some(Definition::Enum {
-                        variants, generics, ..
-                    }) = self.ctx.definitions.get(id.as_str())
-                    {
-                        let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
-                        if let Some(variant_definition) =
-                            variants.iter().find(|v| v.name == variant_name)
-                        {
-                            for field_pattern in fields {
-                                if let Some(field_definition) = variant_definition
-                                    .fields
-                                    .iter()
-                                    .find(|f| f.name == field_pattern.name)
-                                {
-                                    let field_ty = generics::resolve_field_type(
-                                        generics,
-                                        params,
-                                        &field_definition.ty,
-                                    );
-                                    self.emit_binding_declarations_with_type(
-                                        output,
-                                        &field_pattern.value,
-                                        &field_ty,
-                                        None,
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            (
-                Pattern::EnumVariant {
-                    fields,
-                    ty: pattern_ty,
-                    ..
-                },
-                Some(TypedPattern::EnumVariant {
-                    enum_name,
-                    variant_fields,
-                    fields: typed_fields,
-                    ..
-                }),
-            ) => {
-                if self.is_tuple_struct_type(pattern_ty) {
-                    if let Type::Constructor { id, params, .. } = &resolved
-                        && let Some(Definition::Struct {
-                            fields: field_defs,
-                            generics,
-                            kind: StructKind::Tuple,
-                            ..
-                        }) = self.ctx.definitions.get(id.as_str())
-                    {
-                        for (i, (field_pattern, field_definition)) in
-                            fields.iter().zip(field_defs.iter()).enumerate()
-                        {
-                            let field_ty = generics::resolve_field_type(
-                                generics,
-                                params,
-                                &field_definition.ty,
-                            );
-                            self.emit_binding_declarations_with_type(
-                                output,
-                                field_pattern,
-                                &field_ty,
-                                typed_fields.get(i),
-                            );
-                        }
-                    }
-                    return;
-                }
-
-                if let Type::Constructor { params, .. } = &resolved
-                    && let Some(Definition::Enum { generics, .. }) =
-                        self.ctx.definitions.get(enum_name.as_str())
-                {
-                    for (i, (field_pattern, field_definition)) in
-                        fields.iter().zip(variant_fields.iter()).enumerate()
-                    {
-                        let field_ty =
-                            generics::resolve_field_type(generics, params, &field_definition.ty);
-                        self.emit_binding_declarations_with_type(
-                            output,
-                            field_pattern,
-                            &field_ty,
-                            typed_fields.get(i),
-                        );
-                    }
-                }
-            }
-
-            (
-                Pattern::EnumVariant {
-                    identifier,
-                    fields,
-                    ty: pattern_ty,
-                    ..
-                },
-                _,
-            ) => {
-                if self.is_tuple_struct_type(pattern_ty) {
-                    if let Type::Constructor { id, params, .. } = &resolved
-                        && let Some(Definition::Struct {
-                            fields: field_defs,
-                            generics,
-                            kind: StructKind::Tuple,
-                            ..
-                        }) = self.ctx.definitions.get(id.as_str())
-                    {
-                        for (field_pattern, field_definition) in
-                            fields.iter().zip(field_defs.iter())
-                        {
-                            let field_ty = generics::resolve_field_type(
-                                generics,
-                                params,
-                                &field_definition.ty,
-                            );
-                            self.emit_binding_declarations_with_type(
-                                output,
-                                field_pattern,
-                                &field_ty,
-                                None,
-                            );
-                        }
-                    }
-                    return;
-                }
-
-                if let Type::Constructor { id, params, .. } = &resolved
-                    && let Some(Definition::Enum {
-                        variants, generics, ..
-                    }) = self.ctx.definitions.get(id.as_str())
-                {
-                    let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
-                    if let Some(variant_definition) =
-                        variants.iter().find(|v| v.name == variant_name)
-                    {
-                        for (field_pattern, field_definition) in
-                            fields.iter().zip(variant_definition.fields.iter())
-                        {
-                            let field_ty = generics::resolve_field_type(
-                                generics,
-                                params,
-                                &field_definition.ty,
-                            );
-                            self.emit_binding_declarations_with_type(
-                                output,
-                                field_pattern,
-                                &field_ty,
-                                None,
-                            );
-                        }
-                    }
-                }
-            }
-
-            (
-                Pattern::Slice { prefix, rest, .. },
-                Some(TypedPattern::Slice {
-                    prefix: typed_prefix,
-                    element_type,
-                    ..
-                }),
-            ) => {
-                for (i, elem) in prefix.iter().enumerate() {
-                    self.emit_binding_declarations_with_type(
-                        output,
-                        elem,
-                        element_type,
-                        typed_prefix.get(i),
-                    );
-                }
-                if let RestPattern::Bind { name, .. } = rest
-                    && let Some(go_name) = self.go_name_for_rest_binding(rest)
-                {
-                    let go_name = self.scope.bindings.add(name, go_name);
-                    let go_ty = self.go_type_as_string(&resolved);
-                    write_line!(output, "var {} {}", go_name, go_ty);
-                }
-            }
-
-            (Pattern::Slice { prefix, rest, .. }, _) => {
-                if let Type::Constructor { params, .. } = &resolved
-                    && let Some(elem_ty) = params.first()
-                {
-                    for elem in prefix {
-                        self.emit_binding_declarations_with_type(output, elem, elem_ty, None);
-                    }
-                    if let RestPattern::Bind { name, .. } = rest
-                        && let Some(go_name) = self.go_name_for_rest_binding(rest)
-                    {
-                        let go_name = self.scope.bindings.add(name, go_name);
-                        let go_ty = self.go_type_as_string(&resolved);
-                        write_line!(output, "var {} {}", go_name, go_ty);
-                    }
-                }
-            }
-
-            (Pattern::Or { patterns, .. }, Some(TypedPattern::Or { alternatives })) => {
-                if let Some(first) = patterns.first() {
-                    self.emit_binding_declarations_with_type(
-                        output,
-                        first,
-                        ty,
-                        alternatives.first(),
-                    );
-                }
-            }
-
-            (Pattern::Or { patterns, .. }, _) => {
-                if let Some(first) = patterns.first() {
-                    self.emit_binding_declarations_with_type(output, first, ty, None);
-                }
-            }
-
-            (
-                p @ Pattern::AsBinding {
-                    pattern: inner,
-                    name,
-                    ..
-                },
-                _,
-            ) => {
+            p @ Pattern::AsBinding {
+                pattern: inner,
+                name,
+                ..
+            } => {
                 self.emit_binding_declarations_with_type(output, inner, ty, typed);
-                if let Some(go_name) = self.go_name_for_binding(p) {
-                    let go_name = if self.is_declared(&go_name) {
-                        self.fresh_var(Some(name))
-                    } else {
-                        go_name
-                    };
-                    let go_name = self.scope.bindings.add(name, go_name);
-                    self.declare(&go_name);
-                    let go_ty = self.go_type_as_string(&resolved);
-                    write_line!(output, "var {} {}", go_name, go_ty);
-                } else {
-                    self.scope.bindings.add(name, "_");
+                self.declare_pattern_var(output, p, name, &resolved);
+            }
+            Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => {}
+        }
+    }
+
+    /// Declare a Go `var X T` binding for an identifier-shaped pattern, falling
+    /// back to `_` when the binding is unused and to a fresh name when the
+    /// desired Go name is already taken in the current scope.
+    fn declare_pattern_var(
+        &mut self,
+        output: &mut String,
+        pattern: &Pattern,
+        lisette_name: &EcoString,
+        resolved: &Type,
+    ) {
+        let Some(go_name) = self.go_name_for_binding(pattern) else {
+            self.scope.bindings.add(lisette_name, "_");
+            return;
+        };
+        let go_name = if self.is_declared(&go_name) {
+            self.fresh_var(Some(lisette_name))
+        } else {
+            go_name
+        };
+        let go_name = self.scope.bindings.add(lisette_name, go_name);
+        self.declare(&go_name);
+        let go_ty = self.go_type_as_string(resolved);
+        write_line!(output, "var {} {}", go_name, go_ty);
+    }
+
+    /// Recurse into tuple-pattern elements, pairing each with the matching
+    /// tuple-slot type from the resolved tuple (or constructor with tuple args).
+    fn emit_tuple_pattern_decls(
+        &mut self,
+        output: &mut String,
+        elements: &[Pattern],
+        resolved: &Type,
+        typed: Option<&TypedPattern>,
+    ) {
+        let typed_elems: &[TypedPattern] = match typed {
+            Some(TypedPattern::Tuple { elements: te, .. }) => te.as_slice(),
+            _ => &[],
+        };
+        let types: &[Type] = match resolved {
+            Type::Constructor { params, .. } => params,
+            Type::Tuple(elems) => elems,
+            _ => return,
+        };
+        for (i, (elem, elem_ty)) in elements.iter().zip(types.iter()).enumerate() {
+            self.emit_binding_declarations_with_type(output, elem, elem_ty, typed_elems.get(i));
+        }
+    }
+
+    /// Recurse into named struct-pattern fields. The pattern may be matching
+    /// a plain struct or an enum's struct variant, discovered via the typed
+    /// pattern when present and via the definitions table as a fallback.
+    fn emit_struct_pattern_decls(
+        &mut self,
+        output: &mut String,
+        fields: &[StructFieldPattern],
+        identifier: &EcoString,
+        resolved: &Type,
+        typed: Option<&TypedPattern>,
+    ) {
+        match typed {
+            Some(TypedPattern::Struct {
+                struct_name,
+                struct_fields,
+                pattern_fields,
+                ..
+            }) => {
+                let Type::Constructor { params, .. } = resolved else {
+                    return;
+                };
+                let Some(Definition::Struct { generics, .. }) =
+                    self.ctx.definitions.get(struct_name.as_str())
+                else {
+                    return;
+                };
+                self.recurse_named_fields(
+                    output,
+                    fields,
+                    struct_fields,
+                    generics,
+                    params,
+                    Some(pattern_fields),
+                );
+            }
+            Some(TypedPattern::EnumStructVariant {
+                enum_name,
+                variant_fields,
+                pattern_fields,
+                ..
+            }) => {
+                let Type::Constructor { params, .. } = resolved else {
+                    return;
+                };
+                let Some(Definition::Enum { generics, .. }) =
+                    self.ctx.definitions.get(enum_name.as_str())
+                else {
+                    return;
+                };
+                self.recurse_named_fields(
+                    output,
+                    fields,
+                    variant_fields,
+                    generics,
+                    params,
+                    Some(pattern_fields),
+                );
+            }
+            _ => self.emit_struct_pattern_fallback(output, fields, identifier, resolved),
+        }
+    }
+
+    /// Untyped struct-pattern fallback: look up the definition by id, then
+    /// dispatch to the same field-recursion helper with `typed_pf = None`.
+    fn emit_struct_pattern_fallback(
+        &mut self,
+        output: &mut String,
+        fields: &[StructFieldPattern],
+        identifier: &EcoString,
+        resolved: &Type,
+    ) {
+        let Type::Constructor { id, params, .. } = resolved else {
+            return;
+        };
+        match self.ctx.definitions.get(id.as_str()) {
+            Some(Definition::Struct {
+                fields: field_defs,
+                generics,
+                ..
+            }) => {
+                self.recurse_named_fields(output, fields, field_defs, generics, params, None);
+            }
+            Some(Definition::Enum {
+                variants, generics, ..
+            }) => {
+                let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+                if let Some(variant) = variants.iter().find(|v| v.name == variant_name) {
+                    self.recurse_named_fields(
+                        output,
+                        fields,
+                        variant_fields_slice(&variant.fields),
+                        generics,
+                        params,
+                        None,
+                    );
                 }
             }
+            _ => {}
+        }
+    }
 
-            (Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. }, _) => {}
+    /// Recurse into positional enum-variant-pattern fields. Tuple-struct
+    /// matches route through the struct definition; everything else routes
+    /// through the enum variant's positional fields.
+    fn emit_enum_variant_pattern_decls(
+        &mut self,
+        output: &mut String,
+        fields: &[Pattern],
+        identifier: &EcoString,
+        pattern_ty: &Type,
+        resolved: &Type,
+        typed: Option<&TypedPattern>,
+    ) {
+        if self.is_tuple_struct_type(pattern_ty) {
+            self.emit_tuple_struct_variant_decls(output, fields, resolved, typed);
+            return;
+        }
+
+        let typed_fields = match typed {
+            Some(TypedPattern::EnumVariant { fields: tf, .. }) => Some(tf.as_slice()),
+            _ => None,
+        };
+
+        if let Some(TypedPattern::EnumVariant {
+            enum_name,
+            variant_fields,
+            ..
+        }) = typed
+        {
+            let Type::Constructor { params, .. } = resolved else {
+                return;
+            };
+            let Some(Definition::Enum { generics, .. }) =
+                self.ctx.definitions.get(enum_name.as_str())
+            else {
+                return;
+            };
+            self.recurse_positional_fields(
+                output,
+                fields,
+                variant_fields,
+                generics,
+                params,
+                typed_fields,
+            );
+            return;
+        }
+
+        let Type::Constructor { id, params, .. } = resolved else {
+            return;
+        };
+        let Some(Definition::Enum {
+            variants, generics, ..
+        }) = self.ctx.definitions.get(id.as_str())
+        else {
+            return;
+        };
+        let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+        let Some(variant) = variants.iter().find(|v| v.name == variant_name) else {
+            return;
+        };
+        self.recurse_positional_fields(
+            output,
+            fields,
+            variant_fields_slice(&variant.fields),
+            generics,
+            params,
+            None,
+        );
+    }
+
+    /// Enum-variant-shaped pattern matching a tuple struct (newtype): use the
+    /// struct's own positional fields with `Tuple` kind, not the enum path.
+    fn emit_tuple_struct_variant_decls(
+        &mut self,
+        output: &mut String,
+        fields: &[Pattern],
+        resolved: &Type,
+        typed: Option<&TypedPattern>,
+    ) {
+        let Type::Constructor { id, params, .. } = resolved else {
+            return;
+        };
+        let Some(Definition::Struct {
+            fields: field_defs,
+            generics,
+            kind: StructKind::Tuple,
+            ..
+        }) = self.ctx.definitions.get(id.as_str())
+        else {
+            return;
+        };
+        let typed_fields = match typed {
+            Some(TypedPattern::EnumVariant { fields: tf, .. }) => Some(tf.as_slice()),
+            _ => None,
+        };
+        self.recurse_positional_fields(output, fields, field_defs, generics, params, typed_fields);
+    }
+
+    /// Recurse into a slice pattern's prefix elements and (optionally) bind
+    /// the rest variable as a slice of the full element type.
+    fn emit_slice_pattern_decls(
+        &mut self,
+        output: &mut String,
+        prefix: &[Pattern],
+        rest: &RestPattern,
+        resolved: &Type,
+        typed: Option<&TypedPattern>,
+    ) {
+        let (elem_ty, typed_prefix): (Type, Option<&[TypedPattern]>) = match typed {
+            Some(TypedPattern::Slice {
+                prefix: tp,
+                element_type,
+                ..
+            }) => (element_type.clone(), Some(tp.as_slice())),
+            _ => {
+                let Type::Constructor { params, .. } = resolved else {
+                    return;
+                };
+                let Some(elem) = params.first().cloned() else {
+                    return;
+                };
+                (elem, None)
+            }
+        };
+
+        for (i, elem) in prefix.iter().enumerate() {
+            let typed_child = typed_prefix.and_then(|tp| tp.get(i));
+            self.emit_binding_declarations_with_type(output, elem, &elem_ty, typed_child);
+        }
+
+        if let RestPattern::Bind { name, .. } = rest
+            && let Some(go_name) = self.go_name_for_rest_binding(rest)
+        {
+            let go_name = self.scope.bindings.add(name, go_name);
+            let go_ty = self.go_type_as_string(resolved);
+            write_line!(output, "var {} {}", go_name, go_ty);
+        }
+    }
+
+    /// For each named pattern field, look up its definition, resolve the
+    /// field's type against the enclosing type's generics, and recurse with
+    /// the matching typed child when available.
+    fn recurse_named_fields<F: FieldDef>(
+        &mut self,
+        output: &mut String,
+        patterns: &[StructFieldPattern],
+        defs: &[F],
+        generics: &[Generic],
+        params: &[Type],
+        typed_pf: Option<&[(EcoString, TypedPattern)]>,
+    ) {
+        for pattern in patterns {
+            let Some(def) = defs.iter().find(|d| d.name() == &pattern.name) else {
+                continue;
+            };
+            let field_ty = generics::resolve_field_type(generics, params, def.ty());
+            let typed_child = typed_pf.and_then(|pf| {
+                pf.iter()
+                    .find(|(n, _)| n == &pattern.name)
+                    .map(|(_, tp)| tp)
+            });
+            self.emit_binding_declarations_with_type(
+                output,
+                &pattern.value,
+                &field_ty,
+                typed_child,
+            );
+        }
+    }
+
+    /// For each positional pattern slot, zip with the definition slots and
+    /// recurse. Positional fields short of the definitions list are skipped
+    /// silently (parser already validates arity).
+    fn recurse_positional_fields<F: FieldDef>(
+        &mut self,
+        output: &mut String,
+        patterns: &[Pattern],
+        defs: &[F],
+        generics: &[Generic],
+        params: &[Type],
+        typed_fields: Option<&[TypedPattern]>,
+    ) {
+        for (i, (pattern, def)) in patterns.iter().zip(defs.iter()).enumerate() {
+            let field_ty = generics::resolve_field_type(generics, params, def.ty());
+            let typed_child = typed_fields.and_then(|tf| tf.get(i));
+            self.emit_binding_declarations_with_type(output, pattern, &field_ty, typed_child);
         }
     }
 }

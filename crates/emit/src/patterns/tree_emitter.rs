@@ -4,8 +4,8 @@ use syntax::types::Type;
 use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::patterns::decision_tree::{
-    ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind, compile_expanded_arms,
-    emit_tree_bindings, expand_or_patterns, render_condition,
+    AccessPath, ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind,
+    compile_expanded_arms, emit_tree_bindings, expand_or_patterns, render_condition,
 };
 use crate::types::emitter::Position;
 use crate::utils::{inline_trivial_bindings, output_ends_with_diverge, output_references_var};
@@ -97,114 +97,206 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
 
         let subject_var = self.subject_var.clone();
+        let switch_expression = self.render_switch_expression(path, kind, &subject_var);
 
-        let switch_expression = match kind {
-            SwitchKind::EnumTag => {
-                let base = path.render(&subject_var);
-                wrap_if_struct_literal(format!("{}.Tag", base))
-            }
-            SwitchKind::Value => {
-                let base = path.render(&subject_var);
-                wrap_if_struct_literal(base)
-            }
-            SwitchKind::TypeSwitch => unreachable!("handled above"),
-        };
-
-        if branches.len() == 2
-            && fallback.is_none()
-            && matches!(kind, SwitchKind::Value)
-            && branches.iter().any(|b| b.case_label == "true")
-            && branches.iter().any(|b| b.case_label == "false")
-        {
-            let (true_branch, false_branch) = if branches[0].case_label == "true" {
-                (&branches[0], &branches[1])
-            } else {
-                (&branches[1], &branches[0])
-            };
-            if true_branch.needs_stdlib || false_branch.needs_stdlib {
-                self.emitter.flags.needs_stdlib = true;
-            }
-            write_line!(output, "if {} {{", switch_expression);
-            self.emitter.enter_scope();
-            self.emit_decision_in_case(output, &true_branch.decision, arm_position, &subject_var);
-            self.emitter.exit_scope();
-            self.emit_else_or_flat(output, &false_branch.decision, arm_position, &subject_var);
+        if self.try_emit_boolean_switch(
+            output,
+            kind,
+            branches,
+            fallback,
+            &switch_expression,
+            arm_position,
+            &subject_var,
+        ) {
             return;
         }
 
-        // Two-branch switch (common for Option/Result): emit as if/else.
-        if branches.len() == 2 && fallback.is_none() {
-            let first = &branches[0];
-            let second = &branches[1];
-            if first.needs_stdlib || second.needs_stdlib {
-                self.emitter.flags.needs_stdlib = true;
-            }
-            write_line!(
-                output,
-                "if {} == {} {{",
-                switch_expression,
-                first.case_label
-            );
-            self.emitter.enter_scope();
-            self.emit_decision_in_case(output, &first.decision, arm_position, &subject_var);
-            self.emitter.exit_scope();
-            self.emit_else_or_flat(output, &second.decision, arm_position, &subject_var);
+        if self.try_emit_two_branch_switch(
+            output,
+            branches,
+            fallback,
+            &switch_expression,
+            arm_position,
+            &subject_var,
+        ) {
             return;
         }
 
-        if branches.len() == 1 && self.is_empty_fallback(fallback) {
-            let branch = &branches[0];
-            if branch.needs_stdlib {
-                self.emitter.flags.needs_stdlib = true;
-            }
-            write_line!(
-                output,
-                "if {} == {} {{",
-                switch_expression,
-                branch.case_label
-            );
-            self.emitter.enter_scope();
-            self.emit_decision_in_case(output, &branch.decision, arm_position, &subject_var);
-            self.emitter.exit_scope();
-            output.push_str("}\n");
-            return;
-        }
-
-        if branches.len() == 1 && fallback.is_some() {
-            let branch = &branches[0];
-            if branch.needs_stdlib {
-                self.emitter.flags.needs_stdlib = true;
-            }
-            write_line!(
-                output,
-                "if {} == {} {{",
-                switch_expression,
-                branch.case_label
-            );
-            self.emitter.enter_scope();
-            self.emit_decision_in_case(output, &branch.decision, arm_position, &subject_var);
-            self.emitter.exit_scope();
-            self.emit_else_or_flat(
-                output,
-                fallback.as_ref().unwrap(),
-                arm_position,
-                &subject_var,
-            );
-            return;
-        }
-
-        // Single-branch exhaustive switch (single-variant enum): emit body directly.
-        if branches.len() == 1 && fallback.is_none() {
-            let branch = &branches[0];
-            if branch.needs_stdlib {
-                self.emitter.flags.needs_stdlib = true;
-            }
-            self.emit_decision_in_case(output, &branch.decision, arm_position, &subject_var);
+        if self.try_emit_single_branch_switch(
+            output,
+            branches,
+            fallback,
+            &switch_expression,
+            arm_position,
+            &subject_var,
+        ) {
             return;
         }
 
         write_line!(output, "switch {} {{", switch_expression);
         self.emit_switch_body(output, branches, fallback, arm_position, &subject_var, true);
+    }
+
+    /// Render the expression driving a non-type-switch dispatch.
+    /// `EnumTag` reads `.Tag` off the subject; `Value` uses the subject path
+    /// directly. Both wrap struct literals to keep gofmt from stripping parens.
+    fn render_switch_expression(
+        &self,
+        path: &AccessPath,
+        kind: &SwitchKind,
+        subject_var: &str,
+    ) -> String {
+        let base = path.render(subject_var);
+        match kind {
+            SwitchKind::EnumTag => wrap_if_struct_literal(format!("{}.Tag", base)),
+            SwitchKind::Value => wrap_if_struct_literal(base),
+            SwitchKind::TypeSwitch => unreachable!("handled by emit_type_switch"),
+        }
+    }
+
+    /// Propagate the stdlib-needed flag from any of the supplied branches.
+    /// Collected in one place because every small-shape specialization
+    /// otherwise repeats the same assignment.
+    fn mark_stdlib_from_branches(&mut self, branches: &[&SwitchBranch]) {
+        if branches.iter().any(|b| b.needs_stdlib) {
+            self.emitter.flags.needs_stdlib = true;
+        }
+    }
+
+    /// Emit `if <cond> { <then> }` with an optional else arm. The else branch
+    /// may inline (e.g. a nested `if`) via `emit_else_or_flat`; `None` closes
+    /// the if block with `}\n`.
+    fn emit_if_else_arm(
+        &mut self,
+        output: &mut String,
+        condition: &str,
+        then: &Decision,
+        otherwise: Option<&Decision>,
+        arm_position: &Position,
+        subject_var: &str,
+    ) {
+        write_line!(output, "if {} {{", condition);
+        self.emitter.enter_scope();
+        self.emit_decision_in_case(output, then, arm_position, subject_var);
+        self.emitter.exit_scope();
+        match otherwise {
+            Some(d) => self.emit_else_or_flat(output, d, arm_position, subject_var),
+            None => output.push_str("}\n"),
+        }
+    }
+
+    /// Two-branch value switch with `true`/`false` labels: emit as a direct
+    /// `if <expr> { true_branch } else { false_branch }` on the raw expression.
+    #[allow(clippy::too_many_arguments)]
+    fn try_emit_boolean_switch(
+        &mut self,
+        output: &mut String,
+        kind: &SwitchKind,
+        branches: &[SwitchBranch],
+        fallback: &Option<Box<Decision>>,
+        switch_expression: &str,
+        arm_position: &Position,
+        subject_var: &str,
+    ) -> bool {
+        if branches.len() != 2
+            || fallback.is_some()
+            || !matches!(kind, SwitchKind::Value)
+            || !branches.iter().any(|b| b.case_label == "true")
+            || !branches.iter().any(|b| b.case_label == "false")
+        {
+            return false;
+        }
+        let (true_branch, false_branch) = if branches[0].case_label == "true" {
+            (&branches[0], &branches[1])
+        } else {
+            (&branches[1], &branches[0])
+        };
+        self.mark_stdlib_from_branches(&[true_branch, false_branch]);
+        self.emit_if_else_arm(
+            output,
+            switch_expression,
+            &true_branch.decision,
+            Some(&false_branch.decision),
+            arm_position,
+            subject_var,
+        );
+        true
+    }
+
+    /// Two-branch non-boolean switch (common for Option/Result): emit as
+    /// `if <expr> == <first.label> { first } else { second }`.
+    fn try_emit_two_branch_switch(
+        &mut self,
+        output: &mut String,
+        branches: &[SwitchBranch],
+        fallback: &Option<Box<Decision>>,
+        switch_expression: &str,
+        arm_position: &Position,
+        subject_var: &str,
+    ) -> bool {
+        if branches.len() != 2 || fallback.is_some() {
+            return false;
+        }
+        let first = &branches[0];
+        let second = &branches[1];
+        self.mark_stdlib_from_branches(&[first, second]);
+        let condition = format!("{} == {}", switch_expression, first.case_label);
+        self.emit_if_else_arm(
+            output,
+            &condition,
+            &first.decision,
+            Some(&second.decision),
+            arm_position,
+            subject_var,
+        );
+        true
+    }
+
+    /// Single-branch shapes: one branch + no-or-empty fallback (plain `if`),
+    /// one branch + real fallback (`if/else`), or one branch + missing
+    /// fallback (inline the body, no condition wrapper — exhaustive enum).
+    fn try_emit_single_branch_switch(
+        &mut self,
+        output: &mut String,
+        branches: &[SwitchBranch],
+        fallback: &Option<Box<Decision>>,
+        switch_expression: &str,
+        arm_position: &Position,
+        subject_var: &str,
+    ) -> bool {
+        if branches.len() != 1 {
+            return false;
+        }
+        let branch = &branches[0];
+        self.mark_stdlib_from_branches(&[branch]);
+
+        if self.is_empty_fallback(fallback) {
+            let condition = format!("{} == {}", switch_expression, branch.case_label);
+            self.emit_if_else_arm(
+                output,
+                &condition,
+                &branch.decision,
+                None,
+                arm_position,
+                subject_var,
+            );
+            return true;
+        }
+        if let Some(fb) = fallback.as_deref() {
+            let condition = format!("{} == {}", switch_expression, branch.case_label);
+            self.emit_if_else_arm(
+                output,
+                &condition,
+                &branch.decision,
+                Some(fb),
+                arm_position,
+                subject_var,
+            );
+            return true;
+        }
+        // Single-variant enum: emit the body directly, no wrapper.
+        self.emit_decision_in_case(output, &branch.decision, arm_position, subject_var);
+        true
     }
 
     /// Emit a Go type switch: `switch x := x.(type) { case T: ... default: ... }`.
@@ -606,134 +698,17 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             Decision::Success {
                 arm_index,
                 bindings,
-            } => {
-                output.push_str("{\n");
-                self.emitter.enter_scope();
-                self.emit_bindings(output, bindings, ctx.subject_var);
-                self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
-                if !ctx.use_direct_return && !output_ends_with_diverge(output) {
-                    write_line!(output, "break {}", ctx.label);
-                }
-                self.emitter.exit_scope();
-                output.push_str("}\n");
-            }
+            } => self.emit_guarded_success(output, *arm_index, bindings, ctx),
 
             Decision::Guard {
                 arm_index,
                 bindings,
-                success: _,
                 failure,
-            } => {
-                let needs_scope = !bindings.is_empty();
-                if needs_scope {
-                    output.push_str("{\n");
-                    self.emitter.enter_scope();
-                }
-                self.emit_bindings(output, bindings, ctx.subject_var);
-
-                if self.emit_guard_header(output, *arm_index) {
-                    self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
-                    if !ctx.use_direct_return && !output_ends_with_diverge(output) {
-                        write_line!(output, "break {}", ctx.label);
-                    }
-                    self.emitter.exit_scope();
-                    output.push_str("}\n");
-                }
-
-                if needs_scope {
-                    self.emitter.exit_scope();
-                    output.push_str("}\n");
-                }
-
-                self.emit_guarded_tree(output, failure, ctx);
-            }
+                ..
+            } => self.emit_guarded_guard(output, *arm_index, bindings, failure, ctx),
 
             Decision::Chain { tests, fallback } => {
-                let last_is_catchall =
-                    matches!(fallback.as_ref(), Decision::Unreachable) && tests.len() > 1;
-
-                // Group consecutive tests with the same rendered condition
-                // so that e.g. three `if tag == Some { ... }` blocks merge
-                // into a single `if tag == Some { ...; ...; ... }`.
-                let mut groups: Vec<(String, Vec<usize>)> = Vec::new();
-                for (i, test) in tests.iter().enumerate() {
-                    let condition = render_condition(&test.checks, ctx.subject_var);
-                    if let Some((last_cond, indices)) = groups.last_mut()
-                        && *last_cond == condition
-                    {
-                        indices.push(i);
-                        continue;
-                    }
-                    groups.push((condition, vec![i]));
-                }
-
-                for (g, (condition, indices)) in groups.iter().enumerate() {
-                    let is_last_group = g == groups.len() - 1;
-
-                    if is_last_group && last_is_catchall && indices.len() == 1 {
-                        self.emit_guarded_tree_decision(
-                            output,
-                            &tests[indices[0]].decision,
-                            ctx,
-                            true,
-                        );
-                        continue;
-                    }
-
-                    if tests[indices[0]].checks.is_empty() {
-                        output.push_str("{\n");
-                    } else {
-                        write_line!(output, "if {} {{", condition);
-                    }
-                    self.emitter.enter_scope();
-
-                    let can_hoist = Self::bindings_are_hoistable(tests, indices, ctx.subject_var);
-                    if can_hoist {
-                        // Hoist shared bindings once at the top of the merged block
-                        if let Some(&ref_idx) = indices.iter().find(|&&idx| {
-                            !Self::decision_top_bindings(&tests[idx].decision).is_empty()
-                        }) {
-                            let bindings = Self::decision_top_bindings(&tests[ref_idx].decision);
-                            self.emit_bindings(output, bindings, ctx.subject_var);
-                        }
-                        for &test_idx in indices.iter() {
-                            self.emit_guarded_tree_decision(
-                                output,
-                                &tests[test_idx].decision,
-                                ctx,
-                                false,
-                            );
-                        }
-                    } else {
-                        for (j, &test_idx) in indices.iter().enumerate() {
-                            let is_last_in_group = j == indices.len() - 1;
-                            let needs_wrapper = !is_last_in_group
-                                && Self::decision_has_bindings(&tests[test_idx].decision);
-                            if needs_wrapper {
-                                output.push_str("{\n");
-                                self.emitter.enter_scope();
-                            }
-                            self.emit_guarded_tree_decision(
-                                output,
-                                &tests[test_idx].decision,
-                                ctx,
-                                true,
-                            );
-                            if needs_wrapper {
-                                self.emitter.exit_scope();
-                                output.push_str("}\n");
-                            }
-                        }
-                    }
-
-                    self.emitter.exit_scope();
-                    output.push_str("}\n");
-                }
-
-                match fallback.as_ref() {
-                    Decision::Unreachable => {}
-                    _ => self.emit_guarded_tree(output, fallback, ctx),
-                }
+                self.emit_guarded_chain(output, tests, fallback, ctx);
             }
 
             Decision::Switch { .. } => {
@@ -744,6 +719,191 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             }
 
             Decision::Unreachable => {}
+        }
+    }
+
+    /// Successful leaf: emit the arm body in its own scope and terminate
+    /// either by the arm's own divergence or by breaking out of the labeled
+    /// retry loop the guarded tree lives inside.
+    fn emit_guarded_success(
+        &mut self,
+        output: &mut String,
+        arm_index: usize,
+        bindings: &[PatternBinding],
+        ctx: &GuardedTreeContext,
+    ) {
+        output.push_str("{\n");
+        self.emitter.enter_scope();
+        self.emit_bindings(output, bindings, ctx.subject_var);
+        self.emit_arm_body(output, arm_index, Some(ctx.arm_position));
+        if !ctx.use_direct_return && !output_ends_with_diverge(output) {
+            write_line!(output, "break {}", ctx.label);
+        }
+        self.emitter.exit_scope();
+        output.push_str("}\n");
+    }
+
+    /// Guard arm: emit bindings (possibly scoped), then an `if <guard>`
+    /// header. On guard success emit the arm body; on guard failure recurse
+    /// into the failure branch.
+    fn emit_guarded_guard(
+        &mut self,
+        output: &mut String,
+        arm_index: usize,
+        bindings: &[PatternBinding],
+        failure: &Decision,
+        ctx: &GuardedTreeContext,
+    ) {
+        let needs_scope = !bindings.is_empty();
+        if needs_scope {
+            output.push_str("{\n");
+            self.emitter.enter_scope();
+        }
+        self.emit_bindings(output, bindings, ctx.subject_var);
+
+        if self.emit_guard_header(output, arm_index) {
+            self.emit_arm_body(output, arm_index, Some(ctx.arm_position));
+            if !ctx.use_direct_return && !output_ends_with_diverge(output) {
+                write_line!(output, "break {}", ctx.label);
+            }
+            self.emitter.exit_scope();
+            output.push_str("}\n");
+        }
+
+        if needs_scope {
+            self.emitter.exit_scope();
+            output.push_str("}\n");
+        }
+
+        self.emit_guarded_tree(output, failure, ctx);
+    }
+
+    /// Chain of tests: collapse consecutive tests sharing the same rendered
+    /// condition into a single `if` block, then emit each group. When the
+    /// fallback is unreachable and the last group is a singleton, unwrap it
+    /// as an exhaustive catchall rather than emitting a dead condition.
+    fn emit_guarded_chain(
+        &mut self,
+        output: &mut String,
+        tests: &[ChainTest],
+        fallback: &Decision,
+        ctx: &GuardedTreeContext,
+    ) {
+        let last_is_catchall = matches!(fallback, Decision::Unreachable) && tests.len() > 1;
+        let groups = self.group_chain_tests_by_condition(tests, ctx.subject_var);
+        let group_count = groups.len();
+
+        for (g, (condition, indices)) in groups.iter().enumerate() {
+            let is_last_group = g == group_count - 1;
+            let collapse_as_catchall = is_last_group && last_is_catchall && indices.len() == 1;
+            self.emit_chain_group(output, condition, indices, tests, ctx, collapse_as_catchall);
+        }
+
+        if !matches!(fallback, Decision::Unreachable) {
+            self.emit_guarded_tree(output, fallback, ctx);
+        }
+    }
+
+    /// Group consecutive chain tests that render to the same condition, so
+    /// e.g. three `if tag == Some { ... }` blocks collapse into one.
+    fn group_chain_tests_by_condition(
+        &self,
+        tests: &[ChainTest],
+        subject_var: &str,
+    ) -> Vec<(String, Vec<usize>)> {
+        let mut groups: Vec<(String, Vec<usize>)> = Vec::new();
+        for (i, test) in tests.iter().enumerate() {
+            let condition = render_condition(&test.checks, subject_var);
+            if let Some((last_cond, indices)) = groups.last_mut()
+                && *last_cond == condition
+            {
+                indices.push(i);
+                continue;
+            }
+            groups.push((condition, vec![i]));
+        }
+        groups
+    }
+
+    /// Emit one group of merged-condition chain tests. `collapse_as_catchall`
+    /// drops the condition wrapper entirely when the final group is an
+    /// exhaustive singleton and the fallback is unreachable.
+    fn emit_chain_group(
+        &mut self,
+        output: &mut String,
+        condition: &str,
+        indices: &[usize],
+        tests: &[ChainTest],
+        ctx: &GuardedTreeContext,
+        collapse_as_catchall: bool,
+    ) {
+        if collapse_as_catchall {
+            self.emit_guarded_tree_decision(output, &tests[indices[0]].decision, ctx, true);
+            return;
+        }
+
+        if tests[indices[0]].checks.is_empty() {
+            output.push_str("{\n");
+        } else {
+            write_line!(output, "if {} {{", condition);
+        }
+        self.emitter.enter_scope();
+
+        if Self::bindings_are_hoistable(tests, indices, ctx.subject_var) {
+            self.emit_chain_group_hoisted(output, indices, tests, ctx);
+        } else {
+            self.emit_chain_group_per_test(output, indices, tests, ctx);
+        }
+
+        self.emitter.exit_scope();
+        output.push_str("}\n");
+    }
+
+    /// Hoist shared pattern bindings to the top of the merged block and emit
+    /// each test's body without its own binding prelude. Caller pre-checked
+    /// that the bindings are hoist-safe.
+    fn emit_chain_group_hoisted(
+        &mut self,
+        output: &mut String,
+        indices: &[usize],
+        tests: &[ChainTest],
+        ctx: &GuardedTreeContext,
+    ) {
+        if let Some(&ref_idx) = indices
+            .iter()
+            .find(|&&idx| !Self::decision_top_bindings(&tests[idx].decision).is_empty())
+        {
+            let bindings = Self::decision_top_bindings(&tests[ref_idx].decision);
+            self.emit_bindings(output, bindings, ctx.subject_var);
+        }
+        for &test_idx in indices {
+            self.emit_guarded_tree_decision(output, &tests[test_idx].decision, ctx, false);
+        }
+    }
+
+    /// Emit each test in the group with its own binding prelude. Non-last
+    /// tests that declare bindings are wrapped in their own block so the
+    /// bindings stay scoped to that test.
+    fn emit_chain_group_per_test(
+        &mut self,
+        output: &mut String,
+        indices: &[usize],
+        tests: &[ChainTest],
+        ctx: &GuardedTreeContext,
+    ) {
+        for (j, &test_idx) in indices.iter().enumerate() {
+            let is_last_in_group = j == indices.len() - 1;
+            let needs_wrapper =
+                !is_last_in_group && Self::decision_has_bindings(&tests[test_idx].decision);
+            if needs_wrapper {
+                output.push_str("{\n");
+                self.emitter.enter_scope();
+            }
+            self.emit_guarded_tree_decision(output, &tests[test_idx].decision, ctx, true);
+            if needs_wrapper {
+                self.emitter.exit_scope();
+                output.push_str("}\n");
+            }
         }
     }
 

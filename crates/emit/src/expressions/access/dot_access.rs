@@ -17,10 +17,55 @@ impl Emitter<'_> {
     ) -> String {
         let dot_access_kind = self.ctx.resolutions.get_dot_access(span);
 
-        // Phase 1: cases that don't need the receiver emitted first. ModuleMember
-        // and unresolved accesses may still resolve to enum/static form (e.g.
-        // cross-module or alias patterns), so fall through to both.
-        let phase_one = match dot_access_kind {
+        if let Some(s) =
+            self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind)
+        {
+            return s;
+        }
+
+        let expression_string = self.emit_coerced_expression(output, expression);
+        let expression_ty = expression.get_type();
+
+        if let Some(s) = self.try_emit_tuple_member_dot(
+            &expression_string,
+            &expression_ty,
+            member,
+            dot_access_kind,
+        ) {
+            return s;
+        }
+
+        let is_exported =
+            self.resolve_is_exported(expression, &expression_ty, member, dot_access_kind);
+        let field = go_field_name(&expression_ty, member, is_exported);
+
+        if let Some(s) = self.try_emit_nullable_field_access(
+            output,
+            &expression_string,
+            &field,
+            &expression_ty,
+            result_ty,
+        ) {
+            return s;
+        }
+
+        let result = format!("{}.{}", expression_string, field);
+        self.append_cross_module_type_args(result, &expression_ty, member, result_ty)
+    }
+
+    /// Phase 1 dispatch: the semantic kind may resolve without needing the
+    /// receiver emitted first (value-enum variant, enum constructor, static
+    /// method, instance-method value). `ModuleMember` and unresolved kinds
+    /// may still resolve as an enum variant or static method under a cross-
+    /// module/alias rename, so both helpers are tried in order.
+    fn try_emit_pre_receiver_dot(
+        &mut self,
+        expression: &Expression,
+        member: &str,
+        result_ty: &Type,
+        dot_access_kind: Option<SemanticDotKind>,
+    ) -> Option<String> {
+        match dot_access_kind {
             Some(SemanticDotKind::ValueEnumVariant) => {
                 self.emit_value_enum_variant(expression, member)
             }
@@ -44,96 +89,113 @@ impl Emitter<'_> {
                 .emit_enum_variant_dot(expression, member, result_ty)
                 .or_else(|| self.emit_static_method_dot(expression, member, result_ty)),
             _ => None,
+        }
+    }
+
+    /// Tuple-shape members: plain tuple slots emit as `.F{index}` (or the
+    /// `TUPLE_FIELDS` name); tuple-struct slots additionally try a newtype
+    /// cast when the struct has a single field and no generics.
+    fn try_emit_tuple_member_dot(
+        &mut self,
+        expression_string: &str,
+        expression_ty: &Type,
+        member: &str,
+        dot_access_kind: Option<SemanticDotKind>,
+    ) -> Option<String> {
+        let Ok(index) = member.parse::<usize>() else {
+            return None;
         };
-        if let Some(s) = phase_one {
-            return s;
-        }
-
-        // Phase 2: Post-receiver emission (struct fields, tuple fields, instance methods)
-        let expression_string = self.emit_coerced_expression(output, expression);
-        let expression_ty = expression.get_type();
-
-        // Tuple element: direct field access using TUPLE_FIELDS names
-        if let Some(SemanticDotKind::TupleElement) = dot_access_kind
-            && let Ok(index) = member.parse::<usize>()
-        {
-            let field = syntax::parse::TUPLE_FIELDS
-                .get(index)
-                .expect("oversize tuple arity");
-            return format!("{}.{}", expression_string, field);
-        }
-
-        // Tuple struct field: newtype cast or positional field access
-        if let Some(SemanticDotKind::TupleStructField { is_newtype }) = dot_access_kind
-            && let Ok(index) = member.parse::<usize>()
-        {
-            if is_newtype
-                && let Some(cast) = self.try_emit_newtype_cast(&expression_ty, &expression_string)
-            {
-                return cast;
+        match dot_access_kind {
+            Some(SemanticDotKind::TupleElement) => {
+                let field = syntax::parse::TUPLE_FIELDS
+                    .get(index)
+                    .expect("oversize tuple arity");
+                Some(format!("{}.{}", expression_string, field))
             }
-            return format!("{}.F{}", expression_string, index);
+            Some(SemanticDotKind::TupleStructField { is_newtype }) => {
+                if is_newtype
+                    && let Some(cast) = self.try_emit_newtype_cast(expression_ty, expression_string)
+                {
+                    return Some(cast);
+                }
+                Some(format!("{}.F{}", expression_string, index))
+            }
+            _ => None,
         }
+    }
 
-        // Determine whether to capitalize the Go name from pre-computed metadata.
-        // Semantic `is_exported` covers cross-module + public visibility.
-        // Emit-side checks are still needed for Go-specific concerns:
-        // - `field_is_public`: also checks #[json] tag-exported fields
-        // - `method_needs_export`: methods that must be capitalized for Go interfaces
-        let is_exported = match dot_access_kind {
+    /// Decide whether the Go member name needs exporting (capitalization).
+    /// Semantic `is_exported` covers cross-module + public visibility; the
+    /// emit-side checks additionally cover Go-specific concerns like
+    /// `#[json]`-tagged fields and interface-method capitalization.
+    fn resolve_is_exported(
+        &self,
+        expression: &Expression,
+        expression_ty: &Type,
+        member: &str,
+        dot_access_kind: Option<SemanticDotKind>,
+    ) -> bool {
+        match dot_access_kind {
             Some(SemanticDotKind::StructField { is_exported }) => {
-                is_exported || self.field_is_public(&expression_ty, member)
+                is_exported || self.field_is_public(expression_ty, member)
             }
             Some(SemanticDotKind::InstanceMethod { is_exported }) => {
                 is_exported || self.method_needs_export(member)
             }
             _ => {
-                // Fallback for ModuleMember/None/unresolved
-                self.compute_is_exported_context(expression, &expression_ty)
-                    || self.field_is_public(&expression_ty, member)
-                    || (!self.has_field(&expression_ty, member) && self.method_needs_export(member))
-            }
-        };
-
-        let is_prelude_type = expression_ty
-            .resolve()
-            .strip_refs()
-            .get_qualified_id()
-            .is_some_and(|id| id.starts_with(go_name::PRELUDE_PREFIX));
-
-        let field = if is_exported {
-            if is_prelude_type {
-                go_name::snake_to_camel(member)
-            } else {
-                go_name::make_exported(member)
-            }
-        } else {
-            go_name::escape_keyword(member).into_owned()
-        };
-
-        // Go nullable field wrapping
-        if Self::is_go_imported_type(&expression_ty) && self.is_go_nullable(result_ty) {
-            let raw_access = format!("{}.{}", expression_string, field);
-            let raw_var = self.fresh_var(Some("raw"));
-            self.declare(&raw_var);
-            write_line!(output, "{} := {}", raw_var, raw_access);
-            return self.maybe_wrap_go_nullable(output, &raw_var, result_ty);
-        }
-
-        // Regular field/method access with cross-module type args
-        let result = format!("{}.{}", expression_string, field);
-        if !self.emitting_call_callee {
-            let resolved_expression_ty = expression_ty.resolve();
-            if let Type::Constructor { ref id, .. } = resolved_expression_ty
-                && let Some(module) = id.strip_prefix(go_name::IMPORT_PREFIX)
-            {
-                let qualified = format!("{}.{}", module, member);
-                if let Some(type_args) = self.format_cross_module_type_args(&qualified, result_ty) {
-                    return format!("{}{}", result, type_args);
-                }
+                self.compute_is_exported_context(expression, expression_ty)
+                    || self.field_is_public(expression_ty, member)
+                    || (!self.has_field(expression_ty, member) && self.method_needs_export(member))
             }
         }
-        result
+    }
+
+    /// Accessing a nullable field on a Go-imported type: capture the raw
+    /// access into a temp and wrap in the Some/None nullable shape expected
+    /// downstream. Returns `None` when no wrapping is needed.
+    fn try_emit_nullable_field_access(
+        &mut self,
+        output: &mut String,
+        expression_string: &str,
+        field: &str,
+        expression_ty: &Type,
+        result_ty: &Type,
+    ) -> Option<String> {
+        if !Self::is_go_imported_type(expression_ty) || !self.is_go_nullable(result_ty) {
+            return None;
+        }
+        let raw_access = format!("{}.{}", expression_string, field);
+        let raw_var = self.fresh_var(Some("raw"));
+        self.declare(&raw_var);
+        write_line!(output, "{} := {}", raw_var, raw_access);
+        Some(self.maybe_wrap_go_nullable(output, &raw_var, result_ty))
+    }
+
+    /// When accessing a cross-module generic member by value (not as a callee),
+    /// look up the instantiation's type args and append them to the expression.
+    /// Callee-position accesses skip this because the call site re-instantiates.
+    fn append_cross_module_type_args(
+        &mut self,
+        base_access: String,
+        expression_ty: &Type,
+        member: &str,
+        result_ty: &Type,
+    ) -> String {
+        if self.emitting_call_callee {
+            return base_access;
+        }
+        let resolved_expression_ty = expression_ty.resolve();
+        let Type::Constructor { ref id, .. } = resolved_expression_ty else {
+            return base_access;
+        };
+        let Some(module) = id.strip_prefix(go_name::IMPORT_PREFIX) else {
+            return base_access;
+        };
+        let qualified = format!("{}.{}", module, member);
+        match self.format_cross_module_type_args(&qualified, result_ty) {
+            Some(type_args) => format!("{}{}", base_access, type_args),
+            None => base_access,
+        }
     }
 
     /// Emit a newtype cast like `MyType(inner)` for single-field tuple struct access.
@@ -287,5 +349,26 @@ impl Emitter<'_> {
         // Only return true if the type actually comes from the prelude module.
         // User-defined types with the same name should NOT be treated as prelude types.
         id.starts_with(go_name::PRELUDE_PREFIX)
+    }
+}
+
+/// Pick the Go-side name for a struct field or method. Exported members on
+/// prelude types follow snake_case → camelCase (matching the stdlib
+/// convention); exported members elsewhere get first-letter capitalization;
+/// non-exported members are escaped to avoid Go keywords.
+fn go_field_name(expression_ty: &Type, member: &str, is_exported: bool) -> String {
+    let is_prelude_type = expression_ty
+        .resolve()
+        .strip_refs()
+        .get_qualified_id()
+        .is_some_and(|id| id.starts_with(go_name::PRELUDE_PREFIX));
+
+    if !is_exported {
+        return go_name::escape_keyword(member).into_owned();
+    }
+    if is_prelude_type {
+        go_name::snake_to_camel(member)
+    } else {
+        go_name::make_exported(member)
     }
 }
