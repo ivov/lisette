@@ -86,53 +86,69 @@ impl Emitter<'_> {
 
         for file in files {
             for item in &file.items {
-                if let Expression::ImplBlock {
+                let Expression::ImplBlock {
                     receiver_name,
                     generics,
                     ..
                 } = item
-                {
-                    if generics.iter().any(|g| !g.bounds.is_empty()) {
-                        for generic in generics.iter() {
-                            for bound in &generic.bounds {
-                                if let syntax::ast::Annotation::Constructor { name, .. } = bound
-                                    && let Some((module, _)) = name.split_once('.')
-                                    && module != self.current_module
-                                    && !go_name::is_go_import(module)
-                                    && module != go_name::PRELUDE_MODULE
-                                {
-                                    let canonical =
-                                        self.resolve_alias_to_module(module).to_string();
-                                    self.require_module_import(&canonical);
-                                }
-                            }
-                        }
+                else {
+                    continue;
+                };
+                if !generics.iter().any(|g| !g.bounds.is_empty()) {
+                    self.module
+                        .unconstrained_impl_receivers
+                        .insert(receiver_name.to_string());
+                    continue;
+                }
+                self.record_bound_imports(generics);
+                self.extend_impl_bounds(receiver_name, generics);
+            }
+        }
+    }
 
-                        if let Some(existing_generics) =
-                            self.module.impl_bounds.get_mut(receiver_name.as_str())
-                        {
-                            for new_gen in generics.iter() {
-                                if let Some(existing_gen) = existing_generics
-                                    .iter_mut()
-                                    .find(|g| g.name == new_gen.name)
-                                {
-                                    for bound in &new_gen.bounds {
-                                        if !existing_gen.bounds.contains(bound) {
-                                            existing_gen.bounds.push(bound.clone());
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            self.module
-                                .impl_bounds
-                                .insert(receiver_name.to_string(), generics.clone());
-                        }
-                    } else {
-                        self.module
-                            .unconstrained_impl_receivers
-                            .insert(receiver_name.to_string());
-                    }
+    /// Register cross-module imports for any bound types referenced in these generics.
+    /// In-module, Go-imported, and prelude modules don't need explicit imports.
+    fn record_bound_imports(&mut self, generics: &[syntax::ast::Generic]) {
+        for generic in generics {
+            for bound in &generic.bounds {
+                let syntax::ast::Annotation::Constructor { name, .. } = bound else {
+                    continue;
+                };
+                let Some((module, _)) = name.split_once('.') else {
+                    continue;
+                };
+                if module == self.current_module
+                    || go_name::is_go_import(module)
+                    || module == go_name::PRELUDE_MODULE
+                {
+                    continue;
+                }
+                let canonical = self.resolve_alias_to_module(module).to_string();
+                self.require_module_import(&canonical);
+            }
+        }
+    }
+
+    /// Merge new generic bounds into an existing impl_bounds entry, or insert fresh.
+    /// Go requires type parameter constraints on the type definition itself, so
+    /// multiple impl blocks with the same receiver must contribute their bounds.
+    fn extend_impl_bounds(&mut self, receiver_name: &str, generics: &[syntax::ast::Generic]) {
+        let Some(existing_generics) = self.module.impl_bounds.get_mut(receiver_name) else {
+            self.module
+                .impl_bounds
+                .insert(receiver_name.to_string(), generics.to_vec());
+            return;
+        };
+        for new_gen in generics {
+            let Some(existing_gen) = existing_generics
+                .iter_mut()
+                .find(|g| g.name == new_gen.name)
+            else {
+                continue;
+            };
+            for bound in &new_gen.bounds {
+                if !existing_gen.bounds.contains(bound) {
+                    existing_gen.bounds.push(bound.clone());
                 }
             }
         }

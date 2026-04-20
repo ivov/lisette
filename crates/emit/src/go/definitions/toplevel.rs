@@ -311,80 +311,13 @@ impl Emitter<'_> {
         let generics_string = self.generics_to_string_with_map_keys(&generics, &map_key_generics);
 
         if *kind == StructKind::Tuple {
-            let definition = self.emit_tuple_struct_definition(name, &generics_string, fields);
-            let receiver_generics = receiver_generics_string(&generics);
-            let is_type_alias = fields.len() == 1 && generics_string.is_empty();
-            let underlying_go_type = if is_type_alias {
-                Some(self.go_type_as_string(&fields[0].ty))
-            } else {
-                None
-            };
-            if let Some(stringer_name) = self.stringer_method_name(name) {
-                let string_method = self.emit_tuple_struct_stringer_method(
-                    name,
-                    &receiver_generics,
-                    fields.len(),
-                    underlying_go_type.as_deref(),
-                    stringer_name,
-                );
-                // Zero-field structs return a literal without fmt.Sprintf, so also skip fmt.
-                if !string_method.is_empty() {
-                    if string_method.contains("fmt.") {
-                        self.ensure_imported.insert("fmt".to_string());
-                    }
-                    return format!("{definition}\n\n{string_method}");
-                }
-            }
-            return definition;
+            return self.emit_tuple_struct(name, &generics_string, fields, &generics);
         }
 
-        let mut go_field_names: Vec<(String, String)> = Vec::new();
-
-        let field_strings: Vec<String> = fields
+        let (field_strings, go_field_names): (Vec<String>, Vec<(String, String)>) = fields
             .iter()
-            .map(|f| {
-                let tag_configs = interpret_field_attributes(f, struct_attrs);
-                let needs_omitzero = is_option_type(&f.ty);
-                let tag_string = format_tag_string(&f.name, &tag_configs, needs_omitzero);
-
-                let has_tags = !tag_configs.is_empty();
-                let needs_export = f.visibility.is_public() || has_tags;
-                let field_name = if needs_export {
-                    go_name::make_exported(&f.name)
-                } else {
-                    go_name::escape_keyword(&f.name).into_owned()
-                };
-
-                go_field_names.push((f.name.to_string(), field_name.clone()));
-
-                if has_tags && !f.visibility.is_public() {
-                    let key = format!("{}.{}.{}", self.current_module, name, f.name);
-                    self.module.tag_exported_fields.insert(key);
-                }
-
-                let field_definition = if let Some(tags) = tag_string {
-                    format!("{} {} {}", field_name, self.go_type_as_string(&f.ty), tags)
-                } else {
-                    format!("{} {}", field_name, self.go_type_as_string(&f.ty))
-                };
-
-                if let Some(doc) = &f.doc {
-                    let doc_lines: Vec<String> = doc
-                        .lines()
-                        .map(|line| {
-                            if line.is_empty() {
-                                "//".to_string()
-                            } else {
-                                format!("// {}", line)
-                            }
-                        })
-                        .collect();
-                    format!("{}\n{}", doc_lines.join("\n"), field_definition)
-                } else {
-                    field_definition
-                }
-            })
-            .collect();
+            .map(|f| self.emit_struct_field(f, name, struct_attrs))
+            .unzip();
 
         let receiver_generics = receiver_generics_string(&generics);
         let go_type_name = go_name::escape_keyword(name);
@@ -414,6 +347,75 @@ impl Emitter<'_> {
         } else {
             definition
         }
+    }
+
+    /// Emit a tuple struct along with its optional Stringer implementation.
+    /// Zero-field structs and tuple structs that return a literal without
+    /// `fmt.Sprintf` don't require the `fmt` import.
+    fn emit_tuple_struct(
+        &mut self,
+        name: &str,
+        generics_string: &str,
+        fields: &[StructFieldDefinition],
+        generics: &[Generic],
+    ) -> String {
+        let definition = self.emit_tuple_struct_definition(name, generics_string, fields);
+        let Some(stringer_name) = self.stringer_method_name(name) else {
+            return definition;
+        };
+        let receiver_generics = receiver_generics_string(generics);
+        let is_type_alias = fields.len() == 1 && generics_string.is_empty();
+        let underlying_go_type = is_type_alias.then(|| self.go_type_as_string(&fields[0].ty));
+        let string_method = self.emit_tuple_struct_stringer_method(
+            name,
+            &receiver_generics,
+            fields.len(),
+            underlying_go_type.as_deref(),
+            stringer_name,
+        );
+        if string_method.is_empty() {
+            return definition;
+        }
+        if string_method.contains("fmt.") {
+            self.ensure_imported.insert("fmt".to_string());
+        }
+        format!("{definition}\n\n{string_method}")
+    }
+
+    /// Emit one Go struct field, returning the field source code paired with
+    /// the (source-name, Go-name) mapping used by the stringer and tag lookups.
+    fn emit_struct_field(
+        &mut self,
+        f: &StructFieldDefinition,
+        struct_name: &str,
+        struct_attrs: &[Attribute],
+    ) -> (String, (String, String)) {
+        let tag_configs = interpret_field_attributes(f, struct_attrs);
+        let needs_omitzero = is_option_type(&f.ty);
+        let tag_string = format_tag_string(&f.name, &tag_configs, needs_omitzero);
+
+        let has_tags = !tag_configs.is_empty();
+        let needs_export = f.visibility.is_public() || has_tags;
+        let field_name = if needs_export {
+            go_name::make_exported(&f.name)
+        } else {
+            go_name::escape_keyword(&f.name).into_owned()
+        };
+
+        if has_tags && !f.visibility.is_public() {
+            let key = format!("{}.{}.{}", self.current_module, struct_name, f.name);
+            self.module.tag_exported_fields.insert(key);
+        }
+
+        let field_definition = if let Some(tags) = tag_string {
+            format!("{} {} {}", field_name, self.go_type_as_string(&f.ty), tags)
+        } else {
+            format!("{} {}", field_name, self.go_type_as_string(&f.ty))
+        };
+
+        let field_with_doc = format!("{}{}", self.emit_doc(&f.doc), field_definition);
+
+        (field_with_doc, (f.name.to_string(), field_name))
     }
 
     fn emit_tuple_struct_definition(
@@ -788,72 +790,73 @@ impl Emitter<'_> {
         methods
             .iter()
             .filter_map(|method| {
-                let (function, is_public, method_doc) = match method {
-                    Expression::Function {
-                        doc,
-                        visibility,
-                        name_span,
-                        ..
-                    } => {
-                        if self.ctx.unused.is_unused_definition(name_span) {
-                            return None;
-                        }
-                        (
-                            method.to_function_definition(),
-                            matches!(visibility, Visibility::Public),
-                            doc.clone(),
-                        )
-                    }
-                    _ => return None,
-                };
-
-                let has_self = function.params.first().is_some_and(|p| {
-                    matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
-                });
-
-                let is_ufcs = self.ctx.ufcs_methods.contains(&(
-                    qualified_type.clone(),
-                    function.name.to_string(),
-                ));
-
-                let should_export =
-                    is_public || self.method_needs_export(&function.name);
-
-                let is_free_function = if !has_self {
-                    true // static method
-                } else {
-                    is_ufcs
-                };
-
-                let code = if is_free_function {
-                    let mut free_function = function.clone();
-                    let method_name = if should_export {
-                        go_name::capitalize_first(&function.name)
-                    } else {
-                        function.name.to_string()
-                    };
-                    free_function.name = format!("{}_{}", receiver_name, method_name).into();
-                    let mut combined_generics = generics.to_vec();
-                    combined_generics.extend(free_function.generics.iter().cloned());
-                    free_function.generics = combined_generics;
-                    self.emit_function(&free_function, None, should_export)
-                } else {
-                    self.emit_function(
-                        &function,
-                        Some((receiver_name.to_string(), ty.clone())),
-                        should_export,
-                    )
-                };
-
-                if code.is_empty() {
-                    None
-                } else {
-                    let method_doc_comment = self.emit_doc(&method_doc);
-                    Some(format!("{}{}", method_doc_comment, code))
-                }
+                self.emit_impl_method(method, receiver_name, ty, generics, &qualified_type)
             })
             .collect::<Vec<_>>()
             .join("\n\n")
+    }
+
+    /// Emit one method of an `impl` block, producing either a receiver method
+    /// (`func (r Recv) m(...)`) or a free function (`func Recv_m(r Recv, ...)`)
+    /// depending on whether the method has `self` and whether it's UFCS-declared.
+    fn emit_impl_method(
+        &mut self,
+        method: &Expression,
+        receiver_name: &str,
+        ty: &Type,
+        generics: &[Generic],
+        qualified_type: &str,
+    ) -> Option<String> {
+        let Expression::Function {
+            doc,
+            visibility,
+            name_span,
+            ..
+        } = method
+        else {
+            return None;
+        };
+        if self.ctx.unused.is_unused_definition(name_span) {
+            return None;
+        }
+        let function = method.to_function_definition();
+        let is_public = matches!(visibility, Visibility::Public);
+
+        let has_self = function.params.first().is_some_and(|p| {
+            matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
+        });
+        let is_ufcs = self
+            .ctx
+            .ufcs_methods
+            .contains(&(qualified_type.to_string(), function.name.to_string()));
+        let should_export = is_public || self.method_needs_export(&function.name);
+        let is_free_function = !has_self || is_ufcs;
+
+        let code = if is_free_function {
+            let mut free_function = function.clone();
+            let method_name = if should_export {
+                go_name::capitalize_first(&function.name)
+            } else {
+                function.name.to_string()
+            };
+            free_function.name = format!("{}_{}", receiver_name, method_name).into();
+            let mut combined_generics = generics.to_vec();
+            combined_generics.extend(free_function.generics.iter().cloned());
+            free_function.generics = combined_generics;
+            self.emit_function(&free_function, None, should_export)
+        } else {
+            self.emit_function(
+                &function,
+                Some((receiver_name.to_string(), ty.clone())),
+                should_export,
+            )
+        };
+
+        if code.is_empty() {
+            return None;
+        }
+        let method_doc_comment = self.emit_doc(doc);
+        Some(format!("{}{}", method_doc_comment, code))
     }
 }
 

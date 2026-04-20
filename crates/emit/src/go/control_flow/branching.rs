@@ -222,31 +222,52 @@ impl Emitter<'_> {
             std::slice::from_ref(expression)
         };
 
-        if is_block {
-            if has_go_braces {
-                self.enter_scope();
-            } else {
-                self.scope.bindings.save();
+        self.enter_block_scope(is_block, has_go_braces);
+
+        if let Some((last, rest)) = items.split_last() {
+            let is_new_target = self.scope.assign_targets.insert(var.to_string());
+            for item in rest {
+                self.emit_statement(output, item);
+            }
+            self.emit_tail_to_var(output, last, var);
+            if is_new_target {
+                self.scope.assign_targets.remove(var);
             }
         }
 
-        let Some((last, rest)) = items.split_last() else {
-            if is_block {
-                if has_go_braces {
-                    self.exit_scope();
-                } else {
-                    self.scope.bindings.restore();
-                }
-            }
+        self.exit_block_scope(is_block, has_go_braces);
+    }
+
+    /// Enter the scope appropriate for a block-to-var assignment.
+    /// Go-brace blocks get a full Go scope; brace-less blocks save bindings only
+    /// (variables need to remain visible after the block).
+    fn enter_block_scope(&mut self, is_block: bool, has_go_braces: bool) {
+        if !is_block {
             return;
-        };
-
-        let is_new_target = self.scope.assign_targets.insert(var.to_string());
-
-        for item in rest {
-            self.emit_statement(output, item);
         }
+        if has_go_braces {
+            self.enter_scope();
+        } else {
+            self.scope.bindings.save();
+        }
+    }
 
+    fn exit_block_scope(&mut self, is_block: bool, has_go_braces: bool) {
+        if !is_block {
+            return;
+        }
+        if has_go_braces {
+            self.exit_scope();
+        } else {
+            self.scope.bindings.restore();
+        }
+    }
+
+    /// Emit the tail expression of a block-to-var assignment, handling
+    /// statement-only forms, divergent expressions, unit calls, and append
+    /// optimizations before falling through to general branching or value
+    /// emission.
+    fn emit_tail_to_var(&mut self, output: &mut String, last: &Expression, var: &str) {
         if matches!(
             last,
             Expression::Return { .. }
@@ -259,15 +280,18 @@ impl Emitter<'_> {
                 | Expression::Const { .. }
         ) {
             self.emit_statement(output, last);
-        } else if last.get_type().is_never() {
-            // Never-typed expressions (e.g. panic(), blocks ending in
-            // break/continue/return) don't produce a value. Emit as a
-            // statement to avoid creating unused temp variables.
+            return;
+        }
+        if last.get_type().is_never() {
+            // Never-typed expressions (panic(), blocks ending in break/continue/return)
+            // don't produce a value. Emit as a statement to avoid unused temp vars.
             self.emit_statement(output, last);
             if !Self::is_go_never(last) {
                 output.push_str("panic(\"unreachable\")\n");
             }
-        } else if last.get_type().resolve().is_unit()
+            return;
+        }
+        if last.get_type().resolve().is_unit()
             && matches!(last.unwrap_parens(), Expression::Call { .. })
         {
             // Emit as statement and assign struct{}{} to the block result var.
@@ -276,32 +300,23 @@ impl Emitter<'_> {
                 write_line!(output, "{call_str}");
             }
             write_line!(output, "{var} = struct{{}}{{}}");
-        } else if !self.emit_append_to_var(output, var, last) {
-            match last {
-                Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
-                    self.with_position(Position::Assign(var.to_string()), |this| {
-                        this.emit_branching_directly(output, last);
-                    });
-                }
-                _ => {
-                    let expression_string = self.emit_value(output, last);
-                    let expression_string = self.adapt_to_assign_target(last, expression_string);
-                    write_line!(output, "{} = {}", var, expression_string);
-                }
-            }
+            return;
         }
-
-        if is_new_target {
-            self.scope.assign_targets.remove(var);
+        if self.emit_append_to_var(output, var, last) {
+            return;
         }
-
-        if is_block {
-            if has_go_braces {
-                self.exit_scope();
-            } else {
-                self.scope.bindings.restore();
-            }
+        if matches!(
+            last,
+            Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. }
+        ) {
+            self.with_position(Position::Assign(var.to_string()), |this| {
+                this.emit_branching_directly(output, last);
+            });
+            return;
         }
+        let expression_string = self.emit_value(output, last);
+        let expression_string = self.adapt_to_assign_target(last, expression_string);
+        write_line!(output, "{} = {}", var, expression_string);
     }
 
     fn emit_append_to_var(&mut self, output: &mut String, var: &str, last: &Expression) -> bool {

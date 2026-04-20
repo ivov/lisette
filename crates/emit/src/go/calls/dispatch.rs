@@ -27,6 +27,52 @@ fn extract_return_type_param(function: &Expression) -> Option<Type> {
     params.first().cloned()
 }
 
+/// Collapse redundant fmt wrappers:
+/// - `fmt.Print{ln}(fmt.Sprintf(...))` → `fmt.Printf(..., "\n")`
+/// - `fmt.Print{ln}(fmt.Sprint(x))` → `fmt.Print{ln}(x)`
+fn collapse_fmt_print(function_string: &str, args_strings: &[String], call_str: String) -> String {
+    if function_string != "fmt.Print" && function_string != "fmt.Println" {
+        return call_str;
+    }
+    if args_strings.len() != 1 {
+        return call_str;
+    }
+    let arg = &args_strings[0];
+
+    if let Some(inner) = arg
+        .strip_prefix("fmt.Sprintf(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        let suffix = if function_string == "fmt.Println" {
+            "\\n"
+        } else {
+            ""
+        };
+        if suffix.is_empty() {
+            return format!("fmt.Printf({})", inner);
+        }
+        if let Some(close_quote) = inner.find("\", ") {
+            let format_str = &inner[..close_quote];
+            let rest = &inner[close_quote + 1..];
+            return format!("fmt.Printf({}{}\"{})", format_str, suffix, rest);
+        }
+        if inner.starts_with('"') && inner.ends_with('"') {
+            let format_str = &inner[..inner.len() - 1];
+            return format!("fmt.Printf({}{}\")", format_str, suffix);
+        }
+        return call_str;
+    }
+
+    if let Some(inner) = arg
+        .strip_prefix("fmt.Sprint(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        return format!("{}({})", function_string, inner);
+    }
+
+    call_str
+}
+
 impl Emitter<'_> {
     fn resolve_element_type(
         &mut self,
@@ -278,62 +324,49 @@ impl Emitter<'_> {
             wrap_spread_to_any,
         );
 
-        let mut call_str = format!(
+        let call_str = format!(
             "{}{}({})",
             function_string,
             type_args_string,
             args_strings.join(", ")
         );
+        let call_str = collapse_fmt_print(&function_string, &args_strings, call_str);
 
-        // Collapse fmt.Print{ln}(fmt.Sprintf(...)) → fmt.Printf(...{\\n})
-        if (function_string == "fmt.Print" || function_string == "fmt.Println")
-            && args_strings.len() == 1
-            && args_strings[0].starts_with("fmt.Sprintf(")
-        {
-            let inner = &args_strings[0]["fmt.Sprintf(".len()..args_strings[0].len() - 1];
-            let suffix = if function_string == "fmt.Println" {
-                "\\n"
-            } else {
-                ""
-            };
-            if suffix.is_empty() {
-                call_str = format!("fmt.Printf({})", inner);
-            } else if let Some(close_quote) = inner.find("\", ") {
-                let format_str = &inner[..close_quote];
-                let rest = &inner[close_quote + 1..];
-                call_str = format!("fmt.Printf({}{}\"{})", format_str, suffix, rest);
-            } else if inner.starts_with('"') && inner.ends_with('"') {
-                let format_str = &inner[..inner.len() - 1];
-                call_str = format!("fmt.Printf({}{}\")", format_str, suffix);
-            }
+        if let Some(wrapped) = self.wrap_go_array_return(output, function, &call_str) {
+            return wrapped;
         }
-
-        // Collapse fmt.Print{ln}(fmt.Sprint(x)) → fmt.Print{ln}(x)
-        if (function_string == "fmt.Print" || function_string == "fmt.Println")
-            && args_strings.len() == 1
-            && args_strings[0].starts_with("fmt.Sprint(")
-            && args_strings[0].ends_with(')')
-        {
-            let inner = &args_strings[0]["fmt.Sprint(".len()..args_strings[0].len() - 1];
-            call_str = format!("{}({})", function_string, inner);
-        }
-
-        if !self.skip_array_return_wrap
-            && let Expression::DotAccess {
-                expression: receiver_expression,
-                member,
-                ..
-            } = function.unwrap_parens()
-            && Self::is_go_receiver(receiver_expression)
-            && self.has_go_array_return(receiver_expression, member)
-        {
-            let temp = self.fresh_var(Some("arr"));
-            self.declare(&temp);
-            write_line!(output, "{} := {}", temp, call_str);
-            return format!("{}[:]", temp);
-        }
-
         call_str
+    }
+
+    /// Materialize a Go array-returning call into a variable and reslice it,
+    /// so the caller sees a `[]T` slice instead of a fixed-size array.
+    /// Skipped in discarded-call contexts via `skip_array_return_wrap`.
+    fn wrap_go_array_return(
+        &mut self,
+        output: &mut String,
+        function: &Expression,
+        call_str: &str,
+    ) -> Option<String> {
+        if self.skip_array_return_wrap {
+            return None;
+        }
+        let Expression::DotAccess {
+            expression: receiver_expression,
+            member,
+            ..
+        } = function.unwrap_parens()
+        else {
+            return None;
+        };
+        if !Self::is_go_receiver(receiver_expression)
+            || !self.has_go_array_return(receiver_expression, member)
+        {
+            return None;
+        }
+        let temp = self.fresh_var(Some("arr"));
+        self.declare(&temp);
+        write_line!(output, "{} := {}", temp, call_str);
+        Some(format!("{}[:]", temp))
     }
 
     fn resolve_call_type_args(

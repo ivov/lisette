@@ -341,88 +341,18 @@ impl Emitter<'_> {
             ..
         } = index
         {
-            // Only slices need three-index sub-slicing for safety — strings
-            // are immutable so backing array aliasing cannot cause mutation.
-            let needs_cap = expression.get_type().resolve().has_name("Slice");
-
-            // Stage base, start, end together for eval-order sequencing
-            let base_staged = if let Expression::Unary {
-                operator: UnaryOperator::Deref,
-                expression: inner,
-                ..
-            } = expression
-            {
-                let s = self.stage_operand(inner);
-                Staged {
-                    value: format!("(*{})", s.value),
-                    setup: s.setup,
-                    has_side_effects: s.has_side_effects,
-                }
-            } else {
-                self.stage_operand(expression)
-            };
-
-            let mut all_stages = vec![base_staged];
-            if let Some(s) = start {
-                all_stages.push(self.stage_operand(s));
-            }
-            if let Some(e) = end {
-                all_stages.push(self.stage_operand(e));
-            }
-            let values = self.sequence(output, all_stages, "_base");
-            let base_str = &values[0];
-
-            let (start_str, end_expression) = if start.is_some() {
-                (values[1].as_str(), values.get(2).map(|s| s.as_str()))
-            } else {
-                ("", values.get(1).map(|s| s.as_str()))
-            };
-
-            let end_str = match (end_expression, *inclusive) {
-                (None, _) => String::new(),
-                (Some(e), false) => e.to_string(),
-                (Some(e), true) => format!("{}+1", e),
-            };
-
-            if !needs_cap {
-                return format!("{}[{}:{}]", base_str, start_str, end_str);
-            }
-
-            if end_str.is_empty() {
-                let len_var = self.fresh_var(Some("len"));
-                self.declare(&len_var);
-                write_line!(output, "{} := len({})", len_var, base_str);
-                return format!("{}[{}:{}:{}]", base_str, start_str, len_var, len_var);
-            }
-
-            if end_str.contains('(') {
-                let end_var = self.fresh_var(Some("end"));
-                self.declare(&end_var);
-                write_line!(output, "{} := {}", end_var, end_str);
-                return format!("{}[{}:{}:{}]", base_str, start_str, end_var, end_var);
-            }
-
-            return format!("{}[{}:{}:{}]", base_str, start_str, end_str, end_str);
+            return self.emit_range_slice(
+                output,
+                expression,
+                start.as_deref(),
+                end.as_deref(),
+                *inclusive,
+            );
         }
 
-        // Stage base + index for eval-order sequencing
-        let base_staged = if let Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } = expression
-        {
-            let s = self.stage_operand(inner);
-            Staged {
-                value: format!("(*{})", s.value),
-                setup: s.setup,
-                has_side_effects: s.has_side_effects,
-            }
-        } else {
-            self.stage_operand(expression)
-        };
+        let base_staged = self.stage_base_with_deref(expression);
 
-        // Handle range-typed variables used as slice indices (e.g. `items[r]` where `r: Range<int>`)
+        // Range-typed variable as index (e.g. `items[r]` where `r: Range<int>`).
         let index_ty = index.get_type().resolve();
         if let Some(range_kind) = index_ty.get_name()
             && matches!(
@@ -431,7 +361,6 @@ impl Emitter<'_> {
             )
         {
             let needs_cap = expression.get_type().resolve().has_name("Slice");
-            // emit_or_capture already handles complex index expressions
             output.push_str(&base_staged.setup);
             let index_string = self.emit_or_capture(output, index, "range");
             return self.emit_range_var_slice(
@@ -445,6 +374,82 @@ impl Emitter<'_> {
         let index_staged = self.stage_composite(index);
         let values = self.sequence(output, vec![base_staged, index_staged], "_base");
         format!("{}[{}]", values[0], values[1])
+    }
+
+    /// Stage an indexable base expression, unwrapping an explicit deref into
+    /// a parenthesized `(*x)` form while preserving evaluation-order setup.
+    fn stage_base_with_deref(&mut self, expression: &Expression) -> Staged {
+        let Expression::Unary {
+            operator: UnaryOperator::Deref,
+            expression: inner,
+            ..
+        } = expression
+        else {
+            return self.stage_operand(expression);
+        };
+        let s = self.stage_operand(inner);
+        Staged {
+            value: format!("(*{})", s.value),
+            setup: s.setup,
+            has_side_effects: s.has_side_effects,
+        }
+    }
+
+    /// Emit `base[start:end]` (or the three-index form for slices to prevent
+    /// append-through-alias corruption). Strings use two-index slicing because
+    /// immutability makes the backing array safe to share.
+    fn emit_range_slice(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        start: Option<&Expression>,
+        end: Option<&Expression>,
+        inclusive: bool,
+    ) -> String {
+        let needs_cap = expression.get_type().resolve().has_name("Slice");
+        let base_staged = self.stage_base_with_deref(expression);
+
+        let mut all_stages = vec![base_staged];
+        if let Some(s) = start {
+            all_stages.push(self.stage_operand(s));
+        }
+        if let Some(e) = end {
+            all_stages.push(self.stage_operand(e));
+        }
+        let values = self.sequence(output, all_stages, "_base");
+        let base_str = &values[0];
+
+        let (start_str, end_expression) = if start.is_some() {
+            (values[1].as_str(), values.get(2).map(|s| s.as_str()))
+        } else {
+            ("", values.get(1).map(|s| s.as_str()))
+        };
+
+        let end_str = match (end_expression, inclusive) {
+            (None, _) => String::new(),
+            (Some(e), false) => e.to_string(),
+            (Some(e), true) => format!("{}+1", e),
+        };
+
+        if !needs_cap {
+            return format!("{}[{}:{}]", base_str, start_str, end_str);
+        }
+
+        if end_str.is_empty() {
+            let len_var = self.fresh_var(Some("len"));
+            self.declare(&len_var);
+            write_line!(output, "{} := len({})", len_var, base_str);
+            return format!("{}[{}:{}:{}]", base_str, start_str, len_var, len_var);
+        }
+
+        if end_str.contains('(') {
+            let end_var = self.fresh_var(Some("end"));
+            self.declare(&end_var);
+            write_line!(output, "{} := {}", end_var, end_str);
+            return format!("{}[{}:{}:{}]", base_str, start_str, end_var, end_var);
+        }
+
+        format!("{}[{}:{}:{}]", base_str, start_str, end_str, end_str)
     }
 
     /// Emit a Go slice expression from a range-typed variable index.
@@ -510,38 +515,15 @@ impl Emitter<'_> {
         let mut field_values: Vec<String> = Vec::new();
         for (fi, f) in field_assignments.iter().enumerate() {
             let field_name = self.resolve_struct_call_field_name(&f.name, ty, &ctx);
-            let value = emitted_values[fi].clone();
-            // For recursive enum fields (pointer types), wrap with &
-            let value = if ctx
-                .enum_ctx
-                .as_ref()
-                .is_some_and(|e| e.pointer_fields.contains(f.name.as_str()))
-            {
-                if matches!(*f.value, Expression::Reference { .. })
-                    || f.value.get_type().resolve().is_ref()
-                {
-                    // Already a reference (&x) or a Ref<T> value — emit directly, no re-wrapping
-                    value
-                } else {
-                    let temp = self.fresh_var(Some("ptr"));
-                    self.declare(&temp);
-                    write_line!(output, "{} := {}", temp, value);
-                    format!("&{}", temp)
-                }
-            } else {
-                value
-            };
-            // Unwrap Option<Ref<T>> / Slice<Option<Ref<T>>> to bare Go types
-            let value = if is_go_struct {
-                self.maybe_unwrap_go_nullable(output, &value, &f.value.get_type().resolve())
-            } else {
-                value
-            };
-            let value = if let Some(field_ty) = self.lookup_struct_field_ty(ty, &f.name) {
-                self.maybe_wrap_as_go_interface(value, &f.value.get_type(), &field_ty)
-            } else {
-                value
-            };
+            let mut value = emitted_values[fi].clone();
+            value = self.wrap_recursive_enum_field(output, value, f, &ctx);
+            if is_go_struct {
+                value =
+                    self.maybe_unwrap_go_nullable(output, &value, &f.value.get_type().resolve());
+            }
+            if let Some(field_ty) = self.lookup_struct_field_ty(ty, &f.name) {
+                value = self.maybe_wrap_as_go_interface(value, &f.value.get_type(), &field_ty);
+            }
             field_names.push(field_name);
             field_values.push(value);
         }
@@ -573,6 +555,35 @@ impl Emitter<'_> {
         } else {
             self.emit_struct_literal(&ctx.go_type, &field_pairs)
         }
+    }
+
+    /// Address a struct-call field whose enum variant stores it behind a pointer
+    /// (recursive-enum cycle breaker). Fields that are already a reference or a
+    /// `Ref<T>` value pass through unchanged; others are captured into a temp so
+    /// Go can take their address.
+    fn wrap_recursive_enum_field(
+        &mut self,
+        output: &mut String,
+        value: String,
+        field: &StructFieldAssignment,
+        ctx: &StructCallContext,
+    ) -> String {
+        let needs_pointer = ctx
+            .enum_ctx
+            .as_ref()
+            .is_some_and(|e| e.pointer_fields.contains(field.name.as_str()));
+        if !needs_pointer {
+            return value;
+        }
+        if matches!(*field.value, Expression::Reference { .. })
+            || field.value.get_type().resolve().is_ref()
+        {
+            return value;
+        }
+        let temp = self.fresh_var(Some("ptr"));
+        self.declare(&temp);
+        write_line!(output, "{} := {}", temp, value);
+        format!("&{}", temp)
     }
 
     /// Analyze a struct call to determine Go type and enum context.
