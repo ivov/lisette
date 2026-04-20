@@ -3,7 +3,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use ecow::EcoString;
 use syntax::ast::BindingKind;
 use syntax::ast::{
-    EnumFieldDefinition, Expression, Pattern, RestPattern, Span, StructFieldPattern, TypedPattern,
+    EnumFieldDefinition, Expression, Literal, Pattern, RestPattern, Span, StructFieldPattern,
+    TypedPattern,
 };
 use syntax::program::Definition;
 use syntax::types::{Type, substitute};
@@ -224,10 +225,24 @@ impl Checker<'_, '_> {
                 name,
                 span,
             } => {
-                if let Pattern::Identifier { identifier, .. } = pattern.as_ref() {
-                    self.sink.push(diagnostics::infer::identifier_in_as_binding(
-                        identifier, &name, span,
-                    ));
+                match pattern.as_ref() {
+                    Pattern::Identifier { identifier, .. } => {
+                        self.sink.push(diagnostics::infer::redundant_as_identifier(
+                            identifier, &name, span,
+                        ));
+                    }
+                    Pattern::WildCard { .. } => {
+                        self.sink
+                            .push(diagnostics::infer::redundant_as_wildcard(&name, span));
+                    }
+                    Pattern::Literal { literal, .. } => {
+                        self.sink.push(diagnostics::infer::redundant_as_literal(
+                            &format_literal(literal),
+                            &name,
+                            span,
+                        ));
+                    }
+                    _ => {}
                 }
                 let inner_kind = match kind {
                     BindingKind::Let { .. } => BindingKind::Let { mutable: false },
@@ -818,5 +833,18 @@ impl Checker<'_, '_> {
             span: *span,
         };
         Some((pattern, typed))
+    }
+}
+
+fn format_literal(lit: &Literal) -> String {
+    match lit {
+        Literal::Integer { text, value } => text.as_ref().unwrap_or(&value.to_string()).clone(),
+        Literal::Float { text, value } => text.as_ref().unwrap_or(&value.to_string()).clone(),
+        Literal::Imaginary(v) => format!("{}i", v),
+        Literal::Boolean(b) => b.to_string(),
+        Literal::String(s) => format!("\"{}\"", s),
+        Literal::Char(c) => format!("'{}'", c),
+        Literal::FormatString(_) => "f\"...\"".to_string(),
+        Literal::Slice(_) => "[...]".to_string(),
     }
 }

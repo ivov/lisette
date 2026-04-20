@@ -191,11 +191,36 @@ fn test(pair: (Point, int), (Point { x, .. } as p, z): (Point, int)) -> int { x 
 }
 
 #[test]
-fn infer_identifier_in_as_binding() {
+fn infer_redundant_as_identifier() {
     let input = r#"
 fn test(x: int) -> int {
   match x {
     n as m => m,
+    _ => 0,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_redundant_as_wildcard() {
+    let input = r#"
+fn test(x: int) -> int {
+  match x {
+    _ as m => m,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_redundant_as_literal() {
+    let input = r#"
+fn test(x: int) -> int {
+  match x {
+    42 as m => m,
     _ => 0,
   }
 }

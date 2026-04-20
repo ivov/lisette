@@ -808,13 +808,30 @@ pub fn select_some_as_binding_not_supported(span: Span) -> LisetteDiagnostic {
         )
 }
 
-pub fn identifier_in_as_binding(inner: &str, alias: &str, span: Span) -> LisetteDiagnostic {
+pub fn redundant_as_identifier(inner: &str, alias: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Redundant `as` binding")
-        .with_infer_code("identifier_in_as_binding")
+        .with_infer_code("redundant_as_binding")
         .with_span_label(&span, format!("`{}` already binds this value", inner))
         .with_help(format!(
             "Use `{}` directly, or rename `{}` to `{}`",
             alias, inner, alias
+        ))
+}
+
+pub fn redundant_as_wildcard(alias: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Redundant `as` binding")
+        .with_infer_code("redundant_as_binding")
+        .with_span_label(&span, "`_` binds nothing")
+        .with_help(format!("Replace `_ as {}` with just `{}`", alias, alias))
+}
+
+pub fn redundant_as_literal(literal: &str, alias: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Redundant `as` binding")
+        .with_infer_code("redundant_as_binding")
+        .with_span_label(&span, format!("`{}` is always `{}`", alias, literal))
+        .with_help(format!(
+            "Replace `{} as {}` with just `{}`",
+            literal, alias, literal
         ))
 }
 

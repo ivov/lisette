@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·        ╰── `n` already binds this value
  5 │     _ => 0,
    ╰────
-  help: Use `m` directly, or rename `n` to `m` · code: [infer.identifier_in_as_binding]
+  help: Use `m` directly, or rename `n` to `m` · code: [infer.redundant_as_binding]

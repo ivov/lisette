@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Redundant `as` binding
+   ╭─[test.lis:4:5]
+ 3 │   match x {
+ 4 │     _ as m => m,
+   ·     ───┬──
+   ·        ╰── `_` binds nothing
+ 5 │   }
+   ╰────
+  help: Replace `_ as m` with just `m` · code: [infer.redundant_as_binding]
