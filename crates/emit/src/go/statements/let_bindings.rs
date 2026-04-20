@@ -138,31 +138,14 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         if self.value.get_type().resolve().is_unit()
             && matches!(self.value.unwrap_parens(), Expression::Call { .. })
         {
-            let value_expression = self.emitter.emit_value(output, self.value);
-            write_line!(output, "{}", value_expression);
-
-            if let Some(raw_go_name) = self.emitter.go_name_for_binding(&self.binding.pattern) {
-                let go_identifier = crate::go::escape_reserved(&raw_go_name);
-                if self.emitter.is_declared(&go_identifier) {
-                    let fresh = self.emitter.fresh_var(Some(identifier));
-                    self.emitter.declare(&fresh);
-                    write_line!(output, "{} := struct{{}}{{}}", fresh);
-                    self.emitter.scope.bindings.add(identifier, &fresh);
-                } else {
-                    let go_identifier = self.emitter.scope.bindings.add(identifier, &raw_go_name);
-                    self.emitter.try_declare(&go_identifier);
-                    write_line!(output, "{} := struct{{}}{{}}", go_identifier);
-                }
-            }
+            self.emit_unit_call_binding(output, identifier);
             return;
         }
 
         let Some(raw_go_name) = self.emitter.go_name_for_binding(&self.binding.pattern) else {
             // Register `_` in scope so any later reassignment (`x = value`)
             // resolves to `_ = value` instead of emitting the undeclared name.
-            if let Pattern::Identifier { identifier, .. } = &self.binding.pattern {
-                self.emitter.scope.bindings.add(identifier.as_str(), "_");
-            }
+            self.emitter.scope.bindings.add(identifier.as_str(), "_");
             if requires_temp_var(self.value) {
                 self.emit_temp_var_binding(output, "_");
             } else {
@@ -183,42 +166,76 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
                 self.emitter.scope.bindings.add(identifier, &raw_go_name);
                 self.emit_temp_var_binding(output, &go_identifier);
             }
+            return;
+        }
+
+        self.emit_direct_value_binding(output, identifier, &raw_go_name);
+    }
+
+    /// Unit-returning call bindings (`let x = foo()` where `foo(): unit`):
+    /// emit the call as a statement, then declare the binding as `struct{}{}`.
+    /// A new fresh var is taken if the preferred name is already declared.
+    fn emit_unit_call_binding(&mut self, output: &mut String, identifier: &str) {
+        let value_expression = self.emitter.emit_value(output, self.value);
+        write_line!(output, "{}", value_expression);
+
+        let Some(raw_go_name) = self.emitter.go_name_for_binding(&self.binding.pattern) else {
+            return;
+        };
+        let go_identifier = crate::go::escape_reserved(&raw_go_name);
+        if self.emitter.is_declared(&go_identifier) {
+            let fresh = self.emitter.fresh_var(Some(identifier));
+            self.emitter.declare(&fresh);
+            write_line!(output, "{} := struct{{}}{{}}", fresh);
+            self.emitter.scope.bindings.add(identifier, &fresh);
         } else {
-            let value_expression = self.emitter.emit_value(output, self.value);
-
-            let value_expression = self.emitter.maybe_wrap_as_go_interface(
-                value_expression,
-                &self.value.get_type(),
-                &self.binding.ty,
-            );
-
-            let value_expression = if self.is_mutable_subslice_binding() {
-                self.emitter.flags.needs_slices = true;
-                format!("slices.Clone({})", value_expression)
-            } else {
-                value_expression
-            };
-
             let go_identifier = self.emitter.scope.bindings.add(identifier, &raw_go_name);
-            let is_new = self.emitter.try_declare(&go_identifier);
+            self.emitter.try_declare(&go_identifier);
+            write_line!(output, "{} := struct{{}}{{}}", go_identifier);
+        }
+    }
 
-            if !is_new || self.emitter.scope.assign_targets.contains(&go_identifier) {
-                let fresh = self.emitter.fresh_var(Some(identifier));
-                self.emitter.scope.bindings.add(identifier, &fresh);
-                self.emitter.try_declare(&fresh);
-                write_line!(output, "{} := {}", fresh, value_expression);
-            } else if self.needs_explicit_type_declaration() {
-                let var_ty = self.emitter.go_type_as_string(&self.binding.ty);
-                write_line!(
-                    output,
-                    "var {} {} = {}",
-                    go_identifier,
-                    var_ty,
-                    value_expression
-                );
-            } else {
-                write_line!(output, "{} := {}", go_identifier, value_expression);
-            }
+    /// Emit a direct-value binding (no temp var needed): compute the RHS,
+    /// optionally wrap for interface coercion or clone for mutable sub-slices,
+    /// then emit `var` / `:=` / fresh-name depending on scope conditions.
+    fn emit_direct_value_binding(
+        &mut self,
+        output: &mut String,
+        identifier: &str,
+        raw_go_name: &str,
+    ) {
+        let value_expression = self.emitter.emit_value(output, self.value);
+        let value_expression = self.emitter.maybe_wrap_as_go_interface(
+            value_expression,
+            &self.value.get_type(),
+            &self.binding.ty,
+        );
+        let value_expression = if self.is_mutable_subslice_binding() {
+            self.emitter.flags.needs_slices = true;
+            format!("slices.Clone({})", value_expression)
+        } else {
+            value_expression
+        };
+
+        let go_identifier = self.emitter.scope.bindings.add(identifier, raw_go_name);
+        let is_new = self.emitter.try_declare(&go_identifier);
+
+        if !is_new || self.emitter.scope.assign_targets.contains(&go_identifier) {
+            let fresh = self.emitter.fresh_var(Some(identifier));
+            self.emitter.scope.bindings.add(identifier, &fresh);
+            self.emitter.try_declare(&fresh);
+            write_line!(output, "{} := {}", fresh, value_expression);
+        } else if self.needs_explicit_type_declaration() {
+            let var_ty = self.emitter.go_type_as_string(&self.binding.ty);
+            write_line!(
+                output,
+                "var {} {} = {}",
+                go_identifier,
+                var_ty,
+                value_expression
+            );
+        } else {
+            write_line!(output, "{} := {}", go_identifier, value_expression);
         }
     }
 
@@ -352,28 +369,26 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             .assign_target_ty
             .replace(self.binding.ty.clone());
 
+        self.emit_value_to_temp(output, identifier);
+
+        self.emitter.assign_target_ty = saved_target_ty;
+    }
+
+    /// Emit the value-producing expression into the already-declared temp var
+    /// `identifier`. Branching expressions position themselves in `Assign(id)`;
+    /// `Propagate`/`TryBlock`/`RecoverBlock` produce a value string assigned
+    /// directly; `Loop` pushes the temp as its break-target before emitting.
+    fn emit_value_to_temp(&mut self, output: &mut String, identifier: &str) {
         match self.value {
-            Expression::If {
-                condition,
-                consequence,
-                alternative,
-                ..
-            } => {
+            Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
+                let value = self.value;
                 self.emitter
                     .with_position(Position::Assign(identifier.to_string()), |this| {
-                        this.emit_if(output, condition, consequence, alternative)
+                        this.emit_branching_directly(output, value)
                     });
             }
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
-            }
-            Expression::Match {
-                subject, arms, ty, ..
-            } => {
-                self.emitter
-                    .with_position(Position::Assign(identifier.to_string()), |this| {
-                        this.emit_match(output, subject, arms, ty)
-                    });
             }
             Expression::Block { items, .. } => {
                 let needs_braces = items.len() > 1;
@@ -389,12 +404,6 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
                 if needs_braces {
                     output.push_str("}\n");
                 }
-            }
-            Expression::Select { arms, .. } => {
-                self.emitter
-                    .with_position(Position::Assign(identifier.to_string()), |this| {
-                        this.emit_select(output, arms)
-                    });
             }
             Expression::Loop {
                 body, needs_label, ..
@@ -412,8 +421,6 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             }
             _ => unreachable!("requires_temp_var returned true for unexpected expression"),
         }
-
-        self.emitter.assign_target_ty = saved_target_ty;
     }
 
     fn emit_discard(&mut self, output: &mut String) {

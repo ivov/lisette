@@ -242,74 +242,100 @@ impl Emitter<'_> {
             return true;
         }
 
-        if let Expression::Call {
-            expression: call_expression,
-            args,
-            ..
-        } = expression
-        {
-            match fallible.classify_constructor(call_expression) {
-                Some(ConstructorKind::Success) => {
-                    let arg = self.emit_composite_value(output, &args[0]);
-                    let mut fe = FallibleEmitter::new(self, &fallible);
-                    let success = fe.emit_success(&arg);
-                    write_line!(output, "return {}", success);
-                    return true;
-                }
-                Some(ConstructorKind::Failure) => {
-                    if fallible.is_result() {
-                        let arg = self.emit_composite_value(output, &args[0]);
-                        let mut fe = FallibleEmitter::new(self, &fallible);
-                        let failure = fe.emit_failure(Some(&arg));
-                        write_line!(output, "return {}", failure);
-                    } else {
-                        let mut fe = FallibleEmitter::new(self, &fallible);
-                        let failure = fe.emit_failure(None);
-                        write_line!(output, "return {}", failure);
-                    }
-                    return true;
-                }
-                None => {
-                    if let Some(strategy) = self.resolve_go_call_strategy(expression) {
-                        let result_var =
-                            self.emit_go_wrapped_call(output, expression, &strategy, &return_ty);
-                        write_line!(output, "return {}", result_var);
-                    } else {
-                        let call = self.emit_call(output, expression, None);
-                        write_line!(output, "return {}", call);
-                    }
-                    return true;
-                }
-            }
+        if matches!(expression, Expression::Call { .. }) {
+            self.emit_wrapped_call_return(output, expression, &fallible, &return_ty);
+            return true;
         }
 
         if matches!(expression, Expression::If { .. } | Expression::Match { .. }) {
-            let temp_var = self.fresh_var(None);
-            self.declare(&temp_var);
-            let full_ty = {
-                let mut fe = FallibleEmitter::new(self, &fallible);
-                fe.full_type_string()
-            };
-
-            let pre_len = output.len();
-            write_line!(output, "var {} {}", temp_var, full_ty);
-
-            let saved_target_ty = self.assign_target_ty.replace(return_ty.clone());
-
-            self.with_position(Position::Assign(temp_var.clone()), |this| {
-                this.emit_branching_directly(output, expression);
-            });
-
-            self.assign_target_ty = saved_target_ty;
-
-            write_line!(output, "return {}", temp_var);
-            optimize_region(output, pre_len, Some(&temp_var));
+            self.emit_wrapped_branching_return(output, expression, &fallible, &return_ty);
             return true;
         }
 
         let value = self.emit_value(output, expression);
         write_line!(output, "return {}", value);
         true
+    }
+
+    /// Emit a return for a call whose result is wrapped in the function's
+    /// Result/Option return type. Success/Failure constructors collapse
+    /// directly; other calls emit normally and return the call expression.
+    fn emit_wrapped_call_return(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        fallible: &Fallible,
+        return_ty: &Type,
+    ) {
+        let Expression::Call {
+            expression: call_expression,
+            args,
+            ..
+        } = expression
+        else {
+            unreachable!("emit_wrapped_call_return requires a Call expression");
+        };
+        match fallible.classify_constructor(call_expression) {
+            Some(ConstructorKind::Success) => {
+                let arg = self.emit_composite_value(output, &args[0]);
+                let mut fe = FallibleEmitter::new(self, fallible);
+                let success = fe.emit_success(&arg);
+                write_line!(output, "return {}", success);
+            }
+            Some(ConstructorKind::Failure) => {
+                let failure = if fallible.is_result() {
+                    let arg = self.emit_composite_value(output, &args[0]);
+                    let mut fe = FallibleEmitter::new(self, fallible);
+                    fe.emit_failure(Some(&arg))
+                } else {
+                    let mut fe = FallibleEmitter::new(self, fallible);
+                    fe.emit_failure(None)
+                };
+                write_line!(output, "return {}", failure);
+            }
+            None => {
+                if let Some(strategy) = self.resolve_go_call_strategy(expression) {
+                    let result_var =
+                        self.emit_go_wrapped_call(output, expression, &strategy, return_ty);
+                    write_line!(output, "return {}", result_var);
+                } else {
+                    let call = self.emit_call(output, expression, None);
+                    write_line!(output, "return {}", call);
+                }
+            }
+        }
+    }
+
+    /// Emit an If/Match as a wrapped return by materializing its branches
+    /// into a temp var, then returning that temp. `optimize_region` may later
+    /// inline the temp if only one branch reaches the return.
+    fn emit_wrapped_branching_return(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        fallible: &Fallible,
+        return_ty: &Type,
+    ) {
+        let temp_var = self.fresh_var(None);
+        self.declare(&temp_var);
+        let full_ty = {
+            let mut fe = FallibleEmitter::new(self, fallible);
+            fe.full_type_string()
+        };
+
+        let pre_len = output.len();
+        write_line!(output, "var {} {}", temp_var, full_ty);
+
+        let saved_target_ty = self.assign_target_ty.replace(return_ty.clone());
+
+        self.with_position(Position::Assign(temp_var.clone()), |this| {
+            this.emit_branching_directly(output, expression);
+        });
+
+        self.assign_target_ty = saved_target_ty;
+
+        write_line!(output, "return {}", temp_var);
+        optimize_region(output, pre_len, Some(&temp_var));
     }
 
     pub(crate) fn emit_try_block(

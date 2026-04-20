@@ -30,114 +30,9 @@ impl Emitter<'_> {
                 value,
                 compound_operator,
                 ..
-            } => {
-                if value.get_type().is_never() {
-                    self.emit_statement(output, value);
-                    return;
-                }
-
-                let detected_compound = if let Some(op) = compound_operator.as_ref() {
-                    Some((op, Self::compound_rhs(value)))
-                } else if let Expression::Binary {
-                    left,
-                    operator,
-                    right,
-                    ..
-                } = value.as_ref()
-                    && is_compound_eligible(operator)
-                    && lvalues_match(target, left)
-                {
-                    Some((operator, right.as_ref()))
-                } else {
-                    None
-                };
-
-                if let Some((op, rhs)) = detected_compound {
-                    // false: compound RHS is emitted via emit_operand (inline),
-                    // so its temp statements land in output after the target.
-                    let target_str = if is_order_sensitive(target) {
-                        self.emit_left_value_capturing(output, target, false)
-                    } else {
-                        self.emit_left_value(output, target)
-                    };
-                    let is_inc_dec = Self::is_literal_one(rhs)
-                        && matches!(op, BinaryOperator::Addition | BinaryOperator::Subtraction);
-                    if is_inc_dec {
-                        let inc_op = if *op == BinaryOperator::Addition {
-                            "++"
-                        } else {
-                            "--"
-                        };
-                        write_line!(output, "{}{}", target_str, inc_op);
-                    } else {
-                        let rhs_str = self.emit_operand(output, rhs);
-                        write_line!(output, "{} {}= {}", target_str, op, rhs_str);
-                    }
-                    return;
-                }
-
-                let is_go_nullable = matches!(target.as_ref(), Expression::DotAccess { expression, ty, .. }
-                        if Self::is_go_imported_type(&expression.get_type())
-                            && self.is_go_nullable(ty));
-
-                let rhs_staged = self.stage_composite(value);
-                let rhs_has_setup = !rhs_staged.setup.is_empty();
-
-                let target_str = if is_order_sensitive(target) {
-                    self.emit_left_value_capturing(output, target, rhs_has_setup)
-                } else {
-                    self.emit_left_value(output, target)
-                };
-                output.push_str(&rhs_staged.setup);
-
-                if is_go_nullable {
-                    let unwrapped = self.maybe_unwrap_go_nullable(
-                        output,
-                        &rhs_staged.value,
-                        &value.get_type().resolve(),
-                    );
-                    write_line!(output, "{} = {}", target_str, unwrapped);
-                } else {
-                    let adapted = self.maybe_wrap_as_go_interface(
-                        rhs_staged.value,
-                        &value.get_type(),
-                        &target.get_type(),
-                    );
-                    write_line!(output, "{} = {}", target_str, adapted);
-                }
-            }
+            } => self.emit_assignment_statement(output, target, value, compound_operator.as_ref()),
             Expression::Break { value, .. } => {
-                if let Some(val) = value {
-                    let assign_var = self.current_loop_result_var().map(str::to_string);
-                    let is_unit_call = val.get_type().resolve().is_unit()
-                        && matches!(val.unwrap_parens(), Expression::Call { .. });
-                    let val_str = self.emit_value(output, val);
-
-                    // When propagation (e.g. `Err(...)? / None?`) emits a direct
-                    // `return`, emit_value returns "". Skip assignment and break
-                    // since the function has already returned.
-                    if val_str.is_empty() && matches!(**val, Expression::Propagate { .. }) {
-                        return;
-                    }
-
-                    if let Some(var) = assign_var {
-                        if is_unit_call {
-                            if !val_str.is_empty() {
-                                write_line!(output, "{}", val_str);
-                            }
-                            write_line!(output, "{} = struct{{}}{{}}", var);
-                        } else if !val_str.is_empty() {
-                            write_line!(output, "{} = {}", var, val_str);
-                        }
-                    } else if !val_str.is_empty() {
-                        write_line!(output, "_ = {}", val_str);
-                    }
-                }
-                if let Some(label) = self.current_loop_label() {
-                    write_line!(output, "break {}", label);
-                } else {
-                    output.push_str("break\n");
-                }
+                self.emit_break_statement(output, value.as_deref());
             }
             Expression::Continue { .. } => {
                 if let Some(label) = self.current_loop_label() {
@@ -178,37 +73,7 @@ impl Emitter<'_> {
                 body,
                 needs_label,
                 ..
-            } => {
-                self.push_loop("_");
-                let pre_len = output.len();
-                let cond = self.emit_condition_operand(output, condition);
-                let has_setup = output.len() > pre_len;
-                if has_setup {
-                    // Condition produced setup statements (temps) — they must
-                    // re-run each iteration, so move everything inside the loop.
-                    let setup = output[pre_len..].to_string();
-                    output.truncate(pre_len);
-                    let header = format!("for {{\n{}if !({}) {{ break }}\n", setup, cond);
-                    self.emit_labeled_loop(output, &header, body, *needs_label);
-                } else if matches!(
-                    condition.unwrap_parens(),
-                    Expression::Literal {
-                        literal: Literal::Boolean(true),
-                        ..
-                    }
-                ) {
-                    self.emit_labeled_loop(output, "for {\n", body, *needs_label);
-                } else {
-                    let cond = wrap_if_struct_literal(cond);
-                    self.emit_labeled_loop(
-                        output,
-                        &format!("for {} {{\n", cond),
-                        body,
-                        *needs_label,
-                    );
-                }
-                self.pop_loop();
-            }
+            } => self.emit_while_statement(output, condition, body, *needs_label),
             Expression::WhileLet {
                 pattern,
                 typed_pattern,
@@ -295,6 +160,193 @@ impl Emitter<'_> {
                 }
             }
         }
+    }
+
+    fn emit_assignment_statement(
+        &mut self,
+        output: &mut String,
+        target: &Expression,
+        value: &Expression,
+        compound_operator: Option<&BinaryOperator>,
+    ) {
+        if value.get_type().is_never() {
+            self.emit_statement(output, value);
+            return;
+        }
+
+        if let Some((op, rhs)) = Self::detect_compound_assignment(target, value, compound_operator)
+        {
+            self.emit_compound_assignment(output, target, op, rhs);
+            return;
+        }
+
+        self.emit_simple_assignment(output, target, value);
+    }
+
+    /// Recognize compound assignment — either `x += y` syntax (caller supplies
+    /// `compound_operator`) or the desugared `x = x + y` pattern where lvalue
+    /// equality on both sides lets us collapse to `x += y`.
+    fn detect_compound_assignment<'a>(
+        target: &Expression,
+        value: &'a Expression,
+        compound_operator: Option<&'a BinaryOperator>,
+    ) -> Option<(&'a BinaryOperator, &'a Expression)> {
+        if let Some(op) = compound_operator {
+            return Some((op, Self::compound_rhs(value)));
+        }
+        let Expression::Binary {
+            left,
+            operator,
+            right,
+            ..
+        } = value
+        else {
+            return None;
+        };
+        if !is_compound_eligible(operator) || !lvalues_match(target, left) {
+            return None;
+        }
+        Some((operator, right.as_ref()))
+    }
+
+    fn emit_compound_assignment(
+        &mut self,
+        output: &mut String,
+        target: &Expression,
+        op: &BinaryOperator,
+        rhs: &Expression,
+    ) {
+        // false: compound RHS is emitted via emit_operand (inline),
+        // so its temp statements land in output after the target.
+        let target_str = if is_order_sensitive(target) {
+            self.emit_left_value_capturing(output, target, false)
+        } else {
+            self.emit_left_value(output, target)
+        };
+        let is_inc_dec = Self::is_literal_one(rhs)
+            && matches!(op, BinaryOperator::Addition | BinaryOperator::Subtraction);
+        if is_inc_dec {
+            let inc_op = if *op == BinaryOperator::Addition {
+                "++"
+            } else {
+                "--"
+            };
+            write_line!(output, "{}{}", target_str, inc_op);
+        } else {
+            let rhs_str = self.emit_operand(output, rhs);
+            write_line!(output, "{} {}= {}", target_str, op, rhs_str);
+        }
+    }
+
+    fn emit_simple_assignment(
+        &mut self,
+        output: &mut String,
+        target: &Expression,
+        value: &Expression,
+    ) {
+        let is_go_nullable = matches!(target, Expression::DotAccess { expression, ty, .. }
+                if Self::is_go_imported_type(&expression.get_type())
+                    && self.is_go_nullable(ty));
+
+        let rhs_staged = self.stage_composite(value);
+        let rhs_has_setup = !rhs_staged.setup.is_empty();
+
+        let target_str = if is_order_sensitive(target) {
+            self.emit_left_value_capturing(output, target, rhs_has_setup)
+        } else {
+            self.emit_left_value(output, target)
+        };
+        output.push_str(&rhs_staged.setup);
+
+        if is_go_nullable {
+            let unwrapped = self.maybe_unwrap_go_nullable(
+                output,
+                &rhs_staged.value,
+                &value.get_type().resolve(),
+            );
+            write_line!(output, "{} = {}", target_str, unwrapped);
+        } else {
+            let adapted = self.maybe_wrap_as_go_interface(
+                rhs_staged.value,
+                &value.get_type(),
+                &target.get_type(),
+            );
+            write_line!(output, "{} = {}", target_str, adapted);
+        }
+    }
+
+    fn emit_break_statement(&mut self, output: &mut String, value: Option<&Expression>) {
+        if let Some(val) = value {
+            let val_str = self.emit_value(output, val);
+            // When propagation (e.g. `Err(...)? / None?`) emits a direct `return`,
+            // emit_value returns "". Skip assignment and break since the function
+            // has already returned.
+            if val_str.is_empty() && matches!(val, Expression::Propagate { .. }) {
+                return;
+            }
+            self.bind_break_value(output, val, &val_str);
+        }
+        if let Some(label) = self.current_loop_label() {
+            write_line!(output, "break {}", label);
+        } else {
+            output.push_str("break\n");
+        }
+    }
+
+    /// Bind a `break` value to the enclosing loop's result var, or discard it.
+    /// Unit-typed calls are emitted as a statement before the `struct{}{}` store
+    /// to preserve side effects.
+    fn bind_break_value(&mut self, output: &mut String, val: &Expression, val_str: &str) {
+        let assign_var = self.current_loop_result_var().map(str::to_string);
+        let Some(var) = assign_var else {
+            if !val_str.is_empty() {
+                write_line!(output, "_ = {}", val_str);
+            }
+            return;
+        };
+        let is_unit_call = val.get_type().resolve().is_unit()
+            && matches!(val.unwrap_parens(), Expression::Call { .. });
+        if is_unit_call {
+            if !val_str.is_empty() {
+                write_line!(output, "{}", val_str);
+            }
+            write_line!(output, "{} = struct{{}}{{}}", var);
+        } else if !val_str.is_empty() {
+            write_line!(output, "{} = {}", var, val_str);
+        }
+    }
+
+    fn emit_while_statement(
+        &mut self,
+        output: &mut String,
+        condition: &Expression,
+        body: &Expression,
+        needs_label: bool,
+    ) {
+        self.push_loop("_");
+        let pre_len = output.len();
+        let cond = self.emit_condition_operand(output, condition);
+        let has_setup = output.len() > pre_len;
+        if has_setup {
+            // Condition produced setup statements (temps) — they must
+            // re-run each iteration, so move everything inside the loop.
+            let setup = output[pre_len..].to_string();
+            output.truncate(pre_len);
+            let header = format!("for {{\n{}if !({}) {{ break }}\n", setup, cond);
+            self.emit_labeled_loop(output, &header, body, needs_label);
+        } else if matches!(
+            condition.unwrap_parens(),
+            Expression::Literal {
+                literal: Literal::Boolean(true),
+                ..
+            }
+        ) {
+            self.emit_labeled_loop(output, "for {\n", body, needs_label);
+        } else {
+            let cond = wrap_if_struct_literal(cond);
+            self.emit_labeled_loop(output, &format!("for {} {{\n", cond), body, needs_label);
+        }
+        self.pop_loop();
     }
 
     pub(crate) fn emit_left_value(

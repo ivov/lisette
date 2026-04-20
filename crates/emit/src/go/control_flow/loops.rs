@@ -47,14 +47,11 @@ impl Emitter<'_> {
         }
 
         let iterable_ty = iterable.get_type().resolve();
-        if let Some(ty_name) = iterable_ty.get_name() {
-            match ty_name {
-                "Range" | "RangeInclusive" | "RangeFrom" => {
-                    self.emit_stored_range_for_loop(output, binding, iterable, ty_name, body);
-                    return;
-                }
-                _ => {}
-            }
+        if let Some(ty_name) = iterable_ty.get_name()
+            && matches!(ty_name, "Range" | "RangeInclusive" | "RangeFrom")
+        {
+            self.emit_stored_range_for_loop(output, binding, iterable, ty_name, body);
+            return;
         }
 
         let iter_expression = self.emit_operand(output, iterable);
@@ -66,8 +63,7 @@ impl Emitter<'_> {
 
         let is_channel = iterable_ty
             .get_name()
-            .map(|n| n == "Channel" || n == "Receiver")
-            .unwrap_or(false);
+            .is_some_and(|n| n == "Channel" || n == "Receiver");
 
         self.enter_scope();
 
@@ -77,23 +73,13 @@ impl Emitter<'_> {
 
         match &binding.pattern {
             Pattern::Identifier { .. } => {
-                let loop_var = self.bind_loop_pattern(&binding.pattern, None);
-                if loop_var != "_" {
-                    if is_channel {
-                        write_line!(output, "for {} := range {} {{", loop_var, iter_expression);
-                    } else {
-                        write_line!(
-                            output,
-                            "for _, {} := range {} {{",
-                            loop_var,
-                            iter_expression
-                        );
-                    }
-                } else {
-                    write_line!(output, "for range {} {{", iter_expression);
-                }
-                self.emit_block(output, body);
-                output.push_str("}\n");
+                self.emit_identifier_for_loop(
+                    output,
+                    &binding.pattern,
+                    &iter_expression,
+                    is_channel,
+                    body,
+                );
             }
             Pattern::WildCard { .. } => {
                 write_line!(output, "for range {} {{", iter_expression);
@@ -106,101 +92,147 @@ impl Emitter<'_> {
                         n == "Map" || n == "OrderedMap" || n == "EnumeratedSlice"
                     }) =>
             {
-                let first = &elements[0];
-                let second = &elements[1];
-
-                let first_is_simple =
-                    matches!(first, Pattern::Identifier { .. } | Pattern::WildCard { .. });
-                let second_is_simple = matches!(
-                    second,
-                    Pattern::Identifier { .. } | Pattern::WildCard { .. }
-                );
-
-                if first_is_simple && second_is_simple {
-                    let first_is_discard = matches!(first, Pattern::WildCard { .. })
-                        || self.go_name_for_binding(first).is_none();
-                    let second_is_discard = matches!(second, Pattern::WildCard { .. })
-                        || self.go_name_for_binding(second).is_none();
-                    let both_wildcard = first_is_discard && second_is_discard;
-
-                    if both_wildcard {
-                        write_line!(output, "for range {} {{", iter_expression);
-                    } else {
-                        let key = self.bind_loop_pattern(first, None);
-                        let value = self.bind_loop_pattern(second, None);
-                        write_line!(
-                            output,
-                            "for {}, {} := range {} {{",
-                            key,
-                            value,
-                            iter_expression
-                        );
-                    }
-                    self.emit_block(output, body);
-                    output.push_str("}\n");
-                } else {
-                    let key_var = self.fresh_var(Some("key"));
-                    let value_var = self.fresh_var(Some("value"));
-                    write_line!(
-                        output,
-                        "for {}, {} := range {} {{",
-                        key_var,
-                        value_var,
-                        iter_expression
-                    );
-                    let key_guard = DiscardGuard::new(output, &key_var);
-                    let value_guard = DiscardGuard::new(output, &value_var);
-                    {
-                        let (_, key_bindings) =
-                            decision_tree::collect_pattern_info(self, first, None);
-                        decision_tree::emit_tree_bindings(self, output, &key_bindings, &key_var);
-                        let (_, value_bindings) =
-                            decision_tree::collect_pattern_info(self, second, None);
-                        decision_tree::emit_tree_bindings(
-                            self,
-                            output,
-                            &value_bindings,
-                            &value_var,
-                        );
-                    }
-                    self.emit_block(output, body);
-                    key_guard.finish(output);
-                    value_guard.finish(output);
-                    output.push_str("}\n");
-                }
+                self.emit_map_tuple_for_loop(output, elements, &iter_expression, body);
             }
             _ => {
-                let (_, bindings) = decision_tree::collect_pattern_info(
-                    self,
-                    &binding.pattern,
-                    binding.typed_pattern.as_ref(),
-                );
-                if bindings.is_empty() {
-                    write_line!(output, "for range {} {{", iter_expression);
-                    self.emit_block(output, body);
-                    output.push_str("}\n");
-                } else {
-                    let item_var = self.fresh_var(Some("item"));
-                    if is_channel {
-                        write_line!(output, "for {} := range {} {{", item_var, iter_expression);
-                    } else {
-                        write_line!(
-                            output,
-                            "for _, {} := range {} {{",
-                            item_var,
-                            iter_expression
-                        );
-                    }
-                    let guard = DiscardGuard::new(output, &item_var);
-                    decision_tree::emit_tree_bindings(self, output, &bindings, &item_var);
-                    self.emit_block(output, body);
-                    guard.finish(output);
-                    output.push_str("}\n");
-                }
+                self.emit_pattern_for_loop(output, binding, &iter_expression, is_channel, body);
             }
         }
 
         self.exit_scope();
+    }
+
+    /// For loops over an identifier-bound iterable: `for x := range xs` (or
+    /// `for range xs` when the binding is discarded). Channels drop the index
+    /// position from the `range` form.
+    fn emit_identifier_for_loop(
+        &mut self,
+        output: &mut String,
+        pattern: &Pattern,
+        iter_expression: &str,
+        is_channel: bool,
+        body: &Expression,
+    ) {
+        let loop_var = self.bind_loop_pattern(pattern, None);
+        if loop_var == "_" {
+            write_line!(output, "for range {} {{", iter_expression);
+        } else if is_channel {
+            write_line!(output, "for {} := range {} {{", loop_var, iter_expression);
+        } else {
+            write_line!(
+                output,
+                "for _, {} := range {} {{",
+                loop_var,
+                iter_expression
+            );
+        }
+        self.emit_block(output, body);
+        output.push_str("}\n");
+    }
+
+    /// Tuple destructuring over a map-like iterable (`Map`, `OrderedMap`,
+    /// `EnumeratedSlice`). Simple identifier/wildcard element pairs bind
+    /// directly in the `range` header; compound patterns capture into fresh
+    /// vars and emit decision-tree bindings inside the loop body.
+    fn emit_map_tuple_for_loop(
+        &mut self,
+        output: &mut String,
+        elements: &[Pattern],
+        iter_expression: &str,
+        body: &Expression,
+    ) {
+        let first = &elements[0];
+        let second = &elements[1];
+
+        let first_is_simple =
+            matches!(first, Pattern::Identifier { .. } | Pattern::WildCard { .. });
+        let second_is_simple = matches!(
+            second,
+            Pattern::Identifier { .. } | Pattern::WildCard { .. }
+        );
+
+        if !first_is_simple || !second_is_simple {
+            let key_var = self.fresh_var(Some("key"));
+            let value_var = self.fresh_var(Some("value"));
+            write_line!(
+                output,
+                "for {}, {} := range {} {{",
+                key_var,
+                value_var,
+                iter_expression
+            );
+            let key_guard = DiscardGuard::new(output, &key_var);
+            let value_guard = DiscardGuard::new(output, &value_var);
+            let (_, key_bindings) = decision_tree::collect_pattern_info(self, first, None);
+            decision_tree::emit_tree_bindings(self, output, &key_bindings, &key_var);
+            let (_, value_bindings) = decision_tree::collect_pattern_info(self, second, None);
+            decision_tree::emit_tree_bindings(self, output, &value_bindings, &value_var);
+            self.emit_block(output, body);
+            key_guard.finish(output);
+            value_guard.finish(output);
+            output.push_str("}\n");
+            return;
+        }
+
+        let first_is_discard =
+            matches!(first, Pattern::WildCard { .. }) || self.go_name_for_binding(first).is_none();
+        let second_is_discard = matches!(second, Pattern::WildCard { .. })
+            || self.go_name_for_binding(second).is_none();
+        if first_is_discard && second_is_discard {
+            write_line!(output, "for range {} {{", iter_expression);
+        } else {
+            let key = self.bind_loop_pattern(first, None);
+            let value = self.bind_loop_pattern(second, None);
+            write_line!(
+                output,
+                "for {}, {} := range {} {{",
+                key,
+                value,
+                iter_expression
+            );
+        }
+        self.emit_block(output, body);
+        output.push_str("}\n");
+    }
+
+    /// Compound-pattern for loop. Captures each element into a fresh `item`
+    /// var, emits decision-tree bindings inside the loop, and discards the
+    /// temp via `DiscardGuard` if the pattern doesn't reference it.
+    fn emit_pattern_for_loop(
+        &mut self,
+        output: &mut String,
+        binding: &Binding,
+        iter_expression: &str,
+        is_channel: bool,
+        body: &Expression,
+    ) {
+        let (_, bindings) = decision_tree::collect_pattern_info(
+            self,
+            &binding.pattern,
+            binding.typed_pattern.as_ref(),
+        );
+        if bindings.is_empty() {
+            write_line!(output, "for range {} {{", iter_expression);
+            self.emit_block(output, body);
+            output.push_str("}\n");
+            return;
+        }
+        let item_var = self.fresh_var(Some("item"));
+        if is_channel {
+            write_line!(output, "for {} := range {} {{", item_var, iter_expression);
+        } else {
+            write_line!(
+                output,
+                "for _, {} := range {} {{",
+                item_var,
+                iter_expression
+            );
+        }
+        let guard = DiscardGuard::new(output, &item_var);
+        decision_tree::emit_tree_bindings(self, output, &bindings, &item_var);
+        self.emit_block(output, body);
+        guard.finish(output);
+        output.push_str("}\n");
     }
 
     fn emit_range_for_loop(
