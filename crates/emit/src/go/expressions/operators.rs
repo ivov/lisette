@@ -9,6 +9,11 @@ struct NumericBinaryEmitInfo {
     cast_result_to: Option<Type>,
 }
 
+struct BinaryOperand<'a> {
+    expression: &'a Expression,
+    ty: Type,
+}
+
 impl Emitter<'_> {
     pub(crate) fn emit_binary_expression(
         &mut self,
@@ -21,16 +26,16 @@ impl Emitter<'_> {
             unreachable!("Pipeline operator should have been desugared by now")
         }
 
-        let left_ty = left_expression.get_type().resolve();
-        let right_ty = right_expression.get_type().resolve();
+        let left = BinaryOperand {
+            expression: left_expression,
+            ty: left_expression.get_type().resolve(),
+        };
+        let right = BinaryOperand {
+            expression: right_expression,
+            ty: right_expression.get_type().resolve(),
+        };
 
-        if let Some(emit_info) = self.is_casting_needed(
-            operator,
-            &left_ty,
-            &right_ty,
-            left_expression,
-            right_expression,
-        ) {
+        if let Some(emit_info) = self.is_casting_needed(operator, &left, &right) {
             return self.emit_numeric_binary_with_casts(
                 output,
                 operator,
@@ -39,6 +44,9 @@ impl Emitter<'_> {
                 emit_info,
             );
         }
+
+        let left_ty = &left.ty;
+        let right_ty = &right.ty;
 
         if matches!(operator, BinaryOperator::Multiplication) {
             if let Expression::Literal {
@@ -123,10 +131,8 @@ impl Emitter<'_> {
     fn is_casting_needed(
         &self,
         operator: &BinaryOperator,
-        left_ty: &Type,
-        right_ty: &Type,
-        left_expression: &Expression,
-        right_expression: &Expression,
+        left: &BinaryOperand<'_>,
+        right: &BinaryOperand<'_>,
     ) -> Option<NumericBinaryEmitInfo> {
         use BinaryOperator::*;
 
@@ -147,8 +153,8 @@ impl Emitter<'_> {
             return None;
         }
 
-        let left_underlying_ty = left_ty.underlying_numeric_type();
-        let right_underlying_ty = right_ty.underlying_numeric_type();
+        let left_underlying_ty = left.ty.underlying_numeric_type();
+        let right_underlying_ty = right.ty.underlying_numeric_type();
 
         let (left_underlying_ty, right_underlying_ty) =
             match (&left_underlying_ty, &right_underlying_ty) {
@@ -163,10 +169,10 @@ impl Emitter<'_> {
             return None;
         }
 
-        let left_is_aliased = left_ty.is_aliased_numeric_type();
-        let right_is_aliased = right_ty.is_aliased_numeric_type();
+        let left_is_aliased = left.ty.is_aliased_numeric_type();
+        let right_is_aliased = right.ty.is_aliased_numeric_type();
 
-        if left_ty == right_ty {
+        if left.ty == right.ty {
             if left_is_aliased && matches!(operator, Division) {
                 return Some(NumericBinaryEmitInfo {
                     cast_left_to: None,
@@ -177,8 +183,8 @@ impl Emitter<'_> {
             return None;
         }
 
-        let left_is_literal = is_literal_expression(left_expression);
-        let right_is_literal = is_literal_expression(right_expression);
+        let left_is_literal = is_literal_expression(left.expression);
+        let right_is_literal = is_literal_expression(right.expression);
 
         match (left_is_aliased, right_is_aliased) {
             (true, false) => Some(NumericBinaryEmitInfo {
@@ -186,7 +192,7 @@ impl Emitter<'_> {
                 cast_right_to: if right_is_literal {
                     None
                 } else {
-                    Some(left_ty.clone())
+                    Some(left.ty.clone())
                 },
                 cast_result_to: None,
             }),
@@ -195,7 +201,7 @@ impl Emitter<'_> {
                 cast_left_to: if left_is_literal {
                     None
                 } else {
-                    Some(right_ty.clone())
+                    Some(right.ty.clone())
                 },
                 cast_right_to: None,
                 cast_result_to: None,

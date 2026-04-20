@@ -3,6 +3,13 @@ use crate::go::names::go_name;
 use syntax::ast::{Expression, Generic, Pattern, Visibility};
 use syntax::types::Type;
 
+struct ImplContext<'a> {
+    receiver_name: &'a str,
+    ty: &'a Type,
+    generics: &'a [Generic],
+    qualified_type: String,
+}
+
 impl Emitter<'_> {
     pub(crate) fn emit_impl_block(
         &mut self,
@@ -11,13 +18,16 @@ impl Emitter<'_> {
         methods: &[Expression],
         generics: &[Generic],
     ) -> String {
-        let qualified_type = format!("{}.{}", self.current_module, receiver_name);
+        let ctx = ImplContext {
+            receiver_name,
+            ty,
+            generics,
+            qualified_type: format!("{}.{}", self.current_module, receiver_name),
+        };
 
         methods
             .iter()
-            .filter_map(|method| {
-                self.emit_impl_method(method, receiver_name, ty, generics, &qualified_type)
-            })
+            .filter_map(|method| self.emit_impl_method(method, &ctx))
             .collect::<Vec<_>>()
             .join("\n\n")
     }
@@ -25,14 +35,7 @@ impl Emitter<'_> {
     /// Emit one method of an `impl` block, producing either a receiver method
     /// (`func (r Recv) m(...)`) or a free function (`func Recv_m(r Recv, ...)`)
     /// depending on whether the method has `self` and whether it's UFCS-declared.
-    fn emit_impl_method(
-        &mut self,
-        method: &Expression,
-        receiver_name: &str,
-        ty: &Type,
-        generics: &[Generic],
-        qualified_type: &str,
-    ) -> Option<String> {
+    fn emit_impl_method(&mut self, method: &Expression, ctx: &ImplContext<'_>) -> Option<String> {
         let Expression::Function {
             doc,
             visibility,
@@ -54,7 +57,7 @@ impl Emitter<'_> {
         let is_ufcs = self
             .ctx
             .ufcs_methods
-            .contains(&(qualified_type.to_string(), function.name.to_string()));
+            .contains(&(ctx.qualified_type.clone(), function.name.to_string()));
         let should_export = is_public || self.method_needs_export(&function.name);
         let is_free_function = !has_self || is_ufcs;
 
@@ -65,15 +68,15 @@ impl Emitter<'_> {
             } else {
                 function.name.to_string()
             };
-            free_function.name = format!("{}_{}", receiver_name, method_name).into();
-            let mut combined_generics = generics.to_vec();
+            free_function.name = format!("{}_{}", ctx.receiver_name, method_name).into();
+            let mut combined_generics = ctx.generics.to_vec();
             combined_generics.extend(free_function.generics.iter().cloned());
             free_function.generics = combined_generics;
             self.emit_function(&free_function, None, should_export)
         } else {
             self.emit_function(
                 &function,
-                Some((receiver_name.to_string(), ty.clone())),
+                Some((ctx.receiver_name.to_string(), ctx.ty.clone())),
                 should_export,
             )
         };

@@ -7,10 +7,12 @@ use crate::go::write_line;
 use syntax::ast::{Annotation, Expression, UnaryOperator};
 use syntax::types::Type;
 
-struct CallArgContext<'a> {
+struct CallArgsContext<'a> {
     fn_param_types: &'a [Type],
     pointer_indices: &'a HashSet<usize>,
     is_go_call: bool,
+    spread: Option<&'a Expression>,
+    wrap_spread_to_any: bool,
 }
 
 /// Collapse redundant fmt wrappers:
@@ -107,16 +109,14 @@ impl Emitter<'_> {
             Expression::DotAccess { expression, .. } if Self::is_go_receiver(expression)
         );
 
-        let wrap_spread_to_any = Self::spread_needs_any_wrap(function, spread);
-        let args_strings = self.emit_call_args(
-            output,
-            args,
-            &fn_param_types,
-            &pointer_indices,
+        let ctx = CallArgsContext {
+            fn_param_types: &fn_param_types,
+            pointer_indices: &pointer_indices,
             is_go_call,
             spread,
-            wrap_spread_to_any,
-        );
+            wrap_spread_to_any: Self::spread_needs_any_wrap(function, spread),
+        };
+        let args_strings = self.emit_call_args(output, args, &ctx);
 
         let call_str = format!(
             "{}{}({})",
@@ -203,32 +203,22 @@ impl Emitter<'_> {
         type_args_string
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn emit_call_args(
         &mut self,
         output: &mut String,
         args: &[Expression],
-        fn_param_types: &[Type],
-        pointer_indices: &HashSet<usize>,
-        is_go_call: bool,
-        spread: Option<&Expression>,
-        wrap_spread_to_any: bool,
+        ctx: &CallArgsContext<'_>,
     ) -> Vec<String> {
-        let call_arg_ctx = CallArgContext {
-            fn_param_types,
-            pointer_indices,
-            is_go_call,
-        };
         let stages: Vec<Staged> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| {
                 let mut setup = String::new();
-                let value = self.emit_call_arg(&mut setup, arg, i, &call_arg_ctx);
+                let value = self.emit_call_arg(&mut setup, arg, i, ctx);
                 Staged::new(setup, value)
             })
             .collect();
-        self.sequence_with_spread(output, stages, spread, wrap_spread_to_any, "_arg")
+        self.sequence_with_spread(output, stages, ctx.spread, ctx.wrap_spread_to_any, "_arg")
     }
 
     fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> bool {
@@ -254,7 +244,7 @@ impl Emitter<'_> {
         output: &mut String,
         arg: &Expression,
         index: usize,
-        ctx: &CallArgContext,
+        ctx: &CallArgsContext<'_>,
     ) -> String {
         let effective_param_ty = self.effective_param_type(index, ctx.fn_param_types);
 
