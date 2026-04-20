@@ -320,30 +320,7 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        // Prefer the function's return context type when the try block's own ok_ty
-        // is a type variable (e.g. `Result[any, ...]` when tail is a statement),
-        // or when the tail is Never-typed (ok_ty resolves to unit/Never because
-        // nothing constrains it).
-        let base_fallible = Fallible::from_type(ty);
-        let tail_is_never = items.last().is_some_and(|last| {
-            let ty = last.get_type().resolve();
-            ty.is_never() || last.diverges().is_some()
-        });
-        let needs_context_type = tail_is_never
-            || base_fallible
-                .as_ref()
-                .is_some_and(|f| f.ok_ty().is_variable() || f.ok_ty().is_never());
-
-        let effective_ty = if needs_context_type {
-            self.current_return_context
-                .as_ref()
-                .filter(|ctx_ty| Fallible::from_type(ctx_ty).is_some())
-                .cloned()
-                .unwrap_or_else(|| ty.clone())
-        } else {
-            ty.clone()
-        };
-
+        let effective_ty = self.resolve_fallible_block_type(items, ty);
         let fallible = Fallible::from_type(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
@@ -361,72 +338,7 @@ impl Emitter<'_> {
         self.current_return_context = Some(effective_ty.clone());
 
         self.with_fresh_scope(|emitter| {
-            if !items.is_empty() {
-                let (rest, last) = items.split_at(items.len() - 1);
-
-                for item in rest {
-                    emitter.emit_statement(output, item);
-                }
-
-                if let Some(last_item) = last.first() {
-                    let diverges =
-                        last_item.diverges().is_some() || last_item.get_type().resolve().is_never();
-
-                    let is_statement_only = matches!(
-                        last_item,
-                        Expression::Let { .. }
-                            | Expression::Const { .. }
-                            | Expression::Assignment { .. }
-                            | Expression::While { .. }
-                            | Expression::WhileLet { .. }
-                            | Expression::For { .. }
-                            | Expression::Loop { .. }
-                    );
-
-                    let is_unit_call = last_item.get_type().resolve().is_unit()
-                        && matches!(last_item.unwrap_parens(), Expression::Call { .. });
-
-                    if diverges {
-                        emitter.emit_statement(output, last_item);
-                        if !Self::is_go_never(last_item) {
-                            output.push_str("panic(\"unreachable\")\n");
-                        }
-                    } else if is_statement_only || is_unit_call {
-                        // Statement-only tails and unit calls can't be used as values.
-                        // Emit as statement, then return Ok(unit).
-                        emitter.emit_statement(output, last_item);
-                        let unit_val = emitter.zero_value(fallible.ok_ty());
-                        let unit_return = {
-                            let mut fe = FallibleEmitter::new(emitter, &fallible);
-                            fe.emit_success(&unit_val)
-                        };
-                        write_line!(output, "return {}", unit_return);
-                    } else {
-                        let final_expression = emitter.emit_value(output, last_item);
-                        if !final_expression.is_empty() {
-                            let ok_return = {
-                                let mut fe = FallibleEmitter::new(emitter, &fallible);
-                                fe.emit_success(&final_expression)
-                            };
-                            write_line!(output, "return {}", ok_return);
-                        } else {
-                            let unit_val = emitter.zero_value(fallible.ok_ty());
-                            let unit_return = {
-                                let mut fe = FallibleEmitter::new(emitter, &fallible);
-                                fe.emit_success(&unit_val)
-                            };
-                            write_line!(output, "return {}", unit_return);
-                        }
-                    }
-                }
-            } else {
-                let unit_val = emitter.zero_value(fallible.ok_ty());
-                let unit_return = {
-                    let mut fe = FallibleEmitter::new(emitter, &fallible);
-                    fe.emit_success(&unit_val)
-                };
-                write_line!(output, "return {}", unit_return);
-            }
+            emitter.emit_try_body(output, items, &fallible);
         });
 
         self.current_return_context = saved_return_context;
@@ -435,6 +347,91 @@ impl Emitter<'_> {
         output.push_str("}()\n");
 
         result_var
+    }
+
+    /// Prefer the function's return context type when the block's own ok_ty
+    /// is a type variable (e.g. `Result[any, ...]` when tail is a statement),
+    /// or when the tail is Never-typed (ok_ty resolves to unit/Never because
+    /// nothing constrains it).
+    fn resolve_fallible_block_type(&self, items: &[Expression], ty: &Type) -> Type {
+        let tail_is_never = items.last().is_some_and(|last| {
+            let t = last.get_type().resolve();
+            t.is_never() || last.diverges().is_some()
+        });
+        let base = Fallible::from_type(ty);
+        let needs_return_context = tail_is_never
+            || base
+                .as_ref()
+                .is_some_and(|f| f.ok_ty().is_variable() || f.ok_ty().is_never());
+        if !needs_return_context {
+            return ty.clone();
+        }
+        self.current_return_context
+            .as_ref()
+            .filter(|ctx_ty| Fallible::from_type(ctx_ty).is_some())
+            .cloned()
+            .unwrap_or_else(|| ty.clone())
+    }
+
+    fn emit_try_body(&mut self, output: &mut String, items: &[Expression], fallible: &Fallible) {
+        let Some((last, rest)) = items.split_last() else {
+            self.emit_try_unit_return(output, fallible);
+            return;
+        };
+        for item in rest {
+            self.emit_statement(output, item);
+        }
+        self.emit_try_tail(output, last, fallible);
+    }
+
+    fn emit_try_tail(&mut self, output: &mut String, last: &Expression, fallible: &Fallible) {
+        if last.diverges().is_some() || last.get_type().resolve().is_never() {
+            self.emit_statement(output, last);
+            if !Self::is_go_never(last) {
+                output.push_str("panic(\"unreachable\")\n");
+            }
+            return;
+        }
+
+        let is_statement_only = matches!(
+            last,
+            Expression::Let { .. }
+                | Expression::Const { .. }
+                | Expression::Assignment { .. }
+                | Expression::While { .. }
+                | Expression::WhileLet { .. }
+                | Expression::For { .. }
+                | Expression::Loop { .. }
+        );
+        let is_unit_call = last.get_type().resolve().is_unit()
+            && matches!(last.unwrap_parens(), Expression::Call { .. });
+        if is_statement_only || is_unit_call {
+            // Statement-only tails and unit calls can't be used as values.
+            // Emit as statement, then return Ok(unit).
+            self.emit_statement(output, last);
+            self.emit_try_unit_return(output, fallible);
+            return;
+        }
+
+        let final_expression = self.emit_value(output, last);
+        if final_expression.is_empty() {
+            self.emit_try_unit_return(output, fallible);
+        } else {
+            self.emit_try_success_return(output, &final_expression, fallible);
+        }
+    }
+
+    fn emit_try_unit_return(&mut self, output: &mut String, fallible: &Fallible) {
+        let unit_val = self.zero_value(fallible.ok_ty());
+        self.emit_try_success_return(output, &unit_val, fallible);
+    }
+
+    fn emit_try_success_return(&mut self, output: &mut String, value: &str, fallible: &Fallible) {
+        let ok_return = {
+            let mut fe = FallibleEmitter::new(self, fallible);
+            fe.emit_success(value)
+        };
+        write_line!(output, "return {}", ok_return);
     }
 
     /// Optimizes `Err(...)?)` and `None?` by emitting a direct return.
@@ -487,30 +484,12 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        let base_fallible = Fallible::from_type(ty);
-        let tail_is_never = items.last().is_some_and(|last| {
-            let ty = last.get_type().resolve();
-            ty.is_never() || last.diverges().is_some()
-        });
-        let needs_context_type = tail_is_never
-            || base_fallible
-                .as_ref()
-                .is_some_and(|f| f.ok_ty().is_variable() || f.ok_ty().is_never());
-
-        let effective_ty = if needs_context_type {
-            self.current_return_context
-                .as_ref()
-                .filter(|ctx_ty| Fallible::from_type(ctx_ty).is_some())
-                .cloned()
-                .unwrap_or_else(|| ty.clone())
-        } else {
-            ty.clone()
-        };
+        let effective_ty = self.resolve_fallible_block_type(items, ty);
+        let fallible = Fallible::from_type(&effective_ty)
+            .expect("recover block type must be Result<T, PanicValue>");
 
         let result_var = self.fresh_var(Some("recoverResult"));
         self.declare(&result_var);
-        let fallible = Fallible::from_type(&effective_ty)
-            .expect("recover block type must be Result<T, PanicValue>");
         let inner_ty_str = self.go_type_as_string(fallible.ok_ty());
 
         write_line!(
@@ -524,36 +503,48 @@ impl Emitter<'_> {
         self.current_return_context = Some(fallible.ok_ty().clone());
 
         self.with_fresh_scope(|emitter| {
-            if items.is_empty() {
-                let zero_val = emitter.zero_value(fallible.ok_ty());
-                write_line!(output, "return {}", zero_val);
-            } else {
-                for (i, item) in items.iter().enumerate() {
-                    if i == items.len() - 1 {
-                        let item_ty = item.get_type().resolve();
-                        if item_ty.is_never() {
-                            emitter.emit_statement(output, item);
-                            if !Self::is_go_never(item) {
-                                output.push_str("panic(\"unreachable\")\n");
-                            }
-                        } else if item_ty.is_unit() || item_ty.is_variable() {
-                            emitter.emit_statement(output, item);
-                            let zero_val = emitter.zero_value(fallible.ok_ty());
-                            write_line!(output, "return {}", zero_val);
-                        } else {
-                            let expression = emitter.emit_value(output, item);
-                            write_line!(output, "return {}", expression);
-                        }
-                    } else {
-                        emitter.emit_statement(output, item);
-                    }
-                }
-            }
+            emitter.emit_recover_body(output, items, &fallible);
         });
 
         self.current_return_context = saved_return_context;
 
         output.push_str("})\n");
         result_var
+    }
+
+    fn emit_recover_body(
+        &mut self,
+        output: &mut String,
+        items: &[Expression],
+        fallible: &Fallible,
+    ) {
+        let Some((last, rest)) = items.split_last() else {
+            let zero = self.zero_value(fallible.ok_ty());
+            write_line!(output, "return {}", zero);
+            return;
+        };
+        for item in rest {
+            self.emit_statement(output, item);
+        }
+        self.emit_recover_tail(output, last, fallible);
+    }
+
+    fn emit_recover_tail(&mut self, output: &mut String, last: &Expression, fallible: &Fallible) {
+        let item_ty = last.get_type().resolve();
+        if item_ty.is_never() {
+            self.emit_statement(output, last);
+            if !Self::is_go_never(last) {
+                output.push_str("panic(\"unreachable\")\n");
+            }
+            return;
+        }
+        if item_ty.is_unit() || item_ty.is_variable() {
+            self.emit_statement(output, last);
+            let zero = self.zero_value(fallible.ok_ty());
+            write_line!(output, "return {}", zero);
+            return;
+        }
+        let expression = self.emit_value(output, last);
+        write_line!(output, "return {}", expression);
     }
 }

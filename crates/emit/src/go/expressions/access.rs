@@ -109,25 +109,10 @@ impl Emitter<'_> {
         if let Some(SemanticDotKind::TupleStructField { is_newtype }) = dot_access_kind
             && let Ok(index) = member.parse::<usize>()
         {
-            if is_newtype {
-                let deref_ty = expression_ty.resolve().strip_refs();
-                if let Type::Constructor { ref id, .. } = deref_ty
-                    && let Some(Definition::Struct { fields, .. }) =
-                        self.ctx.definitions.get(id.as_str())
-                    && let Some(field) = fields.first()
-                {
-                    let expression = if expression_ty.resolve().is_ref() {
-                        format!("*{}", expression_string)
-                    } else {
-                        expression_string
-                    };
-                    let go_type = self.go_type_as_string(&field.ty);
-                    return if go_type.starts_with('*') {
-                        format!("({})({})", go_type, expression)
-                    } else {
-                        format!("{}({})", go_type, expression)
-                    };
-                }
+            if is_newtype
+                && let Some(cast) = self.try_emit_newtype_cast(&expression_ty, &expression_string)
+            {
+                return cast;
             }
             return format!("{}.F{}", expression_string, index);
         }
@@ -191,6 +176,34 @@ impl Emitter<'_> {
             }
         }
         result
+    }
+
+    /// Emit a newtype cast like `MyType(inner)` for single-field tuple struct access.
+    /// Returns None if the struct shape doesn't match (no single field, non-struct type).
+    fn try_emit_newtype_cast(
+        &mut self,
+        expression_ty: &Type,
+        expression_string: &str,
+    ) -> Option<String> {
+        let deref_ty = expression_ty.resolve().strip_refs();
+        let Type::Constructor { id, .. } = &deref_ty else {
+            return None;
+        };
+        let Some(Definition::Struct { fields, .. }) = self.ctx.definitions.get(id.as_str()) else {
+            return None;
+        };
+        let field_ty = fields.first()?.ty.clone();
+        let go_type = self.go_type_as_string(&field_ty);
+        let operand = if expression_ty.resolve().is_ref() {
+            format!("*{}", expression_string)
+        } else {
+            expression_string.to_string()
+        };
+        Some(if go_type.starts_with('*') {
+            format!("({})({})", go_type, operand)
+        } else {
+            format!("{}({})", go_type, operand)
+        })
     }
 
     /// Compute whether a dot access context requires exported (capitalized) Go names.

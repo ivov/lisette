@@ -234,76 +234,11 @@ impl Emitter<'_> {
             Expression::RecoverBlock { items, ty, .. } => {
                 self.emit_recover_block(output, items, ty)
             }
-            Expression::Tuple { elements, ty, .. } => {
-                let inferred_slot_types: Vec<Type> = match ty.resolve() {
-                    Type::Tuple(slots) => slots,
-                    _ => Vec::new(),
-                };
-
-                let slot_types = self.resolve_tuple_slot_types(inferred_slot_types);
-
-                let stages: Vec<Staged> = elements
-                    .iter()
-                    .enumerate()
-                    .map(|(i, e)| {
-                        let prev = std::mem::replace(
-                            &mut self.current_slot_expected_ty,
-                            slot_types.get(i).cloned(),
-                        );
-                        let staged = self.stage_composite(e);
-                        self.current_slot_expected_ty = prev;
-                        staged
-                    })
-                    .collect();
-                let elem_expressions = self.sequence(output, stages, "_v");
-
-                let elem_expressions: Vec<String> = elements
-                    .iter()
-                    .zip(elem_expressions)
-                    .enumerate()
-                    .map(|(i, (expr, emitted))| match slot_types.get(i) {
-                        Some(slot) => {
-                            self.maybe_wrap_as_go_interface(emitted, &expr.get_type(), slot)
-                        }
-                        None => emitted,
-                    })
-                    .collect();
-
-                self.flags.needs_stdlib = true;
-                let arity = elem_expressions.len();
-
-                let needs_explicit_type_args = !slot_types.is_empty()
-                    && slot_types.iter().any(|t| self.as_interface(t).is_some());
-
-                if needs_explicit_type_args {
-                    let slot_ty_strs: Vec<String> = slot_types
-                        .iter()
-                        .map(|t| self.go_type_as_string(t))
-                        .collect();
-                    format!(
-                        "lisette.MakeTuple{}[{}]({})",
-                        arity,
-                        slot_ty_strs.join(", "),
-                        elem_expressions.join(", ")
-                    )
-                } else {
-                    format!(
-                        "lisette.MakeTuple{}({})",
-                        arity,
-                        elem_expressions.join(", ")
-                    )
-                }
-            }
+            Expression::Tuple { elements, ty, .. } => self.emit_tuple_value(output, elements, ty),
             Expression::If { ty, .. }
             | Expression::Match { ty, .. }
             | Expression::Select { ty, .. } => {
-                let result_var = self.declare_result_var(output, ty);
-                let saved_target_ty = self.assign_target_ty.replace(ty.clone());
-                self.with_position(Position::Assign(result_var.clone()), |this| {
-                    this.emit_branching_directly(output, expression);
-                });
-                self.assign_target_ty = saved_target_ty;
-                result_var
+                self.emit_branching_as_operand(output, expression, ty)
             }
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
@@ -349,6 +284,83 @@ impl Emitter<'_> {
             }
             _ => unreachable!("unexpected expression in emit: {:?}", expression),
         }
+    }
+
+    fn emit_tuple_value(
+        &mut self,
+        output: &mut String,
+        elements: &[Expression],
+        ty: &Type,
+    ) -> String {
+        let inferred_slot_types: Vec<Type> = match ty.resolve() {
+            Type::Tuple(slots) => slots,
+            _ => Vec::new(),
+        };
+        let slot_types = self.resolve_tuple_slot_types(inferred_slot_types);
+
+        let stages: Vec<Staged> = elements
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                let prev = std::mem::replace(
+                    &mut self.current_slot_expected_ty,
+                    slot_types.get(i).cloned(),
+                );
+                let staged = self.stage_composite(e);
+                self.current_slot_expected_ty = prev;
+                staged
+            })
+            .collect();
+        let elem_expressions = self.sequence(output, stages, "_v");
+
+        let elem_expressions: Vec<String> = elements
+            .iter()
+            .zip(elem_expressions)
+            .enumerate()
+            .map(|(i, (expr, emitted))| match slot_types.get(i) {
+                Some(slot) => self.maybe_wrap_as_go_interface(emitted, &expr.get_type(), slot),
+                None => emitted,
+            })
+            .collect();
+
+        self.flags.needs_stdlib = true;
+        let arity = elem_expressions.len();
+
+        let needs_explicit_type_args =
+            !slot_types.is_empty() && slot_types.iter().any(|t| self.as_interface(t).is_some());
+
+        if !needs_explicit_type_args {
+            return format!(
+                "lisette.MakeTuple{}({})",
+                arity,
+                elem_expressions.join(", ")
+            );
+        }
+        let slot_ty_strs: Vec<String> = slot_types
+            .iter()
+            .map(|t| self.go_type_as_string(t))
+            .collect();
+        format!(
+            "lisette.MakeTuple{}[{}]({})",
+            arity,
+            slot_ty_strs.join(", "),
+            elem_expressions.join(", ")
+        )
+    }
+
+    fn emit_branching_as_operand(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        ty: &Type,
+    ) -> String {
+        let result_var = self.declare_result_var(output, ty);
+        let saved_target_ty = self.assign_target_ty.replace(ty.clone());
+        self.with_position(Position::Assign(result_var.clone()), |this| {
+            this.emit_branching_directly(output, expression);
+        });
+        self.assign_target_ty = saved_target_ty;
+        result_var
     }
 
     fn emit_cast(

@@ -112,19 +112,7 @@ impl Emitter<'_> {
                         params: ret_params, ..
                     } = return_type.as_ref()
                     {
-                        let needs_type_args = !self.emitting_call_callee
-                            || ret_params.len() > fn_params.len()
-                            || !ret_params.iter().all(|rp| {
-                                let resolved_rp = rp.resolve();
-                                fn_params
-                                    .iter()
-                                    .any(|fp| fp.resolve().contains_type(&resolved_rp))
-                            });
-                        let type_args = if needs_type_args {
-                            self.format_type_args(ret_params)
-                        } else {
-                            String::new()
-                        };
+                        let type_args = self.constructor_fn_type_args(fn_params, ret_params);
                         return IdentifierKind::ConstructorFunction { name, type_args };
                     }
                 }
@@ -135,6 +123,25 @@ impl Emitter<'_> {
 
         let resolved = make_fn.cloned().unwrap_or(name);
         IdentifierKind::Regular { name: resolved }
+    }
+
+    /// Type args for a constructor function reference (e.g. `MakeFoo[T]` used as a value).
+    /// Skips type args when the callee position already supplies them or when they can be
+    /// inferred from the parameter types.
+    fn constructor_fn_type_args(&mut self, fn_params: &[Type], ret_params: &[Type]) -> String {
+        let needs_type_args = !self.emitting_call_callee
+            || ret_params.len() > fn_params.len()
+            || !ret_params.iter().all(|rp| {
+                let resolved_rp = rp.resolve();
+                fn_params
+                    .iter()
+                    .any(|fp| fp.resolve().contains_type(&resolved_rp))
+            });
+        if needs_type_args {
+            self.format_type_args(ret_params)
+        } else {
+            String::new()
+        }
     }
 
     /// The identifier's type is already instantiated (Forall stripped by the type checker).
