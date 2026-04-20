@@ -36,20 +36,14 @@ impl Emitter<'_> {
         self.flags.needs_stdlib = true;
         let check_var = if let Expression::Identifier { value, ty, .. } = expression {
             let go_name = self.emit_identifier(value, ty);
-            if !go_name.contains('(') {
-                go_name
+            if go_name.contains('(') {
+                self.capture_check_var(output, &go_name)
             } else {
-                let check_var = self.fresh_var(Some("check"));
-                self.declare(&check_var);
-                write_line!(output, "{} := {}", check_var, go_name);
-                check_var
+                go_name
             }
         } else {
-            let check_var = self.fresh_var(Some("check"));
-            self.declare(&check_var);
             let expression_string = self.emit_operand(output, expression);
-            write_line!(output, "{} := {}", check_var, expression_string);
-            check_var
+            self.capture_check_var(output, &expression_string)
         };
 
         let result_var = result_var_name.map(|s| s.to_string()).unwrap_or_else(|| {
@@ -82,6 +76,16 @@ impl Emitter<'_> {
         }
 
         result_var
+    }
+
+    /// Assign the propagated expression to a fresh `check` temp so its
+    /// `.Tag`/`.ErrVal`/etc. can be read without re-evaluating the (possibly
+    /// effectful) underlying call.
+    fn capture_check_var(&mut self, output: &mut String, expression_string: &str) -> String {
+        let check_var = self.fresh_var(Some("check"));
+        self.declare(&check_var);
+        write_line!(output, "{} := {}", check_var, expression_string);
+        check_var
     }
 
     pub(crate) fn emit_option_result_assignment(

@@ -47,48 +47,36 @@ impl Emitter<'_> {
     ) -> String {
         let dot_access_kind = self.ctx.resolutions.get_dot_access(span);
 
-        // Phase 1: Early-return cases that don't need the receiver emitted first
-        match dot_access_kind {
+        // Phase 1: cases that don't need the receiver emitted first. ModuleMember
+        // and unresolved accesses may still resolve to enum/static form (e.g.
+        // cross-module or alias patterns), so fall through to both.
+        let phase_one = match dot_access_kind {
             Some(SemanticDotKind::ValueEnumVariant) => {
-                if let Some(s) = self.emit_value_enum_variant(expression, member) {
-                    return s;
-                }
+                self.emit_value_enum_variant(expression, member)
             }
             Some(SemanticDotKind::EnumVariant) => {
-                if let Some(s) = self.emit_enum_variant_dot(expression, member, result_ty) {
-                    return s;
-                }
+                self.emit_enum_variant_dot(expression, member, result_ty)
             }
             Some(SemanticDotKind::StaticMethod { .. }) => {
-                if let Some(s) = self.emit_static_method_dot(expression, member, result_ty) {
-                    return s;
-                }
+                self.emit_static_method_dot(expression, member, result_ty)
             }
             Some(SemanticDotKind::InstanceMethodValue {
                 is_exported,
                 is_pointer_receiver,
-            }) => {
-                if let Some(s) = self.emit_instance_method_value_dot(
-                    expression,
-                    member,
-                    result_ty,
-                    is_exported,
-                    is_pointer_receiver,
-                ) {
-                    return s;
-                }
-            }
-            Some(SemanticDotKind::ModuleMember) | None => {
-                // ModuleMember and unresolved accesses may still need static method
-                // or enum variant emission (e.g., cross-module or alias patterns)
-                if let Some(s) = self.emit_enum_variant_dot(expression, member, result_ty) {
-                    return s;
-                }
-                if let Some(s) = self.emit_static_method_dot(expression, member, result_ty) {
-                    return s;
-                }
-            }
-            _ => {}
+            }) => self.emit_instance_method_value_dot(
+                expression,
+                member,
+                result_ty,
+                is_exported,
+                is_pointer_receiver,
+            ),
+            Some(SemanticDotKind::ModuleMember) | None => self
+                .emit_enum_variant_dot(expression, member, result_ty)
+                .or_else(|| self.emit_static_method_dot(expression, member, result_ty)),
+            _ => None,
+        };
+        if let Some(s) = phase_one {
+            return s;
         }
 
         // Phase 2: Post-receiver emission (struct fields, tuple fields, instance methods)
