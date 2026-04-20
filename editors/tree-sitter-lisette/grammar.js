@@ -891,9 +891,16 @@ module.exports = grammar({
       $.struct_pattern,
       $.slice_pattern,
       $.or_pattern,
+      $.as_binding_pattern,
       $.remaining_field_pattern,
       '_',
     ),
+
+    as_binding_pattern: $ => prec.left(seq(
+      field('pattern', $._pattern),
+      'as',
+      field('name', $.identifier),
+    )),
 
     tuple_pattern: $ => parenList(choice($._pattern, $.closure_expression)),
 

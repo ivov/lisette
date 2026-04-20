@@ -168,7 +168,7 @@
           "match": "\\b(let|mut|import|defer|task|select|try|recover)\\b"
         },
         {
-          "name": "keyword.operator.cast.lisette",
+          "name": "keyword.operator.as.lisette",
           "match": "\\b(as)\\b"
         },
         {

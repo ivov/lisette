@@ -172,6 +172,10 @@
   type: (scoped_type_identifier
     name: (type_identifier) @type))
 
+; As-binding patterns
+(as_binding_pattern
+  name: (identifier) @variable)
+
 ; Parameters
 (parameter
   pattern: (identifier) @variable.parameter)

@@ -156,3 +156,29 @@ let (Some(x), _) = pair
         type: (identifier)
         (identifier)))
     value: (identifier)))
+
+================================================================================
+As binding pattern
+================================================================================
+
+match p { Point { x, .. } as pt => pt.y }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (match_expression
+      value: (identifier)
+      body: (match_block
+        (match_arm
+          pattern: (match_pattern
+            (as_binding_pattern
+              pattern: (struct_pattern
+                type: (type_identifier)
+                (field_pattern
+                  name: (shorthand_field_identifier))
+                (remaining_field_pattern))
+              name: (identifier)))
+          value: (field_expression
+            value: (identifier)
+            field: (field_identifier)))))))

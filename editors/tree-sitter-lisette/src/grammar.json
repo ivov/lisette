@@ -4702,6 +4702,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "as_binding_pattern"
+        },
+        {
+          "type": "SYMBOL",
           "name": "remaining_field_pattern"
         },
         {
@@ -4709,6 +4713,35 @@
           "value": "_"
         }
       ]
+    },
+    "as_binding_pattern": {
+      "type": "PREC_LEFT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "pattern",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_pattern"
+            }
+          },
+          {
+            "type": "STRING",
+            "value": "as"
+          },
+          {
+            "type": "FIELD",
+            "name": "name",
+            "content": {
+              "type": "SYMBOL",
+              "name": "identifier"
+            }
+          }
+        ]
+      }
     },
     "tuple_pattern": {
       "type": "SEQ",
