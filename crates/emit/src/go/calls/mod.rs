@@ -1,6 +1,7 @@
 mod dispatch;
 pub(crate) mod go_interop;
 mod native;
+mod regular;
 mod ufcs;
 
 use crate::go::types::native::NativeGoType;

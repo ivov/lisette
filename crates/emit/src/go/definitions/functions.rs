@@ -1,10 +1,14 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
+use crate::go::names::go_name;
 use crate::go::types::emitter::Position;
-use crate::go::utils::{group_params, optimize_function_body, requires_temp_var};
+use crate::go::types::native::NativeGoType;
+use crate::go::utils::{group_params, optimize_function_body, receiver_name, requires_temp_var};
 use crate::go::write_line;
-use syntax::ast::{Binding, Expression, Pattern, TypedPattern};
+use syntax::ast::{
+    Annotation, Binding, Expression, FunctionDefinition, Generic, Pattern, Span, TypedPattern,
+};
 use syntax::types::Type;
 
 impl Emitter<'_> {
@@ -207,5 +211,285 @@ impl Emitter<'_> {
             }
             _ => false,
         }
+    }
+
+    pub(crate) fn emit_function(
+        &mut self,
+        function_definition: &FunctionDefinition,
+        receiver: Option<(String, Type)>,
+        is_public: bool,
+    ) -> String {
+        if matches!(*function_definition.body, Expression::NoOp) {
+            return String::new();
+        }
+
+        let directive = self.maybe_line_directive(&function_definition.name_span);
+
+        let saved_return_context = self.current_return_context.clone();
+        self.current_return_context = Some(function_definition.return_type.clone());
+
+        let (function_definition, receiver) =
+            self.change_go_builtin_methods(function_definition, receiver);
+
+        let (params_to_process, receiver_override) =
+            self.extract_receiver(&function_definition, receiver.is_some());
+
+        let mut parts = vec!["func".to_string()];
+
+        let (_, receiver_part) =
+            self.emit_receiver_part(params_to_process, &receiver, receiver_override.as_ref());
+        if let Some(part) = receiver_part {
+            parts.push(part);
+        }
+
+        let function_name = if is_public {
+            go_name::capitalize_first(&function_definition.name)
+        } else if receiver.is_some() {
+            go_name::escape_keyword(&function_definition.name).into_owned()
+        } else {
+            go_name::escape_reserved(&function_definition.name).into_owned()
+        };
+        parts.push(function_name);
+
+        let generic_names: Vec<&str> = function_definition
+            .generics
+            .iter()
+            .map(|g| g.name.as_ref())
+            .collect();
+        let sig_types = params_to_process
+            .iter()
+            .map(|p| &p.ty)
+            .chain(std::iter::once(&function_definition.return_type));
+        let mut map_key_generics = Self::collect_map_key_generics(sig_types, &generic_names);
+        for name in &generic_names {
+            if !map_key_generics.contains(*name)
+                && Self::body_has_map_key_generic(&function_definition.body, name)
+            {
+                map_key_generics.insert(name.to_string());
+            }
+        }
+
+        let generics_str =
+            self.generics_to_string_with_map_keys(&function_definition.generics, &map_key_generics);
+        if !generics_str.is_empty() {
+            parts.push(generics_str);
+        }
+
+        let saved_absorbed =
+            self.detect_absorbed_ref_generics(params_to_process, &function_definition.generics);
+
+        let (params_string, deferred_patterns) = self.emit_function_params(params_to_process);
+        parts.push(params_string);
+
+        let return_ty = if function_definition.return_type.is_unit() {
+            String::new()
+        } else {
+            self.go_type_as_string(&function_definition.return_type)
+        };
+
+        if !return_ty.is_empty() {
+            parts.push(return_ty);
+        }
+
+        let signature = parts.join(" ");
+
+        let mut body = String::new();
+
+        for (var_name, pattern, typed) in deferred_patterns {
+            self.emit_pattern_bindings(&mut body, &var_name, &pattern, typed.as_ref());
+        }
+
+        self.emit_function_body(
+            &mut body,
+            &function_definition.body,
+            !function_definition.return_type.is_unit(),
+        );
+        optimize_function_body(&mut body);
+
+        self.current_return_context = saved_return_context;
+        self.module.absorbed_ref_generics = saved_absorbed;
+
+        let trimmed_body = body.trim_end();
+        if trimmed_body.is_empty() {
+            format!("{}{} {{}}", directive, signature)
+        } else {
+            format!("{}{} {{\n{}\n}}", directive, signature, trimmed_body)
+        }
+    }
+
+    fn change_go_builtin_methods(
+        &mut self,
+        function_definition: &FunctionDefinition,
+        receiver: Option<(String, Type)>,
+    ) -> (FunctionDefinition, Option<(String, Type)>) {
+        let Some((receiver_name, receiver_type)) = receiver else {
+            return (function_definition.clone(), None);
+        };
+
+        let Some(native) = NativeGoType::from_type(&receiver_type) else {
+            return (
+                function_definition.clone(),
+                Some((receiver_name, receiver_type)),
+            );
+        };
+
+        let mut new_function_definition = function_definition.clone();
+        new_function_definition.name =
+            format!("{}.{}", native.lisette_name(), function_definition.name).into();
+
+        let self_binding = Binding {
+            pattern: Pattern::Identifier {
+                identifier: receiver_name.into(),
+                span: Span::dummy(),
+            },
+            annotation: Some(Annotation::Unknown),
+            typed_pattern: None,
+            ty: receiver_type,
+            mutable: false,
+        };
+
+        new_function_definition.params.insert(0, self_binding);
+        (new_function_definition, None)
+    }
+
+    fn emit_receiver_part(
+        &mut self,
+        params_to_process: &[Binding],
+        receiver: &Option<(String, Type)>,
+        receiver_override: Option<&Type>,
+    ) -> (Option<String>, Option<String>) {
+        let Some((_, receiver_ty)) = receiver else {
+            return (None, None);
+        };
+
+        let param_names: Vec<String> = params_to_process
+            .iter()
+            .filter_map(|param| {
+                if let Pattern::Identifier { identifier, .. } = &param.pattern {
+                    Some(identifier.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let actual_ty = receiver_override.unwrap_or(receiver_ty);
+        let ty_string = self.go_type_as_string(actual_ty);
+        let mut receiver_var = receiver_name(&ty_string);
+
+        if param_names.contains(&receiver_var) {
+            receiver_var = format!("{}{}", receiver_var, receiver_var);
+            let mut counter = 2;
+            while param_names.contains(&receiver_var) {
+                receiver_var = format!("{}{}", receiver_name(&ty_string), counter);
+                counter += 1;
+            }
+        }
+
+        let receiver_part = format!("({} {})", receiver_var, ty_string);
+
+        self.scope.bindings.add("self", receiver_var.clone());
+        self.declare(&receiver_var);
+
+        (Some(receiver_var), Some(receiver_part))
+    }
+
+    /// Detect Ref<T> parameters where T is a bounded generic and populate
+    /// absorbed_ref_generics. Returns the previous value for restoration.
+    fn detect_absorbed_ref_generics(
+        &mut self,
+        params: &[Binding],
+        generics: &[Generic],
+    ) -> HashSet<String> {
+        let saved = self.module.absorbed_ref_generics.clone();
+        self.module.absorbed_ref_generics.clear();
+        let bounded_generics: HashSet<&str> = generics
+            .iter()
+            .filter(|g| !g.bounds.is_empty())
+            .map(|g| g.name.as_ref())
+            .collect();
+        for param in params.iter() {
+            let resolved = param.ty.resolve();
+            if resolved.is_ref()
+                && let Some(inner) = resolved.inner()
+                && let Type::Parameter(name) = inner.resolve()
+                && bounded_generics.contains(name.as_ref())
+            {
+                self.module.absorbed_ref_generics.insert(name.to_string());
+            }
+        }
+        saved
+    }
+
+    fn emit_function_params(
+        &mut self,
+        params_to_process: &[Binding],
+    ) -> (String, Vec<(String, Pattern, Option<TypedPattern>)>) {
+        let mut deferred_patterns = Vec::new();
+        let mut params = Vec::new();
+        for param in params_to_process {
+            let name = match &param.pattern {
+                Pattern::Identifier { identifier, .. } => {
+                    if let Some(go_name) = self.go_name_for_binding(&param.pattern) {
+                        let go_id = self.scope.bindings.add(identifier, go_name);
+                        self.declare(&go_id);
+                        go_id
+                    } else {
+                        "_".to_string()
+                    }
+                }
+                Pattern::WildCard { .. } => "_".to_string(),
+                _ => {
+                    let var = self.fresh_var(Some("arg"));
+                    self.declare(&var);
+                    deferred_patterns.push((
+                        var.clone(),
+                        param.pattern.clone(),
+                        param.typed_pattern.clone(),
+                    ));
+                    var
+                }
+            };
+
+            let param_type = {
+                let resolved = param.ty.resolve();
+                if resolved.is_ref()
+                    && let Some(inner) = resolved.inner()
+                    && let Type::Parameter(name) = inner.resolve()
+                    && self.module.absorbed_ref_generics.contains(name.as_ref())
+                {
+                    inner
+                } else {
+                    param.ty.clone()
+                }
+            };
+            params.push((name, self.go_type_as_string(&param_type)));
+        }
+        (format!("({})", group_params(&params)), deferred_patterns)
+    }
+
+    fn extract_receiver<'a>(
+        &mut self,
+        function_definition: &'a FunctionDefinition,
+        has_receiver: bool,
+    ) -> (&'a [Binding], Option<Type>) {
+        let default = (&function_definition.params[..], None);
+
+        if !has_receiver || function_definition.params.is_empty() {
+            return default;
+        }
+
+        let Pattern::Identifier { identifier, .. } = &function_definition.params[0].pattern else {
+            return default;
+        };
+
+        if identifier != "self" {
+            return default;
+        }
+
+        let receiver_ty = &function_definition.params[0].ty;
+        let _ty_str = self.go_type_as_string(receiver_ty);
+
+        (&function_definition.params[1..], Some(receiver_ty.clone()))
     }
 }

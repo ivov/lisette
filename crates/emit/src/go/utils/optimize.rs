@@ -1,138 +1,10 @@
-use syntax::ast::Expression;
+//! Peephole optimization passes over emitted Go source.
+//!
+//! Lisette emits straight Go text, not a structured IR, so these passes do
+//! after-the-fact rewrites (inline temps into returns, strip redundant `else`
+//! blocks, collapse single-use bindings, etc.).
 
-macro_rules! write_line {
-    ($dst:expr, $($arg:tt)*) => {
-        { use std::fmt::Write as _; writeln!($dst, $($arg)*).unwrap() }
-    };
-}
-pub(crate) use write_line;
-
-pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
-    !matches!(
-        expression.unwrap_parens(),
-        Expression::Literal { .. } | Expression::Identifier { .. }
-    )
-}
-
-/// Result of emitting a sub-expression to a separate buffer.
-/// `setup` contains any statements the emitter produced (temp vars, etc.).
-/// `value` is the final expression string.
-pub(crate) struct Staged {
-    pub setup: String,
-    pub value: String,
-    /// Whether the emitted value contains a call (side-effectful).
-    /// Detected via `value.contains('(')` on the Go output string.
-    pub has_side_effects: bool,
-}
-
-impl Staged {
-    pub(crate) fn new(setup: String, value: String) -> Self {
-        let has_side_effects = value.contains('(');
-        Self {
-            setup,
-            value,
-            has_side_effects,
-        }
-    }
-}
-
-pub(crate) fn receiver_name(type_name: &str) -> String {
-    type_name
-        .trim_start_matches('*')
-        .split('[')
-        .next()
-        .unwrap_or(type_name)
-        .chars()
-        .next()
-        .unwrap_or('x')
-        .to_lowercase()
-        .to_string()
-}
-
-/// Check if emitted Go output references `var` as a standalone identifier
-/// (not as a substring of another identifier like `p` in `tmp_1`).
-pub(crate) fn output_references_var(output: &str, var: &str) -> bool {
-    let var_bytes = var.as_bytes();
-    let out_bytes = output.as_bytes();
-    let mut start = 0;
-    while start + var.len() <= output.len() {
-        if let Some(position) = output[start..].find(var) {
-            let abs = start + position;
-            let before_ok = abs == 0 || {
-                let c = out_bytes[abs - 1];
-                !c.is_ascii_alphanumeric() && c != b'_'
-            };
-            let after = abs + var_bytes.len();
-            let after_ok = after >= out_bytes.len() || {
-                let c = out_bytes[after];
-                !c.is_ascii_alphanumeric() && c != b'_'
-            };
-            if before_ok && after_ok {
-                return true;
-            }
-            start = abs + 1;
-        } else {
-            break;
-        }
-    }
-    false
-}
-
-fn discard_if_unused(output: &mut String, pre_len: usize, var: &str) {
-    if !output_references_var(&output[pre_len..], var) {
-        output.insert_str(pre_len, &format!("_ = {}\n", var));
-    }
-}
-
-/// Guard that snapshots the output length and inserts `_ = var\n` on `finish()`
-/// if the variable was never referenced in the output emitted since creation.
-pub(crate) struct DiscardGuard {
-    pre_len: usize,
-    var: String,
-}
-
-impl DiscardGuard {
-    pub(crate) fn new(output: &str, var: &str) -> Self {
-        Self {
-            pre_len: output.len(),
-            var: var.to_string(),
-        }
-    }
-
-    pub(crate) fn finish(self, output: &mut String) {
-        discard_if_unused(output, self.pre_len, &self.var);
-    }
-}
-
-/// Group consecutive parameters with the same Go type: `a int, b int` → `a, b int`.
-pub(crate) fn group_params(params: &[(String, String)]) -> String {
-    if params.is_empty() {
-        return String::new();
-    }
-    if params.len() == 1 {
-        return format!("{} {}", params[0].0, params[0].1);
-    }
-    let mut parts: Vec<String> = Vec::new();
-    let mut names: Vec<&str> = vec![&params[0].0];
-    let mut current_ty = &params[0].1;
-
-    for param in &params[1..] {
-        if param.1 == *current_ty {
-            names.push(&param.0);
-        } else {
-            parts.push(format!("{} {}", names.join(", "), current_ty));
-            names.clear();
-            names.push(&param.0);
-            current_ty = &param.1;
-        }
-    }
-    parts.push(format!("{} {}", names.join(", "), current_ty));
-    parts.join(", ")
-}
-
-fn is_go_identifier(s: &str) -> bool {
-    !s.is_empty() && s.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
-}
+use super::output_references_var;
 
 /// Run all peephole optimization passes on a region of emitted Go output.
 ///
@@ -158,6 +30,61 @@ pub(crate) fn optimize_region(output: &mut String, pre_len: usize, temp_var: Opt
 
 pub(crate) fn optimize_function_body(output: &mut String) {
     optimize_region(output, 0, None);
+}
+
+/// Collapse single-use bindings: `VAR := EXPR\n{return VAR|TARGET = VAR|_ = VAR}\n`
+/// becomes `{return EXPR|TARGET = EXPR|_ = EXPR}\n`.
+///
+/// Only collapses when VAR appears nowhere else in the region (true single-use).
+/// Pattern bindings are always pure field accesses, so reordering is safe.
+pub(crate) fn inline_trivial_bindings(output: &mut String, pre_len: usize) {
+    let region = &output[pre_len..];
+    let lines: Vec<&str> = region.lines().collect();
+
+    let mut result = String::with_capacity(region.len());
+    let mut i = 0;
+    let mut changed = false;
+
+    while i < lines.len() {
+        if i + 1 < lines.len()
+            && let Some((var, expression)) = parse_binding(lines[i])
+            && let Some(collapsed) = try_inline_binding(lines[i + 1], var, expression)
+        {
+            let used_elsewhere = lines
+                .iter()
+                .enumerate()
+                .any(|(j, line)| j != i && j != i + 1 && output_references_var(line, var));
+
+            if !used_elsewhere {
+                result.push_str(&collapsed);
+                result.push('\n');
+                i += 2;
+                changed = true;
+                continue;
+            }
+        }
+        result.push_str(lines[i]);
+        result.push('\n');
+        i += 1;
+    }
+
+    if changed {
+        output.truncate(pre_len);
+        output.push_str(&result);
+    }
+}
+
+/// Check if the output ends with a diverging statement (break/continue/return/panic).
+pub(crate) fn output_ends_with_diverge(output: &str) -> bool {
+    output
+        .trim_end()
+        .lines()
+        .next_back()
+        .is_some_and(is_diverge_line)
+}
+
+fn is_go_identifier(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
 }
 
 fn find_matching_close(lines: &[impl AsRef<str>], start: usize) -> Option<usize> {
@@ -307,48 +234,6 @@ fn find_inlinable_var(region: &str) -> Option<String> {
     Some(var_name.to_owned())
 }
 
-/// Collapse single-use bindings: `VAR := EXPR\n{return VAR|TARGET = VAR|_ = VAR}\n`
-/// becomes `{return EXPR|TARGET = EXPR|_ = EXPR}\n`.
-///
-/// Only collapses when VAR appears nowhere else in the region (true single-use).
-/// Pattern bindings are always pure field accesses, so reordering is safe.
-pub(crate) fn inline_trivial_bindings(output: &mut String, pre_len: usize) {
-    let region = &output[pre_len..];
-    let lines: Vec<&str> = region.lines().collect();
-
-    let mut result = String::with_capacity(region.len());
-    let mut i = 0;
-    let mut changed = false;
-
-    while i < lines.len() {
-        if i + 1 < lines.len()
-            && let Some((var, expression)) = parse_binding(lines[i])
-            && let Some(collapsed) = try_inline_binding(lines[i + 1], var, expression)
-        {
-            let used_elsewhere = lines
-                .iter()
-                .enumerate()
-                .any(|(j, line)| j != i && j != i + 1 && output_references_var(line, var));
-
-            if !used_elsewhere {
-                result.push_str(&collapsed);
-                result.push('\n');
-                i += 2;
-                changed = true;
-                continue;
-            }
-        }
-        result.push_str(lines[i]);
-        result.push('\n');
-        i += 1;
-    }
-
-    if changed {
-        output.truncate(pre_len);
-        output.push_str(&result);
-    }
-}
-
 /// Parse a short variable declaration: `VAR := EXPR` → `(VAR, EXPR)`.
 fn parse_binding(line: &str) -> Option<(&str, &str)> {
     let idx = line.find(" := ")?;
@@ -379,30 +264,6 @@ fn try_inline_binding(next_line: &str, var: &str, expression: &str) -> Option<St
         let value = &next_line[eq_position + 3..];
         if value == var && target != var {
             return Some(format!("{} = {}", target, expression));
-        }
-    }
-    None
-}
-
-/// Try to negate a simple comparison by flipping its operator.
-/// Returns `None` for compound expressions (`&&`/`||`) or non-comparisons.
-/// Used by unary-not emission and let-else condition negation.
-pub(crate) fn try_flip_comparison(expression: &str) -> Option<String> {
-    if expression.contains(" && ") || expression.contains(" || ") {
-        return None;
-    }
-    for (op, flipped) in [
-        (" == ", " != "),
-        (" != ", " == "),
-        (" <= ", " > "),
-        (" >= ", " < "),
-        (" < ", " >= "),
-        (" > ", " <= "),
-    ] {
-        if let Some(position) = expression.find(op) {
-            let lhs = &expression[..position];
-            let rhs = &expression[position + op.len()..];
-            return Some(format!("{}{}{}", lhs, flipped, rhs));
         }
     }
     None
@@ -564,48 +425,5 @@ fn inline_wrapper_alias(output: &mut String, pre_len: usize) {
         output.truncate(pre_len);
         output.push_str(&result);
         return;
-    }
-}
-
-/// Check if the output ends with a diverging statement (break/continue/return/panic).
-pub(crate) fn output_ends_with_diverge(output: &str) -> bool {
-    output
-        .trim_end()
-        .lines()
-        .next_back()
-        .is_some_and(is_diverge_line)
-}
-
-pub(crate) fn requires_temp_var(expression: &Expression) -> bool {
-    matches!(
-        expression,
-        Expression::If { .. }
-            | Expression::IfLet { .. }
-            | Expression::Match { .. }
-            | Expression::Block { .. }
-            | Expression::Loop { .. }
-            | Expression::Propagate { .. }
-            | Expression::TryBlock { .. }
-            | Expression::Select { .. }
-    )
-}
-
-/// Whether an expression contains a function call (i.e. is side-effectful).
-/// Temp-lifted forms (if/match/block) return false — after emission they're
-/// just variable names.
-pub(crate) fn contains_call(expression: &Expression) -> bool {
-    match expression.unwrap_parens() {
-        Expression::Call { .. } => true,
-        Expression::Binary { left, right, .. } => contains_call(left) || contains_call(right),
-        Expression::Unary { expression, .. }
-        | Expression::DotAccess { expression, .. }
-        | Expression::Cast { expression, .. }
-        | Expression::Reference { expression, .. } => contains_call(expression),
-        Expression::IndexedAccess {
-            expression, index, ..
-        } => contains_call(expression) || contains_call(index),
-        Expression::Tuple { elements, .. } => elements.iter().any(contains_call),
-        e if requires_temp_var(e) => false,
-        _ => false,
     }
 }

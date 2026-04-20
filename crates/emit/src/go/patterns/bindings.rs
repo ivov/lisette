@@ -3,7 +3,7 @@ use syntax::program::Definition;
 use syntax::types::Type;
 
 use crate::Emitter;
-use crate::go::expressions::values::convert_escape_sequences;
+use crate::go::expressions::literals::convert_escape_sequences;
 use crate::go::names::generics;
 use crate::go::patterns::decision_tree::{collect_pattern_info, emit_tree_bindings};
 use crate::go::write_line;

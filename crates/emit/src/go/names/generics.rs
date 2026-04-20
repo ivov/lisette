@@ -29,6 +29,17 @@ pub(crate) fn resolve_field_type(
     substitute(field_ty, &type_map)
 }
 
+/// Go receiver generics: just the type parameter names, no constraints.
+/// Unlike the full generics string (`[T any]`), the receiver uses bare names (`[T]`).
+pub(crate) fn receiver_generics_string(generics: &[Generic]) -> String {
+    if generics.is_empty() {
+        String::new()
+    } else {
+        let params: Vec<&str> = generics.iter().map(|g| g.name.as_str()).collect();
+        format!("[{}]", params.join(", "))
+    }
+}
+
 impl Emitter<'_> {
     pub(crate) fn merge_impl_bounds(&self, type_name: &str, generics: &[Generic]) -> Vec<Generic> {
         let Some(impl_generics) = self.module.impl_bounds.get(type_name) else {

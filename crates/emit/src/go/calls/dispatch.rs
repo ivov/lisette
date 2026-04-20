@@ -6,16 +6,9 @@ use crate::Emitter;
 use crate::go::names::go_name;
 use crate::go::types::native::NativeGoType;
 use crate::go::utils::Staged;
-use crate::go::write_line;
-use syntax::ast::{Annotation, Expression, StructKind, UnaryOperator};
+use syntax::ast::{Annotation, Expression, StructKind};
 use syntax::program::{CallKind, Definition};
 use syntax::types::Type;
-
-struct CallArgContext<'a> {
-    fn_param_types: &'a [Type],
-    pointer_indices: &'a HashSet<usize>,
-    is_go_call: bool,
-}
 
 fn extract_return_type_param(function: &Expression) -> Option<Type> {
     let Type::Function { return_type, .. } = function.get_type().resolve() else {
@@ -25,52 +18,6 @@ fn extract_return_type_param(function: &Expression) -> Option<Type> {
         return None;
     };
     params.first().cloned()
-}
-
-/// Collapse redundant fmt wrappers:
-/// - `fmt.Print{ln}(fmt.Sprintf(...))` → `fmt.Printf(..., "\n")`
-/// - `fmt.Print{ln}(fmt.Sprint(x))` → `fmt.Print{ln}(x)`
-fn collapse_fmt_print(function_string: &str, args_strings: &[String], call_str: String) -> String {
-    if function_string != "fmt.Print" && function_string != "fmt.Println" {
-        return call_str;
-    }
-    if args_strings.len() != 1 {
-        return call_str;
-    }
-    let arg = &args_strings[0];
-
-    if let Some(inner) = arg
-        .strip_prefix("fmt.Sprintf(")
-        .and_then(|s| s.strip_suffix(')'))
-    {
-        let suffix = if function_string == "fmt.Println" {
-            "\\n"
-        } else {
-            ""
-        };
-        if suffix.is_empty() {
-            return format!("fmt.Printf({})", inner);
-        }
-        if let Some(close_quote) = inner.find("\", ") {
-            let format_str = &inner[..close_quote];
-            let rest = &inner[close_quote + 1..];
-            return format!("fmt.Printf({}{}\"{})", format_str, suffix, rest);
-        }
-        if inner.starts_with('"') && inner.ends_with('"') {
-            let format_str = &inner[..inner.len() - 1];
-            return format!("fmt.Printf({}{}\")", format_str, suffix);
-        }
-        return call_str;
-    }
-
-    if let Some(inner) = arg
-        .strip_prefix("fmt.Sprint(")
-        .and_then(|s| s.strip_suffix(')'))
-    {
-        return format!("{}({})", function_string, inner);
-    }
-
-    call_str
 }
 
 impl Emitter<'_> {
@@ -266,313 +213,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn emit_regular_call(
-        &mut self,
-        output: &mut String,
-        function: &Expression,
-        args: &[Expression],
-        type_args: &[Annotation],
-        call_ty: Option<&Type>,
-        spread: Option<&Expression>,
-    ) -> String {
-        if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
-            let stages: Vec<Staged> = args.iter().map(|a| self.stage_operand(a)).collect();
-            let wrap_to_any = Self::spread_needs_any_wrap(function, spread);
-            let args_strings =
-                self.sequence_with_spread(output, stages, spread, wrap_to_any, "_arg");
-            return format!("{}({})", go_name, args_strings.join(", "));
-        }
-
-        let saved = self.emitting_call_callee;
-        self.emitting_call_callee = true;
-        let mut function_string = self.emit_operand(output, function);
-        self.emitting_call_callee = saved;
-
-        if matches!(
-            function,
-            Expression::Unary {
-                operator: UnaryOperator::Deref,
-                ..
-            }
-        ) {
-            function_string = format!("({})", function_string);
-        }
-
-        let type_args_string =
-            self.resolve_call_type_args(function, type_args, call_ty, &mut function_string);
-
-        let pointer_indices = self.get_recursive_enum_pointer_indices(function);
-
-        let fn_param_types: Vec<Type> = match function.get_type().resolve() {
-            Type::Function { params, .. } => params,
-            _ => vec![],
-        };
-
-        let is_go_call = matches!(
-            function.unwrap_parens(),
-            Expression::DotAccess { expression, .. } if Self::is_go_receiver(expression)
-        );
-
-        let wrap_spread_to_any = Self::spread_needs_any_wrap(function, spread);
-        let args_strings = self.emit_call_args(
-            output,
-            args,
-            &fn_param_types,
-            &pointer_indices,
-            is_go_call,
-            spread,
-            wrap_spread_to_any,
-        );
-
-        let call_str = format!(
-            "{}{}({})",
-            function_string,
-            type_args_string,
-            args_strings.join(", ")
-        );
-        let call_str = collapse_fmt_print(&function_string, &args_strings, call_str);
-
-        if let Some(wrapped) = self.wrap_go_array_return(output, function, &call_str) {
-            return wrapped;
-        }
-        call_str
-    }
-
-    /// Materialize a Go array-returning call into a variable and reslice it,
-    /// so the caller sees a `[]T` slice instead of a fixed-size array.
-    /// Skipped in discarded-call contexts via `skip_array_return_wrap`.
-    fn wrap_go_array_return(
-        &mut self,
-        output: &mut String,
-        function: &Expression,
-        call_str: &str,
-    ) -> Option<String> {
-        if self.skip_array_return_wrap {
-            return None;
-        }
-        let Expression::DotAccess {
-            expression: receiver_expression,
-            member,
-            ..
-        } = function.unwrap_parens()
-        else {
-            return None;
-        };
-        if !Self::is_go_receiver(receiver_expression)
-            || !self.has_go_array_return(receiver_expression, member)
-        {
-            return None;
-        }
-        let temp = self.fresh_var(Some("arr"));
-        self.declare(&temp);
-        write_line!(output, "{} := {}", temp, call_str);
-        Some(format!("{}[:]", temp))
-    }
-
-    fn resolve_call_type_args(
-        &mut self,
-        function: &Expression,
-        type_args: &[Annotation],
-        call_ty: Option<&Type>,
-        function_string: &mut String,
-    ) -> String {
-        let mut type_args_string = self.format_type_args_from_annotations(type_args);
-
-        let slot_ty = self.current_slot_expected_ty.clone();
-
-        if type_args_string.is_empty()
-            && let Some(inferred) = self.infer_return_only_type_args(function)
-        {
-            type_args_string = slot_ty
-                .as_ref()
-                .and_then(|t| self.prelude_container_type_args(t))
-                .unwrap_or(inferred);
-        }
-
-        if type_args_string.is_empty() && Self::is_prelude_variant_constructor(function) {
-            let candidate = call_ty
-                .and_then(|t| self.prelude_container_type_args(t))
-                .or_else(|| {
-                    slot_ty
-                        .as_ref()
-                        .and_then(|t| self.prelude_container_type_args(t))
-                });
-            type_args_string = candidate.unwrap_or_default();
-        }
-
-        if !type_args_string.is_empty()
-            && let Some(bracket_start) = function_string.find('[')
-        {
-            function_string.truncate(bracket_start);
-        }
-
-        type_args_string
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn emit_call_args(
-        &mut self,
-        output: &mut String,
-        args: &[Expression],
-        fn_param_types: &[Type],
-        pointer_indices: &HashSet<usize>,
-        is_go_call: bool,
-        spread: Option<&Expression>,
-        wrap_spread_to_any: bool,
-    ) -> Vec<String> {
-        let call_arg_ctx = CallArgContext {
-            fn_param_types,
-            pointer_indices,
-            is_go_call,
-        };
-        let stages: Vec<Staged> = args
-            .iter()
-            .enumerate()
-            .map(|(i, arg)| {
-                let mut setup = String::new();
-                let value = self.emit_call_arg(&mut setup, arg, i, &call_arg_ctx);
-                Staged::new(setup, value)
-            })
-            .collect();
-        self.sequence_with_spread(output, stages, spread, wrap_spread_to_any, "_arg")
-    }
-
-    fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> bool {
-        let Some(spread_expr) = spread else {
-            return false;
-        };
-        let Some(variadic_elem) = function.get_type().resolve().is_variadic() else {
-            return false;
-        };
-        if !variadic_elem.is_unknown() {
-            return false;
-        }
-        spread_expr
-            .get_type()
-            .resolve()
-            .inner()
-            .is_some_and(|t| !t.is_unknown())
-    }
-
-    /// Classify and emit a single call argument.
-    fn emit_call_arg(
-        &mut self,
-        output: &mut String,
-        arg: &Expression,
-        index: usize,
-        ctx: &CallArgContext,
-    ) -> String {
-        let effective_param_ty = self.effective_param_type(index, ctx.fn_param_types);
-
-        if ctx.is_go_call
-            && let Some(result) = self.try_emit_callback_wrapper(output, arg, effective_param_ty)
-        {
-            return result;
-        }
-
-        if let Some(result) = self.try_emit_nullable_coercion(output, arg, effective_param_ty) {
-            return result;
-        }
-
-        if ctx.pointer_indices.contains(&index) {
-            let value = self.emit_value(output, arg);
-            if matches!(arg, Expression::Reference { .. }) || arg.get_type().resolve().is_ref() {
-                return value;
-            }
-            let temp = self.fresh_var(Some("ptr"));
-            self.declare(&temp);
-            write_line!(output, "{} := {}", temp, value);
-            return format!("&{}", temp);
-        }
-
-        let value = self.emit_composite_value(output, arg);
-        match effective_param_ty {
-            Some(target) => self.maybe_wrap_as_go_interface(value, &arg.get_type(), target),
-            None => value,
-        }
-    }
-
-    fn effective_param_type<'a>(
-        &self,
-        index: usize,
-        fn_param_types: &'a [Type],
-    ) -> Option<&'a Type> {
-        fn_param_types.get(index).or_else(|| {
-            fn_param_types
-                .last()
-                .filter(|t| t.get_name() == Some("VarArgs"))
-        })
-    }
-
-    fn try_emit_callback_wrapper(
-        &mut self,
-        output: &mut String,
-        arg: &Expression,
-        effective_param_ty: Option<&Type>,
-    ) -> Option<String> {
-        let param_fn_ty = effective_param_ty.and_then(|param_ty| {
-            let resolved = param_ty.resolve();
-            let fn_ty = match resolved {
-                Type::Function { .. } => resolved,
-                Type::Constructor {
-                    underlying_ty: Some(ref inner),
-                    ..
-                } => inner.resolve(),
-                _ => return None,
-            };
-            if let Type::Function {
-                ref return_type, ..
-            } = fn_ty
-            {
-                let ret = return_type.resolve();
-                if ret.is_result() || ret.is_option() || ret.tuple_arity().is_some_and(|a| a >= 2) {
-                    return Some(fn_ty);
-                }
-            }
-            None
-        })?;
-
-        let value = self.emit_value(output, arg);
-        Some(self.emit_lisette_callback_wrapper(output, &value, &param_fn_ty))
-    }
-
-    fn try_emit_nullable_coercion(
-        &mut self,
-        output: &mut String,
-        arg: &Expression,
-        effective_param_ty: Option<&Type>,
-    ) -> Option<String> {
-        let param_ty = effective_param_ty?;
-        let arg_ty = arg.get_type().resolve();
-        if !self.is_nullable_option(&arg_ty) {
-            return None;
-        }
-        let check_ty = if param_ty.get_name() == Some("VarArgs") {
-            param_ty.inner().unwrap_or_else(|| param_ty.resolve())
-        } else {
-            param_ty.resolve()
-        };
-        let needs_coercion = self
-            .as_interface(&check_ty)
-            .is_some_and(|id| go_name::is_go_import(&id))
-            || (check_ty.has_name("Unknown") && {
-                let inner = arg_ty.ok_type();
-                self.as_interface(&inner)
-                    .is_some_and(|id| go_name::is_go_import(&id))
-            });
-
-        if !needs_coercion {
-            return None;
-        }
-
-        if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
-            return Some("nil".to_string());
-        }
-        let value = self.emit_value(output, arg);
-        Some(self.maybe_unwrap_go_nullable(output, &value, &arg.get_type().resolve()))
-    }
-
-    fn infer_return_only_type_args(&mut self, function: &Expression) -> Option<String> {
+    pub(super) fn infer_return_only_type_args(&mut self, function: &Expression) -> Option<String> {
         let definition_ty = self.get_callee_definition_type(function)?;
         let Type::Forall { vars, body } = definition_ty else {
             return None;
@@ -653,7 +294,10 @@ impl Emitter<'_> {
         }
     }
 
-    fn get_recursive_enum_pointer_indices(&mut self, function: &Expression) -> HashSet<usize> {
+    pub(super) fn get_recursive_enum_pointer_indices(
+        &mut self,
+        function: &Expression,
+    ) -> HashSet<usize> {
         let Some((enum_id, variant_name)) = self.get_make_function_info(function) else {
             return HashSet::default();
         };
@@ -825,7 +469,7 @@ impl Emitter<'_> {
     }
 
     /// Look up the `#[go("name")]` override for a callee, if any.
-    fn get_callee_go_name(&self, function: &Expression) -> Option<&str> {
+    pub(super) fn get_callee_go_name(&self, function: &Expression) -> Option<&str> {
         let Expression::Identifier { value, .. } = function else {
             return None;
         };
@@ -866,7 +510,7 @@ impl Emitter<'_> {
             .then(|| self.format_type_args(&params))
     }
 
-    fn is_prelude_variant_constructor(callee: &Expression) -> bool {
+    pub(super) fn is_prelude_variant_constructor(callee: &Expression) -> bool {
         match callee {
             Expression::Identifier { value, .. } => {
                 matches!(value.as_str(), "Some" | "Ok" | "Err")
