@@ -1,26 +1,42 @@
 mod bindings;
-mod go;
+pub(crate) mod calls;
+mod collectors;
+pub(crate) mod control_flow;
+pub(crate) mod definitions;
+pub(crate) mod expressions;
 mod imports;
+pub(crate) mod names;
 mod output;
+pub(crate) mod patterns;
+pub(crate) mod queries;
+pub(crate) mod statements;
+pub(crate) mod types;
+mod utils;
 
 pub(crate) use bindings::Bindings;
-pub use go::names::go_name::PRELUDE_IMPORT_PATH;
+pub(crate) use calls::go_interop::GoCallStrategy;
+pub(crate) use definitions::enum_layout::EnumLayout;
+pub(crate) use names::go_name;
+pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
+pub(crate) use types::emitter::{ArmPosition, EmitFlags, LineIndex, LoopContext, Position};
+pub(crate) use types::prelude::PreludeType;
+pub(crate) use utils::is_order_sensitive;
+pub(crate) use utils::write_line;
+
+pub use names::go_name::PRELUDE_IMPORT_PATH;
 pub use output::OutputFile;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 
 use ecow::EcoString;
-use go::write_line;
 use imports::ImportBuilder;
 use syntax::ast::{Generic, Span};
 use syntax::program::{
     CoercionInfo, Definition, EmitInput, File, ModuleId, MutationInfo, ResolutionInfo, UnusedInfo,
 };
 use syntax::types::Type;
-
-use go::{ArmPosition, EmitFlags, EnumLayout, LineIndex, LoopContext, Position};
 
 #[derive(Clone, Debug, Default)]
 pub struct EmitOptions {
@@ -84,7 +100,7 @@ struct ModuleData {
     /// infer T = *ConcreteType. Ref<T> for these params should emit as just T.
     absorbed_ref_generics: HashSet<String>,
     /// Pre-computed wrapping strategy per Go function.
-    go_call_strategies: HashMap<String, go::GoCallStrategy>,
+    go_call_strategies: HashMap<String, GoCallStrategy>,
 }
 
 struct ScopeState {
@@ -411,7 +427,7 @@ impl<'a> Emitter<'a> {
 
     pub(crate) fn module_alias_for_type(&self, ty: &Type) -> Option<String> {
         if let Type::Constructor { id, .. } = ty {
-            let module = go::names::go_name::module_of_type_id(id);
+            let module = names::go_name::module_of_type_id(id);
             self.module.module_aliases.get(module).cloned()
         } else {
             None
@@ -461,7 +477,7 @@ impl<'a> Emitter<'a> {
             "main".to_string()
         } else {
             let raw = module_id.rsplit('/').next().unwrap_or(module_id);
-            go::go_name::sanitize_package_name(raw).into_owned()
+            go_name::sanitize_package_name(raw).into_owned()
         };
 
         if should_create_bootstrap {

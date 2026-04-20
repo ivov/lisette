@@ -1,6 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use crate::go::go_name;
+use crate::go_name;
 use ecow::EcoString;
 use syntax::ast::ImportAlias;
 use syntax::program::{File, FileImport, ModuleId};

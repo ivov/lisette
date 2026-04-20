@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap as HashMap;
 
-use super::go::escape_reserved;
+use super::escape_reserved;
 
 #[derive(Default)]
 pub(crate) struct Bindings {
