@@ -10,7 +10,7 @@ use crate::go::patterns::bindings::emit_pattern_literal;
 use crate::go::write_line;
 
 /// A single step in navigating from the match subject to a nested value.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PathSegment {
     /// `.FieldName` — access a named field (Go name, already resolved)
     Field(String),
@@ -25,7 +25,7 @@ pub(crate) enum PathSegment {
 }
 
 /// A path from the match subject to a nested value, built up during compilation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AccessPath {
     pub segments: Vec<PathSegment>,
 }
@@ -184,9 +184,32 @@ impl Check {
         }
     }
 
-    pub(crate) fn as_type_assert(&self) -> Option<&str> {
+    pub(crate) fn as_type_switch_case(&self) -> Option<(Vec<&str>, &AccessPath)> {
         match self {
-            Check::TypeAssert { go_type, .. } => Some(go_type),
+            Check::TypeAssert { go_type, path } => Some((vec![go_type.as_str()], path)),
+            Check::Or { alternatives } => {
+                let [
+                    Check::TypeAssert {
+                        go_type,
+                        path: shared_path,
+                    },
+                ] = alternatives.first()?.as_slice()
+                else {
+                    return None;
+                };
+                let mut labels = Vec::with_capacity(alternatives.len());
+                labels.push(go_type.as_str());
+                for alt in &alternatives[1..] {
+                    let [Check::TypeAssert { go_type, path }] = alt.as_slice() else {
+                        return None;
+                    };
+                    if path != shared_path {
+                        return None;
+                    }
+                    labels.push(go_type.as_str());
+                }
+                Some((labels, shared_path))
+            }
             _ => None,
         }
     }
@@ -336,8 +359,8 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         (SwitchKind::EnumTag, first_check.path()?.clone())
     } else if first_check.as_literal().is_some() {
         (SwitchKind::Value, first_check.path()?.clone())
-    } else if first_check.as_type_assert().is_some() {
-        (SwitchKind::TypeSwitch, first_check.path()?.clone())
+    } else if let Some((_, path)) = first_check.as_type_switch_case() {
+        (SwitchKind::TypeSwitch, path.clone())
     } else {
         return None;
     };
@@ -352,15 +375,21 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         }
         let first = arm.checks.first()?;
 
-        let is_compatible = match &kind {
-            SwitchKind::EnumTag => first.as_enum_tag().is_some(),
-            SwitchKind::Value => first.as_literal().is_some() && arm.checks.len() == 1,
-            SwitchKind::TypeSwitch => first.as_type_assert().is_some(),
+        let arm_path = match &kind {
+            SwitchKind::EnumTag => {
+                first.as_enum_tag()?;
+                first.path()?
+            }
+            SwitchKind::Value => {
+                first.as_literal()?;
+                if arm.checks.len() != 1 {
+                    return None;
+                }
+                first.path()?
+            }
+            SwitchKind::TypeSwitch => first.as_type_switch_case()?.1,
         };
-        if !is_compatible {
-            return None;
-        }
-        if first.path().map(|p| p.render("_")) != Some(switch_path.render("_")) {
+        if arm_path != &switch_path {
             return None;
         }
     }
@@ -386,8 +415,8 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
                 (lit.to_string(), false)
             }
             SwitchKind::TypeSwitch => {
-                let go_type = first_check.as_type_assert().unwrap();
-                (go_type.to_string(), false)
+                let (labels, _) = first_check.as_type_switch_case().unwrap();
+                (labels.join(", "), false)
             }
         };
 

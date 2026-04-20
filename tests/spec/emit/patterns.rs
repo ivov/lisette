@@ -628,3 +628,65 @@ pub struct Resize { pub width: int, pub height: int }
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
 }
+
+#[test]
+fn or_pattern_on_go_interface_emits_combined_case_label() {
+    let input = r#"
+import "go:example.com/events"
+
+fn handle(e: events.Event) -> int {
+  match e {
+    events.KeyPress { .. } | events.KeyRelease { .. } => 1,
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct KeyPress { pub key: string }
+pub struct KeyRelease { pub key: string }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}
+
+#[test]
+fn or_pattern_on_go_interface_with_three_alternatives() {
+    let input = r#"
+import "go:example.com/events"
+
+fn handle(e: events.Event) -> int {
+  match e {
+    events.Click { .. } | events.KeyPress { .. } | events.Resize { .. } => 1,
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Click { pub x: int }
+pub struct KeyPress { pub key: string }
+pub struct Resize { pub width: int }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}
+
+#[test]
+fn type_switch_drops_binding_when_no_case_uses_it() {
+    let input = r#"
+import "go:example.com/events"
+
+fn handle(e: events.Event) -> int {
+  match e {
+    events.Click { .. } => 1,
+    events.KeyPress { .. } => 2,
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Click { pub x: int }
+pub struct KeyPress { pub key: string }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}

@@ -8,7 +8,7 @@ use crate::go::patterns::decision_tree::{
     emit_tree_bindings, expand_or_patterns, render_condition,
 };
 use crate::go::types::emitter::Position;
-use crate::go::utils::{inline_trivial_bindings, output_ends_with_diverge};
+use crate::go::utils::{inline_trivial_bindings, output_ends_with_diverge, output_references_var};
 use crate::go::write_line;
 
 struct GuardedTreeContext<'a> {
@@ -222,8 +222,14 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         let subject_var = self.subject_var.clone();
         let base = path.render(&subject_var);
 
+        let header_start = output.len();
         write_line!(output, "switch {} := {}.(type) {{", base, base);
+        let body_start = output.len();
         self.emit_switch_body(output, branches, fallback, arm_position, &base, false);
+        if !output_references_var(&output[body_start..], &base) {
+            let new_header = format!("switch {}.(type) {{\n", base);
+            output.replace_range(header_start..body_start, &new_header);
+        }
     }
 
     /// Emit case branches, the default block, the closing brace, and the

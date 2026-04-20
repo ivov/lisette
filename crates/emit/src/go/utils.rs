@@ -51,7 +51,7 @@ pub(crate) fn receiver_name(type_name: &str) -> String {
 
 /// Check if emitted Go output references `var` as a standalone identifier
 /// (not as a substring of another identifier like `p` in `tmp_1`).
-fn output_references_var(output: &str, var: &str) -> bool {
+pub(crate) fn output_references_var(output: &str, var: &str) -> bool {
     let var_bytes = var.as_bytes();
     let out_bytes = output.as_bytes();
     let mut start = 0;
