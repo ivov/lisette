@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid binding name
+   ╭─[test.lis:6:5]
+ 5 │   match p {
+ 6 │     Point { x, .. } as P => x,
+   ·     ──────────┬─────────
+   ·               ╰── binding names must start with a lowercase letter
+ 7 │   }
+   ╰────
+  help: Use a lowercase name instead of `P` · code: [infer.uppercase_binding]

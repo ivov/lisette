@@ -225,6 +225,10 @@ impl Checker<'_, '_> {
                 name,
                 span,
             } => {
+                if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    self.sink
+                        .push(diagnostics::infer::uppercase_binding(span, &name));
+                }
                 match pattern.as_ref() {
                     Pattern::Identifier { identifier, .. } => {
                         self.sink.push(diagnostics::infer::redundant_as_identifier(

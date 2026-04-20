@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                  ╰── `as` is disallowed here
  6 │ }
    ╰────
-  help: Use `as` only in `match`, `if let`, `while let`, or `Some(value as name)` in `select` · code: [infer.as_binding_in_irrefutable_context]
+  help: Use `as` only in `match`, `if let`, and `while let` · code: [infer.as_binding_in_irrefutable_context]

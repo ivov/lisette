@@ -794,9 +794,7 @@ pub fn as_binding_in_irrefutable_context(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid `as` binding")
         .with_infer_code("as_binding_in_irrefutable_context")
         .with_span_label(&span, "`as` is disallowed here")
-        .with_help(
-            "Use `as` only in `match`, `if let`, `while let`, or `Some(value as name)` in `select`",
-        )
+        .with_help("Use `as` only in `match`, `if let`, and `while let`")
 }
 
 pub fn select_some_as_binding_not_supported(span: Span) -> LisetteDiagnostic {

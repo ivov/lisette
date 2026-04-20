@@ -189,7 +189,7 @@ match event {
 }
 ```
 
-`as` is only allowed in `match`, `if let`, and `while let`, and `Some(value as name)` in `select`.
+`as` is only allowed in `match`, `if let`, and `while let`.
 
 ## Guards
 

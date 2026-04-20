@@ -191,6 +191,20 @@ fn test(pair: (Point, int), (Point { x, .. } as p, z): (Point, int)) -> int { x 
 }
 
 #[test]
+fn infer_uppercase_as_alias() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(p: Point) -> int {
+  match p {
+    Point { x, .. } as P => x,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_redundant_as_identifier() {
     let input = r#"
 fn test(x: int) -> int {
