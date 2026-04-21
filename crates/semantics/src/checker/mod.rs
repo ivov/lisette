@@ -111,6 +111,9 @@ pub(crate) struct InferenceState {
     /// etc.).  Used to reject `Err(x)?`/`None?` in value positions where they
     /// can never produce a value.
     pub in_subexpression: bool,
+    /// Suppresses record-struct-as-value errors when the struct name is a type
+    /// qualifier in a method chain (e.g. `lib.Point` in `lib.Point.sum`).
+    pub dot_access_base: bool,
 }
 
 impl InferenceState {
@@ -124,6 +127,7 @@ impl InferenceState {
             in_match_arm: false,
             loop_needs_label_stack: Vec::new(),
             in_subexpression: false,
+            dot_access_base: false,
         }
     }
 }

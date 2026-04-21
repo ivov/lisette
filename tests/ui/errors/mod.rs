@@ -5723,6 +5723,59 @@ fn main() {
 }
 
 #[test]
+fn infer_record_struct_as_value() {
+    let input = r#"
+struct Coord { x: int, y: int }
+
+fn main() {
+  let c = Coord
+  let _ = c
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_type_alias_record_struct_as_value() {
+    let input = r#"
+struct Coord { x: int, y: int }
+type C = Coord
+
+fn main() {
+  let c = C
+  let _ = c
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_cross_module_record_struct_as_value() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "util",
+        "lib.lis",
+        r#"
+pub struct Point { x: int, y: int }
+"#,
+    );
+
+    let source = r#"
+import "util"
+
+fn main() {
+  let p = util.Point
+  let _ = p
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
 fn infer_type_alias_as_qualifier_parameterized() {
     let input = r#"
 type O<T> = Option<T>

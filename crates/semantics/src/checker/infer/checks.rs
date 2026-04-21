@@ -470,6 +470,23 @@ impl Checker<'_, '_> {
         }
     }
 
+    fn resolves_to_struct_kind(&self, qualified: &str, kind: StructKind) -> bool {
+        match self.store.get_definition(qualified) {
+            Some(Definition::Struct { kind: k, .. }) => *k == kind,
+            Some(Definition::TypeAlias { ty: alias_ty, .. }) => {
+                if let Type::Constructor { id, .. } = alias_ty.unwrap_forall() {
+                    matches!(
+                        self.store.get_definition(id),
+                        Some(Definition::Struct { kind: k, .. }) if *k == kind
+                    )
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
     /// Check if an identifier used as a value (not in call position) refers to a
     /// native method, native constructor, or private method expression.
     pub(crate) fn check_native_value_usage(&mut self, value: &str, ty: &Type, span: Span) {
@@ -491,29 +508,16 @@ impl Checker<'_, '_> {
             } else {
                 format!("{}.{}", self.cursor.module_id, value)
             };
-            let is_tuple_struct = match self.store.get_definition(&qualified) {
-                Some(Definition::Struct {
-                    kind: StructKind::Tuple,
-                    ..
-                }) => true,
-                Some(Definition::TypeAlias { ty: alias_ty, .. }) => {
-                    if let Type::Constructor { id, .. } = alias_ty.unwrap_forall() {
-                        matches!(
-                            self.store.get_definition(id),
-                            Some(Definition::Struct {
-                                kind: StructKind::Tuple,
-                                ..
-                            })
-                        )
-                    } else {
-                        false
-                    }
-                }
-                _ => false,
-            };
-            if is_tuple_struct {
+            if self.resolves_to_struct_kind(&qualified, StructKind::Tuple) {
                 self.sink
                     .push(diagnostics::infer::native_constructor_value(value, span));
+                return;
+            }
+            if !self.inference.dot_access_base
+                && self.resolves_to_struct_kind(&qualified, StructKind::Record)
+            {
+                self.sink
+                    .push(diagnostics::infer::record_struct_value(value, span));
                 return;
             }
         }
