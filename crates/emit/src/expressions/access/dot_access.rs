@@ -264,16 +264,16 @@ impl Emitter<'_> {
         match (coercion, had_explicit_deref) {
             _ if is_absorbed_ref => expression_string,
             (Some(ReceiverCoercion::AutoAddress), true) => expression_string,
-            (Some(ReceiverCoercion::AutoAddress), false) => {
-                if matches!(expression.unwrap_parens(), Expression::Call { .. }) {
+            (Some(ReceiverCoercion::AutoAddress), false) => match expression.unwrap_parens() {
+                Expression::Call { .. } => {
                     let tmp = self.fresh_var(Some("ref"));
                     self.declare(&tmp);
                     write_line!(output, "{} := {}", tmp, expression_string);
                     tmp
-                } else {
-                    expression_string
                 }
-            }
+                Expression::StructCall { .. } => format!("(&{})", expression_string),
+                _ => expression_string,
+            },
             (Some(ReceiverCoercion::AutoDeref), _) => expression_string,
             (None, true) => expression_string,
             (None, false) => expression_string,

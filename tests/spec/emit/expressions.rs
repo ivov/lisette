@@ -1308,6 +1308,58 @@ fn test() {
 }
 
 #[test]
+fn auto_address_struct_literal_receiver() {
+    let input = r#"
+struct Foo { value: int }
+
+impl Foo {
+  fn increment(self: Ref<Foo>) {
+    self.value = self.value + 1
+  }
+}
+
+fn test() {
+  Foo { value: 42 }.increment()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn auto_address_parenthesized_struct_literal_receiver() {
+    let input = r#"
+struct Foo { value: int }
+
+impl Foo {
+  fn increment(self: Ref<Foo>) {
+    self.value = self.value + 1
+  }
+}
+
+fn test() {
+  (Foo { value: 42 }).increment()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn auto_address_empty_struct_literal_receiver() {
+    let input = r#"
+struct Foo {}
+
+impl Foo {
+  fn need_ref(self: Ref<Foo>) {}
+}
+
+fn test() {
+  Foo {}.need_ref()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn deref_map_index_assignment() {
     let input = r#"
 fn update(m: Ref<Map<string, int>>, key: string, val: int) {

@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Foo {}\n\nimpl Foo {\n  fn need_ref(self: Ref<Foo>) {}\n}\n\nfn test() {\n  Foo {}.need_ref()\n}\n"
+---
+package main
+
+type Foo struct{}
+
+func (f Foo) String() string {
+	return "Foo"
+}
+
+func (f *Foo) need_ref() {}
+
+func test() {
+	(&Foo{}).need_ref()
+}
