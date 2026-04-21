@@ -116,6 +116,15 @@ struct ScopeState {
     assign_targets: HashSet<String>,
 }
 
+impl ScopeState {
+    fn reset_for_top_level(&mut self) {
+        self.next_var = 0;
+        self.bindings.reset();
+        self.declared.clear();
+        self.declared.push(HashSet::default());
+    }
+}
+
 pub struct Emitter<'a> {
     ctx: EmitContext<'a>,
     module: ModuleData,
@@ -527,9 +536,7 @@ impl<'a> Emitter<'a> {
             self.pending_adapter_types.clear();
 
             for expression in &file.items {
-                self.scope.next_var = 0;
-                self.scope.bindings.reset();
-                self.scope.declared = vec![HashSet::default()];
+                self.scope.reset_for_top_level();
                 let code = self.emit_top_item(expression);
                 if !code.is_empty() {
                     source.collect_with_blank(code);

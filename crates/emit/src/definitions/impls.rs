@@ -48,6 +48,9 @@ impl Emitter<'_> {
         if self.ctx.unused.is_unused_definition(name_span) {
             return None;
         }
+
+        self.scope.reset_for_top_level();
+
         let function = method.to_function_definition();
         let is_public = matches!(visibility, Visibility::Public);
 

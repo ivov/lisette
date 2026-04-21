@@ -2629,3 +2629,24 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn impl_methods_share_local_variable_name() {
+    let input = r#"
+pub struct Calc {}
+impl Calc {
+  pub fn wider(self) -> uint64 {
+    let mut total: uint64 = 0
+    total += 1
+    total
+  }
+
+  pub fn narrower(self) -> uint32 {
+    let mut total: uint32 = 0
+    total += 1
+    total
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
