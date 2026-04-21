@@ -875,9 +875,7 @@ impl<'a> Formatter<'a> {
                 if i == 0 {
                     self.expression(seg)
                 } else {
-                    Document::Newline
-                        .append("|> ")
-                        .append(self.expression(seg))
+                    Document::Newline.append("|> ").append(self.expression(seg))
                 }
             })
             .collect();
