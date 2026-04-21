@@ -2095,6 +2095,15 @@ pub fn native_constructor_value(name: &str, span: Span) -> LisetteDiagnostic {
         .with_help(format!("Use a closure instead: `|args| {name}(args)`"))
 }
 
+pub fn record_struct_value(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot use struct type as a value")
+        .with_infer_code("record_struct_value")
+        .with_span_label(&span, "struct types cannot be used as expressions")
+        .with_help(format!(
+            "Use a struct literal instead: `{name} {{ field: value, ... }}`"
+        ))
+}
+
 pub fn private_method_expression(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot use private method as a value")
         .with_infer_code("private_method_expression")

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use struct type as a value
+   ╭─[test.lis:6:11]
+ 5 │ fn main() {
+ 6 │   let c = C
+   ·           ┬
+   ·           ╰── struct types cannot be used as expressions
+ 7 │   let _ = c
+   ╰────
+  help: Use a struct literal instead: `C { field: value, ... }` · code: [infer.record_struct_value]

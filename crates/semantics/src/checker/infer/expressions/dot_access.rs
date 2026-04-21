@@ -158,7 +158,10 @@ impl Checker<'_, '_> {
         expected_ty: &Type,
     ) -> Expression {
         let expression_ty = self.new_type_var();
+        let prior_dot_access_base = self.inference.dot_access_base;
+        self.inference.dot_access_base = true;
         let new_expression = self.infer_expression(*expression, &expression_ty);
+        self.inference.dot_access_base = prior_dot_access_base;
         let resolved_expression_ty = expression_ty.resolve();
 
         if resolved_expression_ty.is_error() {
@@ -482,6 +485,23 @@ impl Checker<'_, '_> {
             {
                 let display_name = format!("{}.{}", type_name, args.member_name);
                 self.sink.push(diagnostics::infer::native_constructor_value(
+                    &display_name,
+                    *args.span,
+                ));
+            }
+
+            if !self.scopes.is_callee_context()
+                && !self.inference.dot_access_base
+                && matches!(
+                    self.store.get_definition(&qualified_name),
+                    Some(Definition::Struct {
+                        kind: StructKind::Record,
+                        ..
+                    })
+                )
+            {
+                let display_name = format!("{}.{}", type_name, args.member_name);
+                self.sink.push(diagnostics::infer::record_struct_value(
                     &display_name,
                     *args.span,
                 ));
