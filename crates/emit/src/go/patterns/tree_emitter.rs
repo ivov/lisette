@@ -560,7 +560,21 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         needs_return: bool,
     ) {
         let use_direct_return = arm_position.is_tail();
-        let label = if use_direct_return {
+        let tree_has_terminal = Self::tree_has_unguarded_terminal(tree);
+        let last_arm_is_unguarded_catchall = tree_has_terminal
+            || self
+                .arms
+                .last()
+                .is_some_and(|arm| !arm.has_guard() && Emitter::is_catchall_pattern(&arm.pattern));
+
+        let skip_wrapper = !use_direct_return
+            && last_arm_is_unguarded_catchall
+            && self
+                .arms
+                .iter()
+                .all(|arm| arm.expression.diverges().is_some());
+
+        let label = if use_direct_return || skip_wrapper {
             String::new()
         } else {
             let l = self.emitter.fresh_var(Some("match"));
@@ -573,19 +587,15 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             arm_position,
             subject_var: &subject_var,
             label: &label,
-            use_direct_return,
+            use_direct_return: use_direct_return || skip_wrapper,
         };
         self.emit_guarded_tree(output, tree, &ctx);
 
         if use_direct_return {
-            if !Self::tree_has_unguarded_terminal(tree) {
+            if !tree_has_terminal {
                 output.push_str("panic(\"unreachable\")\n");
             }
-        } else {
-            let last_arm_is_unguarded_catchall =
-                self.arms.last().is_some_and(|arm| {
-                    !arm.has_guard() && Emitter::is_catchall_pattern(&arm.pattern)
-                }) || Self::tree_has_unguarded_terminal(tree);
+        } else if !skip_wrapper {
             if !last_arm_is_unguarded_catchall {
                 write_line!(output, "break {}", label);
             }

@@ -1866,6 +1866,19 @@ fn main() {
 }
 
 #[test]
+fn match_with_guards_all_arms_diverge() {
+    let input = r#"
+fn main() {
+  match 0 {
+    _ if true => {return},
+    _ => {panic("")}
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_in_statement_position_followed_by_statement() {
     let input = r#"
 import "go:fmt"

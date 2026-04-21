@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/control_flow.rs
+assertion_line: 1878
+description: "input: \nfn main() {\n  match 0 {\n    _ if true => {return},\n    _ => {panic(\"\")}\n  }\n}\n"
+---
+package main
+
+func main() {
+	if true {
+		return
+	}
+	panic("")
+}
