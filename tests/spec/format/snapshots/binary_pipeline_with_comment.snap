@@ -3,7 +3,8 @@ source: tests/spec/format/mod.rs
 description: "input: fn test() {\n  x\n  |> foo()\n  // comment before bar\n  |> bar()\n}"
 ---
 fn test() {
-  x |> foo()
+  x
+    |> foo()
     |> // comment before bar
     bar()
 }

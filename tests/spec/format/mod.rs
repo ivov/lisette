@@ -71,6 +71,11 @@ fn binary_no_spaces() {
 }
 
 #[test]
+fn binary_pipeline_single() {
+    assert_format_snapshot!("fn test() { x |> foo() }");
+}
+
+#[test]
 fn binary_pipeline() {
     assert_format_snapshot!("fn test() { x |> foo() |> bar() }");
 }

@@ -858,6 +858,16 @@ impl<'a> Formatter<'a> {
         segments.push(current);
         segments.reverse();
 
+        if segments.len() == 2 {
+            return self
+                .expression(segments[0])
+                .append(flex_break("", " "))
+                .append("|> ")
+                .append(self.expression(segments[1]))
+                .nest_if_broken(INDENT_WIDTH)
+                .group();
+        }
+
         let docs: Vec<_> = segments
             .iter()
             .enumerate()
@@ -865,14 +875,14 @@ impl<'a> Formatter<'a> {
                 if i == 0 {
                     self.expression(seg)
                 } else {
-                    flex_break("", " ")
+                    Document::Newline
                         .append("|> ")
                         .append(self.expression(seg))
                 }
             })
             .collect();
 
-        concat(docs).nest_if_broken(INDENT_WIDTH).group()
+        concat(docs).nest(INDENT_WIDTH)
     }
 
     fn unary_operator(
