@@ -203,7 +203,7 @@ impl Emitter<'_> {
         expression_string: &str,
     ) -> Option<String> {
         let deref_ty = expression_ty.resolve().strip_refs();
-        let Type::Constructor { id, .. } = &deref_ty else {
+        let Type::Nominal { id, .. } = &deref_ty else {
             return None;
         };
         let Some(Definition::Struct { fields, .. }) = self.ctx.definitions.get(id.as_str()) else {
@@ -232,7 +232,7 @@ impl Emitter<'_> {
         );
         is_import_namespace_ident
             || self.is_from_prelude(expression_ty)
-            || if let Type::Constructor { id, .. } = expression_ty.resolve().strip_refs() {
+            || if let Type::Nominal { id, .. } = expression_ty.resolve().strip_refs() {
                 id.split_once('.')
                     .is_some_and(|(m, _)| m != self.current_module && m != go_name::PRELUDE_MODULE)
             } else {
@@ -307,7 +307,7 @@ impl Emitter<'_> {
         index: usize,
     ) -> Option<String> {
         let deref_ty = expression_ty.resolve().strip_refs();
-        let Type::Constructor { ref id, .. } = deref_ty else {
+        let Type::Nominal { ref id, .. } = deref_ty else {
             return None;
         };
 
@@ -342,7 +342,7 @@ impl Emitter<'_> {
     /// the struct-call path, which also uses prelude-ness to decide field
     /// naming and type formatting.
     pub(super) fn is_from_prelude(&self, ty: &Type) -> bool {
-        let Type::Constructor { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
             return false;
         };
         // Only return true if the type actually comes from the prelude module.

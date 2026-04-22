@@ -69,8 +69,18 @@ impl Emitter<'_> {
     }
 
     fn is_map_key_type(ty: &Type, generic_name: &str) -> bool {
+        if let Type::Compound {
+            kind: syntax::types::CompoundKind::Map,
+            args,
+        } = ty
+            && !args.is_empty()
+            && let Type::Parameter(name) = &args[0]
+            && name.as_ref() == generic_name
+        {
+            return true;
+        }
         match ty {
-            Type::Constructor { id, params, .. } => {
+            Type::Nominal { id, params, .. } => {
                 if (id.as_ref() == "Map" || id.as_ref().ends_with(".Map"))
                     && !params.is_empty()
                     && let Type::Parameter(name) = &params[0]
@@ -81,6 +91,9 @@ impl Emitter<'_> {
                 params
                     .iter()
                     .any(|p| Self::is_map_key_type(p, generic_name))
+            }
+            Type::Compound { args, .. } => {
+                args.iter().any(|a| Self::is_map_key_type(a, generic_name))
             }
             Type::Function {
                 params,
@@ -142,7 +155,7 @@ impl Emitter<'_> {
             .map(|(i, _)| i)
             .collect();
         for p in &definition.parents {
-            if let Type::Constructor {
+            if let Type::Nominal {
                 id: pid, params, ..
             } = p
             {
@@ -305,25 +318,25 @@ pub(crate) fn extract_type_mapping(
     concrete: &Type,
     mapping: &mut HashMap<String, Type>,
 ) {
+    if let Type::Parameter(name) = generic {
+        mapping
+            .entry(name.to_string())
+            .or_insert_with(|| concrete.clone());
+        return;
+    }
+
+    // Walk type arguments for any type that carries them (Constructor,
+    // Compound, or mixed-variant pairs).
+    if let (Some(gen_params), Some(conc_params)) =
+        (generic.get_type_params(), concrete.get_type_params())
+    {
+        for (g, c) in gen_params.iter().zip(conc_params.iter()) {
+            extract_type_mapping(g, c, mapping);
+        }
+        return;
+    }
+
     match (generic, concrete) {
-        (Type::Parameter(name), concrete) => {
-            mapping
-                .entry(name.to_string())
-                .or_insert_with(|| concrete.clone());
-        }
-        (
-            Type::Constructor {
-                params: gen_params, ..
-            },
-            Type::Constructor {
-                params: conc_params,
-                ..
-            },
-        ) => {
-            for (g, c) in gen_params.iter().zip(conc_params.iter()) {
-                extract_type_mapping(g, c, mapping);
-            }
-        }
         (
             Type::Function {
                 params: gen_params,

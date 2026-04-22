@@ -167,22 +167,14 @@ impl Checker<'_, '_> {
                 prefix, rest, span, ..
             } => {
                 let resolved_ty = expected_ty.resolve();
-                let element_ty = match &resolved_ty {
-                    Type::Constructor { id, params, .. }
-                        if id.ends_with("Slice") && params.len() == 1 =>
-                    {
-                        params[0].clone()
+                let element_ty = match resolved_ty.as_compound() {
+                    Some((syntax::types::CompoundKind::Slice, args)) if args.len() == 1 => {
+                        args[0].clone()
                     }
                     _ => {
                         let element_ty = self.new_type_var();
-                        let slice_ty = Type::Constructor {
-                            id: "Slice".into(),
-                            params: vec![element_ty.clone()],
-                            underlying_ty: None,
-                        };
-
+                        let slice_ty = self.type_slice(element_ty.clone());
                         self.unify(&expected_ty, &slice_ty, &span);
-
                         element_ty
                     }
                 };
@@ -357,7 +349,10 @@ impl Checker<'_, '_> {
         let (value_constructor_type, _) = self.instantiate(&ty);
 
         if is_bare_name
-            && matches!(&value_constructor_type, Type::Constructor { .. })
+            && matches!(
+                &value_constructor_type,
+                Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_)
+            )
             && !self.is_enum_type(&value_constructor_type)
         {
             self.sink
@@ -371,7 +366,9 @@ impl Checker<'_, '_> {
                 return_type,
                 ..
             } => (*return_type, params),
-            Type::Constructor { .. } => (value_constructor_type, vec![]),
+            Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_) => {
+                (value_constructor_type, vec![])
+            }
             _ => unreachable!(),
         };
 
@@ -408,7 +405,7 @@ impl Checker<'_, '_> {
 
         let resolved_ty = pattern_ty.resolve();
         let typed = match &resolved_ty {
-            Type::Constructor { id, params, .. } => {
+            Type::Nominal { id, params, .. } => {
                 let variant_name = identifier.rsplit('.').next().unwrap_or(identifier.as_str());
                 let variant_qualified = format!("{}.{}", id, variant_name);
                 if let Some(definition_span) = self.get_definition_name_span(&variant_qualified) {
@@ -568,7 +565,7 @@ impl Checker<'_, '_> {
 
         let resolved_ty = struct_ty.resolve();
         let typed = match &resolved_ty {
-            Type::Constructor { id, params, .. } => TypedPattern::Struct {
+            Type::Nominal { id, params, .. } => TypedPattern::Struct {
                 struct_name: id.into(),
                 struct_fields,
                 pattern_fields: typed_field_values,
@@ -692,7 +689,7 @@ impl Checker<'_, '_> {
 
     fn get_enum_variant_info(&self, ty: &Type) -> Option<(String, Vec<String>)> {
         let resolved = ty.resolve();
-        let Type::Constructor { id, .. } = resolved else {
+        let Type::Nominal { id, .. } = resolved else {
             return None;
         };
         let variants = self.store.get_enum_variants(&id)?;
@@ -721,7 +718,7 @@ impl Checker<'_, '_> {
             _ => alias_ty.clone(),
         };
 
-        if let Type::Constructor { id: enum_id, .. } = &underlying
+        if let Type::Nominal { id: enum_id, .. } = &underlying
             && let Some(Definition::Enum { variants, .. }) = self.store.get_definition(enum_id)
             && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
         {
@@ -762,7 +759,7 @@ impl Checker<'_, '_> {
 
         let pattern_ty = match value_constructor_type {
             Type::Function { return_type, .. } => *return_type,
-            Type::Constructor { .. } => value_constructor_type,
+            Type::Nominal { .. } => value_constructor_type,
             _ => return None,
         };
 
@@ -770,7 +767,7 @@ impl Checker<'_, '_> {
 
         let resolved_ty = pattern_ty.resolve();
 
-        let Type::Constructor { id, .. } = &resolved_ty else {
+        let Type::Nominal { id, .. } = &resolved_ty else {
             return None;
         };
         let Definition::Enum { variants, .. } = self.store.get_definition(id)? else {
@@ -831,7 +828,7 @@ impl Checker<'_, '_> {
         }
 
         let typed = match &resolved_ty {
-            Type::Constructor { id, params, .. } => {
+            Type::Nominal { id, params, .. } => {
                 let variant_qualified = format!("{}.{}", id, variant_name);
                 if let Some(definition_span) = self.get_definition_name_span(&variant_qualified) {
                     self.facts.add_usage(*span, definition_span);

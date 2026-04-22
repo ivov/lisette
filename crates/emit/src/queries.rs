@@ -39,7 +39,7 @@ impl Emitter<'_> {
     pub(crate) fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
         let resolved = self.peel_alias(&struct_ty.resolve().strip_refs());
 
-        let Type::Constructor { id, .. } = &resolved else {
+        let Type::Nominal { id, .. } = &resolved else {
             return false;
         };
 
@@ -87,7 +87,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn has_field(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let Type::Constructor { id, .. } = struct_ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = struct_ty.resolve().strip_refs() else {
             return false;
         };
         matches!(
@@ -98,7 +98,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_tuple_struct_type(&self, ty: &Type) -> bool {
-        let Type::Constructor { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
             return false;
         };
 
@@ -112,7 +112,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_newtype_struct(&self, ty: &Type) -> bool {
-        let Type::Constructor { id, params, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, params, .. } = ty.resolve().strip_refs() else {
             return false;
         };
 
@@ -132,7 +132,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_go_value_enum(&self, ty: &Type) -> bool {
-        let Type::Constructor { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
             return false;
         };
         matches!(
@@ -142,7 +142,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn get_newtype_underlying(&self, ty: &Type) -> Option<Type> {
-        let Type::Constructor { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
             return None;
         };
 
@@ -165,7 +165,7 @@ impl Emitter<'_> {
         let mut current = ty.resolve();
         let mut seen: Vec<String> = Vec::new();
         loop {
-            let Type::Constructor { id, .. } = &current else {
+            let Type::Nominal { id, .. } = &current else {
                 return current;
             };
             if seen.iter().any(|s| s == id.as_str()) {
@@ -193,7 +193,7 @@ impl Emitter<'_> {
             else {
                 return current;
             };
-            let Type::Constructor { id: next, .. } = alias_ty.resolve() else {
+            let Type::Nominal { id: next, .. } = alias_ty.resolve() else {
                 return current;
             };
             seen.push(current);
@@ -202,7 +202,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
-        let Type::Constructor { id, .. } = self.peel_alias(ty) else {
+        let Type::Nominal { id, .. } = self.peel_alias(ty) else {
             return None;
         };
 
@@ -217,7 +217,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {
-        let Type::Constructor { id, .. } = self.peel_alias(ty) else {
+        let Type::Nominal { id, .. } = self.peel_alias(ty) else {
             return None;
         };
 
@@ -232,7 +232,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_go_imported_type(ty: &Type) -> bool {
-        let Type::Constructor { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
             return false;
         };
         go_name::is_go_import(&id)
@@ -332,7 +332,7 @@ impl Emitter<'_> {
 
     fn is_recursive_type(ty: &Type, enum_id: &str) -> bool {
         match ty.resolve() {
-            Type::Constructor { id, .. } => id == enum_id,
+            Type::Nominal { id, .. } => id == enum_id,
             _ => false,
         }
     }
@@ -394,7 +394,7 @@ impl Emitter<'_> {
             };
         }
 
-        if let Type::Constructor { id, .. } = &resolved
+        if let Type::Nominal { id, .. } = &resolved
             && let Some(name) = self.enum_tuple_field_name(id, variant, index)
         {
             return name;
@@ -409,7 +409,7 @@ impl Emitter<'_> {
 
     pub(crate) fn is_enum_field_pointer(&self, ty: &Type, variant: &str, index: usize) -> bool {
         let resolved = ty.resolve();
-        if let Type::Constructor { id, .. } = &resolved
+        if let Type::Nominal { id, .. } = &resolved
             && let Some(layout) = self.module.enum_layouts.get(id.as_ref())
             && let Some(variant_layout) = layout.get_variant(variant)
             && let Some(field) = variant_layout.fields.get(index)
@@ -427,7 +427,7 @@ impl Emitter<'_> {
     /// automatically for recursion, the binding should be dereferenced transparently.
     pub(crate) fn is_enum_field_source_ref(&self, ty: &Type, variant: &str, index: usize) -> bool {
         let resolved = ty.resolve();
-        if let Type::Constructor { id, .. } = &resolved
+        if let Type::Nominal { id, .. } = &resolved
             && let Some(Definition::Enum { variants, .. }) = self.ctx.definitions.get(id.as_str())
         {
             for v in variants {
@@ -443,7 +443,7 @@ impl Emitter<'_> {
 
     pub(crate) fn is_enum_field_unit(&self, ty: &Type, variant: &str, index: usize) -> bool {
         let resolved = ty.resolve();
-        if let Type::Constructor {
+        if let Type::Nominal {
             id, params: args, ..
         } = &resolved
             && let Some(Definition::Enum {
@@ -474,7 +474,7 @@ impl Emitter<'_> {
         field_name: &str,
     ) -> Option<usize> {
         let resolved = ty.resolve();
-        if let Type::Constructor { id, .. } = &resolved
+        if let Type::Nominal { id, .. } = &resolved
             && let Some(Definition::Enum { variants, .. }) = self.ctx.definitions.get(id.as_str())
         {
             for v in variants {

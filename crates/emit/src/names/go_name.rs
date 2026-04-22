@@ -153,7 +153,7 @@ pub(crate) fn variant(
     current_module: &str,
     module_alias: Option<&str>,
 ) -> ResolvedName {
-    let Type::Constructor { id, .. } = ty else {
+    let Type::Nominal { id, .. } = ty else {
         return ResolvedName::local(identifier.replace('.', "_"));
     };
 

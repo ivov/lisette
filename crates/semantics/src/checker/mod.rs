@@ -385,7 +385,7 @@ impl<'r, 's> Checker<'r, 's> {
                 Type::Forall { body, .. } => body.as_ref(),
                 other => other,
             };
-            if let Type::Constructor { id, .. } = underlying
+            if let Type::Nominal { id, .. } = underlying
                 && let Some(Definition::Struct {
                     constructor: Some(ctor_ty),
                     ..
@@ -435,7 +435,7 @@ impl<'r, 's> Checker<'r, 's> {
     }
 
     pub(crate) fn is_enum_type(&self, ty: &Type) -> bool {
-        let Type::Constructor { id, .. } = ty else {
+        let Type::Nominal { id, .. } = ty else {
             return false;
         };
         let Some(definition) = self.store.get_definition(id) else {
@@ -474,20 +474,23 @@ impl<'r, 's> Checker<'r, 's> {
         }
 
         let resolved = ty.strip_refs().resolve();
-        let Type::Constructor { id, .. } = &resolved else {
-            return MethodSignatures::default();
+        let cache_key: EcoString = match &resolved {
+            Type::Nominal { id, .. } => id.clone(),
+            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
+            Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()).into(),
+            _ => return MethodSignatures::default(),
         };
 
         // Interfaces need type-arg-dependent generic substitution, skip cache.
         let peeled = self.store.peel_alias(&resolved);
-        if let Type::Constructor { id: peeled_id, .. } = &peeled
+        if let Type::Nominal { id: peeled_id, .. } = &peeled
             && self.store.get_interface(peeled_id).is_some()
         {
             let empty = HashMap::default();
             return self.store.get_all_methods(&peeled, &empty);
         }
 
-        if let Some(cached) = self.method_cache.borrow().get(id.as_str()) {
+        if let Some(cached) = self.method_cache.borrow().get(cache_key.as_str()) {
             return cached.clone();
         }
 
@@ -495,7 +498,7 @@ impl<'r, 's> Checker<'r, 's> {
         let methods = self.store.get_all_methods(ty, &empty);
         self.method_cache
             .borrow_mut()
-            .insert(id.clone(), methods.clone());
+            .insert(cache_key, methods.clone());
         methods
     }
 

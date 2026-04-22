@@ -20,11 +20,11 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
     }
     match ty {
         Type::Parameter(name) => map.get(name).cloned().unwrap_or_else(|| ty.clone()),
-        Type::Constructor {
+        Type::Nominal {
             id,
             params,
             underlying_ty: underlying,
-        } => Type::Constructor {
+        } => Type::Nominal {
             id: id.clone(),
             params: params.iter().map(|p| substitute(p, map)).collect(),
             underlying_ty: underlying.as_ref().map(|u| Box::new(substitute(u, map))),
@@ -129,7 +129,7 @@ pub enum Type {
         args: Vec<Type>,
     },
 
-    Constructor {
+    Nominal {
         id: EcoString,
         params: Vec<Type>,
         underlying_ty: Option<Box<Type>>,
@@ -174,8 +174,8 @@ pub enum Type {
 impl std::fmt::Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Constructor { id, params, .. } => f
-                .debug_struct("Constructor")
+            Type::Nominal { id, params, .. } => f
+                .debug_struct("Nominal")
                 .field("id", id)
                 .field("params", params)
                 .finish(),
@@ -225,12 +225,12 @@ impl PartialEq for Type {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (
-                Type::Constructor {
+                Type::Nominal {
                     id: id1,
                     params: params1,
                     ..
                 },
-                Type::Constructor {
+                Type::Nominal {
                     id: id2,
                     params: params2,
                     ..
@@ -335,14 +335,6 @@ impl Type {
     const UNINFERRED_ID: i32 = -1;
     const IGNORED_ID: i32 = -333;
 
-    pub fn nominal(name: &str) -> Self {
-        Self::Constructor {
-            id: format!("**nominal.{}", name).into(),
-            params: vec![],
-            underlying_ty: None,
-        }
-    }
-
     pub fn uninferred() -> Self {
         Self::Variable(Rc::new(RefCell::new(TypeVariableState::Unbound {
             id: Self::UNINFERRED_ID,
@@ -359,7 +351,7 @@ impl Type {
 
     pub fn get_type_params(&self) -> Option<&[Type]> {
         match self {
-            Type::Constructor { params, .. } => Some(params),
+            Type::Nominal { params, .. } => Some(params),
             Type::Compound { args, .. } => Some(args),
             _ => None,
         }
@@ -556,7 +548,7 @@ impl Type {
 
     pub fn has_name(&self, name: &str) -> bool {
         match self {
-            Type::Constructor { id, .. } => unqualified_name(id) == name,
+            Type::Nominal { id, .. } => unqualified_name(id) == name,
             Type::Simple(kind) => kind.leaf_name() == name,
             Type::Compound { kind, .. } => kind.leaf_name() == name,
             _ => false,
@@ -565,14 +557,14 @@ impl Type {
 
     pub fn get_qualified_id(&self) -> Option<&str> {
         match self {
-            Type::Constructor { id, .. } => Some(id.as_str()),
+            Type::Nominal { id, .. } => Some(id.as_str()),
             _ => None,
         }
     }
 
     pub fn get_underlying(&self) -> Option<&Type> {
         match self {
-            Type::Constructor {
+            Type::Nominal {
                 underlying_ty: underlying,
                 ..
             } => underlying.as_deref(),
@@ -593,7 +585,7 @@ impl Type {
     }
 
     fn has_qualified_id(&self, qualified_id: &str) -> bool {
-        matches!(self, Type::Constructor { id, .. } if id.as_str() == qualified_id)
+        matches!(self, Type::Nominal { id, .. } if id.as_str() == qualified_id)
     }
 
     pub fn is_unit(&self) -> bool {
@@ -621,7 +613,7 @@ impl Type {
     pub fn as_compound(&self) -> Option<(CompoundKind, &[Type])> {
         match self {
             Type::Compound { kind, args } => Some((*kind, args.as_slice())),
-            Type::Constructor { id, params, .. } => {
+            Type::Nominal { id, params, .. } => {
                 CompoundKind::from_name(unqualified_name(id)).map(|k| (k, params.as_slice()))
             }
             _ => None,
@@ -712,7 +704,7 @@ impl Type {
             return true;
         }
         match self {
-            Type::Constructor { underlying_ty, .. } => underlying_ty
+            Type::Nominal { underlying_ty, .. } => underlying_ty
                 .as_deref()
                 .is_some_and(|u| u.has_byte_or_rune_slice_underlying()),
             _ => false,
@@ -722,7 +714,7 @@ impl Type {
     pub fn as_simple(&self) -> Option<SimpleKind> {
         match self {
             Type::Simple(kind) => Some(*kind),
-            Type::Constructor { id, .. } => SimpleKind::from_name(unqualified_name(id)),
+            Type::Nominal { id, .. } => SimpleKind::from_name(unqualified_name(id)),
             _ => None,
         }
     }
@@ -789,7 +781,7 @@ impl Type {
                 TypeVariableState::Unbound { hint, .. } => hint.is_some(),
                 TypeVariableState::Link(ty) => ty.has_unbound_variables(),
             },
-            Type::Constructor { params, .. } => params.iter().any(|p| p.has_unbound_variables()),
+            Type::Nominal { params, .. } => params.iter().any(|p| p.has_unbound_variables()),
             Type::Function {
                 params,
                 return_type,
@@ -816,7 +808,7 @@ impl Type {
         }
 
         match self {
-            Type::Constructor { id, params, .. } => {
+            Type::Nominal { id, params, .. } => {
                 names.remove(unqualified_name(id));
                 for param in params {
                     param.remove_found_type_names(names);
@@ -875,7 +867,7 @@ impl Type {
                 CompoundKind::Ref => args.first().and_then(|inner| inner.get_name()),
                 _ => Some(kind.leaf_name()),
             },
-            Type::Constructor { id, params, .. } => {
+            Type::Nominal { id, params, .. } => {
                 let name = unqualified_name(id);
                 if CompoundKind::from_name(name) == Some(CompoundKind::Ref) {
                     return params.first().and_then(|inner| inner.get_name());
@@ -901,7 +893,7 @@ impl Type {
     pub fn get_function_params(&self) -> Option<&[Type]> {
         match self {
             Type::Function { params, .. } => Some(params),
-            Type::Constructor {
+            Type::Nominal {
                 underlying_ty: Some(inner),
                 ..
             } => inner.get_function_params(),
@@ -963,7 +955,9 @@ impl Type {
 
     pub fn get_qualified_name(&self) -> EcoString {
         match self.strip_refs() {
-            Type::Constructor { id, .. } => id,
+            Type::Nominal { id, .. } => id,
+            Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()).into(),
+            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
             _ => panic!("called get_qualified_name on {:#?}", self),
         }
     }
@@ -1049,11 +1043,11 @@ impl Type {
 
     fn remove_vars_impl(ty: &Type, vars: &mut HashMap<i32, EcoString>) -> Type {
         match ty {
-            Type::Constructor {
+            Type::Nominal {
                 id: name,
                 params: args,
                 underlying_ty: underlying,
-            } => Type::Constructor {
+            } => Type::Nominal {
                 id: name.clone(),
                 params: args
                     .iter()
@@ -1136,7 +1130,7 @@ impl Type {
             return true;
         }
         match self {
-            Type::Constructor { params, .. } => params.iter().any(|p| p.contains_type(target)),
+            Type::Nominal { params, .. } => params.iter().any(|p| p.contains_type(target)),
             Type::Function {
                 params,
                 return_type,
@@ -1193,11 +1187,11 @@ impl Type {
                     }
                 }
             }
-            Type::Constructor {
+            Type::Nominal {
                 id,
                 params,
                 underlying_ty: underlying,
-            } => Type::Constructor {
+            } => Type::Nominal {
                 id: id.clone(),
                 params: params.iter().map(|p| p.resolve()).collect(),
                 underlying_ty: underlying.as_ref().map(|u| Box::new(u.resolve())),
@@ -1248,7 +1242,7 @@ impl Type {
     fn underlying_numeric_type_recursive(&self, visited: &mut HashSet<EcoString>) -> Option<Type> {
         match self {
             Type::Simple(_) if self.is_numeric() => Some(self.clone()),
-            Type::Constructor {
+            Type::Nominal {
                 id,
                 underlying_ty: underlying,
                 ..
@@ -1285,7 +1279,7 @@ impl Type {
 
     pub fn is_aliased_numeric_type(&self) -> bool {
         match self {
-            Type::Constructor { underlying_ty, .. } => {
+            Type::Nominal { underlying_ty, .. } => {
                 underlying_ty.is_some() && !self.is_numeric() && self.has_underlying_numeric_type()
             }
             _ => false,

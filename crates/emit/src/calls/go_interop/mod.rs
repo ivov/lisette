@@ -152,7 +152,7 @@ impl Emitter<'_> {
             return Some(format!("{}.{}", module_path, member));
         }
 
-        if let Type::Constructor { id, .. } = ty.resolve().strip_refs()
+        if let Type::Nominal { id, .. } = ty.resolve().strip_refs()
             && go_name::is_go_import(&id)
         {
             return Some(format!("{}.{}", id, member));
@@ -171,7 +171,7 @@ impl Emitter<'_> {
         }
 
         // Check for Go object pattern: type is go:* (possibly wrapped in Ref<>)
-        if let Type::Constructor { id, .. } = ty.resolve().strip_refs()
+        if let Type::Nominal { id, .. } = ty.resolve().strip_refs()
             && go_name::is_go_import(&id)
         {
             return true;

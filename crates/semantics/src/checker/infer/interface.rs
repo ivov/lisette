@@ -131,7 +131,7 @@ impl Checker<'_, '_> {
         let mut incompatible: Vec<(String, Type, Type)> = Vec::new();
 
         let struct_generics: Option<Vec<String>> =
-            if let Type::Constructor { id, .. } = ty.strip_refs().resolve() {
+            if let Type::Nominal { id, .. } = ty.strip_refs().resolve() {
                 self.store
                     .get_definition(&id)
                     .and_then(|definition| match definition {
@@ -217,7 +217,7 @@ impl Checker<'_, '_> {
                     substituted_method,
                     impl_method_without_receiver.clone(),
                 ));
-            } else if let Type::Constructor { id, .. } = ty.strip_refs().resolve() {
+            } else if let Type::Nominal { id, .. } = ty.strip_refs().resolve() {
                 let parts: Vec<&str> = id.split('.').collect();
                 if parts.len() == 2 {
                     self.facts.mark_method_used_for_interface(

@@ -14,7 +14,7 @@ fn extract_return_type_param(function: &Expression) -> Option<Type> {
     let Type::Function { return_type, .. } = function.get_type().resolve() else {
         return None;
     };
-    let Type::Constructor { params, .. } = return_type.as_ref() else {
+    let Type::Nominal { params, .. } = return_type.as_ref() else {
         return None;
     };
     params.first().cloned()
@@ -31,10 +31,12 @@ impl Emitter<'_> {
             return self.annotation_to_go_type(&type_args[0]);
         }
         if let Some(call_result_ty) = call_ty
-            && let Type::Constructor { params, .. } = call_result_ty.resolve()
-            && let Some(first) = params.first()
+            && let Some(first) = call_result_ty
+                .resolve()
+                .get_type_params()
+                .and_then(|ps| ps.first().cloned())
         {
-            return self.go_type_as_string(first);
+            return self.go_type_as_string(&first);
         }
         let param = extract_return_type_param(function)
             .expect("constructor must have constructor return type");
@@ -54,7 +56,7 @@ impl Emitter<'_> {
             );
         }
         if let Some(call_result_ty) = call_ty
-            && let Type::Constructor { params, .. } = call_result_ty.resolve()
+            && let Some(params) = call_result_ty.resolve().get_type_params()
             && params.len() >= 2
         {
             return (
@@ -66,9 +68,9 @@ impl Emitter<'_> {
         let Type::Function { return_type, .. } = return_type else {
             unreachable!("MapNew must be a function");
         };
-        let Type::Constructor { params, .. } = return_type.as_ref() else {
-            unreachable!("MapNew must return a constructor type");
-        };
+        let params = return_type
+            .get_type_params()
+            .expect("MapNew must return a type with type arguments");
         (
             self.go_type_as_string(&params[0]),
             self.go_type_as_string(&params[1]),
@@ -322,7 +324,7 @@ impl Emitter<'_> {
     fn get_make_function_info(&mut self, function: &Expression) -> Option<(String, String)> {
         fn enum_id_from_type(ty: &Type) -> Option<String> {
             if let Type::Function { return_type, .. } = ty.unwrap_forall()
-                && let Type::Constructor { id, .. } = return_type.as_ref()
+                && let Type::Nominal { id, .. } = return_type.as_ref()
             {
                 return Some(id.to_string());
             }
@@ -406,7 +408,7 @@ impl Emitter<'_> {
 
         let return_ty = call_ty.map(|t| t.resolve().clone()).unwrap_or(return_ty);
 
-        let Type::Constructor { id, .. } = return_ty.resolve() else {
+        let Type::Nominal { id, .. } = return_ty.resolve() else {
             return None;
         };
 
@@ -498,7 +500,7 @@ impl Emitter<'_> {
         if !resolved.is_option() && !resolved.is_result() && !resolved.is_partial() {
             return None;
         }
-        let Type::Constructor { params, .. } = resolved else {
+        let Type::Nominal { params, .. } = resolved else {
             return None;
         };
         if params.is_empty() {

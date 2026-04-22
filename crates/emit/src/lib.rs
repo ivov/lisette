@@ -435,7 +435,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub(crate) fn module_alias_for_type(&self, ty: &Type) -> Option<String> {
-        if let Type::Constructor { id, .. } = ty {
+        if let Type::Nominal { id, .. } = ty {
             let module = names::go_name::module_of_type_id(id);
             self.module.module_aliases.get(module).cloned()
         } else {

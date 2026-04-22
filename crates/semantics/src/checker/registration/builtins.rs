@@ -1,5 +1,5 @@
 use syntax::EcoString;
-use syntax::types::Type;
+use syntax::types::{CompoundKind, SimpleKind, Type};
 
 use crate::checker::Checker;
 
@@ -41,27 +41,27 @@ impl Checker<'_, '_> {
     }
 
     pub fn type_int(&mut self) -> Type {
-        self.builtin_type("int")
+        Type::Simple(SimpleKind::Int)
     }
 
     pub fn type_float(&mut self) -> Type {
-        self.builtin_type("float64")
+        Type::Simple(SimpleKind::Float64)
     }
 
     pub fn type_string(&mut self) -> Type {
-        self.builtin_type("string")
+        Type::Simple(SimpleKind::String)
     }
 
     pub fn type_char(&mut self) -> Type {
-        self.builtin_type("rune")
+        Type::Simple(SimpleKind::Rune)
     }
 
     pub fn type_bool(&mut self) -> Type {
-        self.builtin_type("bool")
+        Type::Simple(SimpleKind::Bool)
     }
 
     pub fn type_complex128(&mut self) -> Type {
-        self.builtin_type("complex128")
+        Type::Simple(SimpleKind::Complex128)
     }
 
     pub fn type_unknown(&mut self) -> Type {
@@ -69,31 +69,28 @@ impl Checker<'_, '_> {
     }
 
     pub fn type_slice(&mut self, element_type: Type) -> Type {
-        Type::Constructor {
-            id: self.builtin_qualified_name("Slice"),
-            params: vec![element_type],
-            underlying_ty: None,
+        Type::Compound {
+            kind: CompoundKind::Slice,
+            args: vec![element_type],
         }
     }
 
     pub fn type_reference(&mut self, inner_type: Type) -> Type {
-        Type::Constructor {
-            id: self.builtin_qualified_name("Ref"),
-            params: vec![inner_type],
-            underlying_ty: None,
+        Type::Compound {
+            kind: CompoundKind::Ref,
+            args: vec![inner_type],
         }
     }
 
     pub fn type_map(&mut self, key_type: Type, value_type: Type) -> Type {
-        Type::Constructor {
-            id: self.builtin_qualified_name("Map"),
-            params: vec![key_type, value_type],
-            underlying_ty: None,
+        Type::Compound {
+            kind: CompoundKind::Map,
+            args: vec![key_type, value_type],
         }
     }
 
     pub fn type_result(&mut self, ok_type: Type, error_type: Type) -> Type {
-        Type::Constructor {
+        Type::Nominal {
             id: self.builtin_qualified_name("Result"),
             params: vec![ok_type, error_type],
             underlying_ty: None,
@@ -101,7 +98,7 @@ impl Checker<'_, '_> {
     }
 
     pub fn type_option(&mut self, some_type: Type) -> Type {
-        Type::Constructor {
+        Type::Nominal {
             id: self.builtin_qualified_name("Option"),
             params: vec![some_type],
             underlying_ty: None,
@@ -109,7 +106,7 @@ impl Checker<'_, '_> {
     }
 
     pub fn type_panic_value(&mut self) -> Type {
-        Type::Constructor {
+        Type::Nominal {
             id: self.builtin_qualified_name("PanicValue"),
             params: vec![],
             underlying_ty: None,
@@ -117,7 +114,7 @@ impl Checker<'_, '_> {
     }
 
     pub fn type_range(&mut self, element_type: Type) -> Type {
-        Type::Constructor {
+        Type::Nominal {
             id: self.builtin_qualified_name("Range"),
             params: vec![element_type],
             underlying_ty: None,
@@ -125,7 +122,7 @@ impl Checker<'_, '_> {
     }
 
     pub fn type_range_inclusive(&mut self, element_type: Type) -> Type {
-        Type::Constructor {
+        Type::Nominal {
             id: self.builtin_qualified_name("RangeInclusive"),
             params: vec![element_type],
             underlying_ty: None,
@@ -133,7 +130,7 @@ impl Checker<'_, '_> {
     }
 
     pub fn type_range_from(&mut self, element_type: Type) -> Type {
-        Type::Constructor {
+        Type::Nominal {
             id: self.builtin_qualified_name("RangeFrom"),
             params: vec![element_type],
             underlying_ty: None,
@@ -141,7 +138,7 @@ impl Checker<'_, '_> {
     }
 
     pub fn type_range_to(&mut self, element_type: Type) -> Type {
-        Type::Constructor {
+        Type::Nominal {
             id: self.builtin_qualified_name("RangeTo"),
             params: vec![element_type],
             underlying_ty: None,
@@ -149,7 +146,7 @@ impl Checker<'_, '_> {
     }
 
     pub fn type_range_to_inclusive(&mut self, element_type: Type) -> Type {
-        Type::Constructor {
+        Type::Nominal {
             id: self.builtin_qualified_name("RangeToInclusive"),
             params: vec![element_type],
             underlying_ty: None,
@@ -163,7 +160,8 @@ impl Checker<'_, '_> {
     /// alias names like `tea.Cmd` instead of collapsing to the
     /// underlying `func() Msg`).
     pub fn is_generic_container_with_interface(&self, ty: &Type) -> bool {
-        let Type::Constructor { id, params, .. } = ty.resolve() else {
+        let resolved = ty.resolve();
+        let Type::Nominal { id, params, .. } = &resolved else {
             return false;
         };
 
@@ -172,7 +170,7 @@ impl Checker<'_, '_> {
         }
 
         params.iter().any(|p| {
-            if let Type::Constructor { id, .. } = p.resolve() {
+            if let Type::Nominal { id, .. } = p.resolve() {
                 self.store.get_interface(&id).is_some() || id.starts_with("go:")
             } else {
                 false
@@ -181,12 +179,13 @@ impl Checker<'_, '_> {
     }
 
     pub fn has_interface_type_param(&self, ty: &Type) -> bool {
-        let Type::Constructor { params, .. } = ty.resolve() else {
+        let resolved = ty.resolve();
+        let Some(params) = resolved.get_type_params() else {
             return false;
         };
 
         params.iter().any(|p| {
-            if let Type::Constructor { id, .. } = p.resolve() {
+            if let Type::Nominal { id, .. } = p.resolve() {
                 self.store.get_interface(&id).is_some()
             } else {
                 false
@@ -195,12 +194,13 @@ impl Checker<'_, '_> {
     }
 
     pub fn has_go_named_type_param(&self, ty: &Type) -> bool {
-        let Type::Constructor { params, .. } = ty.resolve() else {
+        let resolved = ty.resolve();
+        let Some(params) = resolved.get_type_params() else {
             return false;
         };
 
         params.iter().any(|p| {
-            if let Type::Constructor { id, .. } = p.resolve() {
+            if let Type::Nominal { id, .. } = p.resolve() {
                 id.starts_with("go:")
             } else {
                 false

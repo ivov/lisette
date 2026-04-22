@@ -5,7 +5,7 @@ use crate::types::{Type, TypeVariableState, unqualified_name};
 impl Type {
     pub fn stringify(&self) -> String {
         match self {
-            Type::Constructor {
+            Type::Nominal {
                 id, params: args, ..
             } => {
                 let args_formatted = args

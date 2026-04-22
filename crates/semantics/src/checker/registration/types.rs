@@ -162,10 +162,10 @@ impl Checker<'_, '_> {
         let underlying_ty =
             underlying_ty.map(|annotation| self.convert_to_type(annotation, name_span));
 
-        let enum_ty = if let (Type::Constructor { id, params, .. }, Some(underlying)) =
+        let enum_ty = if let (Type::Nominal { id, params, .. }, Some(underlying)) =
             (&base_enum_ty, &underlying_ty)
         {
-            Type::Constructor {
+            Type::Nominal {
                 id: id.clone(),
                 params: params.clone(),
                 underlying_ty: Some(Box::new(underlying.clone())),
@@ -409,7 +409,7 @@ impl Checker<'_, '_> {
         let struct_ty = if kind == StructKind::Tuple && new_fields.len() == 1 && generics.is_empty()
         {
             match struct_ty {
-                Type::Constructor { id, params, .. } => Type::Constructor {
+                Type::Nominal { id, params, .. } => Type::Nominal {
                     id,
                     params,
                     underlying_ty: Some(Box::new(new_fields[0].ty.clone())),
@@ -500,7 +500,7 @@ impl Checker<'_, '_> {
         if let Some(variants) = self.store.get_enum_variants(current_id) {
             for variant in variants {
                 for field in &variant.fields {
-                    if let Type::Constructor { id, .. } = field.ty.resolve()
+                    if let Type::Nominal { id, .. } = field.ty.resolve()
                         && id == target_id
                     {
                         continue;
@@ -522,7 +522,7 @@ impl Checker<'_, '_> {
         visited: &mut rustc_hash::FxHashSet<String>,
     ) -> bool {
         match ty {
-            Type::Constructor { id, params, .. } => {
+            Type::Nominal { id, params, .. } => {
                 // Ref, Slice, and Map provide heap indirection in Go (pointer,
                 // slice header, map pointer) — don't treat as direct containment.
                 if matches!(
@@ -592,18 +592,35 @@ impl Checker<'_, '_> {
                     .map(|g| Type::Parameter(g.name.clone()))
                     .collect();
 
-                let constructor_ty = Type::Constructor {
-                    id: qualified_name.clone().into(),
-                    params,
-                    underlying_ty: None,
+                let canonical_ty = if self.cursor.module_id == "prelude" {
+                    if let Some(simple) = syntax::types::SimpleKind::from_name(name) {
+                        Type::Simple(simple)
+                    } else if let Some(compound) = syntax::types::CompoundKind::from_name(name) {
+                        Type::Compound {
+                            kind: compound,
+                            args: params,
+                        }
+                    } else {
+                        Type::Nominal {
+                            id: qualified_name.clone().into(),
+                            params,
+                            underlying_ty: None,
+                        }
+                    }
+                } else {
+                    Type::Nominal {
+                        id: qualified_name.clone().into(),
+                        params,
+                        underlying_ty: None,
+                    }
                 };
 
                 if generics.is_empty() {
-                    constructor_ty
+                    canonical_ty
                 } else {
                     Type::Forall {
                         vars: generics.iter().map(|g| g.name.clone()).collect(),
-                        body: Box::new(constructor_ty),
+                        body: Box::new(canonical_ty),
                     }
                 }
             };
@@ -654,7 +671,7 @@ impl Checker<'_, '_> {
                 .iter()
                 .map(|g| Type::Parameter(g.name.clone()))
                 .collect();
-            Type::Constructor {
+            Type::Nominal {
                 id: qualified_name.clone().into(),
                 params,
                 underlying_ty: Some(Box::new(body_ty)),
@@ -742,7 +759,7 @@ impl Checker<'_, '_> {
 
     fn type_contains_name(ty: &Type, name: &str) -> bool {
         match ty {
-            Type::Constructor {
+            Type::Nominal {
                 id,
                 params,
                 underlying_ty,
@@ -753,6 +770,7 @@ impl Checker<'_, '_> {
                         .as_deref()
                         .is_some_and(|u| Self::type_contains_name(u, name))
             }
+            Type::Compound { args, .. } => args.iter().any(|a| Self::type_contains_name(a, name)),
             Type::Tuple(elements) => elements.iter().any(|e| Self::type_contains_name(e, name)),
             Type::Function {
                 params,
@@ -769,7 +787,7 @@ impl Checker<'_, '_> {
 
     fn collect_type_refs(ty: &Type, refs: &mut Vec<String>) {
         match ty {
-            Type::Constructor {
+            Type::Nominal {
                 id,
                 params,
                 underlying_ty,
@@ -779,6 +797,9 @@ impl Checker<'_, '_> {
                 if let Some(u) = underlying_ty {
                     Self::collect_type_refs(u, refs);
                 }
+            }
+            Type::Compound { args, .. } => {
+                args.iter().for_each(|a| Self::collect_type_refs(a, refs));
             }
             Type::Tuple(elements) => {
                 elements

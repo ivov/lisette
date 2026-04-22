@@ -569,14 +569,9 @@ fn definition_to_completion_kind(def: &Definition) -> &'static str {
 
 /// Get the type name from a resolved Type (unwrap Ref<T> etc).
 fn type_name(ty: &Type) -> Option<String> {
-    match ty {
-        Type::Constructor { id, params, .. } => {
-            if id.as_str() == "Ref" {
-                params.first().and_then(|inner| type_name(inner))
-            } else {
-                Some(id.to_string())
-            }
-        }
+    let stripped = ty.strip_refs();
+    match stripped {
+        Type::Nominal { id, .. } => Some(id.to_string()),
         _ => None,
     }
 }

@@ -167,7 +167,7 @@ impl Emitter<'_> {
         // not as the underlying "internal.Secret".
         if name.contains('.') && !is_prelude {
             let parts: Vec<&str> = name.split('.').collect();
-            let type_args = if let Type::Constructor { params, .. } = ty {
+            let type_args = if let Type::Nominal { params, .. } = ty {
                 self.format_type_args(params)
             } else {
                 String::new()

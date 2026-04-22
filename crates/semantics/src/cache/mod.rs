@@ -477,9 +477,9 @@ mod tests {
 
     #[test]
     fn test_cached_type_roundtrip_constructor() {
-        let ty = Type::Constructor {
+        let ty = Type::Nominal {
             id: "MyType".into(),
-            params: vec![Type::Constructor {
+            params: vec![Type::Nominal {
                 id: "int".into(),
                 params: vec![],
                 underlying_ty: None,
@@ -492,12 +492,12 @@ mod tests {
 
         match (&ty, &restored) {
             (
-                Type::Constructor {
+                Type::Nominal {
                     id: id1,
                     params: p1,
                     ..
                 },
-                Type::Constructor {
+                Type::Nominal {
                     id: id2,
                     params: p2,
                     ..
@@ -513,14 +513,14 @@ mod tests {
     #[test]
     fn test_cached_type_roundtrip_function() {
         let ty = Type::Function {
-            params: vec![Type::Constructor {
+            params: vec![Type::Nominal {
                 id: "int".into(),
                 params: vec![],
                 underlying_ty: None,
             }],
             param_mutability: vec![false],
             bounds: vec![],
-            return_type: Box::new(Type::Constructor {
+            return_type: Box::new(Type::Nominal {
                 id: "string".into(),
                 params: vec![],
                 underlying_ty: None,
@@ -545,7 +545,7 @@ mod tests {
             ) => {
                 assert_eq!(p1.len(), p2.len());
                 match (r1.as_ref(), r2.as_ref()) {
-                    (Type::Constructor { id: id1, .. }, Type::Constructor { id: id2, .. }) => {
+                    (Type::Nominal { id: id1, .. }, Type::Nominal { id: id2, .. }) => {
                         assert_eq!(id1, id2);
                     }
                     _ => panic!("Return type mismatch"),
@@ -558,12 +558,12 @@ mod tests {
     #[test]
     fn test_cached_type_roundtrip_tuple() {
         let ty = Type::Tuple(vec![
-            Type::Constructor {
+            Type::Nominal {
                 id: "int".into(),
                 params: vec![],
                 underlying_ty: None,
             },
-            Type::Constructor {
+            Type::Nominal {
                 id: "string".into(),
                 params: vec![],
                 underlying_ty: None,

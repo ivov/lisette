@@ -57,12 +57,12 @@ pub(crate) fn definition_to_completion_kind(
 /// Extract the element type from a collection type (Slice<T>, Array<T>, Map<K, V>).
 fn element_type_name(ty: &syntax::types::Type) -> Option<&str> {
     match ty {
-        syntax::types::Type::Constructor { id, params, .. }
+        syntax::types::Type::Nominal { id, params, .. }
             if id == "prelude.Slice" || id == "prelude.Array" =>
         {
             params.first().and_then(type_name)
         }
-        syntax::types::Type::Constructor { id, params, .. } if id == "prelude.Map" => {
+        syntax::types::Type::Nominal { id, params, .. } if id == "prelude.Map" => {
             params.get(1).and_then(type_name)
         }
         _ => None,

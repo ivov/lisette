@@ -127,11 +127,11 @@ impl Emitter<'_> {
             (generics_string, format!("[{}]", args))
         };
 
-        let return_type = Type::Constructor {
+        let return_type = Type::Nominal {
             id: enum_name.clone().into(),
             params: generics
                 .iter()
-                .map(|g| Type::Constructor {
+                .map(|g| Type::Nominal {
                     id: g.name.clone(),
                     params: vec![],
                     underlying_ty: None,

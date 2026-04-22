@@ -64,12 +64,22 @@ impl Checker<'_, '_> {
                 .store
                 .get_definition(&qualified_root)
                 .and_then(|definition| {
-                    if let Definition::TypeAlias { ty: alias_ty, .. } = definition
-                        && let Type::Constructor { id, params, .. } = alias_ty.unwrap_forall()
-                        && params.is_empty()
-                        && id.as_str() != qualified_root.as_str()
-                    {
-                        return Some(id.to_string());
+                    if let Definition::TypeAlias { ty: alias_ty, .. } = definition {
+                        let underlying = alias_ty.unwrap_forall();
+                        match underlying {
+                            Type::Nominal { id, params, .. }
+                                if params.is_empty() && id.as_str() != qualified_root.as_str() =>
+                            {
+                                return Some(id.to_string());
+                            }
+                            Type::Simple(kind) => {
+                                return Some(format!("prelude.{}", kind.leaf_name()));
+                            }
+                            Type::Compound { kind, args } if args.is_empty() => {
+                                return Some(format!("prelude.{}", kind.leaf_name()));
+                            }
+                            _ => {}
+                        }
                     }
                     None
                 });
@@ -107,9 +117,9 @@ impl Checker<'_, '_> {
         {
             let underlying = alias_ty.unwrap_forall();
             let is_generic = matches!(alias_ty, Type::Forall { .. })
-                || matches!(underlying, Type::Constructor { params, .. } if !params.is_empty());
+                || matches!(underlying, Type::Nominal { params, .. } if !params.is_empty());
             if is_generic {
-                let type_name = if let Type::Constructor { id, .. } = underlying {
+                let type_name = if let Type::Nominal { id, .. } = underlying {
                     id.split('.').next_back().unwrap_or(id).to_string()
                 } else {
                     "the original type".to_string()
@@ -272,7 +282,7 @@ impl Checker<'_, '_> {
         let deref_ty = ty.strip_refs();
         let mut names = Vec::new();
 
-        if let Type::Constructor { .. } = deref_ty {
+        if let Type::Nominal { .. } = deref_ty {
             let qualified_name = deref_ty.get_qualified_name();
             if let Some(fields) = self.store.get_struct_fields(&qualified_name) {
                 names.extend(fields.iter().map(|f| f.name.to_string()));
@@ -291,7 +301,7 @@ impl Checker<'_, '_> {
     ) -> Option<(Expression, DotAccessKind)> {
         let deref_ty = args.expression_ty.strip_refs();
 
-        let Type::Constructor { .. } = deref_ty else {
+        let Type::Nominal { .. } = deref_ty else {
             return None;
         };
 
@@ -307,7 +317,7 @@ impl Checker<'_, '_> {
                 seen.push(name.clone());
                 let new_name = match self.store.get_definition(&name) {
                     Some(Definition::TypeAlias { ty, .. }) => {
-                        if let Type::Constructor { id, .. } = ty.unwrap_forall()
+                        if let Type::Nominal { id, .. } = ty.unwrap_forall()
                             && id.as_str() != name.as_str()
                         {
                             id.clone()
@@ -514,7 +524,10 @@ impl Checker<'_, '_> {
     ) -> Option<(Expression, DotAccessKind)> {
         let deref_ty = args.expression_ty.strip_refs();
 
-        if !matches!(deref_ty, Type::Constructor { .. } | Type::Parameter(_)) {
+        if !matches!(
+            deref_ty,
+            Type::Nominal { .. } | Type::Parameter(_) | Type::Compound { .. } | Type::Simple(_)
+        ) {
             return None;
         }
 
@@ -591,7 +604,7 @@ impl Checker<'_, '_> {
         method_ty: &Type,
         args: &DotAccessResolutionArgs,
     ) {
-        if let Type::Constructor { .. } = deref_ty {
+        if let Type::Nominal { .. } = deref_ty {
             let qualified_name = deref_ty.get_qualified_name();
             let method_key = format!("{}.{}", qualified_name, args.member_name);
 
@@ -766,11 +779,13 @@ impl Checker<'_, '_> {
     }
 
     pub(crate) fn get_receiver_generics_count(&self, receiver_ty: &Type) -> usize {
-        let Type::Constructor { id, .. } = receiver_ty else {
-            return 0;
+        let lookup_id: EcoString = match receiver_ty {
+            Type::Nominal { id, .. } => id.clone(),
+            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
+            _ => return 0,
         };
 
-        match self.store.get_definition(id) {
+        match self.store.get_definition(&lookup_id) {
             Some(Definition::Struct { generics, .. }) => generics.len(),
             Some(Definition::TypeAlias { generics, .. }) => generics.len(),
             Some(Definition::Enum { generics, .. }) => generics.len(),
@@ -785,9 +800,9 @@ impl Checker<'_, '_> {
         let deref_ty = args.expression_ty.strip_refs();
 
         let id = match deref_ty {
-            Type::Constructor { id, .. } => id.clone(),
+            Type::Nominal { id, .. } => id.clone(),
             Type::Function { return_type, .. } => {
-                if let Type::Constructor { id, .. } = return_type.as_ref() {
+                if let Type::Nominal { id, .. } = return_type.as_ref() {
                     id.clone()
                 } else {
                     return None;
@@ -875,13 +890,13 @@ impl Checker<'_, '_> {
             Type::Function {
                 ref return_type, ..
             } => {
-                if let Type::Constructor { id, .. } = return_type.as_ref() {
+                if let Type::Nominal { id, .. } = return_type.as_ref() {
                     id.clone()
                 } else {
                     return None;
                 }
             }
-            Type::Constructor { ref id, .. } => {
+            Type::Nominal { ref id, .. } => {
                 // For enums with Constructor type, we need to distinguish between:
                 // - Type access (e.g., `module.Color.default()`) - ALLOW
                 // - Value access (e.g., `c.new()` where c is a Color value) - REJECT
@@ -903,6 +918,8 @@ impl Checker<'_, '_> {
                 }
                 id.clone()
             }
+            Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()).into(),
+            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
             _ => return None,
         };
 
@@ -981,7 +998,7 @@ impl Checker<'_, '_> {
     }
 
     fn is_dot_access_exported(&self, deref_ty: &Type, member_name: &str) -> bool {
-        let Type::Constructor { id, .. } = deref_ty.strip_refs() else {
+        let Type::Nominal { id, .. } = deref_ty.strip_refs() else {
             // Type parameters (bounded generics) — can't determine module,
             // fall back to false; the emitter will check method_needs_export.
             return false;

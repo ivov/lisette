@@ -21,13 +21,13 @@ pub fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool
 
     if let Type::Function { params, .. } = body.as_ref()
         && let Some(receiver_param) = params.first()
-        && let Type::Constructor {
+        && let Type::Nominal {
             params: receiver_params,
             ..
         } = receiver_param.strip_refs()
     {
         for param in receiver_params {
-            if matches!(param, Type::Constructor { .. }) {
+            if matches!(param, Type::Nominal { .. }) {
                 return true;
             }
         }

@@ -53,7 +53,7 @@ impl Checker<'_, '_> {
         // If this is a tuple struct with a constructor, the receiver_name (which is the
         // type name) shadows the constructor function in the parent scope. Re-insert the
         // constructor so it's callable from within impl methods.
-        if let Type::Constructor { id, .. } = &impl_ty
+        if let Type::Nominal { id, .. } = &impl_ty
             && let Some(Definition::Struct {
                 constructor: Some(ctor_ty),
                 ..

@@ -36,7 +36,7 @@ pub fn register_test_builtins(checker: &mut Checker) {
         .get_mut(module_id)
         .expect("prelude module must exist");
 
-    let unknown_type = Type::Constructor {
+    let unknown_type = Type::Nominal {
         id: "prelude.Unknown".into(),
         params: vec![],
         underlying_ty: None,

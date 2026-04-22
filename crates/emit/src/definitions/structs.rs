@@ -252,7 +252,7 @@ impl Emitter<'_> {
 
 fn is_option_type(ty: &Type) -> bool {
     match ty {
-        Type::Constructor {
+        Type::Nominal {
             id, underlying_ty, ..
         } => {
             if id == "Option" || id.ends_with(".Option") {

@@ -339,18 +339,39 @@ impl Checker<'_, '_> {
                 .map(|g| Type::Parameter(g.name.clone()))
                 .collect();
 
-            let constructor_ty = Type::Constructor {
-                id: qualified_name.clone().into(),
-                params: args,
-                underlying_ty: None,
+            // Canonical form for prelude-registered native types uses the
+            // dedicated Simple/Compound variants; everything else remains a
+            // nominal Constructor.
+            let canonical_ty = if self.cursor.module_id == "prelude" {
+                if let Some(simple) = syntax::types::SimpleKind::from_name(name) {
+                    debug_assert!(args.is_empty(), "simple kinds have no generics");
+                    Type::Simple(simple)
+                } else if let Some(compound) = syntax::types::CompoundKind::from_name(name) {
+                    Type::Compound {
+                        kind: compound,
+                        args,
+                    }
+                } else {
+                    Type::Nominal {
+                        id: qualified_name.clone().into(),
+                        params: args,
+                        underlying_ty: None,
+                    }
+                }
+            } else {
+                Type::Nominal {
+                    id: qualified_name.clone().into(),
+                    params: args,
+                    underlying_ty: None,
+                }
             };
 
             let ty = if generics.is_empty() {
-                constructor_ty
+                canonical_ty
             } else {
                 Type::Forall {
                     vars: generics.iter().map(|g| g.name.clone()).collect(),
-                    body: Box::new(constructor_ty),
+                    body: Box::new(canonical_ty),
                 }
             };
 
@@ -925,7 +946,7 @@ pub(super) fn has_recursive_instantiation(target_id: &str, ty: &Type) -> bool {
 
 fn walk_type(ty: &Type, predicate: &dyn Fn(&str, &[Type]) -> bool) -> bool {
     match ty {
-        Type::Constructor { id, params, .. } => {
+        Type::Nominal { id, params, .. } => {
             predicate(id, params) || params.iter().any(|p| walk_type(p, predicate))
         }
         Type::Function {

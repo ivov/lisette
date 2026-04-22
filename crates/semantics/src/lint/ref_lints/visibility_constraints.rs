@@ -59,7 +59,7 @@ fn check_type_for_private_leak(
     diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
     match ty {
-        Type::Constructor { id, params, .. } => {
+        Type::Nominal { id, params, .. } => {
             if let Some(definition) = module.definitions.get(id.as_str())
                 && definition.visibility() == &Visibility::Private
             {

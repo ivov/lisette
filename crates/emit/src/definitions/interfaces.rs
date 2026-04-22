@@ -25,7 +25,7 @@ impl Emitter<'_> {
 
         let mut visited = HashSet::default();
         for parent in parents {
-            if let Type::Constructor { id, params, .. } = &parent.ty {
+            if let Type::Nominal { id, params, .. } = &parent.ty {
                 for position in self.map_key_positions(id, &mut visited) {
                     if let Some(Type::Parameter(name)) = params.get(position)
                         && generic_names.contains(&name.as_ref())

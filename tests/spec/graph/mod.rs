@@ -254,7 +254,7 @@ fn store_get_definition_domain_style_go_module() {
         "go:github.com/gorilla/mux.Router".into(),
         syntax::program::Definition::Struct {
             visibility: syntax::program::Visibility::Public,
-            ty: syntax::types::Type::Constructor {
+            ty: syntax::types::Type::Nominal {
                 id: "go:github.com/gorilla/mux.Router".into(),
                 params: vec![],
                 underlying_ty: None,

@@ -13,9 +13,9 @@ impl Emitter<'_> {
     ) -> Option<String> {
         let expression_ty = expression.get_type();
         let enum_id = match expression_ty.resolve() {
-            Type::Constructor { id, .. } => id.clone(),
+            Type::Nominal { id, .. } => id.clone(),
             Type::Function { return_type, .. } => {
-                if let Type::Constructor { id, .. } = return_type.as_ref() {
+                if let Type::Nominal { id, .. } = return_type.as_ref() {
                     id.clone()
                 } else {
                     return None;
@@ -90,7 +90,7 @@ impl Emitter<'_> {
             return None;
         };
 
-        let Type::Constructor {
+        let Type::Nominal {
             id: enum_id,
             params: ret_params,
             ..
@@ -137,7 +137,7 @@ impl Emitter<'_> {
         variant_name: &str,
         result_ty: &Type,
     ) -> Option<String> {
-        let Type::Constructor {
+        let Type::Nominal {
             id: enum_id,
             params,
             ..
@@ -193,7 +193,7 @@ impl Emitter<'_> {
         variant_name: &str,
         result_ty: &Type,
     ) -> Option<String> {
-        let Type::Constructor {
+        let Type::Nominal {
             id: enum_id,
             params,
             ..
@@ -306,7 +306,7 @@ impl Emitter<'_> {
         let (module_name, id_for_prelude_check) =
             if let Some(synthetic_module) = resolved_inner.as_import_namespace() {
                 (synthetic_module.to_string(), synthetic_module.to_string())
-            } else if let Type::Constructor { id, .. } = &resolved_inner {
+            } else if let Type::Nominal { id, .. } = &resolved_inner {
                 let module_name =
                     if let Expression::Identifier { value, .. } = inner_expression.as_ref() {
                         value.to_string()
@@ -338,7 +338,7 @@ impl Emitter<'_> {
             && let Some(first_param) = params.first()
         {
             let receiver_ty = first_param.resolve().strip_refs();
-            if let Type::Constructor {
+            if let Type::Nominal {
                 params: receiver_params,
                 ..
             } = receiver_ty
@@ -393,7 +393,7 @@ impl Emitter<'_> {
 
         let module_name = if let Some(synthetic_module) = resolved_inner.as_import_namespace() {
             synthetic_module.to_string()
-        } else if matches!(resolved_inner, Type::Constructor { .. }) {
+        } else if matches!(resolved_inner, Type::Nominal { .. }) {
             if let Expression::Identifier { value, .. } = inner_expression.as_ref() {
                 value.to_string()
             } else {

@@ -40,7 +40,7 @@ impl CachedSpan {
 /// All type variables are resolved to either concrete types or Parameters.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CachedType {
-    Constructor {
+    Nominal {
         id: String,
         params: Vec<CachedType>,
         underlying_ty: Option<Box<CachedType>>,
@@ -91,11 +91,11 @@ impl CachedType {
                     }
                 }
             }
-            Type::Constructor {
+            Type::Nominal {
                 id,
                 params,
                 underlying_ty,
-            } => CachedType::Constructor {
+            } => CachedType::Nominal {
                 id: id.to_string(),
                 params: params
                     .iter()
@@ -153,11 +153,11 @@ impl CachedType {
 
     pub fn to_type(&self) -> Type {
         match self {
-            CachedType::Constructor {
+            CachedType::Nominal {
                 id,
                 params,
                 underlying_ty,
-            } => Type::Constructor {
+            } => Type::Nominal {
                 id: EcoString::from(id.as_str()),
                 params: params.iter().map(|p| p.to_type()).collect(),
                 underlying_ty: underlying_ty.as_ref().map(|u| Box::new(u.to_type())),

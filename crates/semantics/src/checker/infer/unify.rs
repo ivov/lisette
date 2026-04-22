@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use Type::{Constructor, Function, Variable};
+use Type::{Function, Nominal, Variable};
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::Span;
 use syntax::types::{Bound, Type, TypeVariableState};
@@ -69,32 +69,59 @@ impl Checker<'_, '_> {
 
             (Type::Simple(k1), Type::Simple(k2)) if k1 == k2 => Ok(()),
 
-            // Cross-variant equivalence during transition: a scalar like `int`
-            // may be produced as `Type::Simple(Int)` (via `Type::int()`) or
-            // `Type::Constructor { id: "prelude.int" }` (via store-backed
-            // annotation resolution). Treat them as equivalent.
-            (Type::Simple(kind), Constructor { id, params, .. })
-            | (Constructor { id, params, .. }, Type::Simple(kind))
-                if params.is_empty() && syntax::types::unqualified_name(id) == kind.leaf_name() =>
-            {
-                Ok(())
-            }
+            // Go-level aliases for scalar types: byte <-> uint8, rune <-> int32.
+            (Type::Simple(k1), Type::Simple(k2)) if simple_kinds_are_go_aliases(*k1, *k2) => Ok(()),
 
-            // Mismatch between Simple and Constructor (interface coercion etc.):
-            // synthesise a nominal Constructor for the Simple side and retry
-            // through the Constructor↔Constructor coercion / interface path.
-            (Type::Simple(kind), Constructor { .. }) => {
-                let synth = Type::Constructor {
+            // Alias follow-through: `type MyFoo = Foo` stores a Nominal
+            // alias with Foo as `underlying_ty`. When the other side is a
+            // Simple/Compound, follow the alias to the underlying type.
+            (
+                Nominal {
+                    underlying_ty: Some(underlying),
+                    ..
+                },
+                Type::Simple(_) | Type::Compound { .. },
+            ) => self.try_unify(underlying.as_ref(), t2, span),
+
+            (
+                Type::Simple(_) | Type::Compound { .. },
+                Nominal {
+                    underlying_ty: Some(underlying),
+                    ..
+                },
+            ) => self.try_unify(t1, underlying.as_ref(), span),
+
+            // Simple/Compound vs Nominal interface: synthesise a nominal
+            // equivalent for the native type so interface coercion can check
+            // it (e.g. `string` satisfying `fmt.Stringer`).
+            (Type::Simple(kind), Nominal { .. }) => {
+                let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: vec![],
                     underlying_ty: None,
                 };
                 self.try_unify(&synth, t2, span)
             }
-            (Constructor { .. }, Type::Simple(kind)) => {
-                let synth = Type::Constructor {
+            (Nominal { .. }, Type::Simple(kind)) => {
+                let synth = Type::Nominal {
                     id: format!("prelude.{}", kind.leaf_name()).into(),
                     params: vec![],
+                    underlying_ty: None,
+                };
+                self.try_unify(t1, &synth, span)
+            }
+            (Type::Compound { kind, args }, Nominal { .. }) => {
+                let synth = Type::Nominal {
+                    id: format!("prelude.{}", kind.leaf_name()).into(),
+                    params: args.clone(),
+                    underlying_ty: None,
+                };
+                self.try_unify(&synth, t2, span)
+            }
+            (Nominal { .. }, Type::Compound { kind, args }) => {
+                let synth = Type::Nominal {
+                    id: format!("prelude.{}", kind.leaf_name()).into(),
+                    params: args.clone(),
                     underlying_ty: None,
                 };
                 self.try_unify(t1, &synth, span)
@@ -103,20 +130,16 @@ impl Checker<'_, '_> {
             (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
                 if k1 == k2 && a1.len() == a2.len() =>
             {
-                self.unify_pairs(a1.iter().zip(a2), span)
+                // Compound type arguments are invariant (same rule as generic
+                // user types). Track depth so that interface coercion is
+                // rejected inside generic positions.
+                self.inference.type_param_depth += 1;
+                let result = self.unify_pairs(a1.iter().zip(a2), span);
+                self.inference.type_param_depth -= 1;
+                result
             }
 
-            // Cross-variant: Compound vs Constructor whose leaf name matches
-            // a CompoundKind and whose params align.
-            (Type::Compound { kind, args }, Constructor { id, params, .. })
-            | (Constructor { id, params, .. }, Type::Compound { kind, args })
-                if syntax::types::unqualified_name(id) == kind.leaf_name()
-                    && args.len() == params.len() =>
-            {
-                self.unify_pairs(args.iter().zip(params), span)
-            }
-
-            (Constructor { .. }, Constructor { .. }) => self.unify_constructors(t1, t2, span),
+            (Nominal { .. }, Nominal { .. }) => self.unify_constructors(t1, t2, span),
 
             (Function { .. }, Function { .. }) => self.unify_functions(t1, t2, span),
 
@@ -128,7 +151,7 @@ impl Checker<'_, '_> {
             }
 
             (
-                Constructor {
+                Nominal {
                     underlying_ty: Some(underlying),
                     ..
                 },
@@ -137,7 +160,7 @@ impl Checker<'_, '_> {
 
             (
                 Function { .. },
-                Constructor {
+                Nominal {
                     underlying_ty: Some(underlying),
                     ..
                 },
@@ -157,7 +180,7 @@ impl Checker<'_, '_> {
     }
 
     fn is_interface(&self, ty: &Type) -> bool {
-        if let Type::Constructor { id, .. } = ty {
+        if let Type::Nominal { id, .. } = ty {
             self.store.get_interface(id).is_some()
         } else {
             false
@@ -209,12 +232,12 @@ impl Checker<'_, '_> {
 
     fn unify_constructors(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
         let (
-            Constructor {
+            Nominal {
                 id: symbol1,
                 params: params1,
                 ..
             },
-            Constructor {
+            Nominal {
                 id: symbol2,
                 params: params2,
                 ..
@@ -225,7 +248,7 @@ impl Checker<'_, '_> {
         };
 
         if symbol1 != symbol2 {
-            if let Constructor {
+            if let Nominal {
                 underlying_ty: Some(u),
                 ..
             } = t1
@@ -233,7 +256,7 @@ impl Checker<'_, '_> {
             {
                 return Ok(());
             }
-            if let Constructor {
+            if let Nominal {
                 underlying_ty: Some(u),
                 ..
             } = t2
@@ -266,12 +289,12 @@ impl Checker<'_, '_> {
         span: &Span,
     ) -> Result<(), UnifyError> {
         let (
-            Constructor {
+            Nominal {
                 id: symbol1,
                 params: params1,
                 ..
             },
-            Constructor {
+            Nominal {
                 id: symbol2,
                 params: params2,
                 ..
@@ -364,12 +387,12 @@ impl Checker<'_, '_> {
                 }
                 (Type::Parameter(name1), Type::Parameter(name2)) if name1 == name2 => {}
                 (
-                    Constructor {
+                    Nominal {
                         id: id1,
                         params: p1,
                         ..
                     },
-                    Constructor {
+                    Nominal {
                         id: id2,
                         params: p2,
                         ..
@@ -392,8 +415,8 @@ impl Checker<'_, '_> {
                     self.unify_type_params(e1.iter().zip(e2), span)?;
                 }
                 (Type::Simple(k1), Type::Simple(k2)) if k1 == k2 => {}
-                (Type::Simple(kind), Constructor { id, params, .. })
-                | (Constructor { id, params, .. }, Type::Simple(kind))
+                (Type::Simple(kind), Nominal { id, params, .. })
+                | (Nominal { id, params, .. }, Type::Simple(kind))
                     if params.is_empty()
                         && syntax::types::unqualified_name(id) == kind.leaf_name() => {}
                 (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
@@ -401,8 +424,8 @@ impl Checker<'_, '_> {
                 {
                     self.unify_type_params(a1.iter().zip(a2), span)?;
                 }
-                (Type::Compound { kind, args }, Constructor { id, params, .. })
-                | (Constructor { id, params, .. }, Type::Compound { kind, args })
+                (Type::Compound { kind, args }, Nominal { id, params, .. })
+                | (Nominal { id, params, .. }, Type::Compound { kind, args })
                     if syntax::types::unqualified_name(id) == kind.leaf_name()
                         && args.len() == params.len() =>
                 {
@@ -526,7 +549,7 @@ impl Checker<'_, '_> {
         }
 
         let interface_ty = bound.ty.resolve();
-        let Type::Constructor { id, params, .. } = interface_ty else {
+        let Type::Nominal { id, params, .. } = interface_ty else {
             return;
         };
 
@@ -540,7 +563,7 @@ impl Checker<'_, '_> {
     #[allow(clippy::only_used_in_recursion)]
     fn occurs_in(&self, type_var_id: i32, ty: &Type) -> bool {
         match ty {
-            Constructor { params, .. } => params.iter().any(|p| self.occurs_in(type_var_id, p)),
+            Nominal { params, .. } => params.iter().any(|p| self.occurs_in(type_var_id, p)),
             Variable(type_var) => match &*type_var.borrow() {
                 TypeVariableState::Unbound { id, .. } => *id == type_var_id,
                 TypeVariableState::Link(linked_ty) => self.occurs_in(type_var_id, linked_ty),
@@ -681,5 +704,18 @@ fn are_go_type_aliases(a: &str, b: &str) -> bool {
             | ("prelude.uint8", "prelude.byte")
             | ("prelude.rune", "prelude.int32")
             | ("prelude.int32", "prelude.rune")
+    )
+}
+
+/// Go-level aliases between scalar builtins: `byte` is an alias for `uint8`,
+/// and `rune` is an alias for `int32`.
+fn simple_kinds_are_go_aliases(a: syntax::types::SimpleKind, b: syntax::types::SimpleKind) -> bool {
+    use syntax::types::SimpleKind;
+    matches!(
+        (a, b),
+        (SimpleKind::Byte, SimpleKind::Uint8)
+            | (SimpleKind::Uint8, SimpleKind::Byte)
+            | (SimpleKind::Rune, SimpleKind::Int32)
+            | (SimpleKind::Int32, SimpleKind::Rune)
     )
 }

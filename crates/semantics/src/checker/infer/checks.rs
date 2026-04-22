@@ -59,7 +59,7 @@ impl Checker<'_, '_> {
             } = expression.as_ref()
         {
             let receiver_ty = receiver.get_type().resolve().strip_refs();
-            if let Type::Constructor { id, .. } = &receiver_ty {
+            if let Type::Nominal { id, .. } = &receiver_ty {
                 let method_key = format!("{}.{}", id, member);
                 if let Some(definition) = self.store.get_definition(&method_key) {
                     return definition.allowed_lints().to_vec();
@@ -286,7 +286,7 @@ impl Checker<'_, '_> {
         span: &Span,
         fn_name: &str,
     ) {
-        let Type::Constructor { id, params, .. } = return_ty else {
+        let Type::Nominal { id, params, .. } = return_ty else {
             return;
         };
 
@@ -407,7 +407,7 @@ impl Checker<'_, '_> {
                 if member == "0" {
                     let base_ty = expression.get_type().resolve();
                     let ty = base_ty.strip_refs();
-                    if let Type::Constructor { id, params, .. } = ty
+                    if let Type::Nominal { id, params, .. } = ty
                         && params.is_empty()
                         && let Some(Definition::Struct {
                             kind: StructKind::Tuple,
@@ -474,7 +474,7 @@ impl Checker<'_, '_> {
         match self.store.get_definition(qualified) {
             Some(Definition::Struct { kind: k, .. }) => *k == kind,
             Some(Definition::TypeAlias { ty: alias_ty, .. }) => {
-                if let Type::Constructor { id, .. } = alias_ty.unwrap_forall() {
+                if let Type::Nominal { id, .. } = alias_ty.unwrap_forall() {
                     matches!(
                         self.store.get_definition(id),
                         Some(Definition::Struct { kind: k, .. }) if *k == kind
@@ -582,7 +582,7 @@ impl Checker<'_, '_> {
             return;
         };
         let stripped = first.strip_refs();
-        let is_self = matches!(&stripped, Type::Constructor { id, .. }
+        let is_self = matches!(&stripped, Type::Nominal { id, .. }
             if id.rsplit('.').next() == Some(type_part));
         if !is_self {
             return;
@@ -613,7 +613,7 @@ impl Checker<'_, '_> {
         {
             if member.parse::<usize>().is_ok() {
                 let ty = inner.get_type().resolve().strip_refs();
-                if let Type::Constructor { id, .. } = &ty
+                if let Type::Nominal { id, .. } = &ty
                     && let Some(Definition::Struct {
                         kind: StructKind::Tuple,
                         fields,

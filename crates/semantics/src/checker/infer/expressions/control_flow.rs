@@ -61,7 +61,7 @@ impl Checker<'_, '_> {
                 self.sink
                     .push(diagnostics::infer::cannot_match_on_unknown(*span));
             }
-            Type::Constructor { .. } => {}
+            Type::Nominal { .. } => {}
             Type::Function { .. } => {
                 self.sink
                     .push(diagnostics::infer::cannot_match_on_functions(*span));

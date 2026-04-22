@@ -28,7 +28,7 @@ impl InhabitanceCache {
 fn type_key(ty: &Type) -> String {
     match ty.resolve() {
         Type::Never => "Never".to_string(),
-        Type::Constructor { id, params, .. } => {
+        Type::Nominal { id, params, .. } => {
             if params.is_empty() {
                 id.to_string()
             } else {
@@ -90,9 +90,7 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &InhabitanceCache) -> bool 
         .insert(key.clone(), InhabitanceState::Visiting);
 
     let result = match &resolved {
-        Type::Constructor { id, params, .. } => {
-            check_constructor_inhabited(id, params, store, cache)
-        }
+        Type::Nominal { id, params, .. } => check_constructor_inhabited(id, params, store, cache),
         Type::Forall { body, .. } => is_inhabited(body, store, cache),
         _ => true,
     };
@@ -156,7 +154,7 @@ fn check_constructor_inhabited(
 
 fn is_self_referential_alias(alias_id: &str, target_ty: &Type) -> bool {
     match target_ty {
-        Type::Constructor { id, .. } => id == alias_id,
+        Type::Nominal { id, .. } => id == alias_id,
         Type::Forall { body, .. } => is_self_referential_alias(alias_id, body),
         _ => false,
     }

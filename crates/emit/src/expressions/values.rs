@@ -370,7 +370,7 @@ impl Emitter<'_> {
     ) -> String {
         let inner = self.emit_operand(output, expression);
 
-        if let Type::Constructor { id, .. } = &self.peel_alias(ty)
+        if let Type::Nominal { id, .. } = &self.peel_alias(ty)
             && matches!(
                 self.ctx.definitions.get(id.as_str()),
                 Some(Definition::Interface { .. })
@@ -581,7 +581,7 @@ impl Emitter<'_> {
                 if self.scope.bindings.get(value).is_some() {
                     return false;
                 }
-                if let Type::Constructor { id, .. } = ty.resolve() {
+                if let Type::Nominal { id, .. } = ty.resolve() {
                     matches!(
                         self.ctx.definitions.get(id.as_str()),
                         Some(Definition::Enum { .. })
@@ -594,7 +594,7 @@ impl Emitter<'_> {
             Expression::DotAccess { expression, ty, .. }
                 if !matches!(ty.resolve(), Type::Function { .. }) =>
             {
-                if let Type::Constructor { id, .. } = ty.resolve() {
+                if let Type::Nominal { id, .. } = ty.resolve() {
                     if !matches!(
                         self.ctx.definitions.get(id.as_str()),
                         Some(Definition::Enum { .. })
@@ -602,7 +602,7 @@ impl Emitter<'_> {
                         return false;
                     }
                     let receiver_ty = expression.get_type().resolve();
-                    if let Type::Constructor {
+                    if let Type::Nominal {
                         id: receiver_id, ..
                     } = &receiver_ty
                     {

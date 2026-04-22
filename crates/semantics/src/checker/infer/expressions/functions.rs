@@ -400,7 +400,7 @@ impl Checker<'_, '_> {
                 }
 
                 let stripped = receiver_ty.strip_refs();
-                if let Type::Constructor { id, .. } = &stripped {
+                if let Type::Nominal { id, .. } = &stripped {
                     let qualified = format!("{}.{}", id, member);
                     if let Some(definition) = self.store.get_definition(&qualified) {
                         return definition.ty().clone();
@@ -612,7 +612,7 @@ impl Checker<'_, '_> {
             return result;
         }
 
-        if let Type::Constructor {
+        if let Type::Nominal {
             underlying_ty: Some(underlying),
             ..
         } = ty
@@ -621,7 +621,7 @@ impl Checker<'_, '_> {
             return result;
         }
 
-        if let Type::Constructor { id, params, .. } = ty
+        if let Type::Nominal { id, params, .. } = ty
             && let Some(Definition::TypeAlias { ty: alias_ty, .. }) = self.store.get_definition(id)
         {
             let concrete_alias_ty = match alias_ty {
@@ -633,7 +633,7 @@ impl Checker<'_, '_> {
                 other => other.clone(),
             };
             let resolved = concrete_alias_ty.resolve();
-            if let Type::Constructor {
+            if let Type::Nominal {
                 underlying_ty: Some(underlying),
                 ..
             } = &resolved
@@ -646,7 +646,7 @@ impl Checker<'_, '_> {
     }
 
     fn try_as_type_conversion(&self, callee: &Expression, callee_ty: &Type) -> Option<Type> {
-        let Type::Constructor {
+        let Type::Nominal {
             id,
             underlying_ty: Some(underlying),
             ..
@@ -700,7 +700,7 @@ impl Checker<'_, '_> {
         }
 
         if args.len() != 1 {
-            let Type::Constructor { id, .. } = &named_ty else {
+            let Type::Nominal { id, .. } = &named_ty else {
                 unreachable!("type_conversion_underlying only fires for Constructor callees")
             };
             self.sink.push(diagnostics::infer::type_conversion_arity(
@@ -767,7 +767,7 @@ impl Checker<'_, '_> {
             }
 
             let interface_ty = bound.ty.resolve();
-            let Type::Constructor { id, params, .. } = interface_ty else {
+            let Type::Nominal { id, params, .. } = interface_ty else {
                 continue;
             };
 
@@ -884,7 +884,7 @@ impl Checker<'_, '_> {
             Annotation::Unknown => {
                 if let Type::Function { return_type, .. } = expected_ty {
                     (**return_type).clone()
-                } else if let Type::Constructor {
+                } else if let Type::Nominal {
                     underlying_ty: Some(inner),
                     ..
                 } = expected_ty
@@ -910,7 +910,7 @@ impl Checker<'_, '_> {
                 let receiver_ty = receiver.get_type().resolve().strip_refs();
 
                 // UFCS method: receiver.method() where method is a free function
-                if let Type::Constructor { id, .. } = &receiver_ty
+                if let Type::Nominal { id, .. } = &receiver_ty
                     && self
                         .ufcs_methods
                         .contains(&(id.to_string(), member.to_string()))
@@ -985,17 +985,40 @@ impl Checker<'_, '_> {
         // Resolve type name using checker's scope-aware lookup
         let qualified_name = self.lookup_qualified_name(type_part)?;
 
-        let definition = self.store.get_definition(&qualified_name)?;
-        let methods = match definition {
-            Definition::Struct { methods, .. } => methods,
-            Definition::Enum { methods, .. } => methods,
-            Definition::TypeAlias { methods, .. } => methods,
-            _ => return None,
-        };
+        // Follow type-alias chains through Simple/Compound underlying types
+        // (e.g. `type MyString = string` → look up methods on `prelude.string`).
+        let method_ty = self
+            .store
+            .get_definition(&qualified_name)
+            .and_then(|definition| match definition {
+                Definition::Struct { methods, .. } => methods.get(method).cloned(),
+                Definition::Enum { methods, .. } => methods.get(method).cloned(),
+                Definition::TypeAlias {
+                    methods,
+                    ty: alias_ty,
+                    ..
+                } => {
+                    methods.get(method).cloned().or_else(|| {
+                        // Follow the alias to its underlying type.
+                        let underlying = match alias_ty {
+                            Type::Forall { body, .. } => body.as_ref(),
+                            other => other,
+                        };
+                        let underlying_key: Option<String> = match underlying {
+                            Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
+                            Type::Compound { kind, .. } => {
+                                Some(format!("prelude.{}", kind.leaf_name()))
+                            }
+                            _ => None,
+                        };
+                        underlying_key
+                            .and_then(|k| self.store.get_own_methods(&k)?.get(method).cloned())
+                    })
+                }
+                _ => None,
+            })?;
 
-        let method_ty = methods.get(method)?;
-
-        let has_self = match method_ty {
+        let has_self = match &method_ty {
             Type::Function { params, .. } => !params.is_empty(),
             Type::Forall { body, .. } => {
                 if let Type::Function { params, .. } = body.as_ref() {
@@ -1051,7 +1074,7 @@ impl Checker<'_, '_> {
                 Type::Function { return_type, .. } => return_type.as_ref().clone(),
                 _ => return false,
             };
-            if let Type::Constructor { id, .. } = return_ty.resolve() {
+            if let Type::Nominal { id, .. } = return_ty.resolve() {
                 return matches!(
                     self.store.get_definition(&id),
                     Some(Definition::Struct {

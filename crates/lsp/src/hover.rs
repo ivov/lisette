@@ -128,7 +128,7 @@ pub(crate) fn get_hover_type_and_span(
                             && offset >= span.byte_offset
                             && offset < span.byte_offset + span.byte_length
                         {
-                            let slice_ty = syntax::types::Type::Constructor {
+                            let slice_ty = syntax::types::Type::Nominal {
                                 id: "Slice".into(),
                                 params: vec![elem_type.clone()],
                                 underlying_ty: None,

@@ -334,10 +334,18 @@ fn ensure_no_errors(errors: &[LisetteDiagnostic]) {
 
 fn is_slice_with_type_var(ty: &Type) -> bool {
     let normalized = ty.resolve();
-    matches!(
-        normalized,
-        Type::Constructor { id, params, .. } if id.rsplit('.').next().unwrap_or("") == "Slice" && params.len() == 1 && matches!(params[0], Type::Variable(_))
-    )
+    match &normalized {
+        Type::Nominal { id, params, .. } => {
+            id.rsplit('.').next().unwrap_or("") == "Slice"
+                && params.len() == 1
+                && matches!(params[0], Type::Variable(_))
+        }
+        Type::Compound {
+            kind: syntax::types::CompoundKind::Slice,
+            args,
+        } => args.len() == 1 && matches!(args[0], Type::Variable(_)),
+        _ => false,
+    }
 }
 
 fn types_equal(t1: &Type, t2: &Type) -> bool {
@@ -359,7 +367,28 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
         }
     }
 
-    if let Type::Constructor {
+    match (&resolved_t1, &resolved_t2) {
+        (Type::Compound { kind, args }, Type::Nominal { id, params, .. })
+        | (Type::Nominal { id, params, .. }, Type::Compound { kind, args }) => {
+            let leaf = id.rsplit('.').next().unwrap_or("");
+            if kind.leaf_name() == leaf && args.len() == params.len() {
+                return args
+                    .iter()
+                    .zip(params.iter())
+                    .all(|(x, y)| types_equal(x, y));
+            }
+        }
+        (Type::Simple(kind), Type::Nominal { id, params, .. })
+        | (Type::Nominal { id, params, .. }, Type::Simple(kind)) => {
+            let leaf = id.rsplit('.').next().unwrap_or("");
+            if kind.leaf_name() == leaf && params.is_empty() {
+                return true;
+            }
+        }
+        _ => {}
+    }
+
+    if let Type::Nominal {
         underlying_ty: Some(u),
         ..
     } = &resolved_t1
@@ -367,7 +396,7 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
     {
         return true;
     }
-    if let Type::Constructor {
+    if let Type::Nominal {
         underlying_ty: Some(u),
         ..
     } = &resolved_t2
@@ -380,12 +409,12 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
         (Type::Variable(_), Type::Variable(_)) => true,
 
         (
-            Type::Constructor {
+            Type::Nominal {
                 id: id1,
                 params: args1,
                 underlying_ty: u1,
             },
-            Type::Constructor {
+            Type::Nominal {
                 id: id2,
                 params: args2,
                 ..
@@ -436,6 +465,14 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
                     .iter()
                     .zip(elems2.iter())
                     .all(|(e1, e2)| types_equal(e1, e2))
+        }
+
+        (Type::Simple(k1), Type::Simple(k2)) => k1 == k2,
+
+        (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 }) => {
+            k1 == k2
+                && a1.len() == a2.len()
+                && a1.iter().zip(a2.iter()).all(|(x, y)| types_equal(x, y))
         }
 
         _ => false,

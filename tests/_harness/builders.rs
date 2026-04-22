@@ -1,58 +1,56 @@
-use syntax::types::Type;
+use syntax::types::{CompoundKind, SimpleKind, Type};
 
 pub fn int_type() -> Type {
-    Type::int()
+    Type::Simple(SimpleKind::Int)
 }
 
 pub fn int8_type() -> Type {
-    Type::nominal("int8")
+    Type::Simple(SimpleKind::Int8)
 }
 
 pub fn int16_type() -> Type {
-    Type::nominal("int16")
+    Type::Simple(SimpleKind::Int16)
 }
 
 pub fn float32_type() -> Type {
-    Type::nominal("float32")
+    Type::Simple(SimpleKind::Float32)
 }
 
 pub fn bool_type() -> Type {
-    Type::bool()
+    Type::Simple(SimpleKind::Bool)
 }
 
 pub fn string_type() -> Type {
-    Type::string()
+    Type::Simple(SimpleKind::String)
 }
 
 pub fn float_type() -> Type {
-    Type::float64()
+    Type::Simple(SimpleKind::Float64)
 }
 
 pub fn rune_type() -> Type {
-    Type::rune()
+    Type::Simple(SimpleKind::Rune)
 }
 
 pub fn byte_type() -> Type {
-    Type::byte()
+    Type::Simple(SimpleKind::Byte)
 }
 
 pub fn unit_type() -> Type {
-    Type::unit()
+    Type::Simple(SimpleKind::Unit)
 }
 
 pub fn slice_type(inner: Type) -> Type {
-    Type::Constructor {
-        id: "**nominal.Slice".into(),
-        params: vec![inner],
-        underlying_ty: None,
+    Type::Compound {
+        kind: CompoundKind::Slice,
+        args: vec![inner],
     }
 }
 
 pub fn ref_type(inner: Type) -> Type {
-    Type::Constructor {
-        id: "**nominal.Ref".into(),
-        params: vec![inner],
-        underlying_ty: None,
+    Type::Compound {
+        kind: CompoundKind::Ref,
+        args: vec![inner],
     }
 }
 
@@ -61,8 +59,8 @@ pub fn tuple_type(types: Vec<Type>) -> Type {
 }
 
 pub fn con_type(name: &str, args: Vec<Type>) -> Type {
-    Type::Constructor {
-        id: format!("**nominal.{}", name).into(),
+    Type::Nominal {
+        id: format!("_entry_.{}", name).into(),
         params: args,
         underlying_ty: None,
     }

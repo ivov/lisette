@@ -298,7 +298,7 @@ impl Emitter<'_> {
             let resolved = param_ty.resolve();
             let fn_ty = match resolved {
                 Type::Function { .. } => resolved,
-                Type::Constructor {
+                Type::Nominal {
                     underlying_ty: Some(ref inner),
                     ..
                 } => inner.resolve(),

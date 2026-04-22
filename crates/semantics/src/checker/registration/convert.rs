@@ -145,14 +145,19 @@ impl Checker<'_, '_> {
 
                 // Preserve alias name in emitter output. Guard against re-wrapping bodies whose
                 // id already matches (function aliases are pre-wrapped by populate_type_alias).
-                if let Some(Definition::TypeAlias {
-                    annotation: alias_ann,
-                    ..
-                }) = self.store.get_definition(&qualified_name)
+                let body_differs = match &resolved_ty {
+                    Type::Nominal { id, .. } => id.as_str() != qualified_name.as_str(),
+                    Type::Simple(_) | Type::Compound { .. } => true,
+                    _ => false,
+                };
+                if body_differs
+                    && let Some(Definition::TypeAlias {
+                        annotation: alias_ann,
+                        ..
+                    }) = self.store.get_definition(&qualified_name)
                     && !alias_ann.is_opaque()
-                    && matches!(&resolved_ty, Type::Constructor { id, .. } if id.as_str() != qualified_name.as_str())
                 {
-                    return Type::Constructor {
+                    return Type::Nominal {
                         id: qualified_name.into(),
                         params: concrete_args,
                         underlying_ty: Some(Box::new(resolved_ty)),

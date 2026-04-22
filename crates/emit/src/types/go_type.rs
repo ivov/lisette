@@ -58,7 +58,7 @@ impl std::fmt::Display for GoType {
 impl Emitter<'_> {
     pub(crate) fn go_type(&self, ty: &Type) -> GoType {
         match ty {
-            Type::Constructor { id, params, .. } => self.emit_constructor(id, params, ty),
+            Type::Nominal { id, params, .. } => self.emit_constructor(id, params, ty),
             Type::Simple(kind) => {
                 if matches!(kind, syntax::types::SimpleKind::Unit) {
                     GoType::new("struct{}")
@@ -347,7 +347,7 @@ impl Emitter<'_> {
         type_args: &[Annotation],
     ) -> String {
         let mut go_type_strs = Vec::new();
-        if let Type::Constructor { params, .. } = receiver_ty {
+        if let Type::Nominal { params, .. } = receiver_ty {
             for param in params {
                 go_type_strs.push(self.go_type_as_string(param));
             }

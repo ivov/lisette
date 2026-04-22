@@ -1,3 +1,4 @@
+use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::Cell;
 
@@ -212,7 +213,7 @@ impl Store {
 
     pub fn peel_alias(&self, ty: &Type) -> Type {
         let mut current = ty.clone();
-        while let Type::Constructor {
+        while let Type::Nominal {
             id,
             underlying_ty: Some(u),
             ..
@@ -244,10 +245,10 @@ impl Store {
         ty: &Type,
         trait_bounds: &HashMap<String, Vec<Type>>,
     ) -> MethodSignatures {
-        let Type::Constructor { id, .. } = ty.strip_refs().resolve() else {
+        let stripped = ty.strip_refs().resolve();
+        let Some(qualified_name) = method_lookup_key(&stripped) else {
             return MethodSignatures::default();
         };
-        let qualified_name = id;
 
         if let Some(interface) = self.get_interface(&qualified_name) {
             let mut all_interface_methods = MethodSignatures::default();
@@ -294,8 +295,17 @@ impl Store {
                 Type::Forall { body, .. } => body.as_ref(),
                 other => other,
             };
-            if let Type::Constructor { id: alias_id, .. } = underlying
-                && alias_id.as_str() != qualified_name.as_str()
+            let underlying_key = match underlying {
+                Type::Nominal { id, .. } => Some(id.as_str().to_string()),
+                Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
+                Type::Compound { kind, .. } => Some(format!("prelude.{}", kind.leaf_name())),
+                _ => None,
+            };
+            // Follow only when the alias body names a different type. For
+            // opaque prelude natives (e.g. `type Map<K, V>`) the body points
+            // to itself — following would loop.
+            if let Some(k) = underlying_key
+                && k != qualified_name.as_str()
             {
                 let alias_ty = alias_ty.clone();
                 for (name, method_ty) in self.get_all_methods(&alias_ty, trait_bounds) {
@@ -319,5 +329,17 @@ impl Store {
                 .collect();
         }
         MethodSignatures::default()
+    }
+}
+
+/// Return the qualified name used to look up methods/fields for a given type.
+/// For `Type::Compound` and `Type::Simple`, this is the prelude-qualified name
+/// (e.g. `Type::Compound { Slice, .. }` → `"prelude.Slice"`).
+fn method_lookup_key(ty: &Type) -> Option<EcoString> {
+    match ty {
+        Type::Nominal { id, .. } => Some(id.clone()),
+        Type::Compound { kind, .. } => Some(format!("prelude.{}", kind.leaf_name()).into()),
+        Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name()).into()),
+        _ => None,
     }
 }

@@ -151,7 +151,7 @@ impl NativeTypeKind {
         if resolved.as_import_namespace().is_some() {
             return None;
         }
-        if let Type::Constructor { ref id, .. } = resolved
+        if let Type::Nominal { ref id, .. } = resolved
             && id.starts_with("go:")
         {
             return None;

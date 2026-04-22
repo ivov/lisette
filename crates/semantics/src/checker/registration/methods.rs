@@ -539,7 +539,7 @@ impl Checker<'_, '_> {
     /// `impl<U> Option<Option<U>>` does NOT have simple params (Option<U> is not a bare generic).
     fn impl_has_simple_type_params(&self, receiver_ty: &Type, generics: &[Generic]) -> bool {
         let params = match receiver_ty {
-            Type::Constructor { params, .. } => params,
+            Type::Nominal { params, .. } => params,
             _ => return false,
         };
 

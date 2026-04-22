@@ -529,7 +529,7 @@ impl Emitter<'_> {
     ) -> Option<(String, String)> {
         let tuple_params: Vec<Type> = match return_type {
             Type::Tuple(elements) => elements.clone(),
-            Type::Constructor { params, .. } => params.clone(),
+            Type::Nominal { params, .. } => params.clone(),
             _ => return None,
         };
         let arity = tuple_params.len();
@@ -591,7 +591,7 @@ impl Emitter<'_> {
 
         // Option<fn> adaptation only fires in interface-method shims. Here
         // a closure-valued Option means the caller owns the nil check.
-        if let Type::Constructor { id, params: ps, .. } = &return_type
+        if let Type::Nominal { id, params: ps, .. } = &return_type
             && id == "Option"
             && let Some(inner) = ps.first()
             && matches!(inner.resolve(), Type::Function { .. })

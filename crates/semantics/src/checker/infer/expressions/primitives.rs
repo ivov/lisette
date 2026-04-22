@@ -133,12 +133,11 @@ impl Checker<'_, '_> {
         if items.is_empty() {
             let unit_ty = self.type_unit();
             let resolved = expected_ty.resolve();
-            if let Type::Constructor { id, params, .. } = &resolved
-                && id.ends_with("Map")
-                && params.len() == 2
+            if let Some((syntax::types::CompoundKind::Map, args)) = resolved.as_compound()
+                && args.len() == 2
             {
-                let k = params[0].resolve();
-                let v = params[1].resolve();
+                let k = args[0].resolve();
+                let v = args[1].resolve();
                 self.sink
                     .push(diagnostics::infer::invalid_map_initialization(&k, &v, span));
             } else {

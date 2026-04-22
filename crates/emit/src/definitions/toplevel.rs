@@ -13,7 +13,7 @@ impl Emitter<'_> {
         let is_fn_alias;
         let underlying = match ty {
             Type::Forall { body, .. } => match body.as_ref() {
-                Type::Constructor {
+                Type::Nominal {
                     underlying_ty: Some(inner),
                     ..
                 } if matches!(inner.as_ref(), Type::Function { .. }) => {
@@ -25,7 +25,7 @@ impl Emitter<'_> {
                     other
                 }
             },
-            Type::Constructor {
+            Type::Nominal {
                 underlying_ty: Some(inner),
                 ..
             } if matches!(inner.as_ref(), Type::Function { .. }) => {
@@ -39,7 +39,7 @@ impl Emitter<'_> {
         };
         let ty_string = self.go_type_as_string(underlying);
 
-        if let Type::Constructor { id, .. } = underlying
+        if let Type::Nominal { id, .. } = underlying
             && let Some((module, _)) = id.split_once('.')
             && module != self.current_module
             && module != go_name::PRELUDE_MODULE

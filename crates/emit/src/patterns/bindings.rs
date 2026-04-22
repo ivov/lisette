@@ -287,7 +287,7 @@ impl Emitter<'_> {
             _ => &[],
         };
         let types: &[Type] = match resolved {
-            Type::Constructor { params, .. } => params,
+            Type::Nominal { params, .. } => params,
             Type::Tuple(elems) => elems,
             _ => return,
         };
@@ -314,7 +314,7 @@ impl Emitter<'_> {
                 pattern_fields,
                 ..
             }) => {
-                let Type::Constructor { params, .. } = resolved else {
+                let Type::Nominal { params, .. } = resolved else {
                     return;
                 };
                 let Some(Definition::Struct { generics, .. }) =
@@ -337,7 +337,7 @@ impl Emitter<'_> {
                 pattern_fields,
                 ..
             }) => {
-                let Type::Constructor { params, .. } = resolved else {
+                let Type::Nominal { params, .. } = resolved else {
                     return;
                 };
                 let Some(Definition::Enum { generics, .. }) =
@@ -367,7 +367,7 @@ impl Emitter<'_> {
         identifier: &EcoString,
         resolved: &Type,
     ) {
-        let Type::Constructor { id, params, .. } = resolved else {
+        let Type::Nominal { id, params, .. } = resolved else {
             return;
         };
         match self.ctx.definitions.get(id.as_str()) {
@@ -425,7 +425,7 @@ impl Emitter<'_> {
             ..
         }) = typed
         {
-            let Type::Constructor { params, .. } = resolved else {
+            let Type::Nominal { params, .. } = resolved else {
                 return;
             };
             let Some(Definition::Enum { generics, .. }) =
@@ -444,7 +444,7 @@ impl Emitter<'_> {
             return;
         }
 
-        let Type::Constructor { id, params, .. } = resolved else {
+        let Type::Nominal { id, params, .. } = resolved else {
             return;
         };
         let Some(Definition::Enum {
@@ -476,7 +476,7 @@ impl Emitter<'_> {
         resolved: &Type,
         typed: Option<&TypedPattern>,
     ) {
-        let Type::Constructor { id, params, .. } = resolved else {
+        let Type::Nominal { id, params, .. } = resolved else {
             return;
         };
         let Some(Definition::Struct {
@@ -512,7 +512,7 @@ impl Emitter<'_> {
                 ..
             }) => (element_type.clone(), Some(tp.as_slice())),
             _ => {
-                let Type::Constructor { params, .. } = resolved else {
+                let Type::Nominal { params, .. } = resolved else {
                     return;
                 };
                 let Some(elem) = params.first().cloned() else {

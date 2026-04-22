@@ -37,7 +37,7 @@ impl Emitter<'_> {
         field_name: &str,
     ) -> Option<Type> {
         let resolved = struct_ty.resolve();
-        let Type::Constructor { id, .. } = resolved.strip_refs() else {
+        let Type::Nominal { id, .. } = resolved.strip_refs() else {
             return None;
         };
         let Some(Definition::Struct { fields, .. }) = self.ctx.definitions.get(id.as_str()) else {
@@ -51,7 +51,7 @@ impl Emitter<'_> {
 
     pub(crate) fn is_go_function_alias(&self, ty: &Type) -> bool {
         let resolved = ty.resolve();
-        let Type::Constructor { id, .. } = &resolved else {
+        let Type::Nominal { id, .. } = &resolved else {
             return false;
         };
         if !id.starts_with(GO_IMPORT_PREFIX) {
@@ -91,7 +91,7 @@ impl Emitter<'_> {
             }
             for parent_ty in &current.parents {
                 let parent = self.peel_alias(parent_ty);
-                let Type::Constructor { id, .. } = &parent else {
+                let Type::Nominal { id, .. } = &parent else {
                     continue;
                 };
                 if let Some(Definition::Interface {
@@ -108,7 +108,7 @@ impl Emitter<'_> {
 
     pub(crate) fn needs_adapter(&self, source_ty: &Type, target_ty: &Type) -> Option<AdapterPlan> {
         let target = self.peel_alias(target_ty);
-        let Type::Constructor { id: target_id, .. } = &target else {
+        let Type::Nominal { id: target_id, .. } = &target else {
             return None;
         };
         if !target_id.starts_with(GO_IMPORT_PREFIX) {
@@ -122,7 +122,7 @@ impl Emitter<'_> {
 
         let source_stripped = source_ty.strip_refs();
         let source = source_stripped.resolve();
-        let Type::Constructor { id: source_id, .. } = &source else {
+        let Type::Nominal { id: source_id, .. } = &source else {
             return None;
         };
         if source_id.starts_with(GO_IMPORT_PREFIX) {

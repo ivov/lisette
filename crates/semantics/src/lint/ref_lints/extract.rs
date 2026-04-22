@@ -620,7 +620,7 @@ fn walk_type(
     from: &ModuleItemId,
 ) {
     match ty {
-        Type::Constructor { id, params, .. } => {
+        Type::Nominal { id, params, .. } => {
             // Type IDs from the current module are stored qualified (e.g. "_entry_.Greeter").
             // Strip the module prefix so extract_base_name sees the local name, not the
             // module id — otherwise "module.Type" is misread as "import_alias.Type" and
@@ -686,7 +686,7 @@ fn type_name(ty: &Type) -> Option<String> {
         current = next;
     }
     match current {
-        Type::Constructor { id, .. } => id.split('.').next_back().map(String::from),
+        Type::Nominal { id, .. } => id.split('.').next_back().map(String::from),
         _ => None,
     }
 }
