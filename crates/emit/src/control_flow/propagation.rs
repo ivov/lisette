@@ -92,10 +92,11 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         target_var: &str,
+        target_ty: Option<&Type>,
         expression: &Expression,
     ) {
-        let target_ty = self.assign_target_ty.as_ref().map(|t| t.resolve());
-        let ty = target_ty
+        let resolved_target = target_ty.map(|t| t.resolve());
+        let ty = resolved_target
             .filter(|t| t.is_option() || t.is_result())
             .unwrap_or_else(|| expression.get_type());
         let Some(fallible) = Fallible::from_type(&ty) else {
@@ -195,20 +196,11 @@ impl Emitter<'_> {
         } else if !self.emit_wrapped_return(output, expression) {
             let expression_string =
                 self.with_position(Position::Tail, |this| this.emit_value(output, expression));
-            let expression_string = self.adapt_return_to_context(expression, expression_string);
+            let return_ty = self.current_return_context.clone();
+            let expression_string =
+                self.apply_type_coercion(output, return_ty.as_ref(), expression, expression_string);
             write_line!(output, "return {}", expression_string);
         }
-    }
-
-    pub(crate) fn adapt_return_to_context(
-        &mut self,
-        expression: &Expression,
-        emitted: String,
-    ) -> String {
-        let Some(return_ty) = self.current_return_context.clone() else {
-            return emitted;
-        };
-        self.maybe_wrap_as_go_interface(emitted, &expression.get_type(), &return_ty)
     }
 
     /// Emit a return statement with Result/Option wrapping if applicable.

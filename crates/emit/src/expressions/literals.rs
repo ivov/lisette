@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
 use crate::Emitter;
+use crate::types::coercion::Coercion;
 use crate::utils::Staged;
 use syntax::ast::{FormatStringPart, Literal};
 use syntax::types::Type;
@@ -55,13 +56,12 @@ impl Emitter<'_> {
                     .clone();
                 let elem_ty = self.go_type_as_string(&elem_lisette_ty);
 
-                let elements: Vec<String> = elems
-                    .iter()
-                    .zip(elements)
-                    .map(|(expr, emitted)| {
-                        self.maybe_wrap_as_go_interface(emitted, &expr.get_type(), &elem_lisette_ty)
-                    })
-                    .collect();
+                let mut wrapped: Vec<String> = Vec::with_capacity(elements.len());
+                for (expr, emitted) in elems.iter().zip(elements) {
+                    let coercion = Coercion::resolve(self, &expr.get_type(), &elem_lisette_ty);
+                    wrapped.push(coercion.apply(self, output, emitted));
+                }
+                let elements = wrapped;
 
                 if elements.len() > 1 && elements.iter().any(|e| e.len() > 30) {
                     let indented = elements

@@ -2,6 +2,7 @@ use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
 use crate::names::go_name;
+use crate::types::coercion::Coercion;
 use crate::utils::Staged;
 use crate::write_line;
 use syntax::ast::{Annotation, Expression, UnaryOperator};
@@ -271,7 +272,10 @@ impl Emitter<'_> {
 
         let value = self.emit_composite_value(output, arg);
         match effective_param_ty {
-            Some(target) => self.maybe_wrap_as_go_interface(value, &arg.get_type(), target),
+            Some(target) => {
+                let coercion = Coercion::resolve(self, &arg.get_type(), target);
+                coercion.apply(self, output, value)
+            }
             None => value,
         }
     }
@@ -353,6 +357,7 @@ impl Emitter<'_> {
             return Some("nil".to_string());
         }
         let value = self.emit_value(output, arg);
-        Some(self.maybe_unwrap_go_nullable(output, &value, &arg.get_type().resolve()))
+        let coercion = Coercion::resolve_unwrap_go_nullable(self, &arg.get_type().resolve());
+        Some(coercion.apply(self, output, value))
     }
 }

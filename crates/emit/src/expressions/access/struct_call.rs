@@ -7,6 +7,7 @@ use crate::Emitter;
 use crate::definitions::enum_layout;
 use crate::go_name;
 use crate::is_order_sensitive;
+use crate::types::coercion::Coercion;
 use crate::utils::Staged;
 use crate::write_line;
 
@@ -66,11 +67,13 @@ impl Emitter<'_> {
             let mut value = emitted_values[fi].clone();
             value = self.wrap_recursive_enum_field(output, value, f, &ctx);
             if is_go_struct {
-                value =
-                    self.maybe_unwrap_go_nullable(output, &value, &f.value.get_type().resolve());
+                let coercion =
+                    Coercion::resolve_unwrap_go_nullable(self, &f.value.get_type().resolve());
+                value = coercion.apply(self, output, value);
             }
             if let Some(field_ty) = self.lookup_struct_field_ty(ty, &f.name) {
-                value = self.maybe_wrap_as_go_interface(value, &f.value.get_type(), &field_ty);
+                let coercion = Coercion::resolve(self, &f.value.get_type(), &field_ty);
+                value = coercion.apply(self, output, value);
             }
             field_names.push(field_name);
             field_values.push(value);

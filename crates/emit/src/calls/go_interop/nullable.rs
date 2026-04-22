@@ -117,46 +117,6 @@ impl Emitter<'_> {
         option_var
     }
 
-    pub(crate) fn maybe_unwrap_go_nullable(
-        &mut self,
-        output: &mut String,
-        value_str: &str,
-        value_ty: &Type,
-    ) -> String {
-        if self.is_nullable_option(value_ty) {
-            return self.emit_option_unwrap_to_nullable(output, value_str, value_ty);
-        }
-        if let Some(elem_option_ty) = self.nullable_collection_element_ty(value_ty) {
-            return self.emit_collection_nullable_unwrap(
-                output,
-                value_str,
-                value_ty,
-                &elem_option_ty,
-            );
-        }
-        value_str.to_string()
-    }
-
-    pub(crate) fn maybe_wrap_go_nullable(
-        &mut self,
-        output: &mut String,
-        value_str: &str,
-        value_ty: &Type,
-    ) -> String {
-        if self.is_nullable_option(value_ty) {
-            return self.emit_nil_check_option_wrap(output, value_str, value_ty);
-        }
-        if let Some(elem_option_ty) = self.nullable_collection_element_ty(value_ty) {
-            return self.emit_collection_nullable_wrap(
-                output,
-                value_str,
-                value_ty,
-                &elem_option_ty,
-            );
-        }
-        value_str.to_string()
-    }
-
     pub(crate) fn emit_option_unwrap_to_nullable(
         &mut self,
         output: &mut String,

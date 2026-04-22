@@ -4,6 +4,7 @@ use syntax::program::Definition;
 
 use crate::Emitter;
 use crate::is_order_sensitive;
+use crate::types::coercion::Coercion;
 use crate::types::emitter::Position;
 use crate::utils::Staged;
 use crate::write_line;
@@ -311,15 +312,18 @@ impl Emitter<'_> {
             .collect();
         let elem_expressions = self.sequence(output, stages, "_v");
 
-        let elem_expressions: Vec<String> = elements
-            .iter()
-            .zip(elem_expressions)
-            .enumerate()
-            .map(|(i, (expr, emitted))| match slot_types.get(i) {
-                Some(slot) => self.maybe_wrap_as_go_interface(emitted, &expr.get_type(), slot),
+        let mut wrapped_expressions: Vec<String> = Vec::with_capacity(elem_expressions.len());
+        for (i, (expr, emitted)) in elements.iter().zip(elem_expressions).enumerate() {
+            let value = match slot_types.get(i) {
+                Some(slot) => {
+                    let coercion = Coercion::resolve(self, &expr.get_type(), slot);
+                    coercion.apply(self, output, emitted)
+                }
                 None => emitted,
-            })
-            .collect();
+            };
+            wrapped_expressions.push(value);
+        }
+        let elem_expressions = wrapped_expressions;
 
         self.flags.needs_stdlib = true;
         let arity = elem_expressions.len();
@@ -377,7 +381,8 @@ impl Emitter<'_> {
             )
         {
             let source_ty = expression.get_type();
-            return self.maybe_wrap_as_go_interface(inner, &source_ty, ty);
+            let coercion = Coercion::resolve(self, &source_ty, ty);
+            return coercion.apply(self, output, inner);
         }
 
         let go_type = self.annotation_to_go_type(target_type);
@@ -455,11 +460,8 @@ impl Emitter<'_> {
             && Self::is_go_imported_type(&receiver.get_type())
             && self.is_go_nullable(ty)
         {
-            let unwrapped = self.maybe_unwrap_go_nullable(
-                output,
-                &rhs_staged.value,
-                &value.get_type().resolve(),
-            );
+            let coercion = Coercion::resolve_unwrap_go_nullable(self, &value.get_type().resolve());
+            let unwrapped = coercion.apply(self, output, rhs_staged.value);
             write_line!(output, "{} = {}", target_str, unwrapped);
         } else {
             write_line!(output, "{} = {}", target_str, rhs_staged.value);

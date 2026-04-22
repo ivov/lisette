@@ -94,7 +94,9 @@ impl Emitter<'_> {
         self.with_position(Position::Tail, |this| {
             if !requires_temp_var(last) {
                 let expression = this.emit_value(output, last);
-                let expression = this.adapt_return_to_context(last, expression);
+                let return_ty = this.current_return_context.clone();
+                let expression =
+                    this.apply_type_coercion(output, return_ty.as_ref(), last, expression);
                 output.push_str(&this.wrap_value(&expression));
                 return;
             }
