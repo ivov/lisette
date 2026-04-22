@@ -65,6 +65,8 @@ impl Checker<'_, '_> {
 
             (Type::Parameter(name1), Type::Parameter(name2)) if name1 == name2 => Ok(()),
 
+            (Type::ImportNamespace(m1), Type::ImportNamespace(m2)) if m1 == m2 => Ok(()),
+
             (Constructor { .. }, Constructor { .. }) => self.unify_constructors(t1, t2, span),
 
             (Function { .. }, Function { .. }) => self.unify_functions(t1, t2, span),
@@ -488,7 +490,9 @@ impl Checker<'_, '_> {
             Type::Forall { body, .. } => self.occurs_in(type_var_id, body),
             Type::Tuple(elements) => elements.iter().any(|e| self.occurs_in(type_var_id, e)),
             Type::Parameter(_) => false,
-            Type::Never | Type::Error => false,
+            Type::Never | Type::Error | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {
+                false
+            }
         }
     }
 

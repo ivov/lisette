@@ -73,6 +73,10 @@ impl Emitter<'_> {
             Type::Never => GoType::new("struct{}"),
             Type::Error => unreachable!("Type::Error should not reach the emitter"),
             Type::Tuple(elements) => self.emit_tuple_type(elements),
+            Type::ImportNamespace(_) => {
+                unreachable!("Type::ImportNamespace should not reach the emitter's go_type")
+            }
+            Type::ReceiverPlaceholder => GoType::new("any"),
         }
     }
 

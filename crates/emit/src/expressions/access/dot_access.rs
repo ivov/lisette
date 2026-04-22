@@ -185,10 +185,7 @@ impl Emitter<'_> {
             return base_access;
         }
         let resolved_expression_ty = expression_ty.resolve();
-        let Type::Constructor { ref id, .. } = resolved_expression_ty else {
-            return base_access;
-        };
-        let Some(module) = id.strip_prefix(go_name::IMPORT_PREFIX) else {
+        let Some(module) = resolved_expression_ty.as_import_namespace() else {
             return base_access;
         };
         let qualified = format!("{}.{}", module, member);
@@ -229,10 +226,12 @@ impl Emitter<'_> {
     /// Compute whether a dot access context requires exported (capitalized) Go names.
     /// Used as fallback when semantic DotAccessKind doesn't carry `is_exported`.
     fn compute_is_exported_context(&self, expression: &Expression, expression_ty: &Type) -> bool {
-        matches!(
+        let is_import_namespace_ident = matches!(
             expression,
-            Expression::Identifier { ty: Type::Constructor { id, .. }, .. } if id.starts_with(go_name::IMPORT_PREFIX)
-        ) || self.is_from_prelude(expression_ty)
+            Expression::Identifier { ty, .. } if ty.as_import_namespace().is_some()
+        );
+        is_import_namespace_ident
+            || self.is_from_prelude(expression_ty)
             || if let Type::Constructor { id, .. } = expression_ty.resolve().strip_refs() {
                 id.split_once('.')
                     .is_some_and(|(m, _)| m != self.current_module && m != go_name::PRELUDE_MODULE)

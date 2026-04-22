@@ -259,12 +259,11 @@ impl Checker<'_, '_> {
                 .is_some_and(Definition::is_type_definition),
             Expression::DotAccess {
                 expression: inner, ..
-            } => {
-                matches!(
-                    inner.get_type().shallow_resolve(),
-                    Type::Constructor { id, .. } if id.starts_with("@import/")
-                )
-            }
+            } => inner
+                .get_type()
+                .shallow_resolve()
+                .as_import_namespace()
+                .is_some(),
             _ => false,
         }
     }
@@ -421,25 +420,19 @@ impl Checker<'_, '_> {
 
         // Look up by type-derived name first (works for non-aliased imports).
         // For aliased imports (e.g. `import u "utils"`), the map key is "u" but
-        // the type name is "utils", so fall back to matching by type ID.
+        // the type name is "utils", so fall back to matching by import module id.
         let (module_fields, module_ty) = self
             .imports
             .imported_modules
             .get(type_name)
             .cloned()
             .or_else(|| {
-                if let Type::Constructor { id, .. } = &deref_ty {
-                    self.imports
-                        .imported_modules
-                        .values()
-                        .find(|(_, ty)| match ty {
-                            Type::Constructor { id: ty_id, .. } => ty_id == id,
-                            _ => false,
-                        })
-                        .cloned()
-                } else {
-                    None
-                }
+                let module_id = deref_ty.as_import_namespace()?;
+                self.imports
+                    .imported_modules
+                    .values()
+                    .find(|(_, ty)| ty.as_import_namespace() == Some(module_id))
+                    .cloned()
             })?;
 
         let Some(member_type) = module_fields
@@ -460,14 +453,7 @@ impl Checker<'_, '_> {
             });
         };
 
-        // module_ty.id is "@import/module_id", extract actual module_id
-        if let Type::Constructor {
-            id: module_type_id, ..
-        } = &module_ty
-        {
-            let module_id = module_type_id
-                .strip_prefix("@import/")
-                .unwrap_or(module_type_id);
+        if let Some(module_id) = module_ty.as_import_namespace() {
             let qualified_name = format!("{}.{}", module_id, args.member_name);
             if let Some(definition_span) = self.get_definition_name_span(&qualified_name) {
                 self.facts.add_usage(*args.span, definition_span);
@@ -650,8 +636,7 @@ impl Checker<'_, '_> {
         let is_cross_module_type_access = matches!(
             args.expression,
             Expression::DotAccess { expression: inner, .. }
-                if matches!(inner.get_type().resolve(),
-                    Type::Constructor { ref id, .. } if id.starts_with("@import/"))
+                if inner.get_type().resolve().as_import_namespace().is_some()
         );
 
         if !is_cross_module_type_access || self.scopes.is_callee_context() {
@@ -835,8 +820,7 @@ impl Checker<'_, '_> {
             let is_type_access = matches!(
                 args.expression,
                 Expression::DotAccess { expression, .. }
-                    if matches!(expression.get_type().resolve(),
-                        Type::Constructor { id, .. } if id.starts_with("@import/"))
+                    if expression.get_type().resolve().as_import_namespace().is_some()
             );
             if !is_type_access {
                 return None;
@@ -911,8 +895,7 @@ impl Checker<'_, '_> {
                     let is_type_access = matches!(
                         args.expression,
                         Expression::DotAccess { expression, .. }
-                            if matches!(expression.get_type().resolve(),
-                                Type::Constructor { id, .. } if id.starts_with("@import/"))
+                            if expression.get_type().resolve().as_import_namespace().is_some()
                     );
                     if !is_type_access {
                         return None;

@@ -66,7 +66,7 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
             }
         }
         Type::Tuple(elements) => Type::Tuple(elements.iter().map(|e| substitute(e, map)).collect()),
-        Type::Never => ty.clone(),
+        Type::Never | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => ty.clone(),
     }
 }
 
@@ -122,6 +122,11 @@ pub enum Type {
         underlying_ty: Option<Box<Type>>,
     },
 
+    /// Module namespace handle. Produced by imports (e.g. `import http "net/http"`
+    /// produces an `ImportNamespace("go:net/http")` on the local identifier).
+    /// Dot-access on this type resolves to the module's exports.
+    ImportNamespace(EcoString),
+
     Function {
         params: Vec<Type>,
         param_mutability: Vec<bool>,
@@ -145,6 +150,12 @@ pub enum Type {
     /// Poison type returned after an error has been reported.
     /// Unifies with everything silently, preventing cascading diagnostics.
     Error,
+
+    /// Sentinel occupying the `self` slot of an interface method type.
+    /// Unifies silently so an implementing type's receiver does not conflict
+    /// with the abstract method shape. Previously encoded as
+    /// `Constructor { id: "**nominal.__receiver__" }`.
+    ReceiverPlaceholder,
 }
 
 impl std::fmt::Debug for Type {
@@ -183,6 +194,10 @@ impl std::fmt::Debug for Type {
             Type::Never => write!(f, "Never"),
             Type::Tuple(elements) => f.debug_tuple("Tuple").field(elements).finish(),
             Type::Error => write!(f, "Error"),
+            Type::ImportNamespace(module_id) => {
+                f.debug_tuple("ImportNamespace").field(module_id).finish()
+            }
+            Type::ReceiverPlaceholder => write!(f, "ReceiverPlaceholder"),
         }
     }
 }
@@ -232,6 +247,8 @@ impl PartialEq for Type {
             (Type::Parameter(name1), Type::Parameter(name2)) => name1 == name2,
             (Type::Never, Type::Never) => true,
             (Type::Tuple(elems1), Type::Tuple(elems2)) => elems1 == elems2,
+            (Type::ImportNamespace(m1), Type::ImportNamespace(m2)) => m1 == m2,
+            (Type::ReceiverPlaceholder, Type::ReceiverPlaceholder) => true,
             _ => false,
         }
     }
@@ -248,32 +265,42 @@ thread_local! {
 }
 
 impl Type {
+    pub fn simple(kind: SimpleKind) -> Type {
+        Self::nominal(kind.leaf_name())
+    }
+
     pub fn int() -> Type {
-        INTERNED_INT.with(|cell| cell.get_or_init(|| Self::nominal("int")).clone())
+        INTERNED_INT.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Int)).clone())
     }
 
     pub fn string() -> Type {
-        INTERNED_STRING.with(|cell| cell.get_or_init(|| Self::nominal("string")).clone())
+        INTERNED_STRING.with(|cell| {
+            cell.get_or_init(|| Self::simple(SimpleKind::String))
+                .clone()
+        })
     }
 
     pub fn bool() -> Type {
-        INTERNED_BOOL.with(|cell| cell.get_or_init(|| Self::nominal("bool")).clone())
+        INTERNED_BOOL.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Bool)).clone())
     }
 
     pub fn unit() -> Type {
-        INTERNED_UNIT.with(|cell| cell.get_or_init(|| Self::nominal("Unit")).clone())
+        INTERNED_UNIT.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Unit)).clone())
     }
 
     pub fn float64() -> Type {
-        INTERNED_FLOAT64.with(|cell| cell.get_or_init(|| Self::nominal("float64")).clone())
+        INTERNED_FLOAT64.with(|cell| {
+            cell.get_or_init(|| Self::simple(SimpleKind::Float64))
+                .clone()
+        })
     }
 
     pub fn rune() -> Type {
-        INTERNED_RUNE.with(|cell| cell.get_or_init(|| Self::nominal("rune")).clone())
+        INTERNED_RUNE.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Rune)).clone())
     }
 
     pub fn byte() -> Type {
-        INTERNED_BYTE.with(|cell| cell.get_or_init(|| Self::nominal("byte")).clone())
+        INTERNED_BYTE.with(|cell| cell.get_or_init(|| Self::simple(SimpleKind::Byte)).clone())
     }
 }
 
@@ -311,31 +338,185 @@ impl Type {
     }
 }
 
-const ARITHMETIC_TYPES: &[&str] = &[
-    "byte",
-    "complex128",
-    "complex64",
-    "float32",
-    "float64",
-    "int",
-    "int16",
-    "int32",
-    "int64",
-    "int8",
-    "rune",
-    "uint",
-    "uint16",
-    "uint32",
-    "uint64",
-    "uint8",
-];
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumericFamily {
+    SignedInt,
+    UnsignedInt,
+    Float,
+}
 
-const ORDERED_TYPES: &[&str] = &[
-    "byte", "float32", "float64", "int", "int16", "int32", "int64", "int8", "rune", "uint",
-    "uint16", "uint32", "uint64", "uint8",
-];
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompoundKind {
+    Ref,
+    Slice,
+    EnumeratedSlice,
+    Map,
+    Channel,
+    Sender,
+    Receiver,
+    VarArgs,
+}
 
-const UNSIGNED_INT_TYPES: &[&str] = &["byte", "uint", "uint8", "uint16", "uint32", "uint64"];
+impl CompoundKind {
+    pub fn leaf_name(self) -> &'static str {
+        match self {
+            CompoundKind::Ref => "Ref",
+            CompoundKind::Slice => "Slice",
+            CompoundKind::EnumeratedSlice => "EnumeratedSlice",
+            CompoundKind::Map => "Map",
+            CompoundKind::Channel => "Channel",
+            CompoundKind::Sender => "Sender",
+            CompoundKind::Receiver => "Receiver",
+            CompoundKind::VarArgs => "VarArgs",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<CompoundKind> {
+        Some(match name {
+            "Ref" => CompoundKind::Ref,
+            "Slice" => CompoundKind::Slice,
+            "EnumeratedSlice" => CompoundKind::EnumeratedSlice,
+            "Map" => CompoundKind::Map,
+            "Channel" => CompoundKind::Channel,
+            "Sender" => CompoundKind::Sender,
+            "Receiver" => CompoundKind::Receiver,
+            "VarArgs" => CompoundKind::VarArgs,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SimpleKind {
+    Int,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Uint,
+    Uint8,
+    Uint16,
+    Uint32,
+    Uint64,
+    Uintptr,
+    Byte,
+    Float32,
+    Float64,
+    Complex64,
+    Complex128,
+    Rune,
+    Bool,
+    String,
+    Unit,
+}
+
+impl SimpleKind {
+    pub fn leaf_name(self) -> &'static str {
+        match self {
+            SimpleKind::Int => "int",
+            SimpleKind::Int8 => "int8",
+            SimpleKind::Int16 => "int16",
+            SimpleKind::Int32 => "int32",
+            SimpleKind::Int64 => "int64",
+            SimpleKind::Uint => "uint",
+            SimpleKind::Uint8 => "uint8",
+            SimpleKind::Uint16 => "uint16",
+            SimpleKind::Uint32 => "uint32",
+            SimpleKind::Uint64 => "uint64",
+            SimpleKind::Uintptr => "uintptr",
+            SimpleKind::Byte => "byte",
+            SimpleKind::Float32 => "float32",
+            SimpleKind::Float64 => "float64",
+            SimpleKind::Complex64 => "complex64",
+            SimpleKind::Complex128 => "complex128",
+            SimpleKind::Rune => "rune",
+            SimpleKind::Bool => "bool",
+            SimpleKind::String => "string",
+            SimpleKind::Unit => "Unit",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<SimpleKind> {
+        Some(match name {
+            "int" => SimpleKind::Int,
+            "int8" => SimpleKind::Int8,
+            "int16" => SimpleKind::Int16,
+            "int32" => SimpleKind::Int32,
+            "int64" => SimpleKind::Int64,
+            "uint" => SimpleKind::Uint,
+            "uint8" => SimpleKind::Uint8,
+            "uint16" => SimpleKind::Uint16,
+            "uint32" => SimpleKind::Uint32,
+            "uint64" => SimpleKind::Uint64,
+            "uintptr" => SimpleKind::Uintptr,
+            "byte" => SimpleKind::Byte,
+            "float32" => SimpleKind::Float32,
+            "float64" => SimpleKind::Float64,
+            "complex64" => SimpleKind::Complex64,
+            "complex128" => SimpleKind::Complex128,
+            "rune" => SimpleKind::Rune,
+            "bool" => SimpleKind::Bool,
+            "string" => SimpleKind::String,
+            "Unit" => SimpleKind::Unit,
+            _ => return None,
+        })
+    }
+
+    pub fn is_arithmetic(self) -> bool {
+        !matches!(
+            self,
+            SimpleKind::Bool | SimpleKind::String | SimpleKind::Unit | SimpleKind::Uintptr
+        )
+    }
+
+    pub fn is_ordered(self) -> bool {
+        self.is_arithmetic() && !matches!(self, SimpleKind::Complex64 | SimpleKind::Complex128)
+    }
+
+    pub fn is_unsigned_int(self) -> bool {
+        matches!(
+            self,
+            SimpleKind::Byte
+                | SimpleKind::Uint
+                | SimpleKind::Uint8
+                | SimpleKind::Uint16
+                | SimpleKind::Uint32
+                | SimpleKind::Uint64
+        )
+    }
+
+    pub fn is_signed_int(self) -> bool {
+        matches!(
+            self,
+            SimpleKind::Int
+                | SimpleKind::Int8
+                | SimpleKind::Int16
+                | SimpleKind::Int32
+                | SimpleKind::Int64
+                | SimpleKind::Rune
+        )
+    }
+
+    pub fn is_float(self) -> bool {
+        matches!(self, SimpleKind::Float32 | SimpleKind::Float64)
+    }
+
+    pub fn is_complex(self) -> bool {
+        matches!(self, SimpleKind::Complex64 | SimpleKind::Complex128)
+    }
+
+    pub fn numeric_family(self) -> Option<NumericFamily> {
+        if self.is_signed_int() {
+            Some(NumericFamily::SignedInt)
+        } else if self.is_unsigned_int() {
+            Some(NumericFamily::UnsignedInt)
+        } else if self.is_float() {
+            Some(NumericFamily::Float)
+        } else {
+            None
+        }
+    }
+}
 
 impl Type {
     pub fn get_function_ret(&self) -> Option<&Type> {
@@ -400,12 +581,44 @@ impl Type {
         matches!(self, Type::Tuple(_))
     }
 
+    pub fn as_import_namespace(&self) -> Option<&str> {
+        match self {
+            Type::ImportNamespace(module_id) => Some(module_id),
+            _ => None,
+        }
+    }
+
+    pub fn as_compound(&self) -> Option<(CompoundKind, &[Type])> {
+        match self {
+            Type::Constructor { id, params, .. } => {
+                CompoundKind::from_name(unqualified_name(id)).map(|k| (k, params.as_slice()))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn is_native(&self, kind: CompoundKind) -> bool {
+        self.as_compound().is_some_and(|(k, _)| k == kind)
+    }
+
     pub fn is_ref(&self) -> bool {
-        self.has_name("Ref")
+        self.is_native(CompoundKind::Ref)
+    }
+
+    pub fn is_slice(&self) -> bool {
+        self.is_native(CompoundKind::Slice)
+    }
+
+    pub fn is_map(&self) -> bool {
+        self.is_native(CompoundKind::Map)
+    }
+
+    pub fn is_channel(&self) -> bool {
+        self.is_native(CompoundKind::Channel)
     }
 
     pub fn is_receiver_placeholder(&self) -> bool {
-        self.has_name("__receiver__")
+        matches!(self, Type::ReceiverPlaceholder)
     }
 
     pub fn is_unknown(&self) -> bool {
@@ -413,7 +626,7 @@ impl Type {
     }
 
     pub fn is_receiver(&self) -> bool {
-        self.has_name("Receiver")
+        self.is_native(CompoundKind::Receiver)
     }
 
     pub fn is_ignored(&self) -> bool {
@@ -426,38 +639,37 @@ impl Type {
     }
 
     pub fn is_variadic(&self) -> Option<Type> {
-        let args = self.get_function_params()?;
-        let last = args.last()?;
-
-        if last.get_name()? == "VarArgs" {
-            return last.inner();
+        let last = self.get_function_params()?.last()?;
+        match last.as_compound()? {
+            (CompoundKind::VarArgs, _) => last.inner(),
+            _ => None,
         }
-
-        None
     }
 
     pub fn is_string(&self) -> bool {
-        self.has_name("string")
+        self.is_simple(SimpleKind::String)
+    }
+
+    pub fn is_slice_of_simple(&self, element: SimpleKind) -> bool {
+        match self.as_compound() {
+            Some((CompoundKind::Slice, [elem])) => elem.resolve().is_simple(element),
+            _ => false,
+        }
     }
 
     pub fn is_slice_of(&self, element_name: &str) -> bool {
-        match self {
-            Type::Constructor { id, params, .. } => {
-                if unqualified_name(id) != "Slice" || params.len() != 1 {
-                    return false;
-                }
-                params[0].resolve().has_name(element_name)
-            }
+        match self.as_compound() {
+            Some((CompoundKind::Slice, [elem])) => elem.resolve().has_name(element_name),
             _ => false,
         }
     }
 
     pub fn is_byte_slice(&self) -> bool {
-        self.is_slice_of("byte") || self.is_slice_of("uint8")
+        self.is_slice_of_simple(SimpleKind::Byte) || self.is_slice_of_simple(SimpleKind::Uint8)
     }
 
     pub fn is_rune_slice(&self) -> bool {
-        self.is_slice_of("rune")
+        self.is_slice_of_simple(SimpleKind::Rune)
     }
 
     pub fn is_byte_or_rune_slice(&self) -> bool {
@@ -476,24 +688,35 @@ impl Type {
         }
     }
 
+    pub fn as_simple(&self) -> Option<SimpleKind> {
+        match self {
+            Type::Constructor { id, .. } => SimpleKind::from_name(unqualified_name(id)),
+            _ => None,
+        }
+    }
+
+    pub fn is_simple(&self, kind: SimpleKind) -> bool {
+        self.as_simple() == Some(kind)
+    }
+
     pub fn is_boolean(&self) -> bool {
-        self.has_name("bool")
+        self.is_simple(SimpleKind::Bool)
     }
 
     pub fn is_rune(&self) -> bool {
-        self.has_name("rune")
+        self.is_simple(SimpleKind::Rune)
     }
 
     pub fn is_float64(&self) -> bool {
-        self.has_name("float64")
+        self.is_simple(SimpleKind::Float64)
     }
 
     pub fn is_float32(&self) -> bool {
-        self.has_name("float32")
+        self.is_simple(SimpleKind::Float32)
     }
 
     pub fn is_float(&self) -> bool {
-        self.is_float64() || self.is_float32()
+        self.as_simple().is_some_and(SimpleKind::is_float)
     }
 
     pub fn is_variable(&self) -> bool {
@@ -505,33 +728,19 @@ impl Type {
     }
 
     pub fn is_numeric(&self) -> bool {
-        match self {
-            Type::Constructor { id, .. } => ARITHMETIC_TYPES.contains(&unqualified_name(id)),
-            _ => false,
-        }
+        self.as_simple().is_some_and(SimpleKind::is_arithmetic)
     }
 
     pub fn is_ordered(&self) -> bool {
-        match self {
-            Type::Constructor { id, .. } => ORDERED_TYPES.contains(&unqualified_name(id)),
-            _ => false,
-        }
+        self.as_simple().is_some_and(SimpleKind::is_ordered)
     }
 
     pub fn is_complex(&self) -> bool {
-        match self {
-            Type::Constructor { id, .. } => {
-                matches!(unqualified_name(id), "complex128" | "complex64")
-            }
-            _ => false,
-        }
+        self.as_simple().is_some_and(SimpleKind::is_complex)
     }
 
     pub fn is_unsigned_int(&self) -> bool {
-        match self {
-            Type::Constructor { id, .. } => UNSIGNED_INT_TYPES.contains(&unqualified_name(id)),
-            _ => false,
-        }
+        self.as_simple().is_some_and(SimpleKind::is_unsigned_int)
     }
 
     pub fn is_never(&self) -> bool {
@@ -559,7 +768,11 @@ impl Type {
             }
             Type::Forall { body, .. } => body.has_unbound_variables(),
             Type::Tuple(elements) => elements.iter().any(|e| e.has_unbound_variables()),
-            Type::Parameter(_) | Type::Never | Type::Error => false,
+            Type::Parameter(_)
+            | Type::Never
+            | Type::Error
+            | Type::ImportNamespace(_)
+            | Type::ReceiverPlaceholder => false,
         }
     }
 
@@ -606,7 +819,7 @@ impl Type {
                     element.remove_found_type_names(names);
                 }
             }
-            Type::Never | Type::Error => {}
+            Type::Never | Type::Error | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {}
         }
     }
 }
@@ -616,14 +829,14 @@ impl Type {
         match self {
             Type::Constructor { id, params, .. } => {
                 let name = unqualified_name(id);
-                if name == "Ref" {
+                if CompoundKind::from_name(name) == Some(CompoundKind::Ref) {
                     return params.first().and_then(|inner| inner.get_name());
                 }
-                if let Some(module_path) = id.strip_prefix("@import/") {
-                    let path = module_path.strip_prefix("go:").unwrap_or(module_path);
-                    return path.rsplit('/').next();
-                }
                 Some(name)
+            }
+            Type::ImportNamespace(module_id) => {
+                let path = module_id.strip_prefix("go:").unwrap_or(module_id);
+                path.rsplit('/').next()
             }
             _ => None,
         }
@@ -756,7 +969,7 @@ impl Type {
                 bounds,
                 return_type,
             } => {
-                let mut new_params = vec![Type::nominal("__receiver__")];
+                let mut new_params = vec![Type::ReceiverPlaceholder];
                 new_params.extend(params);
 
                 let mut new_mutability = vec![false];
@@ -857,7 +1070,9 @@ impl Type {
                     .collect(),
             ),
             Type::Parameter(name) => Type::Parameter(name.clone()),
-            Type::Never | Type::Error => ty.clone(),
+            Type::Never | Type::Error | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {
+                ty.clone()
+            }
         }
     }
 
@@ -883,7 +1098,11 @@ impl Type {
             }
             Type::Forall { body, .. } => body.contains_type(target),
             Type::Tuple(elements) => elements.iter().any(|e| e.contains_type(target)),
-            Type::Parameter(_) | Type::Never | Type::Error => false,
+            Type::Parameter(_)
+            | Type::Never
+            | Type::Error
+            | Type::ImportNamespace(_)
+            | Type::ReceiverPlaceholder => false,
         }
     }
 
@@ -946,21 +1165,14 @@ impl Type {
             },
             Type::Forall { body, .. } => body.resolve(),
             Type::Tuple(elements) => Type::Tuple(elements.iter().map(|e| e.resolve()).collect()),
-            Type::Parameter(_) | Type::Error => self.clone(),
+            Type::Parameter(_)
+            | Type::Error
+            | Type::ImportNamespace(_)
+            | Type::ReceiverPlaceholder => self.clone(),
             Type::Never => Type::Never,
         }
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NumericFamily {
-    SignedInt,
-    UnsignedInt,
-    Float,
-}
-
-const SIGNED_INT_TYPES: &[&str] = &["int", "int8", "int16", "int32", "int64", "rune"];
-const FLOAT_TYPES: &[&str] = &["float32", "float64"];
 
 impl Type {
     pub fn underlying_numeric_type(&self) -> Option<Type> {
@@ -995,20 +1207,7 @@ impl Type {
     }
 
     pub fn numeric_family(&self) -> Option<NumericFamily> {
-        let name = match self {
-            Type::Constructor { id, .. } => unqualified_name(id),
-            _ => return None,
-        };
-
-        if SIGNED_INT_TYPES.contains(&name) {
-            Some(NumericFamily::SignedInt)
-        } else if UNSIGNED_INT_TYPES.contains(&name) {
-            Some(NumericFamily::UnsignedInt)
-        } else if FLOAT_TYPES.contains(&name) {
-            Some(NumericFamily::Float)
-        } else {
-            None
-        }
+        self.as_simple()?.numeric_family()
     }
 
     pub fn is_numeric_compatible_with(&self, other: &Type) -> bool {

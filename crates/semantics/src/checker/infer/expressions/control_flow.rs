@@ -78,6 +78,8 @@ impl Checker<'_, '_> {
             Type::Parameter(_) => {}
             Type::Tuple(_) => {}
             Type::Never | Type::Error => {}
+            Type::ImportNamespace(_) => {}
+            Type::ReceiverPlaceholder => {}
         }
     }
 

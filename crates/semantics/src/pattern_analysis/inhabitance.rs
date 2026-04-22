@@ -43,6 +43,8 @@ fn type_key(ty: &Type) -> String {
         Type::Function { .. } => "fn".to_string(),
         Type::Variable(_) | Type::Parameter(_) | Type::Error => "param".to_string(),
         Type::Forall { body, .. } => type_key(&body),
+        Type::ImportNamespace(m) => format!("<import:{}>", m),
+        Type::ReceiverPlaceholder => "<receiver>".to_string(),
     }
 }
 

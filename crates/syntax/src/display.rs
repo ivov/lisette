@@ -90,6 +90,13 @@ impl Type {
             }
 
             Type::Error => "<error>".to_string(),
+
+            Type::ImportNamespace(module_id) => {
+                let path = module_id.strip_prefix("go:").unwrap_or(module_id);
+                path.rsplit('/').next().unwrap_or(module_id).to_string()
+            }
+
+            Type::ReceiverPlaceholder => "self".to_string(),
         }
     }
 }

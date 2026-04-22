@@ -284,10 +284,8 @@ impl Emitter<'_> {
         let is_go_module_fn = matches!(
             expression.unwrap_parens(),
             Expression::DotAccess { expression, .. }
-            if matches!(
-                expression.get_type(),
-                Type::Constructor { ref id, .. } if id.starts_with(go_name::IMPORT_GO_PREFIX)
-            )
+            if expression.get_type().as_import_namespace()
+                .is_some_and(|m| m.starts_with(go_name::GO_IMPORT_PREFIX))
         );
         if is_go_module_fn {
             return go_fn_str;

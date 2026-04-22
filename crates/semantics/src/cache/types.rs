@@ -58,6 +58,7 @@ pub enum CachedType {
     Parameter(String),
     Tuple(Vec<CachedType>),
     Never,
+    ImportNamespace(String),
 }
 
 impl CachedType {
@@ -127,7 +128,8 @@ impl CachedType {
                     .map(|e| CachedType::from_type_with_vars(e, var_names))
                     .collect(),
             ),
-            Type::Never | Type::Error => CachedType::Never,
+            Type::ImportNamespace(module_id) => CachedType::ImportNamespace(module_id.to_string()),
+            Type::Never | Type::Error | Type::ReceiverPlaceholder => CachedType::Never,
         }
     }
 
@@ -167,6 +169,9 @@ impl CachedType {
                 Type::Tuple(elements.iter().map(|e| e.to_type()).collect())
             }
             CachedType::Never => Type::Never,
+            CachedType::ImportNamespace(module_id) => {
+                Type::ImportNamespace(EcoString::from(module_id.as_str()))
+            }
         }
     }
 }

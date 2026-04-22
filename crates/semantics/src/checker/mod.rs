@@ -629,11 +629,7 @@ impl<'r, 's> Checker<'r, 's> {
             })
             .collect();
 
-        let ty = Type::Constructor {
-            id: format!("@import/{}", imported_module_id).into(),
-            params: vec![],
-            underlying_ty: None,
-        };
+        let ty = Type::ImportNamespace(imported_module_id.clone().into());
 
         self.imports
             .imported_modules

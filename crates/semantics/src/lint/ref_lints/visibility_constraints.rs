@@ -168,6 +168,11 @@ fn check_type_for_private_leak(
                 );
             }
         }
-        Type::Variable(_) | Type::Parameter(_) | Type::Never | Type::Error => {}
+        Type::Variable(_)
+        | Type::Parameter(_)
+        | Type::Never
+        | Type::Error
+        | Type::ImportNamespace(_)
+        | Type::ReceiverPlaceholder => {}
     }
 }

@@ -651,7 +651,12 @@ fn walk_type(
                 walk_type(module, e, graph, alias_map, from);
             }
         }
-        Type::Variable(_) | Type::Parameter(_) | Type::Never | Type::Error => {}
+        Type::Variable(_)
+        | Type::Parameter(_)
+        | Type::Never
+        | Type::Error
+        | Type::ImportNamespace(_)
+        | Type::ReceiverPlaceholder => {}
     }
 }
 

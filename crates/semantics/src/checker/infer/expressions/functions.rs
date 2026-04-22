@@ -399,17 +399,18 @@ impl Checker<'_, '_> {
                     return method_ty;
                 }
 
-                if let Type::Constructor { id, .. } = receiver_ty.strip_refs() {
+                let stripped = receiver_ty.strip_refs();
+                if let Type::Constructor { id, .. } = &stripped {
                     let qualified = format!("{}.{}", id, member);
                     if let Some(definition) = self.store.get_definition(&qualified) {
                         return definition.ty().clone();
                     }
+                }
 
-                    if let Some(module_id) = id.strip_prefix("@import/") {
-                        let qualified = format!("{}.{}", module_id, member);
-                        if let Some(definition) = self.store.get_definition(&qualified) {
-                            return definition.ty().clone();
-                        }
+                if let Some(module_id) = stripped.as_import_namespace() {
+                    let qualified = format!("{}.{}", module_id, member);
+                    if let Some(definition) = self.store.get_definition(&qualified) {
+                        return definition.ty().clone();
                     }
                 }
 
@@ -669,10 +670,7 @@ impl Checker<'_, '_> {
             Expression::Identifier { binding_id, .. } => binding_id.is_none(),
             Expression::DotAccess {
                 expression: base, ..
-            } => matches!(
-                base.get_type().resolve(),
-                Type::Constructor { id, .. } if id.starts_with("@import/")
-            ),
+            } => base.get_type().resolve().as_import_namespace().is_some(),
             _ => false,
         };
 
@@ -926,9 +924,7 @@ impl Checker<'_, '_> {
                 }
 
                 // Cross-module tuple struct constructor (e.g. `mod.Point(1, 2)`)
-                if let Type::Constructor { id, .. } = receiver.get_type().resolve()
-                    && let Some(module_id) = id.strip_prefix("@import/")
-                {
+                if let Some(module_id) = receiver.get_type().resolve().as_import_namespace() {
                     let qualified = format!("{}.{}", module_id, member);
                     if matches!(
                         self.store.get_definition(&qualified),
