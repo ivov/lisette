@@ -48,9 +48,9 @@ description: "input: \ntype Callback = fn(int, string) -> bool;\n"
                 byte_length: 23,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         visibility: Private,
         span: Span {
             file_id: 0,

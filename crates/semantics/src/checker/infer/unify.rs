@@ -1,12 +1,11 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use Type::{Function, Nominal, Variable};
+use crate::checker::EnvResolve;
+use Type::{Function, Nominal};
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::Span;
-use syntax::types::{Bound, Type, TypeVariableState};
+use syntax::types::{Bound, Type, TypeVarId};
 
 use super::super::Checker;
+use crate::checker::type_env::VarState;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnifyError {
@@ -40,27 +39,26 @@ impl Checker<'_, '_> {
         t2: &Type,
         span: &Span,
     ) -> Result<(), UnifyError> {
-        let r1 = t1.shallow_resolve();
-        let r2 = t2.shallow_resolve();
+        let r1 = self.env.shallow_resolve(t1);
+        let r2 = self.env.shallow_resolve(t2);
 
-        match (t1, t2) {
-            _ if t1.is_ignored() || t2.is_ignored() => Ok(()),
-            _ if t1.is_receiver_placeholder() || t2.is_receiver_placeholder() => Ok(()),
-            _ if self.should_unify_refs(t1, t2, &r1, &r2) => self.unify_refs(t1, t2, span),
+        match (&r1, &r2) {
+            _ if r1.is_ignored() || r2.is_ignored() => Ok(()),
+            _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => Ok(()),
+            _ if self.should_unify_refs(&r1, &r2, &r1, &r2) => self.unify_refs(&r1, &r2, span),
 
-            (Variable(v1), Variable(v2)) if Rc::ptr_eq(v1, v2) => Ok(()),
+            (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => Ok(()),
 
             _ if r1.is_unknown() => Ok(()),
-            _ if r2.is_unknown() && !t1.is_variable() => Err(UnifyError::TypeMismatch),
+            _ if r2.is_unknown() && !r1.is_variable() => Err(UnifyError::TypeMismatch),
 
             _ if matches!(r2, Type::Never) => Ok(()),
             _ if matches!(r1, Type::Never) => Err(UnifyError::TypeMismatch),
 
-            (Variable(type_var), other) => self.unify_type_variable(type_var, other, span, false),
-            (other, Variable(type_var)) => self.unify_type_variable(type_var, other, span, true),
+            (Type::Var { id, .. }, _) => self.unify_type_variable(*id, &r2, span, false),
+            (_, Type::Var { id, .. }) => self.unify_type_variable(*id, &r1, span, true),
 
-            // Error after Variable: variables absorb Error via linking above;
-            // non-variable vs Error succeeds silently
+            // Non-variable vs Error succeeds silently; variables were handled above.
             _ if matches!(r1, Type::Error) || matches!(r2, Type::Error) => Ok(()),
 
             (Type::Parameter(name1), Type::Parameter(name2)) if name1 == name2 => Ok(()),
@@ -81,7 +79,10 @@ impl Checker<'_, '_> {
                     ..
                 },
                 Type::Simple(_) | Type::Compound { .. },
-            ) => self.try_unify(underlying.as_ref(), t2, span),
+            ) => {
+                let u = underlying.as_ref().clone();
+                self.try_unify(&u, &r2, span)
+            }
 
             (
                 Type::Simple(_) | Type::Compound { .. },
@@ -89,7 +90,10 @@ impl Checker<'_, '_> {
                     underlying_ty: Some(underlying),
                     ..
                 },
-            ) => self.try_unify(t1, underlying.as_ref(), span),
+            ) => {
+                let u = underlying.as_ref().clone();
+                self.try_unify(&r1, &u, span)
+            }
 
             // Simple/Compound vs Nominal interface: synthesise a nominal
             // equivalent for the native type so interface coercion can check
@@ -100,7 +104,7 @@ impl Checker<'_, '_> {
                     params: vec![],
                     underlying_ty: None,
                 };
-                self.try_unify(&synth, t2, span)
+                self.try_unify(&synth, &r2, span)
             }
             (Nominal { .. }, Type::Simple(kind)) => {
                 let synth = Type::Nominal {
@@ -108,7 +112,7 @@ impl Checker<'_, '_> {
                     params: vec![],
                     underlying_ty: None,
                 };
-                self.try_unify(t1, &synth, span)
+                self.try_unify(&r1, &synth, span)
             }
             (Type::Compound { kind, args }, Nominal { .. }) => {
                 let synth = Type::Nominal {
@@ -116,7 +120,7 @@ impl Checker<'_, '_> {
                     params: args.clone(),
                     underlying_ty: None,
                 };
-                self.try_unify(&synth, t2, span)
+                self.try_unify(&synth, &r2, span)
             }
             (Nominal { .. }, Type::Compound { kind, args }) => {
                 let synth = Type::Nominal {
@@ -124,7 +128,7 @@ impl Checker<'_, '_> {
                     params: args.clone(),
                     underlying_ty: None,
                 };
-                self.try_unify(t1, &synth, span)
+                self.try_unify(&r1, &synth, span)
             }
 
             (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
@@ -133,21 +137,25 @@ impl Checker<'_, '_> {
                 // Compound type arguments are invariant (same rule as generic
                 // user types). Track depth so that interface coercion is
                 // rejected inside generic positions.
+                let a1 = a1.clone();
+                let a2 = a2.clone();
                 self.inference.type_param_depth += 1;
-                let result = self.unify_pairs(a1.iter().zip(a2), span);
+                let result = self.unify_pairs(a1.iter().zip(a2.iter()), span);
                 self.inference.type_param_depth -= 1;
                 result
             }
 
-            (Nominal { .. }, Nominal { .. }) => self.unify_constructors(t1, t2, span),
+            (Nominal { .. }, Nominal { .. }) => self.unify_constructors(&r1, &r2, span),
 
-            (Function { .. }, Function { .. }) => self.unify_functions(t1, t2, span),
+            (Function { .. }, Function { .. }) => self.unify_functions(&r1, &r2, span),
 
             (Type::Tuple(elems1), Type::Tuple(elems2)) => {
                 if elems1.len() != elems2.len() {
                     return Err(UnifyError::ArityMismatch);
                 }
-                self.unify_pairs(elems1.iter().zip(elems2), span)
+                let elems1 = elems1.clone();
+                let elems2 = elems2.clone();
+                self.unify_pairs(elems1.iter().zip(elems2.iter()), span)
             }
 
             (
@@ -156,7 +164,10 @@ impl Checker<'_, '_> {
                     ..
                 },
                 Function { .. },
-            ) => self.try_unify(underlying.as_ref(), t2, span),
+            ) => {
+                let u = underlying.as_ref().clone();
+                self.try_unify(&u, &r2, span)
+            }
 
             (
                 Function { .. },
@@ -164,7 +175,10 @@ impl Checker<'_, '_> {
                     underlying_ty: Some(underlying),
                     ..
                 },
-            ) => self.try_unify(t1, underlying.as_ref(), span),
+            ) => {
+                let u = underlying.as_ref().clone();
+                self.try_unify(&r1, &u, span)
+            }
 
             _ => Err(UnifyError::TypeMismatch),
         }
@@ -197,34 +211,29 @@ impl Checker<'_, '_> {
 
     fn unify_type_variable(
         &mut self,
-        type_var: &Rc<RefCell<TypeVariableState>>,
+        id: TypeVarId,
         other_ty: &Type,
         span: &Span,
         var_on_right: bool,
     ) -> Result<(), UnifyError> {
-        let state = type_var.borrow();
-        match &*state {
-            TypeVariableState::Link(ty) => {
-                let ty = ty.clone();
-                drop(state);
+        // Reserved sentinel ids (ignored/uninferred) unify silently with
+        // anything. Their binding doesn't go into the env.
+        if id.is_reserved() {
+            return Ok(());
+        }
+        match self.env.state(id).clone() {
+            VarState::Bound(ty) => {
                 if var_on_right {
                     self.try_unify(other_ty, &ty, span)
                 } else {
                     self.try_unify(&ty, other_ty, span)
                 }
             }
-            TypeVariableState::Unbound { id, hint } => {
-                let id = *id;
-                let hint = hint.clone();
-                drop(state);
-                if self.occurs_in(id, other_ty) {
+            VarState::Unbound { .. } => {
+                if self.env.occurs(id, other_ty) {
                     return Err(UnifyError::InfiniteType);
                 }
-
-                if let Some(log) = &mut self.inference.undo_log {
-                    log.push((Rc::clone(type_var), TypeVariableState::Unbound { id, hint }));
-                }
-                *type_var.borrow_mut() = TypeVariableState::Link(other_ty.clone());
+                self.env.bind(id, other_ty.clone());
                 Ok(())
             }
         }
@@ -351,39 +360,45 @@ impl Checker<'_, '_> {
         pairs: impl Iterator<Item = (&'a Type, &'a Type)>,
         span: &Span,
     ) -> Result<(), UnifyError> {
+        // Collect so we can iterate without holding the original borrows
+        // while binding variables in the env.
+        let pairs: Vec<(Type, Type)> = pairs.map(|(a, b)| (a.clone(), b.clone())).collect();
         for (t1, t2) in pairs {
-            let r1 = t1.shallow_resolve();
-            let r2 = t2.shallow_resolve();
+            let r1 = self.env.shallow_resolve(&t1);
+            let r2 = self.env.shallow_resolve(&t2);
 
-            match (t1, t2) {
-                _ if t1.is_ignored() || t2.is_ignored() => {}
-                _ if t1.is_receiver_placeholder() || t2.is_receiver_placeholder() => {}
-                (Variable(v1), Variable(v2)) if Rc::ptr_eq(v1, v2) => {}
+            match (&r1, &r2) {
+                _ if r1.is_ignored() || r2.is_ignored() => {}
+                _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => {}
+                (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => {}
 
                 _ if r1.is_unknown() => {}
-                _ if r2.is_unknown() && !t1.is_variable() => {
+                _ if r2.is_unknown() && !r1.is_variable() => {
                     return Err(UnifyError::TypeMismatch);
                 }
 
                 _ if matches!(r2, Type::Never) => {
-                    if let Variable(type_var) = t1
-                        && type_var.borrow().is_unbound()
+                    if let Type::Var { id, .. } = &r1
+                        && self.env.is_unbound(*id)
                     {
-                        self.unify_type_variable(type_var, &Type::Never, span, false)?;
+                        self.unify_type_variable(*id, &Type::Never, span, false)?;
                     }
                 }
                 _ if matches!(r1, Type::Never) => {
-                    if let Variable(type_var) = t2
-                        && type_var.borrow().is_unbound()
+                    if let Type::Var { id, .. } = &r2
+                        && self.env.is_unbound(*id)
                     {
-                        self.unify_type_variable(type_var, &Type::Never, span, false)?;
+                        self.unify_type_variable(*id, &Type::Never, span, false)?;
                     } else if !matches!(r2, Type::Never) && !r2.is_variable() {
                         return Err(UnifyError::TypeMismatch);
                     }
                 }
 
-                (Variable(type_var), other) | (other, Variable(type_var)) => {
-                    self.unify_type_variable(type_var, other, span, false)?;
+                (Type::Var { id, .. }, _) => {
+                    self.unify_type_variable(*id, &r2, span, false)?;
+                }
+                (_, Type::Var { id, .. }) => {
+                    self.unify_type_variable(*id, &r1, span, false)?;
                 }
                 (Type::Parameter(name1), Type::Parameter(name2)) if name1 == name2 => {}
                 (
@@ -399,20 +414,24 @@ impl Checker<'_, '_> {
                     },
                 ) if (id1 == id2 || are_go_type_aliases(id1, id2)) && p1.len() == p2.len() => {
                     let is_user_defined = !id1.starts_with("prelude.");
+                    let p1 = p1.clone();
+                    let p2 = p2.clone();
                     if is_user_defined {
                         self.inference.type_param_depth += 1;
                     }
-                    let r = self.unify_type_params(p1.iter().zip(p2), span);
+                    let r = self.unify_type_params(p1.iter().zip(p2.iter()), span);
                     if is_user_defined {
                         self.inference.type_param_depth -= 1;
                     }
                     r?;
                 }
                 (Function { .. }, Function { .. }) => {
-                    self.unify_functions(t1, t2, span)?;
+                    self.unify_functions(&r1, &r2, span)?;
                 }
                 (Type::Tuple(e1), Type::Tuple(e2)) if e1.len() == e2.len() => {
-                    self.unify_type_params(e1.iter().zip(e2), span)?;
+                    let e1 = e1.clone();
+                    let e2 = e2.clone();
+                    self.unify_type_params(e1.iter().zip(e2.iter()), span)?;
                 }
                 (Type::Simple(k1), Type::Simple(k2)) if k1 == k2 => {}
                 (Type::Simple(kind), Nominal { id, params, .. })
@@ -422,14 +441,43 @@ impl Checker<'_, '_> {
                 (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
                     if k1 == k2 && a1.len() == a2.len() =>
                 {
-                    self.unify_type_params(a1.iter().zip(a2), span)?;
+                    let a1 = a1.clone();
+                    let a2 = a2.clone();
+                    self.unify_type_params(a1.iter().zip(a2.iter()), span)?;
                 }
                 (Type::Compound { kind, args }, Nominal { id, params, .. })
                 | (Nominal { id, params, .. }, Type::Compound { kind, args })
                     if syntax::types::unqualified_name(id) == kind.leaf_name()
                         && args.len() == params.len() =>
                 {
-                    self.unify_type_params(args.iter().zip(params), span)?;
+                    let args = args.clone();
+                    let params = params.clone();
+                    self.unify_type_params(args.iter().zip(params.iter()), span)?;
+                }
+                // A type alias (`type Foo = Bar`) appears as a Nominal with
+                // `underlying_ty` set. When the other side is the bare body
+                // (Simple/Compound/Function), unwrap the alias. Symmetric.
+                (
+                    Nominal {
+                        underlying_ty: Some(underlying),
+                        ..
+                    },
+                    Type::Simple(_) | Type::Compound { .. } | Function { .. },
+                )
+                | (
+                    Type::Simple(_) | Type::Compound { .. } | Function { .. },
+                    Nominal {
+                        underlying_ty: Some(underlying),
+                        ..
+                    },
+                ) => {
+                    let u = underlying.as_ref().clone();
+                    let other = if matches!(&r1, Nominal { .. }) {
+                        r2.clone()
+                    } else {
+                        r1.clone()
+                    };
+                    self.try_unify(&u, &other, span)?;
                 }
                 _ => return Err(UnifyError::TypeMismatch),
             }
@@ -516,8 +564,11 @@ impl Checker<'_, '_> {
         // When one side has no bounds (concrete function type) and the other
         // has bounds whose generics are all resolved to concrete types, the
         // bounds are satisfied by instantiation.
-        let all_resolved =
-            |bounds: &[Bound]| bounds.iter().all(|b| !b.generic.resolve().is_variable());
+        let all_resolved = |bounds: &[Bound]| {
+            bounds
+                .iter()
+                .all(|b| !b.generic.resolve_in(&self.env).is_variable())
+        };
 
         if bounds1.is_empty() && all_resolved(bounds2) {
             return true;
@@ -531,7 +582,8 @@ impl Checker<'_, '_> {
         }
 
         let matches = |a: &Bound, b: &Bound| {
-            a.generic.resolve() == b.generic.resolve() && a.ty.resolve() == b.ty.resolve()
+            a.generic.resolve_in(&self.env) == b.generic.resolve_in(&self.env)
+                && a.ty.resolve_in(&self.env) == b.ty.resolve_in(&self.env)
         };
 
         let all_in = |source: &[Bound], target: &[Bound]| {
@@ -542,13 +594,13 @@ impl Checker<'_, '_> {
     }
 
     fn check_function_bound(&mut self, bound: &Bound, span: &Span) {
-        let resolved_ty = bound.generic.resolve();
+        let resolved_ty = bound.generic.resolve_in(&self.env);
 
         if resolved_ty.is_variable() {
             return;
         }
 
-        let interface_ty = bound.ty.resolve();
+        let interface_ty = bound.ty.resolve_in(&self.env);
         let Type::Nominal { id, params, .. } = interface_ty else {
             return;
         };
@@ -560,32 +612,6 @@ impl Checker<'_, '_> {
         let _ = self.satisfies_interface(&resolved_ty, &interface, &params, span);
     }
 
-    #[allow(clippy::only_used_in_recursion)]
-    fn occurs_in(&self, type_var_id: i32, ty: &Type) -> bool {
-        match ty {
-            Nominal { params, .. } => params.iter().any(|p| self.occurs_in(type_var_id, p)),
-            Variable(type_var) => match &*type_var.borrow() {
-                TypeVariableState::Unbound { id, .. } => *id == type_var_id,
-                TypeVariableState::Link(linked_ty) => self.occurs_in(type_var_id, linked_ty),
-            },
-            Function {
-                params,
-                return_type,
-                ..
-            } => {
-                params.iter().any(|p| self.occurs_in(type_var_id, p))
-                    || self.occurs_in(type_var_id, return_type)
-            }
-            Type::Forall { body, .. } => self.occurs_in(type_var_id, body),
-            Type::Tuple(elements) => elements.iter().any(|e| self.occurs_in(type_var_id, e)),
-            Type::Compound { args, .. } => args.iter().any(|a| self.occurs_in(type_var_id, a)),
-            Type::Simple(_) | Type::Parameter(_) => false,
-            Type::Never | Type::Error | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {
-                false
-            }
-        }
-    }
-
     fn unification_diagnostic(
         &mut self,
         t1: &Type,
@@ -593,8 +619,8 @@ impl Checker<'_, '_> {
         span: &Span,
         error: &UnifyError,
     ) -> LisetteDiagnostic {
-        let t1_normalized = t1.resolve();
-        let t2_normalized = t2.resolve();
+        let t1_normalized = t1.resolve_in(&self.env);
+        let t2_normalized = t2.resolve_in(&self.env);
         let (types, _) = Type::remove_vars(&[&t1_normalized, &t2_normalized]);
         let expected = &types[0];
         let actual = &types[1];

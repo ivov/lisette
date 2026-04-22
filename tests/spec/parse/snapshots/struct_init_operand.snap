@@ -15,9 +15,9 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Call {
                         expression: DotAccess {
@@ -54,9 +54,9 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
                                                 value: 1,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 37,
@@ -76,9 +76,9 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
                                                 value: 2,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 43,
@@ -88,9 +88,9 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
                                     },
                                 ],
                                 spread: None,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 26,
@@ -98,9 +98,9 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
                                 },
                             },
                             member: "distance",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 26,
@@ -110,9 +110,9 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
                         args: [],
                         spread: None,
                         type_args: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 26,
@@ -124,9 +124,9 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
@@ -134,18 +134,18 @@ description: "input: \nfn test() { let result = Point { x: 1, y: 2 }.distance();
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 49,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

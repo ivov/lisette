@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -39,9 +39,9 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                             },
                                         ],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 30,
@@ -50,17 +50,17 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                     },
                                     annotation: None,
                                     typed_pattern: None,
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                 },
                                 value: Call {
                                     expression: DotAccess {
                                         expression: Identifier {
                                             value: "iter",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 43,
@@ -70,9 +70,9 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                             qualified: None,
                                         },
                                         member: "next",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 43,
@@ -82,9 +82,9 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                     args: [],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 43,
@@ -105,9 +105,9 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                                 },
                                             },
                                         ],
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 60,
@@ -123,9 +123,9 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                     },
                                 ),
                                 typed_pattern: None,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 26,
@@ -135,9 +135,9 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                             Call {
                                 expression: Identifier {
                                     value: "process",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 76,
@@ -149,9 +149,9 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                 args: [
                                     Identifier {
                                         value: "item",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 84,
@@ -163,9 +163,9 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 76,
@@ -173,18 +173,18 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 20,
                             byte_length: 74,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -193,18 +193,18 @@ description: "input: \nfn test() {\n  loop {\n    let Some(item) = iter.next() e
                     needs_label: false,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 85,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

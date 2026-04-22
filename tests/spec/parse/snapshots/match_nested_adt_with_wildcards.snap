@@ -40,9 +40,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),
@@ -83,9 +83,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     byte_length: 6,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                         EnumFieldDefinition {
                             name: "field1",
@@ -113,9 +113,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     byte_length: 11,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),
@@ -160,24 +160,24 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "state",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 98,
@@ -200,9 +200,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 110,
@@ -212,9 +212,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 135,
@@ -228,9 +228,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                         literal: String(
                                             "Running",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 141,
@@ -240,9 +240,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 135,
@@ -255,9 +255,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                 identifier: "State.Stopped",
                                 fields: [],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 157,
@@ -267,9 +267,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 182,
@@ -283,9 +283,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                         literal: String(
                                             "Stopped",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 188,
@@ -295,9 +295,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 182,
@@ -320,9 +320,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                         identifier: "None",
                                         fields: [],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 219,
@@ -331,9 +331,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 204,
@@ -343,9 +343,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 229,
@@ -359,9 +359,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                         literal: String(
                                             "Error without code",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 235,
@@ -371,9 +371,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 229,
@@ -406,9 +406,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                             },
                                         ],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 279,
@@ -417,9 +417,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 262,
@@ -429,9 +429,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 294,
@@ -445,9 +445,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                         literal: String(
                                             "Error with code",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 300,
@@ -456,9 +456,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     },
                                     Identifier {
                                         value: "msg",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 319,
@@ -469,9 +469,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     },
                                     Identifier {
                                         value: "code",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 324,
@@ -483,9 +483,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 294,
@@ -495,9 +495,9 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 92,
@@ -505,18 +505,18 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 88,
                 byte_length: 248,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 66,

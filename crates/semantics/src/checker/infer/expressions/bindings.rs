@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, Visibility};
@@ -90,7 +91,7 @@ impl Checker<'_, '_> {
             let else_ty = self.new_type_var();
             let new_else = self.infer_expression(*else_expression, &else_ty);
 
-            let resolved_else_ty = else_ty.resolve();
+            let resolved_else_ty = else_ty.resolve_in(&self.env);
             if new_else.diverges().is_none() && !resolved_else_ty.is_never() {
                 let error_span = else_span.expect("let-else must have else_span");
                 self.sink

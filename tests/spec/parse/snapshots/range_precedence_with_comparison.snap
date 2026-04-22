@@ -35,15 +35,15 @@ description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -59,9 +59,9 @@ description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Binary {
                         operator: Equal,
@@ -72,9 +72,9 @@ description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
                                         value: 0,
                                         text: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 32,
@@ -88,9 +88,9 @@ description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
                                         value: 5,
                                         text: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 35,
@@ -99,9 +99,9 @@ description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
                                 },
                             ),
                             inclusive: false,
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 32,
@@ -110,9 +110,9 @@ description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
                         },
                         right: Identifier {
                             value: "other",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 40,
@@ -121,9 +121,9 @@ description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
                             binding_id: None,
                             qualified: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 32,
@@ -135,9 +135,9 @@ description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 24,
@@ -145,18 +145,18 @@ description: "input: \nfn test(other: bool) { let r = 0..5 == other; }\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 22,
                 byte_length: 26,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

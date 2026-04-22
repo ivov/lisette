@@ -33,9 +33,9 @@ description: "input: \nstruct Config {\n  timeout: int,\n  retries: int,\n}\n"
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             StructFieldDefinition {
                 doc: None,
@@ -56,9 +56,9 @@ description: "input: \nstruct Config {\n  timeout: int,\n  retries: int,\n}\n"
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,

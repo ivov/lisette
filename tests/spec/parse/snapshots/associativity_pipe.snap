@@ -15,9 +15,9 @@ description: "input: \nfn test() { let result = a |> b |> c; }\n"
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() { let result = a |> b |> c; }\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Binary {
                         operator: Pipeline,
@@ -43,9 +43,9 @@ description: "input: \nfn test() { let result = a |> b |> c; }\n"
                             operator: Pipeline,
                             left: Identifier {
                                 value: "a",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 26,
@@ -56,9 +56,9 @@ description: "input: \nfn test() { let result = a |> b |> c; }\n"
                             },
                             right: Identifier {
                                 value: "b",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 31,
@@ -67,9 +67,9 @@ description: "input: \nfn test() { let result = a |> b |> c; }\n"
                                 binding_id: None,
                                 qualified: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 26,
@@ -78,9 +78,9 @@ description: "input: \nfn test() { let result = a |> b |> c; }\n"
                         },
                         right: Identifier {
                             value: "c",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 36,
@@ -89,9 +89,9 @@ description: "input: \nfn test() { let result = a |> b |> c; }\n"
                             binding_id: None,
                             qualified: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 26,
@@ -103,9 +103,9 @@ description: "input: \nfn test() { let result = a |> b |> c; }\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
@@ -113,18 +113,18 @@ description: "input: \nfn test() { let result = a |> b |> c; }\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 29,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

@@ -73,15 +73,15 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -97,18 +97,18 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 0,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 59,
@@ -126,9 +126,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 47,
@@ -166,9 +166,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                             },
                         ],
                         rest: false,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 74,
@@ -178,9 +178,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                     scrutinee: IndexedAccess {
                         expression: Identifier {
                             value: "pairs",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 89,
@@ -191,9 +191,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                         },
                         index: Identifier {
                             value: "i",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 95,
@@ -202,9 +202,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                             binding_id: None,
                             qualified: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 94,
@@ -216,9 +216,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                             Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 104,
@@ -232,9 +232,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                                         operator: Addition,
                                         left: Identifier {
                                             value: "a",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 110,
@@ -245,9 +245,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                                         },
                                         right: Identifier {
                                             value: "b",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 114,
@@ -256,9 +256,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                                             binding_id: None,
                                             qualified: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 110,
@@ -268,9 +268,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 104,
@@ -280,9 +280,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                             Assignment {
                                 target: Identifier {
                                     value: "i",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 122,
@@ -295,9 +295,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                                     operator: Addition,
                                     left: Identifier {
                                         value: "i",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 126,
@@ -311,18 +311,18 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                                             value: 1,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 130,
                                             byte_length: 1,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 126,
@@ -337,9 +337,9 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 98,
@@ -355,18 +355,18 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                     needs_label: false,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 43,
                 byte_length: 95,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

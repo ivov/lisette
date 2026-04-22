@@ -35,9 +35,9 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -60,15 +60,15 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -84,9 +84,9 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                                         operator: Multiplication,
                                         left: Identifier {
                                             value: "a",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 34,
@@ -100,18 +100,18 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                                                 value: 2,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 38,
                                                 byte_length: 1,
                                             },
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 34,
@@ -123,27 +123,27 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                                             value: 50,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 42,
                                             byte_length: 2,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 34,
                                         byte_length: 10,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 33,
@@ -152,9 +152,9 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                             },
                             right: Identifier {
                                 value: "b",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 49,
@@ -163,9 +163,9 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                                 binding_id: None,
                                 qualified: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 33,
@@ -175,9 +175,9 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                         right: Call {
                             expression: Identifier {
                                 value: "is_special",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 54,
@@ -189,9 +189,9 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                             args: [
                                 Identifier {
                                     value: "a",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 65,
@@ -203,18 +203,18 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                             ],
                             spread: None,
                             type_args: [],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 54,
                                 byte_length: 13,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 33,
@@ -223,9 +223,9 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                     },
                     consequence: Block {
                         items: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 68,
@@ -233,18 +233,18 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                         },
                     },
                     alternative: Unit {
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 30,
                             byte_length: 68,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 30,
@@ -252,18 +252,18 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 26,
                 byte_length: 74,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

@@ -43,9 +43,9 @@ description: "input: \nstruct Request<Body> {\n  method: string,\n  headers: Map
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             StructFieldDefinition {
                 doc: None,
@@ -85,9 +85,9 @@ description: "input: \nstruct Request<Body> {\n  method: string,\n  headers: Map
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             StructFieldDefinition {
                 doc: None,
@@ -118,9 +118,9 @@ description: "input: \nstruct Request<Body> {\n  method: string,\n  headers: Map
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,

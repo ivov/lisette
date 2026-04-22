@@ -7,6 +7,7 @@ mod validation;
 use rustc_hash::FxHashMap as HashMap;
 
 use super::Checker;
+use super::freeze::FreezeFolder;
 use syntax::ast::Expression;
 use syntax::program::{File, FileImport};
 
@@ -44,12 +45,14 @@ impl Checker<'_, '_> {
             self.run_post_inference_checks();
             self.check_reference_sibling_aliasing(&inferred_items);
 
+            let frozen_items = FreezeFolder::new(&self.env).freeze_items(inferred_items);
+
             let typed_file = File {
                 id: file.id,
                 module_id: file.module_id,
                 name: file.name,
                 source: file.source,
-                items: inferred_items,
+                items: frozen_items,
             };
 
             self.store.store_file(module_id, typed_file);

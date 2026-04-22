@@ -1,5 +1,6 @@
 use rustc_hash::FxHashMap as HashMap;
 
+use crate::checker::EnvResolve;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, StructKind};
 use syntax::program::{CallKind, Definition, NativeTypeKind};
@@ -92,7 +93,7 @@ impl Checker<'_, '_> {
             }
         }
 
-        let resolved_expected = expected_ty.resolve();
+        let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
         let new_params = self.infer_function_params(params, expected_params, true);
 
@@ -174,7 +175,7 @@ impl Checker<'_, '_> {
 
         // Resolve type variables so that a Go function alias bound via speculative
         // unification (e.g. T = tea.Cmd) is visible as its underlying function shape.
-        let resolved_expected = expected_ty.resolve();
+        let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
         let new_params = self.infer_function_params(params, expected_params, false);
 
@@ -250,7 +251,7 @@ impl Checker<'_, '_> {
         }
 
         let variadic_elem_ty = if spread.is_some() {
-            callee_ty.resolve().is_variadic()
+            callee_ty.resolve_in(&self.env).is_variadic()
         } else {
             None
         };
@@ -277,9 +278,9 @@ impl Checker<'_, '_> {
         // collapsing to the Cmd alias's underlying function shape. Guarded
         // to named types to avoid affecting numeric literal inference.
         if self.is_generic_callee(&callee_expression)
-            && !expected_ty.resolve().is_variable()
+            && !expected_ty.resolve_in(&self.env).is_variable()
             && !expected_ty.is_ignored()
-            && self.is_enum_type(&return_ty.resolve())
+            && self.is_enum_type(&return_ty.resolve_in(&self.env))
             && (self.has_interface_type_param(expected_ty)
                 || self.has_go_named_type_param(expected_ty))
         {
@@ -318,7 +319,7 @@ impl Checker<'_, '_> {
         // unification, because unify will resolve a fresh variable to the
         // concrete return type (e.g. Slice<int>). A fresh variable means the
         // caller doesn't consume the result (non-last block item).
-        let expected_was_variable = expected_ty.resolve().is_variable();
+        let expected_was_variable = expected_ty.resolve_in(&self.env).is_variable();
 
         self.unify(expected_ty, &return_ty, &span);
         self.unify_trait_bounds(&bounds, &new_args, &span);
@@ -329,7 +330,7 @@ impl Checker<'_, '_> {
         //   - delete: always mutates (no return value)
         //   - append/extend: mutates only when the result is not consumed
         let result_unused = prev_context != UseContext::Value && {
-            let resolved = expected_ty.resolve();
+            let resolved = expected_ty.resolve_in(&self.env);
             resolved.is_unit() || resolved.is_ignored() || expected_was_variable
         };
         self.check_native_mutating_call(&callee_expression, result_unused, &span);
@@ -338,7 +339,7 @@ impl Checker<'_, '_> {
 
         if self.is_generic_callee(&callee_expression)
             && type_args.is_empty()
-            && !self.is_enum_type(&return_ty.resolve())
+            && !self.is_enum_type(&return_ty.resolve_in(&self.env))
         {
             self.post_inference_checks
                 .push(PostInferenceCheck::GenericCall {
@@ -389,7 +390,7 @@ impl Checker<'_, '_> {
                 member,
                 ..
             } => {
-                let receiver_ty = receiver.get_type().resolve();
+                let receiver_ty = receiver.get_type().resolve_in(&self.env);
 
                 if let Some(method_ty) = self
                     .get_all_methods(&receiver_ty.strip_refs())
@@ -431,7 +432,7 @@ impl Checker<'_, '_> {
                 member,
                 ..
             } => {
-                let receiver_ty = receiver.get_type().resolve();
+                let receiver_ty = receiver.get_type().resolve_in(&self.env);
                 self.get_all_methods(&receiver_ty.strip_refs())
                     .get(member)
                     .map(|ty| matches!(ty, Type::Forall { .. }))
@@ -456,19 +457,23 @@ impl Checker<'_, '_> {
                 ));
             }
             let (instantiated, _) = self.instantiate(forall_ty);
-            return (instantiated.resolve(), vec![]);
+            return (instantiated.resolve_in(&self.env), vec![]);
         };
 
         if type_args.is_empty() {
             let (instantiated, _) = self.instantiate(forall_ty);
-            return (instantiated.resolve(), vec![]);
+            return (instantiated.resolve_in(&self.env), vec![]);
         }
 
         // For DotAccess method calls, accept type args that provide only the
         // method-own generics (excluding receiver/impl generics).
         let receiver_generics_count =
             if let Expression::DotAccess { expression, .. } = callee_expression {
-                let receiver_ty = expression.get_type().resolve().strip_refs().clone();
+                let receiver_ty = expression
+                    .get_type()
+                    .resolve_in(&self.env)
+                    .strip_refs()
+                    .clone();
                 self.get_receiver_generics_count(&receiver_ty)
             } else {
                 0
@@ -507,13 +512,16 @@ impl Checker<'_, '_> {
         };
 
         if let Expression::DotAccess { expression, .. } = callee_expression {
-            let receiver_ty = expression.get_type().resolve();
+            let receiver_ty = expression.get_type().resolve_in(&self.env);
 
             // Only strip the receiver param for instance methods (which have `self`).
             // Instance methods: `as_instance_method` already stripped `self` from
             // the callee type, so the Forall body has one more param than the callee.
             // Static methods and module free functions: no `self`, param counts match.
-            let callee_params = callee_expression.get_type().resolve().param_count();
+            let callee_params = callee_expression
+                .get_type()
+                .resolve_in(&self.env)
+                .param_count();
             let instantiated_params = instantiated.param_count();
             let has_receiver = instantiated_params > callee_params;
 
@@ -550,7 +558,7 @@ impl Checker<'_, '_> {
         arg_count: usize,
         callee_expression: &Expression,
     ) -> (Vec<Type>, Vec<bool>, Type, Vec<Bound>) {
-        let callee_ty = callee_ty.resolve();
+        let callee_ty = callee_ty.resolve_in(&self.env);
         let bounds = callee_ty.get_bounds().to_vec();
         let mut param_mutability = callee_ty.get_param_mutability().to_vec();
         let is_variadic = callee_ty.is_variadic();
@@ -575,7 +583,7 @@ impl Checker<'_, '_> {
                 let return_ty = self.new_type_var();
                 (param_types, return_ty)
             }
-            None if callee_ty.resolve().is_error() => {
+            None if callee_ty.resolve_in(&self.env).is_error() => {
                 let param_types = (0..arg_count).map(|_| Type::Error).collect();
                 let return_ty = Type::Error;
                 (param_types, return_ty)
@@ -632,7 +640,7 @@ impl Checker<'_, '_> {
                 }
                 other => other.clone(),
             };
-            let resolved = concrete_alias_ty.resolve();
+            let resolved = concrete_alias_ty.resolve_in(&self.env);
             if let Type::Nominal {
                 underlying_ty: Some(underlying),
                 ..
@@ -670,7 +678,11 @@ impl Checker<'_, '_> {
             Expression::Identifier { binding_id, .. } => binding_id.is_none(),
             Expression::DotAccess {
                 expression: base, ..
-            } => base.get_type().resolve().as_import_namespace().is_some(),
+            } => base
+                .get_type()
+                .resolve_in(&self.env)
+                .as_import_namespace()
+                .is_some(),
             _ => false,
         };
 
@@ -760,13 +772,13 @@ impl Checker<'_, '_> {
 
     fn unify_trait_bounds(&mut self, bounds: &[Bound], args: &[Expression], fallback_span: &Span) {
         for bound in bounds {
-            let resolved_ty = bound.generic.resolve();
+            let resolved_ty = bound.generic.resolve_in(&self.env);
 
             if resolved_ty.is_variable() {
                 continue;
             }
 
-            let interface_ty = bound.ty.resolve();
+            let interface_ty = bound.ty.resolve_in(&self.env);
             let Type::Nominal { id, params, .. } = interface_ty else {
                 continue;
             };
@@ -777,7 +789,7 @@ impl Checker<'_, '_> {
 
             let span = args
                 .iter()
-                .find(|arg| arg.get_type().resolve() == resolved_ty)
+                .find(|arg| arg.get_type().resolve_in(&self.env) == resolved_ty)
                 .map(|arg| arg.get_span())
                 .unwrap_or_else(|| *fallback_span);
 
@@ -907,7 +919,7 @@ impl Checker<'_, '_> {
                 member,
                 ..
             } => {
-                let receiver_ty = receiver.get_type().resolve().strip_refs();
+                let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
 
                 // UFCS method: receiver.method() where method is a free function
                 if let Type::Nominal { id, .. } = &receiver_ty
@@ -919,12 +931,16 @@ impl Checker<'_, '_> {
                 }
 
                 // Native method: receiver.method() on Slice/Map/Channel/etc.
-                if let Some(kind) = NativeTypeKind::from_type(&receiver.get_type()) {
+                if let Some(kind) = NativeTypeKind::from_type(&receiver_ty) {
                     return CallKind::NativeMethod(kind);
                 }
 
                 // Cross-module tuple struct constructor (e.g. `mod.Point(1, 2)`)
-                if let Some(module_id) = receiver.get_type().resolve().as_import_namespace() {
+                if let Some(module_id) = receiver
+                    .get_type()
+                    .resolve_in(&self.env)
+                    .as_import_namespace()
+                {
                     let qualified = format!("{}.{}", module_id, member);
                     if matches!(
                         self.store.get_definition(&qualified),
@@ -1069,12 +1085,12 @@ impl Checker<'_, '_> {
         }
         // Type alias → follow to the underlying struct via the callee's return type
         if matches!(definition, Some(Definition::TypeAlias { .. })) {
-            let ty = callee.get_type().resolve();
+            let ty = callee.get_type().resolve_in(&self.env);
             let return_ty = match ty.unwrap_forall() {
                 Type::Function { return_type, .. } => return_type.as_ref().clone(),
                 _ => return false,
             };
-            if let Type::Nominal { id, .. } = return_ty.resolve() {
+            if let Type::Nominal { id, .. } = return_ty.resolve_in(&self.env) {
                 return matches!(
                     self.store.get_definition(&id),
                     Some(Definition::Struct {
@@ -1130,7 +1146,7 @@ impl Checker<'_, '_> {
         else {
             return;
         };
-        let receiver_ty = receiver.get_type().resolve().strip_refs();
+        let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
 
         // append/extend on a map entry field generates an invalid write-back
         // (Go map values aren't addressable, so `m[k].field = append(...)` fails).
@@ -1166,7 +1182,7 @@ impl Checker<'_, '_> {
         let binding_is_ref = self
             .scopes
             .lookup_value(&var_name)
-            .map(|t| t.resolve().is_ref())
+            .map(|t| t.resolve_in(&self.env).is_ref())
             .unwrap_or(false);
         if !is_deref && !binding_is_ref && !self.scopes.lookup_mutable(&var_name) {
             let is_match_arm = self

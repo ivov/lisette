@@ -35,15 +35,15 @@ description: "input: \nfn test(count: int) {\n  let negation_count = -count;\n}\
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -59,17 +59,17 @@ description: "input: \nfn test(count: int) {\n  let negation_count = -count;\n}\
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Unary {
                         operator: Negative,
                         expression: Identifier {
                             value: "count",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 47,
@@ -78,9 +78,9 @@ description: "input: \nfn test(count: int) {\n  let negation_count = -count;\n}\
                             binding_id: None,
                             qualified: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 46,
@@ -92,9 +92,9 @@ description: "input: \nfn test(count: int) {\n  let negation_count = -count;\n}\
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 25,
@@ -102,18 +102,18 @@ description: "input: \nfn test(count: int) {\n  let negation_count = -count;\n}\
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 21,
                 byte_length: 34,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

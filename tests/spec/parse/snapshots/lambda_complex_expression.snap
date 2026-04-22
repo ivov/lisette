@@ -45,15 +45,15 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -69,16 +69,16 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Call {
                         expression: Identifier {
                             value: "filter",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 45,
@@ -90,9 +90,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                         args: [
                             Identifier {
                                 value: "items",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 52,
@@ -114,9 +114,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                                         },
                                         annotation: None,
                                         typed_pattern: None,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                     },
                                 ],
                                 return_annotation: Unknown,
@@ -126,9 +126,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                                         operator: GreaterThan,
                                         left: Identifier {
                                             value: "n",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 63,
@@ -142,18 +142,18 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                                                 value: 0,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 67,
                                                 byte_length: 1,
                                             },
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 63,
@@ -164,9 +164,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                                         operator: LessThan,
                                         left: Identifier {
                                             value: "n",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 72,
@@ -180,36 +180,36 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                                                 value: 100,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 76,
                                                 byte_length: 3,
                                             },
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 72,
                                             byte_length: 7,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 63,
                                         byte_length: 16,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 59,
@@ -219,9 +219,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                         ],
                         spread: None,
                         type_args: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 45,
@@ -233,9 +233,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 32,
@@ -243,18 +243,18 @@ description: "input: \nfn test(items: Slice<int>) {\n  let result = filter(items
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 28,
                 byte_length: 55,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

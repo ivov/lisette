@@ -67,43 +67,24 @@ pub enum CachedType {
 }
 
 impl CachedType {
-    /// Convert a Type to CachedType by resolving all type variables.
-    /// Uses a var_names map to ensure distinct type variables get distinct parameter names,
-    /// even if they have the same hint.
-    pub fn from_type_with_vars(ty: &Type, var_names: &mut HashMap<i32, String>) -> Self {
+    /// Convert a Type to CachedType. Registration stores types as `Parameter`
+    /// placeholders (not `Var` handles), so any residual `Var` here would be
+    /// a serialization bug. Rather than fabricate a name, substitute `Error`
+    /// — the cache round-trips through `Type::Never`, matching the prior
+    /// behaviour for `Type::Error` / `Type::ReceiverPlaceholder`.
+    pub fn from_type(ty: &Type) -> Self {
         match ty {
-            Type::Variable(var) => {
-                use syntax::types::TypeVariableState;
-                match &*var.borrow() {
-                    TypeVariableState::Link(linked) => {
-                        CachedType::from_type_with_vars(linked, var_names)
-                    }
-                    TypeVariableState::Unbound { id, hint } => {
-                        if let Some(name) = var_names.get(id) {
-                            return CachedType::Parameter(name.clone());
-                        }
-                        let name = match hint {
-                            Some(h) => format!("{}_{}", h, id),
-                            None => format!("T{}", var_names.len()),
-                        };
-                        var_names.insert(*id, name.clone());
-                        CachedType::Parameter(name)
-                    }
-                }
-            }
+            Type::Var { .. } => CachedType::Never,
             Type::Nominal {
                 id,
                 params,
                 underlying_ty,
             } => CachedType::Nominal {
                 id: id.to_string(),
-                params: params
-                    .iter()
-                    .map(|p| CachedType::from_type_with_vars(p, var_names))
-                    .collect(),
+                params: params.iter().map(CachedType::from_type).collect(),
                 underlying_ty: underlying_ty
                     .as_ref()
-                    .map(|u| Box::new(CachedType::from_type_with_vars(u, var_names))),
+                    .map(|u| Box::new(CachedType::from_type(u))),
             },
             Type::Function {
                 params,
@@ -111,44 +92,27 @@ impl CachedType {
                 bounds,
                 return_type,
             } => CachedType::Function {
-                params: params
-                    .iter()
-                    .map(|p| CachedType::from_type_with_vars(p, var_names))
-                    .collect(),
+                params: params.iter().map(CachedType::from_type).collect(),
                 param_mutability: param_mutability.clone(),
-                bounds: bounds
-                    .iter()
-                    .map(|b| CachedBound::from_bound_with_vars(b, var_names))
-                    .collect(),
-                return_type: Box::new(CachedType::from_type_with_vars(return_type, var_names)),
+                bounds: bounds.iter().map(CachedBound::from_bound).collect(),
+                return_type: Box::new(CachedType::from_type(return_type)),
             },
             Type::Forall { vars, body } => CachedType::Forall {
                 vars: vars.iter().map(|v| v.to_string()).collect(),
-                body: Box::new(CachedType::from_type_with_vars(body, var_names)),
+                body: Box::new(CachedType::from_type(body)),
             },
             Type::Parameter(name) => CachedType::Parameter(name.to_string()),
-            Type::Tuple(elements) => CachedType::Tuple(
-                elements
-                    .iter()
-                    .map(|e| CachedType::from_type_with_vars(e, var_names))
-                    .collect(),
-            ),
+            Type::Tuple(elements) => {
+                CachedType::Tuple(elements.iter().map(CachedType::from_type).collect())
+            }
             Type::ImportNamespace(module_id) => CachedType::ImportNamespace(module_id.to_string()),
             Type::Simple(kind) => CachedType::Simple(format!("{:?}", kind)),
             Type::Compound { kind, args } => CachedType::Compound {
                 kind: format!("{:?}", kind),
-                args: args
-                    .iter()
-                    .map(|a| CachedType::from_type_with_vars(a, var_names))
-                    .collect(),
+                args: args.iter().map(CachedType::from_type).collect(),
             },
             Type::Never | Type::Error | Type::ReceiverPlaceholder => CachedType::Never,
         }
-    }
-
-    pub fn from_type(ty: &Type) -> Self {
-        let mut var_names = HashMap::default();
-        Self::from_type_with_vars(ty, &mut var_names)
     }
 
     pub fn to_type(&self) -> Type {
@@ -242,11 +206,11 @@ pub struct CachedBound {
 }
 
 impl CachedBound {
-    pub fn from_bound_with_vars(bound: &Bound, var_names: &mut HashMap<i32, String>) -> Self {
+    pub fn from_bound(bound: &Bound) -> Self {
         Self {
             param_name: bound.param_name.to_string(),
-            generic: CachedType::from_type_with_vars(&bound.generic, var_names),
-            ty: CachedType::from_type_with_vars(&bound.ty, var_names),
+            generic: CachedType::from_type(&bound.generic),
+            ty: CachedType::from_type(&bound.ty),
         }
     }
 

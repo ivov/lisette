@@ -43,9 +43,9 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,
@@ -68,9 +68,9 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -86,18 +86,18 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 42,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 56,
@@ -109,9 +109,9 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 48,
@@ -150,9 +150,9 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
                             },
                         ),
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: StructCall {
                         name: "Container",
@@ -166,9 +166,9 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
                                 },
                                 value: Identifier {
                                     value: "x",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 105,
@@ -180,9 +180,9 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
                             },
                         ],
                         spread: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 86,
@@ -194,9 +194,9 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 62,
@@ -204,18 +204,18 @@ description: "input: \nstruct Container<T> { value: T }\nfn test() {\n  let x = 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 44,
                 byte_length: 67,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 34,

@@ -519,7 +519,7 @@ impl Emitter<'_> {
             return String::new();
         }
         let resolved = ty.resolve();
-        if resolved.is_unit() || matches!(resolved, Type::Variable(_) | Type::Forall { .. }) {
+        if resolved.is_unit() || matches!(resolved, Type::Var { .. } | Type::Forall { .. }) {
             self.emit_block(output, expression);
             return String::new();
         }

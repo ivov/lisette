@@ -57,9 +57,9 @@ description: "input: \n#[tag]\nstruct User {\n  #[tag(`json:\"name,omitempty\" v
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,

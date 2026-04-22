@@ -15,9 +15,9 @@ description: "input: \nfn test() { let result = &1 + 2; }\n"
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() { let result = &1 + 2; }\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Binary {
                         operator: Addition,
@@ -45,18 +45,18 @@ description: "input: \nfn test() { let result = &1 + 2; }\n"
                                     value: 1,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 27,
                                     byte_length: 1,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 26,
@@ -68,18 +68,18 @@ description: "input: \nfn test() { let result = &1 + 2; }\n"
                                 value: 2,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 31,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 26,
@@ -91,9 +91,9 @@ description: "input: \nfn test() { let result = &1 + 2; }\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
@@ -101,18 +101,18 @@ description: "input: \nfn test() { let result = &1 + 2; }\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 24,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

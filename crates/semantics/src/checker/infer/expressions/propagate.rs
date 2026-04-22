@@ -1,5 +1,6 @@
 use std::cell::Cell;
 
+use crate::checker::EnvResolve;
 use crate::checker::scopes::{CarrierKind, DepthCounter, RecoverBlockContext, TryBlockContext};
 use syntax::ast::{Expression, Span};
 use syntax::program::Visibility;
@@ -23,7 +24,7 @@ impl Checker<'_, '_> {
 
         let tried_ty = self.new_type_var();
         let new_expression = self.infer_expression(*expression, &tried_ty);
-        let resolved_tried_ty = new_expression.get_type().resolve();
+        let resolved_tried_ty = new_expression.get_type().resolve_in(&self.env);
 
         if resolved_tried_ty.is_partial() {
             self.sink
@@ -92,14 +93,14 @@ impl Checker<'_, '_> {
         let ty = if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
             self.unify(try_err_ty, &tried_ty.err_type(), &span);
-            if ok_ty.resolve().is_variable() {
+            if ok_ty.resolve_in(&self.env).is_variable() {
                 self.unify(try_ok_ty, &ok_ty, &span);
             }
             self.unify(expected_ty, &ok_ty, &span);
             ok_ty
         } else if tried_ty.is_option() {
             let some_ty = tried_ty.ok_type();
-            if some_ty.resolve().is_variable() {
+            if some_ty.resolve_in(&self.env).is_variable() {
                 self.unify(try_ok_ty, &some_ty, &span);
             }
             self.unify(expected_ty, &some_ty, &span);
@@ -138,10 +139,10 @@ impl Checker<'_, '_> {
             let new_ok = self.new_type_var();
             let expected_return = self.type_result(new_ok, err_ty);
 
-            if !fn_return_ty.resolve().is_result() {
+            if !fn_return_ty.resolve_in(&self.env).is_result() {
                 self.sink.push(diagnostics::infer::try_return_type_mismatch(
                     "Result<T, E>",
-                    &fn_return_ty.resolve(),
+                    &fn_return_ty.resolve_in(&self.env),
                     span,
                 ));
             }
@@ -154,10 +155,10 @@ impl Checker<'_, '_> {
             let new_some = self.new_type_var();
             let expected_return = self.type_option(new_some);
 
-            if !fn_return_ty.resolve().is_option() {
+            if !fn_return_ty.resolve_in(&self.env).is_option() {
                 self.sink.push(diagnostics::infer::try_return_type_mismatch(
                     "Option<T>",
-                    &fn_return_ty.resolve(),
+                    &fn_return_ty.resolve_in(&self.env),
                     span,
                 ));
             }

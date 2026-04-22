@@ -33,9 +33,9 @@ description: "input: \nstruct Point(int, int)\n"
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             StructFieldDefinition {
                 doc: None,
@@ -56,9 +56,9 @@ description: "input: \nstruct Point(int, int)\n"
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Tuple,

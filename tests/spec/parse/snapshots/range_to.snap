@@ -45,15 +45,15 @@ description: "input: \nfn test(arr: Slice<int>) { let head = arr[..3]; }\n"
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -69,16 +69,16 @@ description: "input: \nfn test(arr: Slice<int>) { let head = arr[..3]; }\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: IndexedAccess {
                         expression: Identifier {
                             value: "arr",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 39,
@@ -95,9 +95,9 @@ description: "input: \nfn test(arr: Slice<int>) { let head = arr[..3]; }\n"
                                         value: 3,
                                         text: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 45,
@@ -106,18 +106,18 @@ description: "input: \nfn test(arr: Slice<int>) { let head = arr[..3]; }\n"
                                 },
                             ),
                             inclusive: false,
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 43,
                                 byte_length: 3,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 42,
@@ -129,9 +129,9 @@ description: "input: \nfn test(arr: Slice<int>) { let head = arr[..3]; }\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 28,
@@ -139,18 +139,18 @@ description: "input: \nfn test(arr: Slice<int>) { let head = arr[..3]; }\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 26,
                 byte_length: 24,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

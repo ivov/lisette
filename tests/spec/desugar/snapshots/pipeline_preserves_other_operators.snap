@@ -15,9 +15,9 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Binary {
                         operator: Addition,
@@ -44,9 +44,9 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                                 value: 1,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 20,
@@ -58,18 +58,18 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                                 value: 2,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 24,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 20,
@@ -81,9 +81,9 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 12,
@@ -102,16 +102,16 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Call {
                         expression: Identifier {
                             value: "double",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 40,
@@ -123,9 +123,9 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                         args: [
                             Identifier {
                                 value: "a",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 35,
@@ -137,9 +137,9 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                         ],
                         spread: None,
                         type_args: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 35,
@@ -151,9 +151,9 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 27,
@@ -161,18 +161,18 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 10,
                 byte_length: 39,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 0,

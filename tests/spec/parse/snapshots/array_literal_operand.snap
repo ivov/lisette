@@ -15,9 +15,9 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: IndexedAccess {
                         expression: Literal {
@@ -46,9 +46,9 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                                             value: 1,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 27,
@@ -60,9 +60,9 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                                             value: 2,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 30,
@@ -74,9 +74,9 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                                             value: 3,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 33,
@@ -85,9 +85,9 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                                     },
                                 ],
                             ),
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 26,
@@ -96,9 +96,9 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                         },
                         index: Identifier {
                             value: "index",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 36,
@@ -107,9 +107,9 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                             binding_id: None,
                             qualified: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 35,
@@ -121,9 +121,9 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
@@ -131,18 +131,18 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 34,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

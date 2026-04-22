@@ -35,9 +35,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -60,9 +60,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -74,9 +74,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -92,17 +92,17 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Binary {
                         operator: Addition,
                         left: Identifier {
                             value: "a",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 54,
@@ -113,9 +113,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                         },
                         right: Identifier {
                             value: "b",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 58,
@@ -124,9 +124,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                             binding_id: None,
                             qualified: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 54,
@@ -138,9 +138,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 41,
@@ -152,9 +152,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                         operator: GreaterThan,
                         left: Identifier {
                             value: "result",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 87,
@@ -168,18 +168,18 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                                 value: 10,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 96,
                                 byte_length: 2,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 87,
@@ -191,9 +191,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                             Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 105,
@@ -207,9 +207,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                                         literal: String(
                                             "Large!\\n",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 111,
@@ -219,9 +219,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 105,
@@ -229,9 +229,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 99,
@@ -239,18 +239,18 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                         },
                     },
                     alternative: Unit {
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 84,
                             byte_length: 43,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 84,
@@ -260,9 +260,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                 Return {
                     expression: Identifier {
                         value: "result",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 137,
@@ -271,9 +271,9 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                         binding_id: None,
                         qualified: None,
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 130,
@@ -281,18 +281,18 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 37,
                 byte_length: 109,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

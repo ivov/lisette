@@ -1,6 +1,6 @@
 use crate::ast::{Expression, FormatStringPart, MatchArm, SelectArm, SelectArmPattern};
 
-pub(crate) trait AstFolder {
+pub trait AstFolder {
     type Error;
 
     fn fold_module(

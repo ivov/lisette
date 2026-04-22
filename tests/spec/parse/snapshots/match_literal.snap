@@ -35,24 +35,24 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "code",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 30,
@@ -68,9 +68,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                     value: 200,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 41,
@@ -80,9 +80,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 48,
@@ -96,9 +96,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                         literal: String(
                                             "OK",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 54,
@@ -108,9 +108,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 48,
@@ -124,9 +124,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                     value: 404,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 65,
@@ -136,9 +136,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 72,
@@ -152,9 +152,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                         literal: String(
                                             "Not Found",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 78,
@@ -164,9 +164,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 72,
@@ -185,9 +185,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 103,
@@ -201,9 +201,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                         literal: String(
                                             "Other",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 109,
@@ -213,9 +213,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 103,
@@ -225,9 +225,9 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 24,
@@ -235,18 +235,18 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 20,
                 byte_length: 104,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

@@ -35,24 +35,24 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { X } => X,\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "p",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 29,
@@ -79,9 +79,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { X } => X,\n
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 37,
@@ -90,9 +90,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { X } => X,\n
                             },
                             expression: Identifier {
                                 value: "X",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 52,
@@ -104,9 +104,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { X } => X,\n
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 23,
@@ -114,18 +114,18 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { X } => X,\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 19,
                 byte_length: 41,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

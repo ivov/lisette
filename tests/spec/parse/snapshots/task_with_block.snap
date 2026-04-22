@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  task {\n    print(\"concurrent task\");\n 
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -27,9 +27,9 @@ description: "input: \nfn test() {\n  task {\n    print(\"concurrent task\");\n 
                             Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 26,
@@ -43,9 +43,9 @@ description: "input: \nfn test() {\n  task {\n    print(\"concurrent task\");\n 
                                         literal: String(
                                             "concurrent task",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 32,
@@ -55,9 +55,9 @@ description: "input: \nfn test() {\n  task {\n    print(\"concurrent task\");\n 
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 26,
@@ -65,18 +65,18 @@ description: "input: \nfn test() {\n  task {\n    print(\"concurrent task\");\n 
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 20,
                             byte_length: 35,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -84,18 +84,18 @@ description: "input: \nfn test() {\n  task {\n    print(\"concurrent task\");\n 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 46,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

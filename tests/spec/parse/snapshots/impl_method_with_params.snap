@@ -33,9 +33,9 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,
@@ -90,9 +90,9 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                             },
                         ),
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     Binding {
                         pattern: Identifier {
@@ -115,9 +115,9 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                             },
                         ),
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                 ],
                 return_annotation: Constructor {
@@ -129,9 +129,9 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                         byte_length: 3,
                     },
                 },
-                return_type: Variable(
-                    -1,
-                ),
+                return_type: Var {
+                    id: uninferred,
+                },
                 visibility: Private,
                 body: Block {
                     items: [
@@ -141,9 +141,9 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                 left: DotAccess {
                                     expression: Identifier {
                                         value: "self",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 107,
@@ -153,9 +153,9 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                         qualified: None,
                                     },
                                     member: "value",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 107,
@@ -164,9 +164,9 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                 },
                                 right: Identifier {
                                     value: "amount",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 120,
@@ -175,18 +175,18 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                     binding_id: None,
                                     qualified: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 107,
                                     byte_length: 19,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 100,
@@ -194,18 +194,18 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                             },
                         },
                     ],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 94,
                         byte_length: 37,
                     },
                 },
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
                 span: Span {
                     file_id: 0,
                     byte_offset: 52,
@@ -214,9 +214,9 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
             },
         ],
         generics: [],
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 35,

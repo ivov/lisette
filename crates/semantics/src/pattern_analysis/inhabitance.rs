@@ -41,7 +41,7 @@ fn type_key(ty: &Type) -> String {
             format!("({})", elem_keys.join(", "))
         }
         Type::Function { .. } => "fn".to_string(),
-        Type::Variable(_) | Type::Parameter(_) | Type::Error => "param".to_string(),
+        Type::Var { .. } | Type::Parameter(_) | Type::Error => "param".to_string(),
         Type::Forall { body, .. } => type_key(&body),
         Type::ImportNamespace(m) => format!("<import:{}>", m),
         Type::ReceiverPlaceholder => "<receiver>".to_string(),
@@ -63,7 +63,7 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &InhabitanceCache) -> bool 
     match &resolved {
         Type::Never => return false,
         Type::Function { .. } => return true,
-        Type::Variable(_) | Type::Parameter(_) => return true,
+        Type::Var { .. } | Type::Parameter(_) => return true,
         _ => {}
     }
 

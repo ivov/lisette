@@ -23,9 +23,9 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -44,9 +44,9 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                                 },
                             ],
                             rest: false,
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 26,
@@ -55,16 +55,16 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Call {
                         expression: Identifier {
                             value: "get_result",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 38,
@@ -76,9 +76,9 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                         args: [],
                         spread: None,
                         type_args: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 38,
@@ -98,27 +98,27 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                                                 value: 1,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 66,
                                                 byte_length: 1,
                                             },
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 65,
                                             byte_length: 2,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 58,
@@ -126,9 +126,9 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                                     },
                                 },
                             ],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 56,
@@ -144,9 +144,9 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                         },
                     ),
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 22,
@@ -155,9 +155,9 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                 },
                 Identifier {
                     value: "value",
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 74,
@@ -167,18 +167,18 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                     qualified: None,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 18,
                 byte_length: 63,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

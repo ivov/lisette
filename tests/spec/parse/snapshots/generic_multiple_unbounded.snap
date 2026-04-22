@@ -54,9 +54,9 @@ description: "input: \nfn pair<T, U>(x: T, y: U) -> (T, U) {\n  return (x, y);\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -79,9 +79,9 @@ description: "input: \nfn pair<T, U>(x: T, y: U) -> (T, U) {\n  return (x, y);\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Tuple {
@@ -111,9 +111,9 @@ description: "input: \nfn pair<T, U>(x: T, y: U) -> (T, U) {\n  return (x, y);\n
                 byte_length: 6,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -122,9 +122,9 @@ description: "input: \nfn pair<T, U>(x: T, y: U) -> (T, U) {\n  return (x, y);\n
                         elements: [
                             Identifier {
                                 value: "x",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 49,
@@ -135,9 +135,9 @@ description: "input: \nfn pair<T, U>(x: T, y: U) -> (T, U) {\n  return (x, y);\n
                             },
                             Identifier {
                                 value: "y",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 52,
@@ -147,18 +147,18 @@ description: "input: \nfn pair<T, U>(x: T, y: U) -> (T, U) {\n  return (x, y);\n
                                 qualified: None,
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 48,
                             byte_length: 6,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 41,
@@ -166,18 +166,18 @@ description: "input: \nfn pair<T, U>(x: T, y: U) -> (T, U) {\n  return (x, y);\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 37,
                 byte_length: 20,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

@@ -35,9 +35,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -60,9 +60,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -74,9 +74,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                 byte_length: 6,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -85,9 +85,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                         elements: [
                             Identifier {
                                 value: "a",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 48,
@@ -98,9 +98,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                             },
                             Identifier {
                                 value: "b",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 51,
@@ -110,9 +110,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                 qualified: None,
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 47,
@@ -129,9 +129,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                                 literal: Boolean(
                                                     true,
                                                 ),
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 61,
@@ -142,9 +142,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                                 literal: Boolean(
                                                     true,
                                                 ),
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 67,
@@ -164,9 +164,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                                 literal: Boolean(
                                                     false,
                                                 ),
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 76,
@@ -177,9 +177,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                                 literal: Boolean(
                                                     false,
                                                 ),
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 83,
@@ -204,9 +204,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                 literal: String(
                                     "same",
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 93,
@@ -223,9 +223,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                                 literal: Boolean(
                                                     true,
                                                 ),
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 106,
@@ -236,9 +236,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                                 literal: Boolean(
                                                     false,
                                                 ),
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 112,
@@ -258,9 +258,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                                 literal: Boolean(
                                                     false,
                                                 ),
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 122,
@@ -271,9 +271,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                                 literal: Boolean(
                                                     true,
                                                 ),
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 129,
@@ -298,9 +298,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                 literal: String(
                                     "different",
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 138,
@@ -310,9 +310,9 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 41,
@@ -320,18 +320,18 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 37,
                 byte_length: 119,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

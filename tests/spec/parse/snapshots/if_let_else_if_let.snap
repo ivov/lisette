@@ -45,9 +45,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -80,15 +80,15 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -106,9 +106,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                             },
                         ],
                         rest: false,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 52,
@@ -117,9 +117,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                     },
                     scrutinee: Identifier {
                         value: "a",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 62,
@@ -133,9 +133,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                             Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 70,
@@ -147,9 +147,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                 args: [
                                     Identifier {
                                         value: "x",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 76,
@@ -161,9 +161,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 70,
@@ -171,9 +171,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 64,
@@ -194,9 +194,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                 },
                             ],
                             rest: false,
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 96,
@@ -205,9 +205,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                         },
                         scrutinee: Identifier {
                             value: "b",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 106,
@@ -221,9 +221,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                 Call {
                                     expression: Identifier {
                                         value: "print",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 114,
@@ -235,9 +235,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                     args: [
                                         Identifier {
                                             value: "y",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 120,
@@ -249,9 +249,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 114,
@@ -259,9 +259,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                     },
                                 },
                             ],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 108,
@@ -273,9 +273,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                 Call {
                                     expression: Identifier {
                                         value: "print",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 139,
@@ -289,9 +289,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                             literal: String(
                                                 "both none",
                                             ),
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 145,
@@ -301,9 +301,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 139,
@@ -311,9 +311,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                     },
                                 },
                             ],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 133,
@@ -328,9 +328,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                 byte_length: 4,
                             },
                         ),
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 89,
@@ -345,9 +345,9 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                             byte_length: 4,
                         },
                     ),
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 45,
@@ -355,18 +355,18 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 41,
                 byte_length: 123,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

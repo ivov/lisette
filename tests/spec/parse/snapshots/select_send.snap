@@ -45,15 +45,15 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -65,9 +65,9 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                     expression: DotAccess {
                                         expression: Identifier {
                                             value: "ch",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 43,
@@ -77,9 +77,9 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                             qualified: None,
                                         },
                                         member: "send",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 43,
@@ -92,9 +92,9 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                                 value: 42,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 51,
@@ -104,9 +104,9 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 43,
@@ -116,9 +116,9 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                 body: Call {
                                     expression: Identifier {
                                         value: "print",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 58,
@@ -132,9 +132,9 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                             literal: String(
                                                 "sent",
                                             ),
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 64,
@@ -144,9 +144,9 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 58,
@@ -156,9 +156,9 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                             },
                         },
                     ],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 30,
@@ -166,18 +166,18 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 26,
                 byte_length: 52,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

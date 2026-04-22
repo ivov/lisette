@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
@@ -104,7 +105,7 @@ impl Checker<'_, '_> {
         target_ty: &Type,
         span: Span,
     ) {
-        let resolved = target_ty.resolve();
+        let resolved = target_ty.resolve_in(&self.env);
         if !resolved.is_numeric() {
             return;
         }

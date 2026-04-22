@@ -35,9 +35,9 @@ description: "input: \nfn test(start: int, end: int) { let r = start..end; }\n"
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -60,15 +60,15 @@ description: "input: \nfn test(start: int, end: int) { let r = start..end; }\n"
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -84,17 +84,17 @@ description: "input: \nfn test(start: int, end: int) { let r = start..end; }\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Range {
                         start: Some(
                             Identifier {
                                 value: "start",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 41,
@@ -107,9 +107,9 @@ description: "input: \nfn test(start: int, end: int) { let r = start..end; }\n"
                         end: Some(
                             Identifier {
                                 value: "end",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 48,
@@ -120,9 +120,9 @@ description: "input: \nfn test(start: int, end: int) { let r = start..end; }\n"
                             },
                         ),
                         inclusive: false,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 41,
@@ -134,9 +134,9 @@ description: "input: \nfn test(start: int, end: int) { let r = start..end; }\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 33,
@@ -144,18 +144,18 @@ description: "input: \nfn test(start: int, end: int) { let r = start..end; }\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 31,
                 byte_length: 23,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

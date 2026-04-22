@@ -338,12 +338,12 @@ fn is_slice_with_type_var(ty: &Type) -> bool {
         Type::Nominal { id, params, .. } => {
             id.rsplit('.').next().unwrap_or("") == "Slice"
                 && params.len() == 1
-                && matches!(params[0], Type::Variable(_))
+                && matches!(params[0], Type::Var { .. })
         }
         Type::Compound {
             kind: syntax::types::CompoundKind::Slice,
             args,
-        } => args.len() == 1 && matches!(args[0], Type::Variable(_)),
+        } => args.len() == 1 && matches!(args[0], Type::Var { .. }),
         _ => false,
     }
 }
@@ -406,7 +406,7 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
     }
 
     match (&resolved_t1, &resolved_t2) {
-        (Type::Variable(_), Type::Variable(_)) => true,
+        (Type::Var { .. }, Type::Var { .. }) => true,
 
         (
             Type::Nominal {

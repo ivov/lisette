@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::{Definition, DotAccessKind, ReceiverCoercion};
@@ -172,7 +173,7 @@ impl Checker<'_, '_> {
         self.inference.dot_access_base = true;
         let new_expression = self.infer_expression(*expression, &expression_ty);
         self.inference.dot_access_base = prior_dot_access_base;
-        let resolved_expression_ty = expression_ty.resolve();
+        let resolved_expression_ty = expression_ty.resolve_in(&self.env);
 
         if resolved_expression_ty.is_error() {
             self.unify(expected_ty, &Type::Error, &span);
@@ -217,7 +218,7 @@ impl Checker<'_, '_> {
             }
             if !self.scopes.is_callee_context()
                 && matches!(
-                    expression.get_type().resolve(),
+                    expression.get_type().resolve_in(&self.env),
                     Type::Function { .. } | Type::Forall { .. }
                 )
                 && is_native_type(&resolved_expression_ty)
@@ -271,7 +272,7 @@ impl Checker<'_, '_> {
                 expression: inner, ..
             } => inner
                 .get_type()
-                .shallow_resolve()
+                .shallow_resolve_in(&self.env)
                 .as_import_namespace()
                 .is_some(),
             _ => false,
@@ -549,7 +550,7 @@ impl Checker<'_, '_> {
 
         if let Some(expression) = self.as_method_value(args, &mut method_ty) {
             let is_pointer_receiver = if let Type::Function { params, .. } = &method_ty {
-                !params.is_empty() && params[0].resolve().is_ref()
+                !params.is_empty() && params[0].resolve_in(&self.env).is_ref()
             } else {
                 false
             };
@@ -649,7 +650,7 @@ impl Checker<'_, '_> {
         let is_cross_module_type_access = matches!(
             args.expression,
             Expression::DotAccess { expression: inner, .. }
-                if inner.get_type().resolve().as_import_namespace().is_some()
+                if inner.get_type().resolve_in(&self.env).as_import_namespace().is_some()
         );
 
         if !is_cross_module_type_access || self.scopes.is_callee_context() {
@@ -658,9 +659,9 @@ impl Checker<'_, '_> {
 
         // Don't remove self — the value type should include the receiver.
         // Still unify the receiver type with the expression type for generic resolution.
-        let receiver_ty = params[0].resolve();
+        let receiver_ty = params[0].resolve_in(&self.env);
         let receiver_stripped = receiver_ty.strip_refs();
-        let expression_stripped = args.expression_ty.resolve().strip_refs();
+        let expression_stripped = args.expression_ty.resolve_in(&self.env).strip_refs();
         self.unify(&receiver_stripped, &expression_stripped, args.span);
 
         self.unify(args.expected_ty, method_ty, args.span);
@@ -684,15 +685,15 @@ impl Checker<'_, '_> {
         span: &Span,
     ) {
         // Resolve to follow any type variable links before checking is_ref
-        let receiver_ty = receiver_ty.resolve();
-        let actual_ty = actual_ty.resolve();
+        let receiver_ty = receiver_ty.resolve_in(&self.env);
+        let actual_ty = actual_ty.resolve_in(&self.env);
         let receiver_is_ref = receiver_ty.is_ref();
         let actual_is_ref = actual_ty.is_ref();
 
         match (receiver_is_ref, actual_is_ref) {
             (true, false) => {
                 // Method expects Ref<T>, have T → auto-address
-                if let Some(kind) = check_is_non_addressable(receiver_expression) {
+                if let Some(kind) = check_is_non_addressable(receiver_expression, &self.env) {
                     self.sink
                         .push(diagnostics::infer::cannot_auto_address_receiver(
                             kind,
@@ -755,7 +756,7 @@ impl Checker<'_, '_> {
         let binding_is_ref = self
             .scopes
             .lookup_value(&var_name)
-            .map(|t| t.resolve().is_ref())
+            .map(|t| t.resolve_in(&self.env).is_ref())
             .unwrap_or(false);
         if !is_deref && !binding_is_ref && !self.scopes.lookup_mutable(&var_name) {
             let self_type_name = if var_name == "self" {
@@ -835,7 +836,7 @@ impl Checker<'_, '_> {
             let is_type_access = matches!(
                 args.expression,
                 Expression::DotAccess { expression, .. }
-                    if expression.get_type().resolve().as_import_namespace().is_some()
+                    if expression.get_type().resolve_in(&self.env).as_import_namespace().is_some()
             );
             if !is_type_access {
                 return None;
@@ -910,7 +911,7 @@ impl Checker<'_, '_> {
                     let is_type_access = matches!(
                         args.expression,
                         Expression::DotAccess { expression, .. }
-                            if expression.get_type().resolve().as_import_namespace().is_some()
+                            if expression.get_type().resolve_in(&self.env).as_import_namespace().is_some()
                     );
                     if !is_type_access {
                         return None;

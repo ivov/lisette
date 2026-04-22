@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: RecoverBlock {
                         items: [
@@ -51,18 +51,18 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                     },
                                     annotation: None,
                                     typed_pattern: None,
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                 },
                                 value: RecoverBlock {
                                     items: [
                                         Call {
                                             expression: Identifier {
                                                 value: "inner_risky",
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 69,
@@ -74,9 +74,9 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                             args: [],
                                             spread: None,
                                             type_args: [],
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 69,
@@ -84,9 +84,9 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                             },
                                         },
                                     ],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     recover_keyword_span: Span {
                                         file_id: 0,
                                         byte_offset: 53,
@@ -103,9 +103,9 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                 else_block: None,
                                 else_span: None,
                                 typed_pattern: None,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 41,
@@ -115,9 +115,9 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                             Call {
                                 expression: Identifier {
                                     value: "outer_risky",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 94,
@@ -129,9 +129,9 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                 args: [],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 94,
@@ -139,9 +139,9 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         recover_keyword_span: Span {
                             file_id: 0,
                             byte_offset: 27,
@@ -158,9 +158,9 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -168,18 +168,18 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 103,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

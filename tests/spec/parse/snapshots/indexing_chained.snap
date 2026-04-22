@@ -55,9 +55,9 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -80,9 +80,9 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -105,15 +105,15 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -129,17 +129,17 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: IndexedAccess {
                         expression: IndexedAccess {
                             expression: Identifier {
                                 value: "matrix",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 71,
@@ -150,9 +150,9 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                             },
                             index: Identifier {
                                 value: "row",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 78,
@@ -161,9 +161,9 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                                 binding_id: None,
                                 qualified: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 77,
@@ -172,9 +172,9 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                         },
                         index: Identifier {
                             value: "col",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 83,
@@ -183,9 +183,9 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                             binding_id: None,
                             qualified: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 82,
@@ -197,9 +197,9 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 60,
@@ -207,18 +207,18 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 56,
                 byte_length: 34,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

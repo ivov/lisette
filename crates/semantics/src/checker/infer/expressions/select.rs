@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
 use syntax::types::Type;
 
@@ -17,7 +18,7 @@ impl Checker<'_, '_> {
             self.unify(expected_ty, &Type::unit(), &span);
             return Expression::Select {
                 arms: vec![],
-                ty: expected_ty.resolve(),
+                ty: expected_ty.resolve_in(&self.env),
                 span,
             };
         }
@@ -70,7 +71,7 @@ impl Checker<'_, '_> {
         // Reject non-exhaustive select expressions in value position:
         // shorthand receive arms without a default arm can silently return
         // a zero value when the channel is closed or the pattern doesn't match.
-        let resolved_result = result_ty.resolve();
+        let resolved_result = result_ty.resolve_in(&self.env);
         if !resolved_result.is_unit() && !resolved_result.is_variable() {
             let has_shorthand_receive = new_arms
                 .iter()
@@ -103,7 +104,7 @@ impl Checker<'_, '_> {
 
         self.check_complex_select_expression(&new_receive_expression);
 
-        let element_ty = if Self::is_channel_receive_call(&new_receive_expression) {
+        let element_ty = if self.is_channel_receive_call(&new_receive_expression) {
             receive_ty.clone()
         } else {
             self.sink.push(diagnostics::infer::expected_channel_receive(
@@ -193,8 +194,8 @@ impl Checker<'_, '_> {
 
         self.check_complex_select_expression(&new_send_expression);
 
-        if !Self::is_channel_send_call(&new_send_expression)
-            && !Self::is_channel_receive_call(&new_send_expression)
+        if !self.is_channel_send_call(&new_send_expression)
+            && !self.is_channel_receive_call(&new_send_expression)
         {
             self.sink.push(diagnostics::infer::expected_channel_send(
                 new_send_expression.get_span(),
@@ -223,7 +224,7 @@ impl Checker<'_, '_> {
 
         self.check_complex_select_expression(&new_receive_expression);
 
-        if !Self::is_channel_receive_call(&new_receive_expression) {
+        if !self.is_channel_receive_call(&new_receive_expression) {
             self.sink.push(diagnostics::infer::expected_channel_receive(
                 &receive_ty,
                 new_receive_expression.get_span(),
@@ -232,7 +233,7 @@ impl Checker<'_, '_> {
 
         self.check_select_match_arms(&match_arms, new_receive_expression.get_span());
 
-        let pattern_ty = receive_ty.resolve();
+        let pattern_ty = receive_ty.resolve_in(&self.env);
 
         let new_match_arms = match_arms
             .into_iter()
@@ -286,7 +287,7 @@ impl Checker<'_, '_> {
         }
     }
 
-    pub(crate) fn is_channel_receive_call(expression: &Expression) -> bool {
+    pub(crate) fn is_channel_receive_call(&self, expression: &Expression) -> bool {
         if let Expression::Call {
             expression, args, ..
         } = expression
@@ -300,7 +301,7 @@ impl Checker<'_, '_> {
                 } = expression.as_ref()
                 && member == "receive"
             {
-                return Self::is_channel_type(&receiver.get_type());
+                return self.is_channel_type(&receiver.get_type());
             }
             // UFCS form after inference: Channel.receive(ch) is rewritten to
             // Identifier("Channel.receive") with 1 arg
@@ -308,7 +309,7 @@ impl Checker<'_, '_> {
                 && let Expression::Identifier { value, .. } = expression.as_ref()
                 && value.ends_with(".receive")
                 && Self::is_ufcs_channel_prefix(value)
-                && Self::is_channel_type(&args[0].get_type())
+                && self.is_channel_type(&args[0].get_type())
             {
                 return true;
             }
@@ -317,7 +318,7 @@ impl Checker<'_, '_> {
     }
 
     /// Check if an expression is a channel send call: `ch.send(value)` or `Channel.send(ch, value)`.
-    pub(crate) fn is_channel_send_call(expression: &Expression) -> bool {
+    pub(crate) fn is_channel_send_call(&self, expression: &Expression) -> bool {
         if let Expression::Call {
             expression, args, ..
         } = expression
@@ -330,7 +331,7 @@ impl Checker<'_, '_> {
             } = expression.as_ref()
                 && member == "send"
                 && args.len() == 1
-                && Self::is_channel_type(&receiver.get_type())
+                && self.is_channel_type(&receiver.get_type())
             {
                 return true;
             }
@@ -340,7 +341,7 @@ impl Checker<'_, '_> {
                 && let Expression::Identifier { value, .. } = expression.as_ref()
                 && value.ends_with(".send")
                 && Self::is_ufcs_channel_prefix(value)
-                && Self::is_channel_type(&args[0].get_type())
+                && self.is_channel_type(&args[0].get_type())
             {
                 return true;
             }
@@ -360,8 +361,8 @@ impl Checker<'_, '_> {
     }
 
     /// Check if a type is a channel-like type (Channel, Sender, Receiver).
-    fn is_channel_type(ty: &Type) -> bool {
-        let resolved = ty.resolve().strip_refs();
+    fn is_channel_type(&self, ty: &Type) -> bool {
+        let resolved = ty.resolve_in(&self.env).strip_refs();
         matches!(resolved.get_name(), Some("Channel" | "Sender" | "Receiver"))
     }
 

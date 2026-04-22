@@ -40,9 +40,9 @@ description: "input: \nenum Message {\n  Move { x: int, y: int },\n}\n"
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                         EnumFieldDefinition {
                             name: "y",
@@ -60,9 +60,9 @@ description: "input: \nenum Message {\n  Move { x: int, y: int },\n}\n"
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),

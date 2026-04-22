@@ -35,24 +35,24 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "p",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 29,
@@ -73,9 +73,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                                 value: 0,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 48,
@@ -90,9 +90,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                                 value: 0,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 54,
@@ -102,9 +102,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 37,
@@ -114,9 +114,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 61,
@@ -130,9 +130,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                         literal: String(
                                             "Origin",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 67,
@@ -142,9 +142,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 61,
@@ -174,9 +174,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                                 value: 0,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 96,
@@ -186,9 +186,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 82,
@@ -198,9 +198,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 106,
@@ -214,9 +214,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                         literal: String(
                                             "On X axis",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 112,
@@ -225,9 +225,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     },
                                     Identifier {
                                         value: "x",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 125,
@@ -239,9 +239,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 106,
@@ -260,9 +260,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                                 value: 0,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 144,
@@ -283,9 +283,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 133,
@@ -295,9 +295,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 157,
@@ -311,9 +311,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                         literal: String(
                                             "On Y axis",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 163,
@@ -322,9 +322,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     },
                                     Identifier {
                                         value: "y",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 176,
@@ -336,9 +336,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 157,
@@ -374,9 +374,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 184,
@@ -386,9 +386,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 208,
@@ -402,9 +402,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                         literal: String(
                                             "Somewhere else",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 214,
@@ -413,9 +413,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     },
                                     Identifier {
                                         value: "x",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 232,
@@ -426,9 +426,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     },
                                     Identifier {
                                         value: "y",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 235,
@@ -440,9 +440,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 208,
@@ -452,9 +452,9 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 23,
@@ -462,18 +462,18 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 19,
                 byte_length: 225,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

@@ -74,9 +74,9 @@ description: "input: \nfn compare<T: Display, U: Debug>(x: T, y: U) -> bool {\n 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -99,9 +99,9 @@ description: "input: \nfn compare<T: Display, U: Debug>(x: T, y: U) -> bool {\n 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -113,9 +113,9 @@ description: "input: \nfn compare<T: Display, U: Debug>(x: T, y: U) -> bool {\n 
                 byte_length: 4,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -124,18 +124,18 @@ description: "input: \nfn compare<T: Display, U: Debug>(x: T, y: U) -> bool {\n 
                         literal: Boolean(
                             true,
                         ),
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 65,
                             byte_length: 4,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 58,
@@ -143,18 +143,18 @@ description: "input: \nfn compare<T: Display, U: Debug>(x: T, y: U) -> bool {\n 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 54,
                 byte_length: 18,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

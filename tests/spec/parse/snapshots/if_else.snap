@@ -35,15 +35,15 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -52,9 +52,9 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                         operator: GreaterThan,
                         left: Identifier {
                             value: "a",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 24,
@@ -68,18 +68,18 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                                 value: 10,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 28,
                                 byte_length: 2,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 24,
@@ -91,9 +91,9 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                             Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 37,
@@ -107,9 +107,9 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                                         literal: String(
                                             "large",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 43,
@@ -119,9 +119,9 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 37,
@@ -129,9 +129,9 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 31,
@@ -143,9 +143,9 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                             Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 68,
@@ -159,9 +159,9 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                                         literal: String(
                                             "small or medium",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 74,
@@ -171,9 +171,9 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 68,
@@ -181,18 +181,18 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 62,
                             byte_length: 35,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 21,
@@ -200,18 +200,18 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 17,
                 byte_length: 82,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

@@ -84,9 +84,9 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -98,18 +98,18 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                 byte_length: 6,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "c",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 71,
@@ -126,9 +126,9 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                                         identifier: "Red",
                                         fields: [],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 79,
@@ -139,9 +139,9 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                                         identifier: "Green",
                                         fields: [],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 85,
@@ -159,9 +159,9 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                                 literal: String(
                                     "warm",
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 94,
@@ -174,9 +174,9 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                                 identifier: "Blue",
                                 fields: [],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 106,
@@ -187,9 +187,9 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                                 literal: String(
                                     "cool",
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 114,
@@ -199,9 +199,9 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 65,
@@ -209,18 +209,18 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 61,
                 byte_length: 66,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 33,

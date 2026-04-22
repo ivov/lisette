@@ -15,9 +15,9 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Call {
                         expression: DotAccess {
@@ -43,9 +43,9 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                                 expression: DotAccess {
                                     expression: Identifier {
                                         value: "obj",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 26,
@@ -55,9 +55,9 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                                         qualified: None,
                                     },
                                     member: "method1",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 26,
@@ -67,9 +67,9 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                                 args: [],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 26,
@@ -77,9 +77,9 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                                 },
                             },
                             member: "method2",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 26,
@@ -89,9 +89,9 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                         args: [],
                         spread: None,
                         type_args: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 26,
@@ -103,9 +103,9 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
@@ -113,18 +113,18 @@ description: "input: \nfn test() { let result = obj.method1().method2(); }\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 41,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

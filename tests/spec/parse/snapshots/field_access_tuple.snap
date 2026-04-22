@@ -53,15 +53,15 @@ description: "input: \nfn test(pair: (int, string)) {\n  let first_item = pair.0
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -77,16 +77,16 @@ description: "input: \nfn test(pair: (int, string)) {\n  let first_item = pair.0
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: DotAccess {
                         expression: Identifier {
                             value: "pair",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 51,
@@ -96,9 +96,9 @@ description: "input: \nfn test(pair: (int, string)) {\n  let first_item = pair.0
                             qualified: None,
                         },
                         member: "0",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 51,
@@ -110,9 +110,9 @@ description: "input: \nfn test(pair: (int, string)) {\n  let first_item = pair.0
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 34,
@@ -131,16 +131,16 @@ description: "input: \nfn test(pair: (int, string)) {\n  let first_item = pair.0
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: DotAccess {
                         expression: Identifier {
                             value: "pair",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 79,
@@ -150,9 +150,9 @@ description: "input: \nfn test(pair: (int, string)) {\n  let first_item = pair.0
                             qualified: None,
                         },
                         member: "1",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 79,
@@ -164,9 +164,9 @@ description: "input: \nfn test(pair: (int, string)) {\n  let first_item = pair.0
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 61,
@@ -174,18 +174,18 @@ description: "input: \nfn test(pair: (int, string)) {\n  let first_item = pair.0
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 30,
                 byte_length: 58,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

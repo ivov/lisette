@@ -40,9 +40,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),
@@ -91,9 +91,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     byte_length: 10,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),
@@ -124,9 +124,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     byte_length: 6,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),
@@ -181,24 +181,24 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "data",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 95,
@@ -217,9 +217,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                             value: 0,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 115,
@@ -228,9 +228,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 106,
@@ -240,9 +240,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 126,
@@ -256,9 +256,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         literal: String(
                                             "Zero",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 132,
@@ -268,9 +268,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 126,
@@ -292,9 +292,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 145,
@@ -304,9 +304,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 165,
@@ -320,9 +320,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         literal: String(
                                             "Number",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 171,
@@ -331,9 +331,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     },
                                     Identifier {
                                         value: "n",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 181,
@@ -345,9 +345,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 165,
@@ -366,9 +366,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                                     value: 0,
                                                     text: None,
                                                 },
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 200,
@@ -392,9 +392,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 189,
@@ -404,9 +404,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 209,
@@ -420,9 +420,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         literal: String(
                                             "Pair on Y axis",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 215,
@@ -431,9 +431,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     },
                                     Identifier {
                                         value: "y",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 233,
@@ -445,9 +445,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 209,
@@ -468,9 +468,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 241,
@@ -480,9 +480,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 261,
@@ -496,9 +496,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         literal: String(
                                             "Some pair",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 267,
@@ -508,9 +508,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 261,
@@ -526,9 +526,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         literal: String(
                                             "end",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 295,
@@ -537,9 +537,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 285,
@@ -549,9 +549,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 305,
@@ -565,9 +565,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         literal: String(
                                             "End marker",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 311,
@@ -577,9 +577,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 305,
@@ -600,9 +600,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                     },
                                 ],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 330,
@@ -612,9 +612,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 350,
@@ -628,9 +628,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         literal: String(
                                             "Some text",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 356,
@@ -640,9 +640,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 350,
@@ -655,9 +655,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 identifier: "Data.Nothing",
                                 fields: [],
                                 rest: false,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 374,
@@ -667,9 +667,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 394,
@@ -683,9 +683,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                         literal: String(
                                             "Nothing",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 400,
@@ -695,9 +695,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 394,
@@ -707,9 +707,9 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 89,
@@ -717,18 +717,18 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 85,
                 byte_length: 332,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 65,

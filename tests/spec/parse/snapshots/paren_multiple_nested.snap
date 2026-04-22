@@ -35,9 +35,9 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -60,9 +60,9 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -85,9 +85,9 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -110,15 +110,15 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -134,18 +134,18 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Paren {
                         expression: Binary {
                             operator: Addition,
                             left: Identifier {
                                 value: "w",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 59,
@@ -159,9 +159,9 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                                     operator: Multiplication,
                                     left: Identifier {
                                         value: "x",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 64,
@@ -175,9 +175,9 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                                             operator: Subtraction,
                                             left: Identifier {
                                                 value: "y",
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 69,
@@ -188,9 +188,9 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                                             },
                                             right: Identifier {
                                                 value: "z",
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 73,
@@ -199,54 +199,54 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                                                 binding_id: None,
                                                 qualified: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 69,
                                                 byte_length: 5,
                                             },
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 68,
                                             byte_length: 7,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 64,
                                         byte_length: 11,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 63,
                                     byte_length: 13,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 59,
                                 byte_length: 17,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 58,
@@ -258,9 +258,9 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 45,
@@ -268,18 +268,18 @@ description: "input: \nfn test(w: int, x: int, y: int, z: int) {\n  let result =
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 41,
                 byte_length: 39,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

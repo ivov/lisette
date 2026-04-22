@@ -15,9 +15,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Binary {
                         operator: Addition,
@@ -44,9 +44,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                 value: 7,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 28,
@@ -58,18 +58,18 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                 value: 5,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 32,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 28,
@@ -81,9 +81,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 16,
@@ -102,17 +102,17 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Boolean(
                             true,
                         ),
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 54,
@@ -124,9 +124,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 38,
@@ -145,18 +145,18 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Float {
                             value: 3.14,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 72,
@@ -168,9 +168,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 63,
@@ -189,17 +189,17 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: String(
                             "Lisette",
                         ),
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 92,
@@ -211,9 +211,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 81,
@@ -232,17 +232,17 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Char(
                             "L",
                         ),
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 120,
@@ -254,9 +254,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 106,
@@ -266,9 +266,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                 Match {
                     subject: Identifier {
                         value: "total",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 134,
@@ -284,9 +284,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                     value: 12,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 149,
@@ -296,9 +296,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 155,
@@ -312,9 +312,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                         literal: String(
                                             "Correct!",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 161,
@@ -324,9 +324,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 155,
@@ -345,9 +345,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 187,
@@ -361,9 +361,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                         literal: String(
                                             "Incorrect!",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 193,
@@ -373,9 +373,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 187,
@@ -385,9 +385,9 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 128,
@@ -395,18 +395,18 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 203,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

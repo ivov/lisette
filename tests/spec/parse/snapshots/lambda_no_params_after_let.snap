@@ -31,9 +31,9 @@ description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  ||
                 byte_length: 11,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -49,18 +49,18 @@ description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  ||
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 0,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 50,
@@ -78,9 +78,9 @@ description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  ||
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 38,
@@ -103,9 +103,9 @@ description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  ||
                             Assignment {
                                 target: Identifier {
                                     value: "n",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 70,
@@ -118,9 +118,9 @@ description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  ||
                                     operator: Addition,
                                     left: Identifier {
                                         value: "n",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 74,
@@ -134,18 +134,18 @@ description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  ||
                                             value: 1,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 78,
                                             byte_length: 1,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 74,
@@ -161,9 +161,9 @@ description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  ||
                             },
                             Identifier {
                                 value: "n",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 84,
@@ -173,18 +173,18 @@ description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  ||
                                 qualified: None,
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 64,
                             byte_length: 25,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 54,
@@ -192,18 +192,18 @@ description: "input: \nfn make_counter() -> fn() -> int {\n  let mut n = 0\n  ||
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 34,
                 byte_length: 57,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

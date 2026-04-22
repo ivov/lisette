@@ -187,6 +187,9 @@ impl CompiledTest {
                 &sink,
             );
 
+            typed_ast =
+                semantics::checker::freeze::FreezeFolder::new(&checker.env).freeze_items(typed_ast);
+
             if !checker.failed() {
                 let pattern_ctx = pattern_analysis::Context::new(
                     checker.store,

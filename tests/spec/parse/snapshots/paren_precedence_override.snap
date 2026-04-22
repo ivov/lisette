@@ -35,9 +35,9 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -60,9 +60,9 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -85,15 +85,15 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -109,9 +109,9 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Binary {
                         operator: Multiplication,
@@ -120,9 +120,9 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                                 operator: Addition,
                                 left: Identifier {
                                     value: "a",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 49,
@@ -133,9 +133,9 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                                 },
                                 right: Identifier {
                                     value: "b",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 53,
@@ -144,18 +144,18 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                                     binding_id: None,
                                     qualified: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 49,
                                     byte_length: 5,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 48,
@@ -164,9 +164,9 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                         },
                         right: Identifier {
                             value: "c",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 58,
@@ -175,9 +175,9 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                             binding_id: None,
                             qualified: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 48,
@@ -189,9 +189,9 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 35,
@@ -199,18 +199,18 @@ description: "input: \nfn test(a: int, b: int, c: int) { let result = (a + b) * 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 33,
                 byte_length: 29,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

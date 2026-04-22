@@ -35,15 +35,15 @@ description: "input: \nfn test(a: int) {\n  let weird = !-a;\n}\n"
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -59,9 +59,9 @@ description: "input: \nfn test(a: int) {\n  let weird = !-a;\n}\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Unary {
                         operator: Not,
@@ -69,9 +69,9 @@ description: "input: \nfn test(a: int) {\n  let weird = !-a;\n}\n"
                             operator: Negative,
                             expression: Identifier {
                                 value: "a",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 35,
@@ -80,18 +80,18 @@ description: "input: \nfn test(a: int) {\n  let weird = !-a;\n}\n"
                                 binding_id: None,
                                 qualified: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 34,
                                 byte_length: 2,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 33,
@@ -103,9 +103,9 @@ description: "input: \nfn test(a: int) {\n  let weird = !-a;\n}\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 21,
@@ -113,18 +113,18 @@ description: "input: \nfn test(a: int) {\n  let weird = !-a;\n}\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 17,
                 byte_length: 22,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

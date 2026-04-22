@@ -40,9 +40,9 @@ description: "input: \nenum IpAddress {\n  V4(uint8, uint8, uint8, uint8),\n  V6
                                     byte_length: 5,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                         EnumFieldDefinition {
                             name: "field1",
@@ -60,9 +60,9 @@ description: "input: \nenum IpAddress {\n  V4(uint8, uint8, uint8, uint8),\n  V6
                                     byte_length: 5,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                         EnumFieldDefinition {
                             name: "field2",
@@ -80,9 +80,9 @@ description: "input: \nenum IpAddress {\n  V4(uint8, uint8, uint8, uint8),\n  V6
                                     byte_length: 5,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                         EnumFieldDefinition {
                             name: "field3",
@@ -100,9 +100,9 @@ description: "input: \nenum IpAddress {\n  V4(uint8, uint8, uint8, uint8),\n  V6
                                     byte_length: 5,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),
@@ -133,9 +133,9 @@ description: "input: \nenum IpAddress {\n  V4(uint8, uint8, uint8, uint8),\n  V6
                                     byte_length: 6,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),

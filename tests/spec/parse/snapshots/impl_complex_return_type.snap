@@ -53,9 +53,9 @@ description: "input: \nstruct Container<T> {\n  items: Vec<T>,\n}\n\nimpl<T> Con
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,
@@ -130,9 +130,9 @@ description: "input: \nstruct Container<T> {\n  items: Vec<T>,\n}\n\nimpl<T> Con
                             },
                         ),
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                 ],
                 return_annotation: Constructor {
@@ -154,9 +154,9 @@ description: "input: \nstruct Container<T> {\n  items: Vec<T>,\n}\n\nimpl<T> Con
                         byte_length: 6,
                     },
                 },
-                return_type: Variable(
-                    -1,
-                ),
+                return_type: Var {
+                    id: uninferred,
+                },
                 visibility: Private,
                 body: Block {
                     items: [
@@ -164,9 +164,9 @@ description: "input: \nstruct Container<T> {\n  items: Vec<T>,\n}\n\nimpl<T> Con
                             expression: DotAccess {
                                 expression: Identifier {
                                     value: "self",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 122,
@@ -176,18 +176,18 @@ description: "input: \nstruct Container<T> {\n  items: Vec<T>,\n}\n\nimpl<T> Con
                                     qualified: None,
                                 },
                                 member: "items",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 122,
                                     byte_length: 10,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 115,
@@ -195,18 +195,18 @@ description: "input: \nstruct Container<T> {\n  items: Vec<T>,\n}\n\nimpl<T> Con
                             },
                         },
                     ],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 109,
                         byte_length: 28,
                     },
                 },
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
                 span: Span {
                     file_id: 0,
                     byte_offset: 68,
@@ -225,9 +225,9 @@ description: "input: \nstruct Container<T> {\n  items: Vec<T>,\n}\n\nimpl<T> Con
                 },
             },
         ],
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 43,

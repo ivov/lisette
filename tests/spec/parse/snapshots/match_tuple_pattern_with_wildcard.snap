@@ -62,24 +62,24 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "triple",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 48,
@@ -96,9 +96,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                         literal: String(
                                             "status",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 62,
@@ -130,9 +130,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 84,
@@ -146,9 +146,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                         literal: String(
                                             "Status code:",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 90,
@@ -157,9 +157,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                     },
                                     Identifier {
                                         value: "code",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 106,
@@ -171,9 +171,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 84,
@@ -202,9 +202,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                         literal: Boolean(
                                             true,
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 124,
@@ -221,9 +221,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 140,
@@ -237,9 +237,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                         literal: String(
                                             "Active",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 146,
@@ -249,9 +249,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 140,
@@ -270,9 +270,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 184,
@@ -286,9 +286,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                         literal: String(
                                             "Other",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 190,
@@ -298,9 +298,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 184,
@@ -310,9 +310,9 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 42,
@@ -320,18 +320,18 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 38,
                 byte_length: 167,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

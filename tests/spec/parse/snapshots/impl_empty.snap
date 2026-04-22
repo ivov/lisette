@@ -35,9 +35,9 @@ description: "input: \nstruct Empty {}\n\nimpl Empty {}\n"
         receiver_name: "Empty",
         methods: [],
         generics: [],
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 18,

@@ -54,9 +54,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -87,18 +87,18 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                 byte_length: 18,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Call {
                     expression: Identifier {
                         value: "Ok",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 58,
@@ -110,9 +110,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                     args: [
                         Identifier {
                             value: "d",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 61,
@@ -124,9 +124,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                     ],
                     spread: None,
                     type_args: [],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 58,
@@ -134,18 +134,18 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 54,
                 byte_length: 11,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 16,
@@ -164,9 +164,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -184,9 +184,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                             },
                         ],
                         rest: false,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 87,
@@ -196,9 +196,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                     scrutinee: Call {
                         expression: Identifier {
                             value: "foo",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 98,
@@ -212,9 +212,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                 name: "Data",
                                 field_assignments: [],
                                 spread: None,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 102,
@@ -224,9 +224,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                         ],
                         spread: None,
                         type_args: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 98,
@@ -238,9 +238,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                             Call {
                                 expression: Identifier {
                                     value: "panic",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 113,
@@ -252,9 +252,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                 args: [
                                     Identifier {
                                         value: "err",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 119,
@@ -266,9 +266,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 113,
@@ -276,9 +276,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 111,
@@ -286,9 +286,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                         },
                     },
                     alternative: Unit {
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 80,
@@ -297,9 +297,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                     },
                     typed_pattern: None,
                     else_span: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 80,
@@ -317,17 +317,17 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Match {
                         subject: Call {
                             expression: Identifier {
                                 value: "foo",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 142,
@@ -341,9 +341,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                     name: "Data",
                                     field_assignments: [],
                                     spread: None,
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 146,
@@ -353,9 +353,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                             ],
                             spread: None,
                             type_args: [],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 142,
@@ -377,9 +377,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                         },
                                     ],
                                     rest: false,
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 161,
@@ -388,9 +388,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                 },
                                 expression: Identifier {
                                     value: "d",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 170,
@@ -414,9 +414,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                         },
                                     ],
                                     rest: false,
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 177,
@@ -426,9 +426,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                 expression: Call {
                                     expression: Identifier {
                                         value: "panic",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 189,
@@ -440,9 +440,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                     args: [
                                         Identifier {
                                             value: "err",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 195,
@@ -454,9 +454,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 189,
@@ -466,9 +466,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                             },
                         ],
                         origin: Explicit,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 136,
@@ -480,9 +480,9 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 128,
@@ -490,18 +490,18 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 76,
                 byte_length: 130,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 66,

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::types::{Type, TypeVariableState, unqualified_name};
+use crate::types::{Type, unqualified_name};
 
 impl Type {
     pub fn stringify(&self) -> String {
@@ -39,12 +39,9 @@ impl Type {
                 format!("{}<{}>", name, args_formatted)
             }
 
-            Type::Variable(var) => match &*var.borrow() {
-                TypeVariableState::Unbound { id, hint } => match hint {
-                    Some(name) => format!("?{}", name),
-                    None => format!("?{}", id),
-                },
-                TypeVariableState::Link(ty) => format!("{}", ty),
+            Type::Var { id, hint } => match hint {
+                Some(name) => format!("?{}", name),
+                None => format!("?{}", id.as_u32()),
             },
 
             Type::Function {

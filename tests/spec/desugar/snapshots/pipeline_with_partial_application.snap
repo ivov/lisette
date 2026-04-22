@@ -15,18 +15,18 @@ description: "input: fn test() { x |> add(5); }"
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Call {
                     expression: Identifier {
                         value: "add",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 17,
@@ -38,9 +38,9 @@ description: "input: fn test() { x |> add(5); }"
                     args: [
                         Identifier {
                             value: "x",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 12,
@@ -54,9 +54,9 @@ description: "input: fn test() { x |> add(5); }"
                                 value: 5,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 21,
@@ -66,9 +66,9 @@ description: "input: fn test() { x |> add(5); }"
                     ],
                     spread: None,
                     type_args: [],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 12,
@@ -76,18 +76,18 @@ description: "input: fn test() { x |> add(5); }"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 10,
                 byte_length: 16,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 0,

@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: StructCall {
                         name: "Point",
@@ -52,9 +52,9 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                                         value: 1,
                                         text: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 38,
@@ -74,9 +74,9 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                                         value: 1,
                                         text: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 44,
@@ -86,9 +86,9 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                             },
                         ],
                         spread: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 27,
@@ -106,9 +106,9 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -119,9 +119,9 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                     target: DotAccess {
                         expression: Identifier {
                             value: "p",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 50,
@@ -131,9 +131,9 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                             qualified: None,
                         },
                         member: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 50,
@@ -145,9 +145,9 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                             value: 10,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 56,
@@ -162,18 +162,18 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 50,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

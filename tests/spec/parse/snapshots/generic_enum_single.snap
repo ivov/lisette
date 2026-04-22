@@ -50,9 +50,9 @@ description: "input: \nenum Option<T> {\n  Some(T),\n  None,\n}\n"
                                     byte_length: 1,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),

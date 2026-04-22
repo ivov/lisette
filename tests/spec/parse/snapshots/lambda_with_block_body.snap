@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Lambda {
                         params: [
@@ -50,9 +50,9 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                                 },
                                 annotation: None,
                                 typed_pattern: None,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                             },
                         ],
                         return_annotation: Unknown,
@@ -70,17 +70,17 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                                         },
                                         annotation: None,
                                         typed_pattern: None,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                     },
                                     value: Binary {
                                         operator: Multiplication,
                                         left: Identifier {
                                             value: "x",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 53,
@@ -94,18 +94,18 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                                                 value: 2,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 57,
                                                 byte_length: 1,
                                             },
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 53,
@@ -117,9 +117,9 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                                     else_block: None,
                                     else_span: None,
                                     typed_pattern: None,
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 39,
@@ -130,9 +130,9 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                                     operator: Addition,
                                     left: Identifier {
                                         value: "doubled",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 64,
@@ -146,18 +146,18 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                                             value: 1,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 74,
                                             byte_length: 1,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 64,
@@ -165,18 +165,18 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                                     },
                                 },
                             ],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 33,
                                 byte_length: 46,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 29,
@@ -188,9 +188,9 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -198,18 +198,18 @@ description: "input: \nfn test() {\n  let process = |x| {\n    let doubled = x *
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 71,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

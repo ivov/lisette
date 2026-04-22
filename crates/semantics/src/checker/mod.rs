@@ -1,10 +1,11 @@
+pub mod freeze;
 pub mod infer;
 pub(crate) mod registration;
 pub mod scopes;
+pub mod type_env;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::RefCell;
-use std::rc::Rc;
 
 use crate::facts::Facts;
 use crate::store::Store;
@@ -16,24 +17,9 @@ use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span, StructFiel
 use syntax::program::{
     CoercionInfo, Definition, FileImport, MethodSignatures, Module, ResolutionInfo,
 };
-use syntax::types::{SubstitutionMap, Type, TypeVariableState, substitute};
+use syntax::types::{SubstitutionMap, Type, substitute};
 
-#[derive(Debug, Default)]
-pub struct IdGen {
-    next_type_var_id: i32,
-}
-
-impl IdGen {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn new_type_var_id(&mut self) -> i32 {
-        let id = self.next_type_var_id;
-        self.next_type_var_id += 1;
-        id
-    }
-}
+pub use type_env::{EnvResolve, Speculation, TypeEnv, VarState};
 
 #[derive(Debug, Clone)]
 pub struct Cursor {
@@ -100,7 +86,6 @@ pub(crate) struct InferenceState {
     pub satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
     pub inferring_assignment_target: bool,
     pub impl_receiver_type: Option<Type>,
-    pub undo_log: Option<Vec<(Rc<RefCell<TypeVariableState>>, TypeVariableState)>>,
     /// True when inside a match/select arm body. Used to determine whether
     /// break/continue need Go labels (since Go switch cases don't fall through).
     pub in_match_arm: bool,
@@ -123,7 +108,6 @@ impl InferenceState {
             satisfying_stack: rustc_hash::FxHashSet::default(),
             inferring_assignment_target: false,
             impl_receiver_type: None,
-            undo_log: None,
             in_match_arm: false,
             loop_needs_label_stack: Vec::new(),
             in_subexpression: false,
@@ -143,7 +127,7 @@ pub enum PostInferenceCheck {
 }
 
 pub struct Checker<'r, 's> {
-    pub ids: IdGen,
+    pub env: TypeEnv,
     pub store: &'r mut Store,
     pub scopes: Scopes,
     pub cursor: Cursor,
@@ -162,7 +146,7 @@ pub struct Checker<'r, 's> {
 impl<'r, 's> Checker<'r, 's> {
     pub fn new(store: &'r mut Store, sink: &'s DiagnosticSink) -> Self {
         Self {
-            ids: IdGen::new(),
+            env: TypeEnv::new(),
             store,
             scopes: Scopes::new(),
             cursor: Cursor::new(),
@@ -180,19 +164,17 @@ impl<'r, 's> Checker<'r, 's> {
     }
 
     pub fn new_type_var(&mut self) -> Type {
-        let id = self.new_type_var_id();
-        Type::Variable(Rc::new(RefCell::new(TypeVariableState::Unbound {
-            id,
-            hint: None,
-        })))
+        let id = self.env.fresh(None);
+        Type::Var { id, hint: None }
     }
 
     pub fn new_type_var_with_hint(&mut self, hint: &str) -> Type {
-        let id = self.new_type_var_id();
-        Type::Variable(Rc::new(RefCell::new(TypeVariableState::Unbound {
+        let hint: EcoString = hint.into();
+        let id = self.env.fresh(Some(hint.clone()));
+        Type::Var {
             id,
-            hint: Some(hint.into()),
-        })))
+            hint: Some(hint),
+        }
     }
 
     pub fn type_from_literal_expression(&mut self, expression: &Expression) -> Option<Type> {
@@ -217,12 +199,11 @@ impl<'r, 's> Checker<'r, 's> {
                 let map: SubstitutionMap = vars
                     .iter()
                     .map(|name| {
-                        let id = self.new_type_var_id();
-                        let fresh_var =
-                            Type::Variable(Rc::new(RefCell::new(TypeVariableState::Unbound {
-                                id,
-                                hint: Some(name.clone()),
-                            })));
+                        let id = self.env.fresh(Some(name.clone()));
+                        let fresh_var = Type::Var {
+                            id,
+                            hint: Some(name.clone()),
+                        };
                         (name.clone(), fresh_var)
                     })
                     .collect();
@@ -235,10 +216,6 @@ impl<'r, 's> Checker<'r, 's> {
 
     pub fn new_file_id(&mut self) -> u32 {
         self.store.new_file_id()
-    }
-
-    pub fn new_type_var_id(&mut self) -> i32 {
-        self.ids.new_type_var_id()
     }
 
     pub fn is_d_lis(&self) -> bool {
@@ -473,7 +450,7 @@ impl<'r, 's> Checker<'r, 's> {
                 .get_methods_from_bounds(&qualified_name, &trait_bounds);
         }
 
-        let resolved = ty.strip_refs().resolve();
+        let resolved = ty.strip_refs().resolve_in(&self.env);
         let cache_key: EcoString = match &resolved {
             Type::Nominal { id, .. } => id.clone(),
             Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
@@ -495,7 +472,10 @@ impl<'r, 's> Checker<'r, 's> {
         }
 
         let empty = HashMap::default();
-        let methods = self.store.get_all_methods(ty, &empty);
+        // Pass the env-resolved type so the store's env-less `resolve()` stays
+        // identity-safe: `Type::Var` chains are chased once here rather than
+        // silently returning empty methods in the store.
+        let methods = self.store.get_all_methods(&resolved, &empty);
         self.method_cache
             .borrow_mut()
             .insert(cache_key, methods.clone());
@@ -643,23 +623,14 @@ impl<'r, 's> Checker<'r, 's> {
     }
 
     /// Run a closure speculatively: if it returns `Err`, all type variable
-    /// mutations performed during the closure are rolled back.
+    /// bindings performed during the closure are rolled back.
     pub(crate) fn speculatively<T, E>(
         &mut self,
         f: impl FnOnce(&mut Self) -> Result<T, E>,
     ) -> Result<T, E> {
-        let prev_log = self.inference.undo_log.take();
-        self.inference.undo_log = Some(Vec::new());
+        let spec = self.env.begin_speculation();
         let result = f(self);
-        let log = self.inference.undo_log.take().unwrap();
-        self.inference.undo_log = prev_log;
-        if result.is_err() {
-            for (type_var, original_state) in log.into_iter().rev() {
-                *type_var.borrow_mut() = original_state;
-            }
-        } else if let Some(parent_log) = &mut self.inference.undo_log {
-            parent_log.extend(log);
-        }
+        self.env.end_speculation(spec, result.is_err());
         result
     }
 

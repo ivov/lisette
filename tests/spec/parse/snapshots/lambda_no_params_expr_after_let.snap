@@ -31,9 +31,9 @@ description: "input: \nfn test() -> fn() -> int {\n  let x = 42\n  || x\n}\n"
                 byte_length: 11,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -49,18 +49,18 @@ description: "input: \nfn test() -> fn() -> int {\n  let x = 42\n  || x\n}\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 42,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 38,
@@ -72,9 +72,9 @@ description: "input: \nfn test() -> fn() -> int {\n  let x = 42\n  || x\n}\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 30,
@@ -86,9 +86,9 @@ description: "input: \nfn test() -> fn() -> int {\n  let x = 42\n  || x\n}\n"
                     return_annotation: Unknown,
                     body: Identifier {
                         value: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 46,
@@ -97,9 +97,9 @@ description: "input: \nfn test() -> fn() -> int {\n  let x = 42\n  || x\n}\n"
                         binding_id: None,
                         qualified: None,
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 43,
@@ -107,18 +107,18 @@ description: "input: \nfn test() -> fn() -> int {\n  let x = 42\n  || x\n}\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 26,
                 byte_length: 23,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

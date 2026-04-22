@@ -23,9 +23,9 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -34,9 +34,9 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                         value: 1,
                         text: None,
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 25,
@@ -44,18 +44,18 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 23,
                 byte_length: 5,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,
@@ -74,9 +74,9 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -92,18 +92,18 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 1,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 51,
@@ -115,9 +115,9 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 43,
@@ -127,9 +127,9 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                 Call {
                     expression: Identifier {
                         value: "get_value",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 56,
@@ -141,9 +141,9 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                     args: [],
                     spread: None,
                     type_args: [],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 56,
@@ -154,9 +154,9 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                     items: [
                         Identifier {
                             value: "x",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 70,
@@ -166,9 +166,9 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                             qualified: None,
                         },
                     ],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 68,
@@ -176,18 +176,18 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 39,
                 byte_length: 36,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 29,

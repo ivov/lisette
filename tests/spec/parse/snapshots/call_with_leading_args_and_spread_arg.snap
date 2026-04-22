@@ -15,18 +15,18 @@ description: "input: \nfn test() { func(a, b, ..xs); }\n"
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Call {
                     expression: Identifier {
                         value: "func",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 13,
@@ -38,9 +38,9 @@ description: "input: \nfn test() { func(a, b, ..xs); }\n"
                     args: [
                         Identifier {
                             value: "a",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 18,
@@ -51,9 +51,9 @@ description: "input: \nfn test() { func(a, b, ..xs); }\n"
                         },
                         Identifier {
                             value: "b",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 21,
@@ -66,9 +66,9 @@ description: "input: \nfn test() { func(a, b, ..xs); }\n"
                     spread: Some(
                         Identifier {
                             value: "xs",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 26,
@@ -79,9 +79,9 @@ description: "input: \nfn test() { func(a, b, ..xs); }\n"
                         },
                     ),
                     type_args: [],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
@@ -89,18 +89,18 @@ description: "input: \nfn test() { func(a, b, ..xs); }\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 21,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

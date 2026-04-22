@@ -35,9 +35,9 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -49,9 +49,9 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -60,9 +60,9 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                         operator: LessThanOrEqual,
                         left: Identifier {
                             value: "n",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 36,
@@ -76,18 +76,18 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                                 value: 1,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 41,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 36,
@@ -102,18 +102,18 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                                         value: 1,
                                         text: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 56,
                                         byte_length: 1,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 49,
@@ -121,9 +121,9 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 43,
@@ -131,18 +131,18 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                         },
                     },
                     alternative: Unit {
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 33,
                             byte_length: 29,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 33,
@@ -154,9 +154,9 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                         operator: Multiplication,
                         left: Identifier {
                             value: "n",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 72,
@@ -168,9 +168,9 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                         right: Call {
                             expression: Identifier {
                                 value: "factorial",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 76,
@@ -184,9 +184,9 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                                     operator: Subtraction,
                                     left: Identifier {
                                         value: "n",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 86,
@@ -200,18 +200,18 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                                             value: 1,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 90,
                                             byte_length: 1,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 86,
@@ -221,27 +221,27 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                             ],
                             spread: None,
                             type_args: [],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 76,
                                 byte_length: 16,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 72,
                             byte_length: 20,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 65,
@@ -249,18 +249,18 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 29,
                 byte_length: 66,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

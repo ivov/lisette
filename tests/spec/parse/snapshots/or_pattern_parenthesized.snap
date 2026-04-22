@@ -74,9 +74,9 @@ description: "input: \nenum Color { Red, Blue }\nfn test(c: Color) -> int {\n  m
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -88,18 +88,18 @@ description: "input: \nenum Color { Red, Blue }\nfn test(c: Color) -> int {\n  m
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "c",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 61,
@@ -116,9 +116,9 @@ description: "input: \nenum Color { Red, Blue }\nfn test(c: Color) -> int {\n  m
                                         identifier: "Red",
                                         fields: [],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 70,
@@ -129,9 +129,9 @@ description: "input: \nenum Color { Red, Blue }\nfn test(c: Color) -> int {\n  m
                                         identifier: "Blue",
                                         fields: [],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 76,
@@ -150,9 +150,9 @@ description: "input: \nenum Color { Red, Blue }\nfn test(c: Color) -> int {\n  m
                                     value: 1,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 85,
@@ -162,9 +162,9 @@ description: "input: \nenum Color { Red, Blue }\nfn test(c: Color) -> int {\n  m
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 55,
@@ -172,18 +172,18 @@ description: "input: \nenum Color { Red, Blue }\nfn test(c: Color) -> int {\n  m
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 51,
                 byte_length: 42,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 26,

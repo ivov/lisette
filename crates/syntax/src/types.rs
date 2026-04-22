@@ -1,6 +1,5 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::cell::{OnceCell, RefCell};
-use std::rc::Rc;
+use std::cell::OnceCell;
 
 use ecow::EcoString;
 
@@ -47,7 +46,7 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
                 .collect(),
             return_type: Box::new(substitute(return_type, map)),
         },
-        Type::Variable(_) | Type::Error => ty.clone(),
+        Type::Var { .. } | Type::Error => ty.clone(),
         Type::Forall { vars, body } => {
             let has_overlap = map.keys().any(|k| vars.contains(k));
             let substituted_body = if has_overlap {
@@ -83,39 +82,31 @@ pub struct Bound {
     pub ty: Type,
 }
 
-#[derive(Clone)]
-pub enum TypeVariableState {
-    Unbound { id: i32, hint: Option<EcoString> },
-    Link(Type),
-}
+/// A unique handle identifying a type variable. The binding state (Unbound /
+/// Bound-to-a-Type) lives in a `TypeEnv` owned by the checker; the handle is
+/// a plain id so `Type` stays a pure value (Clone, Eq, Hash, Serialize).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TypeVarId(pub u32);
 
-impl TypeVariableState {
-    pub fn is_unbound(&self) -> bool {
-        matches!(self, TypeVariableState::Unbound { .. })
+impl TypeVarId {
+    pub const IGNORED: TypeVarId = TypeVarId(u32::MAX);
+    pub const UNINFERRED: TypeVarId = TypeVarId(u32::MAX - 1);
+
+    pub fn is_reserved(self) -> bool {
+        self == Self::IGNORED || self == Self::UNINFERRED
+    }
+
+    pub fn as_u32(self) -> u32 {
+        self.0
     }
 }
 
-impl std::fmt::Debug for TypeVariableState {
+impl std::fmt::Debug for TypeVarId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TypeVariableState::Unbound { id, hint } => match hint {
-                Some(name) => write!(f, "{}", name),
-                None => write!(f, "{}", id),
-            },
-            TypeVariableState::Link(ty) => write!(f, "{:?}", ty),
-        }
-    }
-}
-
-impl PartialEq for TypeVariableState {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (
-                TypeVariableState::Unbound { id: id1, .. },
-                TypeVariableState::Unbound { id: id2, .. },
-            ) => id1 == id2,
-            (TypeVariableState::Link(ty1), TypeVariableState::Link(ty2)) => ty1 == ty2,
-            _ => false,
+        match *self {
+            Self::IGNORED => write!(f, "ignored"),
+            Self::UNINFERRED => write!(f, "uninferred"),
+            TypeVarId(n) => write!(f, "#{}", n),
         }
     }
 }
@@ -147,7 +138,13 @@ pub enum Type {
         return_type: Box<Type>,
     },
 
-    Variable(Rc<RefCell<TypeVariableState>>),
+    /// Type variable handle. Binding state lives in a `TypeEnv` owned by the
+    /// checker; the inline `hint` is display metadata set at allocation time
+    /// so `Display`/`Debug` work without env access.
+    Var {
+        id: TypeVarId,
+        hint: Option<EcoString>,
+    },
 
     Forall {
         vars: Vec<EcoString>,
@@ -194,10 +191,14 @@ impl std::fmt::Debug for Type {
                     .field("return_type", return_type)
                     .finish()
             }
-            Type::Variable(type_var) => f
-                .debug_tuple("Variable")
-                .field(&*type_var.borrow())
-                .finish(),
+            Type::Var { id, hint } => {
+                let mut s = f.debug_struct("Var");
+                s.field("id", id);
+                if let Some(h) = hint {
+                    s.field("hint", h);
+                }
+                s.finish()
+            }
             Type::Forall { vars, body } => f
                 .debug_struct("Forall")
                 .field("vars", vars)
@@ -250,9 +251,7 @@ impl PartialEq for Type {
                     return_type: r2,
                 },
             ) => p1 == p2 && m1 == m2 && b1 == b2 && r1 == r2,
-            (Type::Variable(v1), Type::Variable(v2)) => {
-                Rc::ptr_eq(v1, v2) || *v1.borrow() == *v2.borrow()
-            }
+            (Type::Var { id: id1, .. }, Type::Var { id: id2, .. }) => id1 == id2,
             (
                 Type::Forall {
                     vars: vars1,
@@ -332,21 +331,18 @@ impl Type {
 }
 
 impl Type {
-    const UNINFERRED_ID: i32 = -1;
-    const IGNORED_ID: i32 = -333;
-
     pub fn uninferred() -> Self {
-        Self::Variable(Rc::new(RefCell::new(TypeVariableState::Unbound {
-            id: Self::UNINFERRED_ID,
+        Self::Var {
+            id: TypeVarId::UNINFERRED,
             hint: None,
-        })))
+        }
     }
 
     pub fn ignored() -> Self {
-        Self::Variable(Rc::new(RefCell::new(TypeVariableState::Unbound {
-            id: Self::IGNORED_ID,
+        Self::Var {
+            id: TypeVarId::IGNORED,
             hint: None,
-        })))
+        }
     }
 
     pub fn get_type_params(&self) -> Option<&[Type]> {
@@ -653,12 +649,7 @@ impl Type {
     }
 
     pub fn is_ignored(&self) -> bool {
-        match self {
-            Type::Variable(var) => {
-                matches!(&*var.borrow(), TypeVariableState::Unbound { id, .. } if *id == Self::IGNORED_ID)
-            }
-            _ => false,
-        }
+        matches!(self, Type::Var { id, .. } if *id == TypeVarId::IGNORED)
     }
 
     pub fn is_variadic(&self) -> Option<Type> {
@@ -744,11 +735,11 @@ impl Type {
     }
 
     pub fn is_variable(&self) -> bool {
-        matches!(self, Type::Variable(_))
+        matches!(self, Type::Var { .. })
     }
 
-    pub fn is_unbound_variable(&self) -> bool {
-        matches!(self, Type::Variable(cell) if cell.borrow().is_unbound())
+    pub fn is_type_var(&self) -> bool {
+        matches!(self, Type::Var { .. })
     }
 
     pub fn is_numeric(&self) -> bool {
@@ -777,10 +768,7 @@ impl Type {
 
     pub fn has_unbound_variables(&self) -> bool {
         match self {
-            Type::Variable(type_var) => match &*type_var.borrow() {
-                TypeVariableState::Unbound { hint, .. } => hint.is_some(),
-                TypeVariableState::Link(ty) => ty.has_unbound_variables(),
-            },
+            Type::Var { hint, .. } => hint.is_some(),
             Type::Nominal { params, .. } => params.iter().any(|p| p.has_unbound_variables()),
             Type::Function {
                 params,
@@ -832,11 +820,7 @@ impl Type {
             Type::Forall { body, .. } => {
                 body.remove_found_type_names(names);
             }
-            Type::Variable(type_var) => {
-                if let TypeVariableState::Link(ty) = &*type_var.borrow() {
-                    ty.remove_found_type_names(names);
-                }
-            }
+            Type::Var { .. } => {}
             Type::Parameter(name) => {
                 names.remove(name);
             }
@@ -1041,7 +1025,7 @@ impl Type {
         (types, vars.into_values().collect())
     }
 
-    fn remove_vars_impl(ty: &Type, vars: &mut HashMap<i32, EcoString>) -> Type {
+    fn remove_vars_impl(ty: &Type, vars: &mut HashMap<u32, EcoString>) -> Type {
         match ty {
             Type::Nominal {
                 id: name,
@@ -1080,28 +1064,25 @@ impl Type {
                 return_type: Self::remove_vars_impl(return_type, vars).into(),
             },
 
-            Type::Variable(type_var) => match &*type_var.borrow() {
-                TypeVariableState::Unbound { id, hint } => match vars.get(id) {
-                    Some(g) => Type::Parameter(g.clone()),
-                    None => {
-                        let name: EcoString = hint.clone().unwrap_or_else(|| {
-                            char::from_digit(
-                                (vars.len() + 10)
-                                    .try_into()
-                                    .expect("type var count fits in u32"),
-                                16,
-                            )
-                            .expect("type var index is valid hex digit")
-                            .to_uppercase()
-                            .to_string()
-                            .into()
-                        });
+            Type::Var { id, hint } => match vars.get(&id.0) {
+                Some(g) => Type::Parameter(g.clone()),
+                None => {
+                    let name: EcoString = hint.clone().unwrap_or_else(|| {
+                        char::from_digit(
+                            (vars.len() + 10)
+                                .try_into()
+                                .expect("type var count fits in u32"),
+                            16,
+                        )
+                        .expect("type var index is valid hex digit")
+                        .to_uppercase()
+                        .to_string()
+                        .into()
+                    });
 
-                        vars.insert(*id, name.clone());
-                        Type::Parameter(name)
-                    }
-                },
-                TypeVariableState::Link(ty) => Self::remove_vars_impl(ty, vars),
+                    vars.insert(id.0, name.clone());
+                    Type::Parameter(name)
+                }
             },
 
             Type::Forall { body, .. } => Self::remove_vars_impl(body, vars),
@@ -1138,13 +1119,7 @@ impl Type {
             } => {
                 params.iter().any(|p| p.contains_type(target)) || return_type.contains_type(target)
             }
-            Type::Variable(var) => {
-                if let TypeVariableState::Link(linked) = &*var.borrow() {
-                    linked.contains_type(target)
-                } else {
-                    false
-                }
-            }
+            Type::Var { .. } => false,
             Type::Forall { body, .. } => body.contains_type(target),
             Type::Tuple(elements) => elements.iter().any(|e| e.contains_type(target)),
             Type::Compound { args, .. } => args.iter().any(|a| a.contains_type(target)),
@@ -1157,36 +1132,26 @@ impl Type {
         }
     }
 
-    /// Follow Variable::Link chains to the outermost non-variable type.
-    /// Does NOT recurse into Constructor params, Function params, etc.
-    /// Use this when you only need the outermost type (e.g. is_never, is_unknown, has_name).
+    /// Identity pass-through for post-freeze types. Pre-freeze callers in
+    /// the semantics crate must use `TypeEnv::shallow_resolve` to chase
+    /// `Type::Var` binding chains; downstream crates (emit, lsp, format)
+    /// see frozen types where Vars are either absent or unbound, so this
+    /// method returns `self` for them.
     pub fn shallow_resolve(&self) -> Type {
-        match self {
-            Type::Variable(type_var) => {
-                let state = type_var.borrow();
-                match &*state {
-                    TypeVariableState::Unbound { .. } => self.clone(),
-                    TypeVariableState::Link(linked) => linked.shallow_resolve(),
-                }
-            }
-            _ => self.clone(),
-        }
+        self.clone()
     }
 
+    /// Env-less deep resolve. Identity for `Type::Var` (cannot chase chains
+    /// without a `TypeEnv`). Recurses into composites for consumers that
+    /// want a cloned structural copy.
+    ///
+    /// Semantic code inside the checker should use `TypeEnv::resolve` or
+    /// `Checker::resolve` instead — those chase `Type::Var` chains. This
+    /// method is for downstream crates (emit, lsp, format) that read post-
+    /// freeze types where no unbound `Type::Var` remains.
     pub fn resolve(&self) -> Type {
         match self {
-            Type::Variable(type_var) => {
-                let state = type_var.borrow();
-                match &*state {
-                    TypeVariableState::Unbound { .. } => self.clone(),
-                    TypeVariableState::Link(linked) => {
-                        let resolved = linked.resolve();
-                        drop(state);
-                        *type_var.borrow_mut() = TypeVariableState::Link(resolved.clone());
-                        resolved
-                    }
-                }
-            }
+            Type::Var { .. } => self.clone(),
             Type::Nominal {
                 id,
                 params,

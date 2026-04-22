@@ -1,5 +1,6 @@
 use rustc_hash::FxHashSet as HashSet;
 
+use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructFieldAssignment};
 use syntax::program::Definition;
@@ -149,7 +150,7 @@ impl Checker<'_, '_> {
                 }
             };
 
-            let resolved_ty = pattern_ty.resolve();
+            let resolved_ty = pattern_ty.resolve_in(&self.env);
             let variant_name = struct_name.split('.').next_back().unwrap_or(&struct_name);
 
             if let Type::Nominal { id, .. } = &resolved_ty

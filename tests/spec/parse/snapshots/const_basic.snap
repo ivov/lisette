@@ -17,9 +17,9 @@ description: "input: \nconst MAX_RETRIES = 5;\n"
                 value: 5,
                 text: None,
             },
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 21,
@@ -27,9 +27,9 @@ description: "input: \nconst MAX_RETRIES = 5;\n"
             },
         },
         visibility: Private,
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

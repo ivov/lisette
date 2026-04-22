@@ -15,9 +15,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Binary {
                         operator: Addition,
@@ -43,9 +43,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                             expression: Call {
                                 expression: Identifier {
                                     value: "func",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 26,
@@ -57,18 +57,18 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                 args: [],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 26,
                                     byte_length: 6,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 26,
@@ -80,9 +80,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                 expression: DotAccess {
                                     expression: Identifier {
                                         value: "obj",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 36,
@@ -92,9 +92,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                         qualified: None,
                                     },
                                     member: "method",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 36,
@@ -104,9 +104,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                 args: [
                                     Identifier {
                                         value: "a",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 47,
@@ -119,9 +119,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                         operator: Addition,
                                         left: Identifier {
                                             value: "b",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 50,
@@ -132,9 +132,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                         },
                                         right: Identifier {
                                             value: "c",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 54,
@@ -143,9 +143,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                             binding_id: None,
                                             qualified: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 50,
@@ -155,27 +155,27 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 36,
                                     byte_length: 20,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 36,
                                 byte_length: 21,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 26,
@@ -187,9 +187,9 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
@@ -197,18 +197,18 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 49,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

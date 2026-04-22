@@ -35,9 +35,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -60,15 +60,15 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -77,9 +77,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                         operator: GreaterThan,
                         left: Identifier {
                             value: "a",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 32,
@@ -93,18 +93,18 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                 value: 0,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 36,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 32,
@@ -118,9 +118,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                     operator: GreaterThan,
                                     left: Identifier {
                                         value: "b",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 47,
@@ -134,18 +134,18 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                             value: 0,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 51,
                                             byte_length: 1,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 47,
@@ -157,9 +157,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                         Call {
                                             expression: Identifier {
                                                 value: "print",
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 61,
@@ -173,9 +173,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                                     literal: String(
                                                         "both positive",
                                                     ),
-                                                    ty: Variable(
-                                                        -1,
-                                                    ),
+                                                    ty: Var {
+                                                        id: uninferred,
+                                                    },
                                                     span: Span {
                                                         file_id: 0,
                                                         byte_offset: 67,
@@ -185,9 +185,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                             ],
                                             spread: None,
                                             type_args: [],
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 61,
@@ -195,9 +195,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                             },
                                         },
                                     ],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 53,
@@ -209,9 +209,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                         Call {
                                             expression: Identifier {
                                                 value: "print",
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 104,
@@ -225,9 +225,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                                     literal: String(
                                                         "a positive, b non-positive",
                                                     ),
-                                                    ty: Variable(
-                                                        -1,
-                                                    ),
+                                                    ty: Var {
+                                                        id: uninferred,
+                                                    },
                                                     span: Span {
                                                         file_id: 0,
                                                         byte_offset: 110,
@@ -237,9 +237,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                             ],
                                             spread: None,
                                             type_args: [],
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 104,
@@ -247,18 +247,18 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                             },
                                         },
                                     ],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 96,
                                         byte_length: 50,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 44,
@@ -266,9 +266,9 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 38,
@@ -276,18 +276,18 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                         },
                     },
                     alternative: Unit {
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 29,
                             byte_length: 121,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 29,
@@ -295,18 +295,18 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 25,
                 byte_length: 127,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

@@ -54,15 +54,15 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -95,15 +95,15 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     iterable: Identifier {
                         value: "map_data",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 61,
@@ -117,9 +117,9 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                             Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 76,
@@ -131,9 +131,9 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                                 args: [
                                     Identifier {
                                         value: "key",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 82,
@@ -144,9 +144,9 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                                     },
                                     Identifier {
                                         value: "value",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 87,
@@ -158,9 +158,9 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 76,
@@ -168,9 +168,9 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 70,
@@ -185,18 +185,18 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                     needs_label: false,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 37,
                 byte_length: 63,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

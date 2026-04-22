@@ -1,10 +1,11 @@
+use crate::checker::EnvResolve;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::UnusedExpressionKind;
 use syntax::ast::{Expression, Generic, Pattern, Span, StructKind, UnaryOperator};
 use syntax::program::{Definition, ReceiverCoercion};
-use syntax::types::{Bound, Type, TypeVariableState};
+use syntax::types::{Bound, Type};
 
 use crate::checker::PostInferenceCheck;
 
@@ -58,7 +59,7 @@ impl Checker<'_, '_> {
                 ..
             } = expression.as_ref()
         {
-            let receiver_ty = receiver.get_type().resolve().strip_refs();
+            let receiver_ty = receiver.get_type().resolve_in(&self.env).strip_refs();
             if let Type::Nominal { id, .. } = &receiver_ty {
                 let method_key = format!("{}.{}", id, member);
                 if let Some(definition) = self.store.get_definition(&method_key) {
@@ -70,9 +71,9 @@ impl Checker<'_, '_> {
         vec![]
     }
 
-    pub(crate) fn get_call_return_type(expression: &Expression) -> Option<Type> {
+    pub(crate) fn get_call_return_type(&self, expression: &Expression) -> Option<Type> {
         if let Expression::Call { expression, .. } = expression {
-            let callee_ty = expression.get_type().resolve();
+            let callee_ty = expression.get_type().resolve_in(&self.env);
             match callee_ty {
                 Type::Function { return_type, .. } => Some(return_type.as_ref().clone()),
                 _ => None,
@@ -82,7 +83,7 @@ impl Checker<'_, '_> {
         }
     }
 
-    pub(crate) fn is_channel_send(expression: &Expression) -> bool {
+    pub(crate) fn is_channel_send(&self, expression: &Expression) -> bool {
         if let Expression::Call { expression, .. } = expression
             && let Expression::DotAccess {
                 expression: receiver,
@@ -93,7 +94,7 @@ impl Checker<'_, '_> {
         {
             return receiver
                 .get_type()
-                .resolve()
+                .resolve_in(&self.env)
                 .get_name()
                 .map(|n| n == "Channel" || n == "Sender")
                 .unwrap_or(false);
@@ -203,15 +204,22 @@ impl Checker<'_, '_> {
         span: &Span,
     ) {
         if param_types.len() != args.len() {
-            let actual_types: Vec<Type> = args.iter().map(|e| e.get_type()).collect();
+            let resolved_expected: Vec<Type> = param_types
+                .iter()
+                .map(|t| t.resolve_in(&self.env))
+                .collect();
+            let resolved_actual: Vec<Type> = args
+                .iter()
+                .map(|e| e.get_type().resolve_in(&self.env))
+                .collect();
             let generic_params = self.get_generic_param_names(callee_expression);
             let is_constructor = callee_expression
                 .get_var_name()
                 .map(|name| name.chars().next().is_some_and(|c| c.is_uppercase()))
                 .unwrap_or(false);
             self.sink.push(diagnostics::infer::arity_mismatch(
-                param_types,
-                &actual_types,
+                &resolved_expected,
+                &resolved_actual,
                 &generic_params,
                 is_constructor,
                 *span,
@@ -237,8 +245,9 @@ impl Checker<'_, '_> {
         span: &Span,
     ) {
         for bound in bounds {
-            if let Type::Variable(var) = &bound.generic.resolve()
-                && let TypeVariableState::Unbound { .. } = &*var.borrow()
+            let resolved = self.env.resolve(&bound.generic);
+            if let Type::Var { id, .. } = &resolved
+                && self.env.is_unbound(*id)
             {
                 self.sink.push(diagnostics::infer::unconstrained_type_param(
                     &bound.param_name,
@@ -255,23 +264,20 @@ impl Checker<'_, '_> {
         for check in std::mem::take(&mut self.post_inference_checks) {
             match check {
                 PostInferenceCheck::GenericCall { return_ty, span } => {
-                    if return_ty.resolve().has_unbound_variables() {
+                    if self.env.resolve(&return_ty).has_unbound_variables() {
                         self.sink
                             .push(diagnostics::infer::cannot_infer_type_argument(span));
                     }
                 }
                 PostInferenceCheck::EmptyCollection { name, ty, span } => {
-                    if ty.resolve().has_unbound_variables() {
+                    if self.env.resolve(&ty).has_unbound_variables() {
                         self.sink
                             .push(diagnostics::infer::uninferred_binding(&name, span));
                     }
                 }
                 PostInferenceCheck::StatementTail { expected_ty, span } => {
-                    let resolved = expected_ty.resolve();
-                    if !resolved.is_unit()
-                        && !matches!(resolved, Type::Variable(_))
-                        && !expected_ty.is_ignored()
-                    {
+                    let resolved = self.env.resolve(&expected_ty);
+                    if !resolved.is_unit() && !resolved.is_variable() && !expected_ty.is_ignored() {
                         self.sink.push(diagnostics::infer::statement_as_tail(span));
                     }
                 }
@@ -405,7 +411,7 @@ impl Checker<'_, '_> {
                 expression, member, ..
             } => {
                 if member == "0" {
-                    let base_ty = expression.get_type().resolve();
+                    let base_ty = expression.get_type().resolve_in(&self.env);
                     let ty = base_ty.strip_refs();
                     if let Type::Nominal { id, params, .. } = ty
                         && params.is_empty()
@@ -464,7 +470,7 @@ impl Checker<'_, '_> {
     fn is_map_indexed_access(&self, expression: &Expression) -> bool {
         match expression.unwrap_parens() {
             Expression::IndexedAccess { expression, .. } => {
-                expression.get_type().resolve().has_name("Map")
+                expression.get_type().resolve_in(&self.env).has_name("Map")
             }
             _ => false,
         }
@@ -555,7 +561,7 @@ impl Checker<'_, '_> {
                 _ => None,
             };
             if let Some(ret) = ret_ty {
-                let resolved = ret.resolve();
+                let resolved = ret.resolve_in(&self.env);
                 let is_native_ret =
                     matches!(resolved.get_name(), Some("Channel" | "Map" | "Slice"));
                 if is_native_ret {
@@ -612,7 +618,7 @@ impl Checker<'_, '_> {
         } = current
         {
             if member.parse::<usize>().is_ok() {
-                let ty = inner.get_type().resolve().strip_refs();
+                let ty = inner.get_type().resolve_in(&self.env).strip_refs();
                 if let Type::Nominal { id, .. } = &ty
                     && let Some(Definition::Struct {
                         kind: StructKind::Tuple,
@@ -677,7 +683,10 @@ pub(crate) fn is_temp_producing(expression: &Expression) -> bool {
     )
 }
 
-pub(crate) fn check_is_non_addressable(expression: &Expression) -> Option<&'static str> {
+pub(crate) fn check_is_non_addressable(
+    expression: &Expression,
+    env: &crate::checker::TypeEnv,
+) -> Option<&'static str> {
     match expression {
         Expression::Identifier { .. } => None,
         Expression::DotAccess { expression, .. } => {
@@ -685,15 +694,15 @@ pub(crate) fn check_is_non_addressable(expression: &Expression) -> Option<&'stat
             // Allow &call().x when call returns Ref<T> — pointer fields are addressable.
             let is_non_addressable_origin = matches!(inner, Expression::StructCall { .. })
                 || (matches!(inner, Expression::Call { .. })
-                    && !expression.get_type().resolve().is_ref());
+                    && !expression.get_type().resolve_in(env).is_ref());
             if is_non_addressable_origin {
                 Some("field access on non-addressable value")
             } else {
-                check_is_non_addressable(expression)
+                check_is_non_addressable(expression, env)
             }
         }
         Expression::IndexedAccess { expression, .. } => {
-            let expression_ty = expression.get_type().resolve();
+            let expression_ty = expression.get_type().resolve_in(env);
             if let Some(name) = expression_ty.get_name() {
                 if name == "Map" {
                     return Some("map index expression");
@@ -706,7 +715,7 @@ pub(crate) fn check_is_non_addressable(expression: &Expression) -> Option<&'stat
             if matches!(expression.unwrap_parens(), Expression::Call { .. }) {
                 Some("index access on function call")
             } else {
-                check_is_non_addressable(expression)
+                check_is_non_addressable(expression, env)
             }
         }
         Expression::Unary {
@@ -714,7 +723,7 @@ pub(crate) fn check_is_non_addressable(expression: &Expression) -> Option<&'stat
             ..
         } => None,
         Expression::StructCall { .. } => None,
-        Expression::Paren { expression, .. } => check_is_non_addressable(expression),
+        Expression::Paren { expression, .. } => check_is_non_addressable(expression, env),
         Expression::Call { .. } => None,
         Expression::Literal { .. } => Some("literal"),
         Expression::Binary { .. } => Some("binary expression"),
@@ -733,17 +742,18 @@ pub(crate) fn check_is_non_addressable(expression: &Expression) -> Option<&'stat
 /// struct literals, and tuple literals are not valid assignment roots.
 pub(crate) fn check_non_addressable_assignment_target(
     expression: &Expression,
+    env: &crate::checker::TypeEnv,
 ) -> Option<&'static str> {
     match expression.unwrap_parens() {
         Expression::Identifier { .. } => None,
         Expression::DotAccess { expression, .. } => {
             // Allow assignment through pointer: make().x = 5 when make() -> Ref<T>
             if matches!(expression.unwrap_parens(), Expression::Call { .. })
-                && expression.get_type().resolve().is_ref()
+                && expression.get_type().resolve_in(env).is_ref()
             {
                 None
             } else {
-                check_non_addressable_assignment_target(expression)
+                check_non_addressable_assignment_target(expression, env)
             }
         }
         Expression::IndexedAccess { .. } => None,

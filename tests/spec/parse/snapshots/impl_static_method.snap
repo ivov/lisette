@@ -66,9 +66,9 @@ description: "input: \nstruct Math {}\n\nimpl Math {\n  fn add(a: int, b: int) -
                             },
                         ),
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     Binding {
                         pattern: Identifier {
@@ -91,9 +91,9 @@ description: "input: \nstruct Math {}\n\nimpl Math {\n  fn add(a: int, b: int) -
                             },
                         ),
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                 ],
                 return_annotation: Constructor {
@@ -105,9 +105,9 @@ description: "input: \nstruct Math {}\n\nimpl Math {\n  fn add(a: int, b: int) -
                         byte_length: 3,
                     },
                 },
-                return_type: Variable(
-                    -1,
-                ),
+                return_type: Var {
+                    id: uninferred,
+                },
                 visibility: Private,
                 body: Block {
                     items: [
@@ -116,9 +116,9 @@ description: "input: \nstruct Math {}\n\nimpl Math {\n  fn add(a: int, b: int) -
                                 operator: Addition,
                                 left: Identifier {
                                     value: "a",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 74,
@@ -129,9 +129,9 @@ description: "input: \nstruct Math {}\n\nimpl Math {\n  fn add(a: int, b: int) -
                                 },
                                 right: Identifier {
                                     value: "b",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 78,
@@ -140,18 +140,18 @@ description: "input: \nstruct Math {}\n\nimpl Math {\n  fn add(a: int, b: int) -
                                     binding_id: None,
                                     qualified: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 74,
                                     byte_length: 5,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 67,
@@ -159,18 +159,18 @@ description: "input: \nstruct Math {}\n\nimpl Math {\n  fn add(a: int, b: int) -
                             },
                         },
                     ],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 61,
                         byte_length: 23,
                     },
                 },
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
                 span: Span {
                     file_id: 0,
                     byte_offset: 31,
@@ -179,9 +179,9 @@ description: "input: \nstruct Math {}\n\nimpl Math {\n  fn add(a: int, b: int) -
             },
         ],
         generics: [],
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 17,

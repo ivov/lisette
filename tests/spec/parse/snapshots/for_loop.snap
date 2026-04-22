@@ -45,15 +45,15 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -69,15 +69,15 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     iterable: Identifier {
                         value: "items",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 47,
@@ -91,9 +91,9 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                             Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 59,
@@ -105,9 +105,9 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                                 args: [
                                     Identifier {
                                         value: "item",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 65,
@@ -119,9 +119,9 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 59,
@@ -129,9 +129,9 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 53,
@@ -146,18 +146,18 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                     needs_label: false,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 31,
                 byte_length: 46,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

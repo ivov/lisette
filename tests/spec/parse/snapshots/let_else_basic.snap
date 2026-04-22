@@ -33,9 +33,9 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                 byte_length: 11,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -54,9 +54,9 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                                 },
                             ],
                             rest: false,
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 34,
@@ -65,15 +65,15 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Identifier {
                         value: "opt",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 44,
@@ -90,9 +90,9 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                                 Return {
                                     expression: Identifier {
                                         value: "None",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 62,
@@ -101,9 +101,9 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                                         binding_id: None,
                                         qualified: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 55,
@@ -111,9 +111,9 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                                     },
                                 },
                             ],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 53,
@@ -129,9 +129,9 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                         },
                     ),
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 30,
@@ -141,9 +141,9 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                 Call {
                     expression: Identifier {
                         value: "Some",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 73,
@@ -155,9 +155,9 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                     args: [
                         Identifier {
                             value: "x",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 78,
@@ -169,9 +169,9 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                     ],
                     spread: None,
                     type_args: [],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 73,
@@ -179,18 +179,18 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 26,
                 byte_length: 56,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

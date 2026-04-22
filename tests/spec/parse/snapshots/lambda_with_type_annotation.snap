@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let square = |x: int| -> int x * x;\n}\n"
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() {\n  let square = |x: int| -> int x * x;\n}\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Lambda {
                         params: [
@@ -60,9 +60,9 @@ description: "input: \nfn test() {\n  let square = |x: int| -> int x * x;\n}\n"
                                     },
                                 ),
                                 typed_pattern: None,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                             },
                         ],
                         return_annotation: Constructor {
@@ -78,9 +78,9 @@ description: "input: \nfn test() {\n  let square = |x: int| -> int x * x;\n}\n"
                             operator: Multiplication,
                             left: Identifier {
                                 value: "x",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 44,
@@ -91,9 +91,9 @@ description: "input: \nfn test() {\n  let square = |x: int| -> int x * x;\n}\n"
                             },
                             right: Identifier {
                                 value: "x",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 48,
@@ -102,18 +102,18 @@ description: "input: \nfn test() {\n  let square = |x: int| -> int x * x;\n}\n"
                                 binding_id: None,
                                 qualified: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 44,
                                 byte_length: 5,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 28,
@@ -125,9 +125,9 @@ description: "input: \nfn test() {\n  let square = |x: int| -> int x * x;\n}\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -135,18 +135,18 @@ description: "input: \nfn test() {\n  let square = |x: int| -> int x * x;\n}\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 41,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

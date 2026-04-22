@@ -26,9 +26,9 @@ description: "input: \nconst GREETING: string = \"Hello\";\n"
             literal: String(
                 "Hello",
             ),
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 26,
@@ -36,9 +36,9 @@ description: "input: \nconst GREETING: string = \"Hello\";\n"
             },
         },
         visibility: Private,
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

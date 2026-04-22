@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,18 +33,18 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 10,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 27,
@@ -62,9 +62,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -74,9 +74,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                 Assignment {
                     target: Identifier {
                         value: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 33,
@@ -89,9 +89,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                         operator: Addition,
                         left: Identifier {
                             value: "x",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 33,
@@ -105,18 +105,18 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                                 value: 5,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 38,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 33,
@@ -135,9 +135,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                 Assignment {
                     target: Identifier {
                         value: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 43,
@@ -150,9 +150,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                         operator: Subtraction,
                         left: Identifier {
                             value: "x",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 43,
@@ -166,18 +166,18 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                                 value: 3,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 48,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 43,
@@ -196,9 +196,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                 Assignment {
                     target: Identifier {
                         value: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 53,
@@ -211,9 +211,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                         operator: Multiplication,
                         left: Identifier {
                             value: "x",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 53,
@@ -227,18 +227,18 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                                 value: 2,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 58,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 53,
@@ -257,9 +257,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                 Assignment {
                     target: Identifier {
                         value: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 63,
@@ -272,9 +272,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                         operator: Division,
                         left: Identifier {
                             value: "x",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 63,
@@ -288,18 +288,18 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                                 value: 4,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 68,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 63,
@@ -318,9 +318,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                 Assignment {
                     target: Identifier {
                         value: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 73,
@@ -333,9 +333,9 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                         operator: Remainder,
                         left: Identifier {
                             value: "x",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 73,
@@ -349,18 +349,18 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                                 value: 3,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 78,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 73,
@@ -377,18 +377,18 @@ description: "input: \nfn test() {\n  let mut x = 10;\n  x += 5;\n  x -= 3;\n  x
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 71,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

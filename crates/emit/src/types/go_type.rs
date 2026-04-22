@@ -3,7 +3,7 @@ use crate::names::go_name;
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
 use syntax::ast::Annotation;
-use syntax::types::{Type, TypeVariableState};
+use syntax::types::Type;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct GoType {
@@ -72,10 +72,7 @@ impl Emitter<'_> {
                 return_type,
                 ..
             } => self.emit_function_type(params, return_type),
-            Type::Variable(var) => match &*var.borrow() {
-                TypeVariableState::Link(ty) => self.go_type(ty),
-                TypeVariableState::Unbound { .. } => GoType::new("any"),
-            },
+            Type::Var { .. } => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
             Type::Parameter(name) => GoType::new(name.to_string()),
             Type::Never => GoType::new("struct{}"),

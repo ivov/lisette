@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -46,9 +46,9 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                                         },
                                     ],
                                     rest: false,
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 23,
@@ -64,15 +64,15 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Identifier {
                         value: "tuple",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 34,
@@ -95,9 +95,9 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                                     },
                                 },
                             ],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 45,
@@ -113,9 +113,9 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                         },
                     ),
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -125,9 +125,9 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                 Call {
                     expression: Identifier {
                         value: "use_values",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 59,
@@ -139,9 +139,9 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                     args: [
                         Identifier {
                             value: "a",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 70,
@@ -152,9 +152,9 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                         },
                         Identifier {
                             value: "b",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 73,
@@ -166,9 +166,9 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                     ],
                     spread: None,
                     type_args: [],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 59,
@@ -176,18 +176,18 @@ description: "input: \nfn test() {\n  let (a, Some(b)) = tuple else { break; };\
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 67,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

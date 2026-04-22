@@ -23,9 +23,9 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -41,18 +41,18 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Block {
                         items: [
                             Call {
                                 expression: Identifier {
                                     value: "foo",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 36,
@@ -64,9 +64,9 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                                 args: [],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 36,
@@ -80,18 +80,18 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                                         value: 1,
                                         text: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 47,
                                         byte_length: 1,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 46,
@@ -99,9 +99,9 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 30,
@@ -113,9 +113,9 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 22,
@@ -124,9 +124,9 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                 },
                 Identifier {
                     value: "x",
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 56,
@@ -136,18 +136,18 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                     qualified: None,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 18,
                 byte_length: 41,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

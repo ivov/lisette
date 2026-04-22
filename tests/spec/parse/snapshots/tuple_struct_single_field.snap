@@ -33,9 +33,9 @@ description: "input: \nstruct UserId(int)\n"
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Tuple,

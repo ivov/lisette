@@ -657,7 +657,7 @@ fn walk_type(
             }
         }
         Type::Simple(_)
-        | Type::Variable(_)
+        | Type::Var { .. }
         | Type::Parameter(_)
         | Type::Never
         | Type::Error

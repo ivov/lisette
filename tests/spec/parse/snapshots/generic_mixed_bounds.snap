@@ -92,9 +92,9 @@ description: "input: \nfn complex<T: Display + Clone, U: Debug, V>(x: T, y: U, z
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -117,9 +117,9 @@ description: "input: \nfn complex<T: Display + Clone, U: Debug, V>(x: T, y: U, z
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -142,9 +142,9 @@ description: "input: \nfn complex<T: Display + Clone, U: Debug, V>(x: T, y: U, z
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -156,9 +156,9 @@ description: "input: \nfn complex<T: Display + Clone, U: Debug, V>(x: T, y: U, z
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -168,18 +168,18 @@ description: "input: \nfn complex<T: Display + Clone, U: Debug, V>(x: T, y: U, z
                             value: 0,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 81,
                             byte_length: 1,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 74,
@@ -187,18 +187,18 @@ description: "input: \nfn complex<T: Display + Clone, U: Debug, V>(x: T, y: U, z
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 70,
                 byte_length: 15,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

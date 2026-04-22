@@ -35,9 +35,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -49,18 +49,18 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "s",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 37,
@@ -77,9 +77,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         literal: String(
                                             "yes",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 45,
@@ -90,9 +90,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         literal: String(
                                             "y",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 53,
@@ -103,9 +103,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         literal: String(
                                             "true",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 59,
@@ -124,9 +124,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                     value: 1,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 69,
@@ -141,9 +141,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         literal: String(
                                             "no",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 76,
@@ -154,9 +154,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         literal: String(
                                             "n",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 83,
@@ -167,9 +167,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         literal: String(
                                             "false",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 89,
@@ -188,9 +188,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                     value: 0,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 100,
@@ -213,18 +213,18 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         value: 1,
                                         text: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 113,
                                         byte_length: 1,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 112,
@@ -234,9 +234,9 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 31,
@@ -244,18 +244,18 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 27,
                 byte_length: 94,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

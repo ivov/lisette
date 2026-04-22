@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use syntax::ast::BindingKind;
 use syntax::ast::{Binding, Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::Type;
@@ -66,7 +67,7 @@ impl Checker<'_, '_> {
                 self.sink
                     .push(diagnostics::infer::cannot_match_on_functions(*span));
             }
-            Type::Variable(_) => {
+            Type::Var { .. } => {
                 self.sink
                     .push(diagnostics::infer::cannot_match_on_unconstrained_type(
                         *span,
@@ -132,7 +133,7 @@ impl Checker<'_, '_> {
         // interface from a return type annotation), use a shared type variable
         // (like match does) so both branches can satisfy interface constraints.
         let expected_is_concrete =
-            is_expression && !has_no_else && !expected_ty.resolve().is_variable();
+            is_expression && !has_no_else && !expected_ty.resolve_in(&self.env).is_variable();
 
         if expected_is_concrete {
             self.unify(&consequence_ty, expected_ty, &span);
@@ -157,8 +158,8 @@ impl Checker<'_, '_> {
             let consequence_span = new_consequence.get_span();
             let alternative_span = new_alternative.get_span();
 
-            let resolved_consequence = consequence_ty.resolve();
-            let resolved_alternative = alternative_ty.resolve();
+            let resolved_consequence = consequence_ty.resolve_in(&self.env);
+            let resolved_alternative = alternative_ty.resolve_in(&self.env);
 
             match self
                 .reconcile_branch_types(&[consequence_ty.clone(), alternative_ty.clone()], &span)
@@ -185,7 +186,7 @@ impl Checker<'_, '_> {
         let result_ty = if has_no_else {
             self.type_unit()
         } else if is_expression && !expected_is_concrete {
-            expected_ty.resolve()
+            expected_ty.resolve_in(&self.env)
         } else {
             consequence_ty
         };
@@ -218,7 +219,7 @@ impl Checker<'_, '_> {
         let subject_ty = self.new_type_var();
         let new_subject = self.infer_expression(*subject, &subject_ty);
 
-        let resolved_subject_ty = new_subject.get_type().resolve();
+        let resolved_subject_ty = new_subject.get_type().resolve_in(&self.env);
         self.ensure_subject_matchable(&resolved_subject_ty, &new_subject.get_span());
 
         let is_statement = expected_ty.is_ignored();
@@ -238,14 +239,15 @@ impl Checker<'_, '_> {
             }
         }
 
-        let needs_reconciliation = !arms_independent && result_ty.resolve().is_variable();
+        let needs_reconciliation =
+            !arms_independent && result_ty.resolve_in(&self.env).is_variable();
 
         let new_arms = arms
             .into_iter()
             .map(|a| {
                 self.scopes.push();
 
-                let pattern_ty = subject_ty.resolve();
+                let pattern_ty = subject_ty.resolve_in(&self.env);
                 let (new_pattern, typed_pattern) =
                     self.infer_pattern(a.pattern, pattern_ty, BindingKind::MatchArm);
 
@@ -405,11 +407,17 @@ impl Checker<'_, '_> {
         let scrutinee_ty = self.new_type_var();
         let new_scrutinee = self.infer_expression(*scrutinee, &scrutinee_ty);
 
-        self.ensure_subject_matchable(&scrutinee_ty.resolve(), &new_scrutinee.get_span());
+        self.ensure_subject_matchable(
+            &scrutinee_ty.resolve_in(&self.env),
+            &new_scrutinee.get_span(),
+        );
 
         self.scopes.push();
-        let (new_pattern, typed_pattern) =
-            self.infer_pattern(pattern, scrutinee_ty.resolve(), BindingKind::MatchArm);
+        let (new_pattern, typed_pattern) = self.infer_pattern(
+            pattern,
+            scrutinee_ty.resolve_in(&self.env),
+            BindingKind::MatchArm,
+        );
 
         let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, false);
         self.inference.loop_needs_label_stack.push(false);
@@ -445,7 +453,7 @@ impl Checker<'_, '_> {
         let iterable_ty = self.new_type_var();
         let new_iterable = self.infer_expression(*iterable, &iterable_ty);
 
-        let resolved_iterable_ty = self.store.peel_alias(&iterable_ty.resolve());
+        let resolved_iterable_ty = self.store.peel_alias(&iterable_ty.resolve_in(&self.env));
 
         let iterable_ty_name = match resolved_iterable_ty.get_name() {
             Some(name) => name,

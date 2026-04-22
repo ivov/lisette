@@ -53,9 +53,9 @@ description: "input: \nstruct Container<T: Clone> {\n  item: T,\n}\n"
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,

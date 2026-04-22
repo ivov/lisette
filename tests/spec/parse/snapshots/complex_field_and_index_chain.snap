@@ -15,9 +15,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: DotAccess {
                         expression: DotAccess {
@@ -45,9 +45,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                                         expression: DotAccess {
                                             expression: Identifier {
                                                 value: "obj",
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 26,
@@ -57,9 +57,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                                                 qualified: None,
                                             },
                                             member: "field",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 26,
@@ -68,9 +68,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                                         },
                                         index: Identifier {
                                             value: "i",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 36,
@@ -79,9 +79,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                                             binding_id: None,
                                             qualified: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 35,
@@ -89,9 +89,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                                         },
                                     },
                                     member: "method",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 35,
@@ -101,9 +101,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                                 args: [],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 35,
@@ -111,9 +111,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                                 },
                             },
                             member: "nested",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 35,
@@ -121,9 +121,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                             },
                         },
                         member: "value",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 35,
@@ -135,9 +135,9 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
@@ -145,18 +145,18 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 52,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

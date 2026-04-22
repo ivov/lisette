@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Loop {
                         body: Block {
@@ -44,9 +44,9 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                                     condition: Call {
                                         expression: Identifier {
                                             value: "done",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 37,
@@ -58,9 +58,9 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                                         args: [],
                                         spread: None,
                                         type_args: [],
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 37,
@@ -76,9 +76,9 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                                                             value: 42,
                                                             text: None,
                                                         },
-                                                        ty: Variable(
-                                                            -1,
-                                                        ),
+                                                        ty: Var {
+                                                            id: uninferred,
+                                                        },
                                                         span: Span {
                                                             file_id: 0,
                                                             byte_offset: 58,
@@ -93,9 +93,9 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                                                 },
                                             },
                                         ],
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 44,
@@ -103,18 +103,18 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                                         },
                                     },
                                     alternative: Unit {
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 34,
                                             byte_length: 33,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 34,
@@ -122,18 +122,18 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                                     },
                                 },
                             ],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 28,
                                 byte_length: 43,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 23,
@@ -146,9 +146,9 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -156,18 +156,18 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 63,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

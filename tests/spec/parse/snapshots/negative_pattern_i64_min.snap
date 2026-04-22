@@ -35,9 +35,9 @@ description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -922337
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -49,18 +49,18 @@ description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -922337
                 byte_length: 6,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 41,
@@ -78,9 +78,9 @@ description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -922337
                                         "-9223372036854775808",
                                     ),
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 49,
@@ -91,9 +91,9 @@ description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -922337
                                 literal: String(
                                     "min",
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 73,
@@ -113,9 +113,9 @@ description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -922337
                                 literal: String(
                                     "other",
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 89,
@@ -125,9 +125,9 @@ description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -922337
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 35,
@@ -135,18 +135,18 @@ description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -922337
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 31,
                 byte_length: 72,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

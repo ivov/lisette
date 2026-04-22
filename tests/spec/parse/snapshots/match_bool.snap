@@ -35,24 +35,24 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "active",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 33,
@@ -67,9 +67,9 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                                 literal: Boolean(
                                     true,
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 46,
@@ -79,9 +79,9 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                             expression: Call {
                                 expression: Identifier {
                                     value: "start_service",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 55,
@@ -93,9 +93,9 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                                 args: [],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 55,
@@ -108,9 +108,9 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                                 literal: Boolean(
                                     false,
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 76,
@@ -120,9 +120,9 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                             expression: Call {
                                 expression: Identifier {
                                     value: "stop_service",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 85,
@@ -134,9 +134,9 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                                 args: [],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 85,
@@ -146,9 +146,9 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 27,
@@ -156,18 +156,18 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 23,
                 byte_length: 83,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

@@ -57,9 +57,9 @@ description: "input: \n#[json]\nstruct User {\n  #[json(omitempty)]\n  name: str
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,

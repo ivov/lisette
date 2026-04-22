@@ -60,9 +60,9 @@ description: "input: \n#[tag]\nstruct User {\n  #[tag(\"json\", omitempty)]\n  n
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,

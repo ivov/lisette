@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -28,9 +28,9 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                                 condition: Call {
                                     expression: Identifier {
                                         value: "skip_this",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 29,
@@ -42,9 +42,9 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                                     args: [],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 29,
@@ -61,9 +61,9 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                                             },
                                         },
                                     ],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 41,
@@ -71,18 +71,18 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                                     },
                                 },
                                 alternative: Unit {
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 26,
                                         byte_length: 38,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 26,
@@ -92,9 +92,9 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                             Call {
                                 expression: Identifier {
                                     value: "process",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 69,
@@ -106,9 +106,9 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                                 args: [],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 69,
@@ -116,18 +116,18 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 20,
                             byte_length: 63,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -136,18 +136,18 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                     needs_label: false,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 74,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

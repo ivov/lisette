@@ -52,9 +52,9 @@ description: "input: \nstruct Pair<A, B>(A, B)\n"
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             StructFieldDefinition {
                 doc: None,
@@ -75,9 +75,9 @@ description: "input: \nstruct Pair<A, B>(A, B)\n"
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Tuple,

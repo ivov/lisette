@@ -15,9 +15,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Binary {
                         operator: Pipeline,
@@ -45,9 +45,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                 operator: Pipeline,
                                 left: Identifier {
                                     value: "x",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 26,
@@ -59,9 +59,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                 right: Call {
                                     expression: Identifier {
                                         value: "add",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 31,
@@ -76,9 +76,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                                 value: 5,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 35,
@@ -88,18 +88,18 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 31,
                                         byte_length: 6,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 26,
@@ -109,9 +109,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                             right: Call {
                                 expression: Identifier {
                                     value: "multiply",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 41,
@@ -126,9 +126,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                             value: 2,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 50,
@@ -138,18 +138,18 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 41,
                                     byte_length: 11,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 26,
@@ -159,9 +159,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                         right: Call {
                             expression: Identifier {
                                 value: "subtract",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 56,
@@ -176,9 +176,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                                         value: 3,
                                         text: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 65,
@@ -188,18 +188,18 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                             ],
                             spread: None,
                             type_args: [],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 56,
                                 byte_length: 11,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 26,
@@ -211,9 +211,9 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
@@ -221,18 +221,18 @@ description: "input: \nfn test() { let result = x |> add(5) |> multiply(2) |> su
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 59,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

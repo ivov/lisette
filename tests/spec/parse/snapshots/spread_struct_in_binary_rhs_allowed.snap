@@ -33,9 +33,9 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,
@@ -78,15 +78,15 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -102,18 +102,18 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 1,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 56,
@@ -125,9 +125,9 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 46,
@@ -139,9 +139,9 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                         operator: LessThan,
                         left: Identifier {
                             value: "foo",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 64,
@@ -156,9 +156,9 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                             spread: Some(
                                 Identifier {
                                     value: "base",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 78,
@@ -168,18 +168,18 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                                     qualified: None,
                                 },
                             ),
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 70,
                                 byte_length: 14,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 64,
@@ -192,9 +192,9 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                                 literal: Boolean(
                                     true,
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 87,
@@ -202,9 +202,9 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 85,
@@ -217,9 +217,9 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                                 literal: Boolean(
                                     false,
                                 ),
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 101,
@@ -227,18 +227,18 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 99,
                             byte_length: 9,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 61,
@@ -246,18 +246,18 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 42,
                 byte_length: 68,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 23,

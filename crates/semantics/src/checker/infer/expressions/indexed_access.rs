@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -26,8 +27,10 @@ impl Checker<'_, '_> {
 
         self.check_not_temp_producing(&index_expression);
 
-        let resolved_index_ty = index_ty_var.resolve();
-        let resolved_collection_ty = self.store.peel_alias(&collection_ty_var.resolve());
+        let resolved_index_ty = index_ty_var.resolve_in(&self.env);
+        let resolved_collection_ty = self
+            .store
+            .peel_alias(&collection_ty_var.resolve_in(&self.env));
 
         if resolved_collection_ty.is_error() {
             self.unify(expected_ty, &Type::Error, &span);
@@ -168,7 +171,9 @@ impl Checker<'_, '_> {
         let collection_ty_var = self.new_type_var();
         let collection_expression =
             self.with_value_context(|s| s.infer_expression(*expression, &collection_ty_var));
-        let resolved_collection_ty = self.store.peel_alias(&collection_ty_var.resolve());
+        let resolved_collection_ty = self
+            .store
+            .peel_alias(&collection_ty_var.resolve_in(&self.env));
 
         if resolved_collection_ty.is_error() {
             self.unify(expected_ty, &Type::Error, &span);

@@ -35,15 +35,15 @@ description: "input: \nfn test(a: bool) {\n  let still_a = !!a;\n}\n"
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -59,9 +59,9 @@ description: "input: \nfn test(a: bool) {\n  let still_a = !!a;\n}\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Unary {
                         operator: Not,
@@ -69,9 +69,9 @@ description: "input: \nfn test(a: bool) {\n  let still_a = !!a;\n}\n"
                             operator: Not,
                             expression: Identifier {
                                 value: "a",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 38,
@@ -80,18 +80,18 @@ description: "input: \nfn test(a: bool) {\n  let still_a = !!a;\n}\n"
                                 binding_id: None,
                                 qualified: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 37,
                                 byte_length: 2,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 36,
@@ -103,9 +103,9 @@ description: "input: \nfn test(a: bool) {\n  let still_a = !!a;\n}\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 22,
@@ -113,18 +113,18 @@ description: "input: \nfn test(a: bool) {\n  let still_a = !!a;\n}\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 18,
                 byte_length: 24,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

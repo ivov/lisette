@@ -35,15 +35,15 @@ description: "input: \nfn test(base: Point) { let p = Point { ..base, }; }\n"
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -59,9 +59,9 @@ description: "input: \nfn test(base: Point) { let p = Point { ..base, }; }\n"
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: StructCall {
                         name: "Point",
@@ -69,9 +69,9 @@ description: "input: \nfn test(base: Point) { let p = Point { ..base, }; }\n"
                         spread: Some(
                             Identifier {
                                 value: "base",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 42,
@@ -81,9 +81,9 @@ description: "input: \nfn test(base: Point) { let p = Point { ..base, }; }\n"
                                 qualified: None,
                             },
                         ),
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 32,
@@ -95,9 +95,9 @@ description: "input: \nfn test(base: Point) { let p = Point { ..base, }; }\n"
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 24,
@@ -105,18 +105,18 @@ description: "input: \nfn test(base: Point) { let p = Point { ..base, }; }\n"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 22,
                 byte_length: 30,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

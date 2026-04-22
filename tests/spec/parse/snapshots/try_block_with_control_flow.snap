@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,9 +33,9 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: TryBlock {
                         items: [
@@ -51,15 +51,15 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                     },
                                     annotation: None,
                                     typed_pattern: None,
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                 },
                                 iterable: Identifier {
                                     value: "items",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 47,
@@ -75,9 +75,9 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                                 operator: GreaterThan,
                                                 left: Identifier {
                                                     value: "i",
-                                                    ty: Variable(
-                                                        -1,
-                                                    ),
+                                                    ty: Var {
+                                                        id: uninferred,
+                                                    },
                                                     span: Span {
                                                         file_id: 0,
                                                         byte_offset: 64,
@@ -91,18 +91,18 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                                         value: 10,
                                                         text: None,
                                                     },
-                                                    ty: Variable(
-                                                        -1,
-                                                    ),
+                                                    ty: Var {
+                                                        id: uninferred,
+                                                    },
                                                     span: Span {
                                                         file_id: 0,
                                                         byte_offset: 68,
                                                         byte_length: 2,
                                                     },
                                                 },
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 64,
@@ -120,9 +120,9 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                                         },
                                                     },
                                                 ],
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 71,
@@ -130,18 +130,18 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                                 },
                                             },
                                             alternative: Unit {
-                                                ty: Variable(
-                                                    -1,
-                                                ),
+                                                ty: Var {
+                                                    id: uninferred,
+                                                },
                                                 span: Span {
                                                     file_id: 0,
                                                     byte_offset: 61,
                                                     byte_length: 34,
                                                 },
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 61,
@@ -149,9 +149,9 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                             },
                                         },
                                     ],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 53,
@@ -169,9 +169,9 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                 expression: Call {
                                     expression: Identifier {
                                         value: "get_value",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 107,
@@ -183,18 +183,18 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                     args: [],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 107,
                                         byte_length: 11,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 107,
@@ -202,9 +202,9 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         try_keyword_span: Span {
                             file_id: 0,
                             byte_offset: 28,
@@ -221,9 +221,9 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -231,18 +231,18 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 115,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

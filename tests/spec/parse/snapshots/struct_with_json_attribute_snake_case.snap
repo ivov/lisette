@@ -47,9 +47,9 @@ description: "input: \n#[json(snake_case)]\nstruct User {\n  first_name: string,
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,

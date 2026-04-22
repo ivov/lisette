@@ -203,7 +203,7 @@ impl LanguageServer for Backend {
 
         let (ty, span) = hover::get_hover_type_and_span(expression, offset);
 
-        if ty.is_unbound_variable() {
+        if ty.is_type_var() || ty.is_error() {
             return Ok(None);
         }
 

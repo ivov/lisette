@@ -35,9 +35,9 @@ description: "input: \nfn test(x: int, y: int) {\n  let p = Point { x, y };\n}\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -60,15 +60,15 @@ description: "input: \nfn test(x: int, y: int) {\n  let p = Point { x, y };\n}\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -84,9 +84,9 @@ description: "input: \nfn test(x: int, y: int) {\n  let p = Point { x, y };\n}\n
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: StructCall {
                         name: "Point",
@@ -100,9 +100,9 @@ description: "input: \nfn test(x: int, y: int) {\n  let p = Point { x, y };\n}\n
                                 },
                                 value: Identifier {
                                     value: "x",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 45,
@@ -121,9 +121,9 @@ description: "input: \nfn test(x: int, y: int) {\n  let p = Point { x, y };\n}\n
                                 },
                                 value: Identifier {
                                     value: "y",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 48,
@@ -135,9 +135,9 @@ description: "input: \nfn test(x: int, y: int) {\n  let p = Point { x, y };\n}\n
                             },
                         ],
                         spread: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 37,
@@ -149,9 +149,9 @@ description: "input: \nfn test(x: int, y: int) {\n  let p = Point { x, y };\n}\n
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 29,
@@ -159,18 +159,18 @@ description: "input: \nfn test(x: int, y: int) {\n  let p = Point { x, y };\n}\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 25,
                 byte_length: 29,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

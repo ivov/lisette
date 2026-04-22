@@ -35,9 +35,9 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -49,9 +49,9 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -60,9 +60,9 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                         operator: LessThan,
                         left: Identifier {
                             value: "x",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 30,
@@ -76,18 +76,18 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                                 value: 0,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 34,
                                 byte_length: 1,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 30,
@@ -101,9 +101,9 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                                     operator: Negative,
                                     expression: Identifier {
                                         value: "x",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 50,
@@ -112,18 +112,18 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                                         binding_id: None,
                                         qualified: None,
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 49,
                                         byte_length: 2,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 42,
@@ -131,9 +131,9 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 36,
@@ -141,18 +141,18 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                         },
                     },
                     alternative: Unit {
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 27,
                             byte_length: 29,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 27,
@@ -162,9 +162,9 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                 Return {
                     expression: Identifier {
                         value: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 66,
@@ -173,9 +173,9 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                         binding_id: None,
                         qualified: None,
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 59,
@@ -183,18 +183,18 @@ description: "input: \nfn abs(x: int) -> int {\n  if x < 0 {\n    return -x;\n  
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 23,
                 byte_length: 47,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

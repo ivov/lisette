@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use syntax::EcoString;
 use syntax::types::{CompoundKind, SimpleKind, Type};
 
@@ -160,7 +161,7 @@ impl Checker<'_, '_> {
     /// alias names like `tea.Cmd` instead of collapsing to the
     /// underlying `func() Msg`).
     pub fn is_generic_container_with_interface(&self, ty: &Type) -> bool {
-        let resolved = ty.resolve();
+        let resolved = ty.resolve_in(&self.env);
         let Type::Nominal { id, params, .. } = &resolved else {
             return false;
         };
@@ -170,7 +171,7 @@ impl Checker<'_, '_> {
         }
 
         params.iter().any(|p| {
-            if let Type::Nominal { id, .. } = p.resolve() {
+            if let Type::Nominal { id, .. } = p.resolve_in(&self.env) {
                 self.store.get_interface(&id).is_some() || id.starts_with("go:")
             } else {
                 false
@@ -179,13 +180,13 @@ impl Checker<'_, '_> {
     }
 
     pub fn has_interface_type_param(&self, ty: &Type) -> bool {
-        let resolved = ty.resolve();
+        let resolved = ty.resolve_in(&self.env);
         let Some(params) = resolved.get_type_params() else {
             return false;
         };
 
         params.iter().any(|p| {
-            if let Type::Nominal { id, .. } = p.resolve() {
+            if let Type::Nominal { id, .. } = p.resolve_in(&self.env) {
                 self.store.get_interface(&id).is_some()
             } else {
                 false
@@ -194,13 +195,13 @@ impl Checker<'_, '_> {
     }
 
     pub fn has_go_named_type_param(&self, ty: &Type) -> bool {
-        let resolved = ty.resolve();
+        let resolved = ty.resolve_in(&self.env);
         let Some(params) = resolved.get_type_params() else {
             return false;
         };
 
         params.iter().any(|p| {
-            if let Type::Nominal { id, .. } = p.resolve() {
+            if let Type::Nominal { id, .. } = p.resolve_in(&self.env) {
                 id.starts_with("go:")
             } else {
                 false

@@ -33,9 +33,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             StructFieldDefinition {
                 doc: None,
@@ -56,9 +56,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                     },
                 },
                 visibility: Private,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         kind: Record,
@@ -113,9 +113,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                             },
                         ),
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     Binding {
                         pattern: Identifier {
@@ -138,9 +138,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                             },
                         ),
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                 ],
                 return_annotation: Constructor {
@@ -152,9 +152,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                         byte_length: 5,
                     },
                 },
-                return_type: Variable(
-                    -1,
-                ),
+                return_type: Var {
+                    id: uninferred,
+                },
                 visibility: Private,
                 body: Block {
                     items: [
@@ -171,9 +171,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                                         },
                                         value: Identifier {
                                             value: "x",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 107,
@@ -192,9 +192,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                                         },
                                         value: Identifier {
                                             value: "y",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 110,
@@ -206,18 +206,18 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                                     },
                                 ],
                                 spread: None,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 99,
                                     byte_length: 14,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 92,
@@ -225,18 +225,18 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                             },
                         },
                     ],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 86,
                         byte_length: 32,
                     },
                 },
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
                 span: Span {
                     file_id: 0,
                     byte_offset: 54,
@@ -275,9 +275,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                             },
                         ),
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                 ],
                 return_annotation: Constructor {
@@ -289,9 +289,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                         byte_length: 3,
                     },
                 },
-                return_type: Variable(
-                    -1,
-                ),
+                return_type: Var {
+                    id: uninferred,
+                },
                 visibility: Private,
                 body: Block {
                     items: [
@@ -299,9 +299,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                             expression: DotAccess {
                                 expression: Identifier {
                                     value: "self",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 163,
@@ -311,18 +311,18 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                                     qualified: None,
                                 },
                                 member: "x",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 163,
                                     byte_length: 6,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 156,
@@ -330,18 +330,18 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                             },
                         },
                     ],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 150,
                         byte_length: 24,
                     },
                 },
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
                 span: Span {
                     file_id: 0,
                     byte_offset: 121,
@@ -350,9 +350,9 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
             },
         ],
         generics: [],
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 39,

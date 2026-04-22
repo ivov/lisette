@@ -174,7 +174,7 @@ fn check_type_for_private_leak(
             }
         }
         Type::Simple(_)
-        | Type::Variable(_)
+        | Type::Var { .. }
         | Type::Parameter(_)
         | Type::Never
         | Type::Error

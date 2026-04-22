@@ -35,24 +35,24 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "val",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 28,
@@ -64,9 +64,9 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                     arms: [
                         MatchArm {
                             pattern: Unit {
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 38,
@@ -76,9 +76,9 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 44,
@@ -92,9 +92,9 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                                         literal: String(
                                             "It's unit!",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 50,
@@ -104,9 +104,9 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 44,
@@ -116,9 +116,9 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 22,
@@ -126,18 +126,18 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 18,
                 byte_length: 116,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

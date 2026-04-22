@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use syntax::EcoString;
 use syntax::ast::DeadCodeCause;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
@@ -132,12 +133,12 @@ impl Checker<'_, '_> {
     ) -> Expression {
         if items.is_empty() {
             let unit_ty = self.type_unit();
-            let resolved = expected_ty.resolve();
+            let resolved = expected_ty.resolve_in(&self.env);
             if let Some((syntax::types::CompoundKind::Map, args)) = resolved.as_compound()
                 && args.len() == 2
             {
-                let k = args[0].resolve();
-                let v = args[1].resolve();
+                let k = args[0].resolve_in(&self.env);
+                let v = args[1].resolve_in(&self.env);
                 self.sink
                     .push(diagnostics::infer::invalid_map_initialization(&k, &v, span));
             } else {
@@ -176,7 +177,7 @@ impl Checker<'_, '_> {
         let inner_ty = self.new_type_var();
         let new_expression = self.infer_expression(*expression, &inner_ty);
 
-        let resolved_inner = inner_ty.resolve();
+        let resolved_inner = inner_ty.resolve_in(&self.env);
         let is_already_ref = resolved_inner.is_ref();
 
         // Collapse &ref_var to ref_var — adding another reference layer is a no-op
@@ -196,7 +197,7 @@ impl Checker<'_, '_> {
                     .push(diagnostics::infer::reference_through_newtype(span));
             }
 
-            if let Some(kind) = check_is_non_addressable(&new_expression) {
+            if let Some(kind) = check_is_non_addressable(&new_expression, &self.env) {
                 self.sink
                     .push(diagnostics::infer::non_addressable_expression(kind, span));
             }
@@ -295,7 +296,7 @@ impl Checker<'_, '_> {
             self.clear_inferring_assignment_target();
         }
 
-        if let Some(kind) = check_non_addressable_assignment_target(&new_target) {
+        if let Some(kind) = check_non_addressable_assignment_target(&new_target, &self.env) {
             self.sink
                 .push(diagnostics::infer::non_addressable_assignment(kind, span));
         }
@@ -305,7 +306,7 @@ impl Checker<'_, '_> {
 
         // Propagates type information to the RHS (e.g., lambda params
         // get their types from a Map's value type).
-        let value_expected = target_ty.resolve();
+        let value_expected = target_ty.resolve_in(&self.env);
         let new_value = self.infer_expression(*value, &value_expected);
         let value_ty = new_value.get_type();
 
@@ -330,7 +331,7 @@ impl Checker<'_, '_> {
             let binding_is_ref = self
                 .scopes
                 .lookup_value(&var_name)
-                .map(|t| t.resolve().is_ref())
+                .map(|t| t.resolve_in(&self.env).is_ref())
                 .unwrap_or(false);
 
             let can_mutate = is_mutable || is_deref || binding_is_ref;
@@ -385,7 +386,7 @@ impl Checker<'_, '_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        let expected_elements: Vec<Type> = match expected_ty.resolve() {
+        let expected_elements: Vec<Type> = match expected_ty.resolve_in(&self.env) {
             Type::Tuple(elems) if elems.len() == elements.len() => elems,
             _ => elements.iter().map(|_| self.new_type_var()).collect(),
         };
@@ -451,10 +452,10 @@ impl Checker<'_, '_> {
             // Reject statement-only items (let, =, task, defer) as block tail
             // when the block is expected to produce a non-unit value.
             if is_last && is_statement_only {
-                let expected = last_item_expected_ty.resolve();
+                let expected = self.env.resolve(&last_item_expected_ty);
                 if last_item_expected_ty.is_ignored() {
                     // ignored context — never fire
-                } else if matches!(expected, Type::Variable(_)) {
+                } else if matches!(expected, Type::Var { .. }) {
                     // Type not yet resolved — defer check until after inference
                     self.post_inference_checks
                         .push(PostInferenceCheck::StatementTail {
@@ -499,13 +500,13 @@ impl Checker<'_, '_> {
                     .unwrap_or_default();
 
                 // Channel send returns bool but fire-and-forget is the common pattern
-                if Self::is_channel_send(&inferred_item) {
+                if self.is_channel_send(&inferred_item) {
                     allowed_lints.push("unused_value".to_string());
                 }
 
                 self.check_unused_expression(
                     item_span,
-                    &expression_ty.resolve(),
+                    &expression_ty.resolve_in(&self.env),
                     is_literal,
                     &allowed_lints,
                 );
@@ -515,9 +516,9 @@ impl Checker<'_, '_> {
                 && !is_statement_only
                 && !suppress_unused_check
                 && last_item_expected_ty.is_ignored()
-                && let Some(callee_return_ty) = Self::get_call_return_type(&inferred_item)
+                && let Some(callee_return_ty) = self.get_call_return_type(&inferred_item)
             {
-                let resolved = callee_return_ty.resolve();
+                let resolved = callee_return_ty.resolve_in(&self.env);
                 let classification = if resolved.is_result() {
                     Some(("unused_result", DiscardedTailKind::Result))
                 } else if resolved.is_option() {

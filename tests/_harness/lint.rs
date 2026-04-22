@@ -62,6 +62,8 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         }
     }
 
+    typed_ast = semantics::checker::freeze::FreezeFolder::new(&checker.env).freeze_items(typed_ast);
+
     if !checker.failed() {
         let pattern_ctx =
             pattern_analysis::Context::new(checker.store, &checker.facts.or_pattern_error_spans);

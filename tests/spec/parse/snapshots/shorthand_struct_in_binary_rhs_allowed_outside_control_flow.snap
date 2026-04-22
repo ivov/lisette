@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let foo = 1;\n  let x = 3;\n  foo < Bar { 
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,18 +33,18 @@ description: "input: \nfn test() {\n  let foo = 1;\n  let x = 3;\n  foo < Bar { 
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 1,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 25,
@@ -56,9 +56,9 @@ description: "input: \nfn test() {\n  let foo = 1;\n  let x = 3;\n  foo < Bar { 
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -77,18 +77,18 @@ description: "input: \nfn test() {\n  let foo = 1;\n  let x = 3;\n  foo < Bar { 
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 3,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 38,
@@ -100,9 +100,9 @@ description: "input: \nfn test() {\n  let foo = 1;\n  let x = 3;\n  foo < Bar { 
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 30,
@@ -113,9 +113,9 @@ description: "input: \nfn test() {\n  let foo = 1;\n  let x = 3;\n  foo < Bar { 
                     operator: LessThan,
                     left: Identifier {
                         value: "foo",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 43,
@@ -136,9 +136,9 @@ description: "input: \nfn test() {\n  let foo = 1;\n  let x = 3;\n  foo < Bar { 
                                 },
                                 value: Identifier {
                                     value: "x",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 55,
@@ -150,18 +150,18 @@ description: "input: \nfn test() {\n  let foo = 1;\n  let x = 3;\n  foo < Bar { 
                             },
                         ],
                         spread: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 49,
                             byte_length: 9,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 43,
@@ -169,18 +169,18 @@ description: "input: \nfn test() {\n  let foo = 1;\n  let x = 3;\n  foo < Bar { 
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 49,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

@@ -1,5 +1,6 @@
 use rustc_hash::FxHashMap as HashMap;
 
+use crate::checker::EnvResolve;
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span};
 use syntax::program::Definition;
@@ -123,7 +124,7 @@ impl Checker<'_, '_> {
                     && params.len() == 1
                     && let Some(inner) = resolved_ty.inner()
                 {
-                    let peeled_inner = self.store.peel_alias(&inner.resolve());
+                    let peeled_inner = self.store.peel_alias(&inner.resolve_in(&self.env));
                     if let Some(inner_id) = peeled_inner.get_qualified_id()
                         && self.store.get_interface(inner_id).is_some()
                     {
@@ -290,7 +291,7 @@ impl Checker<'_, '_> {
     }
 
     fn check_map_key_comparable(&mut self, key_ty: &Type, span: Span) {
-        let resolved = key_ty.resolve();
+        let resolved = key_ty.resolve_in(&self.env);
 
         let reason = match &resolved {
             Type::Function { .. } => Some("functions"),

@@ -45,9 +45,9 @@ description: "input: \n fn foo<T>(x: T) -> int {\n    match x {\n      1 => 1;\n
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -59,18 +59,18 @@ description: "input: \n fn foo<T>(x: T) -> int {\n    match x {\n      1 => 1;\n
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "x",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 37,
@@ -86,9 +86,9 @@ description: "input: \n fn foo<T>(x: T) -> int {\n    match x {\n      1 => 1;\n
                                     value: 1,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 47,
@@ -100,9 +100,9 @@ description: "input: \n fn foo<T>(x: T) -> int {\n    match x {\n      1 => 1;\n
                                     value: 1,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 52,
@@ -112,9 +112,9 @@ description: "input: \n fn foo<T>(x: T) -> int {\n    match x {\n      1 => 1;\n
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 31,
@@ -122,18 +122,18 @@ description: "input: \n fn foo<T>(x: T) -> int {\n    match x {\n      1 => 1;\n
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 25,
                 byte_length: 39,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 2,

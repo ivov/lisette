@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      brea
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -28,9 +28,9 @@ description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      brea
                                 condition: Call {
                                     expression: Identifier {
                                         value: "should_stop",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 29,
@@ -42,9 +42,9 @@ description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      brea
                                     args: [],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 29,
@@ -62,9 +62,9 @@ description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      brea
                                             },
                                         },
                                     ],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 43,
@@ -72,18 +72,18 @@ description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      brea
                                     },
                                 },
                                 alternative: Unit {
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 26,
                                         byte_length: 37,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 26,
@@ -91,18 +91,18 @@ description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      brea
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 20,
                             byte_length: 47,
                         },
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -111,18 +111,18 @@ description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      brea
                     needs_label: false,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 58,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

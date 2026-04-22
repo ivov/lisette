@@ -41,9 +41,9 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                 byte_length: 13,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -59,18 +59,18 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 10,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 41,
@@ -82,9 +82,9 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 33,
@@ -103,9 +103,9 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: FormatString(
@@ -116,9 +116,9 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                                 Expression(
                                     Identifier {
                                         value: "a",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 63,
@@ -130,9 +130,9 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                                 ),
                             ],
                         ),
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 54,
@@ -144,9 +144,9 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 46,
@@ -157,9 +157,9 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                     elements: [
                         Identifier {
                             value: "a",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 70,
@@ -170,9 +170,9 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                         },
                         Identifier {
                             value: "b",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 73,
@@ -182,9 +182,9 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                             qualified: None,
                         },
                     ],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 69,
@@ -192,18 +192,18 @@ description: "input: \nfn test1() -> (int, string) {\n  let a = 10\n  let b = f\
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 29,
                 byte_length: 48,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

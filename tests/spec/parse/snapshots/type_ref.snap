@@ -31,9 +31,9 @@ description: "input: \ntype IntRef = Ref<int>;\n"
                 byte_length: 8,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         visibility: Private,
         span: Span {
             file_id: 0,

@@ -9,6 +9,8 @@ use syntax::ast::{
 use syntax::program::Definition;
 use syntax::types::{Type, substitute};
 
+use crate::checker::EnvResolve;
+
 use super::super::Checker;
 use super::super::checks::check_duplicate_bindings;
 
@@ -166,7 +168,7 @@ impl Checker<'_, '_> {
             Pattern::Slice {
                 prefix, rest, span, ..
             } => {
-                let resolved_ty = expected_ty.resolve();
+                let resolved_ty = expected_ty.resolve_in(&self.env);
                 let element_ty = match resolved_ty.as_compound() {
                     Some((syntax::types::CompoundKind::Slice, args)) if args.len() == 1 => {
                         args[0].clone()
@@ -401,9 +403,10 @@ impl Checker<'_, '_> {
             ));
         }
 
-        let resolved_field_types: Box<[Type]> = params.iter().map(|p| p.resolve()).collect();
+        let resolved_field_types: Box<[Type]> =
+            params.iter().map(|p| p.resolve_in(&self.env)).collect();
 
-        let resolved_ty = pattern_ty.resolve();
+        let resolved_ty = pattern_ty.resolve_in(&self.env);
         let typed = match &resolved_ty {
             Type::Nominal { id, params, .. } => {
                 let variant_name = identifier.rsplit('.').next().unwrap_or(identifier.as_str());
@@ -563,7 +566,7 @@ impl Checker<'_, '_> {
             }
         }
 
-        let resolved_ty = struct_ty.resolve();
+        let resolved_ty = struct_ty.resolve_in(&self.env);
         let typed = match &resolved_ty {
             Type::Nominal { id, params, .. } => TypedPattern::Struct {
                 struct_name: id.into(),
@@ -659,8 +662,8 @@ impl Checker<'_, '_> {
                     if let Some(first_ty) = first_binding_types.get(name)
                         && let Some(alt_ty) = self.scopes.lookup_value(name)
                     {
-                        let first_resolved = first_ty.resolve();
-                        let alt_resolved = alt_ty.resolve();
+                        let first_resolved = first_ty.resolve_in(&self.env);
+                        let alt_resolved = alt_ty.resolve_in(&self.env);
                         if first_resolved != alt_resolved {
                             self.sink.push(diagnostics::infer::or_pattern_type_mismatch(
                                 *alt_span,
@@ -688,7 +691,7 @@ impl Checker<'_, '_> {
     }
 
     fn get_enum_variant_info(&self, ty: &Type) -> Option<(String, Vec<String>)> {
-        let resolved = ty.resolve();
+        let resolved = ty.resolve_in(&self.env);
         let Type::Nominal { id, .. } = resolved else {
             return None;
         };
@@ -765,7 +768,7 @@ impl Checker<'_, '_> {
 
         self.unify(expected_ty, &pattern_ty, span);
 
-        let resolved_ty = pattern_ty.resolve();
+        let resolved_ty = pattern_ty.resolve_in(&self.env);
 
         let Type::Nominal { id, .. } = &resolved_ty else {
             return None;

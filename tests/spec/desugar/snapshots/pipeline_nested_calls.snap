@@ -15,18 +15,18 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Call {
                     expression: Identifier {
                         value: "subtract",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 40,
@@ -39,9 +39,9 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                         Call {
                             expression: Identifier {
                                 value: "add",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 17,
@@ -53,9 +53,9 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                             args: [
                                 Identifier {
                                     value: "x",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 12,
@@ -67,9 +67,9 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                 Call {
                                     expression: Identifier {
                                         value: "multiply",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 21,
@@ -84,9 +84,9 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                                 value: 2,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 30,
@@ -98,9 +98,9 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                                 value: 3,
                                                 text: None,
                                             },
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 33,
@@ -110,9 +110,9 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 21,
@@ -122,9 +122,9 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                             ],
                             spread: None,
                             type_args: [],
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 12,
@@ -136,9 +136,9 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                 value: 1,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 49,
@@ -148,9 +148,9 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                     ],
                     spread: None,
                     type_args: [],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 12,
@@ -158,18 +158,18 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 10,
                 byte_length: 44,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 0,

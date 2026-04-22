@@ -35,15 +35,15 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -59,18 +59,18 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: DotAccess {
                         expression: DotAccess {
                             expression: DotAccess {
                                 expression: Identifier {
                                     value: "cfg",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 41,
@@ -80,9 +80,9 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                                     qualified: None,
                                 },
                                 member: "auth",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 41,
@@ -90,9 +90,9 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                                 },
                             },
                             member: "user",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 41,
@@ -100,9 +100,9 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                             },
                         },
                         member: "name",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 41,
@@ -114,9 +114,9 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 26,
@@ -124,18 +124,18 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 22,
                 byte_length: 40,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

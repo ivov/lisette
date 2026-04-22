@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use diagnostics::infer::InterfaceViolation;
 use syntax::ast::Span;
 use syntax::program::{Definition, Interface, MethodSignatures};
@@ -17,7 +18,7 @@ impl Checker<'_, '_> {
         // If we're already checking if this type satisfies this interface, return success
         // to prevent infinite recursion (e.g., interface Fluent { fn next() -> Fluent }).
         let type_id = ty
-            .resolve()
+            .resolve_in(&self.env)
             .get_qualified_id()
             .map(String::from)
             .unwrap_or_else(|| ty.to_string());
@@ -131,7 +132,7 @@ impl Checker<'_, '_> {
         let mut incompatible: Vec<(String, Type, Type)> = Vec::new();
 
         let struct_generics: Option<Vec<String>> =
-            if let Type::Nominal { id, .. } = ty.strip_refs().resolve() {
+            if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env) {
                 self.store
                     .get_definition(&id)
                     .and_then(|definition| match definition {
@@ -217,7 +218,7 @@ impl Checker<'_, '_> {
                     substituted_method,
                     impl_method_without_receiver.clone(),
                 ));
-            } else if let Type::Nominal { id, .. } = ty.strip_refs().resolve() {
+            } else if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env) {
                 let parts: Vec<&str> = id.split('.').collect();
                 if parts.len() == 2 {
                     self.facts.mark_method_used_for_interface(

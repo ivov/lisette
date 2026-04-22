@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,15 +33,15 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     iterable: Identifier {
                         value: "items",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 27,
@@ -67,9 +67,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                             },
                                         ],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 43,
@@ -78,16 +78,16 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                     },
                                     annotation: None,
                                     typed_pattern: None,
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                 },
                                 value: Call {
                                     expression: Identifier {
                                         value: "validate",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 57,
@@ -99,9 +99,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                     args: [
                                         Identifier {
                                             value: "item",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 66,
@@ -113,9 +113,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 57,
@@ -135,9 +135,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                                 },
                                             },
                                         ],
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 77,
@@ -153,9 +153,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                     },
                                 ),
                                 typed_pattern: None,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 39,
@@ -165,9 +165,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                             Call {
                                 expression: Identifier {
                                     value: "process",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 96,
@@ -179,9 +179,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                 args: [
                                     Identifier {
                                         value: "data",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 104,
@@ -193,9 +193,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 96,
@@ -203,9 +203,9 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 33,
@@ -220,18 +220,18 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                     needs_label: false,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 105,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

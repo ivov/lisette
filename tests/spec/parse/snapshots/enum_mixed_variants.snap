@@ -50,9 +50,9 @@ description: "input: \nenum Message {\n  Quit,\n  Move { x: int, y: int },\n  Wr
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                         EnumFieldDefinition {
                             name: "y",
@@ -70,9 +70,9 @@ description: "input: \nenum Message {\n  Quit,\n  Move { x: int, y: int },\n  Wr
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),
@@ -103,9 +103,9 @@ description: "input: \nenum Message {\n  Quit,\n  Move { x: int, y: int },\n  Wr
                                     byte_length: 6,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),

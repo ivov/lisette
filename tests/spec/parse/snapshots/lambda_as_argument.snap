@@ -45,15 +45,15 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -69,16 +69,16 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Call {
                         expression: Identifier {
                             value: "map",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 47,
@@ -90,9 +90,9 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                         args: [
                             Identifier {
                                 value: "numbers",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 51,
@@ -114,9 +114,9 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                                         },
                                         annotation: None,
                                         typed_pattern: None,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                     },
                                 ],
                                 return_annotation: Unknown,
@@ -124,9 +124,9 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                                     operator: Multiplication,
                                     left: Identifier {
                                         value: "n",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 64,
@@ -140,27 +140,27 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                                             value: 2,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 68,
                                             byte_length: 1,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 64,
                                         byte_length: 5,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 60,
@@ -170,9 +170,9 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                         ],
                         spread: None,
                         type_args: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 47,
@@ -184,9 +184,9 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 34,
@@ -194,18 +194,18 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 30,
                 byte_length: 43,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

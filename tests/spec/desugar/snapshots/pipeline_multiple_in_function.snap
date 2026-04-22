@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,16 +33,16 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Call {
                         expression: Identifier {
                             value: "double",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 28,
@@ -54,9 +54,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                         args: [
                             Identifier {
                                 value: "x",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 23,
@@ -68,9 +68,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                         ],
                         spread: None,
                         type_args: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 23,
@@ -82,9 +82,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -103,16 +103,16 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Call {
                         expression: Identifier {
                             value: "triple",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 51,
@@ -124,9 +124,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                         args: [
                             Identifier {
                                 value: "y",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 46,
@@ -138,9 +138,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                         ],
                         spread: None,
                         type_args: [],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 46,
@@ -152,9 +152,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 38,
@@ -165,9 +165,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                     operator: Addition,
                     left: Identifier {
                         value: "a",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 61,
@@ -178,9 +178,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                     },
                     right: Identifier {
                         value: "b",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 65,
@@ -189,9 +189,9 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                         binding_id: None,
                         qualified: None,
                     },
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 61,
@@ -199,18 +199,18 @@ description: "input: \nfn test() {\n  let a = x |> double;\n  let b = y |> tripl
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 57,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

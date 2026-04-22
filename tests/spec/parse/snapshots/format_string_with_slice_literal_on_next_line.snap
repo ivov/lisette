@@ -33,9 +33,9 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                 byte_length: 13,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -51,17 +51,17 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: String(
                             "test",
                         ),
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 43,
@@ -73,9 +73,9 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 32,
@@ -94,9 +94,9 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: FormatString(
@@ -107,9 +107,9 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                                 Expression(
                                     Identifier {
                                         value: "name",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 75,
@@ -121,9 +121,9 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                                 ),
                             ],
                         ),
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 62,
@@ -135,9 +135,9 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 52,
@@ -149,9 +149,9 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                         [
                             Identifier {
                                 value: "msg",
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 85,
@@ -164,9 +164,9 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                                 operator: Addition,
                                 left: Identifier {
                                     value: "msg",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 90,
@@ -179,18 +179,18 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                                     literal: String(
                                         "2",
                                     ),
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 96,
                                         byte_length: 3,
                                     },
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 90,
@@ -199,9 +199,9 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                             },
                         ],
                     ),
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 84,
@@ -209,18 +209,18 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 28,
                 byte_length: 74,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

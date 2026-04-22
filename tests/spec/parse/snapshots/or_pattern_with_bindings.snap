@@ -45,9 +45,9 @@ description: "input: \nfn test(opt: Option<int>) -> int {\n  match opt {\n    So
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Constructor {
@@ -59,18 +59,18 @@ description: "input: \nfn test(opt: Option<int>) -> int {\n  match opt {\n    So
                 byte_length: 3,
             },
         },
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "opt",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 44,
@@ -96,9 +96,9 @@ description: "input: \nfn test(opt: Option<int>) -> int {\n  match opt {\n    So
                                             },
                                         ],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 54,
@@ -109,9 +109,9 @@ description: "input: \nfn test(opt: Option<int>) -> int {\n  match opt {\n    So
                                         identifier: "None",
                                         fields: [],
                                         rest: false,
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 64,
@@ -130,9 +130,9 @@ description: "input: \nfn test(opt: Option<int>) -> int {\n  match opt {\n    So
                                     value: 0,
                                     text: None,
                                 },
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 72,
@@ -142,9 +142,9 @@ description: "input: \nfn test(opt: Option<int>) -> int {\n  match opt {\n    So
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 38,
@@ -152,18 +152,18 @@ description: "input: \nfn test(opt: Option<int>) -> int {\n  match opt {\n    So
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 34,
                 byte_length: 46,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

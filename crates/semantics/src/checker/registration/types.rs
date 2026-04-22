@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use syntax::ast::{
     Annotation, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition, StructKind,
     ValueEnumVariant, VariantFields,
@@ -7,7 +8,6 @@ use syntax::types::Type;
 
 use super::enum_variant_constructor_type;
 use crate::checker::Checker;
-use syntax::types::TypeVariableState;
 
 impl Checker<'_, '_> {
     pub(super) fn populate_enum(
@@ -255,7 +255,7 @@ impl Checker<'_, '_> {
                     format!("{}{}", variant.name, fi)
                 };
 
-                let resolved = field.ty.resolve();
+                let resolved = field.ty.resolve_in(&self.env);
                 let annotation_span = field.annotation.get_span();
                 let span = if !annotation_span.is_dummy() {
                     annotation_span
@@ -263,7 +263,7 @@ impl Checker<'_, '_> {
                     variant.name_span
                 };
                 if let Some(&(v_a, f_a, is_struct_a, ty_a, _)) = seen.get(&go_name) {
-                    if ty_a.resolve() != resolved {
+                    if ty_a.resolve_in(&self.env) != resolved {
                         let loc_a = if is_struct_a {
                             format!("{}.{}.{}", name, v_a, f_a)
                         } else {
@@ -276,7 +276,7 @@ impl Checker<'_, '_> {
                         };
                         self.sink.push(diagnostics::infer::enum_field_type_conflict(
                             &loc_a,
-                            &ty_a.resolve().to_string(),
+                            &ty_a.resolve_in(&self.env).to_string(),
                             &loc_b,
                             &resolved.to_string(),
                             span,
@@ -331,8 +331,8 @@ impl Checker<'_, '_> {
             .iter()
             .map(|f| {
                 let resolved_ty = self.convert_to_type(&f.annotation, span);
-                if let Type::Variable(var) = &f.ty {
-                    *var.borrow_mut() = TypeVariableState::Link(resolved_ty.clone());
+                if let Type::Var { id, .. } = &f.ty {
+                    self.env.bind(*id, resolved_ty.clone());
                 }
                 EnumFieldDefinition {
                     ty: resolved_ty,
@@ -500,7 +500,7 @@ impl Checker<'_, '_> {
         if let Some(variants) = self.store.get_enum_variants(current_id) {
             for variant in variants {
                 for field in &variant.fields {
-                    if let Type::Nominal { id, .. } = field.ty.resolve()
+                    if let Type::Nominal { id, .. } = field.ty.resolve_in(&self.env)
                         && id == target_id
                     {
                         continue;

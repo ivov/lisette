@@ -15,9 +15,9 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
         generics: [],
         params: [],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -33,18 +33,18 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                         },
                         annotation: None,
                         typed_pattern: None,
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                     },
                     value: Literal {
                         literal: Integer {
                             value: 0,
                             text: None,
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 31,
@@ -62,9 +62,9 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                     else_block: None,
                     else_span: None,
                     typed_pattern: None,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 15,
@@ -76,9 +76,9 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                         operator: LessThan,
                         left: Identifier {
                             value: "count",
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 42,
@@ -92,18 +92,18 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                                 value: 10,
                                 text: None,
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 50,
                                 byte_length: 2,
                             },
                         },
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 42,
@@ -115,9 +115,9 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                             Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 59,
@@ -129,9 +129,9 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                                 args: [
                                     Identifier {
                                         value: "count",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 65,
@@ -143,9 +143,9 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 59,
@@ -155,9 +155,9 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                             Assignment {
                                 target: Identifier {
                                     value: "count",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 77,
@@ -170,9 +170,9 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                                     operator: Addition,
                                     left: Identifier {
                                         value: "count",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 85,
@@ -186,18 +186,18 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                                             value: 1,
                                             text: None,
                                         },
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 93,
                                             byte_length: 1,
                                         },
                                     },
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 85,
@@ -212,9 +212,9 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                                 },
                             },
                         ],
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 53,
@@ -229,18 +229,18 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                     needs_label: false,
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
                 byte_length: 90,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

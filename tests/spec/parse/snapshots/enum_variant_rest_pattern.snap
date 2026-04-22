@@ -40,9 +40,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                         EnumFieldDefinition {
                             name: "field1",
@@ -60,9 +60,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                         EnumFieldDefinition {
                             name: "field2",
@@ -80,9 +80,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),
@@ -113,9 +113,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                     byte_length: 5,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),
@@ -160,24 +160,24 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "s",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 83,
@@ -192,9 +192,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                 identifier: "Shape.Triangle",
                                 fields: [],
                                 rest: true,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 91,
@@ -204,9 +204,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 113,
@@ -220,9 +220,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                         literal: String(
                                             "triangle",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 119,
@@ -232,9 +232,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 113,
@@ -247,9 +247,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                 identifier: "Shape.Circle",
                                 fields: [],
                                 rest: true,
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 136,
@@ -259,9 +259,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 156,
@@ -275,9 +275,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                         literal: String(
                                             "circle",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 162,
@@ -287,9 +287,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 156,
@@ -299,9 +299,9 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 77,
@@ -309,18 +309,18 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 73,
                 byte_length: 105,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 55,

@@ -1,3 +1,4 @@
+use crate::checker::EnvResolve;
 use syntax::ast::{BinaryOperator, Expression, Literal, Span, UnaryOperator};
 use syntax::program::Definition;
 use syntax::types::{Type, substitute};
@@ -17,11 +18,12 @@ impl Checker<'_, '_> {
     ) -> Expression {
         // For negation with numeric expected type, propagate it to the operand
         // so literals can adapt (e.g., `let x: int8 = -1` works)
-        let operand_expected_ty = if operator == Negative && expected_ty.resolve().is_numeric() {
-            expected_ty.clone()
-        } else {
-            self.new_type_var()
-        };
+        let operand_expected_ty =
+            if operator == Negative && expected_ty.resolve_in(&self.env).is_numeric() {
+                expected_ty.clone()
+            } else {
+                self.new_type_var()
+            };
 
         if operator == Negative {
             self.scopes.increment_negation_depth();
@@ -38,7 +40,7 @@ impl Checker<'_, '_> {
 
         let expression_ty = match operator {
             Negative => {
-                let resolved = operand_expected_ty.resolve();
+                let resolved = operand_expected_ty.resolve_in(&self.env);
                 if resolved.is_numeric() || resolved.underlying_numeric_type().is_some() {
                     let is_literal = is_numeric_literal(&new_expression);
                     if resolved.is_unsigned_int() && !is_literal {
@@ -154,7 +156,7 @@ impl Checker<'_, '_> {
 
         let new_right_operand = self.with_value_context(|s| {
             if is_right_literal {
-                let left_resolved = left_operand_ty.resolve();
+                let left_resolved = left_operand_ty.resolve_in(&s.env);
                 if literal_can_adapt_to(&right_literal_kind, &left_resolved) {
                     let _ = s.try_unify(&right_operand_ty, &left_resolved, &span);
                 }
@@ -240,7 +242,7 @@ impl Checker<'_, '_> {
                 // Infer the non-literal (right) first so its resolved type
                 // can guide the literal's type adaptation.
                 let right = s.infer_expression(*right_operand, &right_operand_ty);
-                let right_resolved = right_operand_ty.resolve();
+                let right_resolved = right_operand_ty.resolve_in(&s.env);
                 if literal_can_adapt_to(&left_literal_kind, &right_resolved) {
                     let _ = s.try_unify(&left_operand_ty, &right_resolved, &span);
                 }
@@ -249,7 +251,7 @@ impl Checker<'_, '_> {
             } else {
                 let left = s.infer_expression(*left_operand, &left_operand_ty);
                 if is_right_literal {
-                    let left_resolved = left_operand_ty.resolve();
+                    let left_resolved = left_operand_ty.resolve_in(&s.env);
                     if literal_can_adapt_to(&right_literal_kind, &left_resolved) {
                         let _ = s.try_unify(&right_operand_ty, &left_resolved, &span);
                     }
@@ -304,8 +306,8 @@ impl Checker<'_, '_> {
     ) -> Type {
         match operator {
             Equal | NotEqual => {
-                let resolved_left_operand = left_operand_ty.resolve();
-                let resolved_right_operand = right_operand_ty.resolve();
+                let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
+                let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
 
                 let same_aliased_numeric = resolved_left_operand == resolved_right_operand
                     && resolved_left_operand.is_aliased_numeric_type();
@@ -328,8 +330,8 @@ impl Checker<'_, '_> {
             }
 
             LessThan | LessThanOrEqual | GreaterThan | GreaterThanOrEqual => {
-                let resolved_left_operand = left_operand_ty.resolve();
-                let resolved_right_operand = right_operand_ty.resolve();
+                let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
+                let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
 
                 let same_aliased_numeric = resolved_left_operand == resolved_right_operand
                     && resolved_left_operand.is_aliased_numeric_type();
@@ -348,8 +350,8 @@ impl Checker<'_, '_> {
             }
 
             Addition => {
-                let resolved_left_operand = left_operand_ty.resolve();
-                let resolved_right_operand = right_operand_ty.resolve();
+                let resolved_left_operand = left_operand_ty.resolve_in(&self.env);
+                let resolved_right_operand = right_operand_ty.resolve_in(&self.env);
 
                 if let Some(result_ty) = self.try_operation_with_numeric_alias(
                     operator,
@@ -385,8 +387,8 @@ impl Checker<'_, '_> {
             }
 
             Subtraction | Multiplication | Division | Remainder => {
-                let left_resolved = left_operand_ty.resolve();
-                let right_resolved = right_operand_ty.resolve();
+                let left_resolved = left_operand_ty.resolve_in(&self.env);
+                let right_resolved = right_operand_ty.resolve_in(&self.env);
 
                 if matches!(operator, Remainder)
                     && (left_resolved.is_float() || right_resolved.is_float())
@@ -434,11 +436,11 @@ impl Checker<'_, '_> {
         ty: &Type,
         span: &Span,
     ) -> bool {
-        let resolved_ty = ty.resolve();
+        let resolved_ty = self.env.resolve(ty);
         // Type variables (unresolved inference vars) are allowed — they'll be resolved later.
         // But type parameters (generic T without bounds) should be rejected:
         // Go requires `constraints.Ordered` for arithmetic on type params.
-        if matches!(resolved_ty, Type::Variable(_) | Type::Error) {
+        if matches!(resolved_ty, Type::Var { .. } | Type::Error) {
             return true;
         }
         if matches!(resolved_ty, Type::Parameter(_)) {
@@ -458,7 +460,7 @@ impl Checker<'_, '_> {
     }
 
     fn ensure_orderable(&mut self, ty: &Type, span: &Span) {
-        let resolved_ty = ty.resolve();
+        let resolved_ty = ty.resolve_in(&self.env);
 
         if resolved_ty.is_error() {
             return;
@@ -471,7 +473,7 @@ impl Checker<'_, '_> {
     }
 
     fn ensure_comparable(&mut self, ty: &Type, span: &Span) {
-        let resolved = ty.resolve();
+        let resolved = ty.resolve_in(&self.env);
         if resolved.is_error() {
             return;
         }
@@ -498,7 +500,7 @@ impl Checker<'_, '_> {
             return None;
         }
 
-        if matches!(ty, Type::Variable(_)) {
+        if matches!(ty, Type::Var { .. }) {
             return None;
         }
 
@@ -529,7 +531,7 @@ impl Checker<'_, '_> {
             match definition {
                 Definition::Struct { fields, .. } => {
                     for f in fields {
-                        let field_ty = substitute(&f.ty.resolve(), &sub_map);
+                        let field_ty = substitute(&f.ty.resolve_in(&self.env), &sub_map);
                         if self.check_not_comparable(&field_ty).is_some() {
                             return Some("a struct containing non-comparable fields");
                         }
@@ -538,7 +540,7 @@ impl Checker<'_, '_> {
                 Definition::Enum { variants, .. } => {
                     for v in variants {
                         for f in v.fields.iter() {
-                            let field_ty = substitute(&f.ty.resolve(), &sub_map);
+                            let field_ty = substitute(&f.ty.resolve_in(&self.env), &sub_map);
                             if self.check_not_comparable(&field_ty).is_some() {
                                 return Some("an enum containing non-comparable fields");
                             }
@@ -551,7 +553,10 @@ impl Checker<'_, '_> {
 
         if let Type::Tuple(elems) = ty {
             for e in elems {
-                if self.check_not_comparable(&e.resolve()).is_some() {
+                if self
+                    .check_not_comparable(&e.resolve_in(&self.env))
+                    .is_some()
+                {
                     return Some("a tuple containing non-comparable elements");
                 }
             }
@@ -571,11 +576,13 @@ impl Checker<'_, '_> {
             .try_unify(left_operand_ty, right_operand_ty, span)
             .is_err()
         {
+            let left_resolved = left_operand_ty.resolve_in(&self.env);
+            let right_resolved = right_operand_ty.resolve_in(&self.env);
             self.sink
                 .push(diagnostics::infer::binary_operator_type_mismatch(
                     operator,
-                    left_operand_ty,
-                    right_operand_ty,
+                    &left_resolved,
+                    &right_resolved,
                     *span,
                 ));
         }
@@ -700,7 +707,7 @@ impl Checker<'_, '_> {
         let source_ty_var = self.new_type_var();
         let new_expression =
             self.with_value_context(|s| s.infer_expression(*expression, &source_ty_var));
-        let source_ty = source_ty_var.resolve();
+        let source_ty = source_ty_var.resolve_in(&self.env);
 
         self.check_not_temp_producing(&new_expression);
 
@@ -716,7 +723,7 @@ impl Checker<'_, '_> {
 
         self.check_valid_cast(&source_ty, &target_ty, span);
 
-        if is_float_literal(&new_expression) && is_integer_type(&target_ty) {
+        if is_float_literal(&new_expression) && is_integer_type(&target_ty, &self.env) {
             self.sink
                 .push(diagnostics::infer::float_literal_int_cast(span));
         }
@@ -747,9 +754,9 @@ fn is_float_literal(expression: &Expression) -> bool {
     }
 }
 
-fn is_integer_type(ty: &Type) -> bool {
+fn is_integer_type(ty: &Type, env: &crate::checker::TypeEnv) -> bool {
     matches!(
-        ty.resolve().get_name(),
+        ty.resolve_in(env).get_name(),
         Some(
             "int"
                 | "int8"

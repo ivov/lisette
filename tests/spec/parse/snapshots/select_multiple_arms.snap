@@ -45,9 +45,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
             Binding {
                 pattern: Identifier {
@@ -80,15 +80,15 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
@@ -107,9 +107,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                 typed_pattern: None,
                                 receive_expression: Identifier {
                                     value: "ch1",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 75,
@@ -121,9 +121,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                 body: Call {
                                     expression: Identifier {
                                         value: "process",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 82,
@@ -135,9 +135,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                     args: [
                                         Identifier {
                                             value: "x",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 90,
@@ -149,9 +149,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 82,
@@ -166,9 +166,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                     expression: DotAccess {
                                         expression: Identifier {
                                             value: "ch2",
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 98,
@@ -178,9 +178,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                             qualified: None,
                                         },
                                         member: "send",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 98,
@@ -192,9 +192,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                             literal: String(
                                                 "hello",
                                             ),
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 107,
@@ -204,9 +204,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 98,
@@ -216,9 +216,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                 body: Call {
                                     expression: Identifier {
                                         value: "print",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 119,
@@ -232,9 +232,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                             literal: String(
                                                 "sent",
                                             ),
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 125,
@@ -244,9 +244,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 119,
@@ -260,9 +260,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                 body: Call {
                                     expression: Identifier {
                                         value: "print",
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 143,
@@ -276,9 +276,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                             literal: String(
                                                 "default",
                                             ),
-                                            ty: Variable(
-                                                -1,
-                                            ),
+                                            ty: Var {
+                                                id: uninferred,
+                                            },
                                             span: Span {
                                                 file_id: 0,
                                                 byte_offset: 149,
@@ -288,9 +288,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                     ],
                                     spread: None,
                                     type_args: [],
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 143,
@@ -300,9 +300,9 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                             },
                         },
                     ],
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 54,
@@ -310,18 +310,18 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 50,
                 byte_length: 116,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

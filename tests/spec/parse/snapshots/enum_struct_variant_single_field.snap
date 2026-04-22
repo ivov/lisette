@@ -40,9 +40,9 @@ description: "input: \nenum Event {\n  Click { x: int },\n}\n"
                                     byte_length: 3,
                                 },
                             },
-                            ty: Variable(
-                                -1,
-                            ),
+                            ty: Var {
+                                id: uninferred,
+                            },
                         },
                     ],
                 ),

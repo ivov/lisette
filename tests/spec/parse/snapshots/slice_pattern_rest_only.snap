@@ -45,24 +45,24 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                     },
                 ),
                 typed_pattern: None,
-                ty: Variable(
-                    -1,
-                ),
+                ty: Var {
+                    id: uninferred,
+                },
             },
         ],
         return_annotation: Unknown,
-        return_type: Variable(
-            -1,
-        ),
+        return_type: Var {
+            id: uninferred,
+        },
         visibility: Private,
         body: Block {
             items: [
                 Match {
                     subject: Identifier {
                         value: "items",
-                        ty: Variable(
-                            -1,
-                        ),
+                        ty: Var {
+                            id: uninferred,
+                        },
                         span: Span {
                             file_id: 0,
                             byte_offset: 38,
@@ -82,9 +82,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                                         byte_length: 2,
                                     },
                                 ),
-                                element_ty: Variable(
-                                    -1,
-                                ),
+                                element_ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 50,
@@ -94,9 +94,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                             expression: Call {
                                 expression: Identifier {
                                     value: "print",
-                                    ty: Variable(
-                                        -1,
-                                    ),
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
                                     span: Span {
                                         file_id: 0,
                                         byte_offset: 58,
@@ -110,9 +110,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                                         literal: String(
                                             "any slice",
                                         ),
-                                        ty: Variable(
-                                            -1,
-                                        ),
+                                        ty: Var {
+                                            id: uninferred,
+                                        },
                                         span: Span {
                                             file_id: 0,
                                             byte_offset: 64,
@@ -122,9 +122,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                                 ],
                                 spread: None,
                                 type_args: [],
-                                ty: Variable(
-                                    -1,
-                                ),
+                                ty: Var {
+                                    id: uninferred,
+                                },
                                 span: Span {
                                     file_id: 0,
                                     byte_offset: 58,
@@ -134,9 +134,9 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                         },
                     ],
                     origin: Explicit,
-                    ty: Variable(
-                        -1,
-                    ),
+                    ty: Var {
+                        id: uninferred,
+                    },
                     span: Span {
                         file_id: 0,
                         byte_offset: 32,
@@ -144,18 +144,18 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                     },
                 },
             ],
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 28,
                 byte_length: 55,
             },
         },
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 1,

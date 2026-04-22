@@ -27,9 +27,9 @@ description: "input: \npub const MAX: int = 100;\n"
                 value: 100,
                 text: None,
             },
-            ty: Variable(
-                -1,
-            ),
+            ty: Var {
+                id: uninferred,
+            },
             span: Span {
                 file_id: 0,
                 byte_offset: 22,
@@ -37,9 +37,9 @@ description: "input: \npub const MAX: int = 100;\n"
             },
         },
         visibility: Public,
-        ty: Variable(
-            -1,
-        ),
+        ty: Var {
+            id: uninferred,
+        },
         span: Span {
             file_id: 0,
             byte_offset: 5,
