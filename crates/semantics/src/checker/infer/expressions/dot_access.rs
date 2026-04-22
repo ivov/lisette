@@ -5,7 +5,7 @@ use syntax::program::{Definition, DotAccessKind, NativeTypeKind, ReceiverCoercio
 use syntax::types::{Type, substitute, unqualified_name};
 
 use super::super::Checker;
-use super::super::checks::check_is_non_addressable;
+use super::super::addressability::check_is_non_addressable;
 use super::primitives::contains_deref;
 
 impl Checker<'_, '_> {

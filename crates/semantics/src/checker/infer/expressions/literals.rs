@@ -131,10 +131,6 @@ impl Checker<'_, '_> {
                     })
                     .collect();
 
-                for elem in &new_elements {
-                    self.check_not_temp_producing(elem);
-                }
-
                 let slice_ty = self.type_slice(element_expected_ty);
                 self.unify(expected_ty, &slice_ty, &span);
 
@@ -156,7 +152,6 @@ impl Checker<'_, '_> {
                         FormatStringPart::Expression(expression) => {
                             let type_var = self.new_type_var();
                             let inferred_expression = self.infer_expression(*expression, &type_var);
-                            self.check_not_temp_producing(&inferred_expression);
                             FormatStringPart::Expression(Box::new(inferred_expression))
                         }
                     })

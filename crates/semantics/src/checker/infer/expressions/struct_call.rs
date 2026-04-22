@@ -244,8 +244,6 @@ impl Checker<'_, '_> {
                 let new_value = self
                     .with_value_context(|s| s.infer_expression((*field.value).clone(), &field_ty));
 
-                self.check_not_temp_producing(&new_value);
-
                 StructFieldAssignment {
                     name: field.name.clone(),
                     name_span: field.name_span,
@@ -339,8 +337,6 @@ impl Checker<'_, '_> {
 
                 let new_value = self
                     .with_value_context(|s| s.infer_expression((*field.value).clone(), &field_ty));
-
-                self.check_not_temp_producing(&new_value);
 
                 StructFieldAssignment {
                     name: field.name.clone(),

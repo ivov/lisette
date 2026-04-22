@@ -6,7 +6,6 @@ use syntax::program::Definition;
 use syntax::types::Type;
 
 use super::super::Checker;
-use super::super::checks::check_receiver;
 
 impl Checker<'_, '_> {
     pub(super) fn infer_impl_block(
@@ -72,9 +71,7 @@ impl Checker<'_, '_> {
             .into_iter()
             .map(|method| {
                 let method_ty = self.new_type_var();
-                let inferred = self.infer_expression(method, &method_ty);
-                check_receiver(self.sink, &inferred, &impl_ty);
-                inferred
+                self.infer_expression(method, &method_ty)
             })
             .collect();
 
@@ -105,8 +102,6 @@ impl Checker<'_, '_> {
         else {
             unreachable!()
         };
-
-        self.check_prelude_shadowing(&name, name_span);
 
         self.scopes.push();
         self.put_in_scope(&generics);

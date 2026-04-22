@@ -62,9 +62,26 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         }
     }
 
+    {
+        let folder = semantics::checker::freeze::FreezeFolder::new(&checker.env);
+        folder.freeze_facts(&mut checker.facts);
+    }
     typed_ast = semantics::checker::freeze::FreezeFolder::new(&checker.env).freeze_items(typed_ast);
 
     if !checker.failed() {
+        let module_id = checker.cursor.module_id.clone();
+        {
+            let mut ctx = semantics::validators::ValidatorContext {
+                typed_ast: &typed_ast,
+                is_typedef: false,
+                module_id: &module_id,
+                store: checker.store,
+                facts: &mut checker.facts,
+                coercions: &checker.coercions,
+                sink: checker.sink,
+            };
+            semantics::validators::run_all(&mut ctx);
+        }
         let pattern_ctx =
             pattern_analysis::Context::new(checker.store, &checker.facts.or_pattern_error_spans);
         for expression in &typed_ast {

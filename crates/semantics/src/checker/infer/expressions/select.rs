@@ -3,8 +3,7 @@ use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Sp
 use syntax::types::Type;
 
 use super::super::Checker;
-use super::super::checks::check_binding_pattern;
-use crate::checker::infer::checks::is_temp_producing;
+use crate::validators::temp_producing::is_temp_producing;
 
 impl Checker<'_, '_> {
     pub(super) fn infer_select(
@@ -167,8 +166,6 @@ impl Checker<'_, '_> {
             element_ty.clone(),
             syntax::ast::BindingKind::Let { mutable: false },
         );
-
-        check_binding_pattern(self.sink, &new_binding);
 
         let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, true);
         self.inference.in_subexpression = false;

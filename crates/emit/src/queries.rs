@@ -115,20 +115,13 @@ impl Emitter<'_> {
         let Type::Nominal { id, params, .. } = ty.strip_refs() else {
             return false;
         };
-
         if !params.is_empty() {
             return false;
         }
-
-        matches!(
-            self.ctx.definitions.get(id.as_str()),
-            Some(Definition::Struct {
-                kind: StructKind::Tuple,
-                fields,
-                generics,
-                ..
-            }) if fields.len() == 1 && generics.is_empty()
-        )
+        self.ctx
+            .definitions
+            .get(id.as_str())
+            .is_some_and(|d| d.is_newtype())
     }
 
     pub(crate) fn is_go_value_enum(&self, ty: &Type) -> bool {

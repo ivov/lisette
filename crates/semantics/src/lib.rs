@@ -9,6 +9,7 @@ pub mod module_graph;
 pub mod pattern_analysis;
 pub mod prelude;
 pub mod store;
+pub mod validators;
 
 use syntax::ast::Expression;
 

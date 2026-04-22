@@ -4,32 +4,6 @@ use syntax::program::Definition;
 use super::super::super::Checker;
 
 impl Checker<'_, '_> {
-    pub(super) fn infer_enum_definition(&mut self, expression: Expression) -> Expression {
-        let Expression::Enum {
-            ref name,
-            name_span,
-            ..
-        } = expression
-        else {
-            unreachable!()
-        };
-        self.check_prelude_shadowing(name, name_span);
-        expression
-    }
-
-    pub(super) fn infer_value_enum_definition(&mut self, expression: Expression) -> Expression {
-        let Expression::ValueEnum {
-            ref name,
-            name_span,
-            ..
-        } = expression
-        else {
-            unreachable!()
-        };
-        self.check_prelude_shadowing(name, name_span);
-        expression
-    }
-
     pub(super) fn infer_struct_definition(&mut self, expression: Expression) -> Expression {
         let Expression::Struct {
             doc,
@@ -61,8 +35,6 @@ impl Checker<'_, '_> {
             let definition_generics = definition_generics.clone();
             let definition_fields = definition_fields.clone();
             let definition_kind = *definition_kind;
-
-            self.check_prelude_shadowing(&definition_name, definition_name_span);
 
             Expression::Struct {
                 doc,
@@ -104,8 +76,6 @@ impl Checker<'_, '_> {
         else {
             unreachable!()
         };
-
-        self.check_prelude_shadowing(&name, name_span);
 
         let qualified_name = self.qualify_name(&name);
         if let Some(Definition::TypeAlias {

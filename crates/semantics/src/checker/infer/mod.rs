@@ -1,4 +1,4 @@
-pub mod checks;
+pub(crate) mod addressability;
 mod expressions;
 mod interface;
 mod unify;
@@ -42,9 +42,10 @@ impl Checker<'_, '_> {
                 })
                 .collect();
 
-            self.run_post_inference_checks();
             self.check_reference_sibling_aliasing(&inferred_items);
 
+            let folder = FreezeFolder::new(&self.env);
+            folder.freeze_facts(&mut self.facts);
             let frozen_items = FreezeFolder::new(&self.env).freeze_items(inferred_items);
 
             let typed_file = File {

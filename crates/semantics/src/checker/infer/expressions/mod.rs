@@ -143,9 +143,7 @@ impl Checker<'_, '_> {
                 ..
             } => self.infer_dot_access_or_qualified_path(expression, member, span, expected_ty),
 
-            Expression::Enum { .. } => self.infer_enum_definition(expression),
-
-            Expression::ValueEnum { .. } => self.infer_value_enum_definition(expression),
+            Expression::Enum { .. } | Expression::ValueEnum { .. } => expression,
 
             Expression::Struct { .. } => self.infer_struct_definition(expression),
 

@@ -7,11 +7,73 @@ use syntax::program::{CallKind, Definition, NativeTypeKind};
 use syntax::types::{Bound, SubstitutionMap, Type, substitute, unqualified_name};
 
 use super::super::Checker;
-use super::super::checks::{check_binding_pattern, reject_as_binding_in_irrefutable_context};
 use super::primitives::contains_deref;
-use crate::checker::PostInferenceCheck;
 use crate::checker::scopes::UseContext;
 use crate::store::ENTRY_MODULE_ID;
+
+impl Checker<'_, '_> {
+    pub(crate) fn check_call_arity(
+        &mut self,
+        param_types: &[Type],
+        args: &[Expression],
+        callee_expression: &Expression,
+        span: &Span,
+    ) {
+        if param_types.len() == args.len() {
+            return;
+        }
+        let expected: Vec<Type> = param_types
+            .iter()
+            .map(|t| t.resolve_in(&self.env))
+            .collect();
+        let actual: Vec<Type> = args
+            .iter()
+            .map(|e| e.get_type().resolve_in(&self.env))
+            .collect();
+        let generic_params = self.get_generic_param_names(callee_expression);
+        let is_constructor = callee_expression
+            .get_var_name()
+            .map(|name| name.chars().next().is_some_and(|c| c.is_uppercase()))
+            .unwrap_or(false);
+        self.sink.push(diagnostics::infer::arity_mismatch(
+            &expected,
+            &actual,
+            &generic_params,
+            is_constructor,
+            *span,
+        ));
+    }
+
+    fn get_generic_param_names(&self, expression: &Expression) -> Vec<String> {
+        if let Expression::Identifier { value, .. } = expression
+            && let Some(ty) = self.scopes.lookup_value(value)
+        {
+            return match ty {
+                Type::Forall { vars, .. } => vars.iter().map(|s| s.to_string()).collect(),
+                _ => vec![],
+            };
+        }
+        vec![]
+    }
+
+    pub(crate) fn has_map_field_in_chain(&self, expression: &Expression) -> bool {
+        match expression.unwrap_parens() {
+            Expression::DotAccess { expression, .. } => {
+                self.is_map_indexed_access(expression) || self.has_map_field_in_chain(expression)
+            }
+            _ => false,
+        }
+    }
+
+    fn is_map_indexed_access(&self, expression: &Expression) -> bool {
+        match expression.unwrap_parens() {
+            Expression::IndexedAccess { expression, .. } => {
+                expression.get_type().resolve_in(&self.env).has_name("Map")
+            }
+            _ => false,
+        }
+    }
+}
 
 fn has_numeric_member_in_chain(expression: &Expression) -> bool {
     let mut current = expression.unwrap_parens();
@@ -123,16 +185,6 @@ impl Checker<'_, '_> {
         let new_body = self.infer_function_body(body, &body_ty, &return_annotation, &return_ty);
 
         self.scopes.pop();
-
-        self.check_constrained_return_type(
-            &return_ty,
-            &generics,
-            &return_annotation.get_span(),
-            &name,
-        );
-
-        self.check_unused_type_parameters(&generics, &base_fn_ty);
-        self.check_type_params_only_in_bound(&generics, &base_fn_ty);
 
         let fn_forall_ty = if generics.is_empty() {
             base_fn_ty.clone()
@@ -288,30 +340,24 @@ impl Checker<'_, '_> {
         }
 
         let new_args = self.infer_call_arguments(args, &param_types);
-        for arg in &new_args {
-            self.check_not_temp_producing(arg);
-        }
         self.check_call_arity(&param_types, &new_args, &callee_expression, &span);
         self.check_mut_param_arguments(&new_args, &param_mutability, &callee_expression);
 
-        let new_spread = (*spread).map(|spread_expr| {
-            self.check_not_temp_producing(&spread_expr);
-            match variadic_elem_ty {
-                Some(elem_ty) => {
-                    let expected_slice = self.type_slice(elem_ty);
-                    let inferred = self
-                        .with_value_context(|s| s.infer_expression(spread_expr, &expected_slice));
-                    if param_mutability.last().copied().unwrap_or(false) {
-                        let is_external = self.is_external_callee(&callee_expression);
-                        self.check_arg_against_mut_param(&inferred, is_external);
-                    }
-                    inferred
+        let new_spread = (*spread).map(|spread_expr| match variadic_elem_ty {
+            Some(elem_ty) => {
+                let expected_slice = self.type_slice(elem_ty);
+                let inferred =
+                    self.with_value_context(|s| s.infer_expression(spread_expr, &expected_slice));
+                if param_mutability.last().copied().unwrap_or(false) {
+                    let is_external = self.is_external_callee(&callee_expression);
+                    self.check_arg_against_mut_param(&inferred, is_external);
                 }
-                None => {
-                    self.sink
-                        .push(diagnostics::infer::spread_on_non_variadic(span));
-                    self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error))
-                }
+                inferred
+            }
+            None => {
+                self.sink
+                    .push(diagnostics::infer::spread_on_non_variadic(span));
+                self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error))
             }
         });
 
@@ -335,14 +381,13 @@ impl Checker<'_, '_> {
         };
         self.check_native_mutating_call(&callee_expression, result_unused, &span);
 
-        self.check_unconstrained_bounded_type_params(&bounds, &span);
-
         if self.is_generic_callee(&callee_expression)
             && type_args.is_empty()
             && !self.is_enum_type(&return_ty.resolve_in(&self.env))
         {
-            self.post_inference_checks
-                .push(PostInferenceCheck::GenericCall {
+            self.facts
+                .generic_call_checks
+                .push(crate::facts::GenericCallCheck {
                     return_ty: return_ty.clone(),
                     span,
                 });
@@ -738,7 +783,6 @@ impl Checker<'_, '_> {
 
         let arg = args.into_iter().next().unwrap();
         let new_arg = self.with_value_context(|s| s.infer_expression(arg, &underlying_fn));
-        self.check_not_temp_producing(&new_arg);
 
         self.unify(expected_ty, &named_ty, &span);
         self.resolutions.mark_call(span, CallKind::Regular);
@@ -862,8 +906,6 @@ impl Checker<'_, '_> {
                         .unwrap_or_else(|| self.new_type_var())
                 });
 
-                reject_as_binding_in_irrefutable_context(self.sink, &binding.pattern);
-
                 let (new_pattern, typed_pattern) = self.infer_pattern(
                     binding.pattern,
                     binding_ty.clone(),
@@ -871,8 +913,6 @@ impl Checker<'_, '_> {
                         mutable: binding.mutable,
                     },
                 );
-
-                check_binding_pattern(self.sink, &new_pattern);
 
                 Binding {
                     pattern: new_pattern,

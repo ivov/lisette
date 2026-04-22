@@ -12,8 +12,6 @@ use syntax::types::{Type, substitute};
 use crate::checker::EnvResolve;
 
 use super::super::Checker;
-use super::super::checks::check_duplicate_bindings;
-
 pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
     match pattern {
         Pattern::Identifier { identifier, span } => vec![(identifier.to_string(), *span)],
@@ -58,7 +56,6 @@ impl Checker<'_, '_> {
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
-        check_duplicate_bindings(self.sink, &pattern);
         self.infer_pattern_inner(pattern, expected_ty, kind, false)
     }
 

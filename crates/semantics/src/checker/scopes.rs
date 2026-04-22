@@ -42,6 +42,7 @@ pub enum UseContext {
     Statement,
     Value,
     Callee,
+    AssignmentTarget,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -357,5 +358,15 @@ impl Scopes {
 
     pub fn is_callee_context(&self) -> bool {
         self.current().use_context.get() == UseContext::Callee
+    }
+
+    pub fn set_assignment_target_context(&self) -> UseContext {
+        let prev = self.current().use_context.get();
+        self.current().use_context.set(UseContext::AssignmentTarget);
+        prev
+    }
+
+    pub fn is_assignment_target_context(&self) -> bool {
+        self.current().use_context.get() == UseContext::AssignmentTarget
     }
 }

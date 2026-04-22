@@ -14,7 +14,6 @@ use crate::cache::{
     save_module_cache, try_load_cache,
 };
 use crate::checker::Checker;
-use crate::checker::infer::checks::check_interface_visibility;
 use crate::facts::Facts;
 use crate::lint;
 use crate::loader::Loader;
@@ -22,6 +21,7 @@ use crate::module_graph::build_module_graph;
 use crate::pattern_analysis;
 use crate::prelude::parse_and_register_prelude;
 use crate::store::{ENTRY_MODULE_ID, Store};
+use crate::validators;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompilePhase {
@@ -185,7 +185,6 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
             checker.store.store_module(&module_id, files);
             checker.register_module(&module_id);
             checker.infer_module(&module_id);
-            check_interface_visibility(checker.store, &module_id, &sink);
 
             checker.cursor.module_id = prev_module_id;
 
@@ -232,6 +231,23 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     };
 
     if !has_pre_check_errors {
+        for module in store.modules.values() {
+            let module_id = module.id.clone();
+            for file in module.files.values() {
+                let is_typedef = module.typedefs.contains_key(&file.id);
+                let mut ctx = validators::ValidatorContext {
+                    typed_ast: &file.items,
+                    is_typedef,
+                    module_id: &module_id,
+                    store: &store,
+                    facts: &mut facts,
+                    coercions: &coercions,
+                    sink: &sink,
+                };
+                validators::run_all(&mut ctx);
+            }
+        }
+
         let pattern_ctx = pattern_analysis::Context::new(&store, &facts.or_pattern_error_spans);
         for module in store.modules.values() {
             for file in module.files.values() {

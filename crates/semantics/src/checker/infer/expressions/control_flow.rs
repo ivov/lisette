@@ -4,7 +4,6 @@ use syntax::ast::{Binding, Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::Type;
 
 use super::super::Checker;
-use super::super::checks::{check_binding_pattern, reject_as_binding_in_irrefutable_context};
 
 /// Result of reconciling branch types. `Widened` means the common type is a
 /// later branch's type (a supertype of the first), not the first branch's type.
@@ -193,7 +192,6 @@ impl Checker<'_, '_> {
 
         let bool_ty = self.type_bool();
         let new_condition = self.infer_expression(*condition, &bool_ty);
-        self.check_not_temp_producing(&new_condition);
         if let Some(span) = Self::find_propagate(&new_condition) {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));
@@ -371,7 +369,6 @@ impl Checker<'_, '_> {
 
         let bool_ty = self.type_bool();
         let new_condition = self.infer_expression(*condition, &bool_ty);
-        self.check_not_temp_producing(&new_condition);
         if let Some(span) = Self::find_propagate(&new_condition) {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));
@@ -527,15 +524,11 @@ impl Checker<'_, '_> {
         // Push a new scope so the loop variable doesn't shadow outer bindings
         self.scopes.push();
 
-        reject_as_binding_in_irrefutable_context(self.sink, &binding.pattern);
-
         let (inferred_pattern, typed_pattern) = self.infer_pattern(
             binding.pattern,
             element_ty.clone(),
             BindingKind::Let { mutable: false },
         );
-
-        check_binding_pattern(self.sink, &inferred_pattern);
 
         let new_binding = Binding {
             pattern: inferred_pattern,

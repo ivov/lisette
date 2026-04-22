@@ -2,6 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{PatternIssue, UnusedExpressionKind};
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
+use syntax::types::Type;
 
 #[derive(Debug, Default)]
 pub struct Facts {
@@ -16,6 +17,9 @@ pub struct Facts {
     pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<Span>,
+    pub generic_call_checks: Vec<GenericCallCheck>,
+    pub empty_collection_checks: Vec<EmptyCollectionCheck>,
+    pub statement_tail_checks: Vec<StatementTailCheck>,
     /// Spans of or-patterns with binding errors, used to suppress contradictory lints.
     pub or_pattern_error_spans: HashSet<Span>,
     /// Tracks usage locations for find-references in LSP
@@ -24,6 +28,25 @@ pub struct Facts {
     /// Tracks methods used via interface satisfaction during type checking.
     /// Maps (module_id, method_name) -> usage locations
     pub interface_satisfied_methods: HashMap<(String, String), Vec<Span>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GenericCallCheck {
+    pub return_ty: Type,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmptyCollectionCheck {
+    pub name: String,
+    pub ty: Type,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct StatementTailCheck {
+    pub expected_ty: Type,
+    pub span: Span,
 }
 
 impl Facts {

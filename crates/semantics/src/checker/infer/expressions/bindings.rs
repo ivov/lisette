@@ -1,12 +1,10 @@
 use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::BindingKind;
-use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, Visibility};
+use syntax::ast::{Annotation, Binding, Expression, Span, Visibility};
 use syntax::types::Type;
 
 use super::super::Checker;
-use super::super::checks::{check_binding_pattern, reject_as_binding_in_irrefutable_context};
-use crate::checker::PostInferenceCheck;
 
 fn is_const_eligible(expression: &Expression) -> bool {
     match expression.unwrap_parens() {
@@ -104,25 +102,8 @@ impl Checker<'_, '_> {
             None
         };
 
-        reject_as_binding_in_irrefutable_context(self.sink, &binding.pattern);
-
         let (inferred_pattern, typed_pattern) =
             self.infer_pattern(binding.pattern, ty.clone(), BindingKind::Let { mutable });
-
-        if new_else_block.is_none() {
-            check_binding_pattern(self.sink, &inferred_pattern);
-        } else {
-            let mut innermost = &inferred_pattern;
-            while let Pattern::AsBinding { pattern, .. } = innermost {
-                innermost = pattern;
-            }
-            if matches!(innermost, Pattern::Literal { .. }) {
-                self.sink
-                    .push(diagnostics::infer::literal_pattern_in_binding(
-                        inferred_pattern.get_span(),
-                    ));
-            }
-        }
 
         let new_binding = Binding {
             pattern: inferred_pattern,
@@ -136,8 +117,9 @@ impl Checker<'_, '_> {
             && new_value.is_empty_collection()
             && let Some(name) = binding_name
         {
-            self.post_inference_checks
-                .push(PostInferenceCheck::EmptyCollection {
+            self.facts
+                .empty_collection_checks
+                .push(crate::facts::EmptyCollectionCheck {
                     name: name.to_string(),
                     ty: new_binding.ty.clone(),
                     span,

@@ -35,7 +35,6 @@ impl Checker<'_, '_> {
         if operator == Negative {
             self.scopes.decrement_negation_depth();
         }
-        self.check_not_temp_producing(&new_expression);
         let operand_span = new_expression.get_span();
 
         let expression_ty = match operator {
@@ -164,9 +163,6 @@ impl Checker<'_, '_> {
             s.infer_expression(*right_operand, &right_operand_ty)
         });
 
-        self.check_not_temp_producing(&left_inferred);
-        self.check_not_temp_producing(&new_right_operand);
-
         if matches!(operator, And | Or)
             && let Some(span) = Checker::find_propagate(&new_right_operand)
         {
@@ -260,9 +256,6 @@ impl Checker<'_, '_> {
                 (left, right)
             }
         });
-
-        self.check_not_temp_producing(&new_left_operand);
-        self.check_not_temp_producing(&new_right_operand);
 
         if matches!(operator, And | Or)
             && let Some(span) = Checker::find_propagate(&new_right_operand)
@@ -663,13 +656,6 @@ impl Checker<'_, '_> {
             (start, end)
         });
 
-        if let Some(s) = &new_start {
-            self.check_not_temp_producing(s);
-        }
-        if let Some(e) = &new_end {
-            self.check_not_temp_producing(e);
-        }
-
         let range_ty = match (&new_start, &new_end, inclusive) {
             (Some(_), Some(_), false) => self.type_range(element_ty.clone()),
             (Some(_), Some(_), true) => self.type_range_inclusive(element_ty.clone()),
@@ -708,8 +694,6 @@ impl Checker<'_, '_> {
         let new_expression =
             self.with_value_context(|s| s.infer_expression(*expression, &source_ty_var));
         let source_ty = source_ty_var.resolve_in(&self.env);
-
-        self.check_not_temp_producing(&new_expression);
 
         if is_cast_expression(&new_expression) {
             self.sink.push(diagnostics::infer::chained_cast(span));

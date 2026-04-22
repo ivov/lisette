@@ -75,11 +75,6 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             checker.store.store_module(&module_id, files);
             checker.register_module(&module_id);
             checker.infer_module(&module_id);
-            semantics::checker::infer::checks::check_interface_visibility(
-                checker.store,
-                &module_id,
-                &sink,
-            );
 
             checker.cursor.module_id = prev_module_id;
         }
@@ -92,6 +87,29 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             .collect();
 
         if !checker.failed() {
+            let module_ids: Vec<String> = checker.store.modules.keys().cloned().collect();
+            for mid in &module_ids {
+                let typed_ast: Vec<_> = checker
+                    .store
+                    .get_module(mid)
+                    .map(|m| m.files.values().flat_map(|f| f.items.clone()).collect())
+                    .unwrap_or_default();
+                let is_typedef = checker
+                    .store
+                    .get_module(mid)
+                    .map(|m| !m.typedefs.is_empty() && m.files.is_empty())
+                    .unwrap_or(false);
+                let mut ctx = semantics::validators::ValidatorContext {
+                    typed_ast: &typed_ast,
+                    is_typedef,
+                    module_id: mid,
+                    store: checker.store,
+                    facts: &mut checker.facts,
+                    coercions: &checker.coercions,
+                    sink: checker.sink,
+                };
+                semantics::validators::run_all(&mut ctx);
+            }
             let pattern_ctx = pattern_analysis::Context::new(
                 checker.store,
                 &checker.facts.or_pattern_error_spans,

@@ -1,10 +1,30 @@
 use crate::checker::EnvResolve;
-use syntax::ast::Expression;
+use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
 use super::super::super::Checker;
 
 impl Checker<'_, '_> {
+    /// Returns `true` if valid (no error emitted), `false` if an error was emitted.
+    pub(crate) fn check_slice_index_type(
+        &mut self,
+        type_name: &str,
+        index_ty: &Type,
+        span: Span,
+    ) -> bool {
+        if type_name != "Slice" || index_ty.is_variable() {
+            return true;
+        }
+        if index_ty.get_name().is_some_and(|n| n == "int") {
+            return true;
+        }
+        self.sink
+            .push(diagnostics::infer::slice_index_type_mismatch(
+                index_ty, span,
+            ));
+        false
+    }
+
     pub(super) fn infer_indexed_access(
         &mut self,
         expression: Box<Expression>,
@@ -24,8 +44,6 @@ impl Checker<'_, '_> {
             let collection_expression = s.infer_expression(*expression, &collection_ty_var);
             (index_expression, collection_expression)
         });
-
-        self.check_not_temp_producing(&index_expression);
 
         let resolved_index_ty = index_ty_var.resolve_in(&self.env);
         let resolved_collection_ty = self
@@ -242,13 +260,6 @@ impl Checker<'_, '_> {
                         end.map(|expression| Box::new(s.infer_expression(*expression, &int_ty)));
                     (start, end)
                 });
-
-                if let Some(s) = &new_start {
-                    self.check_not_temp_producing(s);
-                }
-                if let Some(e) = &new_end {
-                    self.check_not_temp_producing(e);
-                }
 
                 let range_ty = match (&new_start, &new_end) {
                     (Some(_), Some(_)) if inclusive => self.type_range_inclusive(int_ty),
