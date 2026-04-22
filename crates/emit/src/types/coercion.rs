@@ -15,37 +15,26 @@ pub(crate) struct Coercion {
 pub(crate) enum CoercionKind {
     Identity,
     WrapAsInterface(AdapterPlan),
-    /// Strip a Lisette `Option<T>` wrapper so the raw T-or-nil can land in a
-    /// Go-typed slot. Applied to the value type itself.
     UnwrapNullableOption {
         ty: Type,
     },
-    /// Strip Lisette `Option<T>` wrappers element-wise from a slice or map
-    /// whose elements are nullable Go types.
     UnwrapNullableCollection {
         ty: Type,
         elem_option_ty: Type,
     },
-    /// Wrap a raw Go T-or-nil into a Lisette `Option<T>` after reading it out
-    /// of a Go-typed source.
     WrapNullableOption {
         ty: Type,
     },
-    /// Wrap elements of a Go collection whose slots are nullable into
-    /// Lisette `Option<T>` elements.
     WrapNullableCollection {
         ty: Type,
         elem_option_ty: Type,
     },
-    /// Clone a slice sub-range into a fresh backing array so element writes
-    /// through the binding do not alias the original slice. Applies only to
-    /// `let mut x = arr[range]` bindings.
+    /// Severs the backing-array alias on `let mut x = arr[range]` so writes
+    /// through `x` do not mutate `arr`.
     CloneSubslice,
 }
 
 impl Coercion {
-    /// Resolve a value-to-target interface coercion (Lisette → Go interface
-    /// adapter). Pure: inspects types only.
     pub(crate) fn resolve(emitter: &Emitter, from: &Type, to: &Type) -> Self {
         let kind = if let Some(plan) = emitter.needs_adapter(from, to) {
             CoercionKind::WrapAsInterface(plan)
@@ -59,8 +48,6 @@ impl Coercion {
         }
     }
 
-    /// Resolve the "value is about to enter Go code" coercion: strip Lisette
-    /// Option wrappers so Go sees T-or-nil. Driven by the value type.
     pub(crate) fn resolve_unwrap_go_nullable(emitter: &Emitter, value_ty: &Type) -> Self {
         let kind = if emitter.is_nullable_option(value_ty) {
             CoercionKind::UnwrapNullableOption {
@@ -81,10 +68,6 @@ impl Coercion {
         }
     }
 
-    /// Resolve a mutable-subslice clone coercion: when a `let mut` binding
-    /// takes a slice sub-range (`arr[start..end]`), the binding's backing
-    /// array must be independent of the source so element writes do not
-    /// alias. Identity when the binding is not mutable or not a subslice.
     pub(crate) fn resolve_subslice_clone(value: &Expression, mutable: bool) -> Self {
         let kind = if is_mutable_subslice(value, mutable) {
             CoercionKind::CloneSubslice
@@ -99,8 +82,6 @@ impl Coercion {
         }
     }
 
-    /// Resolve the "value just came out of Go code" coercion: wrap raw T-or-nil
-    /// back into a Lisette Option. Driven by the Lisette-facing value type.
     pub(crate) fn resolve_wrap_go_nullable(emitter: &Emitter, value_ty: &Type) -> Self {
         let kind = if emitter.is_nullable_option(value_ty) {
             CoercionKind::WrapNullableOption {
@@ -121,8 +102,6 @@ impl Coercion {
         }
     }
 
-    /// Apply the resolved coercion. May emit setup statements to `output` and
-    /// register adapter types on the emitter.
     pub(crate) fn apply(self, emitter: &mut Emitter, output: &mut String, value: String) -> String {
         match self.kind {
             CoercionKind::Identity => value,
@@ -156,9 +135,6 @@ impl Coercion {
 }
 
 impl Emitter<'_> {
-    /// Apply an interface-wrap coercion from the expression's type to
-    /// `target_ty`, if any. Used at return and assign-target boundaries where
-    /// the target type is known via ambient context.
     pub(crate) fn apply_type_coercion(
         &mut self,
         output: &mut String,
@@ -174,8 +150,6 @@ impl Emitter<'_> {
     }
 }
 
-/// Extracted from `LetEmitter::is_mutable_subslice_binding`: a `let mut` whose
-/// value is `collection[range]` where the collection resolves to `Slice`.
 fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
     if !mutable {
         return false;

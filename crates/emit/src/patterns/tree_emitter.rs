@@ -18,6 +18,65 @@ struct GuardedTreeContext<'a> {
     use_direct_return: bool,
 }
 
+enum LeafTerminator<'a> {
+    None,
+    BreakLabel(&'a str),
+}
+
+enum GuardFailurePolicy {
+    EmitInline,
+    FallThrough,
+}
+
+enum NestedHandler {
+    Regular,
+    RetryLoop,
+}
+
+struct WalkCtx<'a> {
+    arm_position: &'a Position,
+    subject_var: &'a str,
+    terminator: LeafTerminator<'a>,
+    guard_failure: GuardFailurePolicy,
+    nested: NestedHandler,
+}
+
+impl<'a> WalkCtx<'a> {
+    fn switch_case(arm_position: &'a Position, subject_var: &'a str) -> Self {
+        Self {
+            arm_position,
+            subject_var,
+            terminator: LeafTerminator::None,
+            guard_failure: GuardFailurePolicy::EmitInline,
+            nested: NestedHandler::Regular,
+        }
+    }
+
+    fn chain_test(arm_position: &'a Position, subject_var: &'a str) -> Self {
+        Self {
+            arm_position,
+            subject_var,
+            terminator: LeafTerminator::None,
+            guard_failure: GuardFailurePolicy::FallThrough,
+            nested: NestedHandler::Regular,
+        }
+    }
+
+    fn retry_loop(ctx: &GuardedTreeContext<'a>) -> Self {
+        Self {
+            arm_position: ctx.arm_position,
+            subject_var: ctx.subject_var,
+            terminator: if ctx.use_direct_return {
+                LeafTerminator::None
+            } else {
+                LeafTerminator::BreakLabel(ctx.label)
+            },
+            guard_failure: GuardFailurePolicy::FallThrough,
+            nested: NestedHandler::RetryLoop,
+        }
+    }
+}
+
 pub(crate) struct TreeEmitter<'a, 'e> {
     emitter: &'a mut Emitter<'e>,
     arms: &'a [MatchArm],
@@ -164,7 +223,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     }
 
     /// Emit `if <cond> { <then> }` with an optional else arm. The else branch
-    /// may inline (e.g. a nested `if`) via `emit_else_or_flat`; `None` closes
+    /// may inline (e.g. a nested `if`) via `walk_else_or_flat`; `None` closes
     /// the if block with `}\n`.
     fn emit_if_else_arm(
         &mut self,
@@ -175,12 +234,13 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         arm_position: &Position,
         subject_var: &str,
     ) {
+        let ctx = WalkCtx::switch_case(arm_position, subject_var);
         write_line!(output, "if {} {{", condition);
         self.emitter.enter_scope();
-        self.emit_decision_in_case(output, then, arm_position, subject_var);
+        self.walk(output, then, &ctx);
         self.emitter.exit_scope();
         match otherwise {
-            Some(d) => self.emit_else_or_flat(output, d, arm_position, subject_var),
+            Some(d) => self.walk_else_or_flat(output, d, &ctx),
             None => output.push_str("}\n"),
         }
     }
@@ -295,7 +355,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             return true;
         }
         // Single-variant enum: emit the body directly, no wrapper.
-        self.emit_decision_in_case(output, &branch.decision, arm_position, subject_var);
+        let ctx = WalkCtx::switch_case(arm_position, subject_var);
+        self.walk(output, &branch.decision, &ctx);
         true
     }
 
@@ -345,13 +406,14 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             branches
         };
 
+        let ctx = WalkCtx::switch_case(arm_position, subject_var);
         for branch in regular_branches {
             if track_stdlib && branch.needs_stdlib {
                 self.emitter.flags.needs_stdlib = true;
             }
             write_line!(output, "case {}:", branch.case_label);
             self.emitter.enter_scope();
-            self.emit_decision_in_case(output, &branch.decision, arm_position, subject_var);
+            self.walk(output, &branch.decision, &ctx);
             self.emitter.exit_scope();
         }
 
@@ -367,7 +429,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         if let Some(decision) = default_decision {
             let pre = output.len();
             self.emitter.enter_scope();
-            self.emit_decision_in_case(output, decision, arm_position, subject_var);
+            self.walk(output, decision, &ctx);
             self.emitter.exit_scope();
             if output.len() > pre {
                 output.insert_str(pre, "default:\n");
@@ -378,50 +440,6 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
 
         self.emitter
             .emit_unreachable_if_needed(output, fallback.is_some() || use_last_as_default);
-    }
-
-    /// Close an if-block and emit the alternative decision, either flat (when the
-    /// if-branch diverges) or wrapped in `} else { ... }`.
-    fn emit_else_or_flat(
-        &mut self,
-        output: &mut String,
-        decision: &Decision,
-        arm_position: &Position,
-        subject_var: &str,
-    ) {
-        if self.is_empty_decision(decision) {
-            output.push_str("}\n");
-        } else if output_ends_with_diverge(output) {
-            output.push_str("}\n");
-            self.emit_decision_in_case(output, decision, arm_position, subject_var);
-        } else {
-            output.push_str("} else {\n");
-            self.emitter.enter_scope();
-            self.emit_decision_in_case(output, decision, arm_position, subject_var);
-            self.emitter.exit_scope();
-            output.push_str("}\n");
-        }
-    }
-
-    fn emit_else_or_flat_chain(
-        &mut self,
-        output: &mut String,
-        decision: &Decision,
-        arm_position: &Position,
-        subject_var: &str,
-    ) {
-        if self.is_empty_decision(decision) {
-            output.push_str("}\n");
-        } else if output_ends_with_diverge(output) {
-            output.push_str("}\n");
-            self.emit_chain_decision_body(output, decision, arm_position, subject_var);
-        } else {
-            output.push_str("} else {\n");
-            self.emitter.enter_scope();
-            self.emit_chain_decision_body(output, decision, arm_position, subject_var);
-            self.emitter.exit_scope();
-            output.push_str("}\n");
-        }
     }
 
     /// Emit a guard's `if <condition> {` header and enter scope.
@@ -441,21 +459,15 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
     }
 
-    /// Emit a decision node inside a switch case.
-    fn emit_decision_in_case(
-        &mut self,
-        output: &mut String,
-        decision: &Decision,
-        arm_position: &Position,
-        subject_var: &str,
-    ) {
+    fn walk(&mut self, output: &mut String, decision: &Decision, ctx: &WalkCtx) {
         match decision {
             Decision::Success {
                 arm_index,
                 bindings,
             } => {
-                self.emit_bindings(output, bindings, subject_var);
-                self.emit_arm_body(output, *arm_index, Some(arm_position));
+                self.emit_bindings(output, bindings, ctx.subject_var);
+                self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
+                self.apply_leaf_terminator(output, ctx);
             }
             Decision::Guard {
                 arm_index,
@@ -463,17 +475,89 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 success,
                 failure,
             } => {
-                self.emit_bindings(output, bindings, subject_var);
+                self.emit_bindings(output, bindings, ctx.subject_var);
                 if self.emit_guard_header(output, *arm_index) {
-                    self.emit_decision_in_case(output, success, arm_position, subject_var);
+                    self.walk(output, success, ctx);
                     self.emitter.exit_scope();
-                    self.emit_else_or_flat(output, failure, arm_position, subject_var);
+                    match ctx.guard_failure {
+                        GuardFailurePolicy::EmitInline => {
+                            self.walk_else_or_flat(output, failure, ctx);
+                        }
+                        GuardFailurePolicy::FallThrough => {
+                            output.push_str("}\n");
+                        }
+                    }
+                }
+            }
+            Decision::Chain { .. } | Decision::Switch { .. } => match ctx.nested {
+                NestedHandler::Regular => {
+                    self.emit_chain_decisions(output, decision, ctx.arm_position, ctx.subject_var);
+                }
+                NestedHandler::RetryLoop => {
+                    let label = match &ctx.terminator {
+                        LeafTerminator::BreakLabel(l) => *l,
+                        LeafTerminator::None => "",
+                    };
+                    let guarded_ctx = GuardedTreeContext {
+                        arm_position: ctx.arm_position,
+                        subject_var: ctx.subject_var,
+                        label,
+                        use_direct_return: matches!(ctx.terminator, LeafTerminator::None),
+                    };
+                    self.emit_guarded_tree(output, decision, &guarded_ctx);
+                }
+            },
+            Decision::Unreachable => {}
+        }
+    }
+
+    /// For the hoisted chain-group path: shared bindings are emitted once
+    /// above the merged block, so the Success/Guard leaf must not re-emit them.
+    fn walk_skip_initial_bindings(
+        &mut self,
+        output: &mut String,
+        decision: &Decision,
+        ctx: &WalkCtx,
+    ) {
+        match decision {
+            Decision::Success { arm_index, .. } => {
+                self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
+                self.apply_leaf_terminator(output, ctx);
+            }
+            Decision::Guard { arm_index, .. } => {
+                if self.emit_guard_header(output, *arm_index) {
+                    self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
+                    self.apply_leaf_terminator(output, ctx);
+                    self.emitter.exit_scope();
+                    output.push_str("}\n");
                 }
             }
             _ => {
-                // Nested chain/switch inside a case
-                self.emit_chain_decisions(output, decision, arm_position, subject_var);
+                self.walk(output, decision, ctx);
             }
+        }
+    }
+
+    fn apply_leaf_terminator(&mut self, output: &mut String, ctx: &WalkCtx) {
+        if let LeafTerminator::BreakLabel(label) = ctx.terminator
+            && !output_ends_with_diverge(output)
+        {
+            write_line!(output, "break {}", label);
+        }
+    }
+
+    fn walk_else_or_flat(&mut self, output: &mut String, decision: &Decision, ctx: &WalkCtx) {
+        if self.is_empty_decision(decision) {
+            output.push_str("}\n");
+        } else if output_ends_with_diverge(output) {
+            output.push_str("}\n");
+            self.walk(output, decision, ctx);
+        } else {
+            output.push_str("} else {\n");
+            self.emitter.enter_scope();
+            self.walk(output, decision, ctx);
+            self.emitter.exit_scope();
+            output.push_str("}\n");
         }
     }
 
@@ -557,6 +641,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                     tests
                 };
 
+                let guard_ctx = WalkCtx::switch_case(arm_position, subject_var);
+                let chain_ctx = WalkCtx::chain_test(arm_position, subject_var);
                 for (i, test) in regular_tests.iter().enumerate() {
                     let condition = render_condition(&test.checks, subject_var);
                     let is_catchall = test.checks.is_empty();
@@ -565,35 +651,20 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                         .emit_branch_header(output, &condition, is_catchall, i == 0);
 
                     if matches!(test.decision, Decision::Guard { .. }) {
-                        self.emit_decision_in_case(
-                            output,
-                            &test.decision,
-                            arm_position,
-                            subject_var,
-                        );
+                        self.walk(output, &test.decision, &guard_ctx);
                     } else {
-                        self.emit_chain_decision_body(
-                            output,
-                            &test.decision,
-                            arm_position,
-                            subject_var,
-                        );
+                        self.walk(output, &test.decision, &chain_ctx);
                     }
                 }
 
                 self.emitter.exit_scope();
                 if last_is_catchall {
                     let last_test = tests.last().unwrap();
-                    self.emit_else_or_flat_chain(
-                        output,
-                        &last_test.decision,
-                        arm_position,
-                        subject_var,
-                    );
+                    self.walk_else_or_flat(output, &last_test.decision, &chain_ctx);
                 } else if matches!(fallback.as_ref(), Decision::Unreachable) {
                     output.push_str("}\n");
                 } else {
-                    self.emit_else_or_flat_chain(output, fallback, arm_position, subject_var);
+                    self.walk_else_or_flat(output, fallback, &chain_ctx);
                 }
             }
 
@@ -604,42 +675,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             Decision::Unreachable => {}
 
             Decision::Guard { .. } => {
-                self.emit_chain_decision_body(output, tree, arm_position, subject_var);
-            }
-        }
-    }
-
-    fn emit_chain_decision_body(
-        &mut self,
-        output: &mut String,
-        decision: &Decision,
-        arm_position: &Position,
-        subject_var: &str,
-    ) {
-        match decision {
-            Decision::Success {
-                arm_index,
-                bindings,
-            } => {
-                self.emit_bindings(output, bindings, subject_var);
-                self.emit_arm_body(output, *arm_index, Some(arm_position));
-            }
-            Decision::Guard {
-                arm_index,
-                bindings,
-                success,
-                ..
-            } => {
-                self.emit_bindings(output, bindings, subject_var);
-                if self.emit_guard_header(output, *arm_index) {
-                    self.emit_chain_decision_body(output, success, arm_position, subject_var);
-                    self.emitter.exit_scope();
-                    output.push_str("}\n");
-                }
-                // Failure falls through to the next branch
-            }
-            _ => {
-                self.emit_chain_decisions(output, decision, arm_position, subject_var);
+                let ctx = WalkCtx::chain_test(arm_position, subject_var);
+                self.walk(output, tree, &ctx);
             }
         }
     }
@@ -848,7 +885,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         collapse_as_catchall: bool,
     ) {
         if collapse_as_catchall {
-            self.emit_guarded_tree_decision(output, &tests[indices[0]].decision, ctx, true);
+            let walk_ctx = WalkCtx::retry_loop(ctx);
+            self.walk(output, &tests[indices[0]].decision, &walk_ctx);
             return;
         }
 
@@ -886,8 +924,9 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             let bindings = Self::decision_top_bindings(&tests[ref_idx].decision);
             self.emit_bindings(output, bindings, ctx.subject_var);
         }
+        let walk_ctx = WalkCtx::retry_loop(ctx);
         for &test_idx in indices {
-            self.emit_guarded_tree_decision(output, &tests[test_idx].decision, ctx, false);
+            self.walk_skip_initial_bindings(output, &tests[test_idx].decision, &walk_ctx);
         }
     }
 
@@ -901,6 +940,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         tests: &[ChainTest],
         ctx: &GuardedTreeContext,
     ) {
+        let walk_ctx = WalkCtx::retry_loop(ctx);
         for (j, &test_idx) in indices.iter().enumerate() {
             let is_last_in_group = j == indices.len() - 1;
             let needs_wrapper =
@@ -909,54 +949,10 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 output.push_str("{\n");
                 self.emitter.enter_scope();
             }
-            self.emit_guarded_tree_decision(output, &tests[test_idx].decision, ctx, true);
+            self.walk(output, &tests[test_idx].decision, &walk_ctx);
             if needs_wrapper {
                 self.emitter.exit_scope();
                 output.push_str("}\n");
-            }
-        }
-    }
-
-    fn emit_guarded_tree_decision(
-        &mut self,
-        output: &mut String,
-        decision: &Decision,
-        ctx: &GuardedTreeContext,
-        emit_bindings: bool,
-    ) {
-        match decision {
-            Decision::Success {
-                arm_index,
-                bindings,
-            } => {
-                if emit_bindings {
-                    self.emit_bindings(output, bindings, ctx.subject_var);
-                }
-                self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
-                if !ctx.use_direct_return && !output_ends_with_diverge(output) {
-                    write_line!(output, "break {}", ctx.label);
-                }
-            }
-            Decision::Guard {
-                arm_index,
-                bindings,
-                ..
-            } => {
-                if emit_bindings {
-                    self.emit_bindings(output, bindings, ctx.subject_var);
-                }
-                if self.emit_guard_header(output, *arm_index) {
-                    self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
-                    if !ctx.use_direct_return && !output_ends_with_diverge(output) {
-                        write_line!(output, "break {}", ctx.label);
-                    }
-                    self.emitter.exit_scope();
-                    output.push_str("}\n");
-                }
-                // Failure falls through
-            }
-            _ => {
-                self.emit_guarded_tree(output, decision, ctx);
             }
         }
     }
