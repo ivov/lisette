@@ -202,7 +202,7 @@ impl Emitter<'_> {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some((channel, "receive", _)) = Self::extract_channel_op(unwrapped) {
             let ch = self.emit_value(output, channel);
-            return if channel.get_type().resolve().is_ref() {
+            return if channel.get_type().is_ref() {
                 cancel_deref_of_address(ch)
             } else {
                 ch
@@ -384,7 +384,7 @@ impl Emitter<'_> {
         if let Some((channel, member, args)) = Self::extract_channel_op(unwrapped) {
             let ch_has_call = needs_hoist && contains_call(channel);
             let mut ch = self.emit_value(output, channel);
-            if channel.get_type().resolve().is_ref() {
+            if channel.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
             if ch_has_call {
@@ -409,7 +409,7 @@ impl Emitter<'_> {
         } else {
             let expression_has_call = needs_hoist && contains_call(send_expression);
             let mut ch = self.emit_value(output, send_expression);
-            if send_expression.get_type().resolve().is_ref() {
+            if send_expression.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
             if expression_has_call {

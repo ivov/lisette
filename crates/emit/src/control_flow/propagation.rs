@@ -13,7 +13,7 @@ impl Emitter<'_> {
         expression: &Expression,
         result_var_name: Option<&str>,
     ) -> String {
-        let expression_ty = expression.get_type().resolve();
+        let expression_ty = expression.get_type();
         let fallible = Fallible::from_type(&expression_ty)
             .expect("emit_propagate called on non-Result/Option type");
 
@@ -95,9 +95,9 @@ impl Emitter<'_> {
         target_ty: Option<&Type>,
         expression: &Expression,
     ) {
-        let resolved_target = target_ty.map(|t| t.resolve());
-        let ty = resolved_target
+        let ty = target_ty
             .filter(|t| t.is_option() || t.is_result())
+            .cloned()
             .unwrap_or_else(|| expression.get_type());
         let Some(fallible) = Fallible::from_type(&ty) else {
             let expression_string = self.emit_operand(output, expression);
@@ -214,13 +214,13 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
     ) -> bool {
-        let expression_ty = expression.get_type().resolve();
+        let expression_ty = expression.get_type();
 
         let return_ty = self
             .current_return_context
             .as_ref()
-            .map(|ty| ty.resolve())
             .filter(|ctx_ty| Fallible::from_type(ctx_ty).is_some())
+            .cloned()
             .unwrap_or(expression_ty);
 
         let Some(fallible) = Fallible::from_type(&return_ty) else {
@@ -377,7 +377,7 @@ impl Emitter<'_> {
     /// nothing constrains it).
     fn resolve_fallible_block_type(&self, items: &[Expression], ty: &Type) -> Type {
         let tail_is_never = items.last().is_some_and(|last| {
-            let t = last.get_type().resolve();
+            let t = last.get_type();
             t.is_never() || last.diverges().is_some()
         });
         let base = Fallible::from_type(ty);
@@ -407,7 +407,7 @@ impl Emitter<'_> {
     }
 
     fn emit_try_tail(&mut self, output: &mut String, last: &Expression, fallible: &Fallible) {
-        if last.diverges().is_some() || last.get_type().resolve().is_never() {
+        if last.diverges().is_some() || last.get_type().is_never() {
             self.emit_statement(output, last);
             if !Self::is_go_never(last) {
                 output.push_str("panic(\"unreachable\")\n");
@@ -425,8 +425,8 @@ impl Emitter<'_> {
                 | Expression::For { .. }
                 | Expression::Loop { .. }
         );
-        let is_unit_call = last.get_type().resolve().is_unit()
-            && matches!(last.unwrap_parens(), Expression::Call { .. });
+        let is_unit_call =
+            last.get_type().is_unit() && matches!(last.unwrap_parens(), Expression::Call { .. });
         if is_statement_only || is_unit_call {
             // Statement-only tails and unit calls can't be used as values.
             // Emit as statement, then return Ok(unit).
@@ -552,7 +552,7 @@ impl Emitter<'_> {
     }
 
     fn emit_recover_tail(&mut self, output: &mut String, last: &Expression, fallible: &Fallible) {
-        let item_ty = last.get_type().resolve();
+        let item_ty = last.get_type();
         if item_ty.is_never() {
             self.emit_statement(output, last);
             if !Self::is_go_never(last) {

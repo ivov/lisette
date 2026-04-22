@@ -46,7 +46,7 @@ impl Emitter<'_> {
             return;
         }
 
-        let iterable_ty = iterable.get_type().resolve();
+        let iterable_ty = iterable.get_type();
         if let Some(ty_name) = iterable_ty.get_name()
             && matches!(ty_name, "Range" | "RangeInclusive" | "RangeFrom")
         {
@@ -55,7 +55,7 @@ impl Emitter<'_> {
         }
 
         let iter_expression = self.emit_operand(output, iterable);
-        let iter_expression = if iterable.get_type().resolve().is_ref() {
+        let iter_expression = if iterable.get_type().is_ref() {
             format!("*{}", iter_expression)
         } else {
             iter_expression

@@ -199,19 +199,17 @@ impl Emitter<'_> {
         ty: &Type,
         typed: Option<&TypedPattern>,
     ) {
-        let resolved = ty.resolve();
-
         match pattern {
             Pattern::Identifier { identifier, .. } => {
-                self.declare_pattern_var(output, pattern, identifier, &resolved);
+                self.declare_pattern_var(output, pattern, identifier, ty);
             }
             Pattern::Tuple { elements, .. } => {
-                self.emit_tuple_pattern_decls(output, elements, &resolved, typed);
+                self.emit_tuple_pattern_decls(output, elements, ty, typed);
             }
             Pattern::Struct {
                 fields, identifier, ..
             } => {
-                self.emit_struct_pattern_decls(output, fields, identifier, &resolved, typed);
+                self.emit_struct_pattern_decls(output, fields, identifier, ty, typed);
             }
             Pattern::EnumVariant {
                 fields,
@@ -220,11 +218,11 @@ impl Emitter<'_> {
                 ..
             } => {
                 self.emit_enum_variant_pattern_decls(
-                    output, fields, identifier, pattern_ty, &resolved, typed,
+                    output, fields, identifier, pattern_ty, ty, typed,
                 );
             }
             Pattern::Slice { prefix, rest, .. } => {
-                self.emit_slice_pattern_decls(output, prefix, rest, &resolved, typed);
+                self.emit_slice_pattern_decls(output, prefix, rest, ty, typed);
             }
             Pattern::Or { patterns, .. } => {
                 let Some(first) = patterns.first() else {
@@ -242,7 +240,7 @@ impl Emitter<'_> {
                 ..
             } => {
                 self.emit_binding_declarations_with_type(output, inner, ty, typed);
-                self.declare_pattern_var(output, p, name, &resolved);
+                self.declare_pattern_var(output, p, name, ty);
             }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => {}
         }

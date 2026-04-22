@@ -240,10 +240,11 @@ impl Emitter<'_> {
         } = inner
             && Self::is_go_receiver(receiver)
         {
-            let fn_type = expression.get_type().resolve();
-            let Type::Function { return_type, .. } = fn_type else {
+            let fn_type = expression.get_type();
+            let Type::Function { return_type, .. } = fn_type.unwrap_forall() else {
                 return None;
             };
+            let return_type = return_type.clone();
 
             let go_hints = if let Expression::DotAccess {
                 expression: receiver_expression,
@@ -323,13 +324,13 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
     ) -> String {
-        let fn_type = expression.get_type().resolve();
-        let (params, return_type) = match fn_type {
+        let fn_type = expression.get_type();
+        let (params, return_type) = match fn_type.unwrap_forall() {
             Type::Function {
                 params,
                 return_type,
                 ..
-            } => (params, *return_type),
+            } => (params.clone(), (**return_type).clone()),
             _ => return self.emit_operand(output, expression),
         };
 
@@ -360,13 +361,13 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        let fn_type = expression.get_type().resolve();
-        let (params, return_type) = match fn_type {
+        let fn_type = expression.get_type();
+        let (params, return_type) = match fn_type.unwrap_forall() {
             Type::Function {
                 params,
                 return_type,
                 ..
-            } => (params, *return_type),
+            } => (params.clone(), (**return_type).clone()),
             _ => unreachable!("expected function type"),
         };
 
@@ -414,20 +415,20 @@ impl Emitter<'_> {
         inner_call: &str,
         lisette_return_type: &Type,
     ) -> Option<(String, String)> {
-        let return_type = lisette_return_type.resolve();
+        let return_type = lisette_return_type;
         self.flags.needs_stdlib = true;
 
         if return_type.is_result() {
-            return Some(self.emit_result_return_adapter(inner_call, &return_type));
+            return Some(self.emit_result_return_adapter(inner_call, return_type));
         }
         if return_type.is_partial() {
-            return Some(self.emit_partial_return_adapter(inner_call, &return_type));
+            return Some(self.emit_partial_return_adapter(inner_call, return_type));
         }
         if return_type.is_option() {
-            return Some(self.emit_option_return_adapter(inner_call, &return_type));
+            return Some(self.emit_option_return_adapter(inner_call, return_type));
         }
         if return_type.tuple_arity().is_some_and(|n| n >= 2) {
-            return self.emit_tuple_return_adapter(inner_call, &return_type);
+            return self.emit_tuple_return_adapter(inner_call, return_type);
         }
         None
     }
@@ -578,7 +579,7 @@ impl Emitter<'_> {
             return fn_value.to_string();
         };
 
-        let return_type = return_type.resolve();
+        let return_type = return_type.as_ref();
 
         let (param_strs, arg_names) = self.build_wrapper_params(params);
         let params_str = param_strs.join(", ");
@@ -591,15 +592,15 @@ impl Emitter<'_> {
 
         // Option<fn> adaptation only fires in interface-method shims. Here
         // a closure-valued Option means the caller owns the nil check.
-        if let Type::Nominal { id, params: ps, .. } = &return_type
+        if let Type::Nominal { id, params: ps, .. } = return_type
             && id == "Option"
             && let Some(inner) = ps.first()
-            && matches!(inner.resolve(), Type::Function { .. })
+            && matches!(inner.unwrap_forall(), Type::Function { .. })
         {
             return fn_value.to_string();
         }
 
-        let Some((go_ret, body)) = self.emit_return_adapter(&call_str, &return_type) else {
+        let Some((go_ret, body)) = self.emit_return_adapter(&call_str, return_type) else {
             return fn_value.to_string();
         };
 

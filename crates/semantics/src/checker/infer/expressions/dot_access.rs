@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructKind};
-use syntax::program::{Definition, DotAccessKind, ReceiverCoercion};
+use syntax::program::{Definition, DotAccessKind, NativeTypeKind, ReceiverCoercion};
 use syntax::types::{Type, substitute, unqualified_name};
 
 use super::super::Checker;
@@ -144,14 +144,6 @@ impl Checker<'_, '_> {
     }
 }
 
-fn is_native_type(ty: &Type) -> bool {
-    let resolved = ty.resolve().strip_refs();
-    matches!(
-        resolved.get_name(),
-        Some("Slice" | "EnumeratedSlice" | "Map" | "Channel" | "Sender" | "Receiver" | "string")
-    )
-}
-
 struct DotAccessResolutionArgs<'a> {
     expression: &'a Expression,
     expression_ty: &'a Type,
@@ -221,7 +213,7 @@ impl Checker<'_, '_> {
                     expression.get_type().resolve_in(&self.env),
                     Type::Function { .. } | Type::Forall { .. }
                 )
-                && is_native_type(&resolved_expression_ty)
+                && NativeTypeKind::from_type(&resolved_expression_ty).is_some()
             {
                 self.sink
                     .push(diagnostics::infer::native_method_value(&member, span));

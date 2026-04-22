@@ -291,9 +291,7 @@ impl Emitter<'_> {
             }
             return;
         }
-        if last.get_type().resolve().is_unit()
-            && matches!(last.unwrap_parens(), Expression::Call { .. })
-        {
+        if last.get_type().is_unit() && matches!(last.unwrap_parens(), Expression::Call { .. }) {
             // Emit as statement and assign struct{}{} to the block result var.
             let call_str = self.emit_value(output, last);
             if !call_str.is_empty() {
@@ -476,7 +474,7 @@ impl Emitter<'_> {
         } = func
             && (member == "append" || member == "extend")
         {
-            return expression.get_type().resolve().has_name("Slice");
+            return expression.get_type().has_name("Slice");
         }
         false
     }

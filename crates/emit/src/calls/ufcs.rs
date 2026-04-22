@@ -40,7 +40,7 @@ impl Emitter<'_> {
             return None;
         }
 
-        let instantiated_ty = function.get_type().resolve();
+        let instantiated_ty = function.get_type();
         let mut mapping: HashMap<String, Type> = HashMap::default();
         extract_type_mapping(body, &instantiated_ty, &mut mapping);
 
@@ -87,7 +87,7 @@ impl Emitter<'_> {
             unreachable!("emit_ufcs_call called on non-DotAccess");
         };
 
-        let receiver_ty = receiver.get_type().resolve().strip_refs().clone();
+        let receiver_ty = receiver.get_type().strip_refs().clone();
         let Type::Nominal {
             id: qualified_name, ..
         } = &receiver_ty

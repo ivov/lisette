@@ -83,8 +83,7 @@ pub fn check_self_comparison(expression: &Expression, diagnostics: &mut Vec<Lise
     }
 
     // Don't warn for float types — NaN == NaN is false per IEEE 754
-    let left_ty = left.get_type().resolve();
-    if left_ty.is_float() {
+    if left.get_type().is_float() {
         return;
     }
 

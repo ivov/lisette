@@ -100,8 +100,8 @@ impl Emitter<'_> {
 
         let pointer_indices = self.get_recursive_enum_pointer_indices(function);
 
-        let fn_param_types: Vec<Type> = match function.get_type().resolve() {
-            Type::Function { params, .. } => params,
+        let fn_param_types: Vec<Type> = match function.get_type().unwrap_forall() {
+            Type::Function { params, .. } => params.clone(),
             _ => vec![],
         };
 
@@ -226,7 +226,7 @@ impl Emitter<'_> {
         let Some(spread_expr) = spread else {
             return false;
         };
-        let Some(variadic_elem) = function.get_type().resolve().is_variadic() else {
+        let Some(variadic_elem) = function.get_type().unwrap_forall().is_variadic() else {
             return false;
         };
         if !variadic_elem.is_unknown() {
@@ -234,7 +234,6 @@ impl Emitter<'_> {
         }
         spread_expr
             .get_type()
-            .resolve()
             .inner()
             .is_some_and(|t| !t.is_unknown())
     }
@@ -261,7 +260,7 @@ impl Emitter<'_> {
 
         if ctx.pointer_indices.contains(&index) {
             let value = self.emit_value(output, arg);
-            if matches!(arg, Expression::Reference { .. }) || arg.get_type().resolve().is_ref() {
+            if matches!(arg, Expression::Reference { .. }) || arg.get_type().is_ref() {
                 return value;
             }
             let temp = self.fresh_var(Some("ptr"));
@@ -299,23 +298,21 @@ impl Emitter<'_> {
         effective_param_ty: Option<&Type>,
     ) -> Option<String> {
         let param_fn_ty = effective_param_ty.and_then(|param_ty| {
-            let resolved = param_ty.resolve();
-            let fn_ty = match resolved {
-                Type::Function { .. } => resolved,
+            let unwrapped = param_ty.unwrap_forall();
+            let fn_ty = match unwrapped {
+                Type::Function { .. } => unwrapped.clone(),
                 Type::Nominal {
-                    underlying_ty: Some(ref inner),
+                    underlying_ty: Some(inner),
                     ..
-                } => inner.resolve(),
+                } => inner.unwrap_forall().clone(),
                 _ => return None,
             };
-            if let Type::Function {
-                ref return_type, ..
-            } = fn_ty
+            if let Type::Function { return_type, .. } = &fn_ty
+                && (return_type.is_result()
+                    || return_type.is_option()
+                    || return_type.tuple_arity().is_some_and(|a| a >= 2))
             {
-                let ret = return_type.resolve();
-                if ret.is_result() || ret.is_option() || ret.tuple_arity().is_some_and(|a| a >= 2) {
-                    return Some(fn_ty);
-                }
+                return Some(fn_ty);
             }
             None
         })?;
@@ -331,14 +328,14 @@ impl Emitter<'_> {
         effective_param_ty: Option<&Type>,
     ) -> Option<String> {
         let param_ty = effective_param_ty?;
-        let arg_ty = arg.get_type().resolve();
+        let arg_ty = arg.get_type();
         if !self.is_nullable_option(&arg_ty) {
             return None;
         }
         let check_ty = if param_ty.get_name() == Some("VarArgs") {
-            param_ty.inner().unwrap_or_else(|| param_ty.resolve())
+            param_ty.inner().unwrap_or_else(|| param_ty.clone())
         } else {
-            param_ty.resolve()
+            param_ty.clone()
         };
         let needs_coercion = self
             .as_interface(&check_ty)
@@ -357,7 +354,7 @@ impl Emitter<'_> {
             return Some("nil".to_string());
         }
         let value = self.emit_value(output, arg);
-        let coercion = Coercion::resolve_unwrap_go_nullable(self, &arg.get_type().resolve());
+        let coercion = Coercion::resolve_unwrap_go_nullable(self, &arg.get_type());
         Some(coercion.apply(self, output, value))
     }
 }

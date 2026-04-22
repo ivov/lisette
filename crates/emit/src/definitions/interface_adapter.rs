@@ -23,8 +23,7 @@ impl Emitter<'_> {
         struct_ty: &Type,
         field_name: &str,
     ) -> Option<Type> {
-        let resolved = struct_ty.resolve();
-        let Type::Nominal { id, .. } = resolved.strip_refs() else {
+        let Type::Nominal { id, .. } = struct_ty.strip_refs() else {
             return None;
         };
         let Some(Definition::Struct { fields, .. }) = self.ctx.definitions.get(id.as_str()) else {
@@ -37,28 +36,25 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_go_function_alias(&self, ty: &Type) -> bool {
-        let resolved = ty.resolve();
-        let Type::Nominal { id, .. } = &resolved else {
+        let Type::Nominal { id, .. } = ty else {
             return false;
         };
         if !id.starts_with(GO_IMPORT_PREFIX) {
             return false;
         }
-        self.resolve_to_function_type(&resolved).is_some()
+        self.resolve_to_function_type(ty).is_some()
     }
 
     pub(crate) fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
-        let resolved = ty.resolve();
-        if matches!(resolved, Type::Function { .. }) {
-            return Some(resolved);
+        if matches!(ty, Type::Function { .. }) {
+            return Some(ty.clone());
         }
-        if let Some(underlying) = resolved.get_underlying() {
-            let under = underlying.resolve();
-            if matches!(under, Type::Function { .. }) {
-                return Some(under);
-            }
+        if let Some(underlying) = ty.get_underlying()
+            && matches!(underlying, Type::Function { .. })
+        {
+            return Some(underlying.clone());
         }
-        let peeled = self.peel_alias(&resolved);
+        let peeled = self.peel_alias(ty);
         if matches!(peeled, Type::Function { .. }) {
             Some(peeled)
         } else {
@@ -108,8 +104,7 @@ impl Emitter<'_> {
         };
 
         let source_stripped = source_ty.strip_refs();
-        let source = source_stripped.resolve();
-        let Type::Nominal { id: source_id, .. } = &source else {
+        let Type::Nominal { id: source_id, .. } = &source_stripped else {
             return None;
         };
         if source_id.starts_with(GO_IMPORT_PREFIX) {
@@ -133,7 +128,7 @@ impl Emitter<'_> {
                 params,
                 return_type,
                 ..
-            } = impl_ty.resolve()
+            } = impl_ty.unwrap_forall()
             else {
                 return None;
             };
@@ -142,7 +137,7 @@ impl Emitter<'_> {
             } else {
                 params[1..].to_vec()
             };
-            let return_ty = return_type.resolve();
+            let return_ty = (**return_type).clone();
             if return_ty.is_result()
                 || return_ty.is_partial()
                 || return_ty.is_option()
@@ -275,10 +270,10 @@ impl Emitter<'_> {
 
     pub(crate) fn resolve_tuple_slot_types(&mut self, inferred: Vec<Type>) -> Vec<Type> {
         let return_slots = self.current_return_context.as_ref().and_then(|ret| {
-            let Type::Tuple(slots) = ret.resolve() else {
+            let Type::Tuple(slots) = ret else {
                 return None;
             };
-            (slots.len() == inferred.len()).then_some(slots)
+            (slots.len() == inferred.len()).then(|| slots.clone())
         });
 
         let Some(return_slots) = return_slots else {
@@ -293,18 +288,13 @@ impl Emitter<'_> {
             .iter()
             .zip(inferred.iter())
             .map(|(declared, inferred_slot)| {
-                if self.needs_adapter(inferred_slot, declared).is_some() {
+                if self.needs_adapter(inferred_slot, declared).is_some()
+                    || (declared.get_qualified_id().is_some()
+                        && declared.get_qualified_id() == inferred_slot.get_qualified_id())
+                {
                     declared.clone()
                 } else {
-                    let d = declared.resolve();
-                    let i = inferred_slot.resolve();
-                    if d.get_qualified_id().is_some()
-                        && d.get_qualified_id() == i.get_qualified_id()
-                    {
-                        declared.clone()
-                    } else {
-                        inferred_slot.clone()
-                    }
+                    inferred_slot.clone()
                 }
             })
             .collect()

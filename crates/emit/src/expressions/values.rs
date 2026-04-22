@@ -152,7 +152,7 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
     ) -> String {
-        if expression.get_type().resolve().is_unit()
+        if expression.get_type().is_unit()
             && matches!(expression.unwrap_parens(), Expression::Call { .. })
         {
             let call_str = self.emit_value(output, expression);
@@ -291,8 +291,8 @@ impl Emitter<'_> {
         elements: &[Expression],
         ty: &Type,
     ) -> String {
-        let inferred_slot_types: Vec<Type> = match ty.resolve() {
-            Type::Tuple(slots) => slots,
+        let inferred_slot_types: Vec<Type> = match ty {
+            Type::Tuple(slots) => slots.clone(),
             _ => Vec::new(),
         };
         let slot_types = self.resolve_tuple_slot_types(inferred_slot_types);
@@ -391,9 +391,7 @@ impl Emitter<'_> {
     }
 
     fn emit_reference(&mut self, output: &mut String, inner: &Expression, ty: &Type) -> String {
-        if inner.get_type().resolve().is_unit()
-            && matches!(inner.unwrap_parens(), Expression::Call { .. })
-        {
+        if inner.get_type().is_unit() && matches!(inner.unwrap_parens(), Expression::Call { .. }) {
             let emitted = self.emit_operand(output, inner.unwrap_parens());
             if !emitted.is_empty() {
                 write_line!(output, "{}", emitted);
@@ -405,10 +403,10 @@ impl Emitter<'_> {
         }
 
         let emitted = self.emit_value(output, inner);
-        if inner.get_type().resolve() == ty.resolve() {
+        if inner.get_type() == *ty {
             emitted
         } else if self.is_go_unaddressable(inner)
-            || matches!(inner.get_type().resolve(), Type::Function { .. })
+            || matches!(inner.get_type(), Type::Function { .. })
         {
             let tmp = self.fresh_var(Some("ref"));
             self.declare(&tmp);
@@ -428,7 +426,7 @@ impl Emitter<'_> {
         } = current
         {
             if member.parse::<usize>().is_ok()
-                && self.is_newtype_struct(&inner.get_type().resolve().strip_refs())
+                && self.is_newtype_struct(&inner.get_type().strip_refs())
             {
                 return true;
             }
@@ -460,7 +458,7 @@ impl Emitter<'_> {
             && Self::is_go_imported_type(&receiver.get_type())
             && self.is_go_nullable(ty)
         {
-            let coercion = Coercion::resolve_unwrap_go_nullable(self, &value.get_type().resolve());
+            let coercion = Coercion::resolve_unwrap_go_nullable(self, &value.get_type());
             let unwrapped = coercion.apply(self, output, rhs_staged.value);
             write_line!(output, "{} = {}", target_str, unwrapped);
         } else {
@@ -518,8 +516,7 @@ impl Emitter<'_> {
             self.emit_block(output, expression);
             return String::new();
         }
-        let resolved = ty.resolve();
-        if resolved.is_unit() || matches!(resolved, Type::Var { .. } | Type::Forall { .. }) {
+        if ty.is_unit() || matches!(ty, Type::Var { .. } | Type::Forall { .. }) {
             self.emit_block(output, expression);
             return String::new();
         }
@@ -578,12 +575,12 @@ impl Emitter<'_> {
             Expression::Call { .. } => true,
 
             Expression::Identifier { value, ty, .. }
-                if !matches!(ty.resolve(), Type::Function { .. }) =>
+                if !matches!(ty.unwrap_forall(), Type::Function { .. }) =>
             {
                 if self.scope.bindings.get(value).is_some() {
                     return false;
                 }
-                if let Type::Nominal { id, .. } = ty.resolve() {
+                if let Type::Nominal { id, .. } = ty {
                     matches!(
                         self.ctx.definitions.get(id.as_str()),
                         Some(Definition::Enum { .. })
@@ -594,16 +591,16 @@ impl Emitter<'_> {
             }
 
             Expression::DotAccess { expression, ty, .. }
-                if !matches!(ty.resolve(), Type::Function { .. }) =>
+                if !matches!(ty.unwrap_forall(), Type::Function { .. }) =>
             {
-                if let Type::Nominal { id, .. } = ty.resolve() {
+                if let Type::Nominal { id, .. } = ty {
                     if !matches!(
                         self.ctx.definitions.get(id.as_str()),
                         Some(Definition::Enum { .. })
                     ) {
                         return false;
                     }
-                    let receiver_ty = expression.get_type().resolve();
+                    let receiver_ty = expression.get_type();
                     if let Type::Nominal {
                         id: receiver_id, ..
                     } = &receiver_ty

@@ -162,7 +162,7 @@ impl Emitter<'_> {
             .collect();
 
         let has_return = matches!(ty, Type::Function { return_type, .. }
-            if { let resolved = return_type.resolve(); !resolved.is_unit() && !resolved.is_variable() });
+            if !return_type.is_unit() && !return_type.is_variable());
 
         let return_ty_string = if has_return {
             match ty {
@@ -411,10 +411,9 @@ impl Emitter<'_> {
             .map(|g| g.name.as_ref())
             .collect();
         for param in params.iter() {
-            let resolved = param.ty.resolve();
-            if resolved.is_ref()
-                && let Some(inner) = resolved.inner()
-                && let Type::Parameter(name) = inner.resolve()
+            if param.ty.is_ref()
+                && let Some(inner) = param.ty.inner()
+                && let Type::Parameter(name) = &inner
                 && bounded_generics.contains(name.as_ref())
             {
                 self.module.absorbed_ref_generics.insert(name.to_string());
@@ -454,10 +453,9 @@ impl Emitter<'_> {
             };
 
             let param_type = {
-                let resolved = param.ty.resolve();
-                if resolved.is_ref()
-                    && let Some(inner) = resolved.inner()
-                    && let Type::Parameter(name) = inner.resolve()
+                if param.ty.is_ref()
+                    && let Some(inner) = param.ty.inner()
+                    && let Type::Parameter(name) = &inner
                     && self.module.absorbed_ref_generics.contains(name.as_ref())
                 {
                     inner

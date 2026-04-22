@@ -26,7 +26,7 @@ impl InhabitanceCache {
 }
 
 fn type_key(ty: &Type) -> String {
-    match ty.resolve() {
+    match ty {
         Type::Never => "Never".to_string(),
         Type::Nominal { id, params, .. } => {
             if params.is_empty() {
@@ -42,7 +42,7 @@ fn type_key(ty: &Type) -> String {
         }
         Type::Function { .. } => "fn".to_string(),
         Type::Var { .. } | Type::Parameter(_) | Type::Error => "param".to_string(),
-        Type::Forall { body, .. } => type_key(&body),
+        Type::Forall { body, .. } => type_key(body),
         Type::ImportNamespace(m) => format!("<import:{}>", m),
         Type::ReceiverPlaceholder => "<receiver>".to_string(),
         Type::Simple(kind) => kind.leaf_name().to_string(),
@@ -58,20 +58,18 @@ fn type_key(ty: &Type) -> String {
 }
 
 pub fn is_inhabited(ty: &Type, store: &Store, cache: &InhabitanceCache) -> bool {
-    let resolved = ty.resolve();
-
-    match &resolved {
+    match ty {
         Type::Never => return false,
         Type::Function { .. } => return true,
         Type::Var { .. } | Type::Parameter(_) => return true,
         _ => {}
     }
 
-    if let Type::Tuple(elements) = &resolved {
+    if let Type::Tuple(elements) = ty {
         return elements.iter().all(|e| is_inhabited(e, store, cache));
     }
 
-    let key = type_key(&resolved);
+    let key = type_key(ty);
 
     {
         let cache_ref = cache.cache.borrow();
@@ -89,7 +87,7 @@ pub fn is_inhabited(ty: &Type, store: &Store, cache: &InhabitanceCache) -> bool 
         .borrow_mut()
         .insert(key.clone(), InhabitanceState::Visiting);
 
-    let result = match &resolved {
+    let result = match ty {
         Type::Nominal { id, params, .. } => check_constructor_inhabited(id, params, store, cache),
         Type::Forall { body, .. } => is_inhabited(body, store, cache),
         _ => true,

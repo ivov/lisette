@@ -697,7 +697,7 @@ impl LanguageServer for Backend {
             && let Some(fa) = field_assignments
                 .iter()
                 .find(|fa| offset_in_span(offset, &fa.name_span))
-            && type_name(&ty.resolve())
+            && type_name(ty)
                 .and_then(|type_id| find_struct_field_span(type_id, &fa.name, &snapshot))
                 .is_some()
         {

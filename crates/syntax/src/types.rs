@@ -585,7 +585,7 @@ impl Type {
     }
 
     pub fn is_unit(&self) -> bool {
-        self.resolve().is_simple(SimpleKind::Unit)
+        self.is_simple(SimpleKind::Unit)
     }
 
     pub fn tuple_arity(&self) -> Option<usize> {
@@ -666,14 +666,14 @@ impl Type {
 
     pub fn is_slice_of_simple(&self, element: SimpleKind) -> bool {
         match self.as_compound() {
-            Some((CompoundKind::Slice, [elem])) => elem.resolve().is_simple(element),
+            Some((CompoundKind::Slice, [elem])) => elem.is_simple(element),
             _ => false,
         }
     }
 
     pub fn is_slice_of(&self, element_name: &str) -> bool {
         match self.as_compound() {
-            Some((CompoundKind::Slice, [elem])) => elem.resolve().has_name(element_name),
+            Some((CompoundKind::Slice, [elem])) => elem.has_name(element_name),
             _ => false,
         }
     }
@@ -759,11 +759,11 @@ impl Type {
     }
 
     pub fn is_never(&self) -> bool {
-        matches!(self.shallow_resolve(), Type::Never)
+        matches!(self, Type::Never)
     }
 
     pub fn is_error(&self) -> bool {
-        matches!(self.shallow_resolve(), Type::Error)
+        matches!(self, Type::Error)
     }
 
     pub fn has_unbound_variables(&self) -> bool {
@@ -1129,68 +1129,6 @@ impl Type {
             | Type::Error
             | Type::ImportNamespace(_)
             | Type::ReceiverPlaceholder => false,
-        }
-    }
-
-    /// Identity pass-through for post-freeze types. Pre-freeze callers in
-    /// the semantics crate must use `TypeEnv::shallow_resolve` to chase
-    /// `Type::Var` binding chains; downstream crates (emit, lsp, format)
-    /// see frozen types where Vars are either absent or unbound, so this
-    /// method returns `self` for them.
-    pub fn shallow_resolve(&self) -> Type {
-        self.clone()
-    }
-
-    /// Env-less deep resolve. Identity for `Type::Var` (cannot chase chains
-    /// without a `TypeEnv`). Recurses into composites for consumers that
-    /// want a cloned structural copy.
-    ///
-    /// Semantic code inside the checker should use `TypeEnv::resolve` or
-    /// `Checker::resolve` instead — those chase `Type::Var` chains. This
-    /// method is for downstream crates (emit, lsp, format) that read post-
-    /// freeze types where no unbound `Type::Var` remains.
-    pub fn resolve(&self) -> Type {
-        match self {
-            Type::Var { .. } => self.clone(),
-            Type::Nominal {
-                id,
-                params,
-                underlying_ty: underlying,
-            } => Type::Nominal {
-                id: id.clone(),
-                params: params.iter().map(|p| p.resolve()).collect(),
-                underlying_ty: underlying.as_ref().map(|u| Box::new(u.resolve())),
-            },
-            Type::Function {
-                params,
-                param_mutability,
-                bounds,
-                return_type,
-            } => Type::Function {
-                params: params.iter().map(|p| p.resolve()).collect(),
-                param_mutability: param_mutability.clone(),
-                bounds: bounds
-                    .iter()
-                    .map(|b| Bound {
-                        param_name: b.param_name.clone(),
-                        generic: b.generic.resolve(),
-                        ty: b.ty.resolve(),
-                    })
-                    .collect(),
-                return_type: Box::new(return_type.resolve()),
-            },
-            Type::Forall { body, .. } => body.resolve(),
-            Type::Tuple(elements) => Type::Tuple(elements.iter().map(|e| e.resolve()).collect()),
-            Type::Compound { kind, args } => Type::Compound {
-                kind: *kind,
-                args: args.iter().map(|a| a.resolve()).collect(),
-            },
-            Type::Simple(_)
-            | Type::Parameter(_)
-            | Type::Error
-            | Type::ImportNamespace(_)
-            | Type::ReceiverPlaceholder => self.clone(),
-            Type::Never => Type::Never,
         }
     }
 }

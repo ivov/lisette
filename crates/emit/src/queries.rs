@@ -37,7 +37,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let resolved = self.peel_alias(&struct_ty.resolve().strip_refs());
+        let resolved = self.peel_alias(&struct_ty.strip_refs());
 
         let Type::Nominal { id, .. } = &resolved else {
             return false;
@@ -87,7 +87,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn has_field(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let Type::Nominal { id, .. } = struct_ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = struct_ty.strip_refs() else {
             return false;
         };
         matches!(
@@ -98,7 +98,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_tuple_struct_type(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.strip_refs() else {
             return false;
         };
 
@@ -112,7 +112,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_newtype_struct(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, params, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, params, .. } = ty.strip_refs() else {
             return false;
         };
 
@@ -132,7 +132,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_go_value_enum(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.strip_refs() else {
             return false;
         };
         matches!(
@@ -142,7 +142,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn get_newtype_underlying(&self, ty: &Type) -> Option<Type> {
-        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.strip_refs() else {
             return None;
         };
 
@@ -162,7 +162,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
-        let mut current = ty.resolve();
+        let mut current = ty.unwrap_forall().clone();
         let mut seen: Vec<String> = Vec::new();
         loop {
             let Type::Nominal { id, .. } = &current else {
@@ -177,7 +177,7 @@ impl Emitter<'_> {
                 return current;
             };
             seen.push(id.to_string());
-            current = alias_ty.resolve();
+            current = alias_ty.unwrap_forall().clone();
         }
     }
 
@@ -193,7 +193,7 @@ impl Emitter<'_> {
             else {
                 return current;
             };
-            let Type::Nominal { id: next, .. } = alias_ty.resolve() else {
+            let Type::Nominal { id: next, .. } = alias_ty.unwrap_forall() else {
                 return current;
             };
             seen.push(current);
@@ -232,7 +232,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_go_imported_type(ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.strip_refs() else {
             return false;
         };
         go_name::is_go_import(&id)
@@ -261,14 +261,13 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn nullable_collection_element_ty(&self, ty: &Type) -> Option<Type> {
-        let resolved = ty.resolve();
-        if resolved.has_name("Slice") {
-            let elem_ty = resolved.inner()?;
+        if ty.has_name("Slice") {
+            let elem_ty = ty.inner()?;
             if self.is_nullable_option(&elem_ty) {
                 return Some(elem_ty);
             }
-        } else if resolved.has_name("Map") {
-            let params = resolved.get_type_params()?;
+        } else if ty.has_name("Map") {
+            let params = ty.get_type_params()?;
             let val_ty = params.get(1)?.clone();
             if self.is_nullable_option(&val_ty) {
                 return Some(val_ty);
@@ -331,7 +330,7 @@ impl Emitter<'_> {
     }
 
     fn is_recursive_type(ty: &Type, enum_id: &str) -> bool {
-        match ty.resolve() {
+        match ty.unwrap_forall() {
             Type::Nominal { id, .. } => id == enum_id,
             _ => false,
         }
@@ -367,16 +366,14 @@ impl Emitter<'_> {
         variant: &str,
         index: usize,
     ) -> String {
-        let resolved = ty.resolve();
-
-        if resolved.is_option() {
+        if ty.is_option() {
             return match variant {
                 "Some" => fallible::OPTION_SOME_FIELD.to_string(),
                 _ => variant.to_string(),
             };
         }
 
-        if resolved.is_result() {
+        if ty.is_result() {
             return match (variant, index) {
                 ("Ok", 0) => fallible::RESULT_OK_FIELD.to_string(),
                 ("Err", 0) => fallible::RESULT_ERR_FIELD.to_string(),
@@ -384,7 +381,7 @@ impl Emitter<'_> {
             };
         }
 
-        if resolved.is_partial() {
+        if ty.is_partial() {
             return match (variant, index) {
                 ("Ok", 0) => fallible::PARTIAL_OK_FIELD.to_string(),
                 ("Err", 0) => fallible::PARTIAL_ERR_FIELD.to_string(),
@@ -394,7 +391,7 @@ impl Emitter<'_> {
             };
         }
 
-        if let Type::Nominal { id, .. } = &resolved
+        if let Type::Nominal { id, .. } = ty
             && let Some(name) = self.enum_tuple_field_name(id, variant, index)
         {
             return name;
@@ -408,8 +405,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_enum_field_pointer(&self, ty: &Type, variant: &str, index: usize) -> bool {
-        let resolved = ty.resolve();
-        if let Type::Nominal { id, .. } = &resolved
+        if let Type::Nominal { id, .. } = ty
             && let Some(layout) = self.module.enum_layouts.get(id.as_ref())
             && let Some(variant_layout) = layout.get_variant(variant)
             && let Some(field) = variant_layout.fields.get(index)
@@ -426,8 +422,7 @@ impl Emitter<'_> {
     /// so the user's `.*` (postfix deref) works correctly. When the pointer is added
     /// automatically for recursion, the binding should be dereferenced transparently.
     pub(crate) fn is_enum_field_source_ref(&self, ty: &Type, variant: &str, index: usize) -> bool {
-        let resolved = ty.resolve();
-        if let Type::Nominal { id, .. } = &resolved
+        if let Type::Nominal { id, .. } = ty
             && let Some(Definition::Enum { variants, .. }) = self.ctx.definitions.get(id.as_str())
         {
             for v in variants {
@@ -442,10 +437,9 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_enum_field_unit(&self, ty: &Type, variant: &str, index: usize) -> bool {
-        let resolved = ty.resolve();
         if let Type::Nominal {
             id, params: args, ..
-        } = &resolved
+        } = ty
             && let Some(Definition::Enum {
                 generics, variants, ..
             }) = self.ctx.definitions.get(id.as_str())
@@ -459,7 +453,7 @@ impl Emitter<'_> {
                 if v.name == variant
                     && let Some(field) = v.fields.iter().nth(index)
                 {
-                    let concrete = substitute(&field.ty.resolve(), &sub_map);
+                    let concrete = substitute(&field.ty, &sub_map);
                     return concrete.is_unit() || concrete.is_never();
                 }
             }
@@ -473,8 +467,7 @@ impl Emitter<'_> {
         variant: &str,
         field_name: &str,
     ) -> Option<usize> {
-        let resolved = ty.resolve();
-        if let Type::Nominal { id, .. } = &resolved
+        if let Type::Nominal { id, .. } = ty
             && let Some(Definition::Enum { variants, .. }) = self.ctx.definitions.get(id.as_str())
         {
             for v in variants {

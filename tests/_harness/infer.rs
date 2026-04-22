@@ -333,8 +333,7 @@ fn ensure_no_errors(errors: &[LisetteDiagnostic]) {
 }
 
 fn is_slice_with_type_var(ty: &Type) -> bool {
-    let normalized = ty.resolve();
-    match &normalized {
+    match ty {
         Type::Nominal { id, params, .. } => {
             id.rsplit('.').next().unwrap_or("") == "Slice"
                 && params.len() == 1
@@ -349,14 +348,11 @@ fn is_slice_with_type_var(ty: &Type) -> bool {
 }
 
 fn types_equal(t1: &Type, t2: &Type) -> bool {
-    let resolved_t1 = t1.resolve();
-    let resolved_t2 = t2.resolve();
-
-    if let (Some(n1), Some(n2)) = (resolved_t1.get_name(), resolved_t2.get_name())
+    if let (Some(n1), Some(n2)) = (t1.get_name(), t2.get_name())
         && n1 == n2
     {
-        let args1 = resolved_t1.get_type_params().unwrap_or(&[]);
-        let args2 = resolved_t2.get_type_params().unwrap_or(&[]);
+        let args1 = t1.get_type_params().unwrap_or(&[]);
+        let args2 = t2.get_type_params().unwrap_or(&[]);
         if args1.len() == args2.len()
             && args1
                 .iter()
@@ -367,7 +363,7 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
         }
     }
 
-    match (&resolved_t1, &resolved_t2) {
+    match (t1, t2) {
         (Type::Compound { kind, args }, Type::Nominal { id, params, .. })
         | (Type::Nominal { id, params, .. }, Type::Compound { kind, args }) => {
             let leaf = id.rsplit('.').next().unwrap_or("");
@@ -391,21 +387,21 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
     if let Type::Nominal {
         underlying_ty: Some(u),
         ..
-    } = &resolved_t1
-        && types_equal(u, &resolved_t2)
+    } = t1
+        && types_equal(u, t2)
     {
         return true;
     }
     if let Type::Nominal {
         underlying_ty: Some(u),
         ..
-    } = &resolved_t2
-        && types_equal(&resolved_t1, u)
+    } = t2
+        && types_equal(t1, u)
     {
         return true;
     }
 
-    match (&resolved_t1, &resolved_t2) {
+    match (t1, t2) {
         (Type::Var { .. }, Type::Var { .. }) => true,
 
         (
@@ -432,7 +428,7 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
                 return true;
             }
             if let Some(u) = u1
-                && types_equal(u, &resolved_t2)
+                && types_equal(u, t2)
             {
                 return true;
             }

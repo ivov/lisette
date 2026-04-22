@@ -28,11 +28,11 @@ impl Emitter<'_> {
 
         let left = BinaryOperand {
             expression: left_expression,
-            ty: left_expression.get_type().resolve(),
+            ty: left_expression.get_type(),
         };
         let right = BinaryOperand {
             expression: right_expression,
-            ty: right_expression.get_type().resolve(),
+            ty: right_expression.get_type(),
         };
 
         if let Some(emit_info) = self.is_casting_needed(operator, &left, &right) {

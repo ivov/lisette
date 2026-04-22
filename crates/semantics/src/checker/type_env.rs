@@ -264,8 +264,7 @@ pub struct Speculation {
 }
 
 /// Extension trait for `Type` giving env-aware resolve convenience methods.
-/// Call-site sugar for `env.resolve(&ty)` that reads like the old
-/// `ty.resolve()` chain.
+/// Call-site sugar for `env.resolve(&ty)` written as `ty.resolve_in(&env)`.
 pub trait EnvResolve {
     fn resolve_in(&self, env: &TypeEnv) -> Type;
     fn shallow_resolve_in(&self, env: &TypeEnv) -> Type;

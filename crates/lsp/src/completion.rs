@@ -159,7 +159,7 @@ pub(crate) fn detect_dot_context(
                 ..
             }
         ) {
-            let ty = expression.get_type().resolve();
+            let ty = expression.get_type();
             return type_name(&ty).map(|type_id| DotContext::Instance(type_id.to_string()));
         }
         return None;
@@ -176,7 +176,7 @@ pub(crate) fn detect_dot_context(
         }
     }
 
-    let ty = expression.get_type().resolve();
+    let ty = expression.get_type();
     if let Some(type_id) = type_name(&ty) {
         return Some(DotContext::Instance(type_id.to_string()));
     }

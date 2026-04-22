@@ -209,13 +209,12 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        let resolved = collection_ty.resolve();
-        let is_map = resolved.has_name("Map");
+        let is_map = collection_ty.has_name("Map");
 
         let inner_ty = elem_option_ty.ok_type();
         let go_inner_ty = self.go_type_as_string(&inner_ty);
         let raw_collection_ty = if is_map {
-            let params = resolved
+            let params = collection_ty
                 .get_type_params()
                 .expect("Map should have type params");
             let key_ty = self.go_type_as_string(&params[0]);

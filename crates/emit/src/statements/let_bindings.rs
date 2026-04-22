@@ -136,7 +136,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             unreachable!("emit_simple_identifier called with non-identifier pattern");
         };
 
-        if self.value.get_type().resolve().is_unit()
+        if self.value.get_type().is_unit()
             && matches!(self.value.unwrap_parens(), Expression::Call { .. })
         {
             self.emit_unit_call_binding(output, identifier);
@@ -240,11 +240,11 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
     /// 2. The binding type differs from Go's default inference for that literal
     /// 3. The binding type is an interface (Go's := would infer the concrete type)
     fn needs_explicit_type_declaration(&self) -> bool {
-        let binding_ty = self.binding.ty.resolve();
+        let binding_ty = &self.binding.ty;
 
-        if self.emitter.as_interface(&binding_ty).is_some() {
-            let value_ty = self.value.get_type().resolve();
-            if binding_ty != value_ty {
+        if self.emitter.as_interface(binding_ty).is_some() {
+            let value_ty = self.value.get_type();
+            if *binding_ty != value_ty {
                 return true;
             }
         }
@@ -275,7 +275,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             // type to avoid a Go type mismatch in the dead `return x` path.
             let value_ty = self.value.get_type();
             let ty = if value_ty.is_unit() || value_ty.is_never() {
-                let binding_ty = self.binding.ty.resolve();
+                let binding_ty = &self.binding.ty;
                 if !binding_ty.is_unit() && !binding_ty.is_variable() {
                     &self.binding.ty
                 } else {
@@ -295,9 +295,9 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
                 && ty.ok_type().is_variable();
 
             let var_ty = if has_variable_ok_ty {
-                let binding_ty = self.binding.ty.resolve();
+                let binding_ty = &self.binding.ty;
                 if !binding_ty.is_variable() && !binding_ty.ok_type().is_variable() {
-                    self.emitter.go_type_as_string(&binding_ty)
+                    self.emitter.go_type_as_string(binding_ty)
                 } else if let Some(ctx_ty) = self.emitter.current_return_context.clone() {
                     if Fallible::from_type(&ctx_ty).is_some() {
                         self.emitter.go_type_as_string(&ctx_ty)
@@ -740,7 +740,7 @@ impl Emitter<'_> {
             self.emit_propagate(output, expression, Some("_"));
             return;
         }
-        let value_ty = value.get_type().resolve();
+        let value_ty = value.get_type();
         if value_ty.is_unit() || value_ty.is_variable() {
             let value_expression = self.emit_operand(output, value);
             if !value_expression.is_empty() {

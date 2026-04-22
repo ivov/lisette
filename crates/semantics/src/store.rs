@@ -245,7 +245,7 @@ impl Store {
         ty: &Type,
         trait_bounds: &HashMap<String, Vec<Type>>,
     ) -> MethodSignatures {
-        let stripped = ty.strip_refs().resolve();
+        let stripped = ty.strip_refs();
         let Some(qualified_name) = method_lookup_key(&stripped) else {
             return MethodSignatures::default();
         };

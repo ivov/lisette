@@ -111,7 +111,7 @@ impl Emitter<'_> {
                     }
                 }
                 FormatStringPart::Expression(expression) => {
-                    let format_verb = if expression.get_type().resolve().is_rune() {
+                    let format_verb = if expression.get_type().is_rune() {
                         "%c"
                     } else {
                         "%v"

@@ -778,7 +778,7 @@ fn collect_enum_variant_checks(
     }
 
     if emitter.is_go_value_enum(ty) {
-        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.strip_refs() else {
             return;
         };
         let variant_name = go_name::unqualified_name(identifier);

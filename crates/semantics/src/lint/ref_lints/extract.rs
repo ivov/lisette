@@ -681,7 +681,7 @@ fn add_ref(
 }
 
 fn type_name(ty: &Type) -> Option<String> {
-    let mut current = ty.resolve().strip_refs();
+    let mut current = ty.strip_refs();
     while let Some(next) = current.get_underlying().cloned() {
         current = next;
     }

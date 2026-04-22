@@ -12,7 +12,7 @@ impl Emitter<'_> {
         member: &str,
     ) -> Option<String> {
         let expression_ty = expression.get_type();
-        let enum_id = match expression_ty.resolve() {
+        let enum_id = match expression_ty.unwrap_forall() {
             Type::Nominal { id, .. } => id.clone(),
             Type::Function { return_type, .. } => {
                 if let Type::Nominal { id, .. } = return_type.as_ref() {
@@ -141,7 +141,7 @@ impl Emitter<'_> {
             id: enum_id,
             params,
             ..
-        } = result_ty.resolve()
+        } = result_ty
         else {
             return None;
         };
@@ -167,7 +167,7 @@ impl Emitter<'_> {
         let enum_name = enum_id.split('.').next_back()?;
         let key = format!("{}.{}", enum_name, variant_name);
         let make_fn = self.module.make_functions.get(&key)?.clone();
-        let type_args = self.format_type_args(&params);
+        let type_args = self.format_type_args(params);
 
         if is_prelude {
             let resolved = go_name::resolve(&make_fn);
@@ -222,7 +222,7 @@ impl Emitter<'_> {
         };
 
         let inner_ty = inner_expression.get_type();
-        let alias_module = inner_ty.resolve().as_import_namespace()?.to_string();
+        let alias_module = inner_ty.as_import_namespace()?.to_string();
         let alias_module = alias_module.as_str();
 
         let enum_module = enum_id.split('.').next()?;
@@ -301,12 +301,11 @@ impl Emitter<'_> {
         };
 
         let inner_ty = inner_expression.get_type();
-        let resolved_inner = inner_ty.resolve();
 
         let (module_name, id_for_prelude_check) =
-            if let Some(synthetic_module) = resolved_inner.as_import_namespace() {
+            if let Some(synthetic_module) = inner_ty.as_import_namespace() {
                 (synthetic_module.to_string(), synthetic_module.to_string())
-            } else if let Type::Nominal { id, .. } = &resolved_inner {
+            } else if let Type::Nominal { id, .. } = &inner_ty {
                 let module_name =
                     if let Expression::Identifier { value, .. } = inner_expression.as_ref() {
                         value.to_string()
@@ -337,7 +336,7 @@ impl Emitter<'_> {
         let type_args = if let Type::Function { params, .. } = result_ty.unwrap_forall()
             && let Some(first_param) = params.first()
         {
-            let receiver_ty = first_param.resolve().strip_refs();
+            let receiver_ty = first_param.strip_refs();
             if let Type::Nominal {
                 params: receiver_params,
                 ..
@@ -389,11 +388,10 @@ impl Emitter<'_> {
         };
 
         let inner_ty = inner_expression.get_type();
-        let resolved_inner = inner_ty.resolve();
 
-        let module_name = if let Some(synthetic_module) = resolved_inner.as_import_namespace() {
+        let module_name = if let Some(synthetic_module) = inner_ty.as_import_namespace() {
             synthetic_module.to_string()
-        } else if matches!(resolved_inner, Type::Nominal { .. }) {
+        } else if matches!(inner_ty, Type::Nominal { .. }) {
             if let Expression::Identifier { value, .. } = inner_expression.as_ref() {
                 value.to_string()
             } else {

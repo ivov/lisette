@@ -131,12 +131,9 @@ impl Emitter<'_> {
     fn constructor_fn_type_args(&mut self, fn_params: &[Type], ret_params: &[Type]) -> String {
         let needs_type_args = !self.emitting_call_callee
             || ret_params.len() > fn_params.len()
-            || !ret_params.iter().all(|rp| {
-                let resolved_rp = rp.resolve();
-                fn_params
-                    .iter()
-                    .any(|fp| fp.resolve().contains_type(&resolved_rp))
-            });
+            || !ret_params
+                .iter()
+                .all(|rp| fn_params.iter().any(|fp| fp.contains_type(rp)));
         if needs_type_args {
             self.format_type_args(ret_params)
         } else {

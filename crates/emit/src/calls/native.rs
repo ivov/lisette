@@ -251,7 +251,7 @@ impl Emitter<'_> {
         let raw_receiver = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
 
-        let is_ref_receiver = expression.get_type().resolve().is_ref();
+        let is_ref_receiver = expression.get_type().is_ref();
         let receiver = if is_ref_receiver {
             format!("*{}", raw_receiver)
         } else {
@@ -290,7 +290,7 @@ impl Emitter<'_> {
             go_name::snake_to_camel(ctx.method)
         );
         let type_args_string = if !ctx.type_args.is_empty() && ctx.call_ty.is_some() {
-            let receiver_ty = expression.get_type().resolve();
+            let receiver_ty = expression.get_type();
             self.format_type_args_with_receiver(&receiver_ty, ctx.type_args)
         } else {
             self.format_type_args_from_annotations(ctx.type_args)

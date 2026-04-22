@@ -261,7 +261,7 @@ impl Emitter<'_> {
         output.push_str(&rhs_staged.setup);
 
         if is_go_nullable {
-            let coercion = Coercion::resolve_unwrap_go_nullable(self, &value.get_type().resolve());
+            let coercion = Coercion::resolve_unwrap_go_nullable(self, &value.get_type());
             let unwrapped = coercion.apply(self, output, rhs_staged.value);
             write_line!(output, "{} = {}", target_str, unwrapped);
         } else {
@@ -300,8 +300,8 @@ impl Emitter<'_> {
             }
             return;
         };
-        let is_unit_call = val.get_type().resolve().is_unit()
-            && matches!(val.unwrap_parens(), Expression::Call { .. });
+        let is_unit_call =
+            val.get_type().is_unit() && matches!(val.unwrap_parens(), Expression::Call { .. });
         if is_unit_call {
             if !val_str.is_empty() {
                 write_line!(output, "{}", val_str);
@@ -371,7 +371,7 @@ impl Emitter<'_> {
                 } else {
                     self.emit_operand(output, expression)
                 };
-                let expression_ty = expression.get_type().resolve();
+                let expression_ty = expression.get_type();
                 self.format_dot_access_lvalue(&base_str, &expression_ty, member)
             }
             Expression::IndexedAccess {
@@ -396,7 +396,7 @@ impl Emitter<'_> {
                 expression,
                 ..
             } => self.emit_deref_lvalue(output, expression),
-            Expression::Call { .. } if expression.get_type().resolve().is_ref() => {
+            Expression::Call { .. } if expression.get_type().is_ref() => {
                 let call_str = self.emit_operand(output, expression);
                 let tmp = self.fresh_var(Some("ref"));
                 self.declare(&tmp);
@@ -517,7 +517,7 @@ impl Emitter<'_> {
                 } else {
                     self.emit_left_value(output, base)
                 };
-                let expression_ty = base.get_type().resolve();
+                let expression_ty = base.get_type();
                 self.format_dot_access_lvalue(&base_str, &expression_ty, member)
             }
             Expression::Unary {
@@ -617,7 +617,7 @@ pub(crate) fn is_lvalue_chain(expression: &Expression) -> bool {
         } => true,
         Expression::IndexedAccess { expression, .. } => is_lvalue_chain(expression),
         Expression::DotAccess { expression, .. } => is_lvalue_chain(expression),
-        Expression::Call { .. } if expression.get_type().resolve().is_ref() => true,
+        Expression::Call { .. } if expression.get_type().is_ref() => true,
         _ => false,
     }
 }

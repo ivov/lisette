@@ -67,8 +67,7 @@ impl Emitter<'_> {
             let mut value = emitted_values[fi].clone();
             value = self.wrap_recursive_enum_field(output, value, f, &ctx);
             if is_go_struct {
-                let coercion =
-                    Coercion::resolve_unwrap_go_nullable(self, &f.value.get_type().resolve());
+                let coercion = Coercion::resolve_unwrap_go_nullable(self, &f.value.get_type());
                 value = coercion.apply(self, output, value);
             }
             if let Some(field_ty) = self.lookup_struct_field_ty(ty, &f.name) {
@@ -126,9 +125,7 @@ impl Emitter<'_> {
         if !needs_pointer {
             return value;
         }
-        if matches!(*field.value, Expression::Reference { .. })
-            || field.value.get_type().resolve().is_ref()
-        {
+        if matches!(*field.value, Expression::Reference { .. }) || field.value.get_type().is_ref() {
             return value;
         }
         let temp = self.fresh_var(Some("ptr"));

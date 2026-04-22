@@ -40,8 +40,7 @@ pub(crate) fn resolve_struct_call_field(
     file: &syntax::program::File,
     snapshot: &AnalysisSnapshot,
 ) -> Option<syntax::ast::Span> {
-    let resolved = ty.resolve();
-    let type_id = type_name(&resolved);
+    let type_id = type_name(ty);
 
     field_assignments
         .iter()
@@ -92,7 +91,7 @@ pub(crate) fn resolve_dot_access_definition(
     };
 
     let resolve_by_type = || {
-        type_name(&expression.get_type().resolve()).and_then(|type_id| {
+        type_name(&expression.get_type()).and_then(|type_id| {
             let name = format!("{}.{}", type_id, member);
             try_lookup(&name).or_else(|| find_struct_field_span(type_id, member, snapshot))
         })

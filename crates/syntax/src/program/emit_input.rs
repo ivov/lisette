@@ -145,7 +145,7 @@ pub enum NativeTypeKind {
 
 impl NativeTypeKind {
     pub fn from_type(ty: &Type) -> Option<Self> {
-        let resolved = ty.resolve().strip_refs();
+        let resolved = ty.strip_refs();
         // Skip module namespaces and Go-imported types: their leaf name can
         // collide with a native type (e.g. `Slice`), but they are not native.
         if resolved.as_import_namespace().is_some() {

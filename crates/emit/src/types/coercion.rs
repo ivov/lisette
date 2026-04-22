@@ -163,7 +163,7 @@ fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
     };
 
     let is_range_index = matches!(**index, Expression::Range { .. })
-        || index.get_type().resolve().get_name().is_some_and(|n| {
+        || index.get_type().get_name().is_some_and(|n| {
             matches!(
                 n,
                 "Range" | "RangeInclusive" | "RangeFrom" | "RangeTo" | "RangeToInclusive"
@@ -180,10 +180,10 @@ fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
             expression: inner,
             ..
         } => {
-            let resolved = inner.get_type().resolve();
-            resolved.inner().unwrap_or(resolved)
+            let inner_ty = inner.get_type();
+            inner_ty.inner().unwrap_or(inner_ty)
         }
-        other => other.get_type().resolve(),
+        other => other.get_type(),
     };
     collection_ty.has_name("Slice")
 }

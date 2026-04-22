@@ -35,7 +35,7 @@ fn try_normalize_interface_implementer(
     unions: &mut UnionTable,
 ) -> Option<NormalizedPattern> {
     let scrutinee_ty = ctx.scrutinee_type.as_ref()?;
-    let peeled = ctx.store.peel_alias(&scrutinee_ty.resolve());
+    let peeled = ctx.store.peel_alias(scrutinee_ty);
     let Type::Nominal {
         id: interface_id,
         params: interface_params,

@@ -186,8 +186,7 @@ impl Emitter<'_> {
         if self.emitting_call_callee {
             return base_access;
         }
-        let resolved_expression_ty = expression_ty.resolve();
-        let Some(module) = resolved_expression_ty.as_import_namespace() else {
+        let Some(module) = expression_ty.as_import_namespace() else {
             return base_access;
         };
         let qualified = format!("{}.{}", module, member);
@@ -204,7 +203,7 @@ impl Emitter<'_> {
         expression_ty: &Type,
         expression_string: &str,
     ) -> Option<String> {
-        let deref_ty = expression_ty.resolve().strip_refs();
+        let deref_ty = expression_ty.strip_refs();
         let Type::Nominal { id, .. } = &deref_ty else {
             return None;
         };
@@ -213,7 +212,7 @@ impl Emitter<'_> {
         };
         let field_ty = fields.first()?.ty.clone();
         let go_type = self.go_type_as_string(&field_ty);
-        let operand = if expression_ty.resolve().is_ref() {
+        let operand = if expression_ty.is_ref() {
             format!("*{}", expression_string)
         } else {
             expression_string.to_string()
@@ -234,7 +233,7 @@ impl Emitter<'_> {
         );
         is_import_namespace_ident
             || self.is_from_prelude(expression_ty)
-            || if let Type::Nominal { id, .. } = expression_ty.resolve().strip_refs() {
+            || if let Type::Nominal { id, .. } = expression_ty.strip_refs() {
                 id.split_once('.')
                     .is_some_and(|(m, _)| m != self.current_module && m != go_name::PRELUDE_MODULE)
             } else {
@@ -294,10 +293,10 @@ impl Emitter<'_> {
         } else {
             expression
         };
-        let expression_ty = check_expression.get_type().resolve();
+        let expression_ty = check_expression.get_type();
         expression_ty.is_ref()
             && expression_ty.inner().is_some_and(|inner| {
-                matches!(inner.resolve(), Type::Parameter(name)
+                matches!(inner, Type::Parameter(name)
                     if self.module.absorbed_ref_generics.contains(name.as_ref()))
             })
     }
@@ -308,7 +307,7 @@ impl Emitter<'_> {
         expression_ty: &Type,
         index: usize,
     ) -> Option<String> {
-        let deref_ty = expression_ty.resolve().strip_refs();
+        let deref_ty = expression_ty.strip_refs();
         let Type::Nominal { ref id, .. } = deref_ty else {
             return None;
         };
@@ -329,7 +328,7 @@ impl Emitter<'_> {
 
         if fields.len() == 1 && generics.is_empty() {
             let underlying_ty = self.go_type_as_string(&fields[0].ty);
-            let expression = if expression_ty.resolve().is_ref() {
+            let expression = if expression_ty.is_ref() {
                 format!("*{}", expression_string)
             } else {
                 expression_string.to_string()
@@ -344,7 +343,7 @@ impl Emitter<'_> {
     /// the struct-call path, which also uses prelude-ness to decide field
     /// naming and type formatting.
     pub(super) fn is_from_prelude(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty.resolve().strip_refs() else {
+        let Type::Nominal { id, .. } = ty.strip_refs() else {
             return false;
         };
         // Only return true if the type actually comes from the prelude module.
@@ -359,7 +358,6 @@ impl Emitter<'_> {
 /// non-exported members are escaped to avoid Go keywords.
 fn go_field_name(expression_ty: &Type, member: &str, is_exported: bool) -> String {
     let is_prelude_type = expression_ty
-        .resolve()
         .strip_refs()
         .get_qualified_id()
         .is_some_and(|id| id.starts_with(go_name::PRELUDE_PREFIX));

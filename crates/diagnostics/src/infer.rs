@@ -630,8 +630,8 @@ pub fn binary_operator_type_mismatch(
     let label_msg = format!(
         "cannot {} `{}` and `{}`",
         operator_verb(operator),
-        left_ty.resolve(),
-        right_ty.resolve()
+        left_ty,
+        right_ty
     );
 
     LisetteDiagnostic::error("Type mismatch")
