@@ -18,19 +18,6 @@ pub(crate) struct AdapterMethod {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn maybe_wrap_as_go_interface(
-        &mut self,
-        emitted: String,
-        source_ty: &Type,
-        target_ty: &Type,
-    ) -> String {
-        let Some(plan) = self.needs_adapter(source_ty, target_ty) else {
-            return emitted;
-        };
-        let adapter_name = self.ensure_adapter_type(plan);
-        format!("{}{{inner: {}}}", adapter_name, emitted)
-    }
-
     pub(crate) fn lookup_struct_field_ty(
         &self,
         struct_ty: &Type,
@@ -196,7 +183,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
+    pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
         let key = (
             Self::concrete_dedup_key(&plan.concrete_ty, &plan.concrete_id),
             plan.interface_id.clone(),

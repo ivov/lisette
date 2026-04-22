@@ -315,7 +315,9 @@ impl Emitter<'_> {
             return;
         }
         let expression_string = self.emit_value(output, last);
-        let expression_string = self.adapt_to_assign_target(last, expression_string);
+        let target_ty = self.assign_target_ty.clone();
+        let expression_string =
+            self.apply_type_coercion(output, target_ty.as_ref(), last, expression_string);
         write_line!(output, "{} = {}", var, expression_string);
     }
 
@@ -408,21 +410,12 @@ impl Emitter<'_> {
             }
             _ => {
                 let expression_string = self.emit_value(output, last);
-                let expression_string = self.adapt_return_to_context(last, expression_string);
+                let return_ty = self.current_return_context.clone();
+                let expression_string =
+                    self.apply_type_coercion(output, return_ty.as_ref(), last, expression_string);
                 write_line!(output, "{}return {}", directive, expression_string);
             }
         }
-    }
-
-    pub(crate) fn adapt_to_assign_target(
-        &mut self,
-        expression: &Expression,
-        emitted: String,
-    ) -> String {
-        let Some(target) = self.assign_target_ty.clone() else {
-            return emitted;
-        };
-        self.maybe_wrap_as_go_interface(emitted, &expression.get_type(), &target)
     }
 
     pub(crate) fn emit_in_position(&mut self, output: &mut String, expression: &Expression) {
@@ -433,7 +426,13 @@ impl Emitter<'_> {
             Position::Assign(var) => {
                 let var = var.clone();
                 if expression.get_type().is_result() || expression.get_type().is_option() {
-                    self.emit_option_result_assignment(output, &var, expression);
+                    let target_ty = self.assign_target_ty.clone();
+                    self.emit_option_result_assignment(
+                        output,
+                        &var,
+                        target_ty.as_ref(),
+                        expression,
+                    );
                 } else {
                     self.emit_block_to_var_with_braces(output, expression, &var, false);
                 }

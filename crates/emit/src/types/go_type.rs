@@ -347,8 +347,9 @@ impl Emitter<'_> {
         type_args: &[Annotation],
     ) -> String {
         let mut go_type_strs = Vec::new();
-        if let Type::Nominal { params, .. } = receiver_ty {
-            for param in params {
+        if let Some(params) = receiver_ty.get_type_params() {
+            let params = params.to_vec();
+            for param in &params {
                 go_type_strs.push(self.go_type_as_string(param));
             }
         }

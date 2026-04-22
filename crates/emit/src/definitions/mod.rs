@@ -2,7 +2,7 @@ pub(crate) mod enum_layout;
 mod enums;
 mod functions;
 mod impls;
-mod interface_adapter;
+pub(crate) mod interface_adapter;
 mod interfaces;
 mod structs;
 mod tags;

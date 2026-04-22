@@ -2,6 +2,15 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.17](https://github.com/ivov/lisette/compare/lisette-v0.1.16...lisette-v0.1.17) - 2026-04-21
+
+- fix: always break multi-step pipelines [#147](https://github.com/ivov/lisette/pull/147) [`fbcf877`](https://github.com/ivov/lisette/commit/fbcf877c419749bcec9ba85822ae7e3d8a4af0e5)
+- refactor: simplify emit layer readability and structure [#151](https://github.com/ivov/lisette/pull/151) [`4dc768e`](https://github.com/ivov/lisette/commit/4dc768ef45a196f1d9f532f95856d15b0e7f582f)
+- fix: reset emit scope between impl methods to prevent name leak [#154](https://github.com/ivov/lisette/pull/154) [`259a32c`](https://github.com/ivov/lisette/commit/259a32c9498c4323f1259ffbcd4fd1fe2b165488)
+- fix: omit match label when all guarded arms diverge [#155](https://github.com/ivov/lisette/pull/155) [`0b61fd6`](https://github.com/ivov/lisette/commit/0b61fd6dff511fe7d1bcdc60c3cb8e5cee40c417)
+- fix: auto-address struct literal receivers for ref methods [#156](https://github.com/ivov/lisette/pull/156) [`4f4f065`](https://github.com/ivov/lisette/commit/4f4f065484795310e901c29c6b47eb45a503d2a3)
+- fix: reject bare record struct names used as values [#153](https://github.com/ivov/lisette/pull/153) [`a057965`](https://github.com/ivov/lisette/commit/a0579651d6ed5219b4f5b1d83cc55fd146aec978)
+
 ## [0.1.16](https://github.com/ivov/lisette/compare/lisette-v0.1.15...lisette-v0.1.16) - 2026-04-20
 
 - fix: emit type switch when matching on aliased go interface [#142](https://github.com/ivov/lisette/pull/142) [`97f7f5a`](https://github.com/ivov/lisette/commit/97f7f5a83f6118c33e01d4853947a2f6f3daaa16)

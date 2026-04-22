@@ -2,10 +2,11 @@ use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::control_flow::fallible::Fallible;
 use crate::patterns::decision_tree;
+use crate::types::coercion::Coercion;
 use crate::types::emitter::Position;
 use crate::utils::{DiscardGuard, requires_temp_var, try_flip_comparison};
 use crate::write_line;
-use syntax::ast::{Binding, Expression, Pattern, UnaryOperator};
+use syntax::ast::{Binding, Expression, Pattern};
 
 enum LetKind {
     /// Simple identifier binding: `let x = expression`
@@ -205,17 +206,10 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         raw_go_name: &str,
     ) {
         let value_expression = self.emitter.emit_value(output, self.value);
-        let value_expression = self.emitter.maybe_wrap_as_go_interface(
-            value_expression,
-            &self.value.get_type(),
-            &self.binding.ty,
-        );
-        let value_expression = if self.is_mutable_subslice_binding() {
-            self.emitter.flags.needs_slices = true;
-            format!("slices.Clone({})", value_expression)
-        } else {
-            value_expression
-        };
+        let coercion = Coercion::resolve(self.emitter, &self.value.get_type(), &self.binding.ty);
+        let value_expression = coercion.apply(self.emitter, output, value_expression);
+        let clone = Coercion::resolve_subslice_clone(self.value, self.mutable);
+        let value_expression = clone.apply(self.emitter, output, value_expression);
 
         let go_identifier = self.emitter.scope.bindings.add(identifier, raw_go_name);
         let is_new = self.emitter.try_declare(&go_identifier);
@@ -237,50 +231,6 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         } else {
             write_line!(output, "{} := {}", go_identifier, value_expression);
         }
-    }
-
-    /// Check if this is a `let mut` binding of a slice sub-slice expression.
-    ///
-    /// When true, the emitter wraps the value in `slices.Clone(...)` to sever
-    /// the backing array alias, preventing element writes from mutating the
-    /// original slice.
-    fn is_mutable_subslice_binding(&self) -> bool {
-        if !self.mutable {
-            return false;
-        }
-
-        let value = self.value.unwrap_parens();
-        let Expression::IndexedAccess {
-            expression, index, ..
-        } = value
-        else {
-            return false;
-        };
-
-        let is_range_index = matches!(**index, Expression::Range { .. })
-            || index.get_type().resolve().get_name().is_some_and(|n| {
-                matches!(
-                    n,
-                    "Range" | "RangeInclusive" | "RangeFrom" | "RangeTo" | "RangeToInclusive"
-                )
-            });
-
-        if !is_range_index {
-            return false;
-        }
-
-        let collection_ty = match expression.as_ref() {
-            Expression::Unary {
-                operator: UnaryOperator::Deref,
-                expression: inner,
-                ..
-            } => {
-                let resolved = inner.get_type().resolve();
-                resolved.inner().unwrap_or(resolved)
-            }
-            other => other.get_type().resolve(),
-        };
-        collection_ty.has_name("Slice")
     }
 
     /// Check if we need explicit type declaration for this binding.

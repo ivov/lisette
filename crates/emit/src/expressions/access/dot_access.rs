@@ -4,6 +4,7 @@ use syntax::types::Type;
 
 use crate::Emitter;
 use crate::go_name;
+use crate::types::coercion::Coercion;
 use crate::write_line;
 
 impl Emitter<'_> {
@@ -168,7 +169,8 @@ impl Emitter<'_> {
         let raw_var = self.fresh_var(Some("raw"));
         self.declare(&raw_var);
         write_line!(output, "{} := {}", raw_var, raw_access);
-        Some(self.maybe_wrap_go_nullable(output, &raw_var, result_ty))
+        let coercion = Coercion::resolve_wrap_go_nullable(self, result_ty);
+        Some(coercion.apply(self, output, raw_var))
     }
 
     /// When accessing a cross-module generic member by value (not as a callee),
