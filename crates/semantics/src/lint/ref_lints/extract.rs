@@ -651,7 +651,13 @@ fn walk_type(
                 walk_type(module, e, graph, alias_map, from);
             }
         }
-        Type::Variable(_)
+        Type::Compound { args, .. } => {
+            for a in args {
+                walk_type(module, a, graph, alias_map, from);
+            }
+        }
+        Type::Simple(_)
+        | Type::Variable(_)
         | Type::Parameter(_)
         | Type::Never
         | Type::Error

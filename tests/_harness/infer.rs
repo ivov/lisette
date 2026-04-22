@@ -344,6 +344,38 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
     let resolved_t1 = t1.resolve();
     let resolved_t2 = t2.resolve();
 
+    if let (Some(n1), Some(n2)) = (resolved_t1.get_name(), resolved_t2.get_name())
+        && n1 == n2
+    {
+        let args1 = resolved_t1.get_type_params().unwrap_or(&[]);
+        let args2 = resolved_t2.get_type_params().unwrap_or(&[]);
+        if args1.len() == args2.len()
+            && args1
+                .iter()
+                .zip(args2.iter())
+                .all(|(a1, a2)| types_equal(a1, a2))
+        {
+            return true;
+        }
+    }
+
+    if let Type::Constructor {
+        underlying_ty: Some(u),
+        ..
+    } = &resolved_t1
+        && types_equal(u, &resolved_t2)
+    {
+        return true;
+    }
+    if let Type::Constructor {
+        underlying_ty: Some(u),
+        ..
+    } = &resolved_t2
+        && types_equal(&resolved_t1, u)
+    {
+        return true;
+    }
+
     match (&resolved_t1, &resolved_t2) {
         (Type::Variable(_), Type::Variable(_)) => true,
 

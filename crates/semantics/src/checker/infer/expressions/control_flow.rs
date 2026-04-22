@@ -80,6 +80,7 @@ impl Checker<'_, '_> {
             Type::Never | Type::Error => {}
             Type::ImportNamespace(_) => {}
             Type::ReceiverPlaceholder => {}
+            Type::Simple(_) | Type::Compound { .. } => {}
         }
     }
 

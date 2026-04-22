@@ -59,6 +59,11 @@ pub enum CachedType {
     Tuple(Vec<CachedType>),
     Never,
     ImportNamespace(String),
+    Simple(String),
+    Compound {
+        kind: String,
+        args: Vec<CachedType>,
+    },
 }
 
 impl CachedType {
@@ -129,6 +134,14 @@ impl CachedType {
                     .collect(),
             ),
             Type::ImportNamespace(module_id) => CachedType::ImportNamespace(module_id.to_string()),
+            Type::Simple(kind) => CachedType::Simple(format!("{:?}", kind)),
+            Type::Compound { kind, args } => CachedType::Compound {
+                kind: format!("{:?}", kind),
+                args: args
+                    .iter()
+                    .map(|a| CachedType::from_type_with_vars(a, var_names))
+                    .collect(),
+            },
             Type::Never | Type::Error | Type::ReceiverPlaceholder => CachedType::Never,
         }
     }
@@ -171,6 +184,51 @@ impl CachedType {
             CachedType::Never => Type::Never,
             CachedType::ImportNamespace(module_id) => {
                 Type::ImportNamespace(EcoString::from(module_id.as_str()))
+            }
+            CachedType::Simple(kind_name) => {
+                use syntax::types::SimpleKind;
+                let kind = match kind_name.as_str() {
+                    "Int" => SimpleKind::Int,
+                    "Int8" => SimpleKind::Int8,
+                    "Int16" => SimpleKind::Int16,
+                    "Int32" => SimpleKind::Int32,
+                    "Int64" => SimpleKind::Int64,
+                    "Uint" => SimpleKind::Uint,
+                    "Uint8" => SimpleKind::Uint8,
+                    "Uint16" => SimpleKind::Uint16,
+                    "Uint32" => SimpleKind::Uint32,
+                    "Uint64" => SimpleKind::Uint64,
+                    "Uintptr" => SimpleKind::Uintptr,
+                    "Byte" => SimpleKind::Byte,
+                    "Float32" => SimpleKind::Float32,
+                    "Float64" => SimpleKind::Float64,
+                    "Complex64" => SimpleKind::Complex64,
+                    "Complex128" => SimpleKind::Complex128,
+                    "Rune" => SimpleKind::Rune,
+                    "Bool" => SimpleKind::Bool,
+                    "String" => SimpleKind::String,
+                    "Unit" => SimpleKind::Unit,
+                    _ => panic!("unknown SimpleKind in cache: {}", kind_name),
+                };
+                Type::Simple(kind)
+            }
+            CachedType::Compound { kind, args } => {
+                use syntax::types::CompoundKind;
+                let kind = match kind.as_str() {
+                    "Ref" => CompoundKind::Ref,
+                    "Slice" => CompoundKind::Slice,
+                    "EnumeratedSlice" => CompoundKind::EnumeratedSlice,
+                    "Map" => CompoundKind::Map,
+                    "Channel" => CompoundKind::Channel,
+                    "Sender" => CompoundKind::Sender,
+                    "Receiver" => CompoundKind::Receiver,
+                    "VarArgs" => CompoundKind::VarArgs,
+                    _ => panic!("unknown CompoundKind in cache: {}", kind),
+                };
+                Type::Compound {
+                    kind,
+                    args: args.iter().map(|a| a.to_type()).collect(),
+                }
             }
         }
     }

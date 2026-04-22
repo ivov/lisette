@@ -168,7 +168,13 @@ fn check_type_for_private_leak(
                 );
             }
         }
-        Type::Variable(_)
+        Type::Compound { args, .. } => {
+            for a in args {
+                check_type_for_private_leak(module, a, None, public_definition, diagnostics);
+            }
+        }
+        Type::Simple(_)
+        | Type::Variable(_)
         | Type::Parameter(_)
         | Type::Never
         | Type::Error

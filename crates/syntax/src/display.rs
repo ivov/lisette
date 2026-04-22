@@ -97,6 +97,24 @@ impl Type {
             }
 
             Type::ReceiverPlaceholder => "self".to_string(),
+
+            Type::Simple(kind) => match kind {
+                crate::types::SimpleKind::Unit => "()".to_string(),
+                _ => kind.leaf_name().to_string(),
+            },
+
+            Type::Compound { kind, args } => {
+                let args_formatted = args
+                    .iter()
+                    .map(|a| a.stringify())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if args.is_empty() {
+                    kind.leaf_name().to_string()
+                } else {
+                    format!("{}<{}>", kind.leaf_name(), args_formatted)
+                }
+            }
         }
     }
 }

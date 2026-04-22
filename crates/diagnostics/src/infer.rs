@@ -435,7 +435,7 @@ pub fn generics_arity_mismatch(
 ) -> LisetteDiagnostic {
     let expected: Vec<Type> = expected_generic_params
         .iter()
-        .map(|param| Type::nominal(param))
+        .map(|param| Type::Parameter(param.as_str().into()))
         .collect();
 
     let expected_str = expected

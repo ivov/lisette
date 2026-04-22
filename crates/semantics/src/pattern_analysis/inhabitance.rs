@@ -45,6 +45,15 @@ fn type_key(ty: &Type) -> String {
         Type::Forall { body, .. } => type_key(&body),
         Type::ImportNamespace(m) => format!("<import:{}>", m),
         Type::ReceiverPlaceholder => "<receiver>".to_string(),
+        Type::Simple(kind) => kind.leaf_name().to_string(),
+        Type::Compound { kind, args } => {
+            if args.is_empty() {
+                kind.leaf_name().to_string()
+            } else {
+                let arg_keys: Vec<String> = args.iter().map(type_key).collect();
+                format!("{}<{}>", kind.leaf_name(), arg_keys.join(", "))
+            }
+        }
     }
 }
 

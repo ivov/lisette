@@ -67,6 +67,55 @@ impl Checker<'_, '_> {
 
             (Type::ImportNamespace(m1), Type::ImportNamespace(m2)) if m1 == m2 => Ok(()),
 
+            (Type::Simple(k1), Type::Simple(k2)) if k1 == k2 => Ok(()),
+
+            // Cross-variant equivalence during transition: a scalar like `int`
+            // may be produced as `Type::Simple(Int)` (via `Type::int()`) or
+            // `Type::Constructor { id: "prelude.int" }` (via store-backed
+            // annotation resolution). Treat them as equivalent.
+            (Type::Simple(kind), Constructor { id, params, .. })
+            | (Constructor { id, params, .. }, Type::Simple(kind))
+                if params.is_empty() && syntax::types::unqualified_name(id) == kind.leaf_name() =>
+            {
+                Ok(())
+            }
+
+            // Mismatch between Simple and Constructor (interface coercion etc.):
+            // synthesise a nominal Constructor for the Simple side and retry
+            // through the Constructor↔Constructor coercion / interface path.
+            (Type::Simple(kind), Constructor { .. }) => {
+                let synth = Type::Constructor {
+                    id: format!("prelude.{}", kind.leaf_name()).into(),
+                    params: vec![],
+                    underlying_ty: None,
+                };
+                self.try_unify(&synth, t2, span)
+            }
+            (Constructor { .. }, Type::Simple(kind)) => {
+                let synth = Type::Constructor {
+                    id: format!("prelude.{}", kind.leaf_name()).into(),
+                    params: vec![],
+                    underlying_ty: None,
+                };
+                self.try_unify(t1, &synth, span)
+            }
+
+            (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
+                if k1 == k2 && a1.len() == a2.len() =>
+            {
+                self.unify_pairs(a1.iter().zip(a2), span)
+            }
+
+            // Cross-variant: Compound vs Constructor whose leaf name matches
+            // a CompoundKind and whose params align.
+            (Type::Compound { kind, args }, Constructor { id, params, .. })
+            | (Constructor { id, params, .. }, Type::Compound { kind, args })
+                if syntax::types::unqualified_name(id) == kind.leaf_name()
+                    && args.len() == params.len() =>
+            {
+                self.unify_pairs(args.iter().zip(params), span)
+            }
+
             (Constructor { .. }, Constructor { .. }) => self.unify_constructors(t1, t2, span),
 
             (Function { .. }, Function { .. }) => self.unify_functions(t1, t2, span),
@@ -342,6 +391,23 @@ impl Checker<'_, '_> {
                 (Type::Tuple(e1), Type::Tuple(e2)) if e1.len() == e2.len() => {
                     self.unify_type_params(e1.iter().zip(e2), span)?;
                 }
+                (Type::Simple(k1), Type::Simple(k2)) if k1 == k2 => {}
+                (Type::Simple(kind), Constructor { id, params, .. })
+                | (Constructor { id, params, .. }, Type::Simple(kind))
+                    if params.is_empty()
+                        && syntax::types::unqualified_name(id) == kind.leaf_name() => {}
+                (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
+                    if k1 == k2 && a1.len() == a2.len() =>
+                {
+                    self.unify_type_params(a1.iter().zip(a2), span)?;
+                }
+                (Type::Compound { kind, args }, Constructor { id, params, .. })
+                | (Constructor { id, params, .. }, Type::Compound { kind, args })
+                    if syntax::types::unqualified_name(id) == kind.leaf_name()
+                        && args.len() == params.len() =>
+                {
+                    self.unify_type_params(args.iter().zip(params), span)?;
+                }
                 _ => return Err(UnifyError::TypeMismatch),
             }
         }
@@ -489,7 +555,8 @@ impl Checker<'_, '_> {
             }
             Type::Forall { body, .. } => self.occurs_in(type_var_id, body),
             Type::Tuple(elements) => elements.iter().any(|e| self.occurs_in(type_var_id, e)),
-            Type::Parameter(_) => false,
+            Type::Compound { args, .. } => args.iter().any(|a| self.occurs_in(type_var_id, a)),
+            Type::Simple(_) | Type::Parameter(_) => false,
             Type::Never | Type::Error | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {
                 false
             }

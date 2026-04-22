@@ -66,7 +66,13 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
             }
         }
         Type::Tuple(elements) => Type::Tuple(elements.iter().map(|e| substitute(e, map)).collect()),
-        Type::Never | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => ty.clone(),
+        Type::Compound { kind, args } => Type::Compound {
+            kind: *kind,
+            args: args.iter().map(|a| substitute(a, map)).collect(),
+        },
+        Type::Simple(_) | Type::Never | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {
+            ty.clone()
+        }
     }
 }
 
@@ -116,6 +122,13 @@ impl PartialEq for TypeVariableState {
 
 #[derive(Clone)]
 pub enum Type {
+    Simple(SimpleKind),
+
+    Compound {
+        kind: CompoundKind,
+        args: Vec<Type>,
+    },
+
     Constructor {
         id: EcoString,
         params: Vec<Type>,
@@ -198,6 +211,12 @@ impl std::fmt::Debug for Type {
                 f.debug_tuple("ImportNamespace").field(module_id).finish()
             }
             Type::ReceiverPlaceholder => write!(f, "ReceiverPlaceholder"),
+            Type::Simple(kind) => f.debug_tuple("Simple").field(kind).finish(),
+            Type::Compound { kind, args } => f
+                .debug_struct("Compound")
+                .field("kind", kind)
+                .field("args", args)
+                .finish(),
         }
     }
 }
@@ -249,6 +268,10 @@ impl PartialEq for Type {
             (Type::Tuple(elems1), Type::Tuple(elems2)) => elems1 == elems2,
             (Type::ImportNamespace(m1), Type::ImportNamespace(m2)) => m1 == m2,
             (Type::ReceiverPlaceholder, Type::ReceiverPlaceholder) => true,
+            (Type::Simple(k1), Type::Simple(k2)) => k1 == k2,
+            (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 }) => {
+                k1 == k2 && a1 == a2
+            }
             _ => false,
         }
     }
@@ -266,7 +289,11 @@ thread_local! {
 
 impl Type {
     pub fn simple(kind: SimpleKind) -> Type {
-        Self::nominal(kind.leaf_name())
+        Self::Simple(kind)
+    }
+
+    pub fn compound(kind: CompoundKind, args: Vec<Type>) -> Type {
+        Self::Compound { kind, args }
     }
 
     pub fn int() -> Type {
@@ -333,6 +360,7 @@ impl Type {
     pub fn get_type_params(&self) -> Option<&[Type]> {
         match self {
             Type::Constructor { params, .. } => Some(params),
+            Type::Compound { args, .. } => Some(args),
             _ => None,
         }
     }
@@ -529,6 +557,8 @@ impl Type {
     pub fn has_name(&self, name: &str) -> bool {
         match self {
             Type::Constructor { id, .. } => unqualified_name(id) == name,
+            Type::Simple(kind) => kind.leaf_name() == name,
+            Type::Compound { kind, .. } => kind.leaf_name() == name,
             _ => false,
         }
     }
@@ -567,7 +597,7 @@ impl Type {
     }
 
     pub fn is_unit(&self) -> bool {
-        matches!(self.resolve(), Type::Constructor { ref id, .. } if id.as_ref() == "**nominal.Unit")
+        self.resolve().is_simple(SimpleKind::Unit)
     }
 
     pub fn tuple_arity(&self) -> Option<usize> {
@@ -590,6 +620,7 @@ impl Type {
 
     pub fn as_compound(&self) -> Option<(CompoundKind, &[Type])> {
         match self {
+            Type::Compound { kind, args } => Some((*kind, args.as_slice())),
             Type::Constructor { id, params, .. } => {
                 CompoundKind::from_name(unqualified_name(id)).map(|k| (k, params.as_slice()))
             }
@@ -690,6 +721,7 @@ impl Type {
 
     pub fn as_simple(&self) -> Option<SimpleKind> {
         match self {
+            Type::Simple(kind) => Some(*kind),
             Type::Constructor { id, .. } => SimpleKind::from_name(unqualified_name(id)),
             _ => None,
         }
@@ -768,7 +800,9 @@ impl Type {
             }
             Type::Forall { body, .. } => body.has_unbound_variables(),
             Type::Tuple(elements) => elements.iter().any(|e| e.has_unbound_variables()),
-            Type::Parameter(_)
+            Type::Compound { args, .. } => args.iter().any(|a| a.has_unbound_variables()),
+            Type::Simple(_)
+            | Type::Parameter(_)
             | Type::Never
             | Type::Error
             | Type::ImportNamespace(_)
@@ -819,6 +853,15 @@ impl Type {
                     element.remove_found_type_names(names);
                 }
             }
+            Type::Compound { kind, args } => {
+                names.remove(kind.leaf_name());
+                for arg in args {
+                    arg.remove_found_type_names(names);
+                }
+            }
+            Type::Simple(kind) => {
+                names.remove(kind.leaf_name());
+            }
             Type::Never | Type::Error | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {}
         }
     }
@@ -827,6 +870,11 @@ impl Type {
 impl Type {
     pub fn get_name(&self) -> Option<&str> {
         match self {
+            Type::Simple(kind) => Some(kind.leaf_name()),
+            Type::Compound { kind, args } => match kind {
+                CompoundKind::Ref => args.first().and_then(|inner| inner.get_name()),
+                _ => Some(kind.leaf_name()),
+            },
             Type::Constructor { id, params, .. } => {
                 let name = unqualified_name(id);
                 if CompoundKind::from_name(name) == Some(CompoundKind::Ref) {
@@ -1040,7 +1088,7 @@ impl Type {
 
             Type::Variable(type_var) => match &*type_var.borrow() {
                 TypeVariableState::Unbound { id, hint } => match vars.get(id) {
-                    Some(g) => Self::nominal(g),
+                    Some(g) => Type::Parameter(g.clone()),
                     None => {
                         let name: EcoString = hint.clone().unwrap_or_else(|| {
                             char::from_digit(
@@ -1056,7 +1104,7 @@ impl Type {
                         });
 
                         vars.insert(*id, name.clone());
-                        Self::nominal(&name)
+                        Type::Parameter(name)
                     }
                 },
                 TypeVariableState::Link(ty) => Self::remove_vars_impl(ty, vars),
@@ -1069,7 +1117,14 @@ impl Type {
                     .map(|e| Self::remove_vars_impl(e, vars))
                     .collect(),
             ),
-            Type::Parameter(name) => Type::Parameter(name.clone()),
+            Type::Compound { kind, args } => Type::Compound {
+                kind: *kind,
+                args: args
+                    .iter()
+                    .map(|a| Self::remove_vars_impl(a, vars))
+                    .collect(),
+            },
+            Type::Simple(_) | Type::Parameter(_) => ty.clone(),
             Type::Never | Type::Error | Type::ImportNamespace(_) | Type::ReceiverPlaceholder => {
                 ty.clone()
             }
@@ -1098,7 +1153,9 @@ impl Type {
             }
             Type::Forall { body, .. } => body.contains_type(target),
             Type::Tuple(elements) => elements.iter().any(|e| e.contains_type(target)),
-            Type::Parameter(_)
+            Type::Compound { args, .. } => args.iter().any(|a| a.contains_type(target)),
+            Type::Simple(_)
+            | Type::Parameter(_)
             | Type::Never
             | Type::Error
             | Type::ImportNamespace(_)
@@ -1165,7 +1222,12 @@ impl Type {
             },
             Type::Forall { body, .. } => body.resolve(),
             Type::Tuple(elements) => Type::Tuple(elements.iter().map(|e| e.resolve()).collect()),
-            Type::Parameter(_)
+            Type::Compound { kind, args } => Type::Compound {
+                kind: *kind,
+                args: args.iter().map(|a| a.resolve()).collect(),
+            },
+            Type::Simple(_)
+            | Type::Parameter(_)
             | Type::Error
             | Type::ImportNamespace(_)
             | Type::ReceiverPlaceholder => self.clone(),
@@ -1185,6 +1247,7 @@ impl Type {
 
     fn underlying_numeric_type_recursive(&self, visited: &mut HashSet<EcoString>) -> Option<Type> {
         match self {
+            Type::Simple(_) if self.is_numeric() => Some(self.clone()),
             Type::Constructor {
                 id,
                 underlying_ty: underlying,

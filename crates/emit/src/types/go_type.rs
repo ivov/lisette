@@ -59,6 +59,14 @@ impl Emitter<'_> {
     pub(crate) fn go_type(&self, ty: &Type) -> GoType {
         match ty {
             Type::Constructor { id, params, .. } => self.emit_constructor(id, params, ty),
+            Type::Simple(kind) => {
+                if matches!(kind, syntax::types::SimpleKind::Unit) {
+                    GoType::new("struct{}")
+                } else {
+                    GoType::new(kind.leaf_name().to_string())
+                }
+            }
+            Type::Compound { kind, args } => self.emit_compound(*kind, args, ty),
             Type::Function {
                 params,
                 return_type,
@@ -78,6 +86,50 @@ impl Emitter<'_> {
             }
             Type::ReceiverPlaceholder => GoType::new("any"),
         }
+    }
+
+    fn emit_compound(&self, kind: syntax::types::CompoundKind, args: &[Type], ty: &Type) -> GoType {
+        use syntax::types::CompoundKind;
+
+        if kind == CompoundKind::Ref
+            && let Some(inner) = args.first()
+        {
+            let inner_type = self.go_type(inner);
+            let mut result = GoType::new(format!("*{}", inner_type.code));
+            result.merge(&inner_type);
+            return result;
+        }
+
+        if let Some(native) = NativeGoType::from_type(ty) {
+            return self.emit_native_type(native, ty);
+        }
+
+        let param_types: Vec<GoType> = args.iter().map(|p| self.go_type(p)).collect();
+        let type_args = param_types
+            .iter()
+            .map(|t| t.code.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        if kind == CompoundKind::EnumeratedSlice {
+            let mut result = GoType::new(format!("[]{}", type_args));
+            result.merge_all(&param_types);
+            return result;
+        }
+
+        if kind == CompoundKind::VarArgs {
+            let mut result = GoType::new(format!("...{}", type_args));
+            result.merge_all(&param_types);
+            return result;
+        }
+
+        if args.is_empty() {
+            return GoType::new(kind.leaf_name().to_string());
+        }
+
+        let mut result = GoType::new(format!("{}[{}]", kind.leaf_name(), type_args));
+        result.merge_all(&param_types);
+        result
     }
 
     pub(crate) fn go_type_as_string(&mut self, ty: &Type) -> String {
