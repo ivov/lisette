@@ -1,9 +1,9 @@
 use rustc_hash::FxHashMap as HashMap;
 
 use diagnostics::SemanticResult;
-use ecow::EcoString;
 use semantics::facts::Facts;
 use syntax::program::{Definition, File};
+use syntax::types::Symbol;
 use tower_lsp::lsp_types::Url;
 
 use crate::paths::{ENTRY_MODULE_ID, module_file_to_path};
@@ -100,7 +100,7 @@ impl AnalysisSnapshot {
         &self.facts
     }
 
-    pub(crate) fn definitions(&self) -> &HashMap<EcoString, Definition> {
+    pub(crate) fn definitions(&self) -> &HashMap<Symbol, Definition> {
         &self.result.definitions
     }
 }

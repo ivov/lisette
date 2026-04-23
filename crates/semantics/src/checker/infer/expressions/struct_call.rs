@@ -102,7 +102,7 @@ impl Checker<'_, '_> {
                 _ => alias_ty.clone(),
             };
             let variant_fields = if let Type::Nominal { id: enum_id, .. } = &underlying
-                && let Some(Definition::Enum { variants, .. }) = self.store.get_definition(enum_id)
+                && let Some(variants) = self.store.variants_of(enum_id)
                 && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
                 && variant.fields.is_struct()
             {
@@ -154,7 +154,7 @@ impl Checker<'_, '_> {
             let variant_name = struct_name.split('.').next_back().unwrap_or(&struct_name);
 
             if let Type::Nominal { id, .. } = &resolved_ty
-                && let Some(Definition::Enum { variants, .. }) = self.store.get_definition(id)
+                && let Some(variants) = self.store.variants_of(id)
                 && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
                 && variant.fields.is_struct()
             {

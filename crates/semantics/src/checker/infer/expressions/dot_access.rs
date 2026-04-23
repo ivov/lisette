@@ -276,7 +276,7 @@ impl Checker<'_, '_> {
 
         if let Type::Nominal { .. } = deref_ty {
             let qualified_name = deref_ty.get_qualified_name();
-            if let Some(fields) = self.store.get_struct_fields(&qualified_name) {
+            if let Some(fields) = self.store.fields_of(&qualified_name) {
                 names.extend(fields.iter().map(|f| f.name.to_string()));
             }
         }
@@ -456,7 +456,7 @@ impl Checker<'_, '_> {
         };
 
         if let Some(module_id) = module_ty.as_import_namespace() {
-            let qualified_name = format!("{}.{}", module_id, args.member_name);
+            let qualified_name = Symbol::from_parts(module_id, args.member_name);
             if let Some(definition_span) = self.get_definition_name_span(&qualified_name) {
                 self.facts.add_usage(*args.span, definition_span);
             }
@@ -598,7 +598,7 @@ impl Checker<'_, '_> {
     ) {
         if let Type::Nominal { .. } = deref_ty {
             let qualified_name = deref_ty.get_qualified_name();
-            let method_key = format!("{}.{}", qualified_name, args.member_name);
+            let method_key = qualified_name.with_segment(args.member_name);
 
             if let Some(definition_span) = self.get_definition_name_span(&method_key) {
                 self.facts.add_usage(*args.span, definition_span);
@@ -834,7 +834,7 @@ impl Checker<'_, '_> {
             }
         }
 
-        let variant_qualified_name = format!("{}.{}", id, args.member_name);
+        let variant_qualified_name = id.with_segment(args.member_name);
         let variant_definition = self.store.get_definition(&variant_qualified_name)?;
 
         let Definition::Value {
@@ -910,8 +910,8 @@ impl Checker<'_, '_> {
                 }
                 id.clone()
             }
-            Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()).into(),
-            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
+            Type::Simple(kind) => Symbol::from_parts("prelude", kind.leaf_name()),
+            Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
             _ => return None,
         };
 
@@ -922,7 +922,7 @@ impl Checker<'_, '_> {
             return None;
         }
 
-        let method_qualified_name = format!("{}.{}", id, args.member_name);
+        let method_qualified_name = id.with_segment(args.member_name);
         let method_definition = self.store.get_definition(&method_qualified_name)?;
 
         let Definition::Value {
@@ -1002,7 +1002,7 @@ impl Checker<'_, '_> {
             return true;
         }
 
-        let method_key = format!("{}.{}", id, member_name);
+        let method_key = id.with_segment(member_name);
         self.store
             .get_definition(&method_key)
             .map(|d| d.visibility().is_public())

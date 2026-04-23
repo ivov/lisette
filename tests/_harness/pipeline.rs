@@ -1,7 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{DiagnosticSink, LisetteDiagnostic};
-use ecow::EcoString;
 use semantics::{checker::Checker, pattern_analysis, store::Store};
 use stdlib::get_go_stdlib_typedef;
 use syntax::{
@@ -13,6 +12,7 @@ use syntax::{
         CoercionInfo, Definition, File, FileImport, MutationInfo, ResolutionInfo, UnusedInfo,
         Visibility,
     },
+    types::Symbol,
 };
 
 use super::init_prelude;
@@ -234,7 +234,7 @@ impl CompiledTest {
                 }
             }
 
-            let definitions: HashMap<EcoString, Definition> = checker
+            let definitions: HashMap<Symbol, Definition> = checker
                 .store
                 .modules
                 .values()
@@ -288,7 +288,7 @@ impl CompiledTest {
 pub struct InferenceResult {
     pub ast: Vec<Expression>,
     pub errors: Vec<LisetteDiagnostic>,
-    pub definitions: HashMap<EcoString, Definition>,
+    pub definitions: HashMap<Symbol, Definition>,
     pub module_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,

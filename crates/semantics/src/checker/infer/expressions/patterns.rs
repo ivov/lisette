@@ -407,20 +407,19 @@ impl Checker<'_, '_> {
         let typed = match &resolved_ty {
             Type::Nominal { id, params, .. } => {
                 let variant_name = identifier.rsplit('.').next().unwrap_or(identifier.as_str());
-                let variant_qualified = format!("{}.{}", id, variant_name);
+                let variant_qualified = id.with_segment(variant_name);
                 if let Some(definition_span) = self.get_definition_name_span(&variant_qualified) {
                     self.facts.add_usage(span, definition_span);
                 }
 
                 let variant_fields = self
                     .store
-                    .get_definition(id)
-                    .and_then(|definition| match definition {
-                        Definition::Enum { variants, .. } => variants
+                    .variants_of(id)
+                    .and_then(|variants| {
+                        variants
                             .iter()
                             .find(|v| v.name == variant_name)
-                            .map(|v| v.fields.iter().cloned().collect()),
-                        _ => None,
+                            .map(|v| v.fields.iter().cloned().collect())
                     })
                     .unwrap_or_default();
 
@@ -692,7 +691,7 @@ impl Checker<'_, '_> {
         let Type::Nominal { id, .. } = resolved else {
             return None;
         };
-        let variants = self.store.get_enum_variants(&id)?;
+        let variants = self.store.variants_of(&id)?;
         let variant_names: Vec<String> = variants.iter().map(|v| v.name.to_string()).collect();
         let simple_name = id.rsplit('.').next().unwrap_or(&id);
         Some((simple_name.to_string(), variant_names))
@@ -719,10 +718,10 @@ impl Checker<'_, '_> {
         };
 
         if let Type::Nominal { id: enum_id, .. } = &underlying
-            && let Some(Definition::Enum { variants, .. }) = self.store.get_definition(enum_id)
+            && let Some(variants) = self.store.variants_of(enum_id)
             && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
         {
-            let variant_qualified_name = format!("{}.{}", enum_id, variant_name);
+            let variant_qualified_name = enum_id.with_segment(variant_name);
             if let Some(variant_ty) = self.store.get_type(&variant_qualified_name) {
                 return Some((variant_ty.clone(), variant_name.to_string()));
             }
@@ -770,9 +769,7 @@ impl Checker<'_, '_> {
         let Type::Nominal { id, .. } = &resolved_ty else {
             return None;
         };
-        let Definition::Enum { variants, .. } = self.store.get_definition(id)? else {
-            return None;
-        };
+        let variants = self.store.variants_of(id)?;
         let variant = variants.iter().find(|v| v.name == variant_name)?;
         if !variant.fields.is_struct() {
             return None;
@@ -829,7 +826,7 @@ impl Checker<'_, '_> {
 
         let typed = match &resolved_ty {
             Type::Nominal { id, params, .. } => {
-                let variant_qualified = format!("{}.{}", id, variant_name);
+                let variant_qualified = id.with_segment(&variant_name);
                 if let Some(definition_span) = self.get_definition_name_span(&variant_qualified) {
                     self.facts.add_usage(*span, definition_span);
                 }

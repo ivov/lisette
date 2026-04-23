@@ -1,10 +1,10 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use ecow::EcoString;
 use syntax::ParseError;
 use syntax::program::{
     CoercionInfo, Definition, EmitInput, File, ModuleInfo, MutationInfo, ResolutionInfo, UnusedInfo,
 };
+use syntax::types::Symbol;
 
 use crate::LisetteDiagnostic;
 
@@ -15,7 +15,7 @@ pub struct TypedefSource {
 
 pub struct SemanticResult {
     pub files: HashMap<u32, File>,
-    pub definitions: HashMap<EcoString, Definition>,
+    pub definitions: HashMap<Symbol, Definition>,
     pub modules: HashMap<String, ModuleInfo>,
     pub errors: Vec<LisetteDiagnostic>,
     pub lints: Vec<LisetteDiagnostic>,

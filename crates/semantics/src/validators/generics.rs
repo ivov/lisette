@@ -17,8 +17,7 @@ use diagnostics::DiagnosticSink;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::{Annotation, Binding, Expression, Generic, Span};
-use syntax::program::Definition;
-use syntax::types::{Bound, Type};
+use syntax::types::{Bound, Symbol, Type};
 
 use crate::facts::Facts;
 use crate::store::Store;
@@ -256,14 +255,8 @@ fn check_constrained_return_type(
 
     let qualified_id =
         lookup_qualified_name(id, module_id, store).unwrap_or_else(|| id.to_string());
-    let Some(definition) = store.get_definition(&qualified_id) else {
+    let Some(methods) = store.get_own_methods(&qualified_id) else {
         return;
-    };
-
-    let methods = match definition {
-        Definition::Struct { methods, .. } => methods,
-        Definition::Enum { methods, .. } => methods,
-        _ => return,
     };
 
     let mut required_bounds: HashMap<String, Vec<Type>> = HashMap::default();
@@ -359,12 +352,12 @@ fn lookup_qualified_name(id: &str, module_id: &str, store: &Store) -> Option<Str
         return Some(id.to_string());
     }
 
-    let candidate = format!("{}.{}", module_id, id);
+    let candidate = Symbol::from_parts(module_id, id);
     if store
         .get_module(module_id)
         .is_some_and(|m| m.definitions.contains_key(candidate.as_str()))
     {
-        return Some(candidate);
+        return Some(candidate.to_string());
     }
     None
 }

@@ -1,9 +1,8 @@
 use rustc_hash::FxHashMap as HashMap;
 
-use ecow::EcoString;
-
 use super::definition::{Definition, Visibility};
 use super::file::{File, FileImport};
+use crate::types::Symbol;
 
 pub type ModuleId = String;
 
@@ -15,7 +14,7 @@ pub struct Module {
     /// file ID -> .d.lis file (declarations only)
     pub typedefs: HashMap<u32, File>,
     /// qualified name -> definition
-    pub definitions: HashMap<EcoString, Definition>,
+    pub definitions: HashMap<Symbol, Definition>,
 }
 
 impl Module {

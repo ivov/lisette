@@ -57,7 +57,7 @@ impl Checker<'_, '_> {
             .iter()
             .map(|v| {
                 let variant_ty = enum_variant_constructor_type(v, &enum_ty, generics);
-                let qualified_variant_name = format!("{}.{}", qualified_name, v.name);
+                let qualified_variant_name = qualified_name.with_segment(&v.name);
                 let simple_qualified_name = if is_prelude {
                     Some(self.qualify_name(&v.name))
                 } else {
@@ -98,18 +98,18 @@ impl Checker<'_, '_> {
             };
             module
                 .definitions
-                .insert(qualified_variant_name.into(), definition.clone());
+                .insert(qualified_variant_name, definition.clone());
 
             if let Some(simple_qualified_name) = simple_name {
                 module
                     .definitions
-                    .entry(simple_qualified_name.into())
+                    .entry(simple_qualified_name)
                     .or_insert(definition);
             }
         }
 
         module.definitions.insert(
-            qualified_name.clone().into(),
+            qualified_name.clone(),
             Definition::Enum {
                 visibility,
                 ty: enum_ty,
@@ -175,13 +175,13 @@ impl Checker<'_, '_> {
         };
 
         for variant in variants {
-            let qualified_variant_name = format!("{}.{}", qualified_name, variant.name);
+            let qualified_variant_name = qualified_name.with_segment(&variant.name);
             let module = self
                 .store
                 .get_module_mut(&self.cursor.module_id)
                 .expect("current module must exist in store");
             module.definitions.insert(
-                qualified_variant_name.into(),
+                qualified_variant_name,
                 Definition::Value {
                     visibility: visibility.clone(),
                     ty: enum_ty.clone(),
@@ -209,7 +209,7 @@ impl Checker<'_, '_> {
             .expect("current module must exist in store");
 
         module.definitions.insert(
-            qualified_name.into(),
+            qualified_name,
             Definition::ValueEnum {
                 visibility,
                 ty: enum_ty,
@@ -440,7 +440,7 @@ impl Checker<'_, '_> {
             .expect("current module must exist in store")
             .definitions
             .insert(
-                qualified_name.clone().into(),
+                qualified_name.clone(),
                 Definition::Struct {
                     visibility,
                     ty: struct_ty,
@@ -485,7 +485,7 @@ impl Checker<'_, '_> {
             return false; // Already checked this type
         }
 
-        if let Some(fields) = self.store.get_struct_fields(current_id) {
+        if let Some(fields) = self.store.fields_of(current_id) {
             for field in fields {
                 if self.type_contains_target_without_ref(target_id, &field.ty, visited) {
                     return true;
@@ -497,7 +497,7 @@ impl Checker<'_, '_> {
         // Skip direct self-references (e.g. `Node(Tree, Tree)`) — the emitter wraps
         // those in pointers automatically. Only flag indirect recursion through other
         // types (e.g. `Node(Box<Tree>)` where Box is a value-type struct).
-        if let Some(variants) = self.store.get_enum_variants(current_id) {
+        if let Some(variants) = self.store.variants_of(current_id) {
             for variant in variants {
                 for field in &variant.fields {
                     if let Type::Nominal { id, .. } = field.ty.resolve_in(&self.env)
@@ -542,8 +542,7 @@ impl Checker<'_, '_> {
                     }
                 }
 
-                if (self.store.get_struct_fields(id).is_some()
-                    || self.store.get_enum_variants(id).is_some())
+                if (self.store.fields_of(id).is_some() || self.store.variants_of(id).is_some())
                     && self.contains_type_without_ref(target_id, id, visited)
                 {
                     return true;
@@ -638,7 +637,7 @@ impl Checker<'_, '_> {
                 .expect("current module must exist in store")
                 .definitions
                 .insert(
-                    qualified_name.into(),
+                    qualified_name,
                     Definition::TypeAlias {
                         visibility,
                         name: name.into(),
@@ -713,7 +712,7 @@ impl Checker<'_, '_> {
             .expect("current module must exist in store")
             .definitions
             .insert(
-                qualified_name.into(),
+                qualified_name,
                 Definition::TypeAlias {
                     visibility,
                     name: name.into(),

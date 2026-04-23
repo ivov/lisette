@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use ecow::EcoString;
 
 use crate::ast::{BindingId as AstBindingId, Pattern, RestPattern, Span};
-use crate::types::Type;
+use crate::types::{Symbol, Type};
 
 use super::{Definition, File, ModuleInfo};
 
@@ -230,7 +230,7 @@ impl ResolutionInfo {
 
 pub struct EmitInput {
     pub files: HashMap<u32, File>,
-    pub definitions: HashMap<EcoString, Definition>,
+    pub definitions: HashMap<Symbol, Definition>,
     pub modules: HashMap<String, ModuleInfo>,
     pub entry_module_id: String,
     pub unused: UnusedInfo,

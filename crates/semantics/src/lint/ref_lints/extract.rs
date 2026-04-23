@@ -6,7 +6,7 @@ use syntax::ast::{
 };
 use syntax::program::File;
 use syntax::program::{Definition, Module};
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
 
@@ -37,7 +37,7 @@ impl AliasMap {
     }
 
     fn resolve(&self, module: &Module, name: &str) -> Option<ModuleItemId> {
-        let qualified_name = format!("{}.{}", module.id, name);
+        let qualified_name = Symbol::from_parts(&module.id, name);
         if module.definitions.contains_key(qualified_name.as_str()) {
             return Some(ModuleItemId::new(&module.id, name));
         }
@@ -428,7 +428,7 @@ fn walk_struct_call(
         if let Some(ty_name) = type_name(&spread_expression.get_type()) {
             let explicit: HashSet<&str> =
                 field_assignments.iter().map(|f| f.name.as_str()).collect();
-            let qname = format!("{}.{}", module.id, ty_name);
+            let qname = Symbol::from_parts(&module.id, &ty_name);
             if let Some(Definition::Struct { fields, .. }) = module.definitions.get(qname.as_str())
             {
                 for field in fields {

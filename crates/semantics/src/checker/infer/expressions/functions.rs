@@ -4,7 +4,7 @@ use crate::checker::EnvResolve;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, StructKind};
 use syntax::program::{CallKind, Definition, NativeTypeKind};
-use syntax::types::{Bound, SubstitutionMap, Type, substitute, unqualified_name};
+use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
 use super::super::Checker;
 use super::primitives::contains_deref;
@@ -447,14 +447,14 @@ impl Checker<'_, '_> {
 
                 let stripped = receiver_ty.strip_refs();
                 if let Type::Nominal { id, .. } = &stripped {
-                    let qualified = format!("{}.{}", id, member);
+                    let qualified = id.with_segment(member);
                     if let Some(definition) = self.store.get_definition(&qualified) {
                         return definition.ty().clone();
                     }
                 }
 
                 if let Some(module_id) = stripped.as_import_namespace() {
-                    let qualified = format!("{}.{}", module_id, member);
+                    let qualified = Symbol::from_parts(module_id, member);
                     if let Some(definition) = self.store.get_definition(&qualified) {
                         return definition.ty().clone();
                     }
@@ -981,7 +981,7 @@ impl Checker<'_, '_> {
                     .resolve_in(&self.env)
                     .as_import_namespace()
                 {
-                    let qualified = format!("{}.{}", module_id, member);
+                    let qualified = Symbol::from_parts(module_id, member);
                     if matches!(
                         self.store.get_definition(&qualified),
                         Some(Definition::Struct {
@@ -1100,7 +1100,7 @@ impl Checker<'_, '_> {
 
         let is_public = self
             .store
-            .get_definition(&format!("{}.{}", qualified_name, method))
+            .get_definition(&Symbol::from_parts(&qualified_name, method))
             .map(|d| d.visibility().is_public())
             .unwrap_or(false);
 

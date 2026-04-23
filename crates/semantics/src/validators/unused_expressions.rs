@@ -1,6 +1,6 @@
 use diagnostics::UnusedExpressionKind;
 use syntax::ast::{Expression, Span, UnaryOperator};
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 use crate::facts::{DiscardedTailKind, Facts};
 use crate::store::Store;
@@ -202,7 +202,7 @@ fn callee_allowed_lints(expression: &Expression, module_id: &str, store: &Store)
         let qualified_guess = if value.contains('.') {
             value.to_string()
         } else {
-            format!("{}.{}", module_id, value)
+            Symbol::from_parts(module_id, value).to_string()
         };
         if let Some(definition) = store.get_definition(&qualified_guess) {
             return definition.allowed_lints().to_vec();
@@ -217,13 +217,13 @@ fn callee_allowed_lints(expression: &Expression, module_id: &str, store: &Store)
     {
         let receiver_ty = receiver.get_type().strip_refs();
         if let Type::Nominal { id, .. } = &receiver_ty {
-            let method_key = format!("{}.{}", id, member);
+            let method_key = id.with_segment(member);
             if let Some(definition) = store.get_definition(&method_key) {
                 return definition.allowed_lints().to_vec();
             }
         }
         if let Some(module) = receiver.get_type().as_import_namespace() {
-            let method_key = format!("{}.{}", module, member);
+            let method_key = Symbol::from_parts(module, member);
             if let Some(definition) = store.get_definition(&method_key) {
                 return definition.allowed_lints().to_vec();
             }

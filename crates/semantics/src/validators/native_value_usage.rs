@@ -1,7 +1,7 @@
 use diagnostics::DiagnosticSink;
 use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::Definition;
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 use crate::store::Store;
 
@@ -73,7 +73,7 @@ fn check_one(
         value,
         "imaginary" | "assert_type" | "complex" | "real" | "panic"
     ) {
-        let qualified = format!("{}.{}", module_id, value);
+        let qualified = Symbol::from_parts(module_id, value);
         if store.get_definition(&qualified).is_none() {
             sink.push(diagnostics::infer::native_constructor_value(value, span));
             return;
@@ -84,7 +84,7 @@ fn check_one(
         let qualified = if value.contains('.') {
             value.to_string()
         } else {
-            format!("{}.{}", module_id, value)
+            Symbol::from_parts(module_id, value).to_string()
         };
         if resolves_to_struct_kind(&qualified, StructKind::Tuple, store) {
             sink.push(diagnostics::infer::native_constructor_value(value, span));
@@ -169,14 +169,13 @@ fn check_one(
 }
 
 fn resolves_to_struct_kind(qualified: &str, kind: StructKind, store: &Store) -> bool {
+    if let Some(k) = store.struct_kind(qualified) {
+        return k == kind;
+    }
     match store.get_definition(qualified) {
-        Some(Definition::Struct { kind: k, .. }) => *k == kind,
         Some(Definition::TypeAlias { ty: alias_ty, .. }) => {
             if let Type::Nominal { id, .. } = alias_ty.unwrap_forall() {
-                matches!(
-                    store.get_definition(id),
-                    Some(Definition::Struct { kind: k, .. }) if *k == kind
-                )
+                store.struct_kind(id) == Some(kind)
             } else {
                 false
             }

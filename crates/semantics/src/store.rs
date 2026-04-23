@@ -184,16 +184,47 @@ impl Store {
         best
     }
 
-    pub fn get_enum_variants(&self, qualified_name: &str) -> Option<&[EnumVariant]> {
+    pub fn variants_of(&self, qualified_name: &str) -> Option<&[EnumVariant]> {
         match self.get_definition(qualified_name)? {
             Definition::Enum { variants, .. } => Some(variants),
             _ => None,
         }
     }
 
-    pub fn get_struct_fields(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {
+    pub fn value_variants_of(
+        &self,
+        qualified_name: &str,
+    ) -> Option<&[syntax::ast::ValueEnumVariant]> {
+        match self.get_definition(qualified_name)? {
+            Definition::ValueEnum { variants, .. } => Some(variants),
+            _ => None,
+        }
+    }
+
+    pub fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {
         match self.get_definition(qualified_name)? {
             Definition::Struct { fields, .. } => Some(fields),
+            _ => None,
+        }
+    }
+
+    pub fn struct_kind(&self, qualified_name: &str) -> Option<syntax::ast::StructKind> {
+        match self.get_definition(qualified_name)? {
+            Definition::Struct { kind, .. } => Some(*kind),
+            _ => None,
+        }
+    }
+
+    pub fn struct_constructor(&self, qualified_name: &str) -> Option<&Type> {
+        match self.get_definition(qualified_name)? {
+            Definition::Struct { constructor, .. } => constructor.as_ref(),
+            _ => None,
+        }
+    }
+
+    pub fn parent_interfaces_of(&self, qualified_name: &str) -> Option<&[Type]> {
+        match self.get_definition(qualified_name)? {
+            Definition::Interface { definition, .. } => Some(&definition.parents),
             _ => None,
         }
     }

@@ -120,7 +120,7 @@ impl Checker<'_, '_> {
         for (qualified_name, definition) in type_name_entries {
             module
                 .definitions
-                .entry(qualified_name.into())
+                .entry(qualified_name)
                 .or_insert(definition);
         }
 
@@ -288,7 +288,7 @@ impl Checker<'_, '_> {
         for (qualified_name, definition) in entries {
             module
                 .definitions
-                .entry(qualified_name.into())
+                .entry(qualified_name)
                 .or_insert(definition);
         }
     }
@@ -555,7 +555,7 @@ impl Checker<'_, '_> {
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
         module.definitions.insert(
-            qualified_name.into(),
+            qualified_name,
             Definition::Value {
                 visibility: item_visibility,
                 ty: fn_ty,
@@ -623,7 +623,7 @@ impl Checker<'_, '_> {
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
         module.definitions.insert(
-            qualified_name.into(),
+            qualified_name,
             Definition::Value {
                 visibility: item_visibility,
                 ty: const_ty,
@@ -667,7 +667,7 @@ impl Checker<'_, '_> {
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
         module.definitions.insert(
-            qualified_name.into(),
+            qualified_name,
             Definition::Value {
                 visibility: item_visibility,
                 ty: var_ty,

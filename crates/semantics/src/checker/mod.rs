@@ -264,20 +264,20 @@ impl<'r, 's> Checker<'r, 's> {
         }
 
         let module = self.store.get_module(&self.cursor.module_id)?;
-        let qualified_name = format!("{}.{}", module.id, type_name);
+        let qualified_name = Symbol::from_parts(&module.id, type_name);
 
         if module.definitions.contains_key(qualified_name.as_str()) {
-            return Some(qualified_name);
+            return Some(qualified_name.to_string());
         }
 
         for imported_module_id in &self.imports.unprefixed_imports {
             if let Some(imported_module) = self.store.get_module(imported_module_id) {
-                let qualified_name = format!("{}.{}", imported_module_id, type_name);
+                let qualified_name = Symbol::from_parts(imported_module_id, type_name);
                 if imported_module
                     .definitions
                     .contains_key(qualified_name.as_str())
                 {
-                    return Some(qualified_name);
+                    return Some(qualified_name.to_string());
                 }
             }
         }
@@ -349,7 +349,7 @@ impl<'r, 's> Checker<'r, 's> {
         }
 
         let module = self.store.get_module(&self.cursor.module_id)?;
-        let qualified_name = format!("{}.{}", module.id, value_name);
+        let qualified_name = Symbol::from_parts(&module.id, value_name);
 
         if let Some(definition) = module.definitions.get(qualified_name.as_str()) {
             return Some(self.resolve_definition_value_type(definition));
@@ -357,7 +357,7 @@ impl<'r, 's> Checker<'r, 's> {
 
         for imported_module_id in &self.imports.unprefixed_imports {
             if let Some(imported_module) = self.store.get_module(imported_module_id) {
-                let qualified_name = format!("{}.{}", imported_module_id, value_name);
+                let qualified_name = Symbol::from_parts(imported_module_id, value_name);
                 if let Some(definition) = imported_module.definitions.get(qualified_name.as_str()) {
                     return Some(self.resolve_definition_value_type(definition));
                 }

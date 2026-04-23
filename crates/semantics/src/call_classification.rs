@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::Expression;
 use syntax::program::{Definition, Module};
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 /// Determines if a method type requires UFCS emission based on its signature.
 ///
@@ -80,7 +80,7 @@ pub fn compute_module_ufcs(module: &Module, module_id: &str) -> Vec<(String, Str
                 ..
             } = item
             {
-                let qualified_type = format!("{}.{}", module_id, receiver_name);
+                let qualified_type = Symbol::from_parts(module_id, receiver_name).to_string();
                 if generics.iter().any(|g| !g.bounds.is_empty()) {
                     let method_names: Vec<String> = methods
                         .iter()

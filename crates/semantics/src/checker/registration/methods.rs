@@ -4,7 +4,7 @@ use syntax::ast::{
     Visibility as SyntacticVisibility,
 };
 use syntax::program::{Definition, Interface, Visibility};
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
 use crate::checker::Checker;
@@ -72,7 +72,7 @@ impl Checker<'_, '_> {
         fn_name_span: Span,
         impl_generics_empty: bool,
     ) {
-        let module_qualified_name = format!("{module_id}.{type_name}.{fn_name}");
+        let module_qualified_name = Symbol::from_parts(module_id, type_name).with_segment(fn_name);
 
         let module = self
             .store
@@ -181,7 +181,7 @@ impl Checker<'_, '_> {
             let fn_sig = function.to_function_signature();
             let mut fn_ty = self.extract_function_signature(&fn_sig, span);
             let qualified_name = format!("{}.{}", type_name, fn_sig.name);
-            let module_qualified_name = format!("{}.{}", module_id, qualified_name);
+            let module_qualified_name = Symbol::from_parts(&module_id, &qualified_name);
             let is_instance_method = fn_sig.params.first().is_some_and(|p| {
                 matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
             });
@@ -237,7 +237,7 @@ impl Checker<'_, '_> {
                 .get_module_mut(&module_id)
                 .expect("current module must exist in store");
             module.definitions.insert(
-                module_qualified_name.into(),
+                module_qualified_name,
                 Definition::Value {
                     visibility: fn_visibility.clone(),
                     ty: method_ty,
@@ -364,7 +364,7 @@ impl Checker<'_, '_> {
             .expect("current module must exist in store");
 
         module.definitions.insert(
-            qualified_name.clone().into(),
+            qualified_name.clone(),
             Definition::Interface {
                 visibility: visibility.clone(),
                 ty: interface_ty,

@@ -36,7 +36,7 @@ use syntax::ast::{Generic, Span};
 use syntax::program::{
     CoercionInfo, Definition, EmitInput, File, ModuleId, MutationInfo, ResolutionInfo, UnusedInfo,
 };
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 #[derive(Clone, Debug, Default)]
 pub struct EmitOptions {
@@ -44,7 +44,7 @@ pub struct EmitOptions {
 }
 
 pub struct TestEmitConfig<'a> {
-    pub definitions: &'a HashMap<EcoString, Definition>,
+    pub definitions: &'a HashMap<Symbol, Definition>,
     pub module_id: &'a str,
     pub go_module: &'a str,
     pub unused: &'a UnusedInfo,
@@ -56,7 +56,7 @@ pub struct TestEmitConfig<'a> {
 }
 
 struct EmitContext<'a> {
-    definitions: &'a HashMap<EcoString, Definition>,
+    definitions: &'a HashMap<Symbol, Definition>,
     unused: &'a UnusedInfo,
     mutations: &'a MutationInfo,
     coercions: &'a CoercionInfo,
