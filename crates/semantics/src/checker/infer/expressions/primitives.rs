@@ -114,7 +114,7 @@ impl Checker<'_, '_> {
             }
         }
 
-        self.inference.in_subexpression = parent_is_subexpression;
+        self.scopes.set_in_subexpression(parent_is_subexpression);
         let new_expression = self.infer_expression(*expression, expected_ty);
         let new_ty = new_expression.get_type();
 
@@ -467,7 +467,7 @@ impl Checker<'_, '_> {
                 None
             };
 
-            self.inference.in_subexpression = false;
+            self.scopes.set_in_subexpression(false);
             let inferred_item = self.infer_expression(item, &expression_ty);
 
             if let Some(ctx) = prev_ctx {

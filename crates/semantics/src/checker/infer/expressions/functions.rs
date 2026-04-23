@@ -894,7 +894,7 @@ impl Checker<'_, '_> {
                         && let Pattern::Identifier { identifier, .. } = &binding.pattern
                         && identifier == "self"
                         && binding.annotation.is_none()
-                        && let Some(impl_ty) = &self.inference.impl_receiver_type
+                        && let Some(impl_ty) = self.scopes.impl_receiver_type()
                     {
                         return impl_ty.clone();
                     }

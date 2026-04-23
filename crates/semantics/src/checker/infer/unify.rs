@@ -139,9 +139,9 @@ impl Checker<'_, '_> {
                 // rejected inside generic positions.
                 let a1 = a1.clone();
                 let a2 = a2.clone();
-                self.inference.type_param_depth += 1;
+                self.scopes.increment_type_param_depth();
                 let result = self.unify_pairs(a1.iter().zip(a2.iter()), span);
-                self.inference.type_param_depth -= 1;
+                self.scopes.decrement_type_param_depth();
                 result
             }
 
@@ -285,9 +285,9 @@ impl Checker<'_, '_> {
         // interface coercion inside generic type params. All generic types
         // are treated uniformly, including prelude types (Option, Result,
         // Slice, Map, Ref).
-        self.inference.type_param_depth += 1;
+        self.scopes.increment_type_param_depth();
         let result = self.unify_type_params(params1.iter().zip(params2), span);
-        self.inference.type_param_depth -= 1;
+        self.scopes.decrement_type_param_depth();
         result
     }
 
@@ -317,7 +317,7 @@ impl Checker<'_, '_> {
             return Ok(());
         }
 
-        if self.inference.type_param_depth > 0 {
+        if self.scopes.is_inside_type_param() {
             return Err(UnifyError::TypeMismatch);
         }
 
@@ -417,11 +417,11 @@ impl Checker<'_, '_> {
                     let p1 = p1.clone();
                     let p2 = p2.clone();
                     if is_user_defined {
-                        self.inference.type_param_depth += 1;
+                        self.scopes.increment_type_param_depth();
                     }
                     let r = self.unify_type_params(p1.iter().zip(p2.iter()), span);
                     if is_user_defined {
-                        self.inference.type_param_depth -= 1;
+                        self.scopes.decrement_type_param_depth();
                     }
                     r?;
                 }

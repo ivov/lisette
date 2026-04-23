@@ -36,8 +36,9 @@ impl CachedSpan {
     }
 }
 
-/// Serializable type representation.
-/// All type variables are resolved to either concrete types or Parameters.
+/// Serializable type representation. Types reach the cache frozen (the
+/// `FreezeFolder` pass substitutes every `Type::Var` with its bound type before
+/// `analyze()` returns), so `CachedType` has no `Var` variant.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CachedType {
     Nominal {
@@ -67,14 +68,13 @@ pub enum CachedType {
 }
 
 impl CachedType {
-    /// Convert a Type to CachedType. Registration stores types as `Parameter`
-    /// placeholders (not `Var` handles), so any residual `Var` here would be
-    /// a serialization bug. Rather than fabricate a name, substitute `Error`
-    /// — the cache round-trips through `Type::Never`, matching the prior
-    /// behaviour for `Type::Error` / `Type::ReceiverPlaceholder`.
+    /// Convert a Type to CachedType. Types are frozen before this is reached
+    /// (see `FreezeFolder`), so `Type::Var` is unreachable.
     pub fn from_type(ty: &Type) -> Self {
         match ty {
-            Type::Var { .. } => CachedType::Never,
+            Type::Var { .. } => {
+                unreachable!("cache received an unfrozen Type::Var — freeze pass missed it")
+            }
             Type::Nominal {
                 id,
                 params,
@@ -529,7 +529,8 @@ impl CachedInterface {
     }
 }
 
-/// Serializable version of Definition with all type variables resolved.
+/// Serializable version of Definition. Types are frozen before the cache
+/// writer is reached, so `Var` cannot appear.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CachedDefinition {
     TypeAlias {

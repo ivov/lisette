@@ -81,39 +81,6 @@ impl ImportState {
 /// These never change once populated, so no invalidation needed.
 type BuiltinCache = HashMap<String, Type>;
 
-pub(crate) struct InferenceState {
-    pub type_param_depth: u32,
-    pub satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
-    pub impl_receiver_type: Option<Type>,
-    /// True when inside a match/select arm body. Used to determine whether
-    /// break/continue need Go labels (since Go switch cases don't fall through).
-    pub in_match_arm: bool,
-    /// One entry per enclosing loop; set to `true` when break/continue is
-    /// encountered inside a match arm (i.e. `in_match_arm` is true).
-    pub loop_needs_label_stack: Vec<bool>,
-    /// True when we are inside a compound expression (call arg, binary operand,
-    /// etc.). Used to reject `Err(x)?`/`None?` in value positions where they
-    /// can never produce a value.
-    pub in_subexpression: bool,
-    /// Suppresses record-struct-as-value errors when the struct name is a type
-    /// qualifier in a method chain (e.g. `lib.Point` in `lib.Point.sum`).
-    pub dot_access_base: bool,
-}
-
-impl InferenceState {
-    pub fn new() -> Self {
-        Self {
-            type_param_depth: 0,
-            satisfying_stack: rustc_hash::FxHashSet::default(),
-            impl_receiver_type: None,
-            in_match_arm: false,
-            loop_needs_label_stack: Vec::new(),
-            in_subexpression: false,
-            dot_access_base: false,
-        }
-    }
-}
-
 pub struct Checker<'r, 's> {
     pub env: TypeEnv,
     pub store: &'r mut Store,
@@ -125,7 +92,10 @@ pub struct Checker<'r, 's> {
     pub facts: Facts,
     pub coercions: CoercionInfo,
     pub resolutions: ResolutionInfo,
-    pub(crate) inference: InferenceState,
+    /// Recursion guard for interface satisfaction. Prevents
+    /// `collect_interface_violations` from diverging when a bound on `T`
+    /// transitively requires checking `T` against the same interface.
+    pub satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
     method_cache: RefCell<HashMap<EcoString, MethodSignatures>>,
     pub ufcs_methods: HashSet<(String, String)>,
 }
@@ -143,7 +113,7 @@ impl<'r, 's> Checker<'r, 's> {
             facts: Facts::new(),
             coercions: CoercionInfo::default(),
             resolutions: ResolutionInfo::default(),
-            inference: InferenceState::new(),
+            satisfying_stack: rustc_hash::FxHashSet::default(),
             method_cache: RefCell::new(HashMap::default()),
             ufcs_methods: HashSet::default(),
         }

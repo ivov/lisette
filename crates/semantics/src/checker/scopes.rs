@@ -82,6 +82,7 @@ pub struct Scope {
     pub loop_depth: DepthCounter,
     pub defer_block_depth: DepthCounter,
     pub negation_depth: DepthCounter,
+    pub type_param_depth: DepthCounter,
     pub use_context: Cell<UseContext>,
     /// variable name -> binding ID (for linting)
     pub name_to_binding: HashMap<String, BindingId>,
@@ -107,6 +108,7 @@ impl Scope {
             loop_depth: DepthCounter::new(),
             defer_block_depth: DepthCounter::new(),
             negation_depth: DepthCounter::new(),
+            type_param_depth: DepthCounter::new(),
             use_context: Cell::new(UseContext::Statement),
             name_to_binding: HashMap::default(),
         }
@@ -115,6 +117,26 @@ impl Scope {
 
 pub struct Scopes {
     stack: Vec<Scope>,
+    /// True when inferring the body of a match/select arm. Consumed by
+    /// `infer_break`/`infer_continue` to decide whether the enclosing loop
+    /// needs a Go label (since Go switch cases do not fall through).
+    in_match_arm: Cell<bool>,
+    /// One entry per enclosing loop; set to `true` when a break/continue is
+    /// encountered inside a match arm. The top is popped by the loop's
+    /// inference function and recorded on the Loop/While/For/WhileLet AST node.
+    loop_needs_label_stack: std::cell::RefCell<Vec<bool>>,
+    /// True when inferring inside a compound expression (call arg, binary
+    /// operand, etc.). Used to reject `Err(x)?`/`None?` and similar control-flow
+    /// in positions where they can never produce a value.
+    in_subexpression: Cell<bool>,
+    /// True when inferring the base of a dot-access chain. Suppresses the
+    /// record-struct-as-value error when the struct name is a type qualifier
+    /// (e.g. `lib.Point` in `lib.Point.sum`).
+    dot_access_base: Cell<bool>,
+    /// The enclosing impl block's receiver type, used to resolve `self`
+    /// parameter annotations inside the impl's methods. `None` outside impls.
+    /// Singleton because Lisette does not allow nested impl blocks.
+    impl_receiver_type: Option<Type>,
 }
 
 impl Default for Scopes {
@@ -127,6 +149,11 @@ impl Scopes {
     pub fn new() -> Self {
         Scopes {
             stack: vec![Scope::new()],
+            in_match_arm: Cell::new(false),
+            loop_needs_label_stack: std::cell::RefCell::new(Vec::new()),
+            in_subexpression: Cell::new(false),
+            dot_access_base: Cell::new(false),
+            impl_receiver_type: None,
         }
     }
 
@@ -145,6 +172,7 @@ impl Scopes {
         let loop_depth = current.loop_depth.get();
         let defer_block_depth = current.defer_block_depth.get();
         let negation_depth = current.negation_depth.get();
+        let type_param_depth = current.type_param_depth.get();
         let use_context = current.use_context.get();
         let loop_break_type = current.loop_break_type.clone();
         self.stack.push(Scope {
@@ -159,6 +187,7 @@ impl Scopes {
             loop_depth: DepthCounter::with_value(loop_depth),
             defer_block_depth: DepthCounter::with_value(defer_block_depth),
             negation_depth: DepthCounter::with_value(negation_depth),
+            type_param_depth: DepthCounter::with_value(type_param_depth),
             use_context: Cell::new(use_context),
             name_to_binding: HashMap::default(),
         });
@@ -173,6 +202,11 @@ impl Scopes {
     pub fn reset(&mut self) {
         self.stack.clear();
         self.stack.push(Scope::new());
+        self.in_match_arm.set(false);
+        self.loop_needs_label_stack.borrow_mut().clear();
+        self.in_subexpression.set(false);
+        self.dot_access_base.set(false);
+        self.impl_receiver_type = None;
     }
 
     /// Look up a value by walking the scope stack from top to bottom.
@@ -368,5 +402,66 @@ impl Scopes {
 
     pub fn is_assignment_target_context(&self) -> bool {
         self.current().use_context.get() == UseContext::AssignmentTarget
+    }
+
+    pub fn is_in_match_arm(&self) -> bool {
+        self.in_match_arm.get()
+    }
+
+    pub fn set_in_match_arm(&self, value: bool) -> bool {
+        self.in_match_arm.replace(value)
+    }
+
+    pub fn push_loop_needs_label(&self) {
+        self.loop_needs_label_stack.borrow_mut().push(false);
+    }
+
+    pub fn pop_loop_needs_label(&self) -> bool {
+        self.loop_needs_label_stack
+            .borrow_mut()
+            .pop()
+            .expect("loop_needs_label_stack must not be empty when popping")
+    }
+
+    pub fn mark_current_loop_needs_label(&self) {
+        if let Some(flag) = self.loop_needs_label_stack.borrow_mut().last_mut() {
+            *flag = true;
+        }
+    }
+
+    pub fn is_in_subexpression(&self) -> bool {
+        self.in_subexpression.get()
+    }
+
+    pub fn set_in_subexpression(&self, value: bool) -> bool {
+        self.in_subexpression.replace(value)
+    }
+
+    pub fn is_dot_access_base(&self) -> bool {
+        self.dot_access_base.get()
+    }
+
+    pub fn set_dot_access_base(&self, value: bool) -> bool {
+        self.dot_access_base.replace(value)
+    }
+
+    pub fn increment_type_param_depth(&self) {
+        self.current().type_param_depth.increment();
+    }
+
+    pub fn decrement_type_param_depth(&self) {
+        self.current().type_param_depth.decrement();
+    }
+
+    pub fn is_inside_type_param(&self) -> bool {
+        self.current().type_param_depth.is_active()
+    }
+
+    pub fn set_impl_receiver_type(&mut self, ty: Option<Type>) {
+        self.impl_receiver_type = ty;
+    }
+
+    pub fn impl_receiver_type(&self) -> Option<&Type> {
+        self.impl_receiver_type.as_ref()
     }
 }

@@ -167,10 +167,10 @@ impl Checker<'_, '_> {
             syntax::ast::BindingKind::Let { mutable: false },
         );
 
-        let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, true);
-        self.inference.in_subexpression = false;
+        let saved_in_match_arm = self.scopes.set_in_match_arm(true);
+        self.scopes.set_in_subexpression(false);
         let new_body = self.infer_expression(*body, result_ty);
-        self.inference.in_match_arm = saved_in_match_arm;
+        self.scopes.set_in_match_arm(saved_in_match_arm);
 
         SelectArmPattern::Receive {
             binding: Box::new(new_binding),
@@ -199,10 +199,10 @@ impl Checker<'_, '_> {
             ));
         }
 
-        let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, true);
-        self.inference.in_subexpression = false;
+        let saved_in_match_arm = self.scopes.set_in_match_arm(true);
+        self.scopes.set_in_subexpression(false);
         let new_body = self.infer_expression(*body, result_ty);
-        self.inference.in_match_arm = saved_in_match_arm;
+        self.scopes.set_in_match_arm(saved_in_match_arm);
 
         SelectArmPattern::Send {
             send_expression: Box::new(new_send_expression),
@@ -249,9 +249,9 @@ impl Checker<'_, '_> {
                     Box::new(guard_expression)
                 });
 
-                let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, true);
+                let saved_in_match_arm = self.scopes.set_in_match_arm(true);
                 let new_expression = self.infer_expression(*match_arm.expression, result_ty);
-                self.inference.in_match_arm = saved_in_match_arm;
+                self.scopes.set_in_match_arm(saved_in_match_arm);
 
                 self.scopes.pop();
 
@@ -275,10 +275,10 @@ impl Checker<'_, '_> {
         body: Box<Expression>,
         result_ty: &Type,
     ) -> SelectArmPattern {
-        let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, true);
-        self.inference.in_subexpression = false;
+        let saved_in_match_arm = self.scopes.set_in_match_arm(true);
+        self.scopes.set_in_subexpression(false);
         let new_body = self.infer_expression(*body, result_ty);
-        self.inference.in_match_arm = saved_in_match_arm;
+        self.scopes.set_in_match_arm(saved_in_match_arm);
         SelectArmPattern::WildCard {
             body: Box::new(new_body),
         }

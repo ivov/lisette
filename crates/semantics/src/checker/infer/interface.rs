@@ -25,14 +25,14 @@ impl Checker<'_, '_> {
         let interface_id = interface.name.to_string();
         let pair = (type_id, interface_id);
 
-        if !self.inference.satisfying_stack.insert(pair.clone()) {
+        if !self.satisfying_stack.insert(pair.clone()) {
             return Ok(());
         }
 
         let mut violations = Vec::new();
         self.collect_interface_violations(ty, interface, type_args, None, span, &mut violations);
 
-        self.inference.satisfying_stack.remove(&pair);
+        self.satisfying_stack.remove(&pair);
 
         if violations.is_empty() {
             Ok(())
@@ -202,7 +202,7 @@ impl Checker<'_, '_> {
             // Incrementing type_param_depth disables interface coercion in unify_constructors.
             // Wrap in speculatively() so that if this method's unification fails,
             // its type variable links are rolled back instead of leaking.
-            self.inference.type_param_depth += 1;
+            self.scopes.increment_type_param_depth();
             let sig_match = self.speculatively(|this| {
                 this.try_unify(
                     &strip_bounds(&substituted_method),
@@ -210,7 +210,7 @@ impl Checker<'_, '_> {
                     &Span::dummy(),
                 )
             });
-            self.inference.type_param_depth -= 1;
+            self.scopes.decrement_type_param_depth();
 
             if sig_match.is_err() {
                 incompatible.push((

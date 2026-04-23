@@ -22,11 +22,11 @@ impl Checker<'_, '_> {
     pub fn infer_expression(&mut self, expression: Expression, expected_ty: &Type) -> Expression {
         // Track sub-expression depth: `infer_block_items` resets this to false
         // for each top-level statement, so any nested call sees `true`.
-        let parent_is_subexpression = std::mem::replace(&mut self.inference.in_subexpression, true);
+        let parent_is_subexpression = self.scopes.set_in_subexpression(true);
 
         let result = self.infer_expression_inner(expression, expected_ty, parent_is_subexpression);
 
-        self.inference.in_subexpression = parent_is_subexpression;
+        self.scopes.set_in_subexpression(parent_is_subexpression);
         result
     }
 

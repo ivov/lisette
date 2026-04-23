@@ -65,7 +65,7 @@ impl Checker<'_, '_> {
                 .insert(receiver_name.to_string(), ctor_ty);
         }
 
-        self.inference.impl_receiver_type = Some(impl_ty.clone());
+        self.scopes.set_impl_receiver_type(Some(impl_ty.clone()));
 
         let new_methods: Vec<Expression> = methods
             .into_iter()
@@ -75,7 +75,7 @@ impl Checker<'_, '_> {
             })
             .collect();
 
-        self.inference.impl_receiver_type = None;
+        self.scopes.set_impl_receiver_type(None);
         self.scopes.pop();
 
         Expression::ImplBlock {

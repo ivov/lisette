@@ -140,12 +140,11 @@ impl Checker<'_, '_> {
         }
 
         // Branch bodies are tail-like contexts where Never calls are valid.
-        let saved_subexpression = self.inference.in_subexpression;
-        self.inference.in_subexpression = false;
+        let saved_subexpression = self.scopes.set_in_subexpression(false);
         let new_consequence = self.infer_expression(*consequence, &consequence_ty);
-        self.inference.in_subexpression = false;
+        self.scopes.set_in_subexpression(false);
         let new_alternative = self.infer_expression(*alternative, &alternative_ty);
-        self.inference.in_subexpression = saved_subexpression;
+        self.scopes.set_in_subexpression(saved_subexpression);
 
         if has_no_else {
             // An `if` without `else` always has type () (unit), like Rust.
@@ -262,11 +261,11 @@ impl Checker<'_, '_> {
                 } else {
                     &result_ty
                 };
-                let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, true);
+                let saved_in_match_arm = self.scopes.set_in_match_arm(true);
                 // Arm body is a tail-like context where Never calls are valid.
-                self.inference.in_subexpression = false;
+                self.scopes.set_in_subexpression(false);
                 let new_expression = self.infer_expression(*a.expression, arm_expected);
-                self.inference.in_match_arm = saved_in_match_arm;
+                self.scopes.set_in_match_arm(saved_in_match_arm);
 
                 self.scopes.pop();
 
@@ -325,13 +324,13 @@ impl Checker<'_, '_> {
         let prev_break_type = self.scopes.loop_break_type().cloned();
         self.scopes.set_loop_break_type(break_ty.clone());
 
-        let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, false);
-        self.inference.loop_needs_label_stack.push(false);
+        let saved_in_match_arm = self.scopes.set_in_match_arm(false);
+        self.scopes.push_loop_needs_label();
 
         let new_body = self.infer_in_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
 
-        let needs_label = self.inference.loop_needs_label_stack.pop().unwrap();
-        self.inference.in_match_arm = saved_in_match_arm;
+        let needs_label = self.scopes.pop_loop_needs_label();
+        self.scopes.set_in_match_arm(saved_in_match_arm);
 
         if let Some(prev) = prev_break_type {
             self.scopes.set_loop_break_type(prev);
@@ -374,14 +373,14 @@ impl Checker<'_, '_> {
                 .push(diagnostics::infer::propagate_in_condition(span));
         }
 
-        let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, false);
-        self.inference.loop_needs_label_stack.push(false);
+        let saved_in_match_arm = self.scopes.set_in_match_arm(false);
+        self.scopes.push_loop_needs_label();
 
         let new_body =
             self.infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
 
-        let needs_label = self.inference.loop_needs_label_stack.pop().unwrap();
-        self.inference.in_match_arm = saved_in_match_arm;
+        let needs_label = self.scopes.pop_loop_needs_label();
+        self.scopes.set_in_match_arm(saved_in_match_arm);
 
         Expression::While {
             condition: new_condition.into(),
@@ -416,14 +415,14 @@ impl Checker<'_, '_> {
             BindingKind::MatchArm,
         );
 
-        let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, false);
-        self.inference.loop_needs_label_stack.push(false);
+        let saved_in_match_arm = self.scopes.set_in_match_arm(false);
+        self.scopes.push_loop_needs_label();
 
         let new_body =
             self.infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
 
-        let needs_label = self.inference.loop_needs_label_stack.pop().unwrap();
-        self.inference.in_match_arm = saved_in_match_arm;
+        let needs_label = self.scopes.pop_loop_needs_label();
+        self.scopes.set_in_match_arm(saved_in_match_arm);
 
         self.scopes.pop();
 
@@ -553,14 +552,14 @@ impl Checker<'_, '_> {
             }
         }
 
-        let saved_in_match_arm = std::mem::replace(&mut self.inference.in_match_arm, false);
-        self.inference.loop_needs_label_stack.push(false);
+        let saved_in_match_arm = self.scopes.set_in_match_arm(false);
+        self.scopes.push_loop_needs_label();
 
         let new_body =
             self.infer_in_non_value_loop_context(|s| s.infer_expression(*body, &Type::ignored()));
 
-        let needs_label = self.inference.loop_needs_label_stack.pop().unwrap();
-        self.inference.in_match_arm = saved_in_match_arm;
+        let needs_label = self.scopes.pop_loop_needs_label();
+        self.scopes.set_in_match_arm(saved_in_match_arm);
 
         self.scopes.pop();
 
@@ -605,7 +604,7 @@ impl Checker<'_, '_> {
             }
             _ => {}
         }
-        self.inference.in_subexpression = false;
+        self.scopes.set_in_subexpression(false);
         self.infer_return(expression, span)
     }
 
@@ -742,10 +741,8 @@ impl Checker<'_, '_> {
     }
 
     fn mark_loop_needs_label_in_match_arm(&mut self) {
-        if self.inference.in_match_arm
-            && let Some(flag) = self.inference.loop_needs_label_stack.last_mut()
-        {
-            *flag = true;
+        if self.scopes.is_in_match_arm() {
+            self.scopes.mark_current_loop_needs_label();
         }
     }
 
