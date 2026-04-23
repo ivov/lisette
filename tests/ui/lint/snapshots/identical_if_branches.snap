@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Identical if-else branches
+   ╭─[test.lis:5:11]
+ 4 │   let b = 10;
+ 5 │   let x = if a > b { 42 } else { 42 };
+   ·           ─────────────┬─────────────
+   ·                        ╰── both branches are equivalent
+ 6 │   let _ = x
+   ╰────
+  help: Remove the `if` and keep a single copy of the branch body · code: [lint.identical_if_branches]

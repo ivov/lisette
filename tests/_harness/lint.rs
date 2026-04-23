@@ -14,7 +14,19 @@ use crate::_harness::register_test_builtins;
 use super::TEST_MODULE_ID;
 
 pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
-    let lex_result = Lexer::new(source, 0).lex();
+    let mut store = Store::new();
+    store.add_module(TEST_MODULE_ID);
+
+    let sink = DiagnosticSink::new();
+
+    init_prelude(&mut store);
+
+    // Parser::new hardcodes file_id=0 in spans, so pin the test file to that id
+    // too; source-based diagnostics rely on span.file_id matching files map key.
+    let file_id = 0u32;
+    store.register_file(file_id, TEST_MODULE_ID);
+
+    let lex_result = Lexer::new(source, file_id).lex();
     if lex_result.failed() {
         panic!("Lexing failed in lint test: {:?}", lex_result.errors);
     }
@@ -32,17 +44,6 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         );
     }
     let ast = desugar_result.ast;
-
-    let mut store = Store::new();
-
-    store.add_module(TEST_MODULE_ID);
-
-    let file_id = store.new_file_id();
-    store.register_file(file_id, TEST_MODULE_ID);
-
-    let sink = DiagnosticSink::new();
-
-    init_prelude(&mut store);
 
     let mut checker = Checker::new(&mut store, &sink);
     checker.cursor.module_id = TEST_MODULE_ID.to_string();

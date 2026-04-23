@@ -2095,6 +2095,15 @@ pub fn native_constructor_value(name: &str, span: Span) -> LisetteDiagnostic {
         .with_help(format!("Use a closure instead: `|args| {name}(args)`"))
 }
 
+pub fn enum_variant_constructor_value(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot use enum variant as value")
+        .with_infer_code("enum_variant_constructor_value")
+        .with_span_label(&span, "used as value")
+        .with_help(format!(
+            "Instantiate the variant: `{name} {{ field: value, ... }}`"
+        ))
+}
+
 pub fn record_struct_value(name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot use struct type as a value")
         .with_infer_code("record_struct_value")

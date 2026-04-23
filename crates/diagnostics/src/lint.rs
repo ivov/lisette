@@ -251,14 +251,14 @@ pub fn ineffective_try_block(span: &Span) -> LisetteDiagnostic {
 
 pub fn double_negation(span: &Span, is_bool: bool) -> LisetteDiagnostic {
     let (code, msg) = if is_bool {
-        ("double_bool_negation", "double boolean negation")
+        ("double_bool_negation", "Double boolean negation")
     } else {
-        ("double_int_negation", "double numeric negation")
+        ("double_int_negation", "Double numeric negation")
     };
 
     LisetteDiagnostic::warn(msg)
         .with_lint_code(code)
-        .with_span_label(span, "mistaken double negation")
+        .with_span_label(span, "accidental double negation")
         .with_help("Remove one of the negation operators")
 }
 
@@ -279,6 +279,27 @@ pub fn self_assignment(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("self_assignment")
         .with_span_label(span, "assigning to itself")
         .with_help("Correct this assignment")
+}
+
+pub fn duplicate_logical_operand(span: &Span, operand_text: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Duplicate logical operand")
+        .with_lint_code("duplicate_logical_operand")
+        .with_span_label(span, "accidental repetition")
+        .with_help(format!("Simplify to `{operand_text}`"))
+}
+
+pub fn bool_literal_comparison(span: &Span, replacement: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Redundant comparison to boolean literal")
+        .with_lint_code("bool_literal_comparison")
+        .with_span_label(span, "needlessly verbose")
+        .with_help(format!("Simplify to `{replacement}`"))
+}
+
+pub fn identical_if_branches(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Identical if-else branches")
+        .with_lint_code("identical_if_branches")
+        .with_span_label(span, "both branches are equivalent")
+        .with_help("Remove the `if` and keep a single copy of the branch body")
 }
 
 pub fn empty_match_arm(span: &Span) -> LisetteDiagnostic {

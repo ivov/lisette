@@ -191,6 +191,12 @@ impl Store {
         }
     }
 
+    pub fn variant_of(&self, enum_qualified: &str, variant_name: &str) -> Option<&EnumVariant> {
+        self.variants_of(enum_qualified)?
+            .iter()
+            .find(|v| v.name == variant_name)
+    }
+
     pub fn value_variants_of(
         &self,
         qualified_name: &str,

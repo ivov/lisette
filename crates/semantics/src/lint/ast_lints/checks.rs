@@ -3,10 +3,12 @@ use super::casing::{
 };
 use crate::is_trivial_expression;
 use diagnostics::LisetteDiagnostic;
+use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::{
     BinaryOperator, Expression, FormatStringPart, Generic, Literal, MatchOrigin, Pattern,
     RestPattern, Span, UnaryOperator,
 };
+use syntax::program::File;
 
 pub fn check_double_negation(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
     let Expression::Unary {
@@ -92,6 +94,250 @@ pub fn check_self_comparison(expression: &Expression, diagnostics: &mut Vec<Lise
         span,
         always_true,
     ));
+}
+
+pub fn check_duplicate_logical_operand(
+    expression: &Expression,
+    files: &HashMap<u32, File>,
+    diagnostics: &mut Vec<LisetteDiagnostic>,
+) {
+    let Expression::Binary {
+        operator,
+        left,
+        right,
+        span,
+        ..
+    } = expression
+    else {
+        return;
+    };
+
+    if !matches!(operator, BinaryOperator::And | BinaryOperator::Or) {
+        return;
+    }
+
+    let left_inner = left.unwrap_parens();
+    let right_inner = right.unwrap_parens();
+
+    // `f() && f()` may be intentional double-invocation; only warn when both
+    // sides have no observable effect.
+    if !is_side_effect_free(left_inner) || !is_side_effect_free(right_inner) {
+        return;
+    }
+
+    if !expressions_equivalent(left_inner, right_inner) {
+        return;
+    }
+
+    let Some(operand_text) = source_text(left.get_span(), files) else {
+        return;
+    };
+
+    diagnostics.push(diagnostics::lint::duplicate_logical_operand(
+        span,
+        operand_text,
+    ));
+}
+
+fn source_text(span: Span, files: &HashMap<u32, File>) -> Option<&str> {
+    let file = files.get(&span.file_id)?;
+    file.source
+        .get(span.byte_offset as usize..span.end() as usize)
+}
+
+pub fn check_bool_literal_comparison(
+    expression: &Expression,
+    diagnostics: &mut Vec<LisetteDiagnostic>,
+) {
+    let Expression::Binary {
+        operator,
+        left,
+        right,
+        span,
+        ..
+    } = expression
+    else {
+        return;
+    };
+
+    use BinaryOperator::*;
+    let is_equal = match operator {
+        Equal => true,
+        NotEqual => false,
+        _ => return,
+    };
+
+    // Pick the non-literal operand; bail on `true == false` (lit vs lit) since
+    // check_self_comparison and const-folding are more appropriate there.
+    let (other, bool_value) = match (
+        bool_literal(left.unwrap_parens()),
+        bool_literal(right.unwrap_parens()),
+    ) {
+        (Some(b), None) => (right.unwrap_parens(), b),
+        (None, Some(b)) => (left.unwrap_parens(), b),
+        _ => return,
+    };
+
+    // Skip operands that cannot be rendered as a dotted path — suggesting `!x`
+    // for `f() == true` would be misleading since no `x` exists.
+    let Some(other_text) = render_operand(other) else {
+        return;
+    };
+
+    let negate = bool_value != is_equal;
+    let replacement = if negate {
+        format!("!{other_text}")
+    } else {
+        other_text
+    };
+
+    diagnostics.push(diagnostics::lint::bool_literal_comparison(
+        span,
+        &replacement,
+    ));
+}
+
+pub fn check_identical_if_branches(
+    expression: &Expression,
+    diagnostics: &mut Vec<LisetteDiagnostic>,
+) {
+    let Expression::If {
+        consequence,
+        alternative,
+        span,
+        ..
+    } = expression
+    else {
+        return;
+    };
+
+    // `else if` chains: each arm is checked independently; comparing the
+    // chain tail against the head produces noisy false positives.
+    if matches!(
+        alternative.as_ref(),
+        Expression::If { .. } | Expression::IfLet { .. }
+    ) {
+        return;
+    }
+
+    // Empty blocks are usually in-progress stubs; do not add noise on top of
+    // other lints that already cover that case.
+    if is_empty_block(consequence) || is_empty_block(alternative) {
+        return;
+    }
+
+    if !expressions_equivalent(consequence, alternative) {
+        return;
+    }
+
+    diagnostics.push(diagnostics::lint::identical_if_branches(span));
+}
+
+fn bool_literal(expression: &Expression) -> Option<bool> {
+    if let Expression::Literal {
+        literal: Literal::Boolean(b),
+        ..
+    } = expression
+    {
+        Some(*b)
+    } else {
+        None
+    }
+}
+
+fn render_operand(expression: &Expression) -> Option<String> {
+    expression.as_dotted_path()
+}
+
+fn is_empty_block(expression: &Expression) -> bool {
+    matches!(expression, Expression::Block { items, .. } if items.is_empty())
+}
+
+fn is_side_effect_free(expression: &Expression) -> bool {
+    match expression.unwrap_parens() {
+        Expression::Identifier { .. } | Expression::Literal { .. } => true,
+        Expression::Unary {
+            expression: inner, ..
+        } => is_side_effect_free(inner),
+        Expression::Binary { left, right, .. } => {
+            is_side_effect_free(left) && is_side_effect_free(right)
+        }
+        Expression::DotAccess {
+            expression: inner, ..
+        } => is_side_effect_free(inner),
+        _ => false,
+    }
+}
+
+fn expressions_equivalent(a: &Expression, b: &Expression) -> bool {
+    let a = a.unwrap_parens();
+    let b = b.unwrap_parens();
+    match (a, b) {
+        (Expression::Identifier { value: av, .. }, Expression::Identifier { value: bv, .. }) => {
+            av == bv
+        }
+        (Expression::Literal { literal: al, .. }, Expression::Literal { literal: bl, .. }) => {
+            al == bl
+        }
+        (
+            Expression::Unary {
+                operator: ao,
+                expression: ae,
+                ..
+            },
+            Expression::Unary {
+                operator: bo,
+                expression: be,
+                ..
+            },
+        ) => ao == bo && expressions_equivalent(ae, be),
+        (
+            Expression::Binary {
+                operator: ao,
+                left: al,
+                right: ar,
+                ..
+            },
+            Expression::Binary {
+                operator: bo,
+                left: bl,
+                right: br,
+                ..
+            },
+        ) => ao == bo && expressions_equivalent(al, bl) && expressions_equivalent(ar, br),
+        (
+            Expression::DotAccess {
+                expression: ae,
+                member: am,
+                ..
+            },
+            Expression::DotAccess {
+                expression: be,
+                member: bm,
+                ..
+            },
+        ) => am == bm && expressions_equivalent(ae, be),
+        (Expression::Block { items: ai, .. }, Expression::Block { items: bi, .. }) => {
+            ai.len() == bi.len() && ai.iter().zip(bi).all(|(x, y)| expressions_equivalent(x, y))
+        }
+        (
+            Expression::Call {
+                expression: ac,
+                args: aa,
+                ..
+            },
+            Expression::Call {
+                expression: bc,
+                args: ba,
+                ..
+            },
+        ) => {
+            expressions_equivalent(ac, bc)
+                && aa.len() == ba.len()
+                && aa.iter().zip(ba).all(|(x, y)| expressions_equivalent(x, y))
+        }
+        _ => false,
+    }
 }
 
 pub fn check_self_assignment(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {

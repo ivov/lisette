@@ -17,6 +17,7 @@ use crate::facts::Facts;
 use crate::store::Store;
 
 mod duplicate_bindings;
+mod enum_variant_value;
 mod generics;
 mod irrefutable_patterns;
 mod native_value_usage;
@@ -53,6 +54,7 @@ pub fn run_all(ctx: &mut ValidatorContext<'_>) {
     );
     newtype::run(ctx.typed_ast, ctx.store, ctx.sink);
     native_value_usage::run(ctx.typed_ast, ctx.module_id, ctx.store, ctx.sink);
+    enum_variant_value::run(ctx.typed_ast, ctx.store, ctx.sink);
     temp_producing::run(ctx.typed_ast, ctx.coercions, ctx.sink);
     unused_expressions::run(ctx.typed_ast, ctx.module_id, ctx.store, ctx.facts);
     visibility::run_module(ctx.module_id, ctx.store, ctx.sink);

@@ -592,6 +592,109 @@ fn main() {
 }
 
 #[test]
+fn duplicate_logical_operand_and() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = 5;
+  let b = 10;
+  a > b && a > b
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_logical_operand_or() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = 5;
+  let b = 10;
+  a == b || a == b
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_logical_operand_with_side_effects_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn side_effect() -> bool { true }
+
+fn main() {
+  side_effect() && side_effect()
+}
+"#
+    );
+}
+
+#[test]
+fn bool_literal_comparison_eq_true() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = true;
+  x == true
+}
+"#
+    );
+}
+
+#[test]
+fn bool_literal_comparison_eq_false() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = true;
+  x == false
+}
+"#
+    );
+}
+
+#[test]
+fn bool_literal_comparison_ne_true() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = true;
+  x != true
+}
+"#
+    );
+}
+
+#[test]
+fn identical_if_branches() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = 5;
+  let b = 10;
+  let x = if a > b { 42 } else { 42 };
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn identical_if_branches_else_if_chain_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 5;
+  let b = 10;
+  let x = if a > b { 1 } else if a < b { 2 } else { 3 };
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
 fn unused_function() {
     assert_lint_snapshot!(
         r#"

@@ -826,6 +826,49 @@ fn test() {
 }
 
 #[test]
+fn infer_struct_enum_variant_as_bare_value() {
+    let input = r#"
+enum A {
+  Test { test: string },
+}
+
+fn main() {
+  let a = A.Test
+  let _ = a
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_enum_variant_as_bare_value_cross_module() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+pub enum Shape {
+  Rect { w: float64, h: float64 },
+}
+"#,
+    );
+
+    let source = r#"
+import "shapes"
+
+fn main() {
+  let r = shapes.Shape.Rect
+  let _ = r
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
 fn infer_enum_variant_not_found() {
     let input = r#"
 fn test() {

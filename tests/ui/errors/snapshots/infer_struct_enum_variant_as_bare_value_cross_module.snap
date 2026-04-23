@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use enum variant as value
+   ╭─[main.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let r = shapes.Shape.Rect
+   ·           ────────┬────────
+   ·                   ╰── used as value
+ 6 │   let _ = r
+   ╰────
+  help: Instantiate the variant: `Shape.Rect { field: value, ... }` · code: [infer.enum_variant_constructor_value]
