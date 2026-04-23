@@ -247,7 +247,8 @@ impl Emitter<'_> {
         let qualified_name = format!("{}.{}", self.current_module, real_type_part);
         let first = fn_params.first()?;
         let stripped = first.strip_refs();
-        let is_self = matches!(stripped, Type::Nominal { ref id, .. } if *id == qualified_name);
+        let is_self =
+            matches!(stripped, Type::Nominal { ref id, .. } if id.as_str() == qualified_name);
         if !is_self {
             return None;
         }

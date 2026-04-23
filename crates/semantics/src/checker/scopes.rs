@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::Cell;
 use syntax::ast::BindingId;
 use syntax::ast::Span;
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 #[derive(Debug, Clone, Default)]
 pub struct DepthCounter(Cell<usize>);
@@ -74,7 +74,7 @@ pub struct Scope {
     pub values: HashMap<String, Type>,
     pub mutables: Option<HashSet<String>>,
     pub type_params: Option<HashMap<String, usize>>,
-    pub trait_bounds: Option<HashMap<String, Vec<Type>>>,
+    pub trait_bounds: Option<HashMap<Symbol, Vec<Type>>>,
     pub fn_return_type: Option<Type>,
     pub try_block_context: Option<TryBlockContext>,
     pub recover_block_context: Option<RecoverBlockContext>,
@@ -291,7 +291,7 @@ impl Scopes {
         names
     }
 
-    pub fn collect_all_trait_bounds(&self) -> HashMap<String, Vec<Type>> {
+    pub fn collect_all_trait_bounds(&self) -> HashMap<Symbol, Vec<Type>> {
         let mut all_bounds = HashMap::default();
         // Walk from bottom to top so inner scopes override outer
         for scope in &self.stack {

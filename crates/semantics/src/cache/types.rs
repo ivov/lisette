@@ -6,7 +6,7 @@ use syntax::ast::{
     Annotation, AttributeArg, Generic, Span, StructKind, Visibility as FieldVisibility,
 };
 use syntax::program::{Definition, Interface, MethodSignatures, Visibility};
-use syntax::types::{Bound, Type};
+use syntax::types::{Bound, Symbol, Type};
 
 /// Span stored as file index + byte offsets.
 /// file_index refers to position in ModuleInterface.files array (sorted by filename).
@@ -122,7 +122,7 @@ impl CachedType {
                 params,
                 underlying_ty,
             } => Type::Nominal {
-                id: EcoString::from(id.as_str()),
+                id: Symbol::from_raw(EcoString::from(id.as_str())),
                 params: params.iter().map(|p| p.to_type()).collect(),
                 underlying_ty: underlying_ty.as_ref().map(|u| Box::new(u.to_type())),
             },

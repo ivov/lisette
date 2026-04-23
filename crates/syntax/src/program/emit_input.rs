@@ -152,7 +152,7 @@ impl NativeTypeKind {
             return None;
         }
         if let Type::Nominal { ref id, .. } = resolved
-            && id.starts_with("go:")
+            && id.as_str().starts_with("go:")
         {
             return None;
         }

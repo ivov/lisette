@@ -11,7 +11,7 @@ use syntax::ast::{
     Span, StructKind, Visibility as SyntacticVisibility,
 };
 use syntax::program::{Definition, File, Visibility};
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 use super::Checker;
 
@@ -298,7 +298,7 @@ impl Checker<'_, '_> {
         items: &[Expression],
         visibility: &Visibility,
         is_typedef: bool,
-    ) -> Vec<(String, Definition)> {
+    ) -> Vec<(Symbol, Definition)> {
         let mut entries = Vec::new();
 
         for item in items {
@@ -353,14 +353,14 @@ impl Checker<'_, '_> {
                     }
                 } else {
                     Type::Nominal {
-                        id: qualified_name.clone().into(),
+                        id: qualified_name.clone(),
                         params: args,
                         underlying_ty: None,
                     }
                 }
             } else {
                 Type::Nominal {
-                    id: qualified_name.clone().into(),
+                    id: qualified_name.clone(),
                     params: args,
                     underlying_ty: None,
                 }
@@ -716,7 +716,7 @@ impl Checker<'_, '_> {
         let scope = self.scopes.current_mut();
         scope
             .values
-            .insert(qualified_name.clone(), constructor_ty.clone());
+            .insert(qualified_name.to_string(), constructor_ty.clone());
         scope
             .values
             .insert(name.to_string(), constructor_ty.clone());

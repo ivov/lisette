@@ -602,14 +602,14 @@ impl Checker<'_, '_> {
                         }
                     } else {
                         Type::Nominal {
-                            id: qualified_name.clone().into(),
+                            id: qualified_name.clone(),
                             params,
                             underlying_ty: None,
                         }
                     }
                 } else {
                     Type::Nominal {
-                        id: qualified_name.clone().into(),
+                        id: qualified_name.clone(),
                         params,
                         underlying_ty: None,
                     }
@@ -672,7 +672,7 @@ impl Checker<'_, '_> {
                 .map(|g| Type::Parameter(g.name.clone()))
                 .collect();
             Type::Nominal {
-                id: qualified_name.clone().into(),
+                id: qualified_name.clone(),
                 params,
                 underlying_ty: Some(Box::new(body_ty)),
             }

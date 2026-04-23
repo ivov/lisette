@@ -17,7 +17,7 @@ use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span, StructFiel
 use syntax::program::{
     CoercionInfo, Definition, FileImport, MethodSignatures, Module, ResolutionInfo,
 };
-use syntax::types::{SubstitutionMap, Type, substitute};
+use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 pub use type_env::{EnvResolve, Speculation, TypeEnv, VarState};
 
@@ -190,8 +190,8 @@ impl<'r, 's> Checker<'r, 's> {
         !self.is_d_lis()
     }
 
-    pub(crate) fn qualify_name(&self, name: &str) -> String {
-        format!("{}.{}", self.cursor.module_id, name)
+    pub(crate) fn qualify_name(&self, name: &str) -> Symbol {
+        Symbol::from_parts(&self.cursor.module_id, name)
     }
 
     pub(crate) fn put_in_scope(&mut self, generics: &[Generic]) {
@@ -408,7 +408,7 @@ impl<'r, 's> Checker<'r, 's> {
 
         let resolved = ty.strip_refs().resolve_in(&self.env);
         let cache_key: EcoString = match &resolved {
-            Type::Nominal { id, .. } => id.clone(),
+            Type::Nominal { id, .. } => id.as_eco().clone(),
             Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
             Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()).into(),
             _ => return MethodSignatures::default(),

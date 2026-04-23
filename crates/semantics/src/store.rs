@@ -1,10 +1,9 @@
-use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::Cell;
 
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{Definition, File, Interface, MethodSignatures, Module, ModuleId};
-use syntax::types::{SubstitutionMap, Type, substitute};
+use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 pub const ENTRY_MODULE_ID: &str = "_entry_";
 pub const ENTRY_FILE_ID: u32 = 0;
@@ -243,7 +242,7 @@ impl Store {
     pub fn get_all_methods(
         &self,
         ty: &Type,
-        trait_bounds: &HashMap<String, Vec<Type>>,
+        trait_bounds: &HashMap<Symbol, Vec<Type>>,
     ) -> MethodSignatures {
         let stripped = ty.strip_refs();
         let Some(qualified_name) = method_lookup_key(&stripped) else {
@@ -275,7 +274,7 @@ impl Store {
             return all_interface_methods;
         }
 
-        if let Some(bound_types) = trait_bounds.get(qualified_name.as_str()) {
+        if let Some(bound_types) = trait_bounds.get(&qualified_name) {
             return bound_types
                 .iter()
                 .flat_map(|interface_ty| self.get_all_methods(interface_ty, trait_bounds))
@@ -320,7 +319,7 @@ impl Store {
     pub fn get_methods_from_bounds(
         &self,
         qualified_name: &str,
-        trait_bounds: &HashMap<String, Vec<Type>>,
+        trait_bounds: &HashMap<Symbol, Vec<Type>>,
     ) -> MethodSignatures {
         if let Some(bound_types) = trait_bounds.get(qualified_name) {
             return bound_types
@@ -335,11 +334,11 @@ impl Store {
 /// Return the qualified name used to look up methods/fields for a given type.
 /// For `Type::Compound` and `Type::Simple`, this is the prelude-qualified name
 /// (e.g. `Type::Compound { Slice, .. }` → `"prelude.Slice"`).
-fn method_lookup_key(ty: &Type) -> Option<EcoString> {
+fn method_lookup_key(ty: &Type) -> Option<Symbol> {
     match ty {
         Type::Nominal { id, .. } => Some(id.clone()),
-        Type::Compound { kind, .. } => Some(format!("prelude.{}", kind.leaf_name()).into()),
-        Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name()).into()),
+        Type::Compound { kind, .. } => Some(Symbol::from_parts("prelude", kind.leaf_name())),
+        Type::Simple(kind) => Some(Symbol::from_parts("prelude", kind.leaf_name())),
         _ => None,
     }
 }

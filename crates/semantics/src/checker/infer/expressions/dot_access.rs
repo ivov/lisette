@@ -2,7 +2,7 @@ use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::{Definition, DotAccessKind, NativeTypeKind, ReceiverCoercion};
-use syntax::types::{Type, substitute, unqualified_name};
+use syntax::types::{Symbol, Type, substitute, unqualified_name};
 
 use super::super::Checker;
 use super::super::addressability::check_is_non_addressable;
@@ -771,9 +771,9 @@ impl Checker<'_, '_> {
     }
 
     pub(crate) fn get_receiver_generics_count(&self, receiver_ty: &Type) -> usize {
-        let lookup_id: EcoString = match receiver_ty {
+        let lookup_id: Symbol = match receiver_ty {
             Type::Nominal { id, .. } => id.clone(),
-            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
+            Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
             _ => return 0,
         };
 

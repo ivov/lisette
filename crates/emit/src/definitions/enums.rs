@@ -3,7 +3,7 @@ use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
 use syntax::ast::{Attribute, EnumVariant, Generic};
 use syntax::program::Definition;
-use syntax::types::Type;
+use syntax::types::{Symbol, Type};
 
 impl Emitter<'_> {
     pub(crate) fn emit_enum(
@@ -128,11 +128,11 @@ impl Emitter<'_> {
         };
 
         let return_type = Type::Nominal {
-            id: enum_name.clone().into(),
+            id: Symbol::from_raw(enum_name.clone()),
             params: generics
                 .iter()
                 .map(|g| Type::Nominal {
-                    id: g.name.clone(),
+                    id: Symbol::from_raw(g.name.clone()),
                     params: vec![],
                     underlying_ty: None,
                 })

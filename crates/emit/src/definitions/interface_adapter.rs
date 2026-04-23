@@ -157,8 +157,8 @@ impl Emitter<'_> {
         }
 
         Some(AdapterPlan {
-            concrete_id: source_id.clone(),
-            interface_id: target_id.clone(),
+            concrete_id: source_id.as_eco().clone(),
+            interface_id: target_id.as_eco().clone(),
             concrete_ty: source_ty.clone(),
             methods,
         })

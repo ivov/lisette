@@ -1,7 +1,142 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::borrow::Borrow;
 use std::cell::OnceCell;
 
 use ecow::EcoString;
+
+/// Dot-qualified identifier for a named type, method, value, or variant.
+///
+/// Wraps the qualified name (`"main.Point.sum"`, `"prelude.Option"`,
+/// `"go:net/http.Handler"`) as a single `EcoString` and exposes structured
+/// accessors. Centralizes the join/split logic that used to live in ad-hoc
+/// `format!("{}.{}", ..)` and `split_once('.')` call sites.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Symbol(EcoString);
+
+impl Symbol {
+    /// Joins a module id and a local (possibly multi-segment) name.
+    ///
+    /// `Symbol::from_parts("main", "Point.sum")` → `"main.Point.sum"`.
+    pub fn from_parts(module: &str, local: &str) -> Self {
+        let mut s = String::with_capacity(module.len() + 1 + local.len());
+        s.push_str(module);
+        s.push('.');
+        s.push_str(local);
+        Self(EcoString::from(s))
+    }
+
+    /// Appends an additional dot-segment to an already-qualified symbol.
+    ///
+    /// `Symbol::from_raw("main.Shape").with_segment("Circle")` →
+    /// `"main.Shape.Circle"`.
+    pub fn with_segment(&self, segment: &str) -> Self {
+        let mut s = String::with_capacity(self.0.len() + 1 + segment.len());
+        s.push_str(&self.0);
+        s.push('.');
+        s.push_str(segment);
+        Self(EcoString::from(s))
+    }
+
+    /// Wraps an already-constructed qualified string. Prefer `from_parts`
+    /// when the module id and local name are available separately.
+    pub fn from_raw(qualified: impl Into<EcoString>) -> Self {
+        Self(qualified.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn as_eco(&self) -> &EcoString {
+        &self.0
+    }
+
+    /// Last dot-separated segment. `"main.Point.sum"` → `"sum"`.
+    pub fn last_segment(&self) -> &str {
+        self.0.rsplit('.').next().unwrap_or(&self.0)
+    }
+
+    /// Strips the last dot-separated segment. `"main.Point.sum"` → `"main.Point"`.
+    /// Returns `None` if the symbol has no dot.
+    pub fn without_last_segment(&self) -> Option<&str> {
+        self.0.rsplit_once('.').map(|(rest, _)| rest)
+    }
+
+    /// Naive first segment (first dot split). Correct for user modules; for
+    /// `go:net/http.Handler`-style symbols, resolve via
+    /// `Store::module_for_qualified_name` instead.
+    pub fn simple_module_part(&self) -> Option<&str> {
+        self.0.split_once('.').map(|(m, _)| m)
+    }
+}
+
+impl Borrow<str> for Symbol {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for Symbol {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::ops::Deref for Symbol {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&Symbol> for EcoString {
+    fn from(s: &Symbol) -> Self {
+        s.0.clone()
+    }
+}
+
+impl std::fmt::Display for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<EcoString> for Symbol {
+    fn from(s: EcoString) -> Self {
+        Self(s)
+    }
+}
+
+impl From<Symbol> for EcoString {
+    fn from(s: Symbol) -> Self {
+        s.0
+    }
+}
+
+impl From<&str> for Symbol {
+    fn from(s: &str) -> Self {
+        Self(EcoString::from(s))
+    }
+}
+
+impl From<String> for Symbol {
+    fn from(s: String) -> Self {
+        Self(EcoString::from(s))
+    }
+}
+
+impl PartialEq<str> for Symbol {
+    fn eq(&self, other: &str) -> bool {
+        self.0.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for Symbol {
+    fn eq(&self, other: &&str) -> bool {
+        self.0.as_str() == *other
+    }
+}
 
 /// Extract the unqualified name from a dot-qualified identifier.
 ///
@@ -121,7 +256,7 @@ pub enum Type {
     },
 
     Nominal {
-        id: EcoString,
+        id: Symbol,
         params: Vec<Type>,
         underlying_ty: Option<Box<Type>>,
     },
@@ -544,7 +679,7 @@ impl Type {
 
     pub fn has_name(&self, name: &str) -> bool {
         match self {
-            Type::Nominal { id, .. } => unqualified_name(id) == name,
+            Type::Nominal { id, .. } => id.last_segment() == name,
             Type::Simple(kind) => kind.leaf_name() == name,
             Type::Compound { kind, .. } => kind.leaf_name() == name,
             _ => false,
@@ -610,7 +745,7 @@ impl Type {
         match self {
             Type::Compound { kind, args } => Some((*kind, args.as_slice())),
             Type::Nominal { id, params, .. } => {
-                CompoundKind::from_name(unqualified_name(id)).map(|k| (k, params.as_slice()))
+                CompoundKind::from_name(id.last_segment()).map(|k| (k, params.as_slice()))
             }
             _ => None,
         }
@@ -705,7 +840,7 @@ impl Type {
     pub fn as_simple(&self) -> Option<SimpleKind> {
         match self {
             Type::Simple(kind) => Some(*kind),
-            Type::Nominal { id, .. } => SimpleKind::from_name(unqualified_name(id)),
+            Type::Nominal { id, .. } => SimpleKind::from_name(id.last_segment()),
             _ => None,
         }
     }
@@ -797,7 +932,7 @@ impl Type {
 
         match self {
             Type::Nominal { id, params, .. } => {
-                names.remove(unqualified_name(id));
+                names.remove(id.last_segment());
                 for param in params {
                     param.remove_found_type_names(names);
                 }
@@ -852,7 +987,7 @@ impl Type {
                 _ => Some(kind.leaf_name()),
             },
             Type::Nominal { id, params, .. } => {
-                let name = unqualified_name(id);
+                let name = id.last_segment();
                 if CompoundKind::from_name(name) == Some(CompoundKind::Ref) {
                     return params.first().and_then(|inner| inner.get_name());
                 }
@@ -937,11 +1072,11 @@ impl Type {
         }
     }
 
-    pub fn get_qualified_name(&self) -> EcoString {
+    pub fn get_qualified_name(&self) -> Symbol {
         match self.strip_refs() {
             Type::Nominal { id, .. } => id,
-            Type::Simple(kind) => format!("prelude.{}", kind.leaf_name()).into(),
-            Type::Compound { kind, .. } => format!("prelude.{}", kind.leaf_name()).into(),
+            Type::Simple(kind) => Symbol::from_parts("prelude", kind.leaf_name()),
+            Type::Compound { kind, .. } => Symbol::from_parts("prelude", kind.leaf_name()),
             _ => panic!("called get_qualified_name on {:#?}", self),
         }
     }
@@ -1142,7 +1277,7 @@ impl Type {
         self.underlying_numeric_type().is_some()
     }
 
-    fn underlying_numeric_type_recursive(&self, visited: &mut HashSet<EcoString>) -> Option<Type> {
+    fn underlying_numeric_type_recursive(&self, visited: &mut HashSet<Symbol>) -> Option<Type> {
         match self {
             Type::Simple(_) if self.is_numeric() => Some(self.clone()),
             Type::Nominal {

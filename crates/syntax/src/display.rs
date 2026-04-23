@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::types::{Type, unqualified_name};
+use crate::types::Type;
 
 impl Type {
     pub fn stringify(&self) -> String {
@@ -14,7 +14,7 @@ impl Type {
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                let name = unqualified_name(id);
+                let name = id.last_segment();
 
                 if name == "Unit" {
                     return "()".to_string();

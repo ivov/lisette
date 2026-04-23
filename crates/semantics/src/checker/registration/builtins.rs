@@ -1,13 +1,12 @@
 use crate::checker::EnvResolve;
-use syntax::EcoString;
-use syntax::types::{CompoundKind, SimpleKind, Type};
+use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
 
 use crate::checker::Checker;
 
 impl Checker<'_, '_> {
-    fn builtin_qualified_name(&mut self, type_name: &str) -> EcoString {
+    fn builtin_qualified_name(&mut self, type_name: &str) -> Symbol {
         self.lookup_qualified_name(type_name)
-            .map(EcoString::from)
+            .map(Symbol::from)
             .unwrap_or_else(|| panic!("Builtin type {type_name} not found in store"))
     }
 
