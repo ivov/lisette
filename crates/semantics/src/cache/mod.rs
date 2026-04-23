@@ -346,8 +346,7 @@ pub fn is_cache_disabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cache::types::CachedType;
-    use syntax::types::Type;
+    use syntax::types::{Symbol, Type};
 
     #[test]
     fn test_hash_module_sources_deterministic() {
@@ -476,118 +475,25 @@ mod tests {
     }
 
     #[test]
-    fn test_cached_type_roundtrip_constructor() {
-        let ty = Type::Nominal {
-            id: "MyType".into(),
-            params: vec![Type::Nominal {
-                id: "int".into(),
-                params: vec![],
-                underlying_ty: None,
-            }],
-            underlying_ty: None,
-        };
-
-        let cached = CachedType::from_type(&ty);
-        let restored = cached.to_type();
-
-        match (&ty, &restored) {
-            (
-                Type::Nominal {
-                    id: id1,
-                    params: p1,
-                    ..
-                },
-                Type::Nominal {
-                    id: id2,
-                    params: p2,
-                    ..
-                },
-            ) => {
-                assert_eq!(id1, id2);
-                assert_eq!(p1.len(), p2.len());
-            }
-            _ => panic!("Type mismatch"),
-        }
-    }
-
-    #[test]
-    fn test_cached_type_roundtrip_function() {
+    fn test_type_roundtrip_bincode() {
         let ty = Type::Function {
             params: vec![Type::Nominal {
-                id: "int".into(),
+                id: Symbol::from_raw("int"),
                 params: vec![],
                 underlying_ty: None,
             }],
             param_mutability: vec![false],
             bounds: vec![],
             return_type: Box::new(Type::Nominal {
-                id: "string".into(),
-                params: vec![],
+                id: Symbol::from_raw("main.MyType"),
+                params: vec![Type::Tuple(vec![Type::Never])],
                 underlying_ty: None,
             }),
         };
 
-        let cached = CachedType::from_type(&ty);
-        let restored = cached.to_type();
-
-        match (&ty, &restored) {
-            (
-                Type::Function {
-                    params: p1,
-                    return_type: r1,
-                    ..
-                },
-                Type::Function {
-                    params: p2,
-                    return_type: r2,
-                    ..
-                },
-            ) => {
-                assert_eq!(p1.len(), p2.len());
-                match (r1.as_ref(), r2.as_ref()) {
-                    (Type::Nominal { id: id1, .. }, Type::Nominal { id: id2, .. }) => {
-                        assert_eq!(id1, id2);
-                    }
-                    _ => panic!("Return type mismatch"),
-                }
-            }
-            _ => panic!("Type mismatch"),
-        }
-    }
-
-    #[test]
-    fn test_cached_type_roundtrip_tuple() {
-        let ty = Type::Tuple(vec![
-            Type::Nominal {
-                id: "int".into(),
-                params: vec![],
-                underlying_ty: None,
-            },
-            Type::Nominal {
-                id: "string".into(),
-                params: vec![],
-                underlying_ty: None,
-            },
-        ]);
-
-        let cached = CachedType::from_type(&ty);
-        let restored = cached.to_type();
-
-        match (&ty, &restored) {
-            (Type::Tuple(t1), Type::Tuple(t2)) => {
-                assert_eq!(t1.len(), t2.len());
-            }
-            _ => panic!("Type mismatch"),
-        }
-    }
-
-    #[test]
-    fn test_cached_type_roundtrip_never() {
-        let ty = Type::Never;
-        let cached = CachedType::from_type(&ty);
-        let restored = cached.to_type();
-
-        assert!(matches!(restored, Type::Never));
+        let bytes = bincode::serialize(&ty).unwrap();
+        let restored: Type = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(ty, restored);
     }
 
     #[test]

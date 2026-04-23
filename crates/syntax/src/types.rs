@@ -11,6 +11,7 @@ use ecow::EcoString;
 /// accessors. Centralizes the join/split logic that used to live in ad-hoc
 /// `format!("{}.{}", ..)` and `split_once('.')` call sites.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Symbol(EcoString);
 
 impl Symbol {
@@ -211,6 +212,7 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Bound {
     pub param_name: EcoString,
     pub generic: Type,
@@ -221,6 +223,7 @@ pub struct Bound {
 /// Bound-to-a-Type) lives in a `TypeEnv` owned by the checker; the handle is
 /// a plain id so `Type` stays a pure value (Clone, Eq, Hash, Serialize).
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TypeVarId(pub u32);
 
 impl TypeVarId {
@@ -247,6 +250,7 @@ impl std::fmt::Debug for TypeVarId {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Type {
     Simple(SimpleKind),
 
@@ -497,6 +501,7 @@ pub enum NumericFamily {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CompoundKind {
     Ref,
     Slice,
@@ -538,6 +543,7 @@ impl CompoundKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SimpleKind {
     Int,
     Int8,
