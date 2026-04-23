@@ -524,7 +524,6 @@ dependencies = [
 name = "lisette-diagnostics"
 version = "0.1.17"
 dependencies = [
- "ecow",
  "lisette-syntax",
  "miette",
  "owo-colors",
@@ -553,7 +552,6 @@ name = "lisette-lsp"
 version = "0.1.17"
 dependencies = [
  "dashmap 6.1.0",
- "ecow",
  "lisette-deps",
  "lisette-diagnostics",
  "lisette-format",
@@ -1000,7 +998,6 @@ name = "tests"
 version = "0.1.17"
 dependencies = [
  "bytes",
- "ecow",
  "futures",
  "insta",
  "lisette-deps",

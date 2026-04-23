@@ -22,7 +22,6 @@ semantics = { package = "lisette-semantics", version = "0.1.17", path = "../sema
 diagnostics = { package = "lisette-diagnostics", version = "0.1.17", path = "../diagnostics" }
 deps = { package = "lisette-deps", version = "0.1.17", path = "../deps" }
 format = { package = "lisette-format", version = "0.1.17", path = "../format" }
-ecow.workspace = true
 tower-lsp = "0.20"
 tokio = { version = "1", features = ["full"] }
 dashmap = "6"
