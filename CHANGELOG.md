@@ -2,6 +2,13 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.18](https://github.com/ivov/lisette/compare/lisette-v0.1.17...lisette-v0.1.18) - 2026-04-23
+
+- refactor: consolidate emit coercions and decision walkers [#157](https://github.com/ivov/lisette/pull/157) [`ed1cf48`](https://github.com/ivov/lisette/commit/ed1cf48f37b7f8c33f79bc660c636306d1fea27c)
+- fix: bolster misuse diagnostics [#164](https://github.com/ivov/lisette/pull/164) [`11c86eb`](https://github.com/ivov/lisette/commit/11c86eb1c0c4b3f6d8189bf5eb147fafcfd3f51f)
+- refactor: overhaul type representation and inference state [#161](https://github.com/ivov/lisette/pull/161) [`8468519`](https://github.com/ivov/lisette/commit/84685195a0e777ae01835d68969eb11c69516a6a)
+- fix: align const semantics with Go [#162](https://github.com/ivov/lisette/pull/162) [`db32264`](https://github.com/ivov/lisette/commit/db32264e14e1bb9748c5c597192abe316fb4e741)
+
 ## [0.1.17](https://github.com/ivov/lisette/compare/lisette-v0.1.16...lisette-v0.1.17) - 2026-04-21
 
 - fix: always break multi-step pipelines [#147](https://github.com/ivov/lisette/pull/147) [`fbcf877`](https://github.com/ivov/lisette/commit/fbcf877c419749bcec9ba85822ae7e3d8a4af0e5)
