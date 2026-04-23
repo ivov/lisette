@@ -43,3 +43,9 @@ opt-level = 3
 [profile.flamegraph]
 inherits = "release"
 debug = true
+
+[profile.dist]
+inherits = "release"
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

@@ -12,10 +12,6 @@ repository.workspace = true
 doctest = false
 test = false
 
-[[bin]]
-name = "lisette-lsp"
-path = "src/main.rs"
-
 [dependencies]
 syntax = { package = "lisette-syntax", version = "0.1.18", path = "../syntax" }
 semantics = { package = "lisette-semantics", version = "0.1.18", path = "../semantics" }

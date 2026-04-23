@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
 
       - name: Install Rust toolchain
         run: rustup show
@@ -28,7 +29,7 @@ jobs:
         with:
           command: release-pr
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
 
   publish:
     name: Publish Go modules to Go proxy and compiler to crates.io
@@ -41,6 +42,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
 
       - name: Install Rust toolchain
         run: rustup show
@@ -50,17 +52,23 @@ jobs:
         with:
           command: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+      # Tags are created via the GitHub REST API with GITHUB_TOKEN (not git push with the PAT)
+      # so they do not trigger the cargo-dist release workflow.
       - name: Tag and publish Go modules
         if: steps.release.outputs.releases_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           COMPILER_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.name == "lisette") | .version')
+          COMMIT_SHA=$(git rev-parse HEAD)
           for module in prelude bindgen; do
-            git tag "${module}/v${COMPILER_VERSION}" 2>/dev/null || true
+            gh api -X POST "repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/tags/${module}/v${COMPILER_VERSION}" \
+              -f sha="${COMMIT_SHA}" || true
           done
-          git push origin "prelude/v${COMPILER_VERSION}" "bindgen/v${COMPILER_VERSION}"
           for module in prelude bindgen; do
             curl -sf "https://proxy.golang.org/github.com/ivov/lisette/${module}/@v/v${COMPILER_VERSION}.info" > /dev/null || true
           done

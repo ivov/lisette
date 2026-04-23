@@ -1,0 +1,20 @@
+[workspace]
+members = ["cargo:crates/cli"]
+
+[dist]
+cargo-dist-version = "0.31.0"
+ci = "github"
+installers = ["shell", "powershell"]
+targets = [
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-musl",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+  "aarch64-pc-windows-msvc",
+]
+pr-run-mode = "skip"
+hosting = "github"
+create-release = false
+github-attestations = true
+install-updater = false
