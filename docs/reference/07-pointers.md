@@ -33,6 +33,15 @@ Some expressions cannot be referenced:
   help: Assign the value to a variable first, then take its address
 ```
 
+`const` bindings are also not addressable. Copy the value into a local `let` first if you need a reference:
+
+```rust
+const N = 42
+
+let x = N
+let r = &x          // ok
+```
+
 ## Dereferencing
 
 Use `.*` to access the referenced value:
@@ -57,7 +66,7 @@ increment(&x)
 // x is now 2
 ```
 
-Mutation through a `Ref<T>` does not require `mut` on either the reference binding or the original binding. `Ref<T>` is a Go pointer, so it can always write to its target.
+Mutation through a `Ref<T>` does not require `mut` on either the reference binding or the original binding. `Ref<T>` is a Go pointer, so it can always write to its target. This escape hatch does not apply to `const` bindings, since `&CONST` is rejected at compile time.
 
 ## Nil safety
 

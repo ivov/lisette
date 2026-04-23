@@ -257,10 +257,20 @@ let mut count = 0
 count += 1
 ```
 
-`const` defines a constant. Constants must be compile-time evaluable.
+`const` defines a compile-time constant. As in Go, only primitive values are allowed: `bool`, `int`, `float`, `string`. The initializer must be a literal or an expression built from literals. `const` bindings are immutable and unaddressable.
 
 ```rust
 const MAX_SIZE = 1024
+const GREETING = "hello"
+const DOUBLED = MAX_SIZE * 2
+```
+
+Composite values (tuples, structs, lists) cannot be `const`. Use a function that returns the value instead:
+
+```rust
+fn origin() -> Point {
+  Point { x: 0, y: 0 }
+}
 ```
 
 Add a type annotation with `:` after the binding name. Annotations are optional on bindings; the type typically can inferred from the value. Function parameters require annotations.
