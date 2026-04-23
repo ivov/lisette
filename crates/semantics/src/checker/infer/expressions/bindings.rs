@@ -1,22 +1,31 @@
 use crate::checker::EnvResolve;
 use ecow::EcoString;
 use syntax::ast::BindingKind;
-use syntax::ast::{Annotation, Binding, Expression, Span, Visibility};
+use syntax::ast::{Annotation, Binding, Expression, Literal, Span, Visibility};
 use syntax::types::Type;
 
 use super::super::Checker;
 
-fn is_const_eligible(expression: &Expression) -> bool {
+enum ConstInitReject {
+    NotSimple,
+    Composite,
+}
+
+fn classify_const_init(expression: &Expression) -> Option<ConstInitReject> {
     match expression.unwrap_parens() {
-        Expression::Literal { .. } => true,
-        Expression::Identifier { .. } => true,
+        Expression::Literal { literal, .. } => match literal {
+            Literal::Slice(_) => Some(ConstInitReject::Composite),
+            Literal::FormatString(_) => Some(ConstInitReject::NotSimple),
+            _ => None,
+        },
+        Expression::Identifier { .. } => None,
         Expression::Binary { left, right, .. } => {
-            is_const_eligible(left) && is_const_eligible(right)
+            classify_const_init(left).or_else(|| classify_const_init(right))
         }
-        Expression::Unary { expression, .. } => is_const_eligible(expression),
-        Expression::StructCall { .. } => true,
-        Expression::Tuple { elements, .. } => elements.iter().all(is_const_eligible),
-        _ => false,
+        Expression::Unary { expression, .. } => classify_const_init(expression),
+        Expression::StructCall { .. } => Some(ConstInitReject::Composite),
+        Expression::Tuple { .. } => Some(ConstInitReject::Composite),
+        _ => Some(ConstInitReject::NotSimple),
     }
 }
 
@@ -43,11 +52,20 @@ impl Checker<'_, '_> {
 
         let new_expression = self.infer_expression(*expression, &ty);
 
-        if !is_const_eligible(&new_expression) {
-            self.sink
-                .push(diagnostics::infer::const_requires_simple_expression(
-                    new_expression.get_span(),
-                ));
+        match classify_const_init(&new_expression) {
+            None => {}
+            Some(ConstInitReject::NotSimple) => {
+                self.sink
+                    .push(diagnostics::infer::const_requires_simple_expression(
+                        new_expression.get_span(),
+                    ));
+            }
+            Some(ConstInitReject::Composite) => {
+                self.sink
+                    .push(diagnostics::infer::const_disallows_composite(
+                        new_expression.get_span(),
+                    ));
+            }
         }
 
         Expression::Const {

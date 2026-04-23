@@ -114,6 +114,8 @@ struct ScopeState {
     loop_stack: Vec<LoopContext>,
     /// Go variable names currently used as block-to-var assign targets.
     assign_targets: HashSet<String>,
+    /// Go identifiers emitted as `const` (not `var`).
+    go_const_bindings: HashSet<String>,
 }
 
 impl ScopeState {
@@ -272,6 +274,7 @@ impl<'a> Emitter<'a> {
                 scope_depth: 0,
                 loop_stack: Vec::new(),
                 assign_targets: HashSet::default(),
+                go_const_bindings: HashSet::default(),
             },
             current_module: current_module.to_string(),
             synthesized_adapter_types: HashMap::default(),

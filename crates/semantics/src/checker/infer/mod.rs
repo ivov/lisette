@@ -23,6 +23,9 @@ impl Checker<'_, '_> {
             std::mem::take(&mut module.files).into_values().collect()
         };
 
+        let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
+        self.check_const_cycles(&items_per_file);
+
         for file in files {
             let imports = file.imports();
 

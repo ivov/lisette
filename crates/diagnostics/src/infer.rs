@@ -182,6 +182,32 @@ pub fn circular_type_alias(type_name: &str, span: Span) -> LisetteDiagnostic {
         .with_help("Type aliases cannot be recursive")
 }
 
+pub fn const_disallows_composite(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Composite value in `const`")
+        .with_infer_code("const_disallows_composite")
+        .with_span_label(&span, "not allowed")
+        .with_help("`const` only accepts primitive values: `bool`, `int`, `float`, and `string`")
+}
+
+pub fn const_cycle(cycle: &[String], span: Span) -> LisetteDiagnostic {
+    let mut diagnostic = LisetteDiagnostic::error("`const` init cycle")
+        .with_infer_code("const_cycle")
+        .with_help(
+            "`const` initializers cannot refer to themselves, either directly or transitively",
+        );
+    diagnostic = if cycle.len() == 1 {
+        diagnostic.with_span_label(&span, "self-reference")
+    } else {
+        let chain = cycle
+            .iter()
+            .map(|name| format!("`{}`", name))
+            .collect::<Vec<_>>()
+            .join(" → ");
+        diagnostic.with_span_label(&span, format!("cycle: {} → `{}`", chain, cycle[0]))
+    };
+    diagnostic
+}
+
 pub fn name_not_found(
     variable_name: &str,
     span: Span,
@@ -286,6 +312,7 @@ pub fn disallowed_mutation(
     span: Span,
     self_type_name: Option<&str>,
     is_match_arm_binding: bool,
+    is_const_binding: bool,
 ) -> LisetteDiagnostic {
     if variable_name == "self" {
         if let Some(type_name) = self_type_name {
@@ -301,6 +328,13 @@ pub fn disallowed_mutation(
                 .with_span_label(&span, "receiver is immutable")
                 .with_help("Use `self: Ref<Self>` to make the receiver mutable")
         }
+    } else if is_const_binding {
+        LisetteDiagnostic::error("Cannot mutate `const`")
+            .with_infer_code("immutable")
+            .with_span_label(&span, "cannot mutate a `const`")
+            .with_help(format!(
+                "`const` bindings are immutable. Rebind with `let mut {variable_name} = {variable_name}` to mutate a local copy"
+            ))
     } else if is_match_arm_binding {
         LisetteDiagnostic::error("Immutable variable")
             .with_infer_code("immutable")
@@ -1565,6 +1599,15 @@ pub fn non_addressable_expression(expression_kind: &str, span: Span) -> LisetteD
         .with_infer_code("non_addressable_expression")
         .with_span_label(&span, format!("cannot take address of {}", expression_kind))
         .with_help("Assign the value to a variable first, then take its address")
+}
+
+pub fn non_addressable_const(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot take address of `const`")
+        .with_infer_code("non_addressable_const")
+        .with_span_label(&span, "not addressable")
+        .with_help(
+            "`const` bindings are not addressable. Copy the value into a local `let` first if you need a reference",
+        )
 }
 
 pub fn non_addressable_assignment(expression_kind: &str, span: Span) -> LisetteDiagnostic {

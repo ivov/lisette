@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot mutate `const`
+   ╭─[test.lis:5:3]
+ 4 │ fn main() {
+ 5 │   N = 10
+   ·   ───┬──
+   ·      ╰── cannot mutate a `const`
+ 6 │ }
+   ╰────
+  help: `const` bindings are immutable. Rebind with `let mut N = N` to mutate a local copy · code: [infer.immutable]

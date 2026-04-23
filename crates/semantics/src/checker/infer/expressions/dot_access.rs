@@ -761,11 +761,13 @@ impl Checker<'_, '_> {
                 .lookup_binding_id(&var_name)
                 .and_then(|id| self.facts.bindings.get(&id))
                 .is_some_and(|b| b.kind.is_match_arm());
+            let is_const = self.is_const_var(&var_name);
             self.sink.push(diagnostics::infer::disallowed_mutation(
                 &var_name,
                 *span,
                 self_type_name.as_deref(),
                 is_match_arm,
+                is_const,
             ));
         }
     }

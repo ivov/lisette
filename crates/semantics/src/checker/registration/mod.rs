@@ -622,6 +622,7 @@ impl Checker<'_, '_> {
             .store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
+        module.const_names.insert(qualified_name.clone());
         module.definitions.insert(
             qualified_name,
             Definition::Value {

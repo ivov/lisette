@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot take address of `const`
+    ╭─[test.lis:9:8]
+  8 │ fn main() {
+  9 │   bump(&N)
+    ·        ─┬
+    ·         ╰── not addressable
+ 10 │ }
+    ╰────
+  help: `const` bindings are not addressable. Copy the value into a local `let` first if you need a reference · code: [infer.non_addressable_const]

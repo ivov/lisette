@@ -1,6 +1,6 @@
 use crate::Emitter;
 use crate::names::go_name;
-use syntax::ast::{Expression, Generic, UnaryOperator};
+use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::types::Type;
 
 impl Emitter<'_> {
@@ -79,7 +79,8 @@ impl Emitter<'_> {
         } else {
             &expression_string
         };
-        let keyword = if Self::is_go_const_eligible(expression) {
+        let keyword = if self.is_go_const_eligible(expression) {
+            self.scope.go_const_bindings.insert(go_identifier.clone());
             "const"
         } else {
             "var"
@@ -87,17 +88,28 @@ impl Emitter<'_> {
         format!("{} {} {} = {}", keyword, go_identifier, ty_str, value)
     }
 
-    fn is_go_const_eligible(expression: &Expression) -> bool {
+    fn is_go_const_eligible(&self, expression: &Expression) -> bool {
         match expression.unwrap_parens() {
-            Expression::Literal { .. } => true,
+            Expression::Literal { literal, .. } => matches!(
+                literal,
+                Literal::Integer { .. }
+                    | Literal::Float { .. }
+                    | Literal::Imaginary(_)
+                    | Literal::Boolean(_)
+                    | Literal::String(_)
+                    | Literal::Char(_)
+            ),
+            Expression::Identifier { value, .. } => {
+                self.scope.go_const_bindings.contains(value.as_str())
+            }
             Expression::Binary { left, right, .. } => {
-                Self::is_go_const_eligible(left) && Self::is_go_const_eligible(right)
+                self.is_go_const_eligible(left) && self.is_go_const_eligible(right)
             }
             Expression::Unary {
                 operator: UnaryOperator::Negative | UnaryOperator::Not,
                 expression,
                 ..
-            } => Self::is_go_const_eligible(expression),
+            } => self.is_go_const_eligible(expression),
             _ => false,
         }
     }

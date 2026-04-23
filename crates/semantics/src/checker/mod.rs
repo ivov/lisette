@@ -289,6 +289,23 @@ impl<'r, 's> Checker<'r, 's> {
         self.store.get_definition(qualified_name)?.name_span()
     }
 
+    pub(crate) fn is_const_name(&self, qualified_name: &str) -> bool {
+        if qualified_name.starts_with("go:") {
+            return false;
+        }
+        self.store
+            .module_for_qualified_name(qualified_name)
+            .and_then(|module_id| self.store.get_module(module_id))
+            .is_some_and(|module| module.const_names.contains(qualified_name))
+    }
+
+    pub(crate) fn is_const_var(&self, var_name: &str) -> bool {
+        self.scopes.lookup_binding_id(var_name).is_none()
+            && self
+                .lookup_qualified_name(var_name)
+                .is_some_and(|qname| self.is_const_name(&qname))
+    }
+
     /// Track that `name` (at the start of `span`) refers to the definition at `qualified_name`.
     pub(crate) fn track_name_usage(&mut self, qualified_name: &str, span: &Span, name_len: u32) {
         if let Some(definition_span) = self.get_definition_name_span(qualified_name) {

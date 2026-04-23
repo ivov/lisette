@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Composite value in `const`
+   ╭─[test.lis:2:15]
+ 1 │ 
+ 2 │ const ITEMS = ["a", "b"]
+   ·               ─────┬────
+   ·                    ╰── not allowed
+   ╰────
+  help: `const` only accepts primitive values: `bool`, `int`, `float`, and `string` · code: [infer.const_disallows_composite]

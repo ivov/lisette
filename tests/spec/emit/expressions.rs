@@ -359,6 +359,21 @@ fn main() {
 }
 
 #[test]
+fn const_reference_to_const_stays_const() {
+    let input = r#"
+import "go:fmt"
+
+const X = 10
+const Y = X + 5
+
+fn main() {
+  fmt.Println(Y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn format_string_simple() {
     let input = r#"
 import "go:fmt"

@@ -145,6 +145,7 @@ impl CompiledTest {
             checker.put_imported_modules_in_scope(&imports);
 
             checker.register_types_and_values(&self.ast, &Visibility::Local);
+            checker.check_const_cycles(&[self.ast.as_slice()]);
 
             // Store AST in module so compute_module_ufcs can scan impl blocks (condition 3)
             let test_file_id = checker.store.new_file_id();

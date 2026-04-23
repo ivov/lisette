@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Composite value in `const`
+   ╭─[test.lis:2:14]
+ 1 │ 
+ 2 │ const PAIR = (1, 2)
+   ·              ───┬──
+   ·                 ╰── not allowed
+   ╰────
+  help: `const` only accepts primitive values: `bool`, `int`, `float`, and `string` · code: [infer.const_disallows_composite]

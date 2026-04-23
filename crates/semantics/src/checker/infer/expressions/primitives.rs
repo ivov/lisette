@@ -195,6 +195,14 @@ impl Checker<'_, '_> {
             if let Some(kind) = check_is_non_addressable(&new_expression, &self.env) {
                 self.sink
                     .push(diagnostics::infer::non_addressable_expression(kind, span));
+            } else if let Expression::Identifier {
+                qualified: Some(qname),
+                ..
+            } = &new_expression
+                && self.is_const_name(qname.as_str())
+            {
+                self.sink
+                    .push(diagnostics::infer::non_addressable_const(span));
             }
 
             if let Some(var_name) = new_expression.get_var_name()
@@ -338,11 +346,13 @@ impl Checker<'_, '_> {
                     .lookup_binding_id(&var_name)
                     .and_then(|id| self.facts.bindings.get(&id))
                     .is_some_and(|b| b.kind.is_match_arm());
+                let is_const = self.is_const_var(&var_name);
                 self.sink.push(diagnostics::infer::disallowed_mutation(
                     &var_name,
                     span,
                     self_type_name.as_deref(),
                     is_match_arm,
+                    is_const,
                 ));
             }
 

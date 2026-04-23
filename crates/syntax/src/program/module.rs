@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use super::definition::{Definition, Visibility};
 use super::file::{File, FileImport};
@@ -15,6 +15,8 @@ pub struct Module {
     pub typedefs: HashMap<u32, File>,
     /// qualified name -> definition
     pub definitions: HashMap<Symbol, Definition>,
+    /// Qualified names of module-level `const` bindings.
+    pub const_names: HashSet<Symbol>,
 }
 
 impl Module {
@@ -24,6 +26,7 @@ impl Module {
             files: Default::default(),
             typedefs: Default::default(),
             definitions: Default::default(),
+            const_names: Default::default(),
         }
     }
 

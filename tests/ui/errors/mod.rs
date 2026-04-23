@@ -5179,6 +5179,77 @@ const VALUE = {
 }
 
 #[test]
+fn infer_const_self_reference_cycle() {
+    let input = r#"
+const SELF = SELF
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_const_mutual_cycle() {
+    let input = r#"
+const A = B
+const B = A
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_reference_to_scalar_const() {
+    let input = r#"
+const N = 42
+
+fn bump(r: Ref<int>) {
+  r.* = r.* + 1
+}
+
+fn main() {
+  bump(&N)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_mutate_const_shows_const_hint() {
+    let input = r#"
+const N = 5
+
+fn main() {
+  N = 10
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_const_disallows_list_literal() {
+    let input = r#"
+const ITEMS = ["a", "b"]
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_const_disallows_tuple_literal() {
+    let input = r#"
+const PAIR = (1, 2)
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_const_disallows_struct_literal() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+const ORIGIN = Point { x: 0, y: 0 }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_complex_sub_expression() {
     let input = r#"
 fn side_effect() -> int { 1 }

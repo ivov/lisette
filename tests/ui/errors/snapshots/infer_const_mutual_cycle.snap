@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `const` init cycle
+   ╭─[test.lis:2:7]
+ 1 │ 
+ 2 │ const A = B
+   ·       ┬
+   ·       ╰── cycle: `A` → `B` → `A`
+ 3 │ const B = A
+   ╰────
+  help: `const` initializers cannot refer to themselves, either directly or transitively · code: [infer.const_cycle]
