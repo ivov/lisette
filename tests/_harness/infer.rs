@@ -91,14 +91,16 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             .collect();
 
         if !checker.failed() {
-            let module_ids: Vec<String> = checker.store.modules.keys().cloned().collect();
+            let analysis =
+                semantics::context::AnalysisContext::new(checker.store, &checker.ufcs_methods);
+            let module_ids: Vec<String> = analysis.store.modules.keys().cloned().collect();
             for mid in &module_ids {
-                let typed_ast: Vec<_> = checker
+                let typed_ast: Vec<_> = analysis
                     .store
                     .get_module(mid)
                     .map(|m| m.files.values().flat_map(|f| f.items.clone()).collect())
                     .unwrap_or_default();
-                let is_typedef = checker
+                let is_typedef = analysis
                     .store
                     .get_module(mid)
                     .map(|m| !m.typedefs.is_empty() && m.files.is_empty())
@@ -107,17 +109,15 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
                     typed_ast: &typed_ast,
                     is_typedef,
                     module_id: mid,
-                    store: checker.store,
+                    analysis: &analysis,
                     facts: &mut checker.facts,
                     coercions: &checker.coercions,
                     sink: checker.sink,
                 };
                 semantics::validators::run_all(&mut ctx);
             }
-            let pattern_ctx = pattern_analysis::Context::new(
-                checker.store,
-                &checker.facts.or_pattern_error_spans,
-            );
+            let pattern_ctx =
+                pattern_analysis::Context::new(&analysis, &checker.facts.or_pattern_error_spans);
             for expression in &ast {
                 pattern_analysis::check(expression, &pattern_ctx, checker.sink);
             }

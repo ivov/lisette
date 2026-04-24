@@ -71,12 +71,14 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
 
     if !checker.failed() {
         let module_id = checker.cursor.module_id.clone();
+        let analysis =
+            semantics::context::AnalysisContext::new(checker.store, &checker.ufcs_methods);
         {
             let mut ctx = semantics::validators::ValidatorContext {
                 typed_ast: &typed_ast,
                 is_typedef: false,
                 module_id: &module_id,
-                store: checker.store,
+                analysis: &analysis,
                 facts: &mut checker.facts,
                 coercions: &checker.coercions,
                 sink: checker.sink,
@@ -84,7 +86,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
             semantics::validators::run_all(&mut ctx);
         }
         let pattern_ctx =
-            pattern_analysis::Context::new(checker.store, &checker.facts.or_pattern_error_spans);
+            pattern_analysis::Context::new(&analysis, &checker.facts.or_pattern_error_spans);
         for expression in &typed_ast {
             pattern_analysis::check(expression, &pattern_ctx, checker.sink);
         }

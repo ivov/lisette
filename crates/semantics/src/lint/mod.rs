@@ -4,8 +4,8 @@ mod ref_lints;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use crate::context::AnalysisContext;
 use crate::facts::Facts;
-use crate::store::Store;
 use diagnostics::DiagnosticSink;
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::Expression;
@@ -101,7 +101,12 @@ fn all_lint_rules() -> Vec<Box<dyn LintRule>> {
     ]
 }
 
-pub fn lint_all_modules(store: &Store, facts: &Facts, sink: &DiagnosticSink) -> UnusedInfo {
+pub fn lint_all_modules(
+    analysis: &AnalysisContext,
+    facts: &Facts,
+    sink: &DiagnosticSink,
+) -> UnusedInfo {
+    let store = analysis.store;
     let go_package_names = &store.go_package_names;
     let config = LintConfig::default();
     let mut unused = UnusedInfo::default();

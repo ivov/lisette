@@ -190,12 +190,14 @@ impl CompiledTest {
 
             if !checker.failed() {
                 let module_id = checker.cursor.module_id.clone();
+                let analysis =
+                    semantics::context::AnalysisContext::new(checker.store, &checker.ufcs_methods);
                 {
                     let mut ctx = semantics::validators::ValidatorContext {
                         typed_ast: &typed_ast,
                         is_typedef: false,
                         module_id: &module_id,
-                        store: checker.store,
+                        analysis: &analysis,
                         facts: &mut checker.facts,
                         coercions: &checker.coercions,
                         sink: checker.sink,
@@ -203,7 +205,7 @@ impl CompiledTest {
                     semantics::validators::run_all(&mut ctx);
                 }
                 let pattern_ctx = pattern_analysis::Context::new(
-                    checker.store,
+                    &analysis,
                     &checker.facts.or_pattern_error_spans,
                 );
                 for expression in &typed_ast {

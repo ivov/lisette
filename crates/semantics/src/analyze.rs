@@ -246,8 +246,10 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         )
     };
 
+    let analysis = crate::context::AnalysisContext::new(&store, &ufcs_methods);
+
     if !has_pre_check_errors {
-        for module in store.modules.values() {
+        for module in analysis.store.modules.values() {
             let module_id = module.id.clone();
             for file in module.files.values() {
                 let is_typedef = module.typedefs.contains_key(&file.id);
@@ -255,7 +257,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                     typed_ast: &file.items,
                     is_typedef,
                     module_id: &module_id,
-                    store: &store,
+                    analysis: &analysis,
                     facts: &mut facts,
                     coercions: &coercions,
                     sink: &sink,
@@ -264,8 +266,8 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
             }
         }
 
-        let pattern_ctx = pattern_analysis::Context::new(&store, &facts.or_pattern_error_spans);
-        for module in store.modules.values() {
+        let pattern_ctx = pattern_analysis::Context::new(&analysis, &facts.or_pattern_error_spans);
+        for module in analysis.store.modules.values() {
             for file in module.files.values() {
                 for expression in &file.items {
                     pattern_analysis::check(expression, &pattern_ctx, &sink);
@@ -278,7 +280,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     let errors = sink.take();
 
     let unused = if input.config.run_lints && !has_pre_check_errors {
-        lint::lint_all_modules(&store, &facts, &sink)
+        lint::lint_all_modules(&analysis, &facts, &sink)
     } else {
         UnusedInfo::default()
     };

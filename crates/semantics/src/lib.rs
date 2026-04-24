@@ -2,6 +2,7 @@ pub mod analyze;
 pub mod cache;
 pub mod call_classification;
 pub mod checker;
+pub mod context;
 pub mod facts;
 pub mod lint;
 pub mod loader;

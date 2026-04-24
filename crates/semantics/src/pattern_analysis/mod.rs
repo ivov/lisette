@@ -19,6 +19,7 @@ pub use self::PatternAnalysisContext as Context;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::RefCell;
 
+use crate::context::AnalysisContext;
 use crate::store::Store;
 use diagnostics::{DiagnosticSink, IssueKind, PatternIssue};
 use syntax::ast::{
@@ -37,9 +38,12 @@ pub struct PatternAnalysisContext<'a> {
 }
 
 impl<'a> PatternAnalysisContext<'a> {
-    pub fn new(store: &'a Store, or_pattern_error_spans: &'a HashSet<Span>) -> Self {
+    pub fn new(
+        analysis: &'a AnalysisContext<'a>,
+        or_pattern_error_spans: &'a HashSet<Span>,
+    ) -> Self {
         Self {
-            store,
+            store: analysis.store,
             cache: InhabitanceCache::new(),
             issues: RefCell::new(Vec::new()),
             or_pattern_error_spans,

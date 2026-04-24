@@ -13,8 +13,8 @@ use diagnostics::DiagnosticSink;
 use syntax::ast::Expression;
 use syntax::program::CoercionInfo;
 
+use crate::context::AnalysisContext;
 use crate::facts::Facts;
-use crate::store::Store;
 
 mod duplicate_bindings;
 mod enum_variant_value;
@@ -33,30 +33,31 @@ pub struct ValidatorContext<'a> {
     pub typed_ast: &'a [Expression],
     pub is_typedef: bool,
     pub module_id: &'a str,
-    pub store: &'a Store,
+    pub analysis: &'a AnalysisContext<'a>,
     pub facts: &'a mut Facts,
     pub coercions: &'a CoercionInfo,
     pub sink: &'a DiagnosticSink,
 }
 
 pub fn run_all(ctx: &mut ValidatorContext<'_>) {
+    let store = ctx.analysis.store;
     duplicate_bindings::run(ctx.typed_ast, ctx.sink);
     irrefutable_patterns::run(ctx.typed_ast, ctx.sink);
     receivers::run(ctx.typed_ast, ctx.sink);
-    prelude_shadowing::run(ctx.typed_ast, ctx.is_typedef, ctx.store, ctx.sink);
+    prelude_shadowing::run(ctx.typed_ast, ctx.is_typedef, store, ctx.sink);
     generics::run(
         ctx.typed_ast,
         ctx.is_typedef,
         ctx.module_id,
-        ctx.store,
+        store,
         ctx.facts,
         ctx.sink,
     );
-    newtype::run(ctx.typed_ast, ctx.store, ctx.sink);
-    native_value_usage::run(ctx.typed_ast, ctx.module_id, ctx.store, ctx.sink);
-    enum_variant_value::run(ctx.typed_ast, ctx.store, ctx.sink);
+    newtype::run(ctx.typed_ast, store, ctx.sink);
+    native_value_usage::run(ctx.typed_ast, ctx.module_id, store, ctx.sink);
+    enum_variant_value::run(ctx.typed_ast, store, ctx.sink);
     temp_producing::run(ctx.typed_ast, ctx.coercions, ctx.sink);
-    unused_expressions::run(ctx.typed_ast, ctx.module_id, ctx.store, ctx.facts);
-    visibility::run_module(ctx.module_id, ctx.store, ctx.sink);
+    unused_expressions::run(ctx.typed_ast, ctx.module_id, store, ctx.facts);
+    visibility::run_module(ctx.module_id, store, ctx.sink);
     post_inference::run(ctx.facts, ctx.sink);
 }
