@@ -4,19 +4,19 @@
 //! Walks every `Pattern` site in the typed AST. Mirrors the behaviour of the
 //! previous inline check in `checker/infer/checks.rs::check_duplicate_bindings`.
 
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use rustc_hash::FxHashMap as HashMap;
 use syntax::ast::{
     Binding, Expression, MatchArm, Pattern, RestPattern, SelectArm, SelectArmPattern, Span,
 };
 
-pub(super) fn run(typed_ast: &[Expression], sink: &DiagnosticSink) {
+pub(super) fn run(typed_ast: &[Expression], sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, sink);
     }
 }
 
-fn visit_expression(expression: &Expression, sink: &DiagnosticSink) {
+fn visit_expression(expression: &Expression, sink: &LocalSink) {
     match expression {
         Expression::Let { binding, .. } | Expression::For { binding, .. } => {
             visit_binding(binding, sink);
@@ -47,15 +47,15 @@ fn visit_expression(expression: &Expression, sink: &DiagnosticSink) {
     }
 }
 
-fn visit_binding(binding: &Binding, sink: &DiagnosticSink) {
+fn visit_binding(binding: &Binding, sink: &LocalSink) {
     check(&binding.pattern, sink);
 }
 
-fn visit_match_arm(arm: &MatchArm, sink: &DiagnosticSink) {
+fn visit_match_arm(arm: &MatchArm, sink: &LocalSink) {
     check(&arm.pattern, sink);
 }
 
-fn visit_select_arm(arm: &SelectArm, sink: &DiagnosticSink) {
+fn visit_select_arm(arm: &SelectArm, sink: &LocalSink) {
     if let SelectArmPattern::Receive { binding, .. } = &arm.pattern {
         check(binding, sink);
     } else if let SelectArmPattern::MatchReceive { arms, .. } = &arm.pattern {
@@ -65,7 +65,7 @@ fn visit_select_arm(arm: &SelectArm, sink: &DiagnosticSink) {
     }
 }
 
-fn check(pattern: &Pattern, sink: &DiagnosticSink) {
+fn check(pattern: &Pattern, sink: &LocalSink) {
     if let Pattern::Or { patterns, .. } = pattern {
         for alternative in patterns {
             check(alternative, sink);

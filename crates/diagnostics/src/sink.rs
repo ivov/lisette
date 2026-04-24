@@ -1,57 +1,59 @@
-use std::sync::Mutex;
+use std::cell::RefCell;
 
 use syntax::ParseError;
 
 use crate::LisetteDiagnostic;
 
 #[derive(Debug, Default)]
-pub struct DiagnosticSink {
-    diagnostics: Mutex<Vec<LisetteDiagnostic>>,
+pub struct LocalSink {
+    diagnostics: RefCell<Vec<LisetteDiagnostic>>,
 }
 
-impl DiagnosticSink {
+impl LocalSink {
     pub fn new() -> Self {
         Self::default()
     }
 
     pub fn push(&self, diagnostic: LisetteDiagnostic) {
-        self.diagnostics.lock().unwrap().push(diagnostic);
+        self.diagnostics.borrow_mut().push(diagnostic);
     }
 
     pub fn has_errors(&self) -> bool {
-        self.diagnostics
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|d| d.is_error())
+        self.diagnostics.borrow().iter().any(|d| d.is_error())
     }
 
     pub fn len(&self) -> usize {
-        self.diagnostics.lock().unwrap().len()
+        self.diagnostics.borrow().len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.diagnostics.lock().unwrap().is_empty()
+        self.diagnostics.borrow().is_empty()
     }
 
     pub fn to_vec(&self) -> Vec<LisetteDiagnostic> {
-        self.diagnostics.lock().unwrap().clone()
+        self.diagnostics.borrow().clone()
     }
 
     pub fn take(&self) -> Vec<LisetteDiagnostic> {
-        std::mem::take(&mut *self.diagnostics.lock().unwrap())
+        self.diagnostics.take()
     }
 
     pub fn truncate(&self, len: usize) {
-        self.diagnostics.lock().unwrap().truncate(len);
+        self.diagnostics.borrow_mut().truncate(len);
     }
 
     pub fn extend(&self, diagnostics: impl IntoIterator<Item = LisetteDiagnostic>) {
-        self.diagnostics.lock().unwrap().extend(diagnostics);
+        self.diagnostics.borrow_mut().extend(diagnostics);
     }
 
     pub fn extend_parse_errors(&self, errors: Vec<ParseError>) {
         let diagnostics = errors.into_iter().map(LisetteDiagnostic::from);
-        self.diagnostics.lock().unwrap().extend(diagnostics);
+        self.diagnostics.borrow_mut().extend(diagnostics);
+    }
+
+    pub fn merge(sinks: Vec<LocalSink>) -> Vec<LisetteDiagnostic> {
+        let mut all: Vec<LisetteDiagnostic> = sinks.into_iter().flat_map(|s| s.take()).collect();
+        all.sort_by_key(|d| d.primary_offset());
+        all
     }
 }

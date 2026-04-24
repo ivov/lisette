@@ -1,6 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use diagnostics::{DiagnosticSink, LisetteDiagnostic};
+use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::{checker::TaskState, store::Store};
 use stdlib::get_go_stdlib_typedef;
 use syntax::{
@@ -86,7 +86,7 @@ impl CompiledTest {
         let mut store = Store::new();
         store.add_module(TEST_MODULE_ID);
 
-        let sink = DiagnosticSink::new();
+        let sink = LocalSink::new();
 
         init_prelude(&mut store);
 

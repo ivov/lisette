@@ -1,11 +1,11 @@
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::Definition;
 use syntax::types::{Symbol, Type};
 
 use crate::store::Store;
 
-pub(super) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, sink: &DiagnosticSink) {
+pub(super) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, false, false, module_id, store, sink);
     }
@@ -17,7 +17,7 @@ fn visit_expression(
     is_dot_access_base: bool,
     module_id: &str,
     store: &Store,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) {
     if let Expression::Identifier {
         value, ty, span, ..
@@ -67,7 +67,7 @@ fn check_one(
     is_dot_access_base: bool,
     module_id: &str,
     store: &Store,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) {
     if matches!(
         value,

@@ -1,6 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use semantics::module_graph::build_module_graph;
 use semantics::module_graph::kahn::topological_sort;
 use semantics::store::Store;
@@ -11,7 +11,7 @@ fn default_resolver() -> deps::TypedefLocator {
     deps::TypedefLocator::default()
 }
 
-fn has_diagnostic_code(sink: &DiagnosticSink, code: &str) -> bool {
+fn has_diagnostic_code(sink: &LocalSink, code: &str) -> bool {
     sink.take().iter().any(|d| d.code_str() == Some(code))
 }
 
@@ -91,7 +91,7 @@ fn graph_simple_dependency() {
     store.module_ids.push("main".to_string());
     store.module_ids.push("lib".to_string());
 
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
     let result = build_module_graph(
         &mut store,
         Some(&fs),
@@ -120,7 +120,7 @@ fn graph_missing_module() {
     let mut store = Store::new();
     store.module_ids.push("main".to_string());
 
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
     let _result = build_module_graph(
         &mut store,
         Some(&fs),
@@ -145,7 +145,7 @@ fn graph_cycle_detection() {
     store.module_ids.push("b".to_string());
     store.module_ids.push("c".to_string());
 
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
     let result = build_module_graph(
         &mut store,
         Some(&fs),
@@ -166,7 +166,7 @@ fn graph_standalone_third_party_go_import_uses_module_not_found() {
     let mut store = Store::new();
     store.module_ids.push("main".to_string());
 
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
     let _result = build_module_graph(
         &mut store,
         Some(&fs),
@@ -188,7 +188,7 @@ fn graph_project_third_party_go_import_undeclared() {
     let mut store = Store::new();
     store.module_ids.push("main".to_string());
 
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
     let _result = build_module_graph(
         &mut store,
         Some(&fs),
@@ -223,7 +223,7 @@ fn graph_declared_dep_missing_typedef() {
     );
     let resolver = deps::TypedefLocator::new(go_deps, None, None);
 
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
     let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
 
     assert!(sink.has_errors());

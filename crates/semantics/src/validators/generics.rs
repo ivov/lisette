@@ -13,7 +13,7 @@
 //!   nominal type whose methods require bounds on a type parameter must
 //!   declare those bounds on its own generic; emit a hard error.
 
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use ecow::EcoString;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::ast::{Annotation, Binding, Expression, Generic, Span};
@@ -27,7 +27,7 @@ pub(super) fn run(
     module_id: &str,
     store: &Store,
     facts: &mut Facts,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) {
     for item in typed_ast {
         visit_expression(item, None, module_id, store, facts, sink);
@@ -40,7 +40,7 @@ fn visit_expression(
     module_id: &str,
     store: &Store,
     facts: &mut Facts,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) {
     match expression {
         Expression::ImplBlock {
@@ -210,7 +210,7 @@ fn annotation_remove_names(annotation: &Annotation, names: &mut HashSet<EcoStrin
     }
 }
 
-fn check_unconstrained_bounded(bounds: &[Bound], span: &Span, sink: &DiagnosticSink) {
+fn check_unconstrained_bounded(bounds: &[Bound], span: &Span, sink: &LocalSink) {
     for bound in bounds {
         if matches!(&bound.generic, Type::Var { .. }) {
             sink.push(diagnostics::infer::unconstrained_type_param(
@@ -230,7 +230,7 @@ fn check_constrained_return_type(
     fn_name: &str,
     module_id: &str,
     store: &Store,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) {
     let Type::Nominal { id, params, .. } = return_ty else {
         return;

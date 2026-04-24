@@ -1,16 +1,16 @@
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span};
 use syntax::types::{Type, unqualified_name};
 
 use crate::store::Store;
 
-pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &DiagnosticSink) {
+pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, store, sink);
     }
 }
 
-fn visit_expression(expression: &Expression, store: &Store, sink: &DiagnosticSink) {
+fn visit_expression(expression: &Expression, store: &Store, sink: &LocalSink) {
     match expression {
         Expression::Identifier {
             qualified: Some(qualified),
@@ -47,7 +47,7 @@ fn check(
     display: &str,
     span: Span,
     store: &Store,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) {
     let Some(variant) = store.variant_of(enum_qualified, variant_name) else {
         return;

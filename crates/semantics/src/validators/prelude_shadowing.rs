@@ -1,9 +1,9 @@
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use syntax::ast::Expression;
 
 use crate::store::Store;
 
-pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &DiagnosticSink) {
+pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
     let Some(prelude_module) = store.get_module("prelude") else {
         return;
     };
@@ -15,7 +15,7 @@ pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &DiagnosticSink
 fn visit_expression(
     expression: &Expression,
     prelude_module: &syntax::program::Module,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) {
     match expression {
         Expression::Enum {

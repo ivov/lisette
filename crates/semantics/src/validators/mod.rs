@@ -1,4 +1,4 @@
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use syntax::ast::Expression;
 use syntax::program::{CoercionInfo, UnusedInfo};
 
@@ -30,14 +30,14 @@ pub(crate) struct ValidatorContext<'a> {
     pub analysis: &'a AnalysisContext<'a>,
     pub facts: &'a mut Facts,
     pub coercions: &'a CoercionInfo,
-    pub sink: &'a DiagnosticSink,
+    pub sink: &'a LocalSink,
 }
 
 pub fn run(
     analysis: &AnalysisContext,
     facts: &mut Facts,
     coercions: &CoercionInfo,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
     unused: &mut UnusedInfo,
     run_lints: bool,
 ) {

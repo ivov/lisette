@@ -10,7 +10,7 @@ pub mod render;
 
 pub use diagnostic::{IndexedSource, LisetteDiagnostic, Report};
 pub use result::{SemanticResult, TypedefSource};
-pub use sink::DiagnosticSink;
+pub use sink::LocalSink;
 
 pub use lint::{IssueKind, UnusedExpressionKind};
 pub use pattern::PatternIssue;

@@ -21,7 +21,7 @@ use std::cell::RefCell;
 
 use crate::context::AnalysisContext;
 use crate::store::Store;
-use diagnostics::{DiagnosticSink, IssueKind, PatternIssue};
+use diagnostics::{IssueKind, LocalSink, PatternIssue};
 use syntax::ast::{
     Expression, Literal, MatchOrigin, Pattern, SelectArmPattern, Span, TypedPattern,
 };
@@ -75,7 +75,7 @@ impl<'a> PatternAnalysisContext<'a> {
     }
 }
 
-pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &DiagnosticSink) {
+pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &LocalSink) {
     match expression {
         Expression::Literal { literal, .. } => {
             if let Literal::Slice(expressions) = literal {
@@ -372,7 +372,7 @@ fn check_redundancy_with_guards(
     arms: &[syntax::ast::MatchArm],
     unions: &mut UnionTable,
     norm_ctx: &NormalizationContext,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) -> bool {
     let mut unguarded_previous: Vec<(usize, Row)> = vec![];
 
@@ -498,7 +498,7 @@ fn check_refutability(
     pattern: &Pattern,
     typed_pattern: Option<&TypedPattern>,
     ctx: &PatternAnalysisContext,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) -> bool {
     let Some(typed_pattern) = typed_pattern else {
         return true;

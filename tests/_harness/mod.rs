@@ -16,7 +16,7 @@ pub use infer::{InferResult, infer, infer_module};
 
 pub const TEST_MODULE_ID: &str = "test";
 
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use semantics::checker::TaskState;
 use semantics::prelude::parse_and_register_prelude;
 use semantics::store::Store;
@@ -24,7 +24,7 @@ use syntax::program::{Definition, Visibility};
 use syntax::types::Type;
 
 pub fn init_prelude(store: &mut Store) {
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
     parse_and_register_prelude(store, &sink);
 }
 

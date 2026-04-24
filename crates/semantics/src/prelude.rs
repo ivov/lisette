@@ -1,4 +1,4 @@
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use stdlib::LIS_PRELUDE_SOURCE;
 use syntax::program::{File, Visibility};
 
@@ -9,7 +9,7 @@ use crate::store::Store;
 pub const PRELUDE_MODULE_ID: &str = "prelude";
 pub const PRELUDE_FILE_ID: u32 = 1;
 
-pub fn parse_and_register_prelude(store: &mut Store, sink: &DiagnosticSink) {
+pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
     let result = syntax::build_ast(LIS_PRELUDE_SOURCE, PRELUDE_FILE_ID);
 
     sink.extend_parse_errors(result.errors);

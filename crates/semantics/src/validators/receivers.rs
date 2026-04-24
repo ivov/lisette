@@ -3,17 +3,17 @@
 //! named `self` has the right type. Methods with an unrelated first parameter
 //! are treated as static methods and skipped.
 
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use syntax::ast::{Expression, Pattern};
 use syntax::types::Type;
 
-pub(super) fn run(typed_ast: &[Expression], sink: &DiagnosticSink) {
+pub(super) fn run(typed_ast: &[Expression], sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, sink);
     }
 }
 
-fn visit_expression(expression: &Expression, sink: &DiagnosticSink) {
+fn visit_expression(expression: &Expression, sink: &LocalSink) {
     if let Expression::ImplBlock {
         ty: impl_ty,
         methods,
@@ -29,7 +29,7 @@ fn visit_expression(expression: &Expression, sink: &DiagnosticSink) {
     }
 }
 
-fn check_method_receiver(method: &Expression, impl_ty: &Type, sink: &DiagnosticSink) {
+fn check_method_receiver(method: &Expression, impl_ty: &Type, sink: &LocalSink) {
     let Expression::Function { params, .. } = method else {
         return;
     };

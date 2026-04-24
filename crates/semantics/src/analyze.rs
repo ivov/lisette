@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use diagnostics::{DiagnosticSink, SemanticResult, TypedefSource};
+use diagnostics::{LocalSink, SemanticResult, TypedefSource};
 use syntax::ast::Expression;
 use syntax::program::{File, ModuleInfo, MutationInfo, UnusedInfo};
 
@@ -53,7 +53,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     store.init_entry_module();
     store.store_entry_file(&input.filename, &input.source, input.ast);
 
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
 
     if input.config.load_siblings {
         for (filename, source) in input.loader.scan_folder(ENTRY_MODULE_ID) {

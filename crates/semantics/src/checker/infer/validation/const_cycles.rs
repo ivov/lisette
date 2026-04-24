@@ -94,7 +94,7 @@ fn dfs<'a>(
     color: &mut HashMap<&'a EcoString, Color>,
     path: &mut Vec<&'a EcoString>,
     reported: &mut HashSet<&'a EcoString>,
-    sink: &diagnostics::DiagnosticSink,
+    sink: &diagnostics::LocalSink,
 ) {
     color.insert(node, Color::Gray);
     path.push(node);

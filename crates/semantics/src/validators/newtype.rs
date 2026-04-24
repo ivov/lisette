@@ -2,19 +2,19 @@
 //! struct) compiles to a Go named scalar. `.0` is a cast, not a field — so
 //! it's read-only (can't assign to) and non-addressable (can't take `&`).
 
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span, UnaryOperator};
 use syntax::types::Type;
 
 use crate::store::Store;
 
-pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &DiagnosticSink) {
+pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, store, sink);
     }
 }
 
-fn visit_expression(expression: &Expression, store: &Store, sink: &DiagnosticSink) {
+fn visit_expression(expression: &Expression, store: &Store, sink: &LocalSink) {
     match expression {
         Expression::Assignment { target, span, .. } => {
             check_newtype_field_assignment(target, *span, store, sink);
@@ -38,7 +38,7 @@ fn check_newtype_field_assignment(
     target: &Expression,
     span: Span,
     store: &Store,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) {
     match target {
         Expression::DotAccess {

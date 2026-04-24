@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::facts::{BindingIdAllocator, Facts};
 use crate::store::Store;
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use ecow::EcoString;
 use scopes::Scopes;
 use syntax::ast::Visibility as AstVisibility;
@@ -89,7 +89,7 @@ pub struct TaskState<'s> {
     pub cursor: Cursor,
     pub imports: ImportState,
     pub builtins: BuiltinCache,
-    pub sink: &'s DiagnosticSink,
+    pub sink: &'s LocalSink,
     pub facts: Facts,
     pub coercions: CoercionInfo,
     pub resolutions: ResolutionInfo,
@@ -104,7 +104,7 @@ pub struct TaskState<'s> {
 }
 
 impl<'s> TaskState<'s> {
-    pub fn new(sink: &'s DiagnosticSink, binding_ids: Arc<BindingIdAllocator>) -> Self {
+    pub fn new(sink: &'s LocalSink, binding_ids: Arc<BindingIdAllocator>) -> Self {
         Self {
             env: TypeEnv::new(),
             scopes: Scopes::new(),
@@ -122,7 +122,7 @@ impl<'s> TaskState<'s> {
         }
     }
 
-    pub fn with_fresh_allocator(sink: &'s DiagnosticSink) -> Self {
+    pub fn with_fresh_allocator(sink: &'s LocalSink) -> Self {
         Self::new(sink, Arc::new(BindingIdAllocator::new()))
     }
 

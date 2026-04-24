@@ -1,10 +1,10 @@
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use syntax::program::{Definition, Visibility};
 
 use crate::store::Store;
 
-pub(super) fn run_module(module_id: &str, store: &Store, sink: &DiagnosticSink) {
+pub(super) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
     let Some(module) = store.get_module(module_id) else {
         return;
     };

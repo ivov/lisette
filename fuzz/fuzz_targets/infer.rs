@@ -17,7 +17,7 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
 
-    let sink = lisette_diagnostics::DiagnosticSink::new();
+    let sink = lisette_diagnostics::LocalSink::new();
     let mut store = lisette_semantics::store::Store::new();
     store.add_module("fuzz");
     lisette_semantics::prelude::parse_and_register_prelude(&mut store, &sink);

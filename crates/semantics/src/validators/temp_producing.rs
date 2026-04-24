@@ -1,14 +1,14 @@
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::program::{CoercionInfo, ReceiverCoercion};
 
-pub(super) fn run(typed_ast: &[Expression], coercions: &CoercionInfo, sink: &DiagnosticSink) {
+pub(super) fn run(typed_ast: &[Expression], coercions: &CoercionInfo, sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, coercions, sink);
     }
 }
 
-fn visit_expression(expression: &Expression, coercions: &CoercionInfo, sink: &DiagnosticSink) {
+fn visit_expression(expression: &Expression, coercions: &CoercionInfo, sink: &LocalSink) {
     match expression {
         Expression::Call {
             expression: callee,
@@ -88,7 +88,7 @@ fn visit_expression(expression: &Expression, coercions: &CoercionInfo, sink: &Di
     }
 }
 
-fn check(expression: &Expression, coercions: &CoercionInfo, sink: &DiagnosticSink) {
+fn check(expression: &Expression, coercions: &CoercionInfo, sink: &LocalSink) {
     if is_temp_producing(expression) || has_auto_address_on_call(expression, coercions) {
         sink.push(diagnostics::infer::complex_sub_expression(
             expression.get_span(),

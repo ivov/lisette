@@ -2,8 +2,8 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::context::AnalysisContext;
 use crate::facts::{DiscardedTailKind, Facts};
-use diagnostics::DiagnosticSink;
 use diagnostics::LisetteDiagnostic;
+use diagnostics::LocalSink;
 use syntax::ast::Expression;
 use syntax::program::File;
 use syntax::program::Module;
@@ -81,7 +81,7 @@ impl LintConfig {
 pub fn lint_all_modules(
     analysis: &AnalysisContext,
     facts: &Facts,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
     unused: &mut UnusedInfo,
 ) {
     let store = analysis.store;
@@ -101,7 +101,7 @@ fn lint_module(
     go_package_names: &HashMap<String, String>,
     facts: &Facts,
     config: &LintConfig,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
     unused: &mut UnusedInfo,
 ) {
     let mut diagnostics: Vec<LisetteDiagnostic> = Vec::new();
@@ -138,7 +138,7 @@ fn lint_module(
     sink.extend(diagnostics);
 }
 
-pub fn lint_all_facts(facts: &Facts, unused: &mut UnusedInfo, sink: &DiagnosticSink) {
+pub fn lint_all_facts(facts: &Facts, unused: &mut UnusedInfo, sink: &LocalSink) {
     let mut diagnostics: Vec<LisetteDiagnostic> = Vec::new();
 
     collect_bindings(facts, unused, &mut diagnostics);

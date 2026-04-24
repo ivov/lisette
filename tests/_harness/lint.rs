@@ -1,4 +1,4 @@
-use diagnostics::{DiagnosticSink, LisetteDiagnostic};
+use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::{checker::TaskState, store::Store, validators};
 use syntax::{
     desugar,
@@ -17,7 +17,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     let mut store = Store::new();
     store.add_module(TEST_MODULE_ID);
 
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
 
     init_prelude(&mut store);
 

@@ -8,7 +8,7 @@ use syntax::program::File;
 
 use crate::loader::Loader;
 use crate::store::Store;
-use diagnostics::DiagnosticSink;
+use diagnostics::LocalSink;
 
 pub type ModuleId = String;
 
@@ -26,7 +26,7 @@ pub fn build_module_graph(
     store: &mut Store,
     loader: Option<&dyn Loader>,
     entry_module: &str,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
     standalone_mode: bool,
     locator: &TypedefLocator,
 ) -> ModuleGraphResult {
@@ -100,7 +100,7 @@ fn parse_module_files(
     module_id: &ModuleId,
     store: &mut Store,
     loader: Option<&dyn Loader>,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
 ) -> Vec<File> {
     let Some(fs) = loader else {
         return vec![];
@@ -132,7 +132,7 @@ fn collect_imports(
     module_id: &ModuleId,
     store: &mut Store,
     loader: Option<&dyn Loader>,
-    sink: &DiagnosticSink,
+    sink: &LocalSink,
     standalone_mode: bool,
     locator: &TypedefLocator,
 ) -> (HashMap<ModuleId, Span>, Vec<File>) {

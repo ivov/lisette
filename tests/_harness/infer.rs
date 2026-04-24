@@ -1,4 +1,4 @@
-use diagnostics::{DiagnosticSink, LisetteDiagnostic};
+use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::{checker::TaskState, module_graph::build_module_graph, store::Store};
 use stdlib::get_go_stdlib_typedef;
 use syntax::{ast::Expression, types::Type};
@@ -29,7 +29,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
     store.module_ids.extend(available_folders);
 
-    let sink = DiagnosticSink::new();
+    let sink = LocalSink::new();
 
     let locator = deps::TypedefLocator::default();
     let mut graph_result =
