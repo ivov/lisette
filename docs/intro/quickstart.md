@@ -1,10 +1,14 @@
 # Quickstart
 
-Prerequisites: [Rust](https://rustup.rs/) and [Go 1.25+](https://go.dev/dl/).
+Prerequisite: [Go 1.25+](https://go.dev/dl/)
 
 1. Install the CLI:
 
 ```sh
+# prebuilt binary
+curl -fsSL https://lisette.run/install.sh | sh
+
+# from source (requires Rust 1.94+)
 cargo install lisette
 ```
 
