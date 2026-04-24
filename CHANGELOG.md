@@ -2,6 +2,13 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.19](https://github.com/ivov/lisette/compare/lisette-v0.1.18...lisette-v0.1.19) - 2026-04-24
+
+- ci: ship prebuilt binaries [#165](https://github.com/ivov/lisette/pull/165) [`a11eda1`](https://github.com/ivov/lisette/commit/a11eda1696aa2e0c9b3e7cc311d8031125a17529)
+- fix: suppress auto-stringer when user method uses Go casing [#171](https://github.com/ivov/lisette/pull/171) [`6c4bb49`](https://github.com/ivov/lisette/commit/6c4bb490bd5402b82677743e8dff28d45e0af5cc)
+- fix: place enum constructors beside their enum definition [#172](https://github.com/ivov/lisette/pull/172) [`e367406`](https://github.com/ivov/lisette/commit/e3674063d070d130d53be9b43525d4a7fcd41b86)
+- refactor: prep parallel semantics [#170](https://github.com/ivov/lisette/pull/170) [`54a2a0c`](https://github.com/ivov/lisette/commit/54a2a0cf07d34f1f9bea6205fb963114351790a1)
+
 ## [0.1.18](https://github.com/ivov/lisette/compare/lisette-v0.1.17...lisette-v0.1.18) - 2026-04-23
 
 - refactor: consolidate emit coercions and decision walkers [#157](https://github.com/ivov/lisette/pull/157) [`ed1cf48`](https://github.com/ivov/lisette/commit/ed1cf48f37b7f8c33f79bc660c636306d1fea27c)
