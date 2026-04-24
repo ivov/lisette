@@ -26,7 +26,6 @@ pub use lints::Lint;
 
 pub(crate) struct ValidatorContext<'a> {
     pub typed_ast: &'a [Expression],
-    pub is_typedef: bool,
     pub module_id: &'a str,
     pub analysis: &'a AnalysisContext<'a>,
     pub facts: &'a mut Facts,
@@ -47,10 +46,8 @@ pub fn run(
     for module in store.modules.values() {
         visibility::run_module(&module.id, store, sink);
         for file in module.files.values() {
-            let is_typedef = module.typedefs.contains_key(&file.id);
             let mut ctx = ValidatorContext {
                 typed_ast: &file.items,
-                is_typedef,
                 module_id: &module.id,
                 analysis,
                 facts,
@@ -82,15 +79,8 @@ fn run_per_file(ctx: &mut ValidatorContext<'_>) {
     duplicate_bindings::run(ctx.typed_ast, ctx.sink);
     irrefutable_patterns::run(ctx.typed_ast, ctx.sink);
     receivers::run(ctx.typed_ast, ctx.sink);
-    prelude_shadowing::run(ctx.typed_ast, ctx.is_typedef, store, ctx.sink);
-    generics::run(
-        ctx.typed_ast,
-        ctx.is_typedef,
-        ctx.module_id,
-        store,
-        ctx.facts,
-        ctx.sink,
-    );
+    prelude_shadowing::run(ctx.typed_ast, store, ctx.sink);
+    generics::run(ctx.typed_ast, ctx.module_id, store, ctx.facts, ctx.sink);
     newtype::run(ctx.typed_ast, store, ctx.sink);
     native_value_usage::run(ctx.typed_ast, ctx.module_id, store, ctx.sink);
     enum_variant_value::run(ctx.typed_ast, store, ctx.sink);

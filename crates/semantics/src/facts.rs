@@ -129,21 +129,14 @@ impl Facts {
             .push(OverusedReferenceFact { span, name });
     }
 
-    pub fn add_unused_type_param(&mut self, name: String, span: Span, is_typedef: bool) {
-        self.unused_type_params.push(UnusedTypeParamFact {
-            name,
-            span,
-            is_typedef,
-        });
+    pub fn add_unused_type_param(&mut self, name: String, span: Span) {
+        self.unused_type_params
+            .push(UnusedTypeParamFact { name, span });
     }
 
-    pub fn add_type_param_only_in_bound(&mut self, name: String, span: Span, is_typedef: bool) {
+    pub fn add_type_param_only_in_bound(&mut self, name: String, span: Span) {
         self.type_params_only_in_bound
-            .push(TypeParamOnlyInBoundFact {
-                name,
-                span,
-                is_typedef,
-            });
+            .push(TypeParamOnlyInBoundFact { name, span });
     }
 
     pub fn add_always_failing_try_block(&mut self, span: Span) {
@@ -226,14 +219,12 @@ pub struct OverusedReferenceFact {
 pub struct UnusedTypeParamFact {
     pub name: String,
     pub span: Span,
-    pub is_typedef: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct TypeParamOnlyInBoundFact {
     pub name: String,
     pub span: Span,
-    pub is_typedef: bool,
 }
 
 /// Records a usage of a symbol, linking the usage location to its definition.

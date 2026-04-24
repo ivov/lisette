@@ -237,18 +237,12 @@ fn collect_overused_references(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) 
 
 fn collect_unused_type_params(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
     for fact in &facts.unused_type_params {
-        if fact.is_typedef {
-            continue;
-        }
         out.push(diagnostics::lint::unused_type_parameter(&fact.span));
     }
 }
 
 fn collect_type_params_only_in_bound(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
     for fact in &facts.type_params_only_in_bound {
-        if fact.is_typedef {
-            continue;
-        }
         out.push(diagnostics::lint::type_param_only_in_bound(
             &fact.span, &fact.name,
         ));

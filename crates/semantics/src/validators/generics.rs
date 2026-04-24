@@ -24,21 +24,19 @@ use crate::store::Store;
 
 pub(super) fn run(
     typed_ast: &[Expression],
-    is_typedef: bool,
     module_id: &str,
     store: &Store,
     facts: &mut Facts,
     sink: &DiagnosticSink,
 ) {
     for item in typed_ast {
-        visit_expression(item, None, is_typedef, module_id, store, facts, sink);
+        visit_expression(item, None, module_id, store, facts, sink);
     }
 }
 
 fn visit_expression(
     expression: &Expression,
     enclosing_impl_generics: Option<&[Generic]>,
-    is_typedef: bool,
     module_id: &str,
     store: &Store,
     facts: &mut Facts,
@@ -49,15 +47,7 @@ fn visit_expression(
             methods, generics, ..
         } => {
             for method in methods {
-                visit_expression(
-                    method,
-                    Some(generics),
-                    is_typedef,
-                    module_id,
-                    store,
-                    facts,
-                    sink,
-                );
+                visit_expression(method, Some(generics), module_id, store, facts, sink);
             }
             return;
         }
@@ -69,8 +59,8 @@ fn visit_expression(
             return_type,
             ..
         } => {
-            check_unused_type_parameters(generics, params, return_type, is_typedef, facts);
-            check_type_params_only_in_bound(generics, params, return_type, is_typedef, facts);
+            check_unused_type_parameters(generics, params, return_type, facts);
+            check_type_params_only_in_bound(generics, params, return_type, facts);
             check_constrained_return_type(
                 return_type,
                 generics,
@@ -100,7 +90,6 @@ fn visit_expression(
         visit_expression(
             child,
             enclosing_impl_generics,
-            is_typedef,
             module_id,
             store,
             facts,
@@ -113,7 +102,6 @@ fn check_unused_type_parameters(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
-    is_typedef: bool,
     facts: &mut Facts,
 ) {
     if generics.is_empty() {
@@ -137,7 +125,7 @@ fn check_unused_type_parameters(
         }
 
         if remaining.contains(&generic.name) {
-            facts.add_unused_type_param(generic.name.to_string(), generic.span, is_typedef);
+            facts.add_unused_type_param(generic.name.to_string(), generic.span);
         }
     }
 }
@@ -146,7 +134,6 @@ fn check_type_params_only_in_bound(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
-    is_typedef: bool,
     facts: &mut Facts,
 ) {
     if generics.is_empty() {
@@ -165,7 +152,7 @@ fn check_type_params_only_in_bound(
         if generic.name.starts_with('_') || !only_in_bound.contains(&generic.name) {
             continue;
         }
-        facts.add_type_param_only_in_bound(generic.name.to_string(), generic.span, is_typedef);
+        facts.add_type_param_only_in_bound(generic.name.to_string(), generic.span);
     }
 }
 
