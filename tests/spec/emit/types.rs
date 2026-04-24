@@ -2631,6 +2631,89 @@ fn main() {
 }
 
 #[test]
+fn struct_user_pascal_string_method_suppresses_auto_stringer() {
+    let input = r#"
+struct A { a: string }
+
+impl A {
+  fn String(self) -> string {
+    self.a + "asdf"
+  }
+}
+
+fn main() {
+  let a = A { a: "text" }
+  let _ = a
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn tuple_struct_user_pascal_string_method_suppresses_auto_stringer() {
+    let input = r#"
+struct UserId(int)
+
+impl UserId {
+  fn String(self) -> string {
+    "custom"
+  }
+}
+
+fn main() {
+  let u = UserId(1)
+  let _ = u
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn enum_user_pascal_string_method_suppresses_auto_stringer() {
+    let input = r#"
+enum Color {
+  Red,
+  Blue,
+}
+
+impl Color {
+  fn String(self) -> string {
+    "custom"
+  }
+}
+
+fn main() {
+  let c = Color.Red
+  let _ = c
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_user_pascal_string_and_go_string_methods() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+impl Point {
+  fn String(self) -> string {
+    "custom display"
+  }
+
+  fn GoString(self) -> string {
+    "custom debug"
+  }
+}
+
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  let _ = p
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn impl_methods_share_local_variable_name() {
     let input = r#"
 pub struct Calc {}

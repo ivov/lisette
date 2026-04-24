@@ -1,0 +1,45 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum Color {\n  Red,\n  Blue,\n}\n\nimpl Color {\n  fn String(self) -> string {\n    \"custom\"\n  }\n}\n\nfn main() {\n  let c = Color.Red\n  let _ = c\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeColorRed() Color {
+	return Color{Tag: ColorRed}
+}
+
+func MakeColorBlue() Color {
+	return Color{Tag: ColorBlue}
+}
+
+type ColorTag int
+
+const (
+	ColorRed ColorTag = iota
+	ColorBlue
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) GoString() string {
+	switch c.Tag {
+	case ColorRed:
+		return "Color.Red"
+	case ColorBlue:
+		return "Color.Blue"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+func (c Color) String() string {
+	return "custom"
+}
+
+func main() {
+	_ = MakeColorRed()
+}

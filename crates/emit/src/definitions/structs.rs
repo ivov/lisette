@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
@@ -224,11 +225,12 @@ impl Emitter<'_> {
     }
 
     /// Returns the name for the auto-generated stringer method, or `None` if no
-    /// auto-generated method should be emitted.
+    /// auto-generated method should be emitted. Both Lisette casing (`string`,
+    /// `goString`) and Go casing (`String`, `GoString`) count as user-defined.
     ///
-    /// - No user `string` → auto-generated method is `"String"`
-    /// - User `string` only → auto-generated method is `"GoString"`
-    /// - User `string` + `goString` → `None` (skip, user covers both)
+    /// - No user stringer → auto-generated method is `"String"`
+    /// - User stringer only → auto-generated method is `"GoString"`
+    /// - User stringer + go-stringer → `None` (skip, user covers both)
     pub(super) fn stringer_method_name(&self, name: &str) -> Option<&'static str> {
         let qualified = format!("{}.{}", self.current_module, name);
         let methods = self
@@ -242,10 +244,14 @@ impl Emitter<'_> {
                 | Definition::TypeAlias { methods, .. } => Some(methods),
                 _ => None,
             });
-        match methods {
-            Some(m) if m.contains_key("string") && m.contains_key("goString") => None,
-            Some(m) if m.contains_key("string") => Some("GoString"),
-            _ => Some("String"),
+        let has_stringer = methods
+            .is_some_and(|m| m.contains_key("string") || m.contains_key(ENUM_STRINGER_METHOD));
+        let has_go_stringer = methods
+            .is_some_and(|m| m.contains_key("goString") || m.contains_key(ENUM_GO_STRINGER_METHOD));
+        match (has_stringer, has_go_stringer) {
+            (true, true) => None,
+            (true, false) => Some(ENUM_GO_STRINGER_METHOD),
+            _ => Some(ENUM_STRINGER_METHOD),
         }
     }
 }
