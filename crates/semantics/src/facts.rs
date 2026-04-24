@@ -200,6 +200,70 @@ impl Facts {
             .or_default()
             .push(usage_span);
     }
+
+    pub fn merge(&mut self, other: Facts) {
+        debug_assert!(
+            Arc::ptr_eq(&self.allocator, &other.allocator),
+            "Facts::merge requires a shared BindingIdAllocator",
+        );
+
+        let Facts {
+            allocator: _,
+            bindings,
+            dead_code,
+            pattern_issues,
+            unused_expressions,
+            discarded_tail_expressions,
+            overused_references,
+            unused_type_params,
+            type_params_only_in_bound,
+            always_failing_try_blocks,
+            expression_only_fstrings,
+            generic_call_checks,
+            empty_collection_checks,
+            statement_tail_checks,
+            or_pattern_error_spans,
+            usages,
+            usage_set: _,
+            interface_satisfied_methods,
+        } = other;
+
+        self.bindings.extend(bindings);
+        self.dead_code.extend(dead_code);
+        self.pattern_issues.extend(pattern_issues);
+        self.unused_expressions.extend(unused_expressions);
+        self.discarded_tail_expressions
+            .extend(discarded_tail_expressions);
+        self.overused_references.extend(overused_references);
+        self.unused_type_params.extend(unused_type_params);
+        self.type_params_only_in_bound
+            .extend(type_params_only_in_bound);
+        self.always_failing_try_blocks
+            .extend(always_failing_try_blocks);
+        self.expression_only_fstrings
+            .extend(expression_only_fstrings);
+        self.generic_call_checks.extend(generic_call_checks);
+        self.empty_collection_checks.extend(empty_collection_checks);
+        self.statement_tail_checks.extend(statement_tail_checks);
+        self.or_pattern_error_spans.extend(or_pattern_error_spans);
+
+        self.usages.reserve(usages.len());
+        self.usage_set.reserve(usages.len());
+        for Usage {
+            usage_span,
+            definition_span,
+        } in usages
+        {
+            self.add_usage(usage_span, definition_span);
+        }
+
+        for (key, spans) in interface_satisfied_methods {
+            self.interface_satisfied_methods
+                .entry(key)
+                .or_default()
+                .extend(spans);
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -266,4 +330,108 @@ pub struct TypeParamOnlyInBoundFact {
 pub struct Usage {
     pub usage_span: Span,
     pub definition_span: Span,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syntax::ast::BindingKind;
+
+    fn span(offset: u32) -> Span {
+        Span::new(0, offset, 1)
+    }
+
+    #[test]
+    fn merge_preserves_unique_binding_ids_across_tasks() {
+        let allocator = Arc::new(BindingIdAllocator::new());
+        let mut a = Facts::new(allocator.clone());
+        let mut b = Facts::new(allocator.clone());
+
+        let a_id = a.add_binding(
+            "a".into(),
+            span(0),
+            BindingKind::Let { mutable: false },
+            false,
+            false,
+            false,
+        );
+        let b_id = b.add_binding(
+            "b".into(),
+            span(1),
+            BindingKind::Let { mutable: false },
+            false,
+            false,
+            false,
+        );
+        assert_ne!(a_id, b_id);
+
+        a.merge(b);
+        assert_eq!(a.bindings.len(), 2);
+        assert!(a.bindings.contains_key(&a_id));
+        assert!(a.bindings.contains_key(&b_id));
+    }
+
+    #[test]
+    fn merge_extends_vec_facts() {
+        let allocator = Arc::new(BindingIdAllocator::new());
+        let mut a = Facts::new(allocator.clone());
+        let mut b = Facts::new(allocator);
+
+        a.add_always_failing_try_block(span(0));
+        b.add_always_failing_try_block(span(1));
+        b.add_always_failing_try_block(span(2));
+
+        a.merge(b);
+        assert_eq!(a.always_failing_try_blocks.len(), 3);
+    }
+
+    #[test]
+    fn merge_deduplicates_usages() {
+        let allocator = Arc::new(BindingIdAllocator::new());
+        let mut a = Facts::new(allocator.clone());
+        let mut b = Facts::new(allocator);
+
+        a.add_usage(span(10), span(0));
+        b.add_usage(span(10), span(0));
+        b.add_usage(span(20), span(0));
+
+        a.merge(b);
+        assert_eq!(a.usages.len(), 2);
+    }
+
+    #[test]
+    fn merge_deduplicates_or_pattern_error_spans() {
+        let allocator = Arc::new(BindingIdAllocator::new());
+        let mut a = Facts::new(allocator.clone());
+        let mut b = Facts::new(allocator);
+
+        a.or_pattern_error_spans.insert(span(0));
+        b.or_pattern_error_spans.insert(span(0));
+        b.or_pattern_error_spans.insert(span(1));
+
+        a.merge(b);
+        assert_eq!(a.or_pattern_error_spans.len(), 2);
+    }
+
+    #[test]
+    fn merge_concatenates_interface_method_spans() {
+        let allocator = Arc::new(BindingIdAllocator::new());
+        let mut a = Facts::new(allocator.clone());
+        let mut b = Facts::new(allocator);
+
+        a.mark_method_used_for_interface("m".into(), "f".into(), span(0));
+        b.mark_method_used_for_interface("m".into(), "f".into(), span(1));
+        b.mark_method_used_for_interface("m".into(), "g".into(), span(2));
+
+        a.merge(b);
+        assert_eq!(a.interface_satisfied_methods.len(), 2);
+        assert_eq!(
+            a.interface_satisfied_methods[&("m".into(), "f".into())].len(),
+            2
+        );
+        assert_eq!(
+            a.interface_satisfied_methods[&("m".into(), "g".into())].len(),
+            1
+        );
+    }
 }
