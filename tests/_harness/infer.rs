@@ -79,6 +79,10 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             checker.cursor.module_id = prev_module_id;
         }
 
+        for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {
+            checker.store.store_file(&module_id, typed_file);
+        }
+
         let module = checker.store.get_module(module_name).unwrap();
         let ast: Vec<_> = module
             .files

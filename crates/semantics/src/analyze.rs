@@ -127,6 +127,8 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
             go_stdlib::try_load_go_stdlib_cache()
         };
 
+        let mut to_infer: Vec<String> = Vec::new();
+
         for module_id in order {
             if let Some(go_pkg) = module_id.strip_prefix("go:") {
                 if deps::is_stdlib(go_pkg)
@@ -184,7 +186,6 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
 
             checker.store.store_module(&module_id, files);
             checker.register_module(&module_id);
-            checker.infer_module(&module_id);
 
             checker.cursor.module_id = prev_module_id;
 
@@ -195,6 +196,21 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                     dep_hashes,
                 });
             }
+
+            to_infer.push(module_id);
+        }
+
+        for module_id in &to_infer {
+            let prev_module_id = checker.cursor.module_id.clone();
+            checker.cursor.module_id = module_id.clone();
+
+            checker.infer_module(module_id);
+
+            checker.cursor.module_id = prev_module_id;
+        }
+
+        for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {
+            checker.store.store_file(&module_id, typed_file);
         }
 
         // Save Go stdlib cache if store has Go modules not already in cache

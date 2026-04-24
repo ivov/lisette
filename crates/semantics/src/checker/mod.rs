@@ -15,7 +15,7 @@ use scopes::Scopes;
 use syntax::ast::Visibility as AstVisibility;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span, StructFieldDefinition};
 use syntax::program::{
-    CoercionInfo, Definition, FileImport, MethodSignatures, Module, ResolutionInfo,
+    CoercionInfo, Definition, File, FileImport, MethodSignatures, Module, ResolutionInfo,
 };
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
@@ -98,6 +98,8 @@ pub struct Checker<'r, 's> {
     pub satisfying_stack: rustc_hash::FxHashSet<(String, String)>,
     method_cache: RefCell<HashMap<EcoString, MethodSignatures>>,
     pub ufcs_methods: HashSet<(String, String)>,
+    /// Typed files produced by inference.
+    pub typed_files: Vec<(String, File)>,
 }
 
 impl<'r, 's> Checker<'r, 's> {
@@ -116,6 +118,7 @@ impl<'r, 's> Checker<'r, 's> {
             satisfying_stack: rustc_hash::FxHashSet::default(),
             method_cache: RefCell::new(HashMap::default()),
             ufcs_methods: HashSet::default(),
+            typed_files: Vec::new(),
         }
     }
 

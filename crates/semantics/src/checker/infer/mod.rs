@@ -59,7 +59,7 @@ impl Checker<'_, '_> {
                 items: frozen_items,
             };
 
-            self.store.store_file(module_id, typed_file);
+            self.typed_files.push((module_id.to_string(), typed_file));
         }
 
         self.cursor.file_id = None;
