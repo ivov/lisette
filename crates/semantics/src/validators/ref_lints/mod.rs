@@ -5,39 +5,20 @@ mod visibility_constraints;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::facts::Facts;
-use crate::lint::ast_lints::attributes::SERIALIZATION_KEYS;
-use crate::lint::{Lint as LintEnum, LintConfig};
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::{AttributeArg, Expression, ImportAlias, Span, Visibility};
 use syntax::program::Module;
 use syntax::program::{File, FileImport};
 
-use crate::lint::{LintContext, LintRule};
+use super::Lint as LintEnum;
+use super::ast_lints::attributes::SERIALIZATION_KEYS;
+use super::lints::LintConfig;
 use extract::{AliasMap, extract_references};
 use reference_graph::{
     EnumVariantId, EnumVariantInfo, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId,
     StructFieldInfo,
 };
 use visibility_constraints::check_visibility_constraints;
-
-pub struct RefLintGroup;
-
-impl LintRule for RefLintGroup {
-    fn check(&self, ctx: &LintContext) -> Vec<LisetteDiagnostic> {
-        ctx.module
-            .map(|module| {
-                run_ref_lints(
-                    module,
-                    ctx.files,
-                    ctx.go_package_names,
-                    ctx.config,
-                    ctx.facts,
-                )
-                .diagnostics
-            })
-            .unwrap_or_default()
-    }
-}
 
 pub struct RefLintResult {
     pub diagnostics: Vec<LisetteDiagnostic>,

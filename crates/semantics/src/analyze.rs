@@ -15,10 +15,8 @@ use crate::cache::{
 };
 use crate::checker::TaskState;
 use crate::facts::Facts;
-use crate::lint;
 use crate::loader::Loader;
 use crate::module_graph::build_module_graph;
-use crate::pattern_analysis;
 use crate::prelude::parse_and_register_prelude;
 use crate::store::{ENTRY_MODULE_ID, Store};
 use crate::validators;
@@ -252,42 +250,17 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
 
     let analysis = crate::context::AnalysisContext::new(&store, &ufcs_methods);
 
+    let mut unused = UnusedInfo::default();
     if !has_pre_check_errors {
-        for module in analysis.store.modules.values() {
-            let module_id = module.id.clone();
-            for file in module.files.values() {
-                let is_typedef = module.typedefs.contains_key(&file.id);
-                let mut ctx = validators::ValidatorContext {
-                    typed_ast: &file.items,
-                    is_typedef,
-                    module_id: &module_id,
-                    analysis: &analysis,
-                    facts: &mut facts,
-                    coercions: &coercions,
-                    sink: &sink,
-                };
-                validators::run_all(&mut ctx);
-            }
-        }
-
-        let pattern_ctx = pattern_analysis::Context::new(&analysis, &facts.or_pattern_error_spans);
-        for module in analysis.store.modules.values() {
-            for file in module.files.values() {
-                for expression in &file.items {
-                    pattern_analysis::check(expression, &pattern_ctx, &sink);
-                }
-            }
-        }
-        facts.pattern_issues = pattern_ctx.take_issues();
+        validators::run(
+            &analysis,
+            &mut facts,
+            &coercions,
+            &sink,
+            &mut unused,
+            input.config.run_lints,
+        );
     }
-
-    let errors = sink.take();
-
-    let unused = if input.config.run_lints && !has_pre_check_errors {
-        lint::lint_all_modules(&analysis, &facts, &sink)
-    } else {
-        UnusedInfo::default()
-    };
 
     let mut mutations = MutationInfo::default();
     for (&binding_id, b) in facts.bindings.iter() {
@@ -296,7 +269,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         }
     }
 
-    let lints = sink.take();
+    let (errors, lints): (Vec<_>, Vec<_>) = sink.take().into_iter().partition(|d| d.is_error());
 
     if cache_enabled && let Some(ref project_root) = input.project_root {
         let has_errors = errors.iter().any(|e| e.is_error());

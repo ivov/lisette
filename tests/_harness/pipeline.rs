@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{DiagnosticSink, LisetteDiagnostic};
-use semantics::{checker::TaskState, pattern_analysis, store::Store};
+use semantics::{checker::TaskState, store::Store};
 use stdlib::get_go_stdlib_typedef;
 use syntax::{
     ast::Expression,
@@ -189,29 +189,29 @@ impl CompiledTest {
                 semantics::checker::freeze::FreezeFolder::new(&checker.env).freeze_items(typed_ast);
 
             if !checker.failed() {
-                let module_id = checker.cursor.module_id.clone();
+                // Overwrite the stored file with the typed AST so validators::run
+                // sees post-inference items when iterating store.modules.
+                store.store_file(
+                    TEST_MODULE_ID,
+                    File::new(
+                        TEST_MODULE_ID,
+                        "test.lis",
+                        "",
+                        typed_ast.clone(),
+                        test_file_id,
+                    ),
+                );
                 let analysis =
                     semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
-                {
-                    let mut ctx = semantics::validators::ValidatorContext {
-                        typed_ast: &typed_ast,
-                        is_typedef: false,
-                        module_id: &module_id,
-                        analysis: &analysis,
-                        facts: &mut checker.facts,
-                        coercions: &checker.coercions,
-                        sink: checker.sink,
-                    };
-                    semantics::validators::run_all(&mut ctx);
-                }
-                let pattern_ctx = pattern_analysis::Context::new(
+                let mut harness_unused = UnusedInfo::default();
+                semantics::validators::run(
                     &analysis,
-                    &checker.facts.or_pattern_error_spans,
+                    &mut checker.facts,
+                    &checker.coercions,
+                    checker.sink,
+                    &mut harness_unused,
+                    false,
                 );
-                for expression in &typed_ast {
-                    pattern_analysis::check(expression, &pattern_ctx, checker.sink);
-                }
-                checker.facts.pattern_issues = pattern_ctx.take_issues();
             }
 
             if self.wrapped {

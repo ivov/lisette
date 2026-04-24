@@ -2,7 +2,6 @@ use diagnostics::LisetteDiagnostic;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Attribute, AttributeArg, Expression, StructFieldDefinition};
 
-/// Known serialization keys for struct tags.
 pub(crate) const SERIALIZATION_KEYS: &[&str] = &[
     "json",
     "xml",

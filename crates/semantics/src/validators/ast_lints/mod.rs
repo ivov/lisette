@@ -5,7 +5,7 @@ mod visitor;
 
 use std::cell::RefCell;
 
-use crate::lint::{LintContext, LintRule};
+use super::lints::LintContext;
 use diagnostics::LisetteDiagnostic;
 
 use attributes::{check_attributes, check_struct_attributes};
@@ -20,8 +20,8 @@ use visitor::visit_ast;
 
 pub struct AstLintGroup;
 
-impl LintRule for AstLintGroup {
-    fn check(&self, ctx: &LintContext) -> Vec<LisetteDiagnostic> {
+impl AstLintGroup {
+    pub fn check(&self, ctx: &LintContext) -> Vec<LisetteDiagnostic> {
         let diagnostics = RefCell::new(Vec::new());
         let is_d_lis = ctx.is_d_lis;
         let files = ctx.files;

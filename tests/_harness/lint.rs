@@ -1,10 +1,10 @@
 use diagnostics::{DiagnosticSink, LisetteDiagnostic};
-use semantics::{checker::TaskState, lint, pattern_analysis, store::Store};
+use semantics::{checker::TaskState, store::Store, validators};
 use syntax::{
     desugar,
     lex::Lexer,
     parse::Parser,
-    program::{File, Visibility},
+    program::{File, UnusedInfo, Visibility},
 };
 
 use super::init_prelude;
@@ -69,29 +69,6 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     }
     typed_ast = semantics::checker::freeze::FreezeFolder::new(&checker.env).freeze_items(typed_ast);
 
-    if !checker.failed() {
-        let module_id = checker.cursor.module_id.clone();
-        let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
-        {
-            let mut ctx = semantics::validators::ValidatorContext {
-                typed_ast: &typed_ast,
-                is_typedef: false,
-                module_id: &module_id,
-                analysis: &analysis,
-                facts: &mut checker.facts,
-                coercions: &checker.coercions,
-                sink: checker.sink,
-            };
-            semantics::validators::run_all(&mut ctx);
-        }
-        let pattern_ctx =
-            pattern_analysis::Context::new(&analysis, &checker.facts.or_pattern_error_spans);
-        for expression in &typed_ast {
-            pattern_analysis::check(expression, &pattern_ctx, checker.sink);
-        }
-        checker.facts.pattern_issues = pattern_ctx.take_issues();
-    }
-
     if checker.failed() {
         return vec![];
     }
@@ -106,21 +83,16 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
 
     store.store_file(TEST_MODULE_ID, typed_file);
 
-    let lint_config = lint::LintConfig::default();
-    let module = store.get_module(TEST_MODULE_ID).unwrap();
-    let file = module.files.get(&file_id).unwrap();
+    let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
+    let mut unused = UnusedInfo::default();
+    validators::run(
+        &analysis,
+        &mut checker.facts,
+        &checker.coercions,
+        &sink,
+        &mut unused,
+        true,
+    );
 
-    let go_package_names = store.go_package_names.clone();
-    let lint_ctx = lint::LintContext {
-        ast: &file.items,
-        facts: &checker.facts,
-        module: Some(module),
-        config: &lint_config,
-        is_d_lis: file.is_d_lis(),
-        files: &module.files,
-        go_package_names: &go_package_names,
-    };
-    let lint_sink = DiagnosticSink::new();
-    lint::lint_file(&lint_ctx, &lint_sink);
-    lint_sink.take()
+    sink.take()
 }

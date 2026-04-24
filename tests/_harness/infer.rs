@@ -1,7 +1,5 @@
 use diagnostics::{DiagnosticSink, LisetteDiagnostic};
-use semantics::{
-    checker::TaskState, module_graph::build_module_graph, pattern_analysis, store::Store,
-};
+use semantics::{checker::TaskState, module_graph::build_module_graph, store::Store};
 use stdlib::get_go_stdlib_typedef;
 use syntax::{ast::Expression, types::Type};
 
@@ -92,35 +90,15 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
         if !checker.failed() {
             let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
-            let module_ids: Vec<String> = analysis.store.modules.keys().cloned().collect();
-            for mid in &module_ids {
-                let typed_ast: Vec<_> = analysis
-                    .store
-                    .get_module(mid)
-                    .map(|m| m.files.values().flat_map(|f| f.items.clone()).collect())
-                    .unwrap_or_default();
-                let is_typedef = analysis
-                    .store
-                    .get_module(mid)
-                    .map(|m| !m.typedefs.is_empty() && m.files.is_empty())
-                    .unwrap_or(false);
-                let mut ctx = semantics::validators::ValidatorContext {
-                    typed_ast: &typed_ast,
-                    is_typedef,
-                    module_id: mid,
-                    analysis: &analysis,
-                    facts: &mut checker.facts,
-                    coercions: &checker.coercions,
-                    sink: checker.sink,
-                };
-                semantics::validators::run_all(&mut ctx);
-            }
-            let pattern_ctx =
-                pattern_analysis::Context::new(&analysis, &checker.facts.or_pattern_error_spans);
-            for expression in &ast {
-                pattern_analysis::check(expression, &pattern_ctx, checker.sink);
-            }
-            checker.facts.pattern_issues = pattern_ctx.take_issues();
+            let mut unused = syntax::program::UnusedInfo::default();
+            semantics::validators::run(
+                &analysis,
+                &mut checker.facts,
+                &checker.coercions,
+                checker.sink,
+                &mut unused,
+                false,
+            );
         }
 
         ast
