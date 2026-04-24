@@ -1,12 +1,33 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use diagnostics::{PatternIssue, UnusedExpressionKind};
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
 use syntax::types::Type;
 
 #[derive(Debug, Default)]
+pub struct BindingIdAllocator {
+    next: AtomicU32,
+}
+
+impl BindingIdAllocator {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn reserve(&self) -> BindingId {
+        self.next.fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub fn snapshot(&self) -> BindingId {
+        self.next.load(Ordering::Relaxed)
+    }
+}
+
+#[derive(Debug)]
 pub struct Facts {
-    next_id: BindingId,
+    allocator: Arc<BindingIdAllocator>,
     pub bindings: HashMap<BindingId, BindingFact>,
     pub dead_code: Vec<DeadCodeFact>,
     pub pattern_issues: Vec<PatternIssue>,
@@ -50,14 +71,27 @@ pub struct StatementTailCheck {
 }
 
 impl Facts {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    fn new_binding_id(&mut self) -> BindingId {
-        let id = self.next_id;
-        self.next_id += 1;
-        id
+    pub fn new(allocator: Arc<BindingIdAllocator>) -> Self {
+        Self {
+            allocator,
+            bindings: HashMap::default(),
+            dead_code: Vec::new(),
+            pattern_issues: Vec::new(),
+            unused_expressions: Vec::new(),
+            discarded_tail_expressions: Vec::new(),
+            overused_references: Vec::new(),
+            unused_type_params: Vec::new(),
+            type_params_only_in_bound: Vec::new(),
+            always_failing_try_blocks: Vec::new(),
+            expression_only_fstrings: Vec::new(),
+            generic_call_checks: Vec::new(),
+            empty_collection_checks: Vec::new(),
+            statement_tail_checks: Vec::new(),
+            or_pattern_error_spans: HashSet::default(),
+            usages: Vec::new(),
+            usage_set: HashSet::default(),
+            interface_satisfied_methods: HashMap::default(),
+        }
     }
 
     pub fn add_binding(
@@ -69,7 +103,7 @@ impl Facts {
         is_struct_field: bool,
         is_as_alias: bool,
     ) -> BindingId {
-        let id = self.new_binding_id();
+        let id = self.allocator.reserve();
         self.bindings.insert(
             id,
             BindingFact {
@@ -99,12 +133,11 @@ impl Facts {
     }
 
     pub fn binding_checkpoint(&self) -> BindingId {
-        self.next_id
+        self.allocator.snapshot()
     }
 
     pub fn remove_bindings_from(&mut self, checkpoint: BindingId) {
         self.bindings.retain(|id, _| *id < checkpoint);
-        self.next_id = checkpoint;
     }
 
     pub fn add_dead_code(&mut self, span: Span, cause: DeadCodeCause) {

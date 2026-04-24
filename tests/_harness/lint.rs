@@ -45,7 +45,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     }
     let ast = desugar_result.ast;
 
-    let mut checker = TaskState::new(&sink);
+    let mut checker = TaskState::with_fresh_allocator(&sink);
     checker.cursor.module_id = TEST_MODULE_ID.to_string();
     register_test_builtins(&mut store, &mut checker);
     checker.put_prelude_in_scope(&store);

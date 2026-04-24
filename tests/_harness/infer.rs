@@ -45,7 +45,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     init_prelude(&mut store);
 
     let ast = {
-        let mut checker = TaskState::new(&sink);
+        let mut checker = TaskState::with_fresh_allocator(&sink);
         checker
             .ufcs_methods
             .extend(semantics::prelude::compute_prelude_ufcs(&store));

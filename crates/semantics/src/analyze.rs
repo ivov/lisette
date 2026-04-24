@@ -1,5 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use diagnostics::{DiagnosticSink, SemanticResult, TypedefSource};
 use syntax::ast::Expression;
@@ -14,7 +15,7 @@ use crate::cache::{
     save_module_cache, try_load_cache,
 };
 use crate::checker::TaskState;
-use crate::facts::Facts;
+use crate::facts::{BindingIdAllocator, Facts};
 use crate::loader::Loader;
 use crate::module_graph::build_module_graph;
 use crate::prelude::parse_and_register_prelude;
@@ -106,8 +107,10 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     let cache_enabled = input.project_root.is_some() && !cache_disabled;
     let check_go_files = input.compile_phase == CompilePhase::Emit;
 
+    let binding_ids = Arc::new(BindingIdAllocator::new());
+
     let (mut facts, coercions, resolutions, cached_modules, compiled_modules, ufcs_methods) = {
-        let mut checker = TaskState::new(&sink);
+        let mut checker = TaskState::new(&sink, binding_ids.clone());
         checker
             .ufcs_methods
             .extend(crate::prelude::compute_prelude_ufcs(&store));

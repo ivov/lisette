@@ -6,8 +6,9 @@ pub mod type_env;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::cell::RefCell;
+use std::sync::Arc;
 
-use crate::facts::Facts;
+use crate::facts::{BindingIdAllocator, Facts};
 use crate::store::Store;
 use diagnostics::DiagnosticSink;
 use ecow::EcoString;
@@ -103,7 +104,7 @@ pub struct TaskState<'s> {
 }
 
 impl<'s> TaskState<'s> {
-    pub fn new(sink: &'s DiagnosticSink) -> Self {
+    pub fn new(sink: &'s DiagnosticSink, binding_ids: Arc<BindingIdAllocator>) -> Self {
         Self {
             env: TypeEnv::new(),
             scopes: Scopes::new(),
@@ -111,7 +112,7 @@ impl<'s> TaskState<'s> {
             imports: ImportState::new(),
             builtins: BuiltinCache::default(),
             sink,
-            facts: Facts::new(),
+            facts: Facts::new(binding_ids),
             coercions: CoercionInfo::default(),
             resolutions: ResolutionInfo::default(),
             satisfying_stack: rustc_hash::FxHashSet::default(),
@@ -119,6 +120,10 @@ impl<'s> TaskState<'s> {
             ufcs_methods: HashSet::default(),
             typed_files: Vec::new(),
         }
+    }
+
+    pub fn with_fresh_allocator(sink: &'s DiagnosticSink) -> Self {
+        Self::new(sink, Arc::new(BindingIdAllocator::new()))
     }
 
     pub fn new_type_var(&mut self) -> Type {

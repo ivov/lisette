@@ -26,7 +26,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &DiagnosticSink) {
         },
     );
 
-    let mut checker = TaskState::new(sink);
+    let mut checker = TaskState::with_fresh_allocator(sink);
     checker.cursor.module_id = PRELUDE_MODULE_ID.to_string();
     checker.cursor.file_id = Some(PRELUDE_FILE_ID);
 

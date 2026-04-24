@@ -100,7 +100,7 @@ impl CompiledTest {
             ufcs_methods,
             go_package_names,
         ) = {
-            let mut checker = TaskState::new(&sink);
+            let mut checker = TaskState::with_fresh_allocator(&sink);
             checker
                 .ufcs_methods
                 .extend(semantics::prelude::compute_prelude_ufcs(&store));
