@@ -64,6 +64,7 @@ description: "input: \nfn test() {\n  select {\n    _ => print(\"default\"),\n  
                                         byte_offset: 33,
                                         byte_length: 16,
                                     },
+                                    call_kind: None,
                                 },
                             },
                         },

@@ -88,6 +88,8 @@ description: "input: \nfn test(p: Point) {\n  let negation_x = -p.x;\n}\n"
                                 byte_offset: 41,
                                 byte_length: 3,
                             },
+                            dot_access_kind: None,
+                            receiver_coercion: None,
                         },
                         ty: Var {
                             id: uninferred,

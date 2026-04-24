@@ -112,6 +112,7 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                                     byte_offset: 44,
                                     byte_length: 19,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

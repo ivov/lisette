@@ -130,6 +130,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                                     byte_offset: 58,
                                     byte_length: 18,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

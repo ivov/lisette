@@ -211,6 +211,7 @@ description: "input: \nfn test(a: int, b: bool) {\n  if (a * 2 > 50) && b || is_
                                 byte_offset: 54,
                                 byte_length: 13,
                             },
+                            call_kind: None,
                         },
                         ty: Var {
                             id: uninferred,

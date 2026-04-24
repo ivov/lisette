@@ -50,6 +50,7 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                                         byte_offset: 29,
                                         byte_length: 11,
                                     },
+                                    call_kind: None,
                                 },
                                 consequence: Block {
                                     items: [
@@ -114,6 +115,7 @@ description: "input: \nfn test() {\n  loop {\n    if skip_this() {\n      contin
                                     byte_offset: 69,
                                     byte_length: 9,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

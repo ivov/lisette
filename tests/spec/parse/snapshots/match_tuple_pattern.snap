@@ -157,6 +157,7 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                     byte_offset: 58,
                                     byte_length: 15,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -243,6 +244,7 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                     byte_offset: 89,
                                     byte_length: 21,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -329,6 +331,7 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                     byte_offset: 126,
                                     byte_length: 21,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -422,6 +425,7 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                     byte_offset: 163,
                                     byte_length: 21,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

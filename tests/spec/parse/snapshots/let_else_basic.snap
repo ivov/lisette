@@ -177,6 +177,7 @@ description: "input: \nfn test() -> Option<int> {\n  let Some(x) = opt else { re
                         byte_offset: 73,
                         byte_length: 7,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

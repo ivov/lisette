@@ -65,6 +65,7 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                     byte_offset: 26,
                                     byte_length: 6,
                                 },
+                                call_kind: None,
                             },
                             ty: Var {
                                 id: uninferred,
@@ -100,6 +101,8 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                         byte_offset: 36,
                                         byte_length: 10,
                                     },
+                                    dot_access_kind: None,
+                                    receiver_coercion: None,
                                 },
                                 args: [
                                     Identifier {
@@ -163,6 +166,7 @@ description: "input: \nfn test() { let result = func()? + obj.method(a, b + c)?;
                                     byte_offset: 36,
                                     byte_length: 20,
                                 },
+                                call_kind: None,
                             },
                             ty: Var {
                                 id: uninferred,

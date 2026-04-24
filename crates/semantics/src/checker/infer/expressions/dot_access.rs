@@ -40,6 +40,8 @@ impl TaskState<'_> {
                     member,
                     ty: expected_ty.clone(),
                     span,
+                    dot_access_kind: None,
+                    receiver_coercion: None,
                 };
             }
         }
@@ -139,6 +141,8 @@ impl TaskState<'_> {
                     member,
                     ty: expected_ty.clone(),
                     span,
+                    dot_access_kind: None,
+                    receiver_coercion: None,
                 };
             }
         }
@@ -177,6 +181,8 @@ impl TaskState<'_> {
                 member,
                 ty: Type::Error,
                 span,
+                dot_access_kind: None,
+                receiver_coercion: None,
             };
         }
 
@@ -202,9 +208,7 @@ impl TaskState<'_> {
             self.as_static_method(store, &args)
         };
 
-        if let Some((expression, kind)) = resolved {
-            self.resolutions.mark_dot_access(span, kind);
-
+        if let Some((expression, _kind)) = resolved {
             if (member.as_str() == "append" || member.as_str() == "extend")
                 && resolved_expression_ty.is_ref()
                 && resolved_expression_ty.strip_refs().has_name("Slice")
@@ -241,6 +245,8 @@ impl TaskState<'_> {
             member,
             ty: Type::Error,
             span,
+            dot_access_kind: None,
+            receiver_coercion: None,
         }
     }
 
@@ -391,6 +397,8 @@ impl TaskState<'_> {
                 member: args.member_name.into(),
                 ty: field_ty,
                 span: *args.span,
+                dot_access_kind: Some(kind),
+                receiver_coercion: None,
             },
             kind,
         ))
@@ -421,6 +429,8 @@ impl TaskState<'_> {
             member: args.member_name.into(),
             ty: element_ty,
             span: *args.span,
+            dot_access_kind: Some(DotAccessKind::TupleElement),
+            receiver_coercion: None,
         })
     }
 
@@ -464,6 +474,8 @@ impl TaskState<'_> {
                 member: args.member_name.into(),
                 ty: Type::Error,
                 span: *args.span,
+                dot_access_kind: Some(DotAccessKind::ModuleMember),
+                receiver_coercion: None,
             });
         };
 
@@ -519,6 +531,8 @@ impl TaskState<'_> {
             member: args.member_name.into(),
             ty: member_ty,
             span: *args.span,
+            dot_access_kind: Some(DotAccessKind::ModuleMember),
+            receiver_coercion: None,
         })
     }
 
@@ -552,16 +566,9 @@ impl TaskState<'_> {
             return None;
         }
 
-        if let Some(expression) = self.as_method_value(store, args, &mut method_ty) {
-            let is_pointer_receiver = if let Type::Function { params, .. } = &method_ty {
-                !params.is_empty() && params[0].resolve_in(&self.env).is_ref()
-            } else {
-                false
-            };
-            let value_kind = DotAccessKind::InstanceMethodValue {
-                is_exported,
-                is_pointer_receiver,
-            };
+        if let Some((expression, value_kind)) =
+            self.as_method_value(store, args, &mut method_ty, is_exported)
+        {
             return Some((expression, value_kind));
         }
 
@@ -580,7 +587,7 @@ impl TaskState<'_> {
         }
         let actual_ty = args.expression_ty;
 
-        self.unify_receiver_with_coercion(
+        let receiver_coercion = self.unify_receiver_with_coercion(
             store,
             &receiver_ty,
             actual_ty,
@@ -597,6 +604,8 @@ impl TaskState<'_> {
                 member: args.member_name.into(),
                 ty: method_ty,
                 span: *args.span,
+                dot_access_kind: Some(kind),
+                receiver_coercion,
             },
             kind,
         ))
@@ -649,7 +658,8 @@ impl TaskState<'_> {
         store: &Store,
         args: &DotAccessResolutionArgs,
         method_ty: &mut Type,
-    ) -> Option<Expression> {
+        is_exported: bool,
+    ) -> Option<(Expression, DotAccessKind)> {
         let Type::Function { params, .. } = &*method_ty else {
             return None;
         };
@@ -673,16 +683,30 @@ impl TaskState<'_> {
 
         self.unify(store, args.expected_ty, method_ty, args.span);
 
-        Some(Expression::DotAccess {
-            expression: args.expression.clone().into(),
-            member: args.member_name.into(),
-            ty: method_ty.clone(),
-            span: *args.span,
-        })
+        let is_pointer_receiver = matches!(method_ty, Type::Function { params, .. } if !params.is_empty() && params[0].resolve_in(&self.env).is_ref());
+        let value_kind = DotAccessKind::InstanceMethodValue {
+            is_exported,
+            is_pointer_receiver,
+        };
+
+        Some((
+            Expression::DotAccess {
+                expression: args.expression.clone().into(),
+                member: args.member_name.into(),
+                ty: method_ty.clone(),
+                span: *args.span,
+                dot_access_kind: Some(value_kind),
+                receiver_coercion: None,
+            },
+            value_kind,
+        ))
     }
 
     /// Unifies receiver type with coercion support for method calls.
     /// Matches Go's behavior: auto-address (T → Ref<T>) and auto-deref (Ref<T> → T).
+    ///
+    /// Returns the coercion (if any) that should be attached to the enclosing
+    /// `DotAccess` expression so the emitter can apply it to the receiver.
     fn unify_receiver_with_coercion(
         &mut self,
         store: &Store,
@@ -691,12 +715,14 @@ impl TaskState<'_> {
         receiver_expression: &Expression,
         method_name: &str,
         span: &Span,
-    ) {
+    ) -> Option<ReceiverCoercion> {
         // Resolve to follow any type variable links before checking is_ref
         let receiver_ty = receiver_ty.resolve_in(&self.env);
         let actual_ty = actual_ty.resolve_in(&self.env);
         let receiver_is_ref = receiver_ty.is_ref();
         let actual_is_ref = actual_ty.is_ref();
+
+        let mut coercion = None;
 
         match (receiver_is_ref, actual_is_ref) {
             (true, false) => {
@@ -711,10 +737,7 @@ impl TaskState<'_> {
                             *span,
                         ));
                 } else {
-                    self.coercions.mark_coercion(
-                        receiver_expression.get_span(),
-                        ReceiverCoercion::AutoAddress,
-                    );
+                    coercion = Some(ReceiverCoercion::AutoAddress);
                     self.check_auto_address_mutation(store, receiver_expression, method_name, span);
                 }
                 // Unify inner types: T with T (from Ref<T>)
@@ -724,8 +747,7 @@ impl TaskState<'_> {
             }
             (false, true) => {
                 // Method expects T, have Ref<T> → auto-deref
-                self.coercions
-                    .mark_coercion(receiver_expression.get_span(), ReceiverCoercion::AutoDeref);
+                coercion = Some(ReceiverCoercion::AutoDeref);
                 // Unify inner types: T with T (from Ref<T>)
                 if let Some(inner) = actual_ty.inner() {
                     self.unify(store, &receiver_ty, &inner, span);
@@ -741,6 +763,8 @@ impl TaskState<'_> {
                 self.unify(store, &receiver_ty, &actual_ty, span);
             }
         }
+
+        coercion
     }
 
     /// When auto-addressing a receiver (T → Ref<T>), verify the binding
@@ -888,6 +912,8 @@ impl TaskState<'_> {
                 member: args.member_name.into(),
                 ty: variant_ty,
                 span: *args.span,
+                dot_access_kind: Some(kind),
+                receiver_coercion: None,
             },
             kind,
         ))
@@ -1006,6 +1032,8 @@ impl TaskState<'_> {
                 member: args.member_name.into(),
                 ty: method_ty,
                 span: *args.span,
+                dot_access_kind: Some(DotAccessKind::StaticMethod { is_exported }),
+                receiver_coercion: None,
             },
             DotAccessKind::StaticMethod { is_exported },
         ))

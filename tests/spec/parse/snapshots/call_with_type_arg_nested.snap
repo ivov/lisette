@@ -75,6 +75,7 @@ description: "input: \nfn test() { func<Map<string, int>>(); }\n"
                         byte_offset: 13,
                         byte_length: 24,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

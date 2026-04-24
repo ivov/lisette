@@ -184,6 +184,8 @@ description: "input: \nstruct Container<T> {\n  items: Vec<T>,\n}\n\nimpl<T> Con
                                     byte_offset: 122,
                                     byte_length: 10,
                                 },
+                                dot_access_kind: None,
+                                receiver_coercion: None,
                             },
                             ty: Var {
                                 id: uninferred,

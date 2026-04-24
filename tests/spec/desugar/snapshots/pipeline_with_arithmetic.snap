@@ -96,6 +96,7 @@ description: "input: fn test() { (1 + 2) |> double; }"
                         byte_offset: 12,
                         byte_length: 17,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

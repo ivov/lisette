@@ -180,6 +180,7 @@ description: "input: \nfn test(opt_res: Option<Result<int, string>>) {\n  match 
                                     byte_offset: 90,
                                     byte_length: 24,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -271,6 +272,7 @@ description: "input: \nfn test(opt_res: Option<Result<int, string>>) {\n  match 
                                     byte_offset: 139,
                                     byte_length: 26,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -326,6 +328,7 @@ description: "input: \nfn test(opt_res: Option<Result<int, string>>) {\n  match 
                                     byte_offset: 190,
                                     byte_length: 17,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

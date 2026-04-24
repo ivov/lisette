@@ -94,7 +94,6 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             semantics::validators::run(
                 &analysis,
                 &mut checker.facts,
-                &checker.coercions,
                 checker.sink,
                 &mut unused,
                 false,

@@ -85,6 +85,8 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                             byte_offset: 43,
                                             byte_length: 7,
                                         },
+                                        dot_access_kind: None,
+                                        receiver_coercion: None,
                                     },
                                     args: [
                                         Literal {
@@ -112,6 +114,7 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                         byte_offset: 43,
                                         byte_length: 11,
                                     },
+                                    call_kind: None,
                                 },
                                 body: Call {
                                     expression: Identifier {
@@ -152,6 +155,7 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                         byte_offset: 58,
                                         byte_length: 13,
                                     },
+                                    call_kind: None,
                                 },
                             },
                         },

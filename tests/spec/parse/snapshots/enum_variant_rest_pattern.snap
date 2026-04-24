@@ -240,6 +240,7 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                     byte_offset: 113,
                                     byte_length: 17,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -295,6 +296,7 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                     byte_offset: 156,
                                     byte_length: 15,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

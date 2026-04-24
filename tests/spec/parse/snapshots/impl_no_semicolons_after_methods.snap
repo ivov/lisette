@@ -319,6 +319,8 @@ description: "input: \nstruct Point {\n  x: int,\n  y: int,\n}\n\nimpl Point {\n
                                     byte_offset: 163,
                                     byte_length: 6,
                                 },
+                                dot_access_kind: None,
+                                receiver_coercion: None,
                             },
                             ty: Var {
                                 id: uninferred,

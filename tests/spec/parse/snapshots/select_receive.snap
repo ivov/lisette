@@ -122,6 +122,7 @@ description: "input: \nfn test(ch: Receiver<int>) {\n  select {\n    let x = ch 
                                         byte_offset: 59,
                                         byte_length: 10,
                                     },
+                                    call_kind: None,
                                 },
                             },
                         },

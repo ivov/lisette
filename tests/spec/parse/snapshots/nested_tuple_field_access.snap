@@ -123,6 +123,8 @@ description: "input: \nfn test(nested: ((int, int), int)) {\n  let x = nested.0.
                                 byte_offset: 48,
                                 byte_length: 8,
                             },
+                            dot_access_kind: None,
+                            receiver_coercion: None,
                         },
                         member: "0",
                         ty: Var {
@@ -133,6 +135,8 @@ description: "input: \nfn test(nested: ((int, int), int)) {\n  let x = nested.0.
                             byte_offset: 48,
                             byte_length: 10,
                         },
+                        dot_access_kind: None,
+                        receiver_coercion: None,
                     },
                     mutable: false,
                     mut_span: None,

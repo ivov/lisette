@@ -354,6 +354,7 @@ impl<'source> Parser<'source> {
             spread: spread.into(),
             type_args,
             span: self.span_from_offset(start_offset),
+            call_kind: None,
         }
     }
 
@@ -710,6 +711,8 @@ impl<'source> Parser<'source> {
                 expression: expression.into(),
                 member: index.to_string().into(),
                 span: self.span_from_offset(expression_start),
+                dot_access_kind: None,
+                receiver_coercion: None,
             };
         }
 
@@ -722,6 +725,8 @@ impl<'source> Parser<'source> {
             expression: expression.into(),
             member: field.into(),
             span: self.span_from_offset(expression_start),
+            dot_access_kind: None,
+            receiver_coercion: None,
         }
     }
 

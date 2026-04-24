@@ -66,6 +66,7 @@ description: "input: \nfn test() {\n  let x = loop {\n    if done() {\n      bre
                                             byte_offset: 37,
                                             byte_length: 6,
                                         },
+                                        call_kind: None,
                                     },
                                     consequence: Block {
                                         items: [

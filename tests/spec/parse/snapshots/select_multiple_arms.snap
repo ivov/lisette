@@ -157,6 +157,7 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                         byte_offset: 82,
                                         byte_length: 10,
                                     },
+                                    call_kind: None,
                                 },
                             },
                         },
@@ -186,6 +187,8 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                             byte_offset: 98,
                                             byte_length: 8,
                                         },
+                                        dot_access_kind: None,
+                                        receiver_coercion: None,
                                     },
                                     args: [
                                         Literal {
@@ -212,6 +215,7 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                         byte_offset: 98,
                                         byte_length: 17,
                                     },
+                                    call_kind: None,
                                 },
                                 body: Call {
                                     expression: Identifier {
@@ -252,6 +256,7 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                         byte_offset: 119,
                                         byte_length: 13,
                                     },
+                                    call_kind: None,
                                 },
                             },
                         },
@@ -296,6 +301,7 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                         byte_offset: 143,
                                         byte_length: 16,
                                     },
+                                    call_kind: None,
                                 },
                             },
                         },

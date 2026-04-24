@@ -89,6 +89,7 @@ description: "input: \nfn test(key: string) {\n  let value = get_map()[key];\n}\
                                 byte_offset: 38,
                                 byte_length: 9,
                             },
+                            call_kind: None,
                         },
                         index: Identifier {
                             value: "key",

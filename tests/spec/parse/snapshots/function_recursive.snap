@@ -229,6 +229,7 @@ description: "input: \nfn factorial(n: int) -> int {\n  if n <= 1 {\n    return 
                                 byte_offset: 76,
                                 byte_length: 16,
                             },
+                            call_kind: None,
                         },
                         ty: Var {
                             id: uninferred,

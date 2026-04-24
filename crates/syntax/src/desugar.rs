@@ -128,6 +128,7 @@ impl Desugarer {
                 type_args: vec![],
                 ty: Type::uninferred(),
                 span,
+                call_kind: None,
             },
 
             Expression::Call {
@@ -137,6 +138,7 @@ impl Desugarer {
                 type_args,
                 ty,
                 span: _,
+                call_kind,
             } => {
                 let mut new_args = vec![left];
                 new_args.extend(args);
@@ -147,6 +149,7 @@ impl Desugarer {
                     type_args,
                     ty,
                     span,
+                    call_kind,
                 }
             }
 

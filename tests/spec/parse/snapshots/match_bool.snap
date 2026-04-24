@@ -101,6 +101,7 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                                     byte_offset: 55,
                                     byte_length: 15,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -142,6 +143,7 @@ description: "input: \nfn test(active: bool) {\n  match active {\n    true  => s
                                     byte_offset: 85,
                                     byte_length: 14,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

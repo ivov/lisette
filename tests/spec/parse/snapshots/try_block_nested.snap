@@ -83,6 +83,7 @@ description: "input: \nfn test() {\n  let outer = try {\n    let inner = try {\n
                                                     byte_offset: 61,
                                                     byte_length: 13,
                                                 },
+                                                call_kind: None,
                                             },
                                             ty: Var {
                                                 id: uninferred,
@@ -148,6 +149,7 @@ description: "input: \nfn test() {\n  let outer = try {\n    let inner = try {\n
                                         byte_offset: 87,
                                         byte_length: 13,
                                     },
+                                    call_kind: None,
                                 },
                                 ty: Var {
                                     id: uninferred,

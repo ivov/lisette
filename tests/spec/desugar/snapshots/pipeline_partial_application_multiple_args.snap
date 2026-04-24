@@ -88,6 +88,7 @@ description: "input: fn test() { x |> clamp(0, 100); }"
                         byte_offset: 12,
                         byte_length: 18,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

@@ -144,6 +144,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..ini
                                     byte_offset: 68,
                                     byte_length: 22,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -198,6 +199,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..ini
                                     byte_offset: 102,
                                     byte_length: 14,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

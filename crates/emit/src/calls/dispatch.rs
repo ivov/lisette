@@ -119,7 +119,7 @@ impl Emitter<'_> {
             args,
             type_args,
             spread,
-            span: call_span,
+            call_kind,
             ..
         } = call_expression
         else {
@@ -128,11 +128,7 @@ impl Emitter<'_> {
         let function = callee.unwrap_parens();
         let spread = (**spread).as_ref();
 
-        let call_kind = self
-            .ctx
-            .resolutions
-            .get_call(*call_span)
-            .filter(|_| !self.is_local_binding(function));
+        let call_kind = call_kind.filter(|_| !self.is_local_binding(function));
 
         match call_kind {
             Some(CallKind::TupleStructConstructor) => {

@@ -334,6 +334,8 @@ impl<'source> Parser<'source> {
                         expression: lhs.into(),
                         member: field,
                         span: self.span_from_tokens(field_start),
+                        dot_access_kind: None,
+                        receiver_coercion: None,
                     }
                 }
             }

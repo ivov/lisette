@@ -178,6 +178,7 @@ description: "input: \nfn test(numbers: Slice<int>) {\n  let result = map(number
                             byte_offset: 47,
                             byte_length: 23,
                         },
+                        call_kind: None,
                     },
                     mutable: false,
                     mut_span: None,

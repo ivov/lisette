@@ -106,6 +106,7 @@ description: "input: \nfn test() {\n  let (_, status_code): (string, int) = http
                             byte_offset: 53,
                             byte_length: 14,
                         },
+                        call_kind: None,
                     },
                     mutable: false,
                     mut_span: None,

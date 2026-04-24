@@ -15,9 +15,7 @@ use ecow::EcoString;
 use scopes::Scopes;
 use syntax::ast::Visibility as AstVisibility;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span, StructFieldDefinition};
-use syntax::program::{
-    CoercionInfo, Definition, File, FileImport, MethodSignatures, Module, ResolutionInfo,
-};
+use syntax::program::{Definition, File, FileImport, MethodSignatures, Module};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 pub use type_env::{EnvResolve, Speculation, TypeEnv, VarState};
@@ -91,8 +89,6 @@ pub struct TaskState<'s> {
     pub builtins: BuiltinCache,
     pub sink: &'s LocalSink,
     pub facts: Facts,
-    pub coercions: CoercionInfo,
-    pub resolutions: ResolutionInfo,
     /// Recursion guard for interface satisfaction. Prevents
     /// `collect_interface_violations` from diverging when a bound on `T`
     /// transitively requires checking `T` against the same interface.
@@ -113,8 +109,6 @@ impl<'s> TaskState<'s> {
             builtins: BuiltinCache::default(),
             sink,
             facts: Facts::new(binding_ids),
-            coercions: CoercionInfo::default(),
-            resolutions: ResolutionInfo::default(),
             satisfying_stack: rustc_hash::FxHashSet::default(),
             method_cache: RefCell::new(HashMap::default()),
             ufcs_methods: HashSet::default(),

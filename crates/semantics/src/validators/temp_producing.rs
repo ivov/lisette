@@ -1,14 +1,14 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, FormatStringPart, Literal};
-use syntax::program::{CoercionInfo, ReceiverCoercion};
+use syntax::program::ReceiverCoercion;
 
-pub(super) fn run(typed_ast: &[Expression], coercions: &CoercionInfo, sink: &LocalSink) {
+pub(super) fn run(typed_ast: &[Expression], sink: &LocalSink) {
     for item in typed_ast {
-        visit_expression(item, coercions, sink);
+        visit_expression(item, sink);
     }
 }
 
-fn visit_expression(expression: &Expression, coercions: &CoercionInfo, sink: &LocalSink) {
+fn visit_expression(expression: &Expression, sink: &LocalSink) {
     match expression {
         Expression::Call {
             expression: callee,
@@ -17,17 +17,17 @@ fn visit_expression(expression: &Expression, coercions: &CoercionInfo, sink: &Lo
             ..
         } => {
             for arg in args {
-                check(arg, coercions, sink);
+                check(arg, sink);
             }
             if let Some(s) = spread.as_ref() {
-                check(s, coercions, sink);
+                check(s, sink);
             }
-            visit_expression(callee, coercions, sink);
+            visit_expression(callee, sink);
             for arg in args {
-                visit_expression(arg, coercions, sink);
+                visit_expression(arg, sink);
             }
             if let Some(s) = spread.as_ref() {
-                visit_expression(s, coercions, sink);
+                visit_expression(s, sink);
             }
             return;
         }
@@ -35,31 +35,31 @@ fn visit_expression(expression: &Expression, coercions: &CoercionInfo, sink: &Lo
             field_assignments, ..
         } => {
             for f in field_assignments {
-                check(&f.value, coercions, sink);
+                check(&f.value, sink);
             }
         }
         Expression::Binary { left, right, .. } => {
-            check(left, coercions, sink);
-            check(right, coercions, sink);
+            check(left, sink);
+            check(right, sink);
         }
         Expression::Unary { expression, .. } | Expression::Reference { expression, .. } => {
-            check(expression, coercions, sink);
+            check(expression, sink);
         }
         Expression::Cast { expression, .. } => {
-            check(expression, coercions, sink);
+            check(expression, sink);
         }
         Expression::If { condition, .. } | Expression::While { condition, .. } => {
-            check(condition, coercions, sink);
+            check(condition, sink);
         }
         Expression::IndexedAccess { index, .. } => {
-            check(index, coercions, sink);
+            check(index, sink);
         }
         Expression::Range { start, end, .. } => {
             if let Some(s) = start {
-                check(s, coercions, sink);
+                check(s, sink);
             }
             if let Some(e) = end {
-                check(e, coercions, sink);
+                check(e, sink);
             }
         }
         Expression::Literal {
@@ -67,7 +67,7 @@ fn visit_expression(expression: &Expression, coercions: &CoercionInfo, sink: &Lo
             ..
         } => {
             for e in elements {
-                check(e, coercions, sink);
+                check(e, sink);
             }
         }
         Expression::Literal {
@@ -76,7 +76,7 @@ fn visit_expression(expression: &Expression, coercions: &CoercionInfo, sink: &Lo
         } => {
             for p in parts {
                 if let FormatStringPart::Expression(e) = p {
-                    check(e, coercions, sink);
+                    check(e, sink);
                 }
             }
         }
@@ -84,12 +84,12 @@ fn visit_expression(expression: &Expression, coercions: &CoercionInfo, sink: &Lo
     }
 
     for child in expression.children() {
-        visit_expression(child, coercions, sink);
+        visit_expression(child, sink);
     }
 }
 
-fn check(expression: &Expression, coercions: &CoercionInfo, sink: &LocalSink) {
-    if is_temp_producing(expression) || has_auto_address_on_call(expression, coercions) {
+fn check(expression: &Expression, sink: &LocalSink) {
+    if is_temp_producing(expression) || has_auto_address_on_call(expression) {
         sink.push(diagnostics::infer::complex_sub_expression(
             expression.get_span(),
         ));
@@ -110,20 +110,21 @@ pub(crate) fn is_temp_producing(expression: &Expression) -> bool {
     )
 }
 
-fn has_auto_address_on_call(expression: &Expression, coercions: &CoercionInfo) -> bool {
+fn has_auto_address_on_call(expression: &Expression) -> bool {
     let expression = expression.unwrap_parens();
     if let Expression::Call { expression, .. } = expression
         && let Expression::DotAccess {
             expression: receiver,
+            receiver_coercion,
             ..
         } = expression.unwrap_parens()
     {
         if matches!(receiver.unwrap_parens(), Expression::Call { .. })
-            && coercions.get_coercion(receiver.get_span()) == Some(ReceiverCoercion::AutoAddress)
+            && *receiver_coercion == Some(ReceiverCoercion::AutoAddress)
         {
             return true;
         }
-        return has_auto_address_on_call(receiver, coercions);
+        return has_auto_address_on_call(receiver);
     }
     false
 }

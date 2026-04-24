@@ -1,6 +1,6 @@
 use diagnostics::LocalSink;
 use syntax::ast::Expression;
-use syntax::program::{CoercionInfo, UnusedInfo};
+use syntax::program::UnusedInfo;
 
 use crate::context::AnalysisContext;
 use crate::facts::Facts;
@@ -29,14 +29,12 @@ pub(crate) struct ValidatorContext<'a> {
     pub module_id: &'a str,
     pub analysis: &'a AnalysisContext<'a>,
     pub facts: &'a mut Facts,
-    pub coercions: &'a CoercionInfo,
     pub sink: &'a LocalSink,
 }
 
 pub fn run(
     analysis: &AnalysisContext,
     facts: &mut Facts,
-    coercions: &CoercionInfo,
     sink: &LocalSink,
     unused: &mut UnusedInfo,
     run_lints: bool,
@@ -51,7 +49,6 @@ pub fn run(
                 module_id: &module.id,
                 analysis,
                 facts,
-                coercions,
                 sink,
             };
             run_per_file(&mut ctx);
@@ -84,7 +81,7 @@ fn run_per_file(ctx: &mut ValidatorContext<'_>) {
     newtype::run(ctx.typed_ast, store, ctx.sink);
     native_value_usage::run(ctx.typed_ast, ctx.module_id, store, ctx.sink);
     enum_variant_value::run(ctx.typed_ast, store, ctx.sink);
-    temp_producing::run(ctx.typed_ast, ctx.coercions, ctx.sink);
+    temp_producing::run(ctx.typed_ast, ctx.sink);
     unused_expressions::run(ctx.typed_ast, ctx.module_id, store, ctx.facts);
     post_inference::run(ctx.facts, ctx.sink);
 }

@@ -65,6 +65,7 @@ description: "input: \nfn test() {\n  let result = try {\n    do_something()?;\n
                                         byte_offset: 38,
                                         byte_length: 14,
                                     },
+                                    call_kind: None,
                                 },
                                 ty: Var {
                                     id: uninferred,

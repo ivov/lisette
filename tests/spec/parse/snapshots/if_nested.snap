@@ -193,6 +193,7 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                                 byte_offset: 61,
                                                 byte_length: 22,
                                             },
+                                            call_kind: None,
                                         },
                                     ],
                                     ty: Var {
@@ -245,6 +246,7 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                                 byte_offset: 104,
                                                 byte_length: 35,
                                             },
+                                            call_kind: None,
                                         },
                                     ],
                                     ty: Var {

@@ -127,6 +127,7 @@ description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large
                                     byte_offset: 38,
                                     byte_length: 19,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {
@@ -218,6 +219,7 @@ description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large
                                         byte_offset: 84,
                                         byte_length: 14,
                                     },
+                                    call_kind: None,
                                 },
                             ],
                             ty: Var {
@@ -270,6 +272,7 @@ description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large
                                         byte_offset: 115,
                                         byte_length: 24,
                                     },
+                                    call_kind: None,
                                 },
                             ],
                             ty: Var {

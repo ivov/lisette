@@ -107,6 +107,7 @@ description: "input: \nfn test() {\n  let (a, b): (int, string) = get_pair();\n}
                             byte_offset: 43,
                             byte_length: 10,
                         },
+                        call_kind: None,
                     },
                     mutable: false,
                     mut_span: None,

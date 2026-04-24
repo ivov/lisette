@@ -63,6 +63,7 @@ description: "input: \nfn test() {\n  loop {\n    print(\"forever\");\n  }\n}\n"
                                     byte_offset: 26,
                                     byte_length: 16,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

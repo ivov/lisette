@@ -227,6 +227,7 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                                     byte_offset: 105,
                                     byte_length: 17,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

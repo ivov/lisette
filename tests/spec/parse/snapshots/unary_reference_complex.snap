@@ -95,6 +95,8 @@ description: "input: \nfn test() { let result = &(a + b).field; }\n"
                                 byte_offset: 27,
                                 byte_length: 13,
                             },
+                            dot_access_kind: None,
+                            receiver_coercion: None,
                         },
                         ty: Var {
                             id: uninferred,

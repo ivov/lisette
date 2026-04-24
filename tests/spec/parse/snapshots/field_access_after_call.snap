@@ -63,6 +63,7 @@ description: "input: \nfn test() {\n  let x_coord = get_point().x;\n}\n"
                                 byte_offset: 29,
                                 byte_length: 11,
                             },
+                            call_kind: None,
                         },
                         member: "x",
                         ty: Var {
@@ -73,6 +74,8 @@ description: "input: \nfn test() {\n  let x_coord = get_point().x;\n}\n"
                             byte_offset: 29,
                             byte_length: 13,
                         },
+                        dot_access_kind: None,
+                        receiver_coercion: None,
                     },
                     mutable: false,
                     mut_span: None,

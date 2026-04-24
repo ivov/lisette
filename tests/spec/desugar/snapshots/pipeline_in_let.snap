@@ -76,6 +76,7 @@ description: "input: fn test() { let result = x |> func; }"
                             byte_offset: 25,
                             byte_length: 9,
                         },
+                        call_kind: None,
                     },
                     mutable: false,
                     mut_span: None,

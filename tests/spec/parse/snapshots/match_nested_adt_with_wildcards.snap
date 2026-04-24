@@ -248,6 +248,7 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     byte_offset: 135,
                                     byte_length: 16,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -303,6 +304,7 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     byte_offset: 182,
                                     byte_length: 16,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -379,6 +381,7 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     byte_offset: 229,
                                     byte_length: 27,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -491,6 +494,7 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                     byte_offset: 294,
                                     byte_length: 35,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

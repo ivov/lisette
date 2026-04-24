@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, Span, StructKind, UnaryOperator};
+use syntax::ast::{Expression, StructKind, UnaryOperator};
 use syntax::program::{Definition, DotAccessKind as SemanticDotKind, ReceiverCoercion};
 use syntax::types::Type;
 
@@ -14,17 +14,16 @@ impl Emitter<'_> {
         expression: &Expression,
         member: &str,
         result_ty: &Type,
-        span: Span,
+        dot_access_kind: Option<SemanticDotKind>,
+        receiver_coercion: Option<ReceiverCoercion>,
     ) -> String {
-        let dot_access_kind = self.ctx.resolutions.get_dot_access(span);
-
         if let Some(s) =
             self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind)
         {
             return s;
         }
 
-        let expression_string = self.emit_coerced_expression(output, expression);
+        let expression_string = self.emit_coerced_expression(output, expression, receiver_coercion);
         let expression_ty = expression.get_type();
 
         if let Some(s) = self.try_emit_tuple_member_dot(
@@ -245,9 +244,12 @@ impl Emitter<'_> {
     ///
     /// Handles explicit deref (`.*`), absorbed `Ref<T>` generics, and auto-address/auto-deref
     /// coercions. Returns the Go expression string ready for member access.
-    fn emit_coerced_expression(&mut self, output: &mut String, expression: &Expression) -> String {
-        let coercion = self.ctx.coercions.get_coercion(expression.get_span());
-
+    fn emit_coerced_expression(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        coercion: Option<ReceiverCoercion>,
+    ) -> String {
         let (expression_string, had_explicit_deref) = if let Expression::Unary {
             operator: UnaryOperator::Deref,
             expression: inner,

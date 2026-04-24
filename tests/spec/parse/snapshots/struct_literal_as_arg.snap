@@ -130,6 +130,7 @@ description: "input: \nfn test(x_val: int) {\n  process(Point { x: x_val, y: 0 }
                         byte_offset: 25,
                         byte_length: 33,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

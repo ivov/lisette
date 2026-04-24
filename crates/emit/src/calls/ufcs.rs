@@ -81,6 +81,7 @@ impl Emitter<'_> {
         let Expression::DotAccess {
             expression: receiver,
             member,
+            receiver_coercion: coercion,
             ..
         } = function
         else {
@@ -95,7 +96,7 @@ impl Emitter<'_> {
             unreachable!("UFCS receiver must be a constructor type");
         };
 
-        let coercion = self.ctx.coercions.get_coercion(receiver.get_span());
+        let coercion = *coercion;
 
         // Stage receiver + args together for eval-order sequencing
         let mut all_stages: Vec<Staged> =

@@ -50,6 +50,7 @@ description: "input: \nfn test() {\n  loop {\n    if should_stop() {\n      brea
                                         byte_offset: 29,
                                         byte_length: 13,
                                     },
+                                    call_kind: None,
                                 },
                                 consequence: Block {
                                     items: [

@@ -180,6 +180,7 @@ description: "input: \nfn outer() {\n  fn inner(x: int) -> int {\n    return x *
                         byte_offset: 68,
                         byte_length: 8,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

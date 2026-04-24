@@ -139,6 +139,8 @@ description: "input: \nfn test() {\n  let mut p = Point { x: 1, y: 1};\n  p.x = 
                             byte_offset: 50,
                             byte_length: 3,
                         },
+                        dot_access_kind: None,
+                        receiver_coercion: None,
                     },
                     value: Literal {
                         literal: Integer {

@@ -47,6 +47,7 @@ description: "input: \nfn test() {\n  task compute();\n}\n"
                             byte_offset: 20,
                             byte_length: 9,
                         },
+                        call_kind: None,
                     },
                     ty: Var {
                         id: uninferred,

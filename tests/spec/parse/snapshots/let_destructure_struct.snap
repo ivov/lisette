@@ -100,6 +100,7 @@ description: "input: \nfn test() {\n  let Point { x, y: y_coord }: Point = get_p
                             byte_offset: 52,
                             byte_length: 11,
                         },
+                        call_kind: None,
                     },
                     mutable: false,
                     mut_span: None,

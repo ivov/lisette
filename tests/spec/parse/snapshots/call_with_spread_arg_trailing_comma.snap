@@ -60,6 +60,7 @@ description: "input: \nfn test() { func(..xs,); }\n"
                         byte_offset: 13,
                         byte_length: 11,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

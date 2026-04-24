@@ -150,6 +150,7 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     byte_offset: 61,
                                     byte_length: 15,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -247,6 +248,7 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     byte_offset: 106,
                                     byte_length: 21,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -344,6 +346,7 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     byte_offset: 157,
                                     byte_length: 21,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -448,6 +451,7 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                     byte_offset: 208,
                                     byte_length: 29,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

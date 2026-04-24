@@ -5,8 +5,7 @@ mod module;
 
 pub use definition::{Definition, Interface, MethodSignatures, Visibility};
 pub use emit_input::{
-    CallKind, CoercionInfo, DotAccessKind, EmitInput, MutationInfo, NativeTypeKind,
-    ReceiverCoercion, ResolutionInfo, UnusedInfo,
+    CallKind, DotAccessKind, EmitInput, MutationInfo, NativeTypeKind, ReceiverCoercion, UnusedInfo,
 };
 pub use file::{File, FileImport};
 pub use module::{Module, ModuleId, ModuleInfo};

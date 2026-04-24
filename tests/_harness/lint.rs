@@ -85,14 +85,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
 
     let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
     let mut unused = UnusedInfo::default();
-    validators::run(
-        &analysis,
-        &mut checker.facts,
-        &checker.coercions,
-        &sink,
-        &mut unused,
-        true,
-    );
+    validators::run(&analysis, &mut checker.facts, &sink, &mut unused, true);
 
     sink.take()
 }

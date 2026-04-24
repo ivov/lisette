@@ -64,6 +64,7 @@ description: "input: \nfn test() {\n  let result = recover {\n    do_something()
                                     byte_offset: 42,
                                     byte_length: 14,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

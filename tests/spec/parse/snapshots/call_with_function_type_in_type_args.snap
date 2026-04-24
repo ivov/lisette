@@ -45,6 +45,8 @@ description: "input: \nfn test() { Map.new<string, fn(int, int) -> int>(); }\n"
                             byte_offset: 13,
                             byte_length: 7,
                         },
+                        dot_access_kind: None,
+                        receiver_coercion: None,
                     },
                     args: [],
                     spread: None,
@@ -103,6 +105,7 @@ description: "input: \nfn test() { Map.new<string, fn(int, int) -> int>(); }\n"
                         byte_offset: 13,
                         byte_length: 38,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

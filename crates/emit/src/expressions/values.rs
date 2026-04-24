@@ -190,8 +190,17 @@ impl Emitter<'_> {
                 expression,
                 member,
                 ty,
-                span,
-            } => self.emit_dot_access(output, expression, member, ty, *span),
+                dot_access_kind,
+                receiver_coercion,
+                ..
+            } => self.emit_dot_access(
+                output,
+                expression,
+                member,
+                ty,
+                *dot_access_kind,
+                *receiver_coercion,
+            ),
             Expression::IndexedAccess {
                 expression, index, ..
             } => self.emit_index_access(output, expression, index),

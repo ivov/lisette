@@ -276,6 +276,7 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                                     byte_offset: 104,
                                     byte_length: 12,
                                 },
+                                call_kind: None,
                             },
                             Assignment {
                                 target: Identifier {

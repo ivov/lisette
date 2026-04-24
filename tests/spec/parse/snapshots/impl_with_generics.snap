@@ -164,6 +164,8 @@ description: "input: \nstruct Container<T> {\n  value: T,\n}\n\nimpl<T> Containe
                                     byte_offset: 108,
                                     byte_length: 10,
                                 },
+                                dot_access_kind: None,
+                                receiver_coercion: None,
                             },
                             ty: Var {
                                 id: uninferred,

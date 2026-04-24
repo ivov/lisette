@@ -88,6 +88,8 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                                     byte_offset: 41,
                                     byte_length: 8,
                                 },
+                                dot_access_kind: None,
+                                receiver_coercion: None,
                             },
                             member: "user",
                             ty: Var {
@@ -98,6 +100,8 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                                 byte_offset: 41,
                                 byte_length: 13,
                             },
+                            dot_access_kind: None,
+                            receiver_coercion: None,
                         },
                         member: "name",
                         ty: Var {
@@ -108,6 +112,8 @@ description: "input: \nfn test(cfg: Config) {\n  let username = cfg.auth.user.na
                             byte_offset: 41,
                             byte_length: 18,
                         },
+                        dot_access_kind: None,
+                        receiver_coercion: None,
                     },
                     mutable: false,
                     mut_span: None,

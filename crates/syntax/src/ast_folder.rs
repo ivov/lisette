@@ -45,6 +45,7 @@ pub trait AstFolder {
                 type_args,
                 ty,
                 span,
+                call_kind,
             } => Call {
                 expression: Box::new(self.fold_expression(*expression)?),
                 args: self.fold_vec(args)?,
@@ -52,6 +53,7 @@ pub trait AstFolder {
                 type_args,
                 ty,
                 span,
+                call_kind,
             },
 
             Block { items, ty, span } => Block {
@@ -206,11 +208,15 @@ pub trait AstFolder {
                 member,
                 ty,
                 span,
+                dot_access_kind,
+                receiver_coercion,
             } => DotAccess {
                 expression: Box::new(self.fold_expression(*expression)?),
                 member,
                 ty,
                 span,
+                dot_access_kind,
+                receiver_coercion,
             },
 
             IndexedAccess {

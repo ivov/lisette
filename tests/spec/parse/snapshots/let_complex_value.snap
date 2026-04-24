@@ -138,6 +138,7 @@ description: "input: \nfn test() {\n  let result = (10 + 5) * 2 / calculate_some
                                 byte_offset: 43,
                                 byte_length: 21,
                             },
+                            call_kind: None,
                         },
                         ty: Var {
                             id: uninferred,

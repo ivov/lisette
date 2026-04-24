@@ -63,6 +63,7 @@ description: "input: \nfn test() {\n  task {\n    print(\"concurrent task\");\n 
                                     byte_offset: 26,
                                     byte_length: 24,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

@@ -217,6 +217,7 @@ description: "input: \nfn test(items: Slice<Option<int>>) {\n  let mut i = 0;\n 
                                     byte_offset: 92,
                                     byte_length: 8,
                                 },
+                                call_kind: None,
                             },
                             Assignment {
                                 target: Identifier {

@@ -166,6 +166,7 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                                     byte_offset: 76,
                                     byte_length: 17,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

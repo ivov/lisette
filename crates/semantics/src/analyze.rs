@@ -109,7 +109,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
 
     let binding_ids = Arc::new(BindingIdAllocator::new());
 
-    let (mut facts, coercions, resolutions, cached_modules, compiled_modules, ufcs_methods) = {
+    let (mut facts, cached_modules, compiled_modules, ufcs_methods) = {
         let mut checker = TaskState::new(&sink, binding_ids.clone());
         checker
             .ufcs_methods
@@ -243,8 +243,6 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
 
         (
             checker.facts,
-            checker.coercions,
-            checker.resolutions,
             cached_modules,
             compiled_modules,
             checker.ufcs_methods,
@@ -258,7 +256,6 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         validators::run(
             &analysis,
             &mut facts,
-            &coercions,
             &sink,
             &mut unused,
             input.config.run_lints,
@@ -347,8 +344,6 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         entry_module_id: ENTRY_MODULE_ID.to_string(),
         unused,
         mutations,
-        coercions,
-        resolutions,
         cached_modules,
         ufcs_methods,
         typedef_sources,

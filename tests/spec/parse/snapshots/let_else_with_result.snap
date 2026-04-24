@@ -84,6 +84,7 @@ description: "input: \nfn test() -> int {\n  let Ok(value) = get_result() else {
                             byte_offset: 38,
                             byte_length: 12,
                         },
+                        call_kind: None,
                     },
                     mutable: false,
                     mut_span: None,

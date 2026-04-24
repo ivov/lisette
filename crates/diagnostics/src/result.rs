@@ -1,9 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ParseError;
-use syntax::program::{
-    CoercionInfo, Definition, EmitInput, File, ModuleInfo, MutationInfo, ResolutionInfo, UnusedInfo,
-};
+use syntax::program::{Definition, EmitInput, File, ModuleInfo, MutationInfo, UnusedInfo};
 use syntax::types::Symbol;
 
 use crate::LisetteDiagnostic;
@@ -22,8 +20,6 @@ pub struct SemanticResult {
     pub entry_module_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
-    pub coercions: CoercionInfo,
-    pub resolutions: ResolutionInfo,
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
     pub typedef_sources: HashMap<u32, TypedefSource>,
@@ -41,8 +37,6 @@ impl SemanticResult {
             entry_module_id: entry_module_id.to_string(),
             unused: UnusedInfo::default(),
             mutations: MutationInfo::default(),
-            coercions: CoercionInfo::default(),
-            resolutions: ResolutionInfo::default(),
             cached_modules: HashSet::default(),
             ufcs_methods: HashSet::default(),
             typedef_sources: HashMap::default(),
@@ -62,8 +56,6 @@ impl SemanticResult {
             entry_module_id: self.entry_module_id,
             unused: self.unused,
             mutations: self.mutations,
-            coercions: self.coercions,
-            resolutions: self.resolutions,
             cached_modules: self.cached_modules,
             ufcs_methods: self.ufcs_methods,
             go_package_names: self.go_package_names,

@@ -66,6 +66,7 @@ description: "input: \nfn test() {\n  let name = load_config()?.user?.name;\n}\n
                                             byte_offset: 26,
                                             byte_length: 13,
                                         },
+                                        call_kind: None,
                                     },
                                     ty: Var {
                                         id: uninferred,
@@ -85,6 +86,8 @@ description: "input: \nfn test() {\n  let name = load_config()?.user?.name;\n}\n
                                     byte_offset: 26,
                                     byte_length: 19,
                                 },
+                                dot_access_kind: None,
+                                receiver_coercion: None,
                             },
                             ty: Var {
                                 id: uninferred,
@@ -104,6 +107,8 @@ description: "input: \nfn test() {\n  let name = load_config()?.user?.name;\n}\n
                             byte_offset: 26,
                             byte_length: 25,
                         },
+                        dot_access_kind: None,
+                        receiver_coercion: None,
                     },
                     mutable: false,
                     mut_span: None,

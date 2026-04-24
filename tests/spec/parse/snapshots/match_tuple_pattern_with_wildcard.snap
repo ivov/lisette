@@ -179,6 +179,7 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                     byte_offset: 84,
                                     byte_length: 27,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -257,6 +258,7 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                     byte_offset: 140,
                                     byte_length: 15,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -306,6 +308,7 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                     byte_offset: 184,
                                     byte_length: 14,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

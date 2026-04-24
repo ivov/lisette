@@ -111,6 +111,7 @@ description: "input: fn test() { let x = 5; f\"result: {x |> double}\"; }"
                                         byte_offset: 34,
                                         byte_length: 11,
                                     },
+                                    call_kind: None,
                                 },
                             ),
                         ],

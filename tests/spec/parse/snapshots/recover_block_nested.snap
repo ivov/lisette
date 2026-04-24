@@ -82,6 +82,7 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                                 byte_offset: 69,
                                                 byte_length: 13,
                                             },
+                                            call_kind: None,
                                         },
                                     ],
                                     ty: Var {
@@ -137,6 +138,7 @@ description: "input: \nfn test() {\n  let outer = recover {\n    let inner = rec
                                     byte_offset: 94,
                                     byte_length: 13,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

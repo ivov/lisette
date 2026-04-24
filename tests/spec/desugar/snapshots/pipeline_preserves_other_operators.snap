@@ -145,6 +145,7 @@ description: "input: fn test() { let a = 1 + 2; let b = a |> double; }"
                             byte_offset: 35,
                             byte_length: 11,
                         },
+                        call_kind: None,
                     },
                     mutable: false,
                     mut_span: None,

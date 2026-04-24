@@ -121,6 +121,7 @@ description: "input: \nfn test() { for i in 0..5 { print(i); } }\n"
                                     byte_offset: 29,
                                     byte_length: 8,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

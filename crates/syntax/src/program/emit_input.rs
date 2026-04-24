@@ -7,9 +7,6 @@ use crate::types::{Symbol, Type};
 
 use super::{Definition, File, ModuleInfo};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct ReceiverId(Span);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReceiverCoercion {
     /// Insert `&` to convert `T` to `Ref<T>`
@@ -19,45 +16,27 @@ pub enum ReceiverCoercion {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct CoercionInfo {
-    receivers: HashMap<ReceiverId, ReceiverCoercion>,
-}
-
-impl CoercionInfo {
-    pub fn mark_coercion(&mut self, span: Span, coercion: ReceiverCoercion) {
-        self.receivers.insert(ReceiverId(span), coercion);
-    }
-
-    pub fn get_coercion(&self, span: Span) -> Option<ReceiverCoercion> {
-        self.receivers.get(&ReceiverId(span)).copied()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct BindingId(Span);
-
-#[derive(Debug, Clone, Default)]
 pub struct UnusedInfo {
-    bindings: HashSet<BindingId>,
-    definitions: HashSet<BindingId>,
+    bindings: HashSet<Span>,
+    definitions: HashSet<Span>,
     pub imports_by_module: HashMap<EcoString, HashSet<EcoString>>,
 }
 
 impl UnusedInfo {
     pub fn mark_binding_unused(&mut self, span: Span) {
-        self.bindings.insert(BindingId(span));
+        self.bindings.insert(span);
     }
 
     pub fn is_unused_binding(&self, pattern: &Pattern) -> bool {
         match pattern {
-            Pattern::Identifier { span, .. } => self.bindings.contains(&BindingId(*span)),
+            Pattern::Identifier { span, .. } => self.bindings.contains(span),
             Pattern::AsBinding { span, name, .. } => {
                 let name_span = Span::new(
                     span.file_id,
                     span.byte_offset + span.byte_length - name.len() as u32,
                     name.len() as u32,
                 );
-                self.bindings.contains(&BindingId(name_span))
+                self.bindings.contains(&name_span)
             }
             _ => false,
         }
@@ -65,17 +44,17 @@ impl UnusedInfo {
 
     pub fn is_unused_rest_binding(&self, rest: &RestPattern) -> bool {
         match rest {
-            RestPattern::Bind { span, .. } => self.bindings.contains(&BindingId(*span)),
+            RestPattern::Bind { span, .. } => self.bindings.contains(span),
             _ => false,
         }
     }
 
     pub fn mark_definition_unused(&mut self, span: Span) {
-        self.definitions.insert(BindingId(span));
+        self.definitions.insert(span);
     }
 
     pub fn is_unused_definition(&self, span: &Span) -> bool {
-        self.definitions.contains(&BindingId(*span))
+        self.definitions.contains(span)
     }
 }
 
@@ -197,37 +176,6 @@ pub enum CallKind {
     ReceiverMethodUfcs { is_public: bool },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct ResolutionId(Span);
-
-/// Pre-computed resolution metadata from type checking.
-///
-/// Follows the same pattern as `CoercionInfo`: keyed by expression span,
-/// populated during inference, consumed by the emitter.
-#[derive(Debug, Clone, Default)]
-pub struct ResolutionInfo {
-    dot_accesses: HashMap<ResolutionId, DotAccessKind>,
-    calls: HashMap<ResolutionId, CallKind>,
-}
-
-impl ResolutionInfo {
-    pub fn mark_dot_access(&mut self, span: Span, kind: DotAccessKind) {
-        self.dot_accesses.insert(ResolutionId(span), kind);
-    }
-
-    pub fn get_dot_access(&self, span: Span) -> Option<DotAccessKind> {
-        self.dot_accesses.get(&ResolutionId(span)).copied()
-    }
-
-    pub fn mark_call(&mut self, span: Span, meta: CallKind) {
-        self.calls.insert(ResolutionId(span), meta);
-    }
-
-    pub fn get_call(&self, span: Span) -> Option<CallKind> {
-        self.calls.get(&ResolutionId(span)).copied()
-    }
-}
-
 pub struct EmitInput {
     pub files: HashMap<u32, File>,
     pub definitions: HashMap<Symbol, Definition>,
@@ -235,8 +183,6 @@ pub struct EmitInput {
     pub entry_module_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
-    pub coercions: CoercionInfo,
-    pub resolutions: ResolutionInfo,
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
     pub go_package_names: HashMap<String, String>,

@@ -106,6 +106,7 @@ description: "input: \nfn test() {\n  {\n    let x = 5;\n    x |> double\n  }\n}
                                 byte_offset: 36,
                                 byte_length: 11,
                             },
+                            call_kind: None,
                         },
                     ],
                     ty: Var {

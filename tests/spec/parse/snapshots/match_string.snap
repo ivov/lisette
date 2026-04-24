@@ -115,6 +115,7 @@ description: "input: \nfn test(command: string) {\n  match command {\n    \"star
                                     byte_offset: 61,
                                     byte_length: 13,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -170,6 +171,7 @@ description: "input: \nfn test(command: string) {\n  match command {\n    \"star
                                     byte_offset: 91,
                                     byte_length: 12,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -219,6 +221,7 @@ description: "input: \nfn test(command: string) {\n  match command {\n    \"star
                                     byte_offset: 120,
                                     byte_length: 24,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

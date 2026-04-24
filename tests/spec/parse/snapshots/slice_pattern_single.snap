@@ -146,6 +146,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [x] =>
                                     byte_offset: 57,
                                     byte_length: 18,
                                 },
+                                call_kind: None,
                             },
                         },
                         MatchArm {
@@ -195,6 +196,7 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [x] =>
                                     byte_offset: 86,
                                     byte_length: 14,
                                 },
+                                call_kind: None,
                             },
                         },
                     ],

@@ -72,6 +72,7 @@ description: "input: \nfn test() -> int {\n  let x = {\n    foo()\n    -1\n  };\
                                     byte_offset: 36,
                                     byte_length: 5,
                                 },
+                                call_kind: None,
                             },
                             Unary {
                                 operator: Negative,

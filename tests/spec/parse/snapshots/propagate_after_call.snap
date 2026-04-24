@@ -63,6 +63,7 @@ description: "input: \nfn test() {\n  let data = load_data()?;\n}\n"
                                 byte_offset: 26,
                                 byte_length: 11,
                             },
+                            call_kind: None,
                         },
                         ty: Var {
                             id: uninferred,

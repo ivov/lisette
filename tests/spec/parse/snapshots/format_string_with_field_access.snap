@@ -67,6 +67,8 @@ description: "input: \nfn test() { let result = f\"name: {person.name}\"; }\n"
                                             byte_offset: 35,
                                             byte_length: 11,
                                         },
+                                        dot_access_kind: None,
+                                        receiver_coercion: None,
                                     },
                                 ),
                             ],

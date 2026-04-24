@@ -81,6 +81,7 @@ description: "input: \nfn test() {\n  let result = try {\n    let a = get_a()?;\
                                             byte_offset: 46,
                                             byte_length: 7,
                                         },
+                                        call_kind: None,
                                     },
                                     ty: Var {
                                         id: uninferred,
@@ -147,6 +148,7 @@ description: "input: \nfn test() {\n  let result = try {\n    let a = get_a()?;\
                                             byte_offset: 68,
                                             byte_length: 7,
                                         },
+                                        call_kind: None,
                                     },
                                     ty: Var {
                                         id: uninferred,

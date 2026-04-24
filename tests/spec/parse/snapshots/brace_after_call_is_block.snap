@@ -149,6 +149,7 @@ description: "input: \nfn get_value() -> int { 1 }\nfn test() {\n  let x = 1;\n 
                         byte_offset: 56,
                         byte_length: 11,
                     },
+                    call_kind: None,
                 },
                 Block {
                     items: [

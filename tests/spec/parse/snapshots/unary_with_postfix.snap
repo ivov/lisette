@@ -63,6 +63,8 @@ description: "input: \nfn test() { let result = !obj.method(); }\n"
                                     byte_offset: 27,
                                     byte_length: 10,
                                 },
+                                dot_access_kind: None,
+                                receiver_coercion: None,
                             },
                             args: [],
                             spread: None,
@@ -75,6 +77,7 @@ description: "input: \nfn test() { let result = !obj.method(); }\n"
                                 byte_offset: 27,
                                 byte_length: 12,
                             },
+                            call_kind: None,
                         },
                         ty: Var {
                             id: uninferred,

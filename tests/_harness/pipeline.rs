@@ -8,10 +8,7 @@ use syntax::{
     desugar,
     lex::Lexer,
     parse::Parser,
-    program::{
-        CoercionInfo, Definition, File, FileImport, MutationInfo, ResolutionInfo, UnusedInfo,
-        Visibility,
-    },
+    program::{Definition, File, FileImport, MutationInfo, UnusedInfo, Visibility},
     types::Symbol,
 };
 
@@ -90,16 +87,7 @@ impl CompiledTest {
 
         init_prelude(&mut store);
 
-        let (
-            typed_ast,
-            definitions,
-            unused,
-            mutations,
-            coercions,
-            resolutions,
-            ufcs_methods,
-            go_package_names,
-        ) = {
+        let (typed_ast, definitions, unused, mutations, ufcs_methods, go_package_names) = {
             let mut checker = TaskState::with_fresh_allocator(&sink);
             checker
                 .ufcs_methods
@@ -207,7 +195,6 @@ impl CompiledTest {
                 semantics::validators::run(
                     &analysis,
                     &mut checker.facts,
-                    &checker.coercions,
                     checker.sink,
                     &mut harness_unused,
                     false,
@@ -255,8 +242,6 @@ impl CompiledTest {
                 }
             }
 
-            let coercions = std::mem::take(&mut checker.coercions);
-            let resolutions = std::mem::take(&mut checker.resolutions);
             let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
             let go_package_names = store.go_package_names.clone();
 
@@ -265,8 +250,6 @@ impl CompiledTest {
                 definitions,
                 unused,
                 mutations,
-                coercions,
-                resolutions,
                 ufcs_methods,
                 go_package_names,
             )
@@ -279,8 +262,6 @@ impl CompiledTest {
             module_id: TEST_MODULE_ID.to_string(),
             unused,
             mutations,
-            coercions,
-            resolutions,
             ufcs_methods,
             go_package_names,
         }
@@ -294,8 +275,6 @@ pub struct InferenceResult {
     pub module_id: String,
     pub unused: UnusedInfo,
     pub mutations: MutationInfo,
-    pub coercions: CoercionInfo,
-    pub resolutions: ResolutionInfo,
     pub ufcs_methods: HashSet<(String, String)>,
     pub go_package_names: HashMap<String, String>,
 }

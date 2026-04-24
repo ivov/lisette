@@ -64,6 +64,7 @@ description: "input: \nfn test() {\n  let result = !is_ready();\n}\n"
                                 byte_offset: 29,
                                 byte_length: 10,
                             },
+                            call_kind: None,
                         },
                         ty: Var {
                             id: uninferred,

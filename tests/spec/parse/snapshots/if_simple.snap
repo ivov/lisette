@@ -127,6 +127,7 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                                     byte_offset: 37,
                                     byte_length: 14,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

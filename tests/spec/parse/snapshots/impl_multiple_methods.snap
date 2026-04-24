@@ -134,6 +134,8 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                     byte_offset: 94,
                                     byte_length: 10,
                                 },
+                                dot_access_kind: None,
+                                receiver_coercion: None,
                             },
                             ty: Var {
                                 id: uninferred,
@@ -251,6 +253,8 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                                     byte_offset: 182,
                                                     byte_length: 10,
                                                 },
+                                                dot_access_kind: None,
+                                                receiver_coercion: None,
                                             },
                                             right: Literal {
                                                 literal: Integer {

@@ -70,6 +70,7 @@ description: "input: \nfn test() { func<int>(x); }\n"
                         byte_offset: 13,
                         byte_length: 12,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

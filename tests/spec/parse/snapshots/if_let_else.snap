@@ -134,6 +134,7 @@ description: "input: \nfn test(opt: Option<int>) {\n  if let Some(x) = opt {\n  
                                     byte_offset: 58,
                                     byte_length: 8,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {
@@ -186,6 +187,7 @@ description: "input: \nfn test(opt: Option<int>) {\n  if let Some(x) = opt {\n  
                                     byte_offset: 83,
                                     byte_length: 13,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

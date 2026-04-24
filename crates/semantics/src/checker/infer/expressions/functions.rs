@@ -419,7 +419,6 @@ impl TaskState<'_> {
         };
 
         let call_kind = self.classify_call(store, &callee_expression);
-        self.resolutions.mark_call(span, call_kind);
 
         Expression::Call {
             expression: callee_expression.into(),
@@ -428,6 +427,7 @@ impl TaskState<'_> {
             type_args: new_type_args,
             ty: call_ty,
             span,
+            call_kind: Some(call_kind),
         }
     }
 
@@ -811,7 +811,6 @@ impl TaskState<'_> {
                 })
                 .collect();
             self.unify(store, expected_ty, &Type::Error, &span);
-            self.resolutions.mark_call(span, CallKind::Regular);
             return Expression::Call {
                 expression: callee_expression.into(),
                 args: new_args,
@@ -819,6 +818,7 @@ impl TaskState<'_> {
                 type_args,
                 ty: Type::Error,
                 span,
+                call_kind: Some(CallKind::Regular),
             };
         }
 
@@ -826,7 +826,6 @@ impl TaskState<'_> {
         let new_arg = self.with_value_context(|s| s.infer_expression(store, arg, &underlying_fn));
 
         self.unify(store, expected_ty, &named_ty, &span);
-        self.resolutions.mark_call(span, CallKind::Regular);
 
         Expression::Call {
             expression: callee_expression.into(),
@@ -835,6 +834,7 @@ impl TaskState<'_> {
             type_args,
             ty: named_ty,
             span,
+            call_kind: Some(CallKind::Regular),
         }
     }
 

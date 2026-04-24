@@ -1,5 +1,6 @@
 use ecow::EcoString;
 
+use crate::program::{CallKind, DotAccessKind, ReceiverCoercion};
 use crate::types::Type;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -562,6 +563,7 @@ pub enum Expression {
         type_args: Vec<Annotation>,
         ty: Type,
         span: Span,
+        call_kind: Option<CallKind>,
     },
     If {
         condition: Box<Expression>,
@@ -604,6 +606,8 @@ pub enum Expression {
         member: EcoString,
         ty: Type,
         span: Span,
+        dot_access_kind: Option<DotAccessKind>,
+        receiver_coercion: Option<ReceiverCoercion>,
     },
     Assignment {
         target: Box<Expression>,

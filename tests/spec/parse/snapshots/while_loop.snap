@@ -151,6 +151,7 @@ description: "input: \nfn test() {\n  let mut count = 0;\n  while count < 10 {\n
                                     byte_offset: 59,
                                     byte_length: 12,
                                 },
+                                call_kind: None,
                             },
                             Assignment {
                                 target: Identifier {

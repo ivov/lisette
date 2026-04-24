@@ -127,6 +127,7 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                                     byte_offset: 59,
                                     byte_length: 11,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {

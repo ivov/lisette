@@ -85,6 +85,8 @@ description: "input: \nfn test(ch: Channel<int>) {\n  select {\n    match ch.rec
                                             byte_offset: 50,
                                             byte_length: 10,
                                         },
+                                        dot_access_kind: None,
+                                        receiver_coercion: None,
                                     },
                                     args: [],
                                     spread: None,
@@ -97,6 +99,7 @@ description: "input: \nfn test(ch: Channel<int>) {\n  select {\n    match ch.rec
                                         byte_offset: 50,
                                         byte_length: 12,
                                     },
+                                    call_kind: None,
                                 },
                                 arms: [
                                     MatchArm {
@@ -161,6 +164,7 @@ description: "input: \nfn test(ch: Channel<int>) {\n  select {\n    match ch.rec
                                                 byte_offset: 82,
                                                 byte_length: 10,
                                             },
+                                            call_kind: None,
                                         },
                                     },
                                     MatchArm {
@@ -202,6 +206,7 @@ description: "input: \nfn test(ch: Channel<int>) {\n  select {\n    match ch.rec
                                                 byte_offset: 108,
                                                 byte_length: 14,
                                             },
+                                            call_kind: None,
                                         },
                                     },
                                 ],
@@ -234,6 +239,7 @@ description: "input: \nfn test(ch: Channel<int>) {\n  select {\n    match ch.rec
                                         byte_offset: 140,
                                         byte_length: 9,
                                     },
+                                    call_kind: None,
                                 },
                             },
                         },

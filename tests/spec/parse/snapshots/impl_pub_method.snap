@@ -134,6 +134,8 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  p
                                     byte_offset: 98,
                                     byte_length: 10,
                                 },
+                                dot_access_kind: None,
+                                receiver_coercion: None,
                             },
                             ty: Var {
                                 id: uninferred,

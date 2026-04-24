@@ -118,6 +118,7 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                         byte_offset: 21,
                                         byte_length: 14,
                                     },
+                                    call_kind: None,
                                 },
                             ],
                             spread: None,
@@ -130,6 +131,7 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                                 byte_offset: 12,
                                 byte_length: 24,
                             },
+                            call_kind: None,
                         },
                         Literal {
                             literal: Integer {
@@ -156,6 +158,7 @@ description: "input: fn test() { x |> add(multiply(2, 3)) |> subtract(1); }"
                         byte_offset: 12,
                         byte_length: 39,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

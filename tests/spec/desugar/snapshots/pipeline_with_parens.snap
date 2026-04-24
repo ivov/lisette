@@ -60,6 +60,7 @@ description: "input: fn test() { x |> (f); }"
                         byte_offset: 12,
                         byte_length: 8,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {

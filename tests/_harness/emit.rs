@@ -46,8 +46,6 @@ fn emit_inner(
         go_module: "myproject",
         unused: &result.unused,
         mutations: &result.mutations,
-        coercions: &result.coercions,
-        resolutions: &result.resolutions,
         ufcs_methods: &result.ufcs_methods,
         go_package_names: &result.go_package_names,
     };

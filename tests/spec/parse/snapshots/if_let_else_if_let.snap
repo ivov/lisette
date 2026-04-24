@@ -169,6 +169,7 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                     byte_offset: 70,
                                     byte_length: 8,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {
@@ -257,6 +258,7 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                         byte_offset: 114,
                                         byte_length: 8,
                                     },
+                                    call_kind: None,
                                 },
                             ],
                             ty: Var {
@@ -309,6 +311,7 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                         byte_offset: 139,
                                         byte_length: 18,
                                     },
+                                    call_kind: None,
                                 },
                             ],
                             ty: Var {

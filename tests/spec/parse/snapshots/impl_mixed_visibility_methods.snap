@@ -136,6 +136,8 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                         byte_offset: 105,
                                         byte_length: 10,
                                     },
+                                    dot_access_kind: None,
+                                    receiver_coercion: None,
                                 },
                                 right: Literal {
                                     literal: Integer {
@@ -265,6 +267,8 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                         byte_offset: 174,
                                         byte_length: 19,
                                     },
+                                    dot_access_kind: None,
+                                    receiver_coercion: None,
                                 },
                                 args: [],
                                 spread: None,
@@ -277,6 +281,7 @@ description: "input: \nstruct Counter {\n  value: int,\n}\n\nimpl Counter {\n  f
                                     byte_offset: 174,
                                     byte_length: 21,
                                 },
+                                call_kind: None,
                             },
                             ty: Var {
                                 id: uninferred,

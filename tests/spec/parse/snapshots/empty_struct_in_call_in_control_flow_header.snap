@@ -132,6 +132,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                         byte_offset: 58,
                         byte_length: 5,
                     },
+                    call_kind: None,
                 },
             ],
             ty: Var {
@@ -232,6 +233,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                             byte_offset: 98,
                             byte_length: 12,
                         },
+                        call_kind: None,
                     },
                     consequence: Block {
                         items: [
@@ -274,6 +276,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                     byte_offset: 113,
                                     byte_length: 10,
                                 },
+                                call_kind: None,
                             },
                         ],
                         ty: Var {
@@ -361,6 +364,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                 byte_offset: 142,
                                 byte_length: 12,
                             },
+                            call_kind: None,
                         },
                         arms: [
                             MatchArm {
@@ -462,6 +466,7 @@ description: "input: \nstruct Data {}\nfn foo(d: Data) -> Result<Data, Data> {\n
                                         byte_offset: 189,
                                         byte_length: 10,
                                     },
+                                    call_kind: None,
                                 },
                             },
                         ],

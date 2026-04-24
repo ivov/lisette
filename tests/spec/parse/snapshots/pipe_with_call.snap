@@ -92,6 +92,7 @@ description: "input: \nfn test() { let result = x |> add(5); }\n"
                                 byte_offset: 31,
                                 byte_length: 6,
                             },
+                            call_kind: None,
                         },
                         ty: Var {
                             id: uninferred,

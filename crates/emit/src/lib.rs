@@ -33,9 +33,7 @@ use std::sync::Arc;
 use ecow::EcoString;
 use imports::ImportBuilder;
 use syntax::ast::{Generic, Span};
-use syntax::program::{
-    CoercionInfo, Definition, EmitInput, File, ModuleId, MutationInfo, ResolutionInfo, UnusedInfo,
-};
+use syntax::program::{Definition, EmitInput, File, ModuleId, MutationInfo, UnusedInfo};
 use syntax::types::{Symbol, Type};
 
 #[derive(Clone, Debug, Default)]
@@ -49,8 +47,6 @@ pub struct TestEmitConfig<'a> {
     pub go_module: &'a str,
     pub unused: &'a UnusedInfo,
     pub mutations: &'a MutationInfo,
-    pub coercions: &'a CoercionInfo,
-    pub resolutions: &'a ResolutionInfo,
     pub ufcs_methods: &'a HashSet<(String, String)>,
     pub go_package_names: &'a HashMap<String, String>,
 }
@@ -59,8 +55,6 @@ struct EmitContext<'a> {
     definitions: &'a HashMap<Symbol, Definition>,
     unused: &'a UnusedInfo,
     mutations: &'a MutationInfo,
-    coercions: &'a CoercionInfo,
-    resolutions: &'a ResolutionInfo,
     ufcs_methods: &'a HashSet<(String, String)>,
     go_package_names: &'a HashMap<String, String>,
     entry_module: ModuleId,
@@ -194,8 +188,6 @@ impl<'a> Emitter<'a> {
                 definitions: &analysis.definitions,
                 unused: &analysis.unused,
                 mutations: &analysis.mutations,
-                coercions: &analysis.coercions,
-                resolutions: &analysis.resolutions,
                 ufcs_methods: &analysis.ufcs_methods,
                 go_package_names: &analysis.go_package_names,
                 entry_module: analysis.entry_module_id.to_string(),
@@ -240,8 +232,6 @@ impl<'a> Emitter<'a> {
             definitions: config.definitions,
             unused: config.unused,
             mutations: config.mutations,
-            coercions: config.coercions,
-            resolutions: config.resolutions,
             ufcs_methods: config.ufcs_methods,
             go_package_names: config.go_package_names,
             entry_module: config.module_id.to_string(),

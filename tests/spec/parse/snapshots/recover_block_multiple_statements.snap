@@ -80,6 +80,7 @@ description: "input: \nfn test() {\n  let result = recover {\n    let x = foo();
                                         byte_offset: 50,
                                         byte_length: 5,
                                     },
+                                    call_kind: None,
                                 },
                                 mutable: false,
                                 mut_span: None,
