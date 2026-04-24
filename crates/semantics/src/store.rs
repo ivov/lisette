@@ -1,5 +1,5 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use std::cell::Cell;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{Definition, File, Interface, MethodSignatures, Module, ModuleId};
@@ -18,7 +18,7 @@ pub struct Store {
     pub go_package_names: HashMap<String, String>,
     visited_modules: HashSet<String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
-    next_file_id: Cell<u32>,
+    next_file_id: AtomicU32,
 }
 
 impl Default for Store {
@@ -47,14 +47,12 @@ impl Store {
             module_ids,
             go_package_names: Default::default(),
             visited_modules: Default::default(),
-            next_file_id: Cell::new(2), // 0 = entry, 1 = prelude
+            next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
         }
     }
 
     pub fn new_file_id(&self) -> u32 {
-        let id = self.next_file_id.get();
-        self.next_file_id.set(id + 1);
-        id
+        self.next_file_id.fetch_add(1, Ordering::Relaxed)
     }
 
     pub fn register_file(&mut self, file_id: u32, module_id: &str) {
