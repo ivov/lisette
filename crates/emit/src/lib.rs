@@ -470,10 +470,9 @@ impl<'a> Emitter<'a> {
         self.collect_exported_method_names(files);
         self.collect_impl_bounds(files);
         self.collect_enum_layouts();
-        let make_functions = self.collect_make_functions();
+        let mut make_functions_by_file = self.collect_make_functions();
 
         let mut output_files = Vec::new();
-        let should_create_bootstrap = files.len() > 1 && !make_functions.is_empty();
 
         let package_name = if module_id == self.ctx.entry_module {
             "main".to_string()
@@ -482,47 +481,12 @@ impl<'a> Emitter<'a> {
             go_name::sanitize_package_name(raw).into_owned()
         };
 
-        if should_create_bootstrap {
-            let mut bootstrap_source = OutputCollector::new();
-            for function in &make_functions {
-                bootstrap_source.collect_with_blank(function.clone());
-            }
-
-            let bootstrap_source_str = bootstrap_source.render();
-
-            let unused_imports =
-                Self::unused_imports_for_current_module(self.ctx.unused, &self.current_module);
-            let mut import_builder = ImportBuilder::new(
-                &self.ctx.go_module,
-                unused_imports,
-                self.ctx.go_package_names,
-            );
-
-            // Collect imports from all files in the module to get aliased imports
-            for file in files {
-                import_builder.collect_from_file(file);
-            }
-
-            import_builder.extend_with_modules(&self.ensure_imported);
-            if self.flags.needs_stdlib {
-                import_builder.require_stdlib();
-            }
-            import_builder.filter_unreferenced(&bootstrap_source_str);
-
-            output_files.push(OutputFile {
-                name: "bootstrap.go".to_string(),
-                imports: import_builder.build(),
-                source: bootstrap_source_str,
-                package_name: package_name.clone(),
-            });
-        }
-
         for file in files {
             let mut source = OutputCollector::new();
 
-            if !should_create_bootstrap {
-                for function in &make_functions {
-                    source.collect_with_blank(function.clone());
+            if let Some(functions) = make_functions_by_file.remove(&file.id) {
+                for function in functions {
+                    source.collect_with_blank(function);
                 }
             }
 

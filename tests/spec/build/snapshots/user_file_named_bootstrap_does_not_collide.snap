@@ -1,0 +1,38 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === bootstrap.go ===
+package main
+
+
+// === main.go ===
+package main
+
+import "fmt"
+
+func MakeAA() A {
+	return A{Tag: AA}
+}
+
+func main() {
+	_ = MakeAA()
+}
+
+type ATag int
+
+const (
+	AA ATag = iota
+)
+
+type A struct {
+	Tag ATag
+}
+
+func (a A) String() string {
+	switch a.Tag {
+	case AA:
+		return "A.A"
+	default:
+		return fmt.Sprintf("A(%d)", a.Tag)
+	}
+}

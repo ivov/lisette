@@ -3920,3 +3920,26 @@ fn main() {
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
+
+#[test]
+fn user_file_named_bootstrap_does_not_collide() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let _ = A.A
+}
+
+enum A {
+  A,
+}
+"#,
+    );
+
+    fs.add_file(ENTRY_MODULE_ID, "bootstrap.lis", "");
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}

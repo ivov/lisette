@@ -63,10 +63,11 @@ func main() {
 }
 
 
-// === types/bootstrap.go ===
+// === types/enums.go ===
 package types
 
 import (
+	"fmt"
 	"github.com/user/myproject/bar"
 	"github.com/user/myproject/foo"
 	g "github.com/user/myproject/gizmo"
@@ -87,17 +88,6 @@ func MakeMyEnumContainerSlice(arg0 []foo.Foo) MyEnum {
 func MakeMyEnumAliased(arg0 g.Widget) MyEnum {
 	return MyEnum{Tag: MyEnumAliased, Aliased: arg0}
 }
-
-
-// === types/enums.go ===
-package types
-
-import (
-	"fmt"
-	"github.com/user/myproject/bar"
-	"github.com/user/myproject/foo"
-	g "github.com/user/myproject/gizmo"
-)
 
 type MyEnumTag int
 

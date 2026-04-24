@@ -36,19 +36,6 @@ func main() {
 }
 
 
-// === types/bootstrap.go ===
-package types
-
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"github.com/user/myproject/foo"
-)
-
-func MakeMyEnumMaybe(arg0 lisette.Option[foo.Foo]) MyEnum {
-	return MyEnum{Tag: MyEnumMaybe, Maybe: arg0}
-}
-
-
 // === types/enums.go ===
 package types
 
@@ -57,6 +44,10 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 	"github.com/user/myproject/foo"
 )
+
+func MakeMyEnumMaybe(arg0 lisette.Option[foo.Foo]) MyEnum {
+	return MyEnum{Tag: MyEnumMaybe, Maybe: arg0}
+}
 
 type MyEnumTag int
 

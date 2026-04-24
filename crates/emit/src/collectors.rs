@@ -1,3 +1,5 @@
+use rustc_hash::FxHashMap as HashMap;
+
 use super::names::go_name;
 use crate::Emitter;
 use syntax::program::{Definition, File};
@@ -181,15 +183,12 @@ impl Emitter<'_> {
         }
     }
 
-    /// Register make function names for all enums and generate code for current module's enums.
-    ///
-    /// Combines the previous two-phase pattern (register names, then generate code) into a
-    /// single pass over definitions.
-    pub(crate) fn collect_make_functions(&mut self) -> Vec<String> {
+    /// Register make function names for all enums; return bodies keyed by declaring file_id.
+    pub(crate) fn collect_make_functions(&mut self) -> HashMap<u32, Vec<String>> {
         self.register_prelude_make_functions();
 
         let module_prefix = format!("{}.", self.current_module);
-        let mut code = Vec::new();
+        let mut code: HashMap<u32, Vec<String>> = HashMap::default();
 
         // Collect enum info first to avoid borrow conflicts
         let enums: Vec<_> = self
@@ -197,22 +196,33 @@ impl Emitter<'_> {
             .definitions
             .iter()
             .filter_map(|(key, definition)| {
-                if let Definition::Enum { name, variants, .. } = definition {
+                if let Definition::Enum {
+                    name,
+                    variants,
+                    name_span,
+                    ..
+                } = definition
+                {
                     if name == "Option" || name == "Result" || name == "Partial" {
                         return None;
                     }
-                    Some((key.to_string(), name.clone(), variants.clone()))
+                    Some((
+                        key.to_string(),
+                        name.clone(),
+                        variants.clone(),
+                        name_span.file_id,
+                    ))
                 } else {
                     None
                 }
             })
             .collect();
 
-        for (_, name, variants) in &enums {
+        for (_, name, variants, _) in &enums {
             self.register_make_functions(name, variants);
         }
 
-        for (key, _name, variants) in &enums {
+        for (key, _name, variants, file_id) in &enums {
             if !key.starts_with(&module_prefix) {
                 continue;
             }
@@ -221,7 +231,8 @@ impl Emitter<'_> {
                 continue;
             }
             for variant in variants {
-                code.push(self.create_make_function_code(key, &variant.name));
+                let fn_code = self.create_make_function_code(key, &variant.name);
+                code.entry(*file_id).or_default().push(fn_code);
             }
         }
 
