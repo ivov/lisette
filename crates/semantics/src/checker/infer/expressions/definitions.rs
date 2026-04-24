@@ -2,9 +2,14 @@ use syntax::ast::Expression;
 use syntax::program::Definition;
 
 use super::super::super::Checker;
+use crate::store::Store;
 
-impl Checker<'_, '_> {
-    pub(super) fn infer_struct_definition(&mut self, expression: Expression) -> Expression {
+impl Checker<'_> {
+    pub(super) fn infer_struct_definition(
+        &mut self,
+        store: &Store,
+        expression: Expression,
+    ) -> Expression {
         let Expression::Struct {
             doc,
             attributes,
@@ -28,7 +33,7 @@ impl Checker<'_, '_> {
             fields: definition_fields,
             kind: definition_kind,
             ..
-        }) = self.store.get_definition(&qualified_name)
+        }) = store.get_definition(&qualified_name)
         {
             let definition_name = definition_name.clone();
             let definition_name_span = *definition_name_span;
@@ -62,7 +67,11 @@ impl Checker<'_, '_> {
         }
     }
 
-    pub(super) fn infer_type_alias_definition(&mut self, expression: Expression) -> Expression {
+    pub(super) fn infer_type_alias_definition(
+        &mut self,
+        store: &Store,
+        expression: Expression,
+    ) -> Expression {
         let Expression::TypeAlias {
             doc,
             name,
@@ -84,7 +93,7 @@ impl Checker<'_, '_> {
             annotation: definition_annotation,
             ty: definition_ty,
             ..
-        }) = self.store.get_definition(&qualified_name)
+        }) = store.get_definition(&qualified_name)
         {
             Expression::TypeAlias {
                 doc,

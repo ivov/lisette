@@ -8,40 +8,40 @@ use rustc_hash::FxHashMap as HashMap;
 
 use super::Checker;
 use super::freeze::FreezeFolder;
+use crate::store::Store;
 use syntax::ast::Expression;
 use syntax::program::{File, FileImport};
 
-impl Checker<'_, '_> {
-    pub fn infer_module(&mut self, module_id: &str) {
+impl Checker<'_> {
+    pub fn infer_module(&mut self, store: &mut Store, module_id: &str) {
         self.cursor.module_id = module_id.to_string();
 
         let files: Vec<File> = {
-            let module = self
-                .store
+            let module = store
                 .get_module_mut(module_id)
                 .expect("module must exist for inference");
             std::mem::take(&mut module.files).into_values().collect()
         };
 
         let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
-        self.check_const_cycles(&items_per_file);
+        self.check_const_cycles(&*store, &items_per_file);
 
         for file in files {
             let imports = file.imports();
 
             self.reset_scopes();
             self.cursor.file_id = Some(file.id);
-            self.put_prelude_in_scope();
-            self.put_unprefixed_module_in_scope(module_id);
-            self.put_imported_modules_in_scope(&imports);
-            self.check_definition_module_collisions(&file.items, &imports);
+            self.put_prelude_in_scope(&*store);
+            self.put_unprefixed_module_in_scope(&*store, module_id);
+            self.put_imported_modules_in_scope(&*store, &imports);
+            self.check_definition_module_collisions(&*store, &file.items, &imports);
 
             let inferred_items: Vec<_> = file
                 .items
                 .into_iter()
                 .map(|item| {
                     let type_var = self.new_type_var();
-                    self.infer_expression(item, &type_var)
+                    self.infer_expression(store, item, &type_var)
                 })
                 .collect();
 
@@ -65,11 +65,16 @@ impl Checker<'_, '_> {
         self.cursor.file_id = None;
     }
 
-    fn check_definition_module_collisions(&mut self, items: &[Expression], imports: &[FileImport]) {
+    fn check_definition_module_collisions(
+        &mut self,
+        store: &Store,
+        items: &[Expression],
+        imports: &[FileImport],
+    ) {
         let alias_to_path: HashMap<String, String> = imports
             .iter()
             .filter_map(|imp| {
-                imp.effective_alias(&self.store.go_package_names)
+                imp.effective_alias(&store.go_package_names)
                     .map(|alias| (alias, imp.name.to_string()))
             })
             .collect();

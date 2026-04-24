@@ -9,9 +9,9 @@ use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute, unqualifie
 use super::super::Checker;
 use super::primitives::contains_deref;
 use crate::checker::scopes::UseContext;
-use crate::store::ENTRY_MODULE_ID;
+use crate::store::{ENTRY_MODULE_ID, Store};
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(crate) fn check_call_arity(
         &mut self,
         param_types: &[Type],
@@ -91,9 +91,10 @@ fn has_numeric_member_in_chain(expression: &Expression) -> bool {
     false
 }
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(super) fn infer_function(
         &mut self,
+        store: &mut Store,
         expression: Expression,
         expected_ty: &Type,
     ) -> Expression {
@@ -137,7 +138,7 @@ impl Checker<'_, '_> {
             let qualified_name = self.qualify_name(&g.name);
 
             for b in &g.bounds {
-                let bound_ty = self.convert_to_type(b, &span);
+                let bound_ty = self.convert_to_type(store, b, &span);
 
                 self.scopes
                     .current_mut()
@@ -157,13 +158,15 @@ impl Checker<'_, '_> {
 
         let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
-        let new_params = self.infer_function_params(params, expected_params, true);
+        let new_params = self.infer_function_params(store, params, expected_params, true);
 
+        let unit_ty = self.type_unit();
         let return_ty = self.infer_return_type(
+            store,
             &return_annotation,
             &resolved_expected,
             &span,
-            self.type_unit(),
+            unit_ty,
         );
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
@@ -182,7 +185,8 @@ impl Checker<'_, '_> {
             return_ty.clone()
         };
 
-        let new_body = self.infer_function_body(body, &body_ty, &return_annotation, &return_ty);
+        let new_body =
+            self.infer_function_body(store, body, &body_ty, &return_annotation, &return_ty);
 
         self.scopes.pop();
 
@@ -197,7 +201,7 @@ impl Checker<'_, '_> {
 
         let (fn_ty, _) = self.instantiate(&fn_forall_ty);
 
-        self.unify(expected_ty, &fn_ty, &span);
+        self.unify(store, expected_ty, &fn_ty, &span);
 
         Expression::Function {
             doc,
@@ -217,6 +221,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_lambda(
         &mut self,
+        store: &mut Store,
         params: Vec<Binding>,
         return_annotation: Annotation,
         body: Box<Expression>,
@@ -229,10 +234,11 @@ impl Checker<'_, '_> {
         // unification (e.g. T = tea.Cmd) is visible as its underlying function shape.
         let resolved_expected = expected_ty.resolve_in(&self.env);
         let expected_params = resolved_expected.get_function_params().unwrap_or_default();
-        let new_params = self.infer_function_params(params, expected_params, false);
+        let new_params = self.infer_function_params(store, params, expected_params, false);
 
         let default_return = self.new_type_var();
         let return_ty = self.infer_return_type(
+            store,
             &return_annotation,
             &resolved_expected,
             &span,
@@ -252,14 +258,15 @@ impl Checker<'_, '_> {
         // `defer` inside a closure body should not be flagged as "defer in loop"
         // even when the closure is lexically inside a loop.
         let saved_loop_depth = self.scopes.reset_loop_depth();
-        let new_body = self.infer_function_body(body, &return_ty, &return_annotation, &return_ty);
+        let new_body =
+            self.infer_function_body(store, body, &return_ty, &return_annotation, &return_ty);
         self.scopes.restore_loop_depth(saved_loop_depth);
 
         self.scopes.pop();
 
         let (fn_ty, _) = self.instantiate(&base_fn_ty);
 
-        self.unify(expected_ty, &fn_ty, &span);
+        self.unify(store, expected_ty, &fn_ty, &span);
 
         Expression::Lambda {
             params: new_params,
@@ -270,8 +277,10 @@ impl Checker<'_, '_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_function_call(
         &mut self,
+        store: &mut Store,
         expression: Box<Expression>,
         args: Vec<Expression>,
         spread: Box<Option<Expression>>,
@@ -282,15 +291,18 @@ impl Checker<'_, '_> {
         let callee_ty = self.new_type_var();
 
         let prev_context = self.scopes.set_callee_context();
-        let callee_expression = self.infer_expression(*expression, &callee_ty);
+        let callee_expression = self.infer_expression(store, *expression, &callee_ty);
         self.scopes.restore_use_context(prev_context);
 
-        let forall_ty = self.resolve_callee_forall_type(&callee_expression, &type_args);
+        let forall_ty = self.resolve_callee_forall_type(store, &callee_expression, &type_args);
         let (callee_ty, new_type_args) =
-            self.instantiate_callee_type(&forall_ty, &type_args, &callee_expression, &span);
+            self.instantiate_callee_type(store, &forall_ty, &type_args, &callee_expression, &span);
 
-        if let Some(underlying_fn) = self.try_as_type_conversion(&callee_expression, &callee_ty) {
+        if let Some(underlying_fn) =
+            self.try_as_type_conversion(store, &callee_expression, &callee_ty)
+        {
             return self.infer_type_conversion_call(
+                store,
                 callee_expression,
                 callee_ty,
                 underlying_fn,
@@ -309,7 +321,7 @@ impl Checker<'_, '_> {
         };
 
         let (param_types, param_mutability, return_ty, bounds) =
-            self.extract_call_signature(callee_ty, args.len(), &callee_expression);
+            self.extract_call_signature(store, callee_ty, args.len(), &callee_expression);
 
         if self.is_panic_call(&callee_expression)
             && self.scopes.is_value_context()
@@ -329,25 +341,27 @@ impl Checker<'_, '_> {
         // context `Option<tea.Cmd>` constrains T = tea.Cmd instead of
         // collapsing to the Cmd alias's underlying function shape. Guarded
         // to named types to avoid affecting numeric literal inference.
-        if self.is_generic_callee(&callee_expression)
+        if self.is_generic_callee(store, &callee_expression)
             && !expected_ty.resolve_in(&self.env).is_variable()
             && !expected_ty.is_ignored()
-            && self.is_enum_type(&return_ty.resolve_in(&self.env))
-            && (self.has_interface_type_param(expected_ty)
+            && self.is_enum_type(store, &return_ty.resolve_in(&self.env))
+            && (self.has_interface_type_param(store, expected_ty)
                 || self.has_go_named_type_param(expected_ty))
         {
-            let _ = self.speculatively(|this| this.try_unify(expected_ty, &return_ty, &span));
+            let _ =
+                self.speculatively(|this| this.try_unify(store, expected_ty, &return_ty, &span));
         }
 
-        let new_args = self.infer_call_arguments(args, &param_types);
+        let new_args = self.infer_call_arguments(store, args, &param_types);
         self.check_call_arity(&param_types, &new_args, &callee_expression, &span);
         self.check_mut_param_arguments(&new_args, &param_mutability, &callee_expression);
 
         let new_spread = (*spread).map(|spread_expr| match variadic_elem_ty {
             Some(elem_ty) => {
                 let expected_slice = self.type_slice(elem_ty);
-                let inferred =
-                    self.with_value_context(|s| s.infer_expression(spread_expr, &expected_slice));
+                let inferred = self.with_value_context(|s| {
+                    s.infer_expression(store, spread_expr, &expected_slice)
+                });
                 if param_mutability.last().copied().unwrap_or(false) {
                     let is_external = self.is_external_callee(&callee_expression);
                     self.check_arg_against_mut_param(&inferred, is_external);
@@ -357,7 +371,7 @@ impl Checker<'_, '_> {
             None => {
                 self.sink
                     .push(diagnostics::infer::spread_on_non_variadic(span));
-                self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error))
+                self.with_value_context(|s| s.infer_expression(store, spread_expr, &Type::Error))
             }
         });
 
@@ -367,8 +381,8 @@ impl Checker<'_, '_> {
         // caller doesn't consume the result (non-last block item).
         let expected_was_variable = expected_ty.resolve_in(&self.env).is_variable();
 
-        self.unify(expected_ty, &return_ty, &span);
-        self.unify_trait_bounds(&bounds, &new_args, &span);
+        self.unify(store, expected_ty, &return_ty, &span);
+        self.unify_trait_bounds(store, &bounds, &new_args, &span);
 
         // Native mutating methods (append, extend, delete) are rewritten by
         // the emitter into mutations of the receiver binding. Require `mut`
@@ -379,11 +393,11 @@ impl Checker<'_, '_> {
             let resolved = expected_ty.resolve_in(&self.env);
             resolved.is_unit() || resolved.is_ignored() || expected_was_variable
         };
-        self.check_native_mutating_call(&callee_expression, result_unused, &span);
+        self.check_native_mutating_call(store, &callee_expression, result_unused, &span);
 
-        if self.is_generic_callee(&callee_expression)
+        if self.is_generic_callee(store, &callee_expression)
             && type_args.is_empty()
-            && !self.is_enum_type(&return_ty.resolve_in(&self.env))
+            && !self.is_enum_type(store, &return_ty.resolve_in(&self.env))
         {
             self.facts
                 .generic_call_checks
@@ -397,14 +411,14 @@ impl Checker<'_, '_> {
         // interface type parameters. This ensures coercion like `Option<Printable>`
         // from `Some(Text{...})` gets the correct type for codegen.
         let call_ty = if !expected_ty.is_variable()
-            && self.is_generic_container_with_interface(expected_ty)
+            && self.is_generic_container_with_interface(store, expected_ty)
         {
             expected_ty.clone()
         } else {
             return_ty.clone()
         };
 
-        let call_kind = self.classify_call(&callee_expression);
+        let call_kind = self.classify_call(store, &callee_expression);
         self.resolutions.mark_call(span, call_kind);
 
         Expression::Call {
@@ -419,6 +433,7 @@ impl Checker<'_, '_> {
 
     fn resolve_callee_forall_type(
         &mut self,
+        store: &Store,
         expression: &Expression,
         type_args: &[Annotation],
     ) -> Type {
@@ -428,7 +443,7 @@ impl Checker<'_, '_> {
 
         match expression {
             Expression::Identifier { value, .. } => self
-                .lookup_type(value)
+                .lookup_type(store, value)
                 .unwrap_or_else(|| expression.get_type()),
             Expression::DotAccess {
                 expression: receiver,
@@ -438,7 +453,7 @@ impl Checker<'_, '_> {
                 let receiver_ty = receiver.get_type().resolve_in(&self.env);
 
                 if let Some(method_ty) = self
-                    .get_all_methods(&receiver_ty.strip_refs())
+                    .get_all_methods(store, &receiver_ty.strip_refs())
                     .get(member)
                     .cloned()
                 {
@@ -448,14 +463,14 @@ impl Checker<'_, '_> {
                 let stripped = receiver_ty.strip_refs();
                 if let Type::Nominal { id, .. } = &stripped {
                     let qualified = id.with_segment(member);
-                    if let Some(definition) = self.store.get_definition(&qualified) {
+                    if let Some(definition) = store.get_definition(&qualified) {
                         return definition.ty().clone();
                     }
                 }
 
                 if let Some(module_id) = stripped.as_import_namespace() {
                     let qualified = Symbol::from_parts(module_id, member);
-                    if let Some(definition) = self.store.get_definition(&qualified) {
+                    if let Some(definition) = store.get_definition(&qualified) {
                         return definition.ty().clone();
                     }
                 }
@@ -466,10 +481,10 @@ impl Checker<'_, '_> {
         }
     }
 
-    fn is_generic_callee(&self, expression: &Expression) -> bool {
+    fn is_generic_callee(&self, store: &Store, expression: &Expression) -> bool {
         match expression {
             Expression::Identifier { value, .. } => self
-                .lookup_type(value)
+                .lookup_type(store, value)
                 .map(|ty| matches!(ty, Type::Forall { .. }))
                 .unwrap_or(false),
             Expression::DotAccess {
@@ -478,7 +493,7 @@ impl Checker<'_, '_> {
                 ..
             } => {
                 let receiver_ty = receiver.get_type().resolve_in(&self.env);
-                self.get_all_methods(&receiver_ty.strip_refs())
+                self.get_all_methods(store, &receiver_ty.strip_refs())
                     .get(member)
                     .map(|ty| matches!(ty, Type::Forall { .. }))
                     .unwrap_or(false)
@@ -489,6 +504,7 @@ impl Checker<'_, '_> {
 
     fn instantiate_callee_type(
         &mut self,
+        store: &mut Store,
         forall_ty: &Type,
         type_args: &[Annotation],
         callee_expression: &Expression,
@@ -519,7 +535,7 @@ impl Checker<'_, '_> {
                     .resolve_in(&self.env)
                     .strip_refs()
                     .clone();
-                self.get_receiver_generics_count(&receiver_ty)
+                self.get_receiver_generics_count(store, &receiver_ty)
             } else {
                 0
             };
@@ -532,7 +548,7 @@ impl Checker<'_, '_> {
         if !is_full_arity && !is_method_only_arity {
             let actual_types: Vec<Type> = type_args
                 .iter()
-                .map(|arg| self.convert_to_type(arg, span))
+                .map(|arg| self.convert_to_type(store, arg, span))
                 .collect();
             let vars_as_str: Vec<String> = vars.iter().map(|s| s.to_string()).collect();
             self.sink.push(diagnostics::infer::generics_arity_mismatch(
@@ -549,11 +565,11 @@ impl Checker<'_, '_> {
                 map.insert(var.clone(), self.new_type_var());
             }
             for (var, ann) in vars[receiver_generics_count..].iter().zip(type_args.iter()) {
-                map.insert(var.clone(), self.convert_to_type(ann, span));
+                map.insert(var.clone(), self.convert_to_type(store, ann, span));
             }
             substitute(body, &map)
         } else {
-            self.instantiate_from_annotations(vars, body, type_args, span)
+            self.instantiate_from_annotations(store, vars, body, type_args, span)
         };
 
         if let Expression::DotAccess { expression, .. } = callee_expression {
@@ -585,13 +601,13 @@ impl Checker<'_, '_> {
                 let receiver_ty_stripped = receiver_ty.strip_refs();
                 if receiver_param.is_ref() && !receiver_ty.is_ref() {
                     if let Some(inner) = receiver_param.inner() {
-                        self.unify(&inner, &receiver_ty_stripped, span);
+                        self.unify(store, &inner, &receiver_ty_stripped, span);
                     }
                 } else {
-                    self.unify(&receiver_param, &receiver_ty_stripped, span);
+                    self.unify(store, &receiver_param, &receiver_ty_stripped, span);
                 }
             }
-            self.unify(&instantiated, &callee_expression.get_type(), span);
+            self.unify(store, &instantiated, &callee_expression.get_type(), span);
         }
 
         (instantiated, type_args.to_vec())
@@ -599,6 +615,7 @@ impl Checker<'_, '_> {
 
     fn extract_call_signature(
         &mut self,
+        store: &Store,
         callee_ty: Type,
         arg_count: usize,
         callee_expression: &Expression,
@@ -608,7 +625,7 @@ impl Checker<'_, '_> {
         let mut param_mutability = callee_ty.get_param_mutability().to_vec();
         let is_variadic = callee_ty.is_variadic();
 
-        let (param_types, return_ty) = match self.extract_function_type(&callee_ty) {
+        let (param_types, return_ty) = match self.extract_function_type(store, &callee_ty) {
             Some((mut params, return_type)) => {
                 if let Some(variadic_ty) = is_variadic {
                     params.pop();
@@ -647,7 +664,7 @@ impl Checker<'_, '_> {
         (param_types, param_mutability, return_ty, bounds)
     }
 
-    fn extract_function_type(&self, ty: &Type) -> Option<(Vec<Type>, Type)> {
+    fn extract_function_type(&self, store: &Store, ty: &Type) -> Option<(Vec<Type>, Type)> {
         let fn_type = |ty: &Type| -> Option<(Vec<Type>, Type)> {
             if let Type::Function {
                 params,
@@ -675,7 +692,7 @@ impl Checker<'_, '_> {
         }
 
         if let Type::Nominal { id, params, .. } = ty
-            && let Some(Definition::TypeAlias { ty: alias_ty, .. }) = self.store.get_definition(id)
+            && let Some(Definition::TypeAlias { ty: alias_ty, .. }) = store.get_definition(id)
         {
             let concrete_alias_ty = match alias_ty {
                 Type::Forall { vars, body } => {
@@ -698,7 +715,12 @@ impl Checker<'_, '_> {
         None
     }
 
-    fn try_as_type_conversion(&self, callee: &Expression, callee_ty: &Type) -> Option<Type> {
+    fn try_as_type_conversion(
+        &self,
+        store: &Store,
+        callee: &Expression,
+        callee_ty: &Type,
+    ) -> Option<Type> {
         let Type::Nominal {
             id,
             underlying_ty: Some(underlying),
@@ -712,10 +734,7 @@ impl Checker<'_, '_> {
             return None;
         }
 
-        if !matches!(
-            self.store.get_definition(id),
-            Some(Definition::TypeAlias { .. })
-        ) {
+        if !matches!(store.get_definition(id), Some(Definition::TypeAlias { .. })) {
             return None;
         }
 
@@ -741,6 +760,7 @@ impl Checker<'_, '_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_type_conversion_call(
         &mut self,
+        store: &mut Store,
         callee_expression: Expression,
         named_ty: Type,
         underlying_fn: Type,
@@ -753,7 +773,7 @@ impl Checker<'_, '_> {
         if let Some(spread_expr) = *spread {
             self.sink
                 .push(diagnostics::infer::spread_on_non_variadic(span));
-            self.with_value_context(|s| s.infer_expression(spread_expr, &Type::Error));
+            self.with_value_context(|s| s.infer_expression(store, spread_expr, &Type::Error));
         }
 
         if args.len() != 1 {
@@ -767,9 +787,11 @@ impl Checker<'_, '_> {
             ));
             let new_args: Vec<Expression> = args
                 .into_iter()
-                .map(|arg| self.with_value_context(|s| s.infer_expression(arg, &Type::Error)))
+                .map(|arg| {
+                    self.with_value_context(|s| s.infer_expression(store, arg, &Type::Error))
+                })
                 .collect();
-            self.unify(expected_ty, &Type::Error, &span);
+            self.unify(store, expected_ty, &Type::Error, &span);
             self.resolutions.mark_call(span, CallKind::Regular);
             return Expression::Call {
                 expression: callee_expression.into(),
@@ -782,9 +804,9 @@ impl Checker<'_, '_> {
         }
 
         let arg = args.into_iter().next().unwrap();
-        let new_arg = self.with_value_context(|s| s.infer_expression(arg, &underlying_fn));
+        let new_arg = self.with_value_context(|s| s.infer_expression(store, arg, &underlying_fn));
 
-        self.unify(expected_ty, &named_ty, &span);
+        self.unify(store, expected_ty, &named_ty, &span);
         self.resolutions.mark_call(span, CallKind::Regular);
 
         Expression::Call {
@@ -799,6 +821,7 @@ impl Checker<'_, '_> {
 
     fn infer_call_arguments(
         &mut self,
+        store: &mut Store,
         args: Vec<Expression>,
         param_types: &[Type],
     ) -> Vec<Expression> {
@@ -809,12 +832,18 @@ impl Checker<'_, '_> {
                     .get(i)
                     .cloned()
                     .unwrap_or_else(|| self.new_type_var());
-                self.with_value_context(|s| s.infer_expression(arg, &expected_ty))
+                self.with_value_context(|s| s.infer_expression(store, arg, &expected_ty))
             })
             .collect()
     }
 
-    fn unify_trait_bounds(&mut self, bounds: &[Bound], args: &[Expression], fallback_span: &Span) {
+    fn unify_trait_bounds(
+        &mut self,
+        store: &Store,
+        bounds: &[Bound],
+        args: &[Expression],
+        fallback_span: &Span,
+    ) {
         for bound in bounds {
             let resolved_ty = bound.generic.resolve_in(&self.env);
 
@@ -827,7 +856,7 @@ impl Checker<'_, '_> {
                 continue;
             };
 
-            let Some(interface) = self.store.get_interface(&id).cloned() else {
+            let Some(interface) = store.get_interface(&id).cloned() else {
                 continue;
             };
 
@@ -837,12 +866,13 @@ impl Checker<'_, '_> {
                 .map(|arg| arg.get_span())
                 .unwrap_or_else(|| *fallback_span);
 
-            let _ = self.satisfies_interface(&resolved_ty, &interface, &params, &span);
+            let _ = self.satisfies_interface(store, &resolved_ty, &interface, &params, &span);
         }
     }
 
     fn infer_function_body(
         &mut self,
+        store: &mut Store,
         body: Box<Expression>,
         body_ty: &Type,
         return_annotation: &Annotation,
@@ -869,11 +899,12 @@ impl Checker<'_, '_> {
             };
         }
 
-        self.infer_expression(*body, body_ty)
+        self.infer_expression(store, *body, body_ty)
     }
 
     fn infer_function_params(
         &mut self,
+        store: &mut Store,
         params: Vec<Binding>,
         expected_params: &[Type],
         handle_self_receiver: bool,
@@ -902,11 +933,12 @@ impl Checker<'_, '_> {
                     binding
                         .annotation
                         .as_ref()
-                        .map(|a| self.convert_to_type(a, pattern_span))
+                        .map(|a| self.convert_to_type(store, a, pattern_span))
                         .unwrap_or_else(|| self.new_type_var())
                 });
 
                 let (new_pattern, typed_pattern) = self.infer_pattern(
+                    store,
                     binding.pattern,
                     binding_ty.clone(),
                     BindingKind::Parameter {
@@ -927,6 +959,7 @@ impl Checker<'_, '_> {
 
     fn infer_return_type(
         &mut self,
+        store: &Store,
         annotation: &Annotation,
         expected_ty: &Type,
         span: &Span,
@@ -947,11 +980,11 @@ impl Checker<'_, '_> {
                     default_for_unknown
                 }
             }
-            _ => self.convert_to_type(annotation, span),
+            _ => self.convert_to_type(store, annotation, span),
         }
     }
 
-    fn classify_call(&self, callee: &Expression) -> CallKind {
+    fn classify_call(&self, store: &Store, callee: &Expression) -> CallKind {
         let callee = callee.unwrap_parens();
         match callee {
             Expression::DotAccess {
@@ -983,7 +1016,7 @@ impl Checker<'_, '_> {
                 {
                     let qualified = Symbol::from_parts(module_id, member);
                     if matches!(
-                        self.store.get_definition(&qualified),
+                        store.get_definition(&qualified),
                         Some(Definition::Struct {
                             kind: StructKind::Tuple,
                             ..
@@ -995,11 +1028,11 @@ impl Checker<'_, '_> {
             }
             Expression::Identifier { value, .. } => {
                 let qualified = self.qualify_name(value);
-                let definition = self.store.get_definition(&qualified);
+                let definition = store.get_definition(&qualified);
                 if definition.is_none() && value == "assert_type" {
                     return CallKind::AssertType;
                 }
-                if self.is_tuple_struct_definition(definition, callee) {
+                if self.is_tuple_struct_definition(store, definition, callee) {
                     return CallKind::TupleStructConstructor;
                 }
 
@@ -1022,7 +1055,7 @@ impl Checker<'_, '_> {
                 }
 
                 // Receiver method UFCS: Type.method(receiver, args)
-                if let Some(kind) = self.try_classify_receiver_ufcs(value) {
+                if let Some(kind) = self.try_classify_receiver_ufcs(store, value) {
                     return kind;
                 }
             }
@@ -1033,18 +1066,17 @@ impl Checker<'_, '_> {
 
     /// Classify `Type.method(receiver, args)` as `ReceiverMethodUfcs`.
     /// Uses scope-aware name resolution instead of the old suffix-matching heuristic.
-    fn try_classify_receiver_ufcs(&self, value: &str) -> Option<CallKind> {
+    fn try_classify_receiver_ufcs(&self, store: &Store, value: &str) -> Option<CallKind> {
         let last_dot = value.rfind('.')?;
         let method = &value[last_dot + 1..];
         let type_part = &value[..last_dot];
 
         // Resolve type name using checker's scope-aware lookup
-        let qualified_name = self.lookup_qualified_name(type_part)?;
+        let qualified_name = self.lookup_qualified_name(store, type_part)?;
 
         // Follow type-alias chains through Simple/Compound underlying types
         // (e.g. `type MyString = string` → look up methods on `prelude.string`).
-        let method_ty = self
-            .store
+        let method_ty = store
             .get_definition(&qualified_name)
             .and_then(|definition| match definition {
                 Definition::Struct { methods, .. } => methods.get(method).cloned(),
@@ -1067,8 +1099,7 @@ impl Checker<'_, '_> {
                             }
                             _ => None,
                         };
-                        underlying_key
-                            .and_then(|k| self.store.get_own_methods(&k)?.get(method).cloned())
+                        underlying_key.and_then(|k| store.get_own_methods(&k)?.get(method).cloned())
                     })
                 }
                 _ => None,
@@ -1098,8 +1129,7 @@ impl Checker<'_, '_> {
             return None;
         }
 
-        let is_public = self
-            .store
+        let is_public = store
             .get_definition(&Symbol::from_parts(&qualified_name, method))
             .map(|d| d.visibility().is_public())
             .unwrap_or(false);
@@ -1110,6 +1140,7 @@ impl Checker<'_, '_> {
     /// Check if a definition (or type alias target) is a multi-field tuple struct constructor.
     fn is_tuple_struct_definition(
         &self,
+        store: &Store,
         definition: Option<&Definition>,
         callee: &Expression,
     ) -> bool {
@@ -1132,7 +1163,7 @@ impl Checker<'_, '_> {
             };
             if let Type::Nominal { id, .. } = return_ty.resolve_in(&self.env) {
                 return matches!(
-                    self.store.get_definition(&id),
+                    store.get_definition(&id),
                     Some(Definition::Struct {
                         kind: StructKind::Tuple,
                         ..
@@ -1174,6 +1205,7 @@ impl Checker<'_, '_> {
     ///   emitter rewrites to `s = append(s, ...)` in statement position)
     fn check_native_mutating_call(
         &mut self,
+        store: &Store,
         callee: &Expression,
         result_unused: bool,
         span: &Span,
@@ -1230,7 +1262,7 @@ impl Checker<'_, '_> {
                 .lookup_binding_id(&var_name)
                 .and_then(|id| self.facts.bindings.get(&id))
                 .is_some_and(|b| b.kind.is_match_arm());
-            let is_const = self.is_const_var(&var_name);
+            let is_const = self.is_const_var(store, &var_name);
             self.sink.push(diagnostics::infer::disallowed_mutation(
                 &var_name,
                 *span,

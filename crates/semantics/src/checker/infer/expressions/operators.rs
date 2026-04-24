@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use syntax::ast::{BinaryOperator, Expression, Literal, Span, UnaryOperator};
 use syntax::program::Definition;
 use syntax::types::{Type, substitute};
@@ -8,9 +9,10 @@ use UnaryOperator::*;
 
 use super::super::Checker;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(super) fn infer_unary(
         &mut self,
+        store: &mut Store,
         operator: UnaryOperator,
         operand: Box<Expression>,
         expected_ty: &Type,
@@ -30,7 +32,7 @@ impl Checker<'_, '_> {
         }
 
         let new_expression =
-            self.with_value_context(|s| s.infer_expression(*operand, &operand_expected_ty));
+            self.with_value_context(|s| s.infer_expression(store, *operand, &operand_expected_ty));
 
         if operator == Negative {
             self.scopes.decrement_negation_depth();
@@ -57,18 +59,18 @@ impl Checker<'_, '_> {
             }
             Not => {
                 let bool_ty = self.type_bool();
-                self.unify(&bool_ty, &operand_expected_ty, &span);
+                self.unify(store, &bool_ty, &operand_expected_ty, &span);
                 bool_ty
             }
             Deref => {
                 let inner_ty = self.new_type_var();
                 let ref_ty = self.type_reference(inner_ty.clone());
-                self.unify(&ref_ty, &operand_expected_ty, &span);
+                self.unify(store, &ref_ty, &operand_expected_ty, &span);
                 inner_ty
             }
         };
 
-        self.unify(expected_ty, &expression_ty, &span);
+        self.unify(store, expected_ty, &expression_ty, &span);
 
         Expression::Unary {
             operator,
@@ -80,6 +82,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_binary(
         &mut self,
+        store: &mut Store,
         operator: BinaryOperator,
         left_operand: Box<Expression>,
         right_operand: Box<Expression>,
@@ -101,28 +104,44 @@ impl Checker<'_, '_> {
                 current = *left;
             }
             let mut left_ty = self.new_type_var();
-            let mut left_inferred = self.infer_expression(current, &left_ty);
+            let mut left_inferred = self.infer_expression(store, current, &left_ty);
             while let Some((op, right, s)) = stack.pop() {
                 let result_ty = if stack.is_empty() {
                     expected_ty.clone()
                 } else {
                     self.new_type_var()
                 };
-                let (inferred, ty) =
-                    self.infer_binary_with_left(op, left_inferred, left_ty, right, &result_ty, s);
+                let (inferred, ty) = self.infer_binary_with_left(
+                    store,
+                    op,
+                    left_inferred,
+                    left_ty,
+                    right,
+                    &result_ty,
+                    s,
+                );
                 left_inferred = inferred;
                 left_ty = ty;
             }
             return left_inferred;
         }
 
-        self.infer_binary_impl(operator, left_operand, right_operand, expected_ty, span)
+        self.infer_binary_impl(
+            store,
+            operator,
+            left_operand,
+            right_operand,
+            expected_ty,
+            span,
+        )
     }
 
     /// Infer a binary expression where the left operand is already inferred.
     /// Returns the inferred expression and its result type.
+    #[allow(clippy::too_many_arguments)]
     fn infer_binary_with_left(
         &mut self,
+        store: &mut Store,
         operator: BinaryOperator,
         left_inferred: Expression,
         left_ty: Type,
@@ -157,10 +176,10 @@ impl Checker<'_, '_> {
             if is_right_literal {
                 let left_resolved = left_operand_ty.resolve_in(&s.env);
                 if literal_can_adapt_to(&right_literal_kind, &left_resolved) {
-                    let _ = s.try_unify(&right_operand_ty, &left_resolved, &span);
+                    let _ = s.try_unify(store, &right_operand_ty, &left_resolved, &span);
                 }
             }
-            s.infer_expression(*right_operand, &right_operand_ty)
+            s.infer_expression(store, *right_operand, &right_operand_ty)
         });
 
         if matches!(operator, And | Or)
@@ -174,6 +193,7 @@ impl Checker<'_, '_> {
         let right_span = new_right_operand.get_span();
 
         let expression_ty = self.resolve_binary_type(
+            store,
             &operator,
             &left_operand_ty,
             &right_operand_ty,
@@ -182,7 +202,7 @@ impl Checker<'_, '_> {
             span,
         );
 
-        self.unify(expected_ty, &expression_ty, &span);
+        self.unify(store, expected_ty, &expression_ty, &span);
 
         let result = Expression::Binary {
             operator,
@@ -196,6 +216,7 @@ impl Checker<'_, '_> {
 
     fn infer_binary_impl(
         &mut self,
+        store: &mut Store,
         operator: BinaryOperator,
         left_operand: Box<Expression>,
         right_operand: Box<Expression>,
@@ -237,22 +258,22 @@ impl Checker<'_, '_> {
             if is_left_literal && !is_right_literal {
                 // Infer the non-literal (right) first so its resolved type
                 // can guide the literal's type adaptation.
-                let right = s.infer_expression(*right_operand, &right_operand_ty);
+                let right = s.infer_expression(store, *right_operand, &right_operand_ty);
                 let right_resolved = right_operand_ty.resolve_in(&s.env);
                 if literal_can_adapt_to(&left_literal_kind, &right_resolved) {
-                    let _ = s.try_unify(&left_operand_ty, &right_resolved, &span);
+                    let _ = s.try_unify(store, &left_operand_ty, &right_resolved, &span);
                 }
-                let left = s.infer_expression(*left_operand, &left_operand_ty);
+                let left = s.infer_expression(store, *left_operand, &left_operand_ty);
                 (left, right)
             } else {
-                let left = s.infer_expression(*left_operand, &left_operand_ty);
+                let left = s.infer_expression(store, *left_operand, &left_operand_ty);
                 if is_right_literal {
                     let left_resolved = left_operand_ty.resolve_in(&s.env);
                     if literal_can_adapt_to(&right_literal_kind, &left_resolved) {
-                        let _ = s.try_unify(&right_operand_ty, &left_resolved, &span);
+                        let _ = s.try_unify(store, &right_operand_ty, &left_resolved, &span);
                     }
                 }
-                let right = s.infer_expression(*right_operand, &right_operand_ty);
+                let right = s.infer_expression(store, *right_operand, &right_operand_ty);
                 (left, right)
             }
         });
@@ -268,6 +289,7 @@ impl Checker<'_, '_> {
         let right_span = new_right_operand.get_span();
 
         let expression_ty = self.resolve_binary_type(
+            store,
             &operator,
             &left_operand_ty,
             &right_operand_ty,
@@ -276,7 +298,7 @@ impl Checker<'_, '_> {
             span,
         );
 
-        self.unify(expected_ty, &expression_ty, &span);
+        self.unify(store, expected_ty, &expression_ty, &span);
 
         Expression::Binary {
             operator,
@@ -288,8 +310,10 @@ impl Checker<'_, '_> {
     }
 
     /// Resolve the result type of a binary operation given already-inferred operand types.
+    #[allow(clippy::too_many_arguments)]
     fn resolve_binary_type(
         &mut self,
+        store: &mut Store,
         operator: &BinaryOperator,
         left_operand_ty: &Type,
         right_operand_ty: &Type,
@@ -309,16 +333,22 @@ impl Checker<'_, '_> {
                     && resolved_left_operand.is_numeric_compatible_with(&resolved_right_operand);
 
                 if !same_aliased_numeric && !different_but_compatible {
-                    self.unify_binary_operands(operator, left_operand_ty, right_operand_ty, &span);
+                    self.unify_binary_operands(
+                        store,
+                        operator,
+                        left_operand_ty,
+                        right_operand_ty,
+                        &span,
+                    );
                 }
-                self.ensure_comparable(left_operand_ty, left_span);
+                self.ensure_comparable(store, left_operand_ty, left_span);
                 self.type_bool()
             }
 
             And | Or => {
                 let bool_ty = self.type_bool();
-                self.unify(left_operand_ty, &bool_ty, &span);
-                self.unify(right_operand_ty, &bool_ty, &span);
+                self.unify(store, left_operand_ty, &bool_ty, &span);
+                self.unify(store, right_operand_ty, &bool_ty, &span);
                 bool_ty
             }
 
@@ -337,7 +367,13 @@ impl Checker<'_, '_> {
                 } else {
                     self.ensure_orderable(left_operand_ty, left_span);
                     self.ensure_orderable(right_operand_ty, right_span);
-                    self.unify_binary_operands(operator, left_operand_ty, right_operand_ty, &span);
+                    self.unify_binary_operands(
+                        store,
+                        operator,
+                        left_operand_ty,
+                        right_operand_ty,
+                        &span,
+                    );
                     self.type_bool()
                 }
             }
@@ -368,6 +404,7 @@ impl Checker<'_, '_> {
                     } else {
                         if numeric_ok {
                             self.unify_binary_operands(
+                                store,
                                 operator,
                                 left_operand_ty,
                                 right_operand_ty,
@@ -406,6 +443,7 @@ impl Checker<'_, '_> {
                         self.ensure_numeric_for_binary(operator, right_operand_ty, right_span);
                     if left_ok && right_ok {
                         self.unify_binary_operands(
+                            store,
                             operator,
                             left_operand_ty,
                             right_operand_ty,
@@ -465,18 +503,18 @@ impl Checker<'_, '_> {
         }
     }
 
-    fn ensure_comparable(&mut self, ty: &Type, span: &Span) {
+    fn ensure_comparable(&mut self, store: &Store, ty: &Type, span: &Span) {
         let resolved = ty.resolve_in(&self.env);
         if resolved.is_error() {
             return;
         }
-        if let Some(reason) = self.check_not_comparable(&resolved) {
+        if let Some(reason) = self.check_not_comparable(store, &resolved) {
             self.sink
                 .push(diagnostics::infer::not_comparable(&resolved, reason, *span));
         }
     }
 
-    fn check_not_comparable(&self, ty: &Type) -> Option<&'static str> {
+    fn check_not_comparable(&self, store: &Store, ty: &Type) -> Option<&'static str> {
         if matches!(ty, Type::Function { .. }) {
             return Some("functions");
         }
@@ -506,7 +544,7 @@ impl Checker<'_, '_> {
         // For generic types like Option<Color>, the definition has fields with
         // type parameter T — substitute T → Color before checking comparability.
         if let Some(name) = ty.get_qualified_id()
-            && let Some(definition) = self.store.get_definition(name)
+            && let Some(definition) = store.get_definition(name)
         {
             let type_args = ty.get_type_params().unwrap_or_default();
             let generics = match &definition {
@@ -525,7 +563,7 @@ impl Checker<'_, '_> {
                 Definition::Struct { fields, .. } => {
                     for f in fields {
                         let field_ty = substitute(&f.ty.resolve_in(&self.env), &sub_map);
-                        if self.check_not_comparable(&field_ty).is_some() {
+                        if self.check_not_comparable(store, &field_ty).is_some() {
                             return Some("a struct containing non-comparable fields");
                         }
                     }
@@ -534,7 +572,7 @@ impl Checker<'_, '_> {
                     for v in variants {
                         for f in v.fields.iter() {
                             let field_ty = substitute(&f.ty.resolve_in(&self.env), &sub_map);
-                            if self.check_not_comparable(&field_ty).is_some() {
+                            if self.check_not_comparable(store, &field_ty).is_some() {
                                 return Some("an enum containing non-comparable fields");
                             }
                         }
@@ -547,7 +585,7 @@ impl Checker<'_, '_> {
         if let Type::Tuple(elems) = ty {
             for e in elems {
                 if self
-                    .check_not_comparable(&e.resolve_in(&self.env))
+                    .check_not_comparable(store, &e.resolve_in(&self.env))
                     .is_some()
                 {
                     return Some("a tuple containing non-comparable elements");
@@ -560,13 +598,14 @@ impl Checker<'_, '_> {
 
     fn unify_binary_operands(
         &mut self,
+        store: &Store,
         operator: &BinaryOperator,
         left_operand_ty: &Type,
         right_operand_ty: &Type,
         span: &Span,
     ) {
         if self
-            .try_unify(left_operand_ty, right_operand_ty, span)
+            .try_unify(store, left_operand_ty, right_operand_ty, span)
             .is_err()
         {
             let left_resolved = left_operand_ty.resolve_in(&self.env);
@@ -641,6 +680,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_range(
         &mut self,
+        store: &mut Store,
         start: Option<Box<Expression>>,
         end: Option<Box<Expression>>,
         inclusive: bool,
@@ -650,27 +690,28 @@ impl Checker<'_, '_> {
         let element_ty = self.new_type_var();
 
         let (new_start, new_end) = self.with_value_context(|s| {
-            let start =
-                start.map(|expression| Box::new(s.infer_expression(*expression, &element_ty)));
-            let end = end.map(|expression| Box::new(s.infer_expression(*expression, &element_ty)));
+            let start = start
+                .map(|expression| Box::new(s.infer_expression(store, *expression, &element_ty)));
+            let end =
+                end.map(|expression| Box::new(s.infer_expression(store, *expression, &element_ty)));
             (start, end)
         });
 
         let range_ty = match (&new_start, &new_end, inclusive) {
-            (Some(_), Some(_), false) => self.type_range(element_ty.clone()),
-            (Some(_), Some(_), true) => self.type_range_inclusive(element_ty.clone()),
-            (Some(_), None, _) => self.type_range_from(element_ty.clone()),
-            (None, Some(_), false) => self.type_range_to(element_ty.clone()),
-            (None, Some(_), true) => self.type_range_to_inclusive(element_ty.clone()),
+            (Some(_), Some(_), false) => self.type_range(store, element_ty.clone()),
+            (Some(_), Some(_), true) => self.type_range_inclusive(store, element_ty.clone()),
+            (Some(_), None, _) => self.type_range_from(store, element_ty.clone()),
+            (None, Some(_), false) => self.type_range_to(store, element_ty.clone()),
+            (None, Some(_), true) => self.type_range_to_inclusive(store, element_ty.clone()),
             (None, None, _) => {
                 self.sink
                     .push(diagnostics::infer::range_full_not_valid_expression(span));
                 let error_ty = self.new_type_var();
-                self.type_range(error_ty)
+                self.type_range(store, error_ty)
             }
         };
 
-        self.unify(expected_ty, &range_ty, &span);
+        self.unify(store, expected_ty, &range_ty, &span);
 
         Expression::Range {
             start: new_start,
@@ -683,16 +724,17 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_cast(
         &mut self,
+        store: &mut Store,
         expression: Box<Expression>,
         target_type: syntax::ast::Annotation,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        let target_ty = self.convert_to_type(&target_type, &span);
+        let target_ty = self.convert_to_type(store, &target_type, &span);
 
         let source_ty_var = self.new_type_var();
         let new_expression =
-            self.with_value_context(|s| s.infer_expression(*expression, &source_ty_var));
+            self.with_value_context(|s| s.infer_expression(store, *expression, &source_ty_var));
         let source_ty = source_ty_var.resolve_in(&self.env);
 
         if is_cast_expression(&new_expression) {
@@ -705,14 +747,14 @@ impl Checker<'_, '_> {
 
         self.check_cast_literal_overflow(&new_expression, &target_ty, span);
 
-        self.check_valid_cast(&source_ty, &target_ty, span);
+        self.check_valid_cast(store, &source_ty, &target_ty, span);
 
         if is_float_literal(&new_expression) && is_integer_type(&target_ty, &self.env) {
             self.sink
                 .push(diagnostics::infer::float_literal_int_cast(span));
         }
 
-        self.unify(expected_ty, &target_ty, &span);
+        self.unify(store, expected_ty, &target_ty, &span);
 
         Expression::Cast {
             expression: new_expression.into(),

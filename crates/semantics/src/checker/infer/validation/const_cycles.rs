@@ -4,6 +4,7 @@ use ecow::EcoString;
 use syntax::ast::{Expression, Span};
 
 use crate::checker::Checker;
+use crate::store::Store;
 
 struct ConstEntry<'a> {
     name: &'a EcoString,
@@ -11,10 +12,9 @@ struct ConstEntry<'a> {
     body: &'a Expression,
 }
 
-impl Checker<'_, '_> {
-    pub fn check_const_cycles(&mut self, items_per_file: &[&[Expression]]) {
-        let module_const_names_empty = self
-            .store
+impl Checker<'_> {
+    pub fn check_const_cycles(&mut self, store: &Store, items_per_file: &[&[Expression]]) {
+        let module_const_names_empty = store
             .get_module(&self.cursor.module_id)
             .is_some_and(|m| m.const_names.is_empty());
         if module_const_names_empty {

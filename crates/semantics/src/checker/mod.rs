@@ -81,9 +81,8 @@ impl ImportState {
 /// These never change once populated, so no invalidation needed.
 type BuiltinCache = HashMap<String, Type>;
 
-pub struct Checker<'r, 's> {
+pub struct Checker<'s> {
     pub env: TypeEnv,
-    pub store: &'r mut Store,
     pub scopes: Scopes,
     pub cursor: Cursor,
     pub imports: ImportState,
@@ -102,11 +101,10 @@ pub struct Checker<'r, 's> {
     pub typed_files: Vec<(String, File)>,
 }
 
-impl<'r, 's> Checker<'r, 's> {
-    pub fn new(store: &'r mut Store, sink: &'s DiagnosticSink) -> Self {
+impl<'s> Checker<'s> {
+    pub fn new(sink: &'s DiagnosticSink) -> Self {
         Self {
             env: TypeEnv::new(),
-            store,
             scopes: Scopes::new(),
             cursor: Cursor::new(),
             imports: ImportState::new(),
@@ -173,24 +171,24 @@ impl<'r, 's> Checker<'r, 's> {
         }
     }
 
-    pub fn new_file_id(&mut self) -> u32 {
-        self.store.new_file_id()
+    pub fn new_file_id(&mut self, store: &Store) -> u32 {
+        store.new_file_id()
     }
 
-    pub fn is_d_lis(&self) -> bool {
+    pub fn is_d_lis(&self, store: &Store) -> bool {
         let Some(file_id) = self.cursor.file_id else {
             return false;
         };
 
-        let Some(module) = self.store.get_module(&self.cursor.module_id) else {
+        let Some(module) = store.get_module(&self.cursor.module_id) else {
             return false;
         };
 
         module.typedefs.contains_key(&file_id)
     }
 
-    pub fn is_lis(&self) -> bool {
-        !self.is_d_lis()
+    pub fn is_lis(&self, store: &Store) -> bool {
+        !self.is_d_lis(store)
     }
 
     pub(crate) fn qualify_name(&self, name: &str) -> Symbol {
@@ -208,10 +206,15 @@ impl<'r, 's> Checker<'r, 's> {
     }
 
     /// Validate that all bound annotations on generics refer to types that exist in scope.
-    pub(crate) fn validate_generic_bounds(&mut self, generics: &[Generic], span: &Span) {
+    pub(crate) fn validate_generic_bounds(
+        &mut self,
+        store: &Store,
+        generics: &[Generic],
+        span: &Span,
+    ) {
         for g in generics {
             for b in &g.bounds {
-                self.convert_to_type(b, span);
+                self.convert_to_type(store, b, span);
             }
         }
     }
@@ -256,17 +259,17 @@ impl<'r, 's> Checker<'r, 's> {
         None
     }
 
-    pub(crate) fn lookup_qualified_name(&self, type_name: &str) -> Option<String> {
+    pub(crate) fn lookup_qualified_name(&self, store: &Store, type_name: &str) -> Option<String> {
         if let Some((prefix, simple_name)) = type_name.split_once('.')
             && let Some(module_id) = self.imports.prefix_to_module.get(prefix)
-            && let Some(imported_module) = self.store.get_module(module_id)
+            && let Some(imported_module) = store.get_module(module_id)
             && let Some((qualified_name, _)) =
                 self.resolve_in_imported_module(imported_module, simple_name)
         {
             return Some(qualified_name);
         }
 
-        let module = self.store.get_module(&self.cursor.module_id)?;
+        let module = store.get_module(&self.cursor.module_id)?;
         let qualified_name = Symbol::from_parts(&module.id, type_name);
 
         if module.definitions.contains_key(qualified_name.as_str()) {
@@ -274,7 +277,7 @@ impl<'r, 's> Checker<'r, 's> {
         }
 
         for imported_module_id in &self.imports.unprefixed_imports {
-            if let Some(imported_module) = self.store.get_module(imported_module_id) {
+            if let Some(imported_module) = store.get_module(imported_module_id) {
                 let qualified_name = Symbol::from_parts(imported_module_id, type_name);
                 if imported_module
                     .definitions
@@ -288,30 +291,40 @@ impl<'r, 's> Checker<'r, 's> {
         None
     }
 
-    pub(crate) fn get_definition_name_span(&self, qualified_name: &str) -> Option<Span> {
-        self.store.get_definition(qualified_name)?.name_span()
+    pub(crate) fn get_definition_name_span(
+        &self,
+        store: &Store,
+        qualified_name: &str,
+    ) -> Option<Span> {
+        store.get_definition(qualified_name)?.name_span()
     }
 
-    pub(crate) fn is_const_name(&self, qualified_name: &str) -> bool {
+    pub(crate) fn is_const_name(&self, store: &Store, qualified_name: &str) -> bool {
         if qualified_name.starts_with("go:") {
             return false;
         }
-        self.store
+        store
             .module_for_qualified_name(qualified_name)
-            .and_then(|module_id| self.store.get_module(module_id))
+            .and_then(|module_id| store.get_module(module_id))
             .is_some_and(|module| module.const_names.contains(qualified_name))
     }
 
-    pub(crate) fn is_const_var(&self, var_name: &str) -> bool {
+    pub(crate) fn is_const_var(&self, store: &Store, var_name: &str) -> bool {
         self.scopes.lookup_binding_id(var_name).is_none()
             && self
-                .lookup_qualified_name(var_name)
-                .is_some_and(|qname| self.is_const_name(&qname))
+                .lookup_qualified_name(store, var_name)
+                .is_some_and(|qname| self.is_const_name(store, &qname))
     }
 
     /// Track that `name` (at the start of `span`) refers to the definition at `qualified_name`.
-    pub(crate) fn track_name_usage(&mut self, qualified_name: &str, span: &Span, name_len: u32) {
-        if let Some(definition_span) = self.get_definition_name_span(qualified_name) {
+    pub(crate) fn track_name_usage(
+        &mut self,
+        store: &Store,
+        qualified_name: &str,
+        span: &Span,
+        name_len: u32,
+    ) {
+        if let Some(definition_span) = self.get_definition_name_span(store, qualified_name) {
             let usage_span = Span::new(span.file_id, span.byte_offset, name_len);
             self.facts.add_usage(usage_span, definition_span);
         }
@@ -323,7 +336,7 @@ impl<'r, 's> Checker<'r, 's> {
 
     /// Resolves the value type for a definition. Returns the constructor type for
     /// structs with constructors (tuple structs) and for type aliases pointing to them.
-    fn resolve_definition_value_type(&self, definition: &Definition) -> Type {
+    fn resolve_definition_value_type(&self, store: &Store, definition: &Definition) -> Type {
         if let Definition::Struct {
             constructor: Some(ctor_ty),
             ..
@@ -342,7 +355,7 @@ impl<'r, 's> Checker<'r, 's> {
                 && let Some(Definition::Struct {
                     constructor: Some(ctor_ty),
                     ..
-                }) = self.store.get_definition(id)
+                }) = store.get_definition(id)
             {
                 return ctor_ty.clone();
             }
@@ -351,7 +364,7 @@ impl<'r, 's> Checker<'r, 's> {
         definition.ty().clone()
     }
 
-    pub(crate) fn lookup_type(&self, value_name: &str) -> Option<Type> {
+    pub(crate) fn lookup_type(&self, store: &Store, value_name: &str) -> Option<Type> {
         if let Some(ty) = self.scopes.lookup_value(value_name) {
             return Some(ty.clone());
         }
@@ -362,24 +375,24 @@ impl<'r, 's> Checker<'r, 's> {
 
         if let Some((prefix, rest)) = value_name.split_once('.')
             && let Some(module_id) = self.imports.prefix_to_module.get(prefix)
-            && let Some(imported_module) = self.store.get_module(module_id)
+            && let Some(imported_module) = store.get_module(module_id)
             && let Some((_, definition)) = self.resolve_in_imported_module(imported_module, rest)
         {
-            return Some(self.resolve_definition_value_type(definition));
+            return Some(self.resolve_definition_value_type(store, definition));
         }
 
-        let module = self.store.get_module(&self.cursor.module_id)?;
+        let module = store.get_module(&self.cursor.module_id)?;
         let qualified_name = Symbol::from_parts(&module.id, value_name);
 
         if let Some(definition) = module.definitions.get(qualified_name.as_str()) {
-            return Some(self.resolve_definition_value_type(definition));
+            return Some(self.resolve_definition_value_type(store, definition));
         }
 
         for imported_module_id in &self.imports.unprefixed_imports {
-            if let Some(imported_module) = self.store.get_module(imported_module_id) {
+            if let Some(imported_module) = store.get_module(imported_module_id) {
                 let qualified_name = Symbol::from_parts(imported_module_id, value_name);
                 if let Some(definition) = imported_module.definitions.get(qualified_name.as_str()) {
-                    return Some(self.resolve_definition_value_type(definition));
+                    return Some(self.resolve_definition_value_type(store, definition));
                 }
             }
         }
@@ -387,11 +400,11 @@ impl<'r, 's> Checker<'r, 's> {
         None
     }
 
-    pub(crate) fn is_enum_type(&self, ty: &Type) -> bool {
+    pub(crate) fn is_enum_type(&self, store: &Store, ty: &Type) -> bool {
         let Type::Nominal { id, .. } = ty else {
             return false;
         };
-        let Some(definition) = self.store.get_definition(id) else {
+        let Some(definition) = store.get_definition(id) else {
             return false;
         };
         matches!(
@@ -400,30 +413,36 @@ impl<'r, 's> Checker<'r, 's> {
         )
     }
 
-    pub(crate) fn resolve_type_name(&mut self, type_name: &str) -> Option<(String, Type)> {
+    pub(crate) fn resolve_type_name(
+        &mut self,
+        store: &Store,
+        type_name: &str,
+    ) -> Option<(String, Type)> {
         if self.scopes.lookup_type_param(type_name).is_some() {
             return None;
         }
 
-        let qualified_name = self.lookup_qualified_name(type_name)?;
-        let ty = self.store.get_type(&qualified_name)?.clone();
+        let qualified_name = self.lookup_qualified_name(store, type_name)?;
+        let ty = store.get_type(&qualified_name)?.clone();
 
         Some((qualified_name, ty))
     }
 
-    pub(crate) fn resolve_type_from_prelude(&self, type_name: &str) -> Option<(String, Type)> {
+    pub(crate) fn resolve_type_from_prelude(
+        &self,
+        store: &Store,
+        type_name: &str,
+    ) -> Option<(String, Type)> {
         let qualified_name = format!("prelude.{}", type_name);
-        let ty = self.store.get_type(&qualified_name)?.clone();
+        let ty = store.get_type(&qualified_name)?.clone();
         Some((qualified_name, ty))
     }
 
-    pub(crate) fn get_all_methods(&self, ty: &Type) -> MethodSignatures {
+    pub(crate) fn get_all_methods(&self, store: &Store, ty: &Type) -> MethodSignatures {
         if let Type::Parameter(name) = ty {
             let trait_bounds = self.scopes.collect_all_trait_bounds();
             let qualified_name = self.qualify_name(name);
-            return self
-                .store
-                .get_methods_from_bounds(&qualified_name, &trait_bounds);
+            return store.get_methods_from_bounds(&qualified_name, &trait_bounds);
         }
 
         let resolved = ty.strip_refs().resolve_in(&self.env);
@@ -435,12 +454,12 @@ impl<'r, 's> Checker<'r, 's> {
         };
 
         // Interfaces need type-arg-dependent generic substitution, skip cache.
-        let peeled = self.store.peel_alias(&resolved);
+        let peeled = store.peel_alias(&resolved);
         if let Type::Nominal { id: peeled_id, .. } = &peeled
-            && self.store.get_interface(peeled_id).is_some()
+            && store.get_interface(peeled_id).is_some()
         {
             let empty = HashMap::default();
-            return self.store.get_all_methods(&peeled, &empty);
+            return store.get_all_methods(&peeled, &empty);
         }
 
         if let Some(cached) = self.method_cache.borrow().get(cache_key.as_str()) {
@@ -451,7 +470,7 @@ impl<'r, 's> Checker<'r, 's> {
         // Pass the env-resolved type so the store's env-less `resolve()` stays
         // identity-safe: `Type::Var` chains are chased once here rather than
         // silently returning empty methods in the store.
-        let methods = self.store.get_all_methods(&resolved, &empty);
+        let methods = store.get_all_methods(&resolved, &empty);
         self.method_cache
             .borrow_mut()
             .insert(cache_key, methods.clone());
@@ -467,19 +486,19 @@ impl<'r, 's> Checker<'r, 's> {
         self.sink.has_errors()
     }
 
-    pub fn put_prelude_in_scope(&mut self) {
-        self.put_unprefixed_module_in_scope("prelude");
+    pub fn put_prelude_in_scope(&mut self, store: &Store) {
+        self.put_unprefixed_module_in_scope(store, "prelude");
         if self.imports.imported_modules.contains_key("prelude") {
             return;
         }
-        self.put_module_in_scope("prelude", Some("prelude".to_string()));
+        self.put_module_in_scope(store, "prelude", Some("prelude".to_string()));
     }
 
-    pub fn put_unprefixed_module_in_scope(&mut self, module_id: &str) {
-        self.put_module_in_scope(module_id, None)
+    pub fn put_unprefixed_module_in_scope(&mut self, store: &Store, module_id: &str) {
+        self.put_module_in_scope(store, module_id, None)
     }
 
-    pub fn put_imported_modules_in_scope(&mut self, imports: &[FileImport]) {
+    pub fn put_imported_modules_in_scope(&mut self, store: &Store, imports: &[FileImport]) {
         let mut seen_aliases: HashMap<String, String> = HashMap::default(); // alias -> path
         let mut seen_paths: HashSet<String> = HashSet::default();
 
@@ -511,7 +530,7 @@ impl<'r, 's> Checker<'r, 's> {
                 continue;
             }
 
-            let Some(effective) = import.effective_alias(&self.store.go_package_names) else {
+            let Some(effective) = import.effective_alias(&store.go_package_names) else {
                 continue;
             };
 
@@ -529,17 +548,17 @@ impl<'r, 's> Checker<'r, 's> {
 
             seen_aliases.insert(effective.clone(), import.name.to_string());
 
-            let module = self.store.get_module(&import.name);
+            let module = store.get_module(&import.name);
             if module.is_none() || module.is_some_and(Module::is_empty_stub) {
                 self.imports.failed_imports.insert(effective);
                 continue;
             }
 
-            self.put_module_in_scope(&import.name, Some(effective));
+            self.put_module_in_scope(store, &import.name, Some(effective));
         }
     }
 
-    pub fn put_module_in_scope(&mut self, module_id: &str, prefix: Option<String>) {
+    pub fn put_module_in_scope(&mut self, store: &Store, module_id: &str, prefix: Option<String>) {
         let Some(prefix) = prefix else {
             self.imports
                 .unprefixed_imports
@@ -547,8 +566,7 @@ impl<'r, 's> Checker<'r, 's> {
             return;
         };
 
-        let module = self
-            .store
+        let module = store
             .get_module(module_id)
             .expect("module must exist when putting in scope");
 

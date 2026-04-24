@@ -28,10 +28,9 @@ pub fn init_prelude(store: &mut Store) {
     parse_and_register_prelude(store, &sink);
 }
 
-pub fn register_test_builtins(checker: &mut Checker) {
+pub fn register_test_builtins(store: &mut Store, _checker: &mut Checker) {
     let module_id = "prelude";
-    let module = checker
-        .store
+    let module = store
         .modules
         .get_mut(module_id)
         .expect("prelude module must exist");

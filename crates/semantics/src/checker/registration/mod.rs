@@ -14,6 +14,7 @@ use syntax::program::{Definition, File, Visibility};
 use syntax::types::{Symbol, Type};
 
 use super::Checker;
+use crate::store::Store;
 
 pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
     for line in source.lines().take(10) {
@@ -61,17 +62,17 @@ pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> V
         .collect()
 }
 
-impl Checker<'_, '_> {
-    fn definition_exists(&self, qualified_name: &str) -> bool {
-        self.store
+impl Checker<'_> {
+    fn definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
+        store
             .get_module(&self.cursor.module_id)
             .expect("current module must exist in store")
             .definitions
             .contains_key(qualified_name)
     }
 
-    fn type_definition_exists(&self, qualified_name: &str) -> bool {
-        self.store
+    fn type_definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
+        store
             .get_module(&self.cursor.module_id)
             .expect("current module must exist in store")
             .definitions
@@ -88,12 +89,11 @@ impl Checker<'_, '_> {
             })
     }
 
-    pub fn register_module(&mut self, id: &str) {
+    pub fn register_module(&mut self, store: &mut Store, id: &str) {
         self.cursor.module_id = id.to_string();
 
         let type_name_entries = {
-            let module = self
-                .store
+            let module = store
                 .get_module(id)
                 .expect("module must exist for declaration");
             let mut entries = Vec::new();
@@ -113,8 +113,7 @@ impl Checker<'_, '_> {
             }
             entries
         };
-        let module = self
-            .store
+        let module = store
             .get_module_mut(id)
             .expect("module must exist for declaration");
         for (qualified_name, definition) in type_name_entries {
@@ -125,8 +124,7 @@ impl Checker<'_, '_> {
         }
 
         let file_data: Vec<_> = {
-            let module = self
-                .store
+            let module = store
                 .get_module(id)
                 .expect("module must exist for declaration");
             module
@@ -141,21 +139,20 @@ impl Checker<'_, '_> {
             self.reset_scopes();
             self.cursor.file_id = Some(*file_id);
 
-            self.put_prelude_in_scope();
-            self.put_unprefixed_module_in_scope(id);
-            self.put_imported_modules_in_scope(imports);
+            self.put_prelude_in_scope(&*store);
+            self.put_unprefixed_module_in_scope(&*store, id);
+            self.put_imported_modules_in_scope(&*store, imports);
 
             let items = std::mem::take(
-                &mut self
-                    .store
+                &mut store
                     .get_file_mut(*file_id)
                     .expect("file must exist for registration")
                     .items,
             );
 
-            self.register_type_definitions(&items);
+            self.register_type_definitions(store, &items);
 
-            self.store
+            store
                 .get_file_mut(*file_id)
                 .expect("file must exist after registration")
                 .items = items;
@@ -165,22 +162,21 @@ impl Checker<'_, '_> {
             self.reset_scopes();
             self.cursor.file_id = Some(*file_id);
 
-            self.put_prelude_in_scope();
-            self.put_unprefixed_module_in_scope(id);
-            self.put_imported_modules_in_scope(imports);
+            self.put_prelude_in_scope(&*store);
+            self.put_unprefixed_module_in_scope(&*store, id);
+            self.put_imported_modules_in_scope(&*store, imports);
 
             let items = std::mem::take(
-                &mut self
-                    .store
+                &mut store
                     .get_file_mut(*file_id)
                     .expect("file must exist for registration")
                     .items,
             );
 
-            self.register_impl_blocks(&items);
-            self.register_values(&items, &Visibility::Private);
+            self.register_impl_blocks(store, &items);
+            self.register_values(store, &items, &Visibility::Private);
 
-            self.store
+            store
                 .get_file_mut(*file_id)
                 .expect("file must exist after registration")
                 .items = items;
@@ -188,7 +184,7 @@ impl Checker<'_, '_> {
 
         self.cursor.file_id = None;
 
-        let module = self.store.get_module(id).expect("module must exist");
+        let module = store.get_module(id).expect("module must exist");
         let ufcs_entries = crate::call_classification::compute_module_ufcs(module, id);
         self.ufcs_methods.extend(ufcs_entries);
     }
@@ -198,26 +194,27 @@ impl Checker<'_, '_> {
     /// in scope (no self-references like `MyModule.Type`).
     pub fn parse_and_register_go_module(
         &mut self,
+        store: &mut Store,
         module_id: &str,
         source: &str,
         locator: &TypedefLocator,
     ) {
-        if self.store.is_visited(module_id) {
+        if store.is_visited(module_id) {
             return;
         }
 
-        self.store.mark_visited(module_id);
-        self.store.add_module(module_id);
+        store.mark_visited(module_id);
+        store.add_module(module_id);
 
         if let Some(pkg_name) = extract_package_directive(source)
             && module_id.rsplit('/').next() != Some(pkg_name.as_str())
         {
-            self.store
+            store
                 .go_package_names
                 .insert(module_id.to_string(), pkg_name);
         }
 
-        let file_id = self.store.new_file_id();
+        let file_id = store.new_file_id();
         let filename = format!("{}.d.lis", module_id.replace('/', "_"));
 
         let build_result = syntax::build_ast(source, file_id);
@@ -244,45 +241,53 @@ impl Checker<'_, '_> {
                     content: source, ..
                 } = locator.find_typedef_content(go_pkg)
                 {
-                    self.parse_and_register_go_module(&import_module_id, &source, locator);
+                    self.parse_and_register_go_module(store, &import_module_id, &source, locator);
                 }
             }
         }
 
-        self.store.store_file(module_id, file);
+        store.store_file(module_id, file);
 
         let prev_module_id = self.cursor.module_id.clone();
         self.cursor.module_id = module_id.to_string();
 
         self.reset_scopes();
         self.cursor.file_id = Some(file_id);
-        self.put_prelude_in_scope();
-        self.put_imported_modules_in_scope(&imports);
+        self.put_prelude_in_scope(&*store);
+        self.put_imported_modules_in_scope(&*store, &imports);
 
         let items = std::mem::take(
-            &mut self
-                .store
+            &mut store
                 .get_file_mut(file_id)
                 .expect("file must exist after store_file")
                 .items,
         );
-        self.register_types_and_values(&items, &Visibility::Public);
+        self.register_types_and_values(store, &items, &Visibility::Public);
 
         self.cursor.file_id = None;
         self.cursor.module_id = prev_module_id;
     }
 
-    pub fn register_types_and_values(&mut self, items: &[Expression], visibility: &Visibility) {
-        self.register_type_names(items, visibility);
-        self.register_type_definitions(items);
-        self.register_impl_blocks(items);
-        self.register_values(items, visibility);
+    pub fn register_types_and_values(
+        &mut self,
+        store: &mut Store,
+        items: &[Expression],
+        visibility: &Visibility,
+    ) {
+        self.register_type_names(store, items, visibility);
+        self.register_type_definitions(store, items);
+        self.register_impl_blocks(store, items);
+        self.register_values(store, items, visibility);
     }
 
-    pub fn register_type_names(&mut self, items: &[Expression], visibility: &Visibility) {
-        let entries = self.collect_type_name_entries(items, visibility, self.is_d_lis());
-        let module = self
-            .store
+    pub fn register_type_names(
+        &mut self,
+        store: &mut Store,
+        items: &[Expression],
+        visibility: &Visibility,
+    ) {
+        let entries = self.collect_type_name_entries(items, visibility, self.is_d_lis(&*store));
+        let module = store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
         for (qualified_name, definition) in entries {
@@ -403,7 +408,7 @@ impl Checker<'_, '_> {
         entries
     }
 
-    pub fn register_type_definitions(&mut self, items: &[Expression]) {
+    pub fn register_type_definitions(&mut self, store: &mut Store, items: &[Expression]) {
         for item in items {
             match item {
                 Expression::Enum {
@@ -414,7 +419,7 @@ impl Checker<'_, '_> {
                     span,
                     doc,
                     ..
-                } => self.populate_enum(name, name_span, generics, variants, span, doc),
+                } => self.populate_enum(store, name, name_span, generics, variants, span, doc),
                 Expression::ValueEnum {
                     name,
                     name_span,
@@ -422,9 +427,14 @@ impl Checker<'_, '_> {
                     variants,
                     doc,
                     ..
-                } => {
-                    self.populate_value_enum(name, name_span, underlying_ty.as_ref(), variants, doc)
-                }
+                } => self.populate_value_enum(
+                    store,
+                    name,
+                    name_span,
+                    underlying_ty.as_ref(),
+                    variants,
+                    doc,
+                ),
                 Expression::Struct {
                     name,
                     name_span,
@@ -434,7 +444,9 @@ impl Checker<'_, '_> {
                     span,
                     doc,
                     ..
-                } => self.populate_struct(name, name_span, generics, fields, *kind, span, doc),
+                } => {
+                    self.populate_struct(store, name, name_span, generics, fields, *kind, span, doc)
+                }
                 Expression::Interface {
                     name,
                     name_span,
@@ -445,6 +457,7 @@ impl Checker<'_, '_> {
                     doc,
                     ..
                 } => self.populate_interface(
+                    store,
                     name,
                     name_span,
                     generics,
@@ -461,13 +474,14 @@ impl Checker<'_, '_> {
                     span,
                     doc,
                     ..
-                } => self.populate_type_alias(name, name_span, generics, annotation, span, doc),
+                } => self
+                    .populate_type_alias(store, name, name_span, generics, annotation, span, doc),
                 _ => (),
             }
         }
     }
 
-    pub fn register_impl_blocks(&mut self, items: &[Expression]) {
+    pub fn register_impl_blocks(&mut self, store: &mut Store, items: &[Expression]) {
         for item in items {
             if let Expression::ImplBlock {
                 annotation,
@@ -477,41 +491,56 @@ impl Checker<'_, '_> {
                 ..
             } = item
             {
-                self.populate_impl_methods(annotation, generics, methods, span);
+                self.populate_impl_methods(store, annotation, generics, methods, span);
             }
         }
     }
 
     fn compute_item_visibility(
         &self,
+        store: &Store,
         syntactic: &SyntacticVisibility,
         scope: &Visibility,
     ) -> Visibility {
         match scope {
             Visibility::Local => Visibility::Local,
-            _ if *syntactic == SyntacticVisibility::Public || self.is_d_lis() => Visibility::Public,
+            _ if *syntactic == SyntacticVisibility::Public || self.is_d_lis(store) => {
+                Visibility::Public
+            }
             _ => Visibility::Private,
         }
     }
 
-    pub fn register_values(&mut self, items: &[Expression], visibility: &Visibility) {
+    pub fn register_values(
+        &mut self,
+        store: &mut Store,
+        items: &[Expression],
+        visibility: &Visibility,
+    ) {
         for item in items {
             match item {
-                Expression::Function { .. } => self.register_function_value(item, visibility),
-                Expression::Const { .. } => self.register_const_value(item, visibility),
+                Expression::Function { .. } => {
+                    self.register_function_value(store, item, visibility)
+                }
+                Expression::Const { .. } => self.register_const_value(store, item, visibility),
                 Expression::VariableDeclaration { .. } => {
-                    self.register_variable_declaration(item, visibility)
+                    self.register_variable_declaration(store, item, visibility)
                 }
                 Expression::Struct {
                     kind: StructKind::Tuple,
                     ..
-                } => self.register_tuple_struct_constructor(item),
+                } => self.register_tuple_struct_constructor(store, item),
                 _ => (),
             }
         }
     }
 
-    fn register_function_value(&mut self, item: &Expression, visibility: &Visibility) {
+    fn register_function_value(
+        &mut self,
+        store: &mut Store,
+        item: &Expression,
+        visibility: &Visibility,
+    ) {
         let Expression::Function {
             name,
             name_span,
@@ -527,7 +556,7 @@ impl Checker<'_, '_> {
             return;
         };
 
-        if body.is_noop() && self.is_lis() {
+        if body.is_noop() && self.is_lis(&*store) {
             self.sink
                 .push(diagnostics::infer::bodyless_function_outside_typedef(*span));
         }
@@ -538,20 +567,20 @@ impl Checker<'_, '_> {
         self.scopes.push();
         self.put_in_scope(generics);
 
-        let fn_ty = self.extract_function_signature(&fn_sig, span);
+        let fn_ty = self.extract_function_signature(store, &fn_sig, span);
 
         self.scopes.pop();
 
-        let item_visibility = self.compute_item_visibility(syntactic_visibility, visibility);
+        let item_visibility =
+            self.compute_item_visibility(&*store, syntactic_visibility, visibility);
 
-        if self.is_lis() && self.definition_exists(&qualified_name) {
+        if self.is_lis(&*store) && self.definition_exists(&*store, &qualified_name) {
             self.sink.push(diagnostics::infer::duplicate_definition(
                 "function", name, *name_span,
             ));
         }
 
-        let module = self
-            .store
+        let module = store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
         module.definitions.insert(
@@ -568,7 +597,12 @@ impl Checker<'_, '_> {
         );
     }
 
-    fn register_const_value(&mut self, item: &Expression, visibility: &Visibility) {
+    fn register_const_value(
+        &mut self,
+        store: &mut Store,
+        item: &Expression,
+        visibility: &Visibility,
+    ) {
         let Expression::Const {
             identifier,
             identifier_span,
@@ -585,12 +619,12 @@ impl Checker<'_, '_> {
 
         let has_value = !expression.is_noop();
 
-        if !has_value && self.is_lis() {
+        if !has_value && self.is_lis(&*store) {
             self.sink
                 .push(diagnostics::infer::valueless_const_outside_typedef(*span));
         }
 
-        if !has_value && maybe_annotation.is_none() && self.is_d_lis() {
+        if !has_value && maybe_annotation.is_none() && self.is_d_lis(&*store) {
             self.sink
                 .push(diagnostics::infer::valueless_const_missing_annotation(
                     *span,
@@ -601,16 +635,17 @@ impl Checker<'_, '_> {
 
         let before = self.sink.len();
         let const_ty = if let Some(annotation) = maybe_annotation {
-            self.convert_to_type(annotation, span)
+            self.convert_to_type(store, annotation, span)
         } else {
             self.type_from_literal_expression(expression)
                 .unwrap_or_else(|| self.new_type_var())
         };
         self.sink.truncate(before);
 
-        let item_visibility = self.compute_item_visibility(syntactic_visibility, visibility);
+        let item_visibility =
+            self.compute_item_visibility(&*store, syntactic_visibility, visibility);
 
-        if self.is_lis() && self.definition_exists(&qualified_name) {
+        if self.is_lis(&*store) && self.definition_exists(&*store, &qualified_name) {
             self.sink.push(diagnostics::infer::duplicate_definition(
                 "constant",
                 identifier,
@@ -618,8 +653,7 @@ impl Checker<'_, '_> {
             ));
         }
 
-        let module = self
-            .store
+        let module = store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
         module.const_names.insert(qualified_name.clone());
@@ -637,7 +671,12 @@ impl Checker<'_, '_> {
         );
     }
 
-    fn register_variable_declaration(&mut self, item: &Expression, visibility: &Visibility) {
+    fn register_variable_declaration(
+        &mut self,
+        store: &mut Store,
+        item: &Expression,
+        visibility: &Visibility,
+    ) {
         let Expression::VariableDeclaration {
             name,
             name_span,
@@ -651,7 +690,7 @@ impl Checker<'_, '_> {
             return;
         };
 
-        if self.is_lis() {
+        if self.is_lis(&*store) {
             self.sink
                 .push(diagnostics::infer::variable_declaration_outside_typedef(
                     *span,
@@ -659,12 +698,12 @@ impl Checker<'_, '_> {
         }
 
         let qualified_name = self.qualify_name(name);
-        let var_ty = self.convert_to_type(annotation, span);
+        let var_ty = self.convert_to_type(&*store, annotation, span);
 
-        let item_visibility = self.compute_item_visibility(syntactic_visibility, visibility);
+        let item_visibility =
+            self.compute_item_visibility(&*store, syntactic_visibility, visibility);
 
-        let module = self
-            .store
+        let module = store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
         module.definitions.insert(
@@ -681,7 +720,7 @@ impl Checker<'_, '_> {
         );
     }
 
-    fn register_tuple_struct_constructor(&mut self, item: &Expression) {
+    fn register_tuple_struct_constructor(&mut self, store: &mut Store, item: &Expression) {
         let Expression::Struct {
             name,
             generics,
@@ -695,8 +734,7 @@ impl Checker<'_, '_> {
         };
 
         let qualified_name = self.qualify_name(name);
-        let struct_ty = self
-            .store
+        let struct_ty = store
             .get_type(&qualified_name)
             .expect("struct type scheme must exist")
             .clone();
@@ -706,7 +744,7 @@ impl Checker<'_, '_> {
 
         let field_types: Vec<Type> = fields
             .iter()
-            .map(|f| self.convert_to_type(&f.annotation, span))
+            .map(|f| self.convert_to_type(&*store, &f.annotation, span))
             .collect();
 
         self.scopes.pop();
@@ -722,8 +760,7 @@ impl Checker<'_, '_> {
             .values
             .insert(name.to_string(), constructor_ty.clone());
 
-        let module = self
-            .store
+        let module = store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
         if let Some(Definition::Struct { constructor, .. }) =
@@ -735,6 +772,7 @@ impl Checker<'_, '_> {
 
     pub(crate) fn extract_function_signature(
         &mut self,
+        store: &Store,
         function: &FunctionDefinition,
         span: &Span,
     ) -> Type {
@@ -749,7 +787,7 @@ impl Checker<'_, '_> {
             let qualified_name = self.qualify_name(&g.name);
 
             for b in &g.bounds {
-                let bound_ty = self.convert_to_type(b, span);
+                let bound_ty = self.convert_to_type(store, b, span);
 
                 self.scopes
                     .current_mut()
@@ -776,14 +814,14 @@ impl Checker<'_, '_> {
                 binding
                     .annotation
                     .as_ref()
-                    .map(|a| self.convert_to_type(a, span))
+                    .map(|a| self.convert_to_type(store, a, span))
                     .unwrap_or_else(|| self.new_type_var())
             })
             .collect();
 
         let return_ty = match &function.annotation {
             Annotation::Unknown => self.type_unit(),
-            _ => self.convert_to_type(&function.annotation, span),
+            _ => self.convert_to_type(store, &function.annotation, span),
         };
 
         self.sink.truncate(before);

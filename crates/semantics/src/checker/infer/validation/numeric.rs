@@ -4,7 +4,7 @@ use syntax::types::Type;
 
 use crate::checker::Checker;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     /// Validates that an integer literal fits within the target numeric type.
     /// Note: value is u64 from the parser, so negative literals are handled via unary minus.
     pub(crate) fn check_integer_literal_overflow(

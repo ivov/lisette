@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use ecow::EcoString;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Literal, Span, Visibility};
@@ -29,10 +30,11 @@ fn classify_const_init(expression: &Expression) -> Option<ConstInitReject> {
     }
 }
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_const_binding(
         &mut self,
+        store: &mut Store,
         doc: Option<String>,
         annotation: Option<Annotation>,
         expression: Box<Expression>,
@@ -42,15 +44,15 @@ impl Checker<'_, '_> {
         span: Span,
     ) -> Expression {
         let ty = if let Some(annotation) = &annotation {
-            self.convert_to_type(annotation, &span)
+            self.convert_to_type(store, annotation, &span)
         } else {
             // Look up the type variable that was created during registration.
             // This ensures the type variable in the store gets unified.
-            self.lookup_type(&identifier)
+            self.lookup_type(store, &identifier)
                 .unwrap_or_else(|| self.new_type_var())
         };
 
-        let new_expression = self.infer_expression(*expression, &ty);
+        let new_expression = self.infer_expression(store, *expression, &ty);
 
         match classify_const_init(&new_expression) {
             None => {}
@@ -83,6 +85,7 @@ impl Checker<'_, '_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_let_binding(
         &mut self,
+        store: &mut Store,
         binding: Binding,
         value: Box<Expression>,
         mutable: bool,
@@ -96,16 +99,16 @@ impl Checker<'_, '_> {
         let binding_name = binding.pattern.get_identifier();
 
         let ty = if let Some(annotation) = &binding.annotation {
-            self.convert_to_type(annotation, &span)
+            self.convert_to_type(store, annotation, &span)
         } else {
             self.new_type_var()
         };
 
-        let new_value = self.with_value_context(|s| s.infer_expression(*value, &ty));
+        let new_value = self.with_value_context(|s| s.infer_expression(store, *value, &ty));
 
         let new_else_block = if let Some(else_expression) = else_block {
             let else_ty = self.new_type_var();
-            let new_else = self.infer_expression(*else_expression, &else_ty);
+            let new_else = self.infer_expression(store, *else_expression, &else_ty);
 
             let resolved_else_ty = else_ty.resolve_in(&self.env);
             if new_else.diverges().is_none() && !resolved_else_ty.is_never() {
@@ -113,15 +116,20 @@ impl Checker<'_, '_> {
                 self.sink
                     .push(diagnostics::infer::let_else_must_diverge(error_span));
             }
-            self.unify(&else_ty, &self.type_never(), &span);
+            let never_ty = self.type_never();
+            self.unify(store, &else_ty, &never_ty, &span);
 
             Some(Box::new(new_else))
         } else {
             None
         };
 
-        let (inferred_pattern, typed_pattern) =
-            self.infer_pattern(binding.pattern, ty.clone(), BindingKind::Let { mutable });
+        let (inferred_pattern, typed_pattern) = self.infer_pattern(
+            store,
+            binding.pattern,
+            ty.clone(),
+            BindingKind::Let { mutable },
+        );
 
         let new_binding = Binding {
             pattern: inferred_pattern,
@@ -150,7 +158,8 @@ impl Checker<'_, '_> {
             ));
         }
 
-        self.unify(expected_ty, &self.type_unit(), &span);
+        let unit_ty = self.type_unit();
+        self.unify(store, expected_ty, &unit_ty, &span);
 
         Expression::Let {
             binding: Box::new(new_binding),

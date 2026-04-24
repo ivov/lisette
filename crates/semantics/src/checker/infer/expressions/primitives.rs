@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use syntax::EcoString;
 use syntax::ast::DeadCodeCause;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
@@ -86,9 +87,10 @@ fn contains_stored_reference_to(expression: &Expression, var_name: &str) -> bool
     }
 }
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(super) fn infer_paren(
         &mut self,
+        store: &mut Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -115,7 +117,7 @@ impl Checker<'_, '_> {
         }
 
         self.scopes.set_in_subexpression(parent_is_subexpression);
-        let new_expression = self.infer_expression(*expression, expected_ty);
+        let new_expression = self.infer_expression(store, *expression, expected_ty);
         let new_ty = new_expression.get_type();
 
         Expression::Paren {
@@ -127,6 +129,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_block(
         &mut self,
+        store: &mut Store,
         items: Vec<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -142,7 +145,7 @@ impl Checker<'_, '_> {
                 self.sink
                     .push(diagnostics::infer::invalid_map_initialization(&k, &v, span));
             } else {
-                self.unify(expected_ty, &unit_ty, &span);
+                self.unify(store, expected_ty, &unit_ty, &span);
             }
             return Expression::Block {
                 items,
@@ -152,9 +155,9 @@ impl Checker<'_, '_> {
         }
 
         self.scopes.push();
-        self.register_types_and_values(&items, &Visibility::Local);
+        self.register_types_and_values(store, &items, &Visibility::Local);
 
-        let new_items = self.infer_block_items(items, expected_ty.clone());
+        let new_items = self.infer_block_items(store, items, expected_ty.clone());
 
         let last_item = new_items.last().expect("block must have at least one item");
         let block_ty = last_item.get_type();
@@ -170,12 +173,13 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_reference(
         &mut self,
+        store: &mut Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
         let inner_ty = self.new_type_var();
-        let new_expression = self.infer_expression(*expression, &inner_ty);
+        let new_expression = self.infer_expression(store, *expression, &inner_ty);
 
         let resolved_inner = inner_ty.resolve_in(&self.env);
         let is_already_ref = resolved_inner.is_ref();
@@ -189,7 +193,7 @@ impl Checker<'_, '_> {
             self.type_reference(inner_ty.clone())
         };
 
-        self.unify(expected_ty, &ref_ty, &span);
+        self.unify(store, expected_ty, &ref_ty, &span);
 
         if !is_already_ref {
             if let Some(kind) = check_is_non_addressable(&new_expression, &self.env) {
@@ -199,7 +203,7 @@ impl Checker<'_, '_> {
                 qualified: Some(qname),
                 ..
             } = &new_expression
-                && self.is_const_name(qname.as_str())
+                && self.is_const_name(store, qname.as_str())
             {
                 self.sink
                     .push(diagnostics::infer::non_addressable_const(span));
@@ -221,6 +225,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_identifier(
         &mut self,
+        store: &mut Store,
         value: EcoString,
         span: Span,
         expected_ty: &Type,
@@ -239,25 +244,26 @@ impl Checker<'_, '_> {
         }
 
         let qualified: Option<EcoString> = if binding_id.is_none() {
-            self.lookup_qualified_name(&value).map(EcoString::from)
+            self.lookup_qualified_name(store, &value)
+                .map(EcoString::from)
         } else {
             None
         };
 
         if let Some(ref qname) = qualified
-            && let Some(definition_span) = self.get_definition_name_span(qname.as_str())
+            && let Some(definition_span) = self.get_definition_name_span(store, qname.as_str())
         {
             self.facts.add_usage(span, definition_span);
         }
 
-        let ty = match self.lookup_type(&value) {
+        let ty = match self.lookup_type(store, &value) {
             Some(ty) => ty,
             None => {
                 if value == "self" {
                     self.sink
                         .push(diagnostics::infer::self_in_static_method(span));
                 } else {
-                    self.error_name_not_found(&value, span);
+                    self.error_name_not_found(store, &value, span);
                 }
                 Type::Error
             }
@@ -265,7 +271,7 @@ impl Checker<'_, '_> {
 
         let (identifier_ty, _) = self.instantiate(&ty);
 
-        self.unify(expected_ty, &identifier_ty, &span);
+        self.unify(store, expected_ty, &identifier_ty, &span);
 
         Expression::Identifier {
             value,
@@ -278,6 +284,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_assignment(
         &mut self,
+        store: &mut Store,
         target: Box<Expression>,
         value: Box<Expression>,
         compound_operator: Option<BinaryOperator>,
@@ -292,7 +299,7 @@ impl Checker<'_, '_> {
         } else {
             None
         };
-        let new_target = self.infer_expression(*target, &target_ty);
+        let new_target = self.infer_expression(store, *target, &target_ty);
         if let Some(ctx) = prev_ctx {
             self.scopes.restore_use_context(ctx);
         }
@@ -305,7 +312,7 @@ impl Checker<'_, '_> {
         // Propagates type information to the RHS (e.g., lambda params
         // get their types from a Map's value type).
         let value_expected = target_ty.resolve_in(&self.env);
-        let new_value = self.infer_expression(*value, &value_expected);
+        let new_value = self.infer_expression(store, *value, &value_expected);
         let value_ty = new_value.get_type();
 
         // Track mutation for binding-rooted targets. Call-based lvalues
@@ -336,7 +343,7 @@ impl Checker<'_, '_> {
 
             if !can_mutate {
                 let self_type_name = if var_name == "self" {
-                    self.lookup_type("self")
+                    self.lookup_type(store, "self")
                         .and_then(|t| t.get_name().map(str::to_owned))
                 } else {
                     None
@@ -346,7 +353,7 @@ impl Checker<'_, '_> {
                     .lookup_binding_id(&var_name)
                     .and_then(|id| self.facts.bindings.get(&id))
                     .is_some_and(|b| b.kind.is_match_arm());
-                let is_const = self.is_const_var(&var_name);
+                let is_const = self.is_const_var(store, &var_name);
                 self.sink.push(diagnostics::infer::disallowed_mutation(
                     &var_name,
                     span,
@@ -369,7 +376,7 @@ impl Checker<'_, '_> {
         // type inference already emitted any mismatch diagnostic — a second
         // unify here would duplicate it.
         if value_ty.is_variable() {
-            self.unify(&target_ty, &value_ty, &span);
+            self.unify(store, &target_ty, &value_ty, &span);
         }
 
         Expression::Assignment {
@@ -382,6 +389,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_tuple(
         &mut self,
+        store: &mut Store,
         elements: Vec<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -395,7 +403,7 @@ impl Checker<'_, '_> {
             .into_iter()
             .zip(expected_elements.iter())
             .map(|(element, expected)| {
-                self.with_value_context(|s| s.infer_expression(element, expected))
+                self.with_value_context(|s| s.infer_expression(store, element, expected))
             })
             .collect();
 
@@ -403,7 +411,7 @@ impl Checker<'_, '_> {
 
         let tuple_ty = Type::Tuple(element_types);
 
-        self.unify(&tuple_ty, expected_ty, &span);
+        self.unify(store, &tuple_ty, expected_ty, &span);
 
         Expression::Tuple {
             elements: inferred_elements,
@@ -414,6 +422,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_block_items(
         &mut self,
+        store: &mut Store,
         items: Vec<Expression>,
         last_item_expected_ty: Type,
     ) -> Vec<Expression> {
@@ -424,7 +433,7 @@ impl Checker<'_, '_> {
         for (i, item) in items.into_iter().enumerate() {
             if diverged_at.is_some() {
                 let dead_item_ty = self.new_type_var();
-                let inferred_item = self.infer_expression(item, &dead_item_ty);
+                let inferred_item = self.infer_expression(store, item, &dead_item_ty);
                 new_items.push(inferred_item);
                 continue;
             }
@@ -478,7 +487,7 @@ impl Checker<'_, '_> {
             };
 
             self.scopes.set_in_subexpression(false);
-            let inferred_item = self.infer_expression(item, &expression_ty);
+            let inferred_item = self.infer_expression(store, item, &expression_ty);
 
             if let Some(ctx) = prev_ctx {
                 self.scopes.restore_use_context(ctx);
@@ -500,15 +509,14 @@ impl Checker<'_, '_> {
         new_items
     }
 
-    pub(super) fn error_name_not_found(&mut self, variable_name: &str, span: Span) {
+    pub(super) fn error_name_not_found(&mut self, store: &Store, variable_name: &str, span: Span) {
         if self.imports.failed_imports.contains(variable_name) {
             return;
         }
 
         let mut available_names = self.scopes.collect_all_value_names();
 
-        let module = self
-            .store
+        let module = store
             .get_module(&self.cursor.module_id)
             .expect("current module must exist in store");
         for qualified_name in module.definitions.keys() {

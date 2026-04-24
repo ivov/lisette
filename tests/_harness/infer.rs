@@ -47,23 +47,23 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     init_prelude(&mut store);
 
     let ast = {
-        let mut checker = Checker::new(&mut store, &sink);
+        let mut checker = Checker::new(&sink);
         checker
             .ufcs_methods
-            .extend(semantics::prelude::compute_prelude_ufcs(checker.store));
-        register_test_builtins(&mut checker);
-        checker.put_prelude_in_scope();
+            .extend(semantics::prelude::compute_prelude_ufcs(&store));
+        register_test_builtins(&mut store, &mut checker);
+        checker.put_prelude_in_scope(&store);
 
         let order = std::mem::take(&mut graph_result.order);
         for module_id in order {
             if let Some(go_pkg) = module_id.strip_prefix("go:") {
                 if let Some(typedef) = get_go_stdlib_typedef(go_pkg) {
-                    checker.parse_and_register_go_module(&module_id, typedef, &locator);
+                    checker.parse_and_register_go_module(&mut store, &module_id, typedef, &locator);
                 }
                 continue;
             }
 
-            if checker.store.is_visited(&module_id) {
+            if store.is_visited(&module_id) {
                 continue;
             }
 
@@ -72,18 +72,18 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             let prev_module_id = checker.cursor.module_id.clone();
             checker.cursor.module_id = module_id.to_string();
 
-            checker.store.store_module(&module_id, files);
-            checker.register_module(&module_id);
-            checker.infer_module(&module_id);
+            store.store_module(&module_id, files);
+            checker.register_module(&mut store, &module_id);
+            checker.infer_module(&mut store, &module_id);
 
             checker.cursor.module_id = prev_module_id;
         }
 
         for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {
-            checker.store.store_file(&module_id, typed_file);
+            store.store_file(&module_id, typed_file);
         }
 
-        let module = checker.store.get_module(module_name).unwrap();
+        let module = store.get_module(module_name).unwrap();
         let ast: Vec<_> = module
             .files
             .values()
@@ -91,8 +91,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
             .collect();
 
         if !checker.failed() {
-            let analysis =
-                semantics::context::AnalysisContext::new(checker.store, &checker.ufcs_methods);
+            let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
             let module_ids: Vec<String> = analysis.store.modules.keys().cloned().collect();
             for mid in &module_ids {
                 let typed_ast: Vec<_> = analysis

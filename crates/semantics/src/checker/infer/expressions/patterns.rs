@@ -10,6 +10,7 @@ use syntax::program::Definition;
 use syntax::types::{Type, substitute};
 
 use crate::checker::EnvResolve;
+use crate::store::Store;
 
 use super::super::Checker;
 pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
@@ -49,18 +50,20 @@ pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)>
     }
 }
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(super) fn infer_pattern(
         &mut self,
+        store: &mut Store,
         pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
-        self.infer_pattern_inner(pattern, expected_ty, kind, false)
+        self.infer_pattern_inner(store, pattern, expected_ty, kind, false)
     }
 
     fn infer_pattern_inner(
         &mut self,
+        store: &mut Store,
         pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
@@ -68,12 +71,13 @@ impl Checker<'_, '_> {
     ) -> (Pattern, TypedPattern) {
         match pattern {
             Pattern::Identifier { identifier, span } => {
+                let is_d_lis = self.is_d_lis(store);
                 self.bind_name_in_scope(
                     identifier.to_string(),
                     span,
                     expected_ty,
                     kind,
-                    self.is_d_lis(),
+                    is_d_lis,
                     is_struct_field,
                     false,
                 );
@@ -84,8 +88,11 @@ impl Checker<'_, '_> {
             }
 
             Pattern::Literal { literal, ty, span } => {
-                let inferred_literal =
-                    self.infer_expression(Expression::Literal { literal, ty, span }, &expected_ty);
+                let inferred_literal = self.infer_expression(
+                    store,
+                    Expression::Literal { literal, ty, span },
+                    &expected_ty,
+                );
 
                 match inferred_literal {
                     Expression::Literal { literal, ty, span } => {
@@ -111,7 +118,7 @@ impl Checker<'_, '_> {
                         let vars: Vec<Type> =
                             elements.iter().map(|_| self.new_type_var()).collect();
                         let tuple_ty = Type::Tuple(vars.clone());
-                        self.unify(&expected_ty, &tuple_ty, &span);
+                        self.unify(store, &expected_ty, &tuple_ty, &span);
                         vars
                     }
                 };
@@ -119,7 +126,7 @@ impl Checker<'_, '_> {
                 let (inferred_elements, typed_elements): (Vec<_>, Vec<_>) = elements
                     .into_iter()
                     .zip(element_types.iter())
-                    .map(|(p, ty)| self.infer_pattern_inner(p, ty.clone(), kind, false))
+                    .map(|(p, ty)| self.infer_pattern_inner(store, p, ty.clone(), kind, false))
                     .unzip();
 
                 let pattern = Pattern::Tuple {
@@ -139,7 +146,15 @@ impl Checker<'_, '_> {
                 rest,
                 span,
                 ..
-            } => self.infer_enum_variant_pattern(identifier, fields, rest, span, expected_ty, kind),
+            } => self.infer_enum_variant_pattern(
+                store,
+                identifier,
+                fields,
+                rest,
+                span,
+                expected_ty,
+                kind,
+            ),
 
             Pattern::Struct {
                 identifier,
@@ -147,19 +162,16 @@ impl Checker<'_, '_> {
                 rest,
                 span,
                 ..
-            } => self.infer_struct_pattern(identifier, fields, rest, span, expected_ty, kind),
+            } => {
+                self.infer_struct_pattern(store, identifier, fields, rest, span, expected_ty, kind)
+            }
 
             Pattern::WildCard { span } => (Pattern::WildCard { span }, TypedPattern::Wildcard),
 
             Pattern::Unit { span, .. } => {
-                self.unify(&expected_ty, &self.type_unit(), &span);
-                (
-                    Pattern::Unit {
-                        ty: self.type_unit(),
-                        span,
-                    },
-                    TypedPattern::Wildcard,
-                )
+                let unit_ty = self.type_unit();
+                self.unify(store, &expected_ty, &unit_ty, &span);
+                (Pattern::Unit { ty: unit_ty, span }, TypedPattern::Wildcard)
             }
 
             Pattern::Slice {
@@ -173,19 +185,19 @@ impl Checker<'_, '_> {
                     _ => {
                         let element_ty = self.new_type_var();
                         let slice_ty = self.type_slice(element_ty.clone());
-                        self.unify(&expected_ty, &slice_ty, &span);
+                        self.unify(store, &expected_ty, &slice_ty, &span);
                         element_ty
                     }
                 };
 
                 let (inferred_prefix, typed_prefix): (Vec<_>, Vec<_>) = prefix
                     .into_iter()
-                    .map(|p| self.infer_pattern_inner(p, element_ty.clone(), kind, false))
+                    .map(|p| self.infer_pattern_inner(store, p, element_ty.clone(), kind, false))
                     .unzip();
 
                 if let RestPattern::Bind { ref name, ref span } = rest {
                     let rest_ty = self.type_slice(element_ty.clone());
-                    let is_typedef = self.is_d_lis();
+                    let is_typedef = self.is_d_lis(store);
                     let binding_id = self.facts.add_binding(
                         name.to_string(),
                         *span,
@@ -214,7 +226,7 @@ impl Checker<'_, '_> {
             }
 
             Pattern::Or { patterns, span } => {
-                self.infer_or_pattern(patterns, span, expected_ty, kind)
+                self.infer_or_pattern(store, patterns, span, expected_ty, kind)
             }
 
             Pattern::AsBinding {
@@ -251,6 +263,7 @@ impl Checker<'_, '_> {
                     other => other,
                 };
                 let (inner, typed) = self.infer_pattern_inner(
+                    store,
                     *pattern,
                     expected_ty.clone(),
                     inner_kind,
@@ -313,8 +326,10 @@ impl Checker<'_, '_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn infer_enum_variant_pattern(
         &mut self,
+        store: &mut Store,
         identifier: EcoString,
         fields: Vec<Pattern>,
         rest: bool,
@@ -324,9 +339,10 @@ impl Checker<'_, '_> {
     ) -> (Pattern, TypedPattern) {
         let is_bare_name = fields.is_empty() && !identifier.contains('.') && !kind.is_match_arm();
 
-        let ty = if let Some(ty) = self.lookup_type(&identifier) {
+        let ty = if let Some(ty) = self.lookup_type(store, &identifier) {
             ty
-        } else if let Some((alias_ty, _)) = self.try_resolve_type_alias_variant(&identifier) {
+        } else if let Some((alias_ty, _)) = self.try_resolve_type_alias_variant(store, &identifier)
+        {
             alias_ty
         } else {
             if is_bare_name {
@@ -334,7 +350,7 @@ impl Checker<'_, '_> {
                     .push(diagnostics::infer::uppercase_binding(span, &identifier));
                 return (Pattern::WildCard { span }, TypedPattern::Wildcard);
             }
-            let enum_info = self.get_enum_variant_info(&expected_ty);
+            let enum_info = self.get_enum_variant_info(store, &expected_ty);
             let bare_name = identifier.rsplit('.').next().unwrap_or(&identifier);
             self.sink
                 .push(diagnostics::infer::enum_variant_constructor_not_found(
@@ -352,7 +368,7 @@ impl Checker<'_, '_> {
                 &value_constructor_type,
                 Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_)
             )
-            && !self.is_enum_type(&value_constructor_type)
+            && !self.is_enum_type(store, &value_constructor_type)
         {
             self.sink
                 .push(diagnostics::infer::uppercase_binding(span, &identifier));
@@ -371,14 +387,14 @@ impl Checker<'_, '_> {
             _ => unreachable!(),
         };
 
-        self.unify(&expected_ty, &pattern_ty, &span);
+        self.unify(store, &expected_ty, &pattern_ty, &span);
 
         let (new_fields, mut typed_fields): (Vec<_>, Vec<_>) = fields
             .iter()
             .enumerate()
             .map(|(i, f)| {
                 let param_ty = params.get(i).cloned().unwrap_or_else(|| Type::Error);
-                self.infer_pattern_inner(f.clone(), param_ty, kind, false)
+                self.infer_pattern_inner(store, f.clone(), param_ty, kind, false)
             })
             .unzip();
 
@@ -408,12 +424,13 @@ impl Checker<'_, '_> {
             Type::Nominal { id, params, .. } => {
                 let variant_name = identifier.rsplit('.').next().unwrap_or(identifier.as_str());
                 let variant_qualified = id.with_segment(variant_name);
-                if let Some(definition_span) = self.get_definition_name_span(&variant_qualified) {
+                if let Some(definition_span) =
+                    self.get_definition_name_span(store, &variant_qualified)
+                {
                     self.facts.add_usage(span, definition_span);
                 }
 
-                let variant_fields = self
-                    .store
+                let variant_fields = store
                     .variants_of(id)
                     .and_then(|variants| {
                         variants
@@ -445,8 +462,10 @@ impl Checker<'_, '_> {
         (pattern, typed)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn infer_struct_pattern(
         &mut self,
+        store: &mut Store,
         identifier: EcoString,
         fields: Vec<StructFieldPattern>,
         rest: bool,
@@ -454,9 +473,10 @@ impl Checker<'_, '_> {
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
-        let Some(qualified_name) = self.lookup_qualified_name(&identifier) else {
+        let Some(qualified_name) = self.lookup_qualified_name(store, &identifier) else {
             return self
                 .try_infer_enum_struct_variant(
+                    store,
                     &identifier,
                     &fields,
                     rest,
@@ -474,10 +494,11 @@ impl Checker<'_, '_> {
             ty: struct_forall_ty,
             fields: definition_struct_fields,
             ..
-        }) = self.store.get_definition(&qualified_name)
+        }) = store.get_definition(&qualified_name)
         else {
             return self
                 .try_infer_enum_struct_variant(
+                    store,
                     &identifier,
                     &fields,
                     rest,
@@ -495,11 +516,11 @@ impl Checker<'_, '_> {
         let struct_forall_ty = struct_forall_ty.clone();
         let struct_fields = definition_struct_fields.clone();
 
-        self.track_name_usage(&qualified_name, &span, identifier.len() as u32);
+        self.track_name_usage(store, &qualified_name, &span, identifier.len() as u32);
 
         let (struct_ty, map) = self.instantiate(&struct_forall_ty);
 
-        self.unify(&expected_ty, &struct_ty, &span);
+        self.unify(store, &expected_ty, &struct_ty, &span);
 
         let struct_module = qualified_name.split('.').next().unwrap_or(&qualified_name);
         let is_cross_module = struct_module != self.cursor.module_id;
@@ -537,8 +558,13 @@ impl Checker<'_, '_> {
                     &field.value,
                     Pattern::Identifier { identifier, .. } if identifier == &field.name
                 );
-                let (inferred_value, typed_value) =
-                    self.infer_pattern_inner(field.value.clone(), field_ty, kind, is_shorthand);
+                let (inferred_value, typed_value) = self.infer_pattern_inner(
+                    store,
+                    field.value.clone(),
+                    field_ty,
+                    kind,
+                    is_shorthand,
+                );
                 (
                     StructFieldPattern {
                         name: field.name.clone(),
@@ -585,12 +611,14 @@ impl Checker<'_, '_> {
 
     fn infer_or_pattern(
         &mut self,
+        store: &mut Store,
         patterns: Vec<Pattern>,
         span: Span,
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
         let (first, first_typed) = self.infer_pattern_inner(
+            store,
             patterns
                 .first()
                 .cloned()
@@ -621,7 +649,7 @@ impl Checker<'_, '_> {
             self.scopes.push();
             let checkpoint = self.facts.binding_checkpoint();
             let (alt, alt_typed) =
-                self.infer_pattern_inner(pattern.clone(), expected_ty.clone(), kind, false);
+                self.infer_pattern_inner(store, pattern.clone(), expected_ty.clone(), kind, false);
             let alt_bindings = collect_pattern_bindings(&alt);
             let alt_names: HashSet<&str> =
                 alt_bindings.iter().map(|(name, _)| name.as_str()).collect();
@@ -686,12 +714,12 @@ impl Checker<'_, '_> {
         (pattern, typed)
     }
 
-    fn get_enum_variant_info(&self, ty: &Type) -> Option<(String, Vec<String>)> {
+    fn get_enum_variant_info(&self, store: &Store, ty: &Type) -> Option<(String, Vec<String>)> {
         let resolved = ty.resolve_in(&self.env);
         let Type::Nominal { id, .. } = resolved else {
             return None;
         };
-        let variants = self.store.variants_of(&id)?;
+        let variants = store.variants_of(&id)?;
         let variant_names: Vec<String> = variants.iter().map(|v| v.name.to_string()).collect();
         let simple_name = id.rsplit('.').next().unwrap_or(&id);
         Some((simple_name.to_string(), variant_names))
@@ -702,12 +730,15 @@ impl Checker<'_, '_> {
     /// Returns the variant constructor type and the variant name if successful.
     /// For tuple variants, returns the function type (e.g., `fn(string) -> Event`).
     /// For unit variants, returns the enum type directly.
-    fn try_resolve_type_alias_variant(&mut self, identifier: &str) -> Option<(Type, String)> {
+    fn try_resolve_type_alias_variant(
+        &mut self,
+        store: &Store,
+        identifier: &str,
+    ) -> Option<(Type, String)> {
         let (type_part, variant_name) = identifier.rsplit_once('.')?;
 
-        let qualified_name = self.lookup_qualified_name(type_part)?;
-        let Definition::TypeAlias { ty: alias_ty, .. } =
-            self.store.get_definition(&qualified_name)?
+        let qualified_name = self.lookup_qualified_name(store, type_part)?;
+        let Definition::TypeAlias { ty: alias_ty, .. } = store.get_definition(&qualified_name)?
         else {
             return None;
         };
@@ -718,11 +749,11 @@ impl Checker<'_, '_> {
         };
 
         if let Type::Nominal { id: enum_id, .. } = &underlying
-            && let Some(variants) = self.store.variants_of(enum_id)
+            && let Some(variants) = store.variants_of(enum_id)
             && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
         {
             let variant_qualified_name = enum_id.with_segment(variant_name);
-            if let Some(variant_ty) = self.store.get_type(&variant_qualified_name) {
+            if let Some(variant_ty) = store.get_type(&variant_qualified_name) {
                 return Some((variant_ty.clone(), variant_name.to_string()));
             }
             if variant.fields.is_empty() {
@@ -734,8 +765,10 @@ impl Checker<'_, '_> {
     }
 
     /// Tries to infer an enum struct variant pattern like `Move { x, y }`.
+    #[allow(clippy::too_many_arguments)]
     fn try_infer_enum_struct_variant(
         &mut self,
+        store: &mut Store,
         identifier: &str,
         fields: &[StructFieldPattern],
         rest: bool,
@@ -743,11 +776,11 @@ impl Checker<'_, '_> {
         expected_ty: &Type,
         kind: BindingKind,
     ) -> Option<(Pattern, TypedPattern)> {
-        let (ty, variant_name) = if let Some(ty) = self.lookup_type(identifier) {
+        let (ty, variant_name) = if let Some(ty) = self.lookup_type(store, identifier) {
             let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
             (ty, variant_name.to_string())
         } else if let Some((alias_ty, variant_name)) =
-            self.try_resolve_type_alias_variant(identifier)
+            self.try_resolve_type_alias_variant(store, identifier)
         {
             (alias_ty, variant_name)
         } else {
@@ -762,14 +795,14 @@ impl Checker<'_, '_> {
             _ => return None,
         };
 
-        self.unify(expected_ty, &pattern_ty, span);
+        self.unify(store, expected_ty, &pattern_ty, span);
 
         let resolved_ty = pattern_ty.resolve_in(&self.env);
 
         let Type::Nominal { id, .. } = &resolved_ty else {
             return None;
         };
-        let variants = self.store.variants_of(id)?;
+        let variants = store.variants_of(id)?;
         let variant = variants.iter().find(|v| v.name == variant_name)?;
         if !variant.fields.is_struct() {
             return None;
@@ -799,8 +832,13 @@ impl Checker<'_, '_> {
                     &field.value,
                     Pattern::Identifier { identifier, .. } if identifier == &field.name
                 );
-                let (inferred_value, typed_value) =
-                    self.infer_pattern_inner(field.value.clone(), field_ty, kind, is_shorthand);
+                let (inferred_value, typed_value) = self.infer_pattern_inner(
+                    store,
+                    field.value.clone(),
+                    field_ty,
+                    kind,
+                    is_shorthand,
+                );
                 (
                     StructFieldPattern {
                         name: field.name.clone(),
@@ -827,7 +865,9 @@ impl Checker<'_, '_> {
         let typed = match &resolved_ty {
             Type::Nominal { id, params, .. } => {
                 let variant_qualified = id.with_segment(&variant_name);
-                if let Some(definition_span) = self.get_definition_name_span(&variant_qualified) {
+                if let Some(definition_span) =
+                    self.get_definition_name_span(store, &variant_qualified)
+                {
                     self.facts.add_usage(*span, definition_span);
                 }
 

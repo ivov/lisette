@@ -2,7 +2,7 @@ use syntax::ast::{Pattern, Span};
 
 use crate::checker::Checker;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(crate) fn check_select_match_arms(
         &mut self,
         match_arms: &[syntax::ast::MatchArm],

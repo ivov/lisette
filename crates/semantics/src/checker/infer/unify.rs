@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use Type::{Function, Nominal};
 use diagnostics::LisetteDiagnostic;
 use syntax::ast::Span;
@@ -17,14 +18,14 @@ pub enum UnifyError {
     AlreadyReported,
 }
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     /// Make two types equal.
     ///
     /// - For two concrete types, verifies that they match.
     /// - For two variable types, records that the first equals the second.
     /// - For a concrete and a variable type, records that the variable equals the concrete.
-    pub(super) fn unify(&mut self, t1: &Type, t2: &Type, span: &Span) {
-        if let Err(unify_error) = self.try_unify(t1, t2, span) {
+    pub(super) fn unify(&mut self, store: &Store, t1: &Type, t2: &Type, span: &Span) {
+        if let Err(unify_error) = self.try_unify(store, t1, t2, span) {
             if unify_error == UnifyError::AlreadyReported {
                 return;
             }
@@ -35,6 +36,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn try_unify(
         &mut self,
+        store: &Store,
         t1: &Type,
         t2: &Type,
         span: &Span,
@@ -45,7 +47,9 @@ impl Checker<'_, '_> {
         match (&r1, &r2) {
             _ if r1.is_ignored() || r2.is_ignored() => Ok(()),
             _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => Ok(()),
-            _ if self.should_unify_refs(&r1, &r2, &r1, &r2) => self.unify_refs(&r1, &r2, span),
+            _ if self.should_unify_refs(store, &r1, &r2, &r1, &r2) => {
+                self.unify_refs(store, &r1, &r2, span)
+            }
 
             (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => Ok(()),
 
@@ -55,8 +59,8 @@ impl Checker<'_, '_> {
             _ if matches!(r2, Type::Never) => Ok(()),
             _ if matches!(r1, Type::Never) => Err(UnifyError::TypeMismatch),
 
-            (Type::Var { id, .. }, _) => self.unify_type_variable(*id, &r2, span, false),
-            (_, Type::Var { id, .. }) => self.unify_type_variable(*id, &r1, span, true),
+            (Type::Var { id, .. }, _) => self.unify_type_variable(store, *id, &r2, span, false),
+            (_, Type::Var { id, .. }) => self.unify_type_variable(store, *id, &r1, span, true),
 
             // Non-variable vs Error succeeds silently; variables were handled above.
             _ if matches!(r1, Type::Error) || matches!(r2, Type::Error) => Ok(()),
@@ -81,7 +85,7 @@ impl Checker<'_, '_> {
                 Type::Simple(_) | Type::Compound { .. },
             ) => {
                 let u = underlying.as_ref().clone();
-                self.try_unify(&u, &r2, span)
+                self.try_unify(store, &u, &r2, span)
             }
 
             (
@@ -92,7 +96,7 @@ impl Checker<'_, '_> {
                 },
             ) => {
                 let u = underlying.as_ref().clone();
-                self.try_unify(&r1, &u, span)
+                self.try_unify(store, &r1, &u, span)
             }
 
             // Simple/Compound vs Nominal interface: synthesise a nominal
@@ -104,7 +108,7 @@ impl Checker<'_, '_> {
                     params: vec![],
                     underlying_ty: None,
                 };
-                self.try_unify(&synth, &r2, span)
+                self.try_unify(store, &synth, &r2, span)
             }
             (Nominal { .. }, Type::Simple(kind)) => {
                 let synth = Type::Nominal {
@@ -112,7 +116,7 @@ impl Checker<'_, '_> {
                     params: vec![],
                     underlying_ty: None,
                 };
-                self.try_unify(&r1, &synth, span)
+                self.try_unify(store, &r1, &synth, span)
             }
             (Type::Compound { kind, args }, Nominal { .. }) => {
                 let synth = Type::Nominal {
@@ -120,7 +124,7 @@ impl Checker<'_, '_> {
                     params: args.clone(),
                     underlying_ty: None,
                 };
-                self.try_unify(&synth, &r2, span)
+                self.try_unify(store, &synth, &r2, span)
             }
             (Nominal { .. }, Type::Compound { kind, args }) => {
                 let synth = Type::Nominal {
@@ -128,7 +132,7 @@ impl Checker<'_, '_> {
                     params: args.clone(),
                     underlying_ty: None,
                 };
-                self.try_unify(&r1, &synth, span)
+                self.try_unify(store, &r1, &synth, span)
             }
 
             (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
@@ -140,14 +144,14 @@ impl Checker<'_, '_> {
                 let a1 = a1.clone();
                 let a2 = a2.clone();
                 self.scopes.increment_type_param_depth();
-                let result = self.unify_pairs(a1.iter().zip(a2.iter()), span);
+                let result = self.unify_pairs(store, a1.iter().zip(a2.iter()), span);
                 self.scopes.decrement_type_param_depth();
                 result
             }
 
-            (Nominal { .. }, Nominal { .. }) => self.unify_constructors(&r1, &r2, span),
+            (Nominal { .. }, Nominal { .. }) => self.unify_constructors(store, &r1, &r2, span),
 
-            (Function { .. }, Function { .. }) => self.unify_functions(&r1, &r2, span),
+            (Function { .. }, Function { .. }) => self.unify_functions(store, &r1, &r2, span),
 
             (Type::Tuple(elems1), Type::Tuple(elems2)) => {
                 if elems1.len() != elems2.len() {
@@ -155,7 +159,7 @@ impl Checker<'_, '_> {
                 }
                 let elems1 = elems1.clone();
                 let elems2 = elems2.clone();
-                self.unify_pairs(elems1.iter().zip(elems2.iter()), span)
+                self.unify_pairs(store, elems1.iter().zip(elems2.iter()), span)
             }
 
             (
@@ -166,7 +170,7 @@ impl Checker<'_, '_> {
                 Function { .. },
             ) => {
                 let u = underlying.as_ref().clone();
-                self.try_unify(&u, &r2, span)
+                self.try_unify(store, &u, &r2, span)
             }
 
             (
@@ -177,33 +181,39 @@ impl Checker<'_, '_> {
                 },
             ) => {
                 let u = underlying.as_ref().clone();
-                self.try_unify(&r1, &u, span)
+                self.try_unify(store, &r1, &u, span)
             }
 
             _ => Err(UnifyError::TypeMismatch),
         }
     }
 
-    fn should_unify_refs(&self, t1: &Type, t2: &Type, r1: &Type, r2: &Type) -> bool {
+    fn should_unify_refs(&self, store: &Store, t1: &Type, t2: &Type, r1: &Type, r2: &Type) -> bool {
         let either_is_ref = t1.is_ref() || t2.is_ref();
         let both_concrete = !t1.is_variable() && !t2.is_variable();
-        let neither_is_interface = !self.is_interface(t1) && !self.is_interface(t2);
+        let neither_is_interface = !self.is_interface(store, t1) && !self.is_interface(store, t2);
         let neither_is_unknown = !r1.is_unknown() && !r2.is_unknown();
 
         either_is_ref && both_concrete && neither_is_interface && neither_is_unknown
     }
 
-    fn is_interface(&self, ty: &Type) -> bool {
+    fn is_interface(&self, store: &Store, ty: &Type) -> bool {
         if let Type::Nominal { id, .. } = ty {
-            self.store.get_interface(id).is_some()
+            store.get_interface(id).is_some()
         } else {
             false
         }
     }
 
-    fn unify_refs(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
+    fn unify_refs(
+        &mut self,
+        store: &Store,
+        t1: &Type,
+        t2: &Type,
+        span: &Span,
+    ) -> Result<(), UnifyError> {
         match (t1.is_ref(), t2.is_ref()) {
-            (true, true) => self.try_unify(&t1.strip_refs(), &t2.strip_refs(), span),
+            (true, true) => self.try_unify(store, &t1.strip_refs(), &t2.strip_refs(), span),
             (true, false) | (false, true) => Err(UnifyError::TypeMismatch),
             (false, false) => unreachable!("unify_refs called without refs"),
         }
@@ -211,6 +221,7 @@ impl Checker<'_, '_> {
 
     fn unify_type_variable(
         &mut self,
+        store: &Store,
         id: TypeVarId,
         other_ty: &Type,
         span: &Span,
@@ -224,9 +235,9 @@ impl Checker<'_, '_> {
         match self.env.state(id).clone() {
             VarState::Bound(ty) => {
                 if var_on_right {
-                    self.try_unify(other_ty, &ty, span)
+                    self.try_unify(store, other_ty, &ty, span)
                 } else {
-                    self.try_unify(&ty, other_ty, span)
+                    self.try_unify(store, &ty, other_ty, span)
                 }
             }
             VarState::Unbound { .. } => {
@@ -239,7 +250,13 @@ impl Checker<'_, '_> {
         }
     }
 
-    fn unify_constructors(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
+    fn unify_constructors(
+        &mut self,
+        store: &Store,
+        t1: &Type,
+        t2: &Type,
+        span: &Span,
+    ) -> Result<(), UnifyError> {
         let (
             Nominal {
                 id: symbol1,
@@ -261,7 +278,7 @@ impl Checker<'_, '_> {
                 underlying_ty: Some(u),
                 ..
             } = t1
-                && self.try_unify(u, t2, span).is_ok()
+                && self.try_unify(store, u, t2, span).is_ok()
             {
                 return Ok(());
             }
@@ -269,11 +286,11 @@ impl Checker<'_, '_> {
                 underlying_ty: Some(u),
                 ..
             } = t2
-                && self.try_unify(t1, u, span).is_ok()
+                && self.try_unify(store, t1, u, span).is_ok()
             {
                 return Ok(());
             }
-            return self.try_coerce_or_satisfy_interface(t1, t2, span);
+            return self.try_coerce_or_satisfy_interface(store, t1, t2, span);
         }
 
         if params1.len() != params2.len() {
@@ -286,13 +303,14 @@ impl Checker<'_, '_> {
         // are treated uniformly, including prelude types (Option, Result,
         // Slice, Map, Ref).
         self.scopes.increment_type_param_depth();
-        let result = self.unify_type_params(params1.iter().zip(params2), span);
+        let result = self.unify_type_params(store, params1.iter().zip(params2), span);
         self.scopes.decrement_type_param_depth();
         result
     }
 
     fn try_coerce_or_satisfy_interface(
         &mut self,
+        store: &Store,
         t1: &Type,
         t2: &Type,
         span: &Span,
@@ -326,29 +344,29 @@ impl Checker<'_, '_> {
         if symbol1 == "prelude.Option"
             && params1.len() == 1
             && symbol2.starts_with("go:")
-            && self.store.get_interface(symbol2).is_some()
+            && store.get_interface(symbol2).is_some()
         {
-            return self.try_unify(&params1[0], t2, span);
+            return self.try_unify(store, &params1[0], t2, span);
         }
         if symbol2 == "prelude.Option"
             && params2.len() == 1
             && symbol1.starts_with("go:")
-            && self.store.get_interface(symbol1).is_some()
+            && store.get_interface(symbol1).is_some()
         {
-            return self.try_unify(&params2[0], t1, span);
+            return self.try_unify(store, &params2[0], t1, span);
         }
 
-        if let Some(interface) = self.store.get_interface(symbol1).cloned() {
+        if let Some(interface) = store.get_interface(symbol1).cloned() {
             return self
-                .satisfies_interface(t2, &interface, params1, span)
-                .and_then(|()| self.check_pointer_receivers(t2, &interface, span))
+                .satisfies_interface(store, t2, &interface, params1, span)
+                .and_then(|()| self.check_pointer_receivers(store, t2, &interface, span))
                 .map_err(|_| UnifyError::AlreadyReported);
         }
 
-        if let Some(interface) = self.store.get_interface(symbol2).cloned() {
+        if let Some(interface) = store.get_interface(symbol2).cloned() {
             return self
-                .satisfies_interface(t1, &interface, params2, span)
-                .and_then(|()| self.check_pointer_receivers(t1, &interface, span))
+                .satisfies_interface(store, t1, &interface, params2, span)
+                .and_then(|()| self.check_pointer_receivers(store, t1, &interface, span))
                 .map_err(|_| UnifyError::AlreadyReported);
         }
 
@@ -357,6 +375,7 @@ impl Checker<'_, '_> {
 
     fn unify_type_params<'a>(
         &mut self,
+        store: &Store,
         pairs: impl Iterator<Item = (&'a Type, &'a Type)>,
         span: &Span,
     ) -> Result<(), UnifyError> {
@@ -381,24 +400,24 @@ impl Checker<'_, '_> {
                     if let Type::Var { id, .. } = &r1
                         && self.env.is_unbound(*id)
                     {
-                        self.unify_type_variable(*id, &Type::Never, span, false)?;
+                        self.unify_type_variable(store, *id, &Type::Never, span, false)?;
                     }
                 }
                 _ if matches!(r1, Type::Never) => {
                     if let Type::Var { id, .. } = &r2
                         && self.env.is_unbound(*id)
                     {
-                        self.unify_type_variable(*id, &Type::Never, span, false)?;
+                        self.unify_type_variable(store, *id, &Type::Never, span, false)?;
                     } else if !matches!(r2, Type::Never) && !r2.is_variable() {
                         return Err(UnifyError::TypeMismatch);
                     }
                 }
 
                 (Type::Var { id, .. }, _) => {
-                    self.unify_type_variable(*id, &r2, span, false)?;
+                    self.unify_type_variable(store, *id, &r2, span, false)?;
                 }
                 (_, Type::Var { id, .. }) => {
-                    self.unify_type_variable(*id, &r1, span, false)?;
+                    self.unify_type_variable(store, *id, &r1, span, false)?;
                 }
                 (Type::Parameter(name1), Type::Parameter(name2)) if name1 == name2 => {}
                 (
@@ -419,19 +438,19 @@ impl Checker<'_, '_> {
                     if is_user_defined {
                         self.scopes.increment_type_param_depth();
                     }
-                    let r = self.unify_type_params(p1.iter().zip(p2.iter()), span);
+                    let r = self.unify_type_params(store, p1.iter().zip(p2.iter()), span);
                     if is_user_defined {
                         self.scopes.decrement_type_param_depth();
                     }
                     r?;
                 }
                 (Function { .. }, Function { .. }) => {
-                    self.unify_functions(&r1, &r2, span)?;
+                    self.unify_functions(store, &r1, &r2, span)?;
                 }
                 (Type::Tuple(e1), Type::Tuple(e2)) if e1.len() == e2.len() => {
                     let e1 = e1.clone();
                     let e2 = e2.clone();
-                    self.unify_type_params(e1.iter().zip(e2.iter()), span)?;
+                    self.unify_type_params(store, e1.iter().zip(e2.iter()), span)?;
                 }
                 (Type::Simple(k1), Type::Simple(k2)) if k1 == k2 => {}
                 (Type::Simple(kind), Nominal { id, params, .. })
@@ -443,7 +462,7 @@ impl Checker<'_, '_> {
                 {
                     let a1 = a1.clone();
                     let a2 = a2.clone();
-                    self.unify_type_params(a1.iter().zip(a2.iter()), span)?;
+                    self.unify_type_params(store, a1.iter().zip(a2.iter()), span)?;
                 }
                 (Type::Compound { kind, args }, Nominal { id, params, .. })
                 | (Nominal { id, params, .. }, Type::Compound { kind, args })
@@ -452,7 +471,7 @@ impl Checker<'_, '_> {
                 {
                     let args = args.clone();
                     let params = params.clone();
-                    self.unify_type_params(args.iter().zip(params.iter()), span)?;
+                    self.unify_type_params(store, args.iter().zip(params.iter()), span)?;
                 }
                 // A type alias (`type Foo = Bar`) appears as a Nominal with
                 // `underlying_ty` set. When the other side is the bare body
@@ -477,7 +496,7 @@ impl Checker<'_, '_> {
                     } else {
                         r1.clone()
                     };
-                    self.try_unify(&u, &other, span)?;
+                    self.try_unify(store, &u, &other, span)?;
                 }
                 _ => return Err(UnifyError::TypeMismatch),
             }
@@ -487,13 +506,14 @@ impl Checker<'_, '_> {
 
     fn unify_pairs<'a>(
         &mut self,
+        store: &Store,
         pairs: impl Iterator<Item = (&'a Type, &'a Type)>,
         span: &Span,
     ) -> Result<(), UnifyError> {
         let mut errors = Vec::new();
 
         for (t1, t2) in pairs {
-            if let Err(e) = self.try_unify(t1, t2, span) {
+            if let Err(e) = self.try_unify(store, t1, t2, span) {
                 errors.push(e);
             }
         }
@@ -510,7 +530,13 @@ impl Checker<'_, '_> {
         }
     }
 
-    fn unify_functions(&mut self, t1: &Type, t2: &Type, span: &Span) -> Result<(), UnifyError> {
+    fn unify_functions(
+        &mut self,
+        store: &Store,
+        t1: &Type,
+        t2: &Type,
+        span: &Span,
+    ) -> Result<(), UnifyError> {
         let (
             Function {
                 params: params1,
@@ -541,11 +567,11 @@ impl Checker<'_, '_> {
             return Err(UnifyError::TypeMismatch);
         }
 
-        let params_result = self.unify_pairs(params1.iter().zip(params2), span);
-        let return_type_result = self.try_unify(return_type1, return_type2, span);
+        let params_result = self.unify_pairs(store, params1.iter().zip(params2), span);
+        let return_type_result = self.try_unify(store, return_type1, return_type2, span);
 
         for bound in bounds1.iter().chain(bounds2.iter()) {
-            self.check_function_bound(bound, span);
+            self.check_function_bound(store, bound, span);
         }
 
         if !self.bounds_equivalent(bounds1, bounds2) {
@@ -593,7 +619,7 @@ impl Checker<'_, '_> {
         all_in(bounds1, bounds2) && all_in(bounds2, bounds1)
     }
 
-    fn check_function_bound(&mut self, bound: &Bound, span: &Span) {
+    fn check_function_bound(&mut self, store: &Store, bound: &Bound, span: &Span) {
         let resolved_ty = bound.generic.resolve_in(&self.env);
 
         if resolved_ty.is_variable() {
@@ -605,11 +631,11 @@ impl Checker<'_, '_> {
             return;
         };
 
-        let Some(interface) = self.store.get_interface(&id).cloned() else {
+        let Some(interface) = store.get_interface(&id).cloned() else {
             return;
         };
 
-        let _ = self.satisfies_interface(&resolved_ty, &interface, &params, span);
+        let _ = self.satisfies_interface(store, &resolved_ty, &interface, &params, span);
     }
 
     fn unification_diagnostic(

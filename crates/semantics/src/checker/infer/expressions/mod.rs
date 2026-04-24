@@ -17,14 +17,21 @@ use syntax::ast::Expression;
 use syntax::types::Type;
 
 use super::super::Checker;
+use crate::store::Store;
 
-impl Checker<'_, '_> {
-    pub fn infer_expression(&mut self, expression: Expression, expected_ty: &Type) -> Expression {
+impl Checker<'_> {
+    pub fn infer_expression(
+        &mut self,
+        store: &mut Store,
+        expression: Expression,
+        expected_ty: &Type,
+    ) -> Expression {
         // Track sub-expression depth: `infer_block_items` resets this to false
         // for each top-level statement, so any nested call sees `true`.
         let parent_is_subexpression = self.scopes.set_in_subexpression(true);
 
-        let result = self.infer_expression_inner(expression, expected_ty, parent_is_subexpression);
+        let result =
+            self.infer_expression_inner(store, expression, expected_ty, parent_is_subexpression);
 
         self.scopes.set_in_subexpression(parent_is_subexpression);
         result
@@ -32,18 +39,21 @@ impl Checker<'_, '_> {
 
     fn infer_expression_inner(
         &mut self,
+        store: &mut Store,
         expression: Expression,
         expected_ty: &Type,
         parent_is_subexpression: bool,
     ) -> Expression {
         match expression {
             Expression::Literal { literal, span, .. } => {
-                self.infer_literal(literal, expected_ty, span)
+                self.infer_literal(store, literal, expected_ty, span)
             }
 
-            Expression::Block { items, span, .. } => self.infer_block(items, span, expected_ty),
+            Expression::Block { items, span, .. } => {
+                self.infer_block(store, items, span, expected_ty)
+            }
 
-            Expression::Function { .. } => self.infer_function(expression, expected_ty),
+            Expression::Function { .. } => self.infer_function(store, expression, expected_ty),
 
             Expression::Lambda {
                 params,
@@ -51,13 +61,13 @@ impl Checker<'_, '_> {
                 body,
                 span,
                 ..
-            } => self.infer_lambda(params, return_annotation, body, span, expected_ty),
+            } => self.infer_lambda(store, params, return_annotation, body, span, expected_ty),
 
-            Expression::Unit { span, .. } => self.infer_unit(span, expected_ty),
+            Expression::Unit { span, .. } => self.infer_unit(store, span, expected_ty),
 
             Expression::Identifier {
                 ref value, span, ..
-            } => self.infer_identifier(value.clone(), span, expected_ty),
+            } => self.infer_identifier(store, value.clone(), span, expected_ty),
 
             Expression::Let {
                 binding,
@@ -70,6 +80,7 @@ impl Checker<'_, '_> {
                 typed_pattern: _,
                 ty: _,
             } => self.infer_let_binding(
+                store,
                 *binding,
                 value,
                 mutable,
@@ -90,6 +101,7 @@ impl Checker<'_, '_> {
             } => {
                 let is_panic = matches!(&*expression, Expression::Identifier { value, .. } if value == "panic");
                 let result = self.infer_function_call(
+                    store,
                     expression,
                     call_args,
                     spread,
@@ -110,7 +122,14 @@ impl Checker<'_, '_> {
                 alternative,
                 span,
                 ..
-            } => self.infer_if(condition, consequence, alternative, span, expected_ty),
+            } => self.infer_if(
+                store,
+                condition,
+                consequence,
+                alternative,
+                span,
+                expected_ty,
+            ),
 
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before type inference")
@@ -122,10 +141,10 @@ impl Checker<'_, '_> {
                 origin,
                 span,
                 ..
-            } => self.infer_match(subject, arms, origin, span, expected_ty),
+            } => self.infer_match(store, subject, arms, origin, span, expected_ty),
 
             Expression::Tuple { elements, span, .. } => {
-                self.infer_tuple(elements, span, expected_ty)
+                self.infer_tuple(store, elements, span, expected_ty)
             }
 
             Expression::StructCall {
@@ -134,20 +153,26 @@ impl Checker<'_, '_> {
                 spread,
                 span,
                 ..
-            } => self.infer_struct_call(name, field_assignments, spread, span, expected_ty),
+            } => self.infer_struct_call(store, name, field_assignments, spread, span, expected_ty),
 
             Expression::DotAccess {
                 expression,
                 member,
                 span,
                 ..
-            } => self.infer_dot_access_or_qualified_path(expression, member, span, expected_ty),
+            } => self.infer_dot_access_or_qualified_path(
+                store,
+                expression,
+                member,
+                span,
+                expected_ty,
+            ),
 
             Expression::Enum { .. } | Expression::ValueEnum { .. } => expression,
 
-            Expression::Struct { .. } => self.infer_struct_definition(expression),
+            Expression::Struct { .. } => self.infer_struct_definition(store, expression),
 
-            Expression::TypeAlias { .. } => self.infer_type_alias_definition(expression),
+            Expression::TypeAlias { .. } => self.infer_type_alias_definition(store, expression),
 
             Expression::VariableDeclaration { .. } => expression,
 
@@ -158,20 +183,20 @@ impl Checker<'_, '_> {
                 receiver_name,
                 generics,
                 span,
-            } => self.infer_impl_block(annotation, methods, receiver_name, generics, span),
+            } => self.infer_impl_block(store, annotation, methods, receiver_name, generics, span),
 
-            Expression::Interface { .. } => self.infer_interface(expression),
+            Expression::Interface { .. } => self.infer_interface(store, expression),
 
             Expression::Assignment {
                 target,
                 value,
                 compound_operator,
                 span,
-            } => self.infer_assignment(target, value, compound_operator, span),
+            } => self.infer_assignment(store, target, value, compound_operator, span),
 
             Expression::Return {
                 expression, span, ..
-            } => self.infer_return_statement(expression, span, parent_is_subexpression),
+            } => self.infer_return_statement(store, expression, span, parent_is_subexpression),
 
             Expression::Propagate {
                 expression, span, ..
@@ -179,7 +204,7 @@ impl Checker<'_, '_> {
                 if parent_is_subexpression {
                     self.check_failure_propagation_in_subexpression(&expression, span);
                 }
-                self.infer_propagate(expression, span, expected_ty)
+                self.infer_propagate(store, expression, span, expected_ty)
             }
 
             Expression::TryBlock {
@@ -187,14 +212,14 @@ impl Checker<'_, '_> {
                 try_keyword_span,
                 span,
                 ..
-            } => self.infer_try_block(items, try_keyword_span, span, expected_ty),
+            } => self.infer_try_block(store, items, try_keyword_span, span, expected_ty),
 
             Expression::RecoverBlock {
                 items,
                 recover_keyword_span,
                 span,
                 ..
-            } => self.infer_recover_block(items, recover_keyword_span, span, expected_ty),
+            } => self.infer_recover_block(store, items, recover_keyword_span, span, expected_ty),
 
             Expression::Binary {
                 operator,
@@ -202,18 +227,24 @@ impl Checker<'_, '_> {
                 right,
                 span,
                 ..
-            } => self.infer_binary(operator, left, right, expected_ty, span),
+            } => self.infer_binary(store, operator, left, right, expected_ty, span),
 
             Expression::Paren {
                 expression, span, ..
-            } => self.infer_paren(expression, span, expected_ty, parent_is_subexpression),
+            } => self.infer_paren(
+                store,
+                expression,
+                span,
+                expected_ty,
+                parent_is_subexpression,
+            ),
 
             Expression::Unary {
                 operator,
                 expression,
                 span,
                 ..
-            } => self.infer_unary(operator, expression, expected_ty, span),
+            } => self.infer_unary(store, operator, expression, expected_ty, span),
 
             Expression::Const {
                 doc,
@@ -225,6 +256,7 @@ impl Checker<'_, '_> {
                 identifier_span,
                 visibility,
             } => self.infer_const_binding(
+                store,
                 doc,
                 annotation,
                 expression,
@@ -234,14 +266,14 @@ impl Checker<'_, '_> {
                 span,
             ),
 
-            Expression::Loop { body, span, .. } => self.infer_loop(body, span, expected_ty),
+            Expression::Loop { body, span, .. } => self.infer_loop(store, body, span, expected_ty),
 
             Expression::While {
                 condition,
                 body,
                 span,
                 ..
-            } => self.infer_while(condition, body, span, expected_ty),
+            } => self.infer_while(store, condition, body, span, expected_ty),
 
             Expression::WhileLet {
                 pattern,
@@ -249,7 +281,7 @@ impl Checker<'_, '_> {
                 body,
                 span,
                 ..
-            } => self.infer_while_let(pattern, scrutinee, body, span, expected_ty),
+            } => self.infer_while_let(store, pattern, scrutinee, body, span, expected_ty),
 
             Expression::For {
                 binding,
@@ -257,18 +289,18 @@ impl Checker<'_, '_> {
                 body,
                 span,
                 ..
-            } => self.infer_for(*binding, iterable, body, span, expected_ty),
+            } => self.infer_for(store, *binding, iterable, body, span, expected_ty),
 
             Expression::Reference {
                 expression, span, ..
-            } => self.infer_reference(expression, span, expected_ty),
+            } => self.infer_reference(store, expression, span, expected_ty),
 
             Expression::IndexedAccess {
                 expression,
                 index,
                 span,
                 ..
-            } => self.infer_indexed_access(expression, index, span, expected_ty),
+            } => self.infer_indexed_access(store, expression, index, span, expected_ty),
 
             Expression::Task {
                 expression, span, ..
@@ -279,7 +311,7 @@ impl Checker<'_, '_> {
                     self.sink
                         .push(diagnostics::infer::control_flow_in_expression("task", span));
                 }
-                self.infer_task(expression, span, expected_ty)
+                self.infer_task(store, expression, span, expected_ty)
             }
 
             Expression::Defer {
@@ -291,10 +323,12 @@ impl Checker<'_, '_> {
                             "defer", span,
                         ));
                 }
-                self.infer_defer(expression, span, expected_ty)
+                self.infer_defer(store, expression, span, expected_ty)
             }
 
-            Expression::Select { arms, span, .. } => self.infer_select(arms, span, expected_ty),
+            Expression::Select { arms, span, .. } => {
+                self.infer_select(store, arms, span, expected_ty)
+            }
 
             Expression::ModuleImport {
                 name,
@@ -314,17 +348,17 @@ impl Checker<'_, '_> {
                 inclusive,
                 span,
                 ..
-            } => self.infer_range(start, end, inclusive, span, expected_ty),
+            } => self.infer_range(store, start, end, inclusive, span, expected_ty),
 
             Expression::Cast {
                 expression,
                 target_type,
                 span,
                 ..
-            } => self.infer_cast(expression, target_type, span, expected_ty),
+            } => self.infer_cast(store, expression, target_type, span, expected_ty),
 
             Expression::Break { value, span } => {
-                self.infer_break(value, span, parent_is_subexpression)
+                self.infer_break(store, value, span, parent_is_subexpression)
             }
             Expression::Continue { span } => self.infer_continue(span, parent_is_subexpression),
             Expression::RawGo { text } => Expression::RawGo { text },

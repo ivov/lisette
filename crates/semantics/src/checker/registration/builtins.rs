@@ -2,23 +2,23 @@ use crate::checker::EnvResolve;
 use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
 
 use crate::checker::Checker;
+use crate::store::Store;
 
-impl Checker<'_, '_> {
-    fn builtin_qualified_name(&mut self, type_name: &str) -> Symbol {
-        self.lookup_qualified_name(type_name)
+impl Checker<'_> {
+    fn builtin_qualified_name(&mut self, store: &Store, type_name: &str) -> Symbol {
+        self.lookup_qualified_name(store, type_name)
             .map(Symbol::from)
             .unwrap_or_else(|| panic!("Builtin type {type_name} not found in store"))
     }
 
-    fn builtin_type(&mut self, type_name: &str) -> Type {
+    fn builtin_type(&mut self, store: &Store, type_name: &str) -> Type {
         if let Some(ty) = self.builtins.get(type_name) {
             return ty.clone();
         }
 
-        let qualified_name = self.builtin_qualified_name(type_name);
+        let qualified_name = self.builtin_qualified_name(store, type_name);
 
-        let ty = self
-            .store
+        let ty = store
             .get_type(&qualified_name)
             .unwrap_or_else(|| panic!("Builtin type {type_name} not found in store"));
 
@@ -64,8 +64,8 @@ impl Checker<'_, '_> {
         Type::Simple(SimpleKind::Complex128)
     }
 
-    pub fn type_unknown(&mut self) -> Type {
-        self.builtin_type("Unknown")
+    pub fn type_unknown(&mut self, store: &Store) -> Type {
+        self.builtin_type(store, "Unknown")
     }
 
     pub fn type_slice(&mut self, element_type: Type) -> Type {
@@ -89,65 +89,65 @@ impl Checker<'_, '_> {
         }
     }
 
-    pub fn type_result(&mut self, ok_type: Type, error_type: Type) -> Type {
+    pub fn type_result(&mut self, store: &Store, ok_type: Type, error_type: Type) -> Type {
         Type::Nominal {
-            id: self.builtin_qualified_name("Result"),
+            id: self.builtin_qualified_name(store, "Result"),
             params: vec![ok_type, error_type],
             underlying_ty: None,
         }
     }
 
-    pub fn type_option(&mut self, some_type: Type) -> Type {
+    pub fn type_option(&mut self, store: &Store, some_type: Type) -> Type {
         Type::Nominal {
-            id: self.builtin_qualified_name("Option"),
+            id: self.builtin_qualified_name(store, "Option"),
             params: vec![some_type],
             underlying_ty: None,
         }
     }
 
-    pub fn type_panic_value(&mut self) -> Type {
+    pub fn type_panic_value(&mut self, store: &Store) -> Type {
         Type::Nominal {
-            id: self.builtin_qualified_name("PanicValue"),
+            id: self.builtin_qualified_name(store, "PanicValue"),
             params: vec![],
             underlying_ty: None,
         }
     }
 
-    pub fn type_range(&mut self, element_type: Type) -> Type {
+    pub fn type_range(&mut self, store: &Store, element_type: Type) -> Type {
         Type::Nominal {
-            id: self.builtin_qualified_name("Range"),
+            id: self.builtin_qualified_name(store, "Range"),
             params: vec![element_type],
             underlying_ty: None,
         }
     }
 
-    pub fn type_range_inclusive(&mut self, element_type: Type) -> Type {
+    pub fn type_range_inclusive(&mut self, store: &Store, element_type: Type) -> Type {
         Type::Nominal {
-            id: self.builtin_qualified_name("RangeInclusive"),
+            id: self.builtin_qualified_name(store, "RangeInclusive"),
             params: vec![element_type],
             underlying_ty: None,
         }
     }
 
-    pub fn type_range_from(&mut self, element_type: Type) -> Type {
+    pub fn type_range_from(&mut self, store: &Store, element_type: Type) -> Type {
         Type::Nominal {
-            id: self.builtin_qualified_name("RangeFrom"),
+            id: self.builtin_qualified_name(store, "RangeFrom"),
             params: vec![element_type],
             underlying_ty: None,
         }
     }
 
-    pub fn type_range_to(&mut self, element_type: Type) -> Type {
+    pub fn type_range_to(&mut self, store: &Store, element_type: Type) -> Type {
         Type::Nominal {
-            id: self.builtin_qualified_name("RangeTo"),
+            id: self.builtin_qualified_name(store, "RangeTo"),
             params: vec![element_type],
             underlying_ty: None,
         }
     }
 
-    pub fn type_range_to_inclusive(&mut self, element_type: Type) -> Type {
+    pub fn type_range_to_inclusive(&mut self, store: &Store, element_type: Type) -> Type {
         Type::Nominal {
-            id: self.builtin_qualified_name("RangeToInclusive"),
+            id: self.builtin_qualified_name(store, "RangeToInclusive"),
             params: vec![element_type],
             underlying_ty: None,
         }
@@ -159,7 +159,7 @@ impl Checker<'_, '_> {
     /// Go-imported named types (for Go generic instantiation preserving
     /// alias names like `tea.Cmd` instead of collapsing to the
     /// underlying `func() Msg`).
-    pub fn is_generic_container_with_interface(&self, ty: &Type) -> bool {
+    pub fn is_generic_container_with_interface(&self, store: &Store, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env);
         let Type::Nominal { id, params, .. } = &resolved else {
             return false;
@@ -171,14 +171,14 @@ impl Checker<'_, '_> {
 
         params.iter().any(|p| {
             if let Type::Nominal { id, .. } = p.resolve_in(&self.env) {
-                self.store.get_interface(&id).is_some() || id.starts_with("go:")
+                store.get_interface(&id).is_some() || id.starts_with("go:")
             } else {
                 false
             }
         })
     }
 
-    pub fn has_interface_type_param(&self, ty: &Type) -> bool {
+    pub fn has_interface_type_param(&self, store: &Store, ty: &Type) -> bool {
         let resolved = ty.resolve_in(&self.env);
         let Some(params) = resolved.get_type_params() else {
             return false;
@@ -186,7 +186,7 @@ impl Checker<'_, '_> {
 
         params.iter().any(|p| {
             if let Type::Nominal { id, .. } = p.resolve_in(&self.env) {
-                self.store.get_interface(&id).is_some()
+                store.get_interface(&id).is_some()
             } else {
                 false
             }

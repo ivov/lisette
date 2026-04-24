@@ -6,10 +6,12 @@ use syntax::program::Definition;
 use syntax::types::Type;
 
 use super::super::Checker;
+use crate::store::Store;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(super) fn infer_impl_block(
         &mut self,
+        store: &mut Store,
         annotation: Annotation,
         methods: Vec<Expression>,
         receiver_name: EcoString,
@@ -23,7 +25,7 @@ impl Checker<'_, '_> {
         for g in &generics {
             let qualified_name = self.qualify_name(&g.name);
             for b in &g.bounds {
-                let bound_ty = self.convert_to_type(b, &span);
+                let bound_ty = self.convert_to_type(store, b, &span);
                 self.scopes
                     .current_mut()
                     .trait_bounds
@@ -35,7 +37,7 @@ impl Checker<'_, '_> {
         }
 
         self.check_undeclared_impl_type_params(&annotation, &generics);
-        let impl_ty = self.convert_to_type(&annotation, &span);
+        let impl_ty = self.convert_to_type(store, &annotation, &span);
 
         let receiver_ty = if generics.is_empty() {
             impl_ty.clone()
@@ -56,7 +58,7 @@ impl Checker<'_, '_> {
             && let Some(Definition::Struct {
                 constructor: Some(ctor_ty),
                 ..
-            }) = self.store.get_definition(id)
+            }) = store.get_definition(id)
         {
             let ctor_ty = ctor_ty.clone();
             self.scopes
@@ -71,7 +73,7 @@ impl Checker<'_, '_> {
             .into_iter()
             .map(|method| {
                 let method_ty = self.new_type_var();
-                self.infer_expression(method, &method_ty)
+                self.infer_expression(store, method, &method_ty)
             })
             .collect();
 
@@ -88,7 +90,11 @@ impl Checker<'_, '_> {
         }
     }
 
-    pub(super) fn infer_interface(&mut self, expression: Expression) -> Expression {
+    pub(super) fn infer_interface(
+        &mut self,
+        store: &mut Store,
+        expression: Expression,
+    ) -> Expression {
         let Expression::Interface {
             doc,
             name,
@@ -114,7 +120,7 @@ impl Checker<'_, '_> {
             .into_iter()
             .map(|method_signature| {
                 let signature_ty = self.new_type_var();
-                self.infer_expression(method_signature, &signature_ty)
+                self.infer_expression(store, method_signature, &signature_ty)
             })
             .collect();
         self.facts.remove_bindings_from(checkpoint);
@@ -122,7 +128,7 @@ impl Checker<'_, '_> {
         let new_parents = parents
             .into_iter()
             .map(|parent| {
-                let parent_ty = self.convert_to_type(&parent.annotation, &parent.span);
+                let parent_ty = self.convert_to_type(store, &parent.annotation, &parent.span);
                 ParentInterface {
                     annotation: parent.annotation,
                     span: parent.span,

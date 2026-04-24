@@ -2,7 +2,7 @@ use syntax::ast::Span;
 
 use crate::checker::Checker;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(crate) fn check_return_in_try_block(&mut self, span: Span) {
         if self.scopes.lookup_try_block_context().is_some() {
             self.sink

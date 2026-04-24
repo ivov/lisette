@@ -22,21 +22,22 @@ fuzz_target!(|data: &[u8]| {
     store.add_module("fuzz");
     lisette_semantics::prelude::parse_and_register_prelude(&mut store, &sink);
 
-    let mut checker = lisette_semantics::checker::Checker::new(&mut store, &sink);
+    let mut checker = lisette_semantics::checker::Checker::new(&sink);
     checker
         .ufcs_methods
-        .extend(lisette_semantics::prelude::compute_prelude_ufcs(checker.store));
+        .extend(lisette_semantics::prelude::compute_prelude_ufcs(&store));
     checker.cursor.module_id = "fuzz".to_string();
-    checker.put_prelude_in_scope();
+    checker.put_prelude_in_scope(&store);
 
     checker.register_types_and_values(
+        &mut store,
         &desugar_result.ast,
         &lisette_syntax::program::Visibility::Private,
     );
 
     for expression in desugar_result.ast {
         let type_var = checker.new_type_var();
-        let _ = checker.infer_expression(expression, &type_var);
+        let _ = checker.infer_expression(&mut store, expression, &type_var);
 
         if checker.failed() {
             break;

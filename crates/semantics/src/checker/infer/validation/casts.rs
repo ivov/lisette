@@ -1,10 +1,11 @@
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
 use crate::checker::Checker;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     /// Validates that a cast from source_ty to target_ty is allowed.
     /// Pushes a diagnostic if the cast is invalid.
     ///
@@ -18,6 +19,7 @@ impl Checker<'_, '_> {
     /// Complex types (complex64, complex128) are explicitly excluded.
     pub(crate) fn check_valid_cast(
         &mut self,
+        store: &Store,
         raw_source_ty: &Type,
         raw_target_ty: &Type,
         span: Span,
@@ -51,11 +53,11 @@ impl Checker<'_, '_> {
         // Concrete type -> interface: allowed if source satisfies the interface.
         // Used for explicit coercion before wrapping in generic containers,
         // e.g. `Some(my_dog as Animal)` to get `Option<Animal>`.
-        let peeled_target = self.store.peel_alias(&target_ty);
+        let peeled_target = store.peel_alias(&target_ty);
         if let Type::Nominal { id, params, .. } = &peeled_target
-            && let Some(interface) = self.store.get_interface(id).cloned()
+            && let Some(interface) = store.get_interface(id).cloned()
             && self
-                .satisfies_interface(&source_ty, &interface, params, &span)
+                .satisfies_interface(store, &source_ty, &interface, params, &span)
                 .is_ok()
         {
             return;

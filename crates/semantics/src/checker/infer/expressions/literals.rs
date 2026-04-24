@@ -1,12 +1,14 @@
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
 use syntax::types::Type;
 
 use super::super::Checker;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(super) fn infer_literal(
         &mut self,
+        store: &mut Store,
         literal: Literal,
         expected_ty: &Type,
         span: Span,
@@ -14,7 +16,7 @@ impl Checker<'_, '_> {
         match literal {
             Literal::Boolean(boolean) => {
                 let bool_ty = self.type_bool();
-                self.unify(expected_ty, &bool_ty, &span);
+                self.unify(store, expected_ty, &bool_ty, &span);
 
                 Expression::Literal {
                     literal: Literal::Boolean(boolean),
@@ -39,7 +41,7 @@ impl Checker<'_, '_> {
                     resolved.clone()
                 } else {
                     let int_ty = self.type_int();
-                    self.unify(expected_ty, &int_ty, &span);
+                    self.unify(store, expected_ty, &int_ty, &span);
                     int_ty
                 };
 
@@ -59,7 +61,7 @@ impl Checker<'_, '_> {
                     resolved.clone()
                 } else {
                     let float_ty = self.type_float();
-                    self.unify(expected_ty, &float_ty, &span);
+                    self.unify(store, expected_ty, &float_ty, &span);
                     float_ty
                 };
 
@@ -72,7 +74,7 @@ impl Checker<'_, '_> {
 
             Literal::Imaginary(coef) => {
                 let complex_ty = self.type_complex128();
-                self.unify(expected_ty, &complex_ty, &span);
+                self.unify(store, expected_ty, &complex_ty, &span);
 
                 Expression::Literal {
                     literal: Literal::Imaginary(coef),
@@ -83,7 +85,7 @@ impl Checker<'_, '_> {
 
             Literal::String(string) => {
                 let string_ty = self.type_string();
-                self.unify(expected_ty, &string_ty, &span);
+                self.unify(store, expected_ty, &string_ty, &span);
 
                 Expression::Literal {
                     literal: Literal::String(string),
@@ -101,7 +103,7 @@ impl Checker<'_, '_> {
                     resolved.clone()
                 } else {
                     let char_ty = self.type_char();
-                    self.unify(expected_ty, &char_ty, &span);
+                    self.unify(store, expected_ty, &char_ty, &span);
                     char_ty
                 };
 
@@ -127,12 +129,14 @@ impl Checker<'_, '_> {
                 let new_elements: Vec<Expression> = elements
                     .into_iter()
                     .map(|e| {
-                        self.with_value_context(|s| s.infer_expression(e, &element_expected_ty))
+                        self.with_value_context(|s| {
+                            s.infer_expression(store, e, &element_expected_ty)
+                        })
                     })
                     .collect();
 
                 let slice_ty = self.type_slice(element_expected_ty);
-                self.unify(expected_ty, &slice_ty, &span);
+                self.unify(store, expected_ty, &slice_ty, &span);
 
                 Expression::Literal {
                     literal: Literal::Slice(new_elements),
@@ -151,7 +155,8 @@ impl Checker<'_, '_> {
                         FormatStringPart::Text(text) => FormatStringPart::Text(text),
                         FormatStringPart::Expression(expression) => {
                             let type_var = self.new_type_var();
-                            let inferred_expression = self.infer_expression(*expression, &type_var);
+                            let inferred_expression =
+                                self.infer_expression(store, *expression, &type_var);
                             FormatStringPart::Expression(Box::new(inferred_expression))
                         }
                     })
@@ -165,7 +170,7 @@ impl Checker<'_, '_> {
                 }
 
                 let string_ty = self.type_string();
-                self.unify(expected_ty, &string_ty, &span);
+                self.unify(store, expected_ty, &string_ty, &span);
 
                 Expression::Literal {
                     literal: Literal::FormatString(new_parts),
@@ -176,11 +181,16 @@ impl Checker<'_, '_> {
         }
     }
 
-    pub(super) fn infer_unit(&mut self, span: Span, expected_ty: &Type) -> Expression {
+    pub(super) fn infer_unit(
+        &mut self,
+        store: &mut Store,
+        span: Span,
+        expected_ty: &Type,
+    ) -> Expression {
         let new_ty = self.new_type_var();
         let unit_ty = self.type_unit();
-        self.unify(&new_ty, &unit_ty, &span);
-        self.unify(expected_ty, &new_ty, &span);
+        self.unify(store, &new_ty, &unit_ty, &span);
+        self.unify(store, expected_ty, &new_ty, &span);
         Expression::Unit { ty: new_ty, span }
     }
 }

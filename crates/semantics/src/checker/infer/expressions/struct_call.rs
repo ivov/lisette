@@ -1,6 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructFieldAssignment};
 use syntax::program::Definition;
@@ -8,27 +9,29 @@ use syntax::types::{SubstitutionMap, Type, substitute};
 
 use super::super::Checker;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(super) fn infer_struct_call(
         &mut self,
+        store: &mut Store,
         struct_name: EcoString,
         field_assignments: Vec<StructFieldAssignment>,
         spread: Box<Option<Expression>>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        if let Some(qualified_name) = self.lookup_qualified_name(&struct_name)
+        if let Some(qualified_name) = self.lookup_qualified_name(store, &struct_name)
             && let Some(Definition::Struct {
                 ty: struct_ty,
                 fields: struct_fields,
                 ..
-            }) = self.store.get_definition(&qualified_name)
+            }) = store.get_definition(&qualified_name)
         {
             let struct_ty = struct_ty.clone();
             let struct_fields = struct_fields.clone();
 
-            self.track_name_usage(&qualified_name, &span, struct_name.len() as u32);
+            self.track_name_usage(store, &qualified_name, &span, struct_name.len() as u32);
             return self.infer_struct_call_for_struct(
+                store,
                 struct_name,
                 qualified_name,
                 struct_ty,
@@ -40,12 +43,12 @@ impl Checker<'_, '_> {
             );
         }
 
-        if let Some(qualified_name) = self.lookup_qualified_name(&struct_name)
+        if let Some(qualified_name) = self.lookup_qualified_name(store, &struct_name)
             && let Some(Definition::TypeAlias {
                 ty: alias_ty,
                 annotation,
                 ..
-            }) = self.store.get_definition(&qualified_name)
+            }) = store.get_definition(&qualified_name)
         {
             let alias_ty = alias_ty.clone();
             let is_opaque = annotation.is_opaque();
@@ -59,13 +62,15 @@ impl Checker<'_, '_> {
                     ty: struct_ty,
                     fields: struct_fields,
                     ..
-                }) = self.store.get_definition(struct_id)
+                }) = store.get_definition(struct_id)
             {
                 let struct_ty = struct_ty.clone();
                 let struct_fields = struct_fields.clone();
+                let struct_id_str = struct_id.to_string();
                 return self.infer_struct_call_for_struct(
+                    store,
                     struct_name,
-                    struct_id.to_string(),
+                    struct_id_str,
                     struct_ty,
                     struct_fields,
                     field_assignments,
@@ -79,7 +84,7 @@ impl Checker<'_, '_> {
             // with T{} even though they have no struct definition.
             if is_opaque && field_assignments.is_empty() {
                 let (instantiated_ty, _) = self.instantiate(&alias_ty);
-                self.unify(expected_ty, &instantiated_ty, &span);
+                self.unify(store, expected_ty, &instantiated_ty, &span);
                 return Expression::StructCall {
                     name: struct_name,
                     field_assignments,
@@ -91,9 +96,9 @@ impl Checker<'_, '_> {
         }
 
         if let Some((type_part, variant_name)) = struct_name.rsplit_once('.')
-            && let Some(qualified_name) = self.lookup_qualified_name(type_part)
+            && let Some(qualified_name) = self.lookup_qualified_name(store, type_part)
             && let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
-                self.store.get_definition(&qualified_name)
+                store.get_definition(&qualified_name)
         {
             let alias_ty = alias_ty.clone();
 
@@ -102,7 +107,7 @@ impl Checker<'_, '_> {
                 _ => alias_ty.clone(),
             };
             let variant_fields = if let Type::Nominal { id: enum_id, .. } = &underlying
-                && let Some(variants) = self.store.variants_of(enum_id)
+                && let Some(variants) = store.variants_of(enum_id)
                 && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
                 && variant.fields.is_struct()
             {
@@ -118,6 +123,7 @@ impl Checker<'_, '_> {
                     _ => instantiated_ty,
                 };
                 return self.infer_struct_call_for_enum_variant(
+                    store,
                     struct_name,
                     variant_fields,
                     map,
@@ -130,7 +136,7 @@ impl Checker<'_, '_> {
             }
         }
 
-        if let Some(ty) = self.lookup_type(&struct_name) {
+        if let Some(ty) = self.lookup_type(store, &struct_name) {
             let (value_constructor_type, map) = self.instantiate(&ty);
 
             let pattern_ty = match value_constructor_type {
@@ -139,7 +145,7 @@ impl Checker<'_, '_> {
                 _ => {
                     self.sink
                         .push(diagnostics::infer::struct_not_found(&struct_name, span));
-                    self.unify(expected_ty, &Type::Error, &span);
+                    self.unify(store, expected_ty, &Type::Error, &span);
                     return Expression::StructCall {
                         name: struct_name,
                         field_assignments,
@@ -154,12 +160,13 @@ impl Checker<'_, '_> {
             let variant_name = struct_name.split('.').next_back().unwrap_or(&struct_name);
 
             if let Type::Nominal { id, .. } = &resolved_ty
-                && let Some(variants) = self.store.variants_of(id)
+                && let Some(variants) = store.variants_of(id)
                 && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
                 && variant.fields.is_struct()
             {
                 let variant_fields: Vec<_> = variant.fields.iter().cloned().collect();
                 return self.infer_struct_call_for_enum_variant(
+                    store,
                     struct_name,
                     variant_fields,
                     map,
@@ -174,7 +181,7 @@ impl Checker<'_, '_> {
 
         self.sink
             .push(diagnostics::infer::struct_not_found(&struct_name, span));
-        self.unify(expected_ty, &Type::Error, &span);
+        self.unify(store, expected_ty, &Type::Error, &span);
         Expression::StructCall {
             name: struct_name,
             field_assignments,
@@ -187,6 +194,7 @@ impl Checker<'_, '_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_struct_call_for_struct(
         &mut self,
+        store: &mut Store,
         struct_name: EcoString,
         qualified_name: String,
         struct_ty: Type,
@@ -199,7 +207,7 @@ impl Checker<'_, '_> {
         let (struct_call_ty, map) = self.instantiate(&struct_ty);
 
         let new_spread = (*spread).map(|s| {
-            self.with_value_context(|checker| checker.infer_expression(s, &struct_call_ty))
+            self.with_value_context(|checker| checker.infer_expression(store, s, &struct_call_ty))
         });
 
         let struct_module = qualified_name.split('.').next().unwrap_or(&qualified_name);
@@ -241,8 +249,9 @@ impl Checker<'_, '_> {
                     }
                 };
 
-                let new_value = self
-                    .with_value_context(|s| s.infer_expression((*field.value).clone(), &field_ty));
+                let new_value = self.with_value_context(|s| {
+                    s.infer_expression(store, (*field.value).clone(), &field_ty)
+                });
 
                 StructFieldAssignment {
                     name: field.name.clone(),
@@ -283,7 +292,7 @@ impl Checker<'_, '_> {
             }
         }
 
-        self.unify(expected_ty, &struct_call_ty, &span);
+        self.unify(store, expected_ty, &struct_call_ty, &span);
 
         Expression::StructCall {
             name: struct_name,
@@ -297,6 +306,7 @@ impl Checker<'_, '_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_struct_call_for_enum_variant(
         &mut self,
+        store: &mut Store,
         variant_name: EcoString,
         variant_fields: Vec<syntax::ast::EnumFieldDefinition>,
         map: SubstitutionMap,
@@ -306,10 +316,11 @@ impl Checker<'_, '_> {
         expected_ty: &Type,
         enum_ty: Type,
     ) -> Expression {
-        self.unify(expected_ty, &enum_ty, &span);
+        self.unify(store, expected_ty, &enum_ty, &span);
 
-        let new_spread = (*spread)
-            .map(|s| self.with_value_context(|checker| checker.infer_expression(s, &enum_ty)));
+        let new_spread = (*spread).map(|s| {
+            self.with_value_context(|checker| checker.infer_expression(store, s, &enum_ty))
+        });
 
         let mut matched_fields = HashSet::default();
         let new_field_assignments: Vec<StructFieldAssignment> = field_assignments
@@ -335,8 +346,9 @@ impl Checker<'_, '_> {
                     }
                 };
 
-                let new_value = self
-                    .with_value_context(|s| s.infer_expression((*field.value).clone(), &field_ty));
+                let new_value = self.with_value_context(|s| {
+                    s.infer_expression(store, (*field.value).clone(), &field_ty)
+                });
 
                 StructFieldAssignment {
                     name: field.name.clone(),

@@ -26,27 +26,26 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &DiagnosticSink) {
         },
     );
 
-    let mut checker = Checker::new(store, sink);
+    let mut checker = Checker::new(sink);
     checker.cursor.module_id = PRELUDE_MODULE_ID.to_string();
     checker.cursor.file_id = Some(PRELUDE_FILE_ID);
 
-    let module = checker
-        .store
+    let module = store
         .get_module(PRELUDE_MODULE_ID)
         .cloned()
         .expect("prelude module must exist");
 
     for file in module.all_typedefs() {
-        checker.register_type_names(&file.items, &Visibility::Public);
+        checker.register_type_names(store, &file.items, &Visibility::Public);
     }
 
     checker.reset_scopes();
-    checker.put_unprefixed_module_in_scope(PRELUDE_MODULE_ID);
+    checker.put_unprefixed_module_in_scope(&*store, PRELUDE_MODULE_ID);
 
     for file in module.all_typedefs() {
-        checker.register_type_definitions(&file.items);
-        checker.register_impl_blocks(&file.items);
-        checker.register_values(&file.items, &Visibility::Public);
+        checker.register_type_definitions(store, &file.items);
+        checker.register_impl_blocks(store, &file.items);
+        checker.register_values(store, &file.items, &Visibility::Public);
     }
 
     checker.cursor.file_id = None;

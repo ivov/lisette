@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use diagnostics::infer::InterfaceViolation;
 use syntax::ast::Span;
 use syntax::program::{Definition, Interface, MethodSignatures};
@@ -6,9 +7,10 @@ use syntax::types::{SubstitutionMap, Type, substitute};
 
 use super::super::Checker;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(super) fn satisfies_interface(
         &mut self,
+        store: &Store,
         ty: &Type,
         interface: &Interface,
         type_args: &[Type],
@@ -30,7 +32,15 @@ impl Checker<'_, '_> {
         }
 
         let mut violations = Vec::new();
-        self.collect_interface_violations(ty, interface, type_args, None, span, &mut violations);
+        self.collect_interface_violations(
+            store,
+            ty,
+            interface,
+            type_args,
+            None,
+            span,
+            &mut violations,
+        );
 
         self.satisfying_stack.remove(&pair);
 
@@ -55,6 +65,7 @@ impl Checker<'_, '_> {
     /// emitter may absorb Ref<T> into the type parameter.
     pub(super) fn check_pointer_receivers(
         &self,
+        store: &Store,
         ty: &Type,
         interface: &Interface,
         span: &Span,
@@ -63,10 +74,10 @@ impl Checker<'_, '_> {
             return Ok(());
         }
 
-        let methods = self.get_all_methods(ty);
+        let methods = self.get_all_methods(store, ty);
         let mut ptr_methods = Vec::new();
 
-        self.collect_pointer_receiver_methods(interface, &methods, &mut ptr_methods);
+        self.collect_pointer_receiver_methods(store, interface, &methods, &mut ptr_methods);
 
         if ptr_methods.is_empty() {
             return Ok(());
@@ -85,6 +96,7 @@ impl Checker<'_, '_> {
 
     fn collect_pointer_receiver_methods(
         &self,
+        store: &Store,
         interface: &Interface,
         methods: &MethodSignatures,
         out: &mut Vec<String>,
@@ -104,14 +116,16 @@ impl Checker<'_, '_> {
         }
         for parent in &interface.parents {
             let parent_name = parent.get_qualified_name();
-            if let Some(parent_interface) = self.store.get_interface(&parent_name) {
-                self.collect_pointer_receiver_methods(parent_interface, methods, out);
+            if let Some(parent_interface) = store.get_interface(&parent_name) {
+                self.collect_pointer_receiver_methods(store, parent_interface, methods, out);
             }
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn collect_interface_violations(
         &mut self,
+        store: &Store,
         ty: &Type,
         interface: &Interface,
         type_args: &[Type],
@@ -119,7 +133,7 @@ impl Checker<'_, '_> {
         span: &Span,
         violations: &mut Vec<InterfaceViolation>,
     ) {
-        let symbol_methods = self.get_all_methods(ty);
+        let symbol_methods = self.get_all_methods(store, ty);
 
         let map: SubstitutionMap = interface
             .generics
@@ -133,7 +147,7 @@ impl Checker<'_, '_> {
 
         let struct_generics: Option<Vec<String>> =
             if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env) {
-                self.store
+                store
                     .get_definition(&id)
                     .and_then(|definition| match definition {
                         Definition::Struct { generics, .. } if !generics.is_empty() => {
@@ -205,6 +219,7 @@ impl Checker<'_, '_> {
             self.scopes.increment_type_param_depth();
             let sig_match = self.speculatively(|this| {
                 this.try_unify(
+                    store,
                     &strip_bounds(&substituted_method),
                     &strip_bounds(&impl_method_without_receiver),
                     &Span::dummy(),
@@ -241,7 +256,7 @@ impl Checker<'_, '_> {
 
         for parent in &interface.parents {
             let parent_name = parent.get_qualified_name();
-            if let Some(parent_interface) = self.store.get_interface(&parent_name).cloned() {
+            if let Some(parent_interface) = store.get_interface(&parent_name).cloned() {
                 let parent_type_args = parent.get_type_params().unwrap_or_default();
                 // Substitute parent type arguments using the current interface's substitution map.
                 // E.g., if Processor<T> embeds Mapper<T> and we're checking Processor<string>,
@@ -251,6 +266,7 @@ impl Checker<'_, '_> {
                     .map(|arg| substitute(arg, &map))
                     .collect();
                 self.collect_interface_violations(
+                    store,
                     ty,
                     &parent_interface,
                     &substituted_parent_args,

@@ -8,12 +8,15 @@ use syntax::types::{Symbol, Type};
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
 use crate::checker::Checker;
+use crate::store::Store;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     /// Register an instance method on the receiver type's definition.
     /// Returns `false` if the receiver was not found or is a ValueEnum (caller should skip).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn try_register_instance_method(
         &mut self,
+        store: &mut Store,
         module_id: &str,
         receiver_qualified_name: &str,
         type_name: &str,
@@ -21,8 +24,7 @@ impl Checker<'_, '_> {
         fn_name_span: Span,
         method_ty: &Type,
     ) -> bool {
-        let module = self
-            .store
+        let module = store
             .get_module_mut(module_id)
             .expect("current module must exist in store");
 
@@ -63,8 +65,10 @@ impl Checker<'_, '_> {
         !matches!(definition, Definition::ValueEnum { .. })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn check_duplicate_method(
         &self,
+        store: &Store,
         module_id: &str,
         receiver_qualified_name: &str,
         type_name: &str,
@@ -74,8 +78,7 @@ impl Checker<'_, '_> {
     ) {
         let module_qualified_name = Symbol::from_parts(module_id, type_name).with_segment(fn_name);
 
-        let module = self
-            .store
+        let module = store
             .get_module(module_id)
             .expect("current module must exist in store");
 
@@ -120,6 +123,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn populate_impl_methods(
         &mut self,
+        store: &mut Store,
         annotation: &Annotation,
         generics: &[Generic],
         functions: &[Expression],
@@ -129,7 +133,7 @@ impl Checker<'_, '_> {
         self.put_in_scope(generics);
 
         self.check_undeclared_impl_type_params(annotation, generics);
-        let receiver_ty = self.convert_to_type(annotation, span);
+        let receiver_ty = self.convert_to_type(&*store, annotation, span);
         let Some(type_name) = receiver_ty.get_name() else {
             self.scopes.pop();
             return;
@@ -137,9 +141,7 @@ impl Checker<'_, '_> {
         let receiver_qualified_name = receiver_ty.get_qualified_name();
         let module_id = self.cursor.module_id.clone();
 
-        if let Some(type_module) = self
-            .store
-            .module_for_qualified_name(&receiver_qualified_name)
+        if let Some(type_module) = store.module_for_qualified_name(&receiver_qualified_name)
             && type_module != module_id
         {
             self.sink.push(diagnostics::infer::impl_on_foreign_type(
@@ -154,7 +156,7 @@ impl Checker<'_, '_> {
         let mut impl_bounds: Vec<syntax::types::Bound> = Vec::new();
         for g in generics {
             for b in &g.bounds {
-                let bound_ty = self.convert_to_type(b, span);
+                let bound_ty = self.convert_to_type(&*store, b, span);
                 impl_bounds.push(syntax::types::Bound {
                     param_name: g.name.clone(),
                     generic: Type::Parameter(g.name.clone()),
@@ -172,14 +174,14 @@ impl Checker<'_, '_> {
                 &[]
             };
             let fn_visibility = if let Expression::Function { visibility, .. } = function
-                && (*visibility == SyntacticVisibility::Public || self.is_d_lis())
+                && (*visibility == SyntacticVisibility::Public || self.is_d_lis(&*store))
             {
                 Visibility::Public
             } else {
                 Visibility::Private
             };
             let fn_sig = function.to_function_signature();
-            let mut fn_ty = self.extract_function_signature(&fn_sig, span);
+            let mut fn_ty = self.extract_function_signature(&*store, &fn_sig, span);
             let qualified_name = format!("{}.{}", type_name, fn_sig.name);
             let module_qualified_name = Symbol::from_parts(&module_id, &qualified_name);
             let is_instance_method = fn_sig.params.first().is_some_and(|p| {
@@ -210,6 +212,7 @@ impl Checker<'_, '_> {
 
             if is_instance_method {
                 if !self.try_register_instance_method(
+                    store,
                     &module_id,
                     &receiver_qualified_name,
                     type_name,
@@ -224,6 +227,7 @@ impl Checker<'_, '_> {
             }
 
             self.check_duplicate_method(
+                &*store,
                 &module_id,
                 &receiver_qualified_name,
                 type_name,
@@ -232,8 +236,7 @@ impl Checker<'_, '_> {
                 generics.is_empty(),
             );
 
-            let module = self
-                .store
+            let module = store
                 .get_module_mut(&module_id)
                 .expect("current module must exist in store");
             module.definitions.insert(
@@ -261,6 +264,7 @@ impl Checker<'_, '_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn populate_interface(
         &mut self,
+        store: &mut Store,
         interface_name: &str,
         name_span: &Span,
         generics: &[Generic],
@@ -271,11 +275,11 @@ impl Checker<'_, '_> {
     ) {
         self.scopes.push();
         self.put_in_scope(generics);
-        self.validate_generic_bounds(generics, span);
+        self.validate_generic_bounds(&*store, generics, span);
 
         let new_parents = parents
             .iter()
-            .map(|s| self.convert_to_type(&s.annotation, &s.span))
+            .map(|s| self.convert_to_type(&*store, &s.annotation, &s.span))
             .collect();
 
         let mut method_defs: Vec<(EcoString, Type, Vec<String>)> = Vec::new();
@@ -288,7 +292,7 @@ impl Checker<'_, '_> {
                     &[]
                 };
                 let method_sig = fe.to_function_signature();
-                let fn_ty = self.extract_function_signature(&method_sig, span);
+                let fn_ty = self.extract_function_signature(&*store, &method_sig, span);
                 let fn_ty = match &fn_ty {
                     Type::Forall { body, .. } => body.as_ref().clone(),
                     _ => fn_ty,
@@ -336,8 +340,7 @@ impl Checker<'_, '_> {
         self.scopes.pop();
 
         let qualified_name = self.qualify_name(interface_name);
-        let interface_ty = self
-            .store
+        let interface_ty = store
             .get_type(&qualified_name)
             .expect("interface type scheme must exist")
             .clone();
@@ -349,8 +352,7 @@ impl Checker<'_, '_> {
             methods,
         };
 
-        let visibility = self
-            .store
+        let visibility = store
             .get_module(&self.cursor.module_id)
             .expect("current module must exist in store")
             .definitions
@@ -358,8 +360,7 @@ impl Checker<'_, '_> {
             .map(|definition| definition.visibility().clone())
             .unwrap_or(Visibility::Private);
 
-        let module = self
-            .store
+        let module = store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
 
@@ -394,16 +395,17 @@ impl Checker<'_, '_> {
             );
         }
 
-        self.check_interface_embedding(&qualified_name, interface_name, name_span);
+        self.check_interface_embedding(&*store, &qualified_name, interface_name, name_span);
     }
 
     fn check_interface_embedding(
         &mut self,
+        store: &Store,
         qualified_name: &str,
         interface_name: &str,
         span: &Span,
     ) {
-        let interface = match self.store.get_interface(qualified_name) {
+        let interface = match store.get_interface(qualified_name) {
             Some(iface) => iface,
             None => return,
         };
@@ -426,7 +428,8 @@ impl Checker<'_, '_> {
 
         for parent_ty in &interface.parents {
             if let Some(parent_id) = parent_ty.get_qualified_id()
-                && let Some(cycle) = self.detect_interface_cycle(parent_id, &mut visited, &mut path)
+                && let Some(cycle) =
+                    self.detect_interface_cycle(store, parent_id, &mut visited, &mut path)
             {
                 self.sink
                     .push(diagnostics::infer::interface_embedding_cycle(&cycle, *span));
@@ -441,6 +444,7 @@ impl Checker<'_, '_> {
             if let Some(parent_id) = parent_ty.get_qualified_id() {
                 let parent_simple_name = parent_id.rsplit('.').next().unwrap_or(parent_id);
                 self.collect_interface_methods(
+                    store,
                     parent_id,
                     parent_simple_name,
                     &mut inherited_methods,
@@ -472,6 +476,7 @@ impl Checker<'_, '_> {
 
     fn detect_interface_cycle(
         &self,
+        store: &Store,
         current_id: &str,
         visited: &mut rustc_hash::FxHashSet<String>,
         path: &mut Vec<String>,
@@ -489,10 +494,11 @@ impl Checker<'_, '_> {
 
         path.push(current_id.to_string());
 
-        if let Some(interface) = self.store.get_interface(current_id) {
+        if let Some(interface) = store.get_interface(current_id) {
             for parent_ty in &interface.parents {
                 if let Some(parent_id) = parent_ty.get_qualified_id()
-                    && let Some(cycle) = self.detect_interface_cycle(parent_id, visited, path)
+                    && let Some(cycle) =
+                        self.detect_interface_cycle(store, parent_id, visited, path)
                 {
                     path.pop();
                     return Some(cycle);
@@ -507,6 +513,7 @@ impl Checker<'_, '_> {
 
     fn collect_interface_methods(
         &self,
+        store: &Store,
         interface_id: &str,
         source_name: &str,
         methods: &mut Vec<(String, Type, String)>,
@@ -516,7 +523,7 @@ impl Checker<'_, '_> {
             return;
         }
 
-        if let Some(interface) = self.store.get_interface(interface_id) {
+        if let Some(interface) = store.get_interface(interface_id) {
             for (method_name, method_ty) in &interface.methods {
                 methods.push((
                     method_name.to_string(),
@@ -528,7 +535,13 @@ impl Checker<'_, '_> {
             for parent_ty in &interface.parents {
                 if let Some(parent_id) = parent_ty.get_qualified_id() {
                     let parent_simple = parent_id.rsplit('.').next().unwrap_or(parent_id);
-                    self.collect_interface_methods(parent_id, parent_simple, methods, visited);
+                    self.collect_interface_methods(
+                        store,
+                        parent_id,
+                        parent_simple,
+                        methods,
+                        visited,
+                    );
                 }
             }
         }

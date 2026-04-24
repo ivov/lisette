@@ -1,20 +1,22 @@
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
 use syntax::types::Type;
 
 use super::super::Checker;
 use crate::validators::temp_producing::is_temp_producing;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     pub(super) fn infer_select(
         &mut self,
+        store: &mut Store,
         arms: Vec<SelectArm>,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
         if arms.is_empty() {
             self.sink.push(diagnostics::infer::empty_select(span));
-            self.unify(expected_ty, &Type::unit(), &span);
+            self.unify(store, expected_ty, &Type::unit(), &span);
             return Expression::Select {
                 arms: vec![],
                 ty: expected_ty.resolve_in(&self.env),
@@ -38,22 +40,31 @@ impl Checker<'_, '_> {
                         receive_expression,
                         body,
                         ..
-                    } => self.infer_select_receive(binding, receive_expression, body, &result_ty),
+                    } => self.infer_select_receive(
+                        store,
+                        binding,
+                        receive_expression,
+                        body,
+                        &result_ty,
+                    ),
 
                     SelectArmPattern::Send {
                         send_expression,
                         body,
-                    } => self.infer_select_send(send_expression, body, &result_ty),
+                    } => self.infer_select_send(store, send_expression, body, &result_ty),
 
                     SelectArmPattern::MatchReceive {
                         receive_expression,
                         arms: match_arms,
-                    } => {
-                        self.infer_select_match_receive(receive_expression, match_arms, &result_ty)
-                    }
+                    } => self.infer_select_match_receive(
+                        store,
+                        receive_expression,
+                        match_arms,
+                        &result_ty,
+                    ),
 
                     SelectArmPattern::WildCard { body } => {
-                        self.infer_select_wildcard(body, &result_ty)
+                        self.infer_select_wildcard(store, body, &result_ty)
                     }
                 };
 
@@ -65,7 +76,7 @@ impl Checker<'_, '_> {
             })
             .collect();
 
-        self.unify(expected_ty, &result_ty, &span);
+        self.unify(store, expected_ty, &result_ty, &span);
 
         // Reject non-exhaustive select expressions in value position:
         // shorthand receive arms without a default arm can silently return
@@ -93,13 +104,14 @@ impl Checker<'_, '_> {
 
     fn infer_select_receive(
         &mut self,
+        store: &mut Store,
         binding: Box<Pattern>,
         receive_expression: Box<Expression>,
         body: Box<Expression>,
         result_ty: &Type,
     ) -> SelectArmPattern {
         let receive_ty = self.new_type_var();
-        let new_receive_expression = self.infer_expression(*receive_expression, &receive_ty);
+        let new_receive_expression = self.infer_expression(store, *receive_expression, &receive_ty);
 
         self.check_complex_select_expression(&new_receive_expression);
 
@@ -162,6 +174,7 @@ impl Checker<'_, '_> {
         }
 
         let (new_binding, typed_pattern) = self.infer_pattern(
+            store,
             *binding,
             element_ty.clone(),
             syntax::ast::BindingKind::Let { mutable: false },
@@ -169,7 +182,7 @@ impl Checker<'_, '_> {
 
         let saved_in_match_arm = self.scopes.set_in_match_arm(true);
         self.scopes.set_in_subexpression(false);
-        let new_body = self.infer_expression(*body, result_ty);
+        let new_body = self.infer_expression(store, *body, result_ty);
         self.scopes.set_in_match_arm(saved_in_match_arm);
 
         SelectArmPattern::Receive {
@@ -182,12 +195,13 @@ impl Checker<'_, '_> {
 
     fn infer_select_send(
         &mut self,
+        store: &mut Store,
         send_expression: Box<Expression>,
         body: Box<Expression>,
         result_ty: &Type,
     ) -> SelectArmPattern {
         let send_ty = self.new_type_var();
-        let new_send_expression = self.infer_expression(*send_expression, &send_ty);
+        let new_send_expression = self.infer_expression(store, *send_expression, &send_ty);
 
         self.check_complex_select_expression(&new_send_expression);
 
@@ -201,7 +215,7 @@ impl Checker<'_, '_> {
 
         let saved_in_match_arm = self.scopes.set_in_match_arm(true);
         self.scopes.set_in_subexpression(false);
-        let new_body = self.infer_expression(*body, result_ty);
+        let new_body = self.infer_expression(store, *body, result_ty);
         self.scopes.set_in_match_arm(saved_in_match_arm);
 
         SelectArmPattern::Send {
@@ -212,12 +226,13 @@ impl Checker<'_, '_> {
 
     fn infer_select_match_receive(
         &mut self,
+        store: &mut Store,
         receive_expression: Box<Expression>,
         match_arms: Vec<MatchArm>,
         result_ty: &Type,
     ) -> SelectArmPattern {
         let receive_ty = self.new_type_var();
-        let new_receive_expression = self.infer_expression(*receive_expression, &receive_ty);
+        let new_receive_expression = self.infer_expression(store, *receive_expression, &receive_ty);
 
         self.check_complex_select_expression(&new_receive_expression);
 
@@ -238,6 +253,7 @@ impl Checker<'_, '_> {
                 self.scopes.push();
 
                 let (new_pattern, typed_pattern) = self.infer_pattern(
+                    store,
                     match_arm.pattern,
                     pattern_ty.clone(),
                     syntax::ast::BindingKind::MatchArm,
@@ -245,12 +261,12 @@ impl Checker<'_, '_> {
 
                 let bool_ty = self.type_bool();
                 let new_guard = match_arm.guard.map(|guard| {
-                    let guard_expression = self.infer_expression(*guard, &bool_ty);
+                    let guard_expression = self.infer_expression(store, *guard, &bool_ty);
                     Box::new(guard_expression)
                 });
 
                 let saved_in_match_arm = self.scopes.set_in_match_arm(true);
-                let new_expression = self.infer_expression(*match_arm.expression, result_ty);
+                let new_expression = self.infer_expression(store, *match_arm.expression, result_ty);
                 self.scopes.set_in_match_arm(saved_in_match_arm);
 
                 self.scopes.pop();
@@ -272,12 +288,13 @@ impl Checker<'_, '_> {
 
     fn infer_select_wildcard(
         &mut self,
+        store: &mut Store,
         body: Box<Expression>,
         result_ty: &Type,
     ) -> SelectArmPattern {
         let saved_in_match_arm = self.scopes.set_in_match_arm(true);
         self.scopes.set_in_subexpression(false);
-        let new_body = self.infer_expression(*body, result_ty);
+        let new_body = self.infer_expression(store, *body, result_ty);
         self.scopes.set_in_match_arm(saved_in_match_arm);
         SelectArmPattern::WildCard {
             body: Box::new(new_body),

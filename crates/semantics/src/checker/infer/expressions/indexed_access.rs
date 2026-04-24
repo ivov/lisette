@@ -1,10 +1,11 @@
 use crate::checker::EnvResolve;
+use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
 use super::super::super::Checker;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
     /// Returns `true` if valid (no error emitted), `false` if an error was emitted.
     pub(crate) fn check_slice_index_type(
         &mut self,
@@ -27,31 +28,30 @@ impl Checker<'_, '_> {
 
     pub(super) fn infer_indexed_access(
         &mut self,
+        store: &mut Store,
         expression: Box<Expression>,
         index: Box<Expression>,
         span: syntax::ast::Span,
         expected_ty: &Type,
     ) -> Expression {
         if index.is_range() {
-            return self.infer_slice_range_access(expression, index, span, expected_ty);
+            return self.infer_slice_range_access(store, expression, index, span, expected_ty);
         }
 
         let index_ty_var = self.new_type_var();
         let collection_ty_var = self.new_type_var();
 
         let (index_expression, collection_expression) = self.with_value_context(|s| {
-            let index_expression = s.infer_expression(*index, &index_ty_var);
-            let collection_expression = s.infer_expression(*expression, &collection_ty_var);
+            let index_expression = s.infer_expression(store, *index, &index_ty_var);
+            let collection_expression = s.infer_expression(store, *expression, &collection_ty_var);
             (index_expression, collection_expression)
         });
 
         let resolved_index_ty = index_ty_var.resolve_in(&self.env);
-        let resolved_collection_ty = self
-            .store
-            .peel_alias(&collection_ty_var.resolve_in(&self.env));
+        let resolved_collection_ty = store.peel_alias(&collection_ty_var.resolve_in(&self.env));
 
         if resolved_collection_ty.is_error() {
-            self.unify(expected_ty, &Type::Error, &span);
+            self.unify(store, expected_ty, &Type::Error, &span);
             return Expression::IndexedAccess {
                 expression: collection_expression.into(),
                 index: index_expression.into(),
@@ -86,7 +86,7 @@ impl Checker<'_, '_> {
         if is_range_index {
             if let Some(bound_ty) = resolved_index_ty.get_type_params().and_then(|p| p.first()) {
                 let int_ty = self.type_int();
-                self.unify(&int_ty, bound_ty, &span);
+                self.unify(store, &int_ty, bound_ty, &span);
             }
 
             let result_ty = if type_name == "string" {
@@ -98,7 +98,7 @@ impl Checker<'_, '_> {
                     .unwrap_or_else(|| self.new_type_var());
                 self.type_slice(element_ty)
             };
-            self.unify(expected_ty, &result_ty, &span);
+            self.unify(store, expected_ty, &result_ty, &span);
 
             return Expression::IndexedAccess {
                 expression: collection_expression.into(),
@@ -114,7 +114,7 @@ impl Checker<'_, '_> {
             "Slice" => (self.type_int(), self.type_slice(element_ty.clone())),
             "Map" => {
                 let Some(type_params) = resolved_collection_ty.get_type_params() else {
-                    self.unify(expected_ty, &Type::Error, &span);
+                    self.unify(store, expected_ty, &Type::Error, &span);
                     return Expression::IndexedAccess {
                         expression: collection_expression.into(),
                         index: index_expression.into(),
@@ -161,15 +161,20 @@ impl Checker<'_, '_> {
             }
         };
 
-        self.unify(&expected_collection_ty, &resolved_collection_ty, &span);
+        self.unify(
+            store,
+            &expected_collection_ty,
+            &resolved_collection_ty,
+            &span,
+        );
 
         let index_ok =
             self.check_slice_index_type(type_name, &resolved_index_ty, index_expression.get_span());
 
         if index_ok {
-            self.unify(&expected_index_ty, &resolved_index_ty, &span);
+            self.unify(store, &expected_index_ty, &resolved_index_ty, &span);
         }
-        self.unify(expected_ty, &element_ty, &span);
+        self.unify(store, expected_ty, &element_ty, &span);
 
         Expression::IndexedAccess {
             expression: collection_expression.into(),
@@ -181,6 +186,7 @@ impl Checker<'_, '_> {
 
     fn infer_slice_range_access(
         &mut self,
+        store: &mut Store,
         expression: Box<Expression>,
         range: Box<Expression>,
         span: syntax::ast::Span,
@@ -188,14 +194,12 @@ impl Checker<'_, '_> {
     ) -> Expression {
         let collection_ty_var = self.new_type_var();
         let collection_expression =
-            self.with_value_context(|s| s.infer_expression(*expression, &collection_ty_var));
-        let resolved_collection_ty = self
-            .store
-            .peel_alias(&collection_ty_var.resolve_in(&self.env));
+            self.with_value_context(|s| s.infer_expression(store, *expression, &collection_ty_var));
+        let resolved_collection_ty = store.peel_alias(&collection_ty_var.resolve_in(&self.env));
 
         if resolved_collection_ty.is_error() {
-            self.unify(expected_ty, &Type::Error, &span);
-            let inferred_range = self.infer_range_bounds_only(range);
+            self.unify(store, expected_ty, &Type::Error, &span);
+            let inferred_range = self.infer_range_bounds_only(store, range);
             return Expression::IndexedAccess {
                 expression: collection_expression.into(),
                 index: inferred_range.into(),
@@ -208,7 +212,7 @@ impl Checker<'_, '_> {
             self.sink.push(diagnostics::infer::type_must_be_known(
                 collection_expression.get_span(),
             ));
-            let inferred_range = self.infer_range_bounds_only(range);
+            let inferred_range = self.infer_range_bounds_only(store, range);
             return Expression::IndexedAccess {
                 expression: collection_expression.into(),
                 index: inferred_range.into(),
@@ -223,7 +227,7 @@ impl Checker<'_, '_> {
                     &resolved_collection_ty,
                     &collection_expression.get_span(),
                 ));
-            let inferred_range = self.infer_range_bounds_only(range);
+            let inferred_range = self.infer_range_bounds_only(store, range);
             return Expression::IndexedAccess {
                 expression: collection_expression.into(),
                 index: inferred_range.into(),
@@ -254,19 +258,21 @@ impl Checker<'_, '_> {
                 let int_ty = self.type_int();
 
                 let (new_start, new_end) = self.with_value_context(|s| {
-                    let start =
-                        start.map(|expression| Box::new(s.infer_expression(*expression, &int_ty)));
-                    let end =
-                        end.map(|expression| Box::new(s.infer_expression(*expression, &int_ty)));
+                    let start = start.map(|expression| {
+                        Box::new(s.infer_expression(store, *expression, &int_ty))
+                    });
+                    let end = end.map(|expression| {
+                        Box::new(s.infer_expression(store, *expression, &int_ty))
+                    });
                     (start, end)
                 });
 
                 let range_ty = match (&new_start, &new_end) {
-                    (Some(_), Some(_)) if inclusive => self.type_range_inclusive(int_ty),
-                    (Some(_), Some(_)) => self.type_range(int_ty),
-                    (Some(_), None) => self.type_range_from(int_ty),
-                    (None, Some(_)) if inclusive => self.type_range_to_inclusive(int_ty),
-                    (None, Some(_)) => self.type_range_to(int_ty),
+                    (Some(_), Some(_)) if inclusive => self.type_range_inclusive(store, int_ty),
+                    (Some(_), Some(_)) => self.type_range(store, int_ty),
+                    (Some(_), None) => self.type_range_from(store, int_ty),
+                    (None, Some(_)) if inclusive => self.type_range_to_inclusive(store, int_ty),
+                    (None, Some(_)) => self.type_range_to(store, int_ty),
                     (None, None) => self.new_type_var(),
                 };
 
@@ -287,7 +293,7 @@ impl Checker<'_, '_> {
             self.type_slice(element_ty)
         };
 
-        self.unify(expected_ty, &result_ty, &span);
+        self.unify(store, expected_ty, &result_ty, &span);
 
         Expression::IndexedAccess {
             expression: collection_expression.into(),
@@ -297,7 +303,7 @@ impl Checker<'_, '_> {
         }
     }
 
-    fn infer_range_bounds_only(&mut self, range: Box<Expression>) -> Expression {
+    fn infer_range_bounds_only(&mut self, store: &mut Store, range: Box<Expression>) -> Expression {
         match *range {
             Expression::Range {
                 start,
@@ -307,8 +313,8 @@ impl Checker<'_, '_> {
                 ..
             } => {
                 let int_ty = self.type_int();
-                let new_start = start.map(|s| Box::new(self.infer_expression(*s, &int_ty)));
-                let new_end = end.map(|e| Box::new(self.infer_expression(*e, &int_ty)));
+                let new_start = start.map(|s| Box::new(self.infer_expression(store, *s, &int_ty)));
+                let new_end = end.map(|e| Box::new(self.infer_expression(store, *e, &int_ty)));
 
                 Expression::Range {
                     start: new_start,

@@ -7,9 +7,10 @@ use syntax::program::Definition;
 use syntax::types::{SubstitutionMap, Type, substitute};
 
 use crate::checker::Checker;
+use crate::store::Store;
 
-impl Checker<'_, '_> {
-    pub fn convert_to_type(&mut self, annotation: &Annotation, span: &Span) -> Type {
+impl Checker<'_> {
+    pub fn convert_to_type(&mut self, store: &Store, annotation: &Annotation, span: &Span) -> Type {
         match annotation {
             Annotation::Unknown => self.new_type_var(),
 
@@ -20,14 +21,14 @@ impl Checker<'_, '_> {
             } => {
                 let new_params: Vec<Type> = params
                     .iter()
-                    .map(|param| self.convert_to_type(param, span))
+                    .map(|param| self.convert_to_type(store, param, span))
                     .collect();
                 // For function type annotations, omitted return type means Unit (`()`),
                 // not a type variable. This ensures `fn(T)` is `fn(T) -> ()`.
                 let new_return_type = if matches!(return_type.as_ref(), Annotation::Unknown) {
                     self.type_unit()
                 } else {
-                    self.convert_to_type(return_type, span)
+                    self.convert_to_type(store, return_type, span)
                 };
 
                 Type::Function {
@@ -48,7 +49,7 @@ impl Checker<'_, '_> {
                 // type named `Unit` exists in scope.
                 if type_name == "Unit"
                     && params.is_empty()
-                    && self.resolve_type_name("Unit").is_none()
+                    && self.resolve_type_name(store, "Unit").is_none()
                 {
                     return Type::unit();
                 }
@@ -64,7 +65,7 @@ impl Checker<'_, '_> {
                 }
 
                 let Some((qualified_name, ty)) =
-                    self.resolve_type_with_arity(type_name, params.len())
+                    self.resolve_type_with_arity(store, type_name, params.len())
                 else {
                     if type_name == "Self" {
                         self.sink.push(diagnostics::infer::self_type_not_supported(
@@ -79,9 +80,14 @@ impl Checker<'_, '_> {
                     return Type::Error;
                 };
 
-                self.track_name_usage(&qualified_name, annotation_span, type_name.len() as u32);
+                self.track_name_usage(
+                    store,
+                    &qualified_name,
+                    annotation_span,
+                    type_name.len() as u32,
+                );
 
-                if qualified_name == "prelude.Unknown" && self.is_lis() {
+                if qualified_name == "prelude.Unknown" && self.is_lis(store) {
                     self.sink.push(diagnostics::infer::unknown_outside_typedef(
                         *annotation_span,
                     ));
@@ -95,7 +101,7 @@ impl Checker<'_, '_> {
                 if generics.len() != params.len() {
                     let actual_types: Vec<Type> = params
                         .iter()
-                        .map(|arg| self.convert_to_type(arg, span))
+                        .map(|arg| self.convert_to_type(store, arg, span))
                         .collect();
                     let generics_as_str: Vec<String> =
                         generics.iter().map(|s| s.to_string()).collect();
@@ -109,7 +115,7 @@ impl Checker<'_, '_> {
 
                 let concrete_args: Vec<Type> = params
                     .iter()
-                    .map(|arg| self.convert_to_type(arg, span))
+                    .map(|arg| self.convert_to_type(store, arg, span))
                     .collect();
                 let map: SubstitutionMap = generics
                     .iter()
@@ -119,14 +125,14 @@ impl Checker<'_, '_> {
                 let resolved_ty = substitute(&body, &map);
 
                 // Reject Ref<InterfaceType> — Go pointer-to-interface is invalid
-                if self.is_lis()
+                if self.is_lis(store)
                     && qualified_name == "prelude.Ref"
                     && params.len() == 1
                     && let Some(inner) = resolved_ty.inner()
                 {
-                    let peeled_inner = self.store.peel_alias(&inner.resolve_in(&self.env));
+                    let peeled_inner = store.peel_alias(&inner.resolve_in(&self.env));
                     if let Some(inner_id) = peeled_inner.get_qualified_id()
-                        && self.store.get_interface(inner_id).is_some()
+                        && store.get_interface(inner_id).is_some()
                     {
                         self.sink.push(diagnostics::infer::ref_of_interface_type(
                             &inner,
@@ -155,7 +161,7 @@ impl Checker<'_, '_> {
                     && let Some(Definition::TypeAlias {
                         annotation: alias_ann,
                         ..
-                    }) = self.store.get_definition(&qualified_name)
+                    }) = store.get_definition(&qualified_name)
                     && !alias_ann.is_opaque()
                 {
                     return Type::Nominal {
@@ -171,7 +177,7 @@ impl Checker<'_, '_> {
             Annotation::Tuple { elements, .. } => {
                 let element_types = elements
                     .iter()
-                    .map(|e| self.convert_to_type(e, span))
+                    .map(|e| self.convert_to_type(store, e, span))
                     .collect();
                 Type::Tuple(element_types)
             }
@@ -184,6 +190,7 @@ impl Checker<'_, '_> {
 
     pub(super) fn resolve_type_with_arity(
         &mut self,
+        store: &Store,
         type_name: &str,
         expected_arity: usize,
     ) -> Option<(String, Type)> {
@@ -192,12 +199,12 @@ impl Checker<'_, '_> {
             _ => 0,
         };
 
-        if let Some((qname, ty)) = self.resolve_type_name(type_name) {
+        if let Some((qname, ty)) = self.resolve_type_name(store, type_name) {
             if arity_of(&ty) == expected_arity {
                 return Some((qname, ty));
             }
             if !type_name.contains('.')
-                && let Some((pname, pty)) = self.resolve_type_from_prelude(type_name)
+                && let Some((pname, pty)) = self.resolve_type_from_prelude(store, type_name)
                 && arity_of(&pty) == expected_arity
             {
                 return Some((pname, pty));
@@ -205,11 +212,12 @@ impl Checker<'_, '_> {
             return Some((qname, ty));
         }
 
-        self.resolve_type_from_prelude(type_name)
+        self.resolve_type_from_prelude(store, type_name)
     }
 
     pub fn instantiate_from_annotations(
         &mut self,
+        store: &Store,
         generics: &[EcoString],
         body: &Type,
         type_args: &[Annotation],
@@ -217,7 +225,7 @@ impl Checker<'_, '_> {
     ) -> Type {
         let args: Vec<Type> = type_args
             .iter()
-            .map(|arg_ann| self.convert_to_type(arg_ann, span))
+            .map(|arg_ann| self.convert_to_type(store, arg_ann, span))
             .collect();
 
         let map: SubstitutionMap = generics

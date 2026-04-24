@@ -8,10 +8,13 @@ use syntax::types::Type;
 
 use super::enum_variant_constructor_type;
 use crate::checker::Checker;
+use crate::store::Store;
 
-impl Checker<'_, '_> {
+impl Checker<'_> {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn populate_enum(
         &mut self,
+        store: &mut Store,
         name: &str,
         name_span: &Span,
         generics: &[Generic],
@@ -20,20 +23,19 @@ impl Checker<'_, '_> {
         doc: &Option<String>,
     ) {
         let qualified_name = self.qualify_name(name);
-        let enum_ty = self
-            .store
+        let enum_ty = store
             .get_type(&qualified_name)
             .expect("enum type must exist")
             .clone();
 
         self.scopes.push();
         self.put_in_scope(generics);
-        self.validate_generic_bounds(generics, span);
+        self.validate_generic_bounds(&*store, generics, span);
         self.scopes.pop();
 
         let new_variants: Vec<_> = variants
             .iter()
-            .map(|v| self.resolve_enum_variant_fields(v, generics, span))
+            .map(|v| self.resolve_enum_variant_fields(&*store, v, generics, span))
             .collect();
 
         self.check_enum_field_type_conflicts(name, &new_variants);
@@ -42,8 +44,7 @@ impl Checker<'_, '_> {
             self.add_enum_variant_to_scope(new_variant, name, &enum_ty, generics);
         }
 
-        let visibility = self
-            .store
+        let visibility = store
             .get_module(&self.cursor.module_id)
             .expect("current module must exist in store")
             .definitions
@@ -73,14 +74,13 @@ impl Checker<'_, '_> {
             })
             .collect();
 
-        if self.is_lis() && self.type_definition_exists(&qualified_name) {
+        if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
             self.sink.push(diagnostics::infer::duplicate_definition(
                 "enum", name, *name_span,
             ));
         }
 
-        let module = self
-            .store
+        let module = store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
 
@@ -122,18 +122,19 @@ impl Checker<'_, '_> {
             },
         );
 
-        self.check_recursive_type(&qualified_name, name, name_span);
+        self.check_recursive_type(store, &qualified_name, name, name_span);
     }
 
     pub(super) fn populate_value_enum(
         &mut self,
+        store: &mut Store,
         name: &str,
         name_span: &Span,
         underlying_ty: Option<&Annotation>,
         variants: &[ValueEnumVariant],
         doc: &Option<String>,
     ) {
-        if !self.is_d_lis() {
+        if !self.is_d_lis(&*store) {
             let span = variants
                 .first()
                 .map(|v| v.value_span)
@@ -144,14 +145,12 @@ impl Checker<'_, '_> {
         }
 
         let qualified_name = self.qualify_name(name);
-        let base_enum_ty = self
-            .store
+        let base_enum_ty = store
             .get_type(&qualified_name)
             .expect("enum type must exist")
             .clone();
 
-        let visibility = self
-            .store
+        let visibility = store
             .get_module(&self.cursor.module_id)
             .expect("current module must exist in store")
             .definitions
@@ -160,7 +159,7 @@ impl Checker<'_, '_> {
             .unwrap_or(Visibility::Private);
 
         let underlying_ty =
-            underlying_ty.map(|annotation| self.convert_to_type(annotation, name_span));
+            underlying_ty.map(|annotation| self.convert_to_type(&*store, annotation, name_span));
 
         let enum_ty = if let (Type::Nominal { id, params, .. }, Some(underlying)) =
             (&base_enum_ty, &underlying_ty)
@@ -176,8 +175,7 @@ impl Checker<'_, '_> {
 
         for variant in variants {
             let qualified_variant_name = qualified_name.with_segment(&variant.name);
-            let module = self
-                .store
+            let module = store
                 .get_module_mut(&self.cursor.module_id)
                 .expect("current module must exist in store");
             module.definitions.insert(
@@ -203,8 +201,7 @@ impl Checker<'_, '_> {
                 .insert(variant.name.to_string(), enum_ty.clone());
         }
 
-        let module = self
-            .store
+        let module = store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store");
 
@@ -294,6 +291,7 @@ impl Checker<'_, '_> {
 
     fn resolve_enum_variant_fields(
         &mut self,
+        store: &Store,
         enum_variant: &EnumVariant,
         enum_generics: &[Generic],
         span: &Span,
@@ -301,11 +299,11 @@ impl Checker<'_, '_> {
         let new_fields = match &enum_variant.fields {
             VariantFields::Unit => VariantFields::Unit,
             VariantFields::Tuple(fields) => {
-                let resolved_fields = self.resolve_enum_fields(fields, enum_generics, span);
+                let resolved_fields = self.resolve_enum_fields(store, fields, enum_generics, span);
                 VariantFields::Tuple(resolved_fields)
             }
             VariantFields::Struct(fields) => {
-                let resolved_fields = self.resolve_enum_fields(fields, enum_generics, span);
+                let resolved_fields = self.resolve_enum_fields(store, fields, enum_generics, span);
                 VariantFields::Struct(resolved_fields)
             }
         };
@@ -320,6 +318,7 @@ impl Checker<'_, '_> {
 
     fn resolve_enum_fields(
         &mut self,
+        store: &Store,
         fields: &[EnumFieldDefinition],
         enum_generics: &[Generic],
         span: &Span,
@@ -330,7 +329,7 @@ impl Checker<'_, '_> {
         let resolved_fields = fields
             .iter()
             .map(|f| {
-                let resolved_ty = self.convert_to_type(&f.annotation, span);
+                let resolved_ty = self.convert_to_type(store, &f.annotation, span);
                 if let Type::Var { id, .. } = &f.ty {
                     self.env.bind(*id, resolved_ty.clone());
                 }
@@ -371,6 +370,7 @@ impl Checker<'_, '_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn populate_struct(
         &mut self,
+        store: &mut Store,
         name: &str,
         name_span: &Span,
         generics: &[Generic],
@@ -380,20 +380,19 @@ impl Checker<'_, '_> {
         doc: &Option<String>,
     ) {
         let qualified_name = self.qualify_name(name);
-        let struct_ty = self
-            .store
+        let struct_ty = store
             .get_type(&qualified_name)
             .expect("struct type scheme must exist")
             .clone();
 
         self.scopes.push();
         self.put_in_scope(generics);
-        self.validate_generic_bounds(generics, span);
+        self.validate_generic_bounds(&*store, generics, span);
 
         let new_fields: Vec<StructFieldDefinition> = fields
             .iter()
             .map(|f| {
-                let field_ty = self.convert_to_type(&f.annotation, span);
+                let field_ty = self.convert_to_type(&*store, &f.annotation, span);
                 StructFieldDefinition {
                     ty: field_ty,
                     ..f.clone()
@@ -420,8 +419,7 @@ impl Checker<'_, '_> {
             struct_ty
         };
 
-        let visibility = self
-            .store
+        let visibility = store
             .get_module(&self.cursor.module_id)
             .expect("current module must exist in store")
             .definitions
@@ -429,13 +427,13 @@ impl Checker<'_, '_> {
             .map(|definition| definition.visibility().clone())
             .unwrap_or(Visibility::Private);
 
-        if self.is_lis() && self.type_definition_exists(&qualified_name) {
+        if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
             self.sink.push(diagnostics::infer::duplicate_definition(
                 "struct", name, *name_span,
             ));
         }
 
-        self.store
+        store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store")
             .definitions
@@ -455,14 +453,21 @@ impl Checker<'_, '_> {
                 },
             );
 
-        self.check_recursive_type(&qualified_name, name, name_span);
+        self.check_recursive_type(&*store, &qualified_name, name, name_span);
     }
 
     /// Check whether a type is recursive without Ref indirection.
     /// A type that contains itself (directly or through Option, Tuple, etc.) without going
     /// through Ref has infinite size and is rejected by Go.
-    fn check_recursive_type(&mut self, qualified_name: &str, struct_name: &str, name_span: &Span) {
+    fn check_recursive_type(
+        &mut self,
+        store: &Store,
+        qualified_name: &str,
+        struct_name: &str,
+        name_span: &Span,
+    ) {
         if self.contains_type_without_ref(
+            store,
             qualified_name,
             qualified_name,
             &mut rustc_hash::FxHashSet::default(),
@@ -477,6 +482,7 @@ impl Checker<'_, '_> {
     /// `current_id` is the qualified name of the type whose fields we're inspecting.
     fn contains_type_without_ref(
         &self,
+        store: &Store,
         target_id: &str,
         current_id: &str,
         visited: &mut rustc_hash::FxHashSet<String>,
@@ -485,9 +491,9 @@ impl Checker<'_, '_> {
             return false; // Already checked this type
         }
 
-        if let Some(fields) = self.store.fields_of(current_id) {
+        if let Some(fields) = store.fields_of(current_id) {
             for field in fields {
-                if self.type_contains_target_without_ref(target_id, &field.ty, visited) {
+                if self.type_contains_target_without_ref(store, target_id, &field.ty, visited) {
                     return true;
                 }
             }
@@ -497,7 +503,7 @@ impl Checker<'_, '_> {
         // Skip direct self-references (e.g. `Node(Tree, Tree)`) — the emitter wraps
         // those in pointers automatically. Only flag indirect recursion through other
         // types (e.g. `Node(Box<Tree>)` where Box is a value-type struct).
-        if let Some(variants) = self.store.variants_of(current_id) {
+        if let Some(variants) = store.variants_of(current_id) {
             for variant in variants {
                 for field in &variant.fields {
                     if let Type::Nominal { id, .. } = field.ty.resolve_in(&self.env)
@@ -505,7 +511,7 @@ impl Checker<'_, '_> {
                     {
                         continue;
                     }
-                    if self.type_contains_target_without_ref(target_id, &field.ty, visited) {
+                    if self.type_contains_target_without_ref(store, target_id, &field.ty, visited) {
                         return true;
                     }
                 }
@@ -517,6 +523,7 @@ impl Checker<'_, '_> {
 
     fn type_contains_target_without_ref(
         &self,
+        store: &Store,
         target_id: &str,
         ty: &Type,
         visited: &mut rustc_hash::FxHashSet<String>,
@@ -537,13 +544,13 @@ impl Checker<'_, '_> {
                 }
 
                 for param in params {
-                    if self.type_contains_target_without_ref(target_id, param, visited) {
+                    if self.type_contains_target_without_ref(store, target_id, param, visited) {
                         return true;
                     }
                 }
 
-                if (self.store.fields_of(id).is_some() || self.store.variants_of(id).is_some())
-                    && self.contains_type_without_ref(target_id, id, visited)
+                if (store.fields_of(id).is_some() || store.variants_of(id).is_some())
+                    && self.contains_type_without_ref(store, target_id, id, visited)
                 {
                     return true;
                 }
@@ -552,13 +559,15 @@ impl Checker<'_, '_> {
             }
             Type::Tuple(elements) => elements
                 .iter()
-                .any(|e| self.type_contains_target_without_ref(target_id, e, visited)),
+                .any(|e| self.type_contains_target_without_ref(store, target_id, e, visited)),
             _ => false,
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn populate_type_alias(
         &mut self,
+        store: &mut Store,
         name: &str,
         name_span: &Span,
         generics: &[Generic],
@@ -569,13 +578,12 @@ impl Checker<'_, '_> {
         let qualified_name = self.qualify_name(name);
 
         if annotation.is_opaque() {
-            if self.is_lis() {
+            if self.is_lis(&*store) {
                 self.sink
                     .push(diagnostics::infer::opaque_type_outside_typedef(*span));
             }
 
-            let visibility = self
-                .store
+            let visibility = store
                 .get_module(&self.cursor.module_id)
                 .expect("current module must exist in store")
                 .definitions
@@ -624,7 +632,7 @@ impl Checker<'_, '_> {
                 }
             };
 
-            if self.is_lis() && self.type_definition_exists(&qualified_name) {
+            if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
                 self.sink.push(diagnostics::infer::duplicate_definition(
                     "type alias",
                     name,
@@ -632,7 +640,7 @@ impl Checker<'_, '_> {
                 ));
             }
 
-            self.store
+            store
                 .get_module_mut(&self.cursor.module_id)
                 .expect("current module must exist in store")
                 .definitions
@@ -656,11 +664,11 @@ impl Checker<'_, '_> {
         self.scopes.push();
 
         self.put_in_scope(generics);
-        self.validate_generic_bounds(generics, span);
+        self.validate_generic_bounds(&*store, generics, span);
 
-        let body_ty = self.convert_to_type(annotation, span);
+        let body_ty = self.convert_to_type(&*store, annotation, span);
 
-        if self.is_alias_body_circular(&body_ty, &qualified_name) {
+        if self.is_alias_body_circular(&*store, &body_ty, &qualified_name) {
             self.sink
                 .push(diagnostics::infer::circular_type_alias(name, *span));
         }
@@ -690,8 +698,7 @@ impl Checker<'_, '_> {
 
         self.scopes.pop();
 
-        let visibility = self
-            .store
+        let visibility = store
             .get_module(&self.cursor.module_id)
             .expect("current module must exist in store")
             .definitions
@@ -699,7 +706,7 @@ impl Checker<'_, '_> {
             .map(|definition| definition.visibility().clone())
             .unwrap_or(Visibility::Private);
 
-        if self.is_lis() && self.type_definition_exists(&qualified_name) {
+        if self.is_lis(&*store) && self.type_definition_exists(&*store, &qualified_name) {
             self.sink.push(diagnostics::infer::duplicate_definition(
                 "type alias",
                 name,
@@ -707,7 +714,7 @@ impl Checker<'_, '_> {
             ));
         }
 
-        self.store
+        store
             .get_module_mut(&self.cursor.module_id)
             .expect("current module must exist in store")
             .definitions
@@ -726,7 +733,7 @@ impl Checker<'_, '_> {
             );
     }
 
-    fn is_alias_body_circular(&self, body_ty: &Type, qualified_name: &str) -> bool {
+    fn is_alias_body_circular(&self, store: &Store, body_ty: &Type, qualified_name: &str) -> bool {
         if Self::type_contains_name(body_ty, qualified_name) {
             return true;
         }
@@ -744,7 +751,7 @@ impl Checker<'_, '_> {
             }
             seen.push(name.clone());
 
-            if let Some(Definition::TypeAlias { ty, .. }) = self.store.get_definition(&name) {
+            if let Some(Definition::TypeAlias { ty, .. }) = store.get_definition(&name) {
                 let body = ty.unwrap_forall().clone();
                 if Self::type_contains_name(&body, qualified_name) {
                     return true;

@@ -45,17 +45,17 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     }
     let ast = desugar_result.ast;
 
-    let mut checker = Checker::new(&mut store, &sink);
+    let mut checker = Checker::new(&sink);
     checker.cursor.module_id = TEST_MODULE_ID.to_string();
-    register_test_builtins(&mut checker);
-    checker.put_prelude_in_scope();
-    checker.register_types_and_values(&ast, &Visibility::Private);
+    register_test_builtins(&mut store, &mut checker);
+    checker.put_prelude_in_scope(&store);
+    checker.register_types_and_values(&mut store, &ast, &Visibility::Private);
 
     let mut typed_ast = vec![];
 
     for expression in ast {
         let type_var = checker.new_type_var();
-        let typed_expression = checker.infer_expression(expression, &type_var);
+        let typed_expression = checker.infer_expression(&mut store, expression, &type_var);
         typed_ast.push(typed_expression);
 
         if checker.failed() {
@@ -71,8 +71,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
 
     if !checker.failed() {
         let module_id = checker.cursor.module_id.clone();
-        let analysis =
-            semantics::context::AnalysisContext::new(checker.store, &checker.ufcs_methods);
+        let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
         {
             let mut ctx = semantics::validators::ValidatorContext {
                 typed_ast: &typed_ast,
@@ -105,13 +104,13 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         items: typed_ast,
     };
 
-    checker.store.store_file(TEST_MODULE_ID, typed_file);
+    store.store_file(TEST_MODULE_ID, typed_file);
 
     let lint_config = lint::LintConfig::default();
-    let module = checker.store.get_module(TEST_MODULE_ID).unwrap();
+    let module = store.get_module(TEST_MODULE_ID).unwrap();
     let file = module.files.get(&file_id).unwrap();
 
-    let go_package_names = checker.store.go_package_names.clone();
+    let go_package_names = store.go_package_names.clone();
     let lint_ctx = lint::LintContext {
         ast: &file.items,
         facts: &checker.facts,
