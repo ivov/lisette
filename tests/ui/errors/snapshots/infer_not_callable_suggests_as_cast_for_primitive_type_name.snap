@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Not callable
+   ╭─[test.lis:3:11]
+ 2 │ fn test(contents: Slice<byte>) {
+ 3 │   let _ = string(contents)
+   ·           ───┬──
+   ·              ╰── expected function, found `string`
+ 4 │ }
+   ╰────
+  help: Use `contents as string` to cast between types · code: [infer.not_callable]

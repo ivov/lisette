@@ -1,6 +1,6 @@
 use crate::LisetteDiagnostic;
 use syntax::ast::{Annotation, BinaryOperator, Span};
-use syntax::types::Type;
+use syntax::types::{SimpleKind, Type};
 
 pub fn blank_import_non_go(blank_span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
@@ -1261,13 +1261,26 @@ pub fn string_not_indexable(span: Span, receiver: &str) -> LisetteDiagnostic {
         ))
 }
 
-pub fn not_callable(ty: &Type, span: Span) -> LisetteDiagnostic {
-    let help = match (ty.get_underlying(), ty.get_name()) {
-        (Some(_), Some(name)) => format!(
-            "Only functions can be called with `()`. To convert a value, use `value as {}`",
-            name
-        ),
-        _ => "Only functions can be called with `()`".to_string(),
+pub fn not_callable(
+    ty: &Type,
+    callee_name: Option<&str>,
+    arg_name: Option<&str>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let type_name = ty.get_name();
+    let is_type_call = matches!((callee_name, type_name), (Some(c), Some(t)) if c == t);
+    let is_cast_target = ty.get_underlying().is_some()
+        || type_name.is_some_and(|n| SimpleKind::from_name(n).is_some());
+
+    let help = if is_type_call && is_cast_target {
+        let subject = arg_name.unwrap_or("value");
+        format!(
+            "Use `{} as {}` to cast between types",
+            subject,
+            type_name.unwrap()
+        )
+    } else {
+        "Only functions can be called with `()`".to_string()
     };
 
     LisetteDiagnostic::error("Not callable")

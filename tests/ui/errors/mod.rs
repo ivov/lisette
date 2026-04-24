@@ -1202,6 +1202,16 @@ fn test() {
 }
 
 #[test]
+fn infer_not_callable_suggests_as_cast_for_primitive_type_name() {
+    let input = r#"
+fn test(contents: Slice<byte>) {
+  let _ = string(contents)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_type_conversion_arity() {
     let input = r#"
 type Transformer = fn(int) -> int

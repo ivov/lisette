@@ -321,7 +321,7 @@ impl TaskState<'_> {
         };
 
         let (param_types, param_mutability, return_ty, bounds) =
-            self.extract_call_signature(store, callee_ty, args.len(), &callee_expression);
+            self.extract_call_signature(store, callee_ty, &args, &callee_expression);
 
         if self.is_panic_call(&callee_expression)
             && self.scopes.is_value_context()
@@ -617,9 +617,10 @@ impl TaskState<'_> {
         &mut self,
         store: &Store,
         callee_ty: Type,
-        arg_count: usize,
+        args: &[Expression],
         callee_expression: &Expression,
     ) -> (Vec<Type>, Vec<bool>, Type, Vec<Bound>) {
+        let arg_count = args.len();
         let callee_ty = callee_ty.resolve_in(&self.env);
         let bounds = callee_ty.get_bounds().to_vec();
         let mut param_mutability = callee_ty.get_param_mutability().to_vec();
@@ -651,8 +652,26 @@ impl TaskState<'_> {
                 (param_types, return_ty)
             }
             None => {
+                let callee_name = match callee_expression.unwrap_parens() {
+                    Expression::Identifier {
+                        value,
+                        binding_id: None,
+                        ..
+                    } => Some(value.as_str()),
+                    _ => None,
+                };
+                let arg_name = if args.len() == 1 {
+                    match args[0].unwrap_parens() {
+                        Expression::Identifier { value, .. } => Some(value.as_str()),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
                 self.sink.push(diagnostics::infer::not_callable(
                     &callee_ty,
+                    callee_name,
+                    arg_name,
                     callee_expression.get_span(),
                 ));
                 let param_types = (0..arg_count).map(|_| Type::Error).collect();
