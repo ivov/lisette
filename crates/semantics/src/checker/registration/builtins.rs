@@ -1,10 +1,10 @@
 use crate::checker::EnvResolve;
 use syntax::types::{CompoundKind, SimpleKind, Symbol, Type};
 
-use crate::checker::Checker;
+use crate::checker::TaskState;
 use crate::store::Store;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     fn builtin_qualified_name(&mut self, store: &Store, type_name: &str) -> Symbol {
         self.lookup_qualified_name(store, type_name)
             .map(Symbol::from)

@@ -7,9 +7,9 @@ use syntax::types::{Type, substitute};
 use BinaryOperator::*;
 use UnaryOperator::*;
 
-use super::super::Checker;
+use super::super::TaskState;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_unary(
         &mut self,
         store: &mut Store,
@@ -183,7 +183,7 @@ impl Checker<'_> {
         });
 
         if matches!(operator, And | Or)
-            && let Some(span) = Checker::find_propagate(&new_right_operand)
+            && let Some(span) = TaskState::find_propagate(&new_right_operand)
         {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));
@@ -279,7 +279,7 @@ impl Checker<'_> {
         });
 
         if matches!(operator, And | Or)
-            && let Some(span) = Checker::find_propagate(&new_right_operand)
+            && let Some(span) = TaskState::find_propagate(&new_right_operand)
         {
             self.sink
                 .push(diagnostics::infer::propagate_in_condition(span));

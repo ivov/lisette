@@ -1,8 +1,8 @@
 use syntax::ast::{Pattern, Span};
 
-use crate::checker::Checker;
+use crate::checker::TaskState;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(crate) fn check_select_match_arms(
         &mut self,
         match_arms: &[syntax::ast::MatchArm],

@@ -13,7 +13,7 @@ use syntax::ast::{
 use syntax::program::{Definition, File, Visibility};
 use syntax::types::{Symbol, Type};
 
-use super::Checker;
+use super::TaskState;
 use crate::store::Store;
 
 pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
@@ -62,7 +62,7 @@ pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> V
         .collect()
 }
 
-impl Checker<'_> {
+impl TaskState<'_> {
     fn definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
         store
             .get_module(&self.cursor.module_id)

@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::sync::Mutex;
 
 use syntax::ParseError;
 
@@ -6,7 +6,7 @@ use crate::LisetteDiagnostic;
 
 #[derive(Debug, Default)]
 pub struct DiagnosticSink {
-    diagnostics: RefCell<Vec<LisetteDiagnostic>>,
+    diagnostics: Mutex<Vec<LisetteDiagnostic>>,
 }
 
 impl DiagnosticSink {
@@ -15,39 +15,43 @@ impl DiagnosticSink {
     }
 
     pub fn push(&self, diagnostic: LisetteDiagnostic) {
-        self.diagnostics.borrow_mut().push(diagnostic);
+        self.diagnostics.lock().unwrap().push(diagnostic);
     }
 
     pub fn has_errors(&self) -> bool {
-        self.diagnostics.borrow().iter().any(|d| d.is_error())
+        self.diagnostics
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|d| d.is_error())
     }
 
     pub fn len(&self) -> usize {
-        self.diagnostics.borrow().len()
+        self.diagnostics.lock().unwrap().len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.diagnostics.borrow().is_empty()
+        self.diagnostics.lock().unwrap().is_empty()
     }
 
     pub fn to_vec(&self) -> Vec<LisetteDiagnostic> {
-        self.diagnostics.borrow().clone()
+        self.diagnostics.lock().unwrap().clone()
     }
 
     pub fn take(&self) -> Vec<LisetteDiagnostic> {
-        self.diagnostics.take()
+        std::mem::take(&mut *self.diagnostics.lock().unwrap())
     }
 
     pub fn truncate(&self, len: usize) {
-        self.diagnostics.borrow_mut().truncate(len);
+        self.diagnostics.lock().unwrap().truncate(len);
     }
 
     pub fn extend(&self, diagnostics: impl IntoIterator<Item = LisetteDiagnostic>) {
-        self.diagnostics.borrow_mut().extend(diagnostics);
+        self.diagnostics.lock().unwrap().extend(diagnostics);
     }
 
     pub fn extend_parse_errors(&self, errors: Vec<ParseError>) {
         let diagnostics = errors.into_iter().map(LisetteDiagnostic::from);
-        self.diagnostics.borrow_mut().extend(diagnostics);
+        self.diagnostics.lock().unwrap().extend(diagnostics);
     }
 }

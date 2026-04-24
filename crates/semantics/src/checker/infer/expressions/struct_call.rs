@@ -7,9 +7,9 @@ use syntax::ast::{Expression, Span, StructFieldAssignment};
 use syntax::program::Definition;
 use syntax::types::{SubstitutionMap, Type, substitute};
 
-use super::super::Checker;
+use super::super::TaskState;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_struct_call(
         &mut self,
         store: &mut Store,

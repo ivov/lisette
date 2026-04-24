@@ -81,7 +81,8 @@ impl ImportState {
 /// These never change once populated, so no invalidation needed.
 type BuiltinCache = HashMap<String, Type>;
 
-pub struct Checker<'s> {
+/// Per-task mutable state. Paired with `AnalysisContext` (shared read-only view).
+pub struct TaskState<'s> {
     pub env: TypeEnv,
     pub scopes: Scopes,
     pub cursor: Cursor,
@@ -101,7 +102,7 @@ pub struct Checker<'s> {
     pub typed_files: Vec<(String, File)>,
 }
 
-impl<'s> Checker<'s> {
+impl<'s> TaskState<'s> {
     pub fn new(sink: &'s DiagnosticSink) -> Self {
         Self {
             env: TypeEnv::new(),

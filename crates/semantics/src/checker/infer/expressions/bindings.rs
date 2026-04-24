@@ -5,7 +5,7 @@ use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Literal, Span, Visibility};
 use syntax::types::Type;
 
-use super::super::Checker;
+use super::super::TaskState;
 
 enum ConstInitReject {
     NotSimple,
@@ -30,7 +30,7 @@ fn classify_const_init(expression: &Expression) -> Option<ConstInitReject> {
     }
 }
 
-impl Checker<'_> {
+impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_const_binding(
         &mut self,

@@ -5,11 +5,11 @@ use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::{Definition, DotAccessKind, NativeTypeKind, ReceiverCoercion};
 use syntax::types::{Symbol, Type, substitute, unqualified_name};
 
-use super::super::Checker;
+use super::super::TaskState;
 use super::super::addressability::check_is_non_addressable;
 use super::primitives::contains_deref;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_dot_access_or_qualified_path(
         &mut self,
         store: &mut Store,
@@ -155,7 +155,7 @@ struct DotAccessResolutionArgs<'a> {
     expected_ty: &'a Type,
 }
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_dot_access(
         &mut self,
         store: &mut Store,

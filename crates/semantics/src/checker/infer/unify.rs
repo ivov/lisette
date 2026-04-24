@@ -5,7 +5,7 @@ use diagnostics::LisetteDiagnostic;
 use syntax::ast::Span;
 use syntax::types::{Bound, Type, TypeVarId};
 
-use super::super::Checker;
+use super::super::TaskState;
 use crate::checker::type_env::VarState;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,7 +18,7 @@ pub enum UnifyError {
     AlreadyReported,
 }
 
-impl Checker<'_> {
+impl TaskState<'_> {
     /// Make two types equal.
     ///
     /// - For two concrete types, verifies that they match.

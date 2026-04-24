@@ -3,9 +3,9 @@ use crate::store::Store;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
 use syntax::types::Type;
 
-use super::super::Checker;
+use super::super::TaskState;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_literal(
         &mut self,
         store: &mut Store,

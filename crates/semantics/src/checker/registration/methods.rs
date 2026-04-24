@@ -7,10 +7,10 @@ use syntax::program::{Definition, Interface, Visibility};
 use syntax::types::{Symbol, Type};
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
-use crate::checker::Checker;
+use crate::checker::TaskState;
 use crate::store::Store;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     /// Register an instance method on the receiver type's definition.
     /// Returns `false` if the receiver was not found or is a ValueEnum (caller should skip).
     #[allow(clippy::too_many_arguments)]

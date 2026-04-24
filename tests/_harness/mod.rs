@@ -17,7 +17,7 @@ pub use infer::{InferResult, infer, infer_module};
 pub const TEST_MODULE_ID: &str = "test";
 
 use diagnostics::DiagnosticSink;
-use semantics::checker::Checker;
+use semantics::checker::TaskState;
 use semantics::prelude::parse_and_register_prelude;
 use semantics::store::Store;
 use syntax::program::{Definition, Visibility};
@@ -28,7 +28,7 @@ pub fn init_prelude(store: &mut Store) {
     parse_and_register_prelude(store, &sink);
 }
 
-pub fn register_test_builtins(store: &mut Store, _checker: &mut Checker) {
+pub fn register_test_builtins(store: &mut Store, _checker: &mut TaskState) {
     let module_id = "prelude";
     let module = store
         .modules

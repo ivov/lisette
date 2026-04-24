@@ -13,7 +13,7 @@ use crate::cache::{
     hash_module_sources, is_cache_disabled, prelude as prelude_cache, register_cached_module,
     save_module_cache, try_load_cache,
 };
-use crate::checker::Checker;
+use crate::checker::TaskState;
 use crate::facts::Facts;
 use crate::lint;
 use crate::loader::Loader;
@@ -109,7 +109,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     let check_go_files = input.compile_phase == CompilePhase::Emit;
 
     let (mut facts, coercions, resolutions, cached_modules, compiled_modules, ufcs_methods) = {
-        let mut checker = Checker::new(&sink);
+        let mut checker = TaskState::new(&sink);
         checker
             .ufcs_methods
             .extend(crate::prelude::compute_prelude_ufcs(&store));

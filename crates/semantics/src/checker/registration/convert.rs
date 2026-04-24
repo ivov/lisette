@@ -6,10 +6,10 @@ use syntax::ast::{Annotation, Generic, Span};
 use syntax::program::Definition;
 use syntax::types::{SubstitutionMap, Type, substitute};
 
-use crate::checker::Checker;
+use crate::checker::TaskState;
 use crate::store::Store;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub fn convert_to_type(&mut self, store: &Store, annotation: &Annotation, span: &Span) -> Type {
         match annotation {
             Annotation::Unknown => self.new_type_var(),

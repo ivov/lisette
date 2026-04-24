@@ -3,10 +3,10 @@ use crate::store::Store;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
 use syntax::types::Type;
 
-use super::super::Checker;
+use super::super::TaskState;
 use crate::validators::temp_producing::is_temp_producing;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_select(
         &mut self,
         store: &mut Store,
@@ -164,7 +164,7 @@ impl Checker<'_> {
 
             if variant_name == "Some"
                 && fields.len() == 1
-                && !Checker::is_irrefutable_select_pattern(&fields[0])
+                && !TaskState::is_irrefutable_select_pattern(&fields[0])
             {
                 self.sink
                     .push(diagnostics::infer::select_receive_refutable_pattern(

@@ -5,9 +5,9 @@ use syntax::ast::Span;
 use syntax::program::{Definition, Interface, MethodSignatures};
 use syntax::types::{SubstitutionMap, Type, substitute};
 
-use super::super::Checker;
+use super::super::TaskState;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn satisfies_interface(
         &mut self,
         store: &Store,

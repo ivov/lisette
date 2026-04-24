@@ -7,10 +7,10 @@ use syntax::program::{Definition, MethodSignatures, Visibility};
 use syntax::types::Type;
 
 use super::enum_variant_constructor_type;
-use crate::checker::Checker;
+use crate::checker::TaskState;
 use crate::store::Store;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn populate_enum(
         &mut self,

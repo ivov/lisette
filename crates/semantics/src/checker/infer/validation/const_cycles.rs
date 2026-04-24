@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use ecow::EcoString;
 use syntax::ast::{Expression, Span};
 
-use crate::checker::Checker;
+use crate::checker::TaskState;
 use crate::store::Store;
 
 struct ConstEntry<'a> {
@@ -12,7 +12,7 @@ struct ConstEntry<'a> {
     body: &'a Expression,
 }
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub fn check_const_cycles(&mut self, store: &Store, items_per_file: &[&[Expression]]) {
         let module_const_names_empty = store
             .get_module(&self.cursor.module_id)

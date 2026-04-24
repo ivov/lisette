@@ -6,13 +6,13 @@ mod validation;
 
 use rustc_hash::FxHashMap as HashMap;
 
-use super::Checker;
+use super::TaskState;
 use super::freeze::FreezeFolder;
 use crate::store::Store;
 use syntax::ast::Expression;
 use syntax::program::{File, FileImport};
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub fn infer_module(&mut self, store: &mut Store, module_id: &str) {
         self.cursor.module_id = module_id.to_string();
 

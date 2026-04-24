@@ -1,6 +1,6 @@
 use diagnostics::{DiagnosticSink, LisetteDiagnostic};
 use semantics::{
-    checker::Checker, module_graph::build_module_graph, pattern_analysis, store::Store,
+    checker::TaskState, module_graph::build_module_graph, pattern_analysis, store::Store,
 };
 use stdlib::get_go_stdlib_typedef;
 use syntax::{ast::Expression, types::Type};
@@ -47,7 +47,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     init_prelude(&mut store);
 
     let ast = {
-        let mut checker = Checker::new(&sink);
+        let mut checker = TaskState::new(&sink);
         checker
             .ufcs_methods
             .extend(semantics::prelude::compute_prelude_ufcs(&store));

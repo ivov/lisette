@@ -6,7 +6,7 @@ use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
 use syntax::program::Visibility;
 use syntax::types::Type;
 
-use super::super::Checker;
+use super::super::TaskState;
 use super::super::addressability::{
     check_is_non_addressable, check_non_addressable_assignment_target,
 };
@@ -87,7 +87,7 @@ fn contains_stored_reference_to(expression: &Expression, var_name: &str) -> bool
     }
 }
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_paren(
         &mut self,
         store: &mut Store,

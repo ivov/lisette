@@ -26,11 +26,13 @@ impl<'r> AnalysisContext<'r> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use diagnostics::DiagnosticSink;
 
     #[test]
     fn analysis_context_is_send_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<AnalysisContext<'_>>();
         assert_send_sync::<&Store>();
+        assert_send_sync::<&DiagnosticSink>();
     }
 }

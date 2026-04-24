@@ -1,5 +1,5 @@
 use diagnostics::{DiagnosticSink, LisetteDiagnostic};
-use semantics::{checker::Checker, lint, pattern_analysis, store::Store};
+use semantics::{checker::TaskState, lint, pattern_analysis, store::Store};
 use syntax::{
     desugar,
     lex::Lexer,
@@ -45,7 +45,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     }
     let ast = desugar_result.ast;
 
-    let mut checker = Checker::new(&sink);
+    let mut checker = TaskState::new(&sink);
     checker.cursor.module_id = TEST_MODULE_ID.to_string();
     register_test_builtins(&mut store, &mut checker);
     checker.put_prelude_in_scope(&store);

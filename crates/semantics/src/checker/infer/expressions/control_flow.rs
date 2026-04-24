@@ -4,7 +4,7 @@ use syntax::ast::BindingKind;
 use syntax::ast::{Binding, Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::Type;
 
-use super::super::Checker;
+use super::super::TaskState;
 
 /// Result of reconciling branch types. `Widened` means the common type is a
 /// later branch's type (a supertype of the first), not the first branch's type.
@@ -14,7 +14,7 @@ enum BranchReconciliation {
     Failed,
 }
 
-impl Checker<'_> {
+impl TaskState<'_> {
     fn reconcile_branch_types(
         &mut self,
         store: &Store,

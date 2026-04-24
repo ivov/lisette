@@ -16,10 +16,10 @@ pub mod struct_call;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
-use super::super::Checker;
+use super::super::TaskState;
 use crate::store::Store;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub fn infer_expression(
         &mut self,
         store: &mut Store,

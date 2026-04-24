@@ -12,7 +12,7 @@ use syntax::types::{Type, substitute};
 use crate::checker::EnvResolve;
 use crate::store::Store;
 
-use super::super::Checker;
+use super::super::TaskState;
 pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
     match pattern {
         Pattern::Identifier { identifier, span } => vec![(identifier.to_string(), *span)],
@@ -50,7 +50,7 @@ pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)>
     }
 }
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_pattern(
         &mut self,
         store: &mut Store,

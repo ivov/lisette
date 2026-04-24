@@ -5,10 +5,10 @@ use syntax::ast::{Annotation, Expression, Generic, ParentInterface, Span};
 use syntax::program::Definition;
 use syntax::types::Type;
 
-use super::super::Checker;
+use super::super::TaskState;
 use crate::store::Store;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_impl_block(
         &mut self,
         store: &mut Store,

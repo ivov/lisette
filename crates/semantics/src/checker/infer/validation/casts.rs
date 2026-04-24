@@ -3,9 +3,9 @@ use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
-use crate::checker::Checker;
+use crate::checker::TaskState;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     /// Validates that a cast from source_ty to target_ty is allowed.
     /// Pushes a diagnostic if the cast is invalid.
     ///

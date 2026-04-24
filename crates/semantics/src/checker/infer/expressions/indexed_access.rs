@@ -3,9 +3,9 @@ use crate::store::Store;
 use syntax::ast::{Expression, Span};
 use syntax::types::Type;
 
-use super::super::super::Checker;
+use super::super::super::TaskState;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     /// Returns `true` if valid (no error emitted), `false` if an error was emitted.
     pub(crate) fn check_slice_index_type(
         &mut self,

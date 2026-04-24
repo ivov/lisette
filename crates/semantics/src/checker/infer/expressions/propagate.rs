@@ -7,9 +7,9 @@ use syntax::ast::{Expression, Span};
 use syntax::program::Visibility;
 use syntax::types::Type;
 
-use super::super::Checker;
+use super::super::TaskState;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_propagate(
         &mut self,
         store: &mut Store,

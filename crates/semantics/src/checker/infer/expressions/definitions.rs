@@ -1,10 +1,10 @@
 use syntax::ast::Expression;
 use syntax::program::Definition;
 
-use super::super::super::Checker;
+use super::super::super::TaskState;
 use crate::store::Store;
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_struct_definition(
         &mut self,
         store: &Store,

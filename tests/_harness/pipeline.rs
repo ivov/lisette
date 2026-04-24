@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{DiagnosticSink, LisetteDiagnostic};
-use semantics::{checker::Checker, pattern_analysis, store::Store};
+use semantics::{checker::TaskState, pattern_analysis, store::Store};
 use stdlib::get_go_stdlib_typedef;
 use syntax::{
     ast::Expression,
@@ -100,7 +100,7 @@ impl CompiledTest {
             ufcs_methods,
             go_package_names,
         ) = {
-            let mut checker = Checker::new(&sink);
+            let mut checker = TaskState::new(&sink);
             checker
                 .ufcs_methods
                 .extend(semantics::prelude::compute_prelude_ufcs(&store));

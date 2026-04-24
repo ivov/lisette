@@ -6,12 +6,12 @@ use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, StructKind};
 use syntax::program::{CallKind, Definition, NativeTypeKind};
 use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
-use super::super::Checker;
+use super::super::TaskState;
 use super::primitives::contains_deref;
 use crate::checker::scopes::UseContext;
 use crate::store::{ENTRY_MODULE_ID, Store};
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(crate) fn check_call_arity(
         &mut self,
         param_types: &[Type],
@@ -91,7 +91,7 @@ fn has_numeric_member_in_chain(expression: &Expression) -> bool {
     false
 }
 
-impl Checker<'_> {
+impl TaskState<'_> {
     pub(super) fn infer_function(
         &mut self,
         store: &mut Store,
