@@ -1,0 +1,39 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: fr\"\\d+\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 7,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Raw format strings are currently not supported",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 0,
+                        byte_length: 7,
+                    },
+                    "not yet implemented",
+                ),
+            ],
+            help: Some(
+                "Raw format strings are not yet implemented. When supported, the canonical spelling will be `rf\"...\"`. For now, use a regular f-string with escaped backslashes",
+            ),
+            note: None,
+            code: "lex.unsupported_raw_format_string",
+        },
+    ],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

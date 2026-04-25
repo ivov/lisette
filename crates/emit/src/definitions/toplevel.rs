@@ -96,7 +96,7 @@ impl Emitter<'_> {
                     | Literal::Float { .. }
                     | Literal::Imaginary(_)
                     | Literal::Boolean(_)
-                    | Literal::String(_)
+                    | Literal::String { .. }
                     | Literal::Char(_)
             ),
             Expression::Identifier { value, .. } => {

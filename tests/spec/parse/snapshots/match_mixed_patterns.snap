@@ -253,9 +253,10 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Zero",
-                                        ),
+                                        literal: String {
+                                            value: "Zero",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -318,9 +319,10 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Number",
-                                        ),
+                                        literal: String {
+                                            value: "Number",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -419,9 +421,10 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Pair on Y axis",
-                                        ),
+                                        literal: String {
+                                            value: "Pair on Y axis",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -496,9 +499,10 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Some pair",
-                                        ),
+                                        literal: String {
+                                            value: "Some pair",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -527,9 +531,10 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 identifier: "Data.Text",
                                 fields: [
                                     Literal {
-                                        literal: String(
-                                            "end",
-                                        ),
+                                        literal: String {
+                                            value: "end",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -566,9 +571,10 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "End marker",
-                                        ),
+                                        literal: String {
+                                            value: "End marker",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -630,9 +636,10 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Some text",
-                                        ),
+                                        literal: String {
+                                            value: "Some text",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -686,9 +693,10 @@ description: "input: \nenum Data { Int(int), Pair((int, int)), Text(string), Not
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Nothing",
-                                        ),
+                                        literal: String {
+                                            value: "Nothing",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

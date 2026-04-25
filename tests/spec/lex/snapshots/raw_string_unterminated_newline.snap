@@ -1,0 +1,75 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: r\"abc\nlet x = 1"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: RawString,
+            text: "r\"abc",
+            byte_offset: 0,
+            byte_length: 5,
+        },
+        Token {
+            kind: Semicolon,
+            text: "",
+            byte_offset: 5,
+            byte_length: 0,
+        },
+        Token {
+            kind: Let,
+            text: "let",
+            byte_offset: 6,
+            byte_length: 3,
+        },
+        Token {
+            kind: Identifier,
+            text: "x",
+            byte_offset: 10,
+            byte_length: 1,
+        },
+        Token {
+            kind: Equal,
+            text: "=",
+            byte_offset: 12,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "1",
+            byte_offset: 14,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 15,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Unterminated raw string literal",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 0,
+                        byte_length: 5,
+                    },
+                    "raw string not closed",
+                ),
+            ],
+            help: Some(
+                "Add a closing double quote",
+            ),
+            note: None,
+            code: "lex.unterminated_raw_string",
+        },
+    ],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

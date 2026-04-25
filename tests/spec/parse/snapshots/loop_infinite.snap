@@ -40,9 +40,10 @@ description: "input: \nfn test() {\n  loop {\n    print(\"forever\");\n  }\n}\n"
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "forever",
-                                        ),
+                                        literal: String {
+                                            value: "forever",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

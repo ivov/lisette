@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unnecessary raw string
+   ╭─[test.lis:3:13]
+ 2 │ fn main() {
+ 3 │   let msg = r"";
+   ·             ─┬─
+   ·              ╰── no backslashes
+ 4 │   msg
+   ╰────
+  help: Remove the `r` prefix. A string without backslashes does not need to be raw · code: [lint.unnecessary_raw_string]

@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { let re = r\"([a-zA-Z])(\\d)\" }"
+---
+fn test() {
+  let re = r"([a-zA-Z])(\d)"
+}

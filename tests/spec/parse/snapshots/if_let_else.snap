@@ -164,9 +164,10 @@ description: "input: \nfn test(opt: Option<int>) {\n  if let Some(x) = opt {\n  
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "none",
-                                        ),
+                                        literal: String {
+                                            value: "none",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

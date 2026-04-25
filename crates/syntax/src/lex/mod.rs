@@ -48,6 +48,10 @@ impl<'source> Lexer<'source> {
                 break;
             }
 
+            if self.try_consume_unsupported_raw_variant(self.input.len()) {
+                continue;
+            }
+
             if self.current_byte() == b'f' && self.peek_byte() == b'"' {
                 let mut fstring_tokens = self.lex_format_string_tokens();
                 fstring_tokens.reverse();
@@ -102,6 +106,7 @@ impl<'source> Lexer<'source> {
                 | TokenKind::Imaginary
                 | TokenKind::Float
                 | TokenKind::String
+                | TokenKind::RawString
                 | TokenKind::Char
                 | TokenKind::Boolean
                 | TokenKind::RightParen
@@ -179,6 +184,7 @@ impl<'source> Lexer<'source> {
         let c = self.current_char();
         match c {
             '0'..='9' => self.lex_number(),
+            'r' if self.peek_byte() == b'"' => self.lex_raw_string_literal(),
             _ if c.is_alphabetic() || c == '_' => self.lex_identifier(),
             '"' => self.lex_string_literal(),
             '`' => self.lex_backtick_literal(),
@@ -211,6 +217,16 @@ impl<'source> Lexer<'source> {
     fn peek_byte(&self) -> u8 {
         if self.current_offset + 1 < self.input_bytes.len() {
             self.input_bytes[self.current_offset + 1]
+        } else {
+            0
+        }
+    }
+
+    #[inline]
+    fn peek_byte_at(&self, n: usize) -> u8 {
+        let offset = self.current_offset + n;
+        if offset < self.input_bytes.len() {
+            self.input_bytes[offset]
         } else {
             0
         }
@@ -883,6 +899,112 @@ impl<'source> Lexer<'source> {
         }
     }
 
+    fn lex_raw_string_literal(&mut self) -> Token<'source> {
+        let start_offset = self.current_offset;
+        self.next(); // consume 'r'
+        self.next(); // consume opening '"'
+
+        let mut terminated = false;
+        while !self.at_eof() {
+            let byte = self.current_byte();
+            if byte == b'"' {
+                terminated = true;
+                self.next();
+                break;
+            } else if byte == b'\n' {
+                break;
+            } else if byte == 0 {
+                self.error_disallowed_byte_in_raw_string(self.current_offset, byte);
+                self.next();
+                continue;
+            }
+            self.next();
+        }
+
+        let end_offset = self.current_offset;
+        let length = end_offset - start_offset;
+
+        if !terminated {
+            self.error_unterminated_raw_string(start_offset, length);
+        }
+
+        Token {
+            kind: TokenKind::RawString,
+            text: &self.input[start_offset..end_offset],
+            byte_offset: start_offset as u32,
+            byte_length: length as u32,
+        }
+    }
+
+    fn try_consume_unsupported_raw_variant(&mut self, end: usize) -> bool {
+        let raw_format_prefix = if self.current_byte() == b'r'
+            && self.peek_byte() == b'f'
+            && self.peek_byte_at(2) == b'"'
+        {
+            Some("rf")
+        } else if self.current_byte() == b'f'
+            && self.peek_byte() == b'r'
+            && self.peek_byte_at(2) == b'"'
+        {
+            Some("fr")
+        } else {
+            None
+        };
+        if let Some(prefix) = raw_format_prefix {
+            let start = self.current_offset;
+            self.skip(3);
+            while self.current_offset < end
+                && self.current_byte() != b'"'
+                && self.current_byte() != b'\n'
+            {
+                self.next();
+            }
+            if self.current_offset < end && self.current_byte() == b'"' {
+                self.next();
+            }
+            let length = self.current_offset - start;
+            self.error_unsupported_raw_format_string(start, length, prefix);
+            return true;
+        }
+
+        if self.current_byte() == b'r' && self.peek_byte() == b'#' {
+            let mut hash_count = 0usize;
+            let mut probe = self.current_offset + 1;
+            while probe < self.input_bytes.len() && self.input_bytes[probe] == b'#' {
+                hash_count += 1;
+                probe += 1;
+            }
+            if hash_count > 0 && probe < self.input_bytes.len() && self.input_bytes[probe] == b'"' {
+                let start = self.current_offset;
+                self.skip(1 + hash_count + 1);
+                loop {
+                    if self.current_offset >= end || self.current_byte() == b'\n' {
+                        break;
+                    }
+                    if self.current_byte() == b'"' {
+                        let mut closer_matches = true;
+                        for i in 1..=hash_count {
+                            if self.peek_byte_at(i) != b'#' {
+                                closer_matches = false;
+                                break;
+                            }
+                        }
+                        if closer_matches {
+                            self.skip(1 + hash_count);
+                            break;
+                        }
+                    }
+                    self.next();
+                }
+                let length = self.current_offset - start;
+                self.error_unsupported_hash_delimited_raw_string(start, length);
+                return true;
+            }
+        }
+
+        false
+    }
+
     fn push_format_string_text_if_needed(
         &self,
         tokens: &mut Vec<Token<'source>>,
@@ -932,12 +1054,28 @@ impl<'source> Lexer<'source> {
                 break;
             }
 
+            if self.try_consume_unsupported_raw_variant(interpolation_end) {
+                continue;
+            }
+
             if self.current_byte() == b'f' && self.peek_byte() == b'"' {
                 let mut fstring_tokens = self.lex_format_string_tokens();
                 tokens.append(&mut fstring_tokens);
             } else if self.current_byte() == b'\\' && self.peek_byte() == b'"' {
                 self.error_escaped_quote_in_interpolation(self.current_offset);
                 self.skip(2);
+            } else if self.current_byte() == b'r' && self.peek_byte() == b'"' {
+                self.error_raw_string_in_interpolation(self.current_offset);
+                self.skip(2);
+                while self.current_offset < interpolation_end
+                    && self.current_byte() != b'"'
+                    && self.current_byte() != b'\n'
+                {
+                    self.next();
+                }
+                if self.current_offset < interpolation_end && self.current_byte() == b'"' {
+                    self.next();
+                }
             } else {
                 let token = self.create_token();
                 tokens.push(token);

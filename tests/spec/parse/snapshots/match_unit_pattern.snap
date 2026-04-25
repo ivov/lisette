@@ -89,9 +89,10 @@ description: "input: \nfn test(val: ()) {\n  match val {\n    () => print(\"It's
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "It's unit!",
-                                        ),
+                                        literal: String {
+                                            value: "It's unit!",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

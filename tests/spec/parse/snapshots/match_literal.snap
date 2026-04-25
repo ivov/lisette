@@ -93,9 +93,10 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "OK",
-                                        ),
+                                        literal: String {
+                                            value: "OK",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -150,9 +151,10 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Not Found",
-                                        ),
+                                        literal: String {
+                                            value: "Not Found",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -200,9 +202,10 @@ description: "input: \nfn test(code: int) {\n  match code {\n    200 => print(\"
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Other",
-                                        ),
+                                        literal: String {
+                                            value: "Other",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

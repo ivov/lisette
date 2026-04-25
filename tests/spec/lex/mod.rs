@@ -813,3 +813,159 @@ fn no_asi_before_closing_bracket() {
 ]";
     assert_lex_snapshot!(input);
 }
+
+#[test]
+fn raw_string_empty() {
+    let input = "r\"\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_simple() {
+    let input = "r\"hello\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_with_backslash() {
+    let input = "r\"a\\b\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_with_regex() {
+    let input = "r\"([a-zA-Z])(\\d)\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_with_windows_path() {
+    let input = "r\"C:\\Users\\me\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_with_escape_like_content() {
+    let input = "r\"\\n\\t\\u{1234}\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_unterminated_eof() {
+    let input = "r\"abc";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_unterminated_newline() {
+    let input = "r\"abc\nlet x = 1";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_followed_by_string() {
+    let input = "r\"a\"\"b\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn identifier_r_not_raw_string() {
+    let input = "let r = 1";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn identifier_r_followed_by_string_with_newline() {
+    let input = "r\n\"hello\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_in_fstring_interpolation_rejected() {
+    let input = "f\"{r\"\\d\"}\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_in_nested_fstring_interpolation_rejected() {
+    let input = "f\"{f\"{r\"x\"}\"}\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_in_fstring_boundary_scanner_alignment() {
+    let input = "f\"{r\"\\d\"}\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn raw_string_nul_byte_rejected() {
+    let input = "r\"a\0b\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_raw_format_string_fr() {
+    let input = "fr\"abc\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_raw_format_string_rf() {
+    let input = "rf\"abc\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_raw_format_string_suppresses_inner_cascade() {
+    let input = "fr\"\\d+\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_hash_delimited_raw_string_single() {
+    let input = "r#\"foo\"#";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_hash_delimited_raw_string_double() {
+    let input = "r##\"foo\"##";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_hash_delimited_raw_string_with_embedded_quote() {
+    let input = "r#\"foo \"bar\" baz\"#";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_hash_delimited_raw_string_suppresses_escape_cascade() {
+    let input = "r#\"\\d+\"#";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn r_followed_by_hash_without_quote_is_identifier() {
+    let input = "let r = 1; r#";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_rf_in_fstring_interpolation() {
+    let input = "f\"{rf\"abc\"}\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_fr_in_fstring_interpolation() {
+    let input = "f\"{fr\"abc\"}\"";
+    assert_lex_snapshot!(input);
+}
+
+#[test]
+fn unsupported_hash_delimited_in_fstring_interpolation() {
+    let input = "f\"{r#\"abc\"#}\"";
+    assert_lex_snapshot!(input);
+}

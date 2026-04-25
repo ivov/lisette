@@ -5169,6 +5169,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "raw_string_literal"
+        },
+        {
+          "type": "SYMBOL",
           "name": "char_literal"
         },
         {
@@ -5199,6 +5203,10 @@
         {
           "type": "SYMBOL",
           "name": "string_literal"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "raw_string_literal"
         },
         {
           "type": "SYMBOL",
@@ -5329,6 +5337,26 @@
           }
         }
       ]
+    },
+    "raw_string_literal": {
+      "type": "TOKEN",
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "r\""
+          },
+          {
+            "type": "PATTERN",
+            "value": "[^\"\\n]*"
+          },
+          {
+            "type": "STRING",
+            "value": "\""
+          }
+        ]
+      }
     },
     "format_string": {
       "type": "SEQ",
@@ -5626,5 +5654,6 @@
     "_literal_pattern",
     "_declaration_statement",
     "_pattern"
-  ]
+  ],
+  "reserved": {}
 }

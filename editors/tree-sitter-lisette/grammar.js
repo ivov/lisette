@@ -946,6 +946,7 @@ module.exports = grammar({
 
     _literal: $ => choice(
       $.string_literal,
+      $.raw_string_literal,
       $.char_literal,
       $.boolean_literal,
       $.integer_literal,
@@ -956,6 +957,7 @@ module.exports = grammar({
 
     _literal_pattern: $ => choice(
       $.string_literal,
+      $.raw_string_literal,
       $.char_literal,
       $.boolean_literal,
       $.integer_literal,
@@ -987,6 +989,8 @@ module.exports = grammar({
       )),
       token.immediate('"'),
     ),
+
+    raw_string_literal: _ => token(seq('r"', /[^"\n]*/, '"')),
 
     format_string: $ => seq(
       'f"',

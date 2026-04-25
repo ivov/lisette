@@ -40,9 +40,10 @@ description: "input: \nfn test() {\n  task {\n    print(\"concurrent task\");\n 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "concurrent task",
-                                        ),
+                                        literal: String {
+                                            value: "concurrent task",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

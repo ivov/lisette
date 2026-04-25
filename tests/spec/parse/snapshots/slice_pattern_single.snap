@@ -110,9 +110,10 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [x] =>
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "single",
-                                        ),
+                                        literal: String {
+                                            value: "single",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -173,9 +174,10 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [x] =>
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "other",
-                                        ),
+                                        literal: String {
+                                            value: "other",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

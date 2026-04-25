@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Unnecessary raw string
+   ╭─[test.lis:4:21]
+ 3 │   let s = "hello"
+ 4 │   let _ = match s { r"hello" => 1, _ => 0 }
+   ·                     ────┬───
+   ·                         ╰── no backslashes
+ 5 │ }
+   ╰────
+  help: Remove the `r` prefix. A string without backslashes does not need to be raw · code: [lint.unnecessary_raw_string]

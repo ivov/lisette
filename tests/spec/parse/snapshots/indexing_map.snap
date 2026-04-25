@@ -97,9 +97,10 @@ description: "input: \nfn test(data: Map<string, bool>) {\n  let active = data[\
                             qualified: None,
                         },
                         index: Literal {
-                            literal: String(
-                                "user_status",
-                            ),
+                            literal: String {
+                                value: "user_status",
+                                raw: false,
+                            },
                             ty: Var {
                                 id: uninferred,
                             },

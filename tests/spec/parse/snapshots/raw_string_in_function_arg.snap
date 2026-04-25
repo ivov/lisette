@@ -1,0 +1,85 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() { f(r\"C:\\Users\\me\"); }\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Var {
+            id: uninferred,
+        },
+        visibility: Private,
+        body: Block {
+            items: [
+                Call {
+                    expression: Identifier {
+                        value: "f",
+                        ty: Var {
+                            id: uninferred,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 13,
+                            byte_length: 1,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    args: [
+                        Literal {
+                            literal: String {
+                                value: "C:\\Users\\me",
+                                raw: true,
+                            },
+                            ty: Var {
+                                id: uninferred,
+                            },
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 15,
+                                byte_length: 14,
+                            },
+                        },
+                    ],
+                    spread: None,
+                    type_args: [],
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 13,
+                        byte_length: 17,
+                    },
+                    call_kind: None,
+                },
+            ],
+            ty: Var {
+                id: uninferred,
+            },
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 22,
+            },
+        },
+        ty: Var {
+            id: uninferred,
+        },
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 32,
+        },
+    },
+]

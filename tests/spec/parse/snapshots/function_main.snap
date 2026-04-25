@@ -194,9 +194,10 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                         },
                     },
                     value: Literal {
-                        literal: String(
-                            "Lisette",
-                        ),
+                        literal: String {
+                            value: "Lisette",
+                            raw: false,
+                        },
                         ty: Var {
                             id: uninferred,
                         },
@@ -309,9 +310,10 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Correct!",
-                                        ),
+                                        literal: String {
+                                            value: "Correct!",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -359,9 +361,10 @@ description: "input: \nfn main() {\n   let total = 7 + 5;\n   let is_active = tr
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Incorrect!",
-                                        ),
+                                        literal: String {
+                                            value: "Incorrect!",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

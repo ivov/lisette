@@ -79,6 +79,7 @@ impl<'source> Parser<'source> {
             Float => self.parse_float_pattern(),
             Boolean => self.parse_boolean_pattern(),
             String => self.parse_string_pattern(),
+            RawString => self.parse_string_pattern(),
             Char => self.parse_char_pattern(),
 
             Imaginary => {
@@ -238,15 +239,28 @@ impl<'source> Parser<'source> {
     fn parse_string_pattern(&mut self) -> Pattern {
         let start = self.current_token();
         let s = start.text;
+        let kind = start.kind;
         self.next();
-        let s_stripped = if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
-            s[1..s.len() - 1].to_string()
+        let (value, raw) = if kind == crate::lex::TokenKind::RawString {
+            let stripped = if s.len() >= 3 && s.starts_with("r\"") && s.ends_with('"') {
+                s[2..s.len() - 1].to_string()
+            } else if s.len() >= 2 && s.starts_with("r\"") {
+                s[2..].to_string()
+            } else {
+                s.to_string()
+            };
+            (stripped, true)
         } else {
-            s.to_string()
+            let stripped = if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
+                s[1..s.len() - 1].to_string()
+            } else {
+                s.to_string()
+            };
+            (stripped, false)
         };
 
         Pattern::Literal {
-            literal: Literal::String(s_stripped),
+            literal: Literal::String { value, raw },
             ty: Type::uninferred(),
             span: self.span_from_tokens(start),
         }
@@ -704,6 +718,7 @@ impl<'source> Parser<'source> {
                 | Float
                 | Boolean
                 | String
+                | RawString
                 | Char
                 | LeftParen
                 | LeftSquareBracket

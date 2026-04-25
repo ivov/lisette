@@ -88,9 +88,10 @@ description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -922337
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "min",
-                                ),
+                                literal: String {
+                                    value: "min",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -110,9 +111,10 @@ description: "input: \nfn classify(x: int) -> string {\n  match x {\n    -922337
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "other",
-                                ),
+                                literal: String {
+                                    value: "other",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },

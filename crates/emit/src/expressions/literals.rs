@@ -37,9 +37,10 @@ impl Emitter<'_> {
                 }
             }
             Literal::Boolean(b) => b.to_string(),
-            Literal::String(s) => {
-                format!("\"{}\"", convert_escape_sequences(s))
+            Literal::String { value, raw: false } => {
+                format!("\"{}\"", convert_escape_sequences(value))
             }
+            Literal::String { value, raw: true } => emit_raw_string(value),
             Literal::Char(c) => {
                 format!("'{}'", convert_escape_sequences(c))
             }
@@ -132,6 +133,20 @@ impl Emitter<'_> {
             return format!("fmt.Sprint({})", args[0]);
         }
         format!("fmt.Sprintf(\"{}\", {})", format_string, args.join(", "))
+    }
+}
+
+pub(crate) fn emit_raw_string(value: &str) -> String {
+    // Go discards `\r` from backtick raw strings, so we must fall back to
+    // double-quoted form when the content contains CR.
+    if !value.contains('`') && !value.contains('\r') {
+        format!("`{}`", value)
+    } else {
+        let escaped = value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\r', "\\r");
+        format!("\"{}\"", escaped)
     }
 }
 

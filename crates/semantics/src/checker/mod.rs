@@ -141,7 +141,7 @@ impl<'s> TaskState<'s> {
                 Literal::Integer { .. } => Some(self.type_int()),
                 Literal::Float { .. } => Some(self.type_float()),
                 Literal::Boolean(_) => Some(self.type_bool()),
-                Literal::String(_) => Some(self.type_string()),
+                Literal::String { .. } => Some(self.type_string()),
                 Literal::Char(_) => Some(self.type_char()),
                 _ => None,
             },

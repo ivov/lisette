@@ -1,0 +1,152 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() {\n  match s {\n    r\"\\d+\" => 1,\n    \"plain\" => 2,\n    _ => 0,\n  }\n}\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Var {
+            id: uninferred,
+        },
+        visibility: Private,
+        body: Block {
+            items: [
+                Match {
+                    subject: Identifier {
+                        value: "s",
+                        ty: Var {
+                            id: uninferred,
+                        },
+                        span: Span {
+                            file_id: 0,
+                            byte_offset: 21,
+                            byte_length: 1,
+                        },
+                        binding_id: None,
+                        qualified: None,
+                    },
+                    arms: [
+                        MatchArm {
+                            pattern: Literal {
+                                literal: String {
+                                    value: "\\d+",
+                                    raw: true,
+                                },
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 29,
+                                    byte_length: 6,
+                                },
+                            },
+                            expression: Literal {
+                                literal: Integer {
+                                    value: 1,
+                                    text: None,
+                                },
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 39,
+                                    byte_length: 1,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: Literal {
+                                literal: String {
+                                    value: "plain",
+                                    raw: false,
+                                },
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 46,
+                                    byte_length: 7,
+                                },
+                            },
+                            expression: Literal {
+                                literal: Integer {
+                                    value: 2,
+                                    text: None,
+                                },
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 57,
+                                    byte_length: 1,
+                                },
+                            },
+                        },
+                        MatchArm {
+                            pattern: WildCard {
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 64,
+                                    byte_length: 1,
+                                },
+                            },
+                            expression: Literal {
+                                literal: Integer {
+                                    value: 0,
+                                    text: None,
+                                },
+                                ty: Var {
+                                    id: uninferred,
+                                },
+                                span: Span {
+                                    file_id: 0,
+                                    byte_offset: 69,
+                                    byte_length: 1,
+                                },
+                            },
+                        },
+                    ],
+                    origin: Explicit,
+                    ty: Var {
+                        id: uninferred,
+                    },
+                    span: Span {
+                        file_id: 0,
+                        byte_offset: 15,
+                        byte_length: 60,
+                    },
+                },
+            ],
+            ty: Var {
+                id: uninferred,
+            },
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 66,
+            },
+        },
+        ty: Var {
+            id: uninferred,
+        },
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 76,
+        },
+    },
+]

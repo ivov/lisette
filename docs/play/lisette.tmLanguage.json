@@ -31,6 +31,12 @@
     "strings": {
       "patterns": [
         {
+          "name": "string.quoted.double.raw.lisette",
+          "begin": "r\"",
+          "end": "\"",
+          "patterns": []
+        },
+        {
           "name": "string.interpolated.lisette",
           "begin": "f\"",
           "end": "\"",

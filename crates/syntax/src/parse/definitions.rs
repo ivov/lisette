@@ -398,7 +398,13 @@ impl<'source> Parser<'source> {
                 let text = token.text;
                 let end = token.byte_offset + token.byte_length;
                 self.next();
-                (Literal::String(text[1..text.len() - 1].to_string()), end)
+                (
+                    Literal::String {
+                        value: text[1..text.len() - 1].to_string(),
+                        raw: false,
+                    },
+                    end,
+                )
             }
             Minus => {
                 let minus_offset = token.byte_offset;

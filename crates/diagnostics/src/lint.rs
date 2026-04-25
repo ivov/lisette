@@ -345,6 +345,13 @@ pub fn uninterpolated_fstring(span: &Span) -> LisetteDiagnostic {
         .with_help("Remove the `f` prefix. A string without interpolations does not need to be a format string")
 }
 
+pub fn unnecessary_raw_string(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Unnecessary raw string")
+        .with_lint_code("unnecessary_raw_string")
+        .with_span_label(span, "no backslashes")
+        .with_help("Remove the `r` prefix. A string without backslashes does not need to be raw")
+}
+
 pub fn expression_only_fstring(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Expression-only f-string")
         .with_lint_code("expression_only_fstring")

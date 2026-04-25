@@ -515,3 +515,72 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn raw_string_empty() {
+    let input = r#"
+fn test() -> string {
+  r""
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn raw_string_simple() {
+    let input = r#"
+fn test() -> string {
+  r"abc"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn raw_string_with_regex_escapes() {
+    let input = r#"
+fn test() -> string {
+  r"\d+"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn raw_string_with_windows_path() {
+    let input = r#"
+fn test() -> string {
+  r"C:\Users"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn raw_string_with_backtick_falls_back_to_double_quoted() {
+    let input = r#"
+fn test() -> string {
+  r"has `tick"
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn raw_string_with_cr_falls_back_to_double_quoted() {
+    let input = "\nfn test() -> string {\n  r\"x\ry\"\n}\n";
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn raw_string_pattern_emit() {
+    let input = r#"
+fn test(s: string) -> int {
+  match s {
+    r"\d+" => 1,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

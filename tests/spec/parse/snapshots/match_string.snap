@@ -64,9 +64,10 @@ description: "input: \nfn test(command: string) {\n  match command {\n    \"star
                     arms: [
                         MatchArm {
                             pattern: Literal {
-                                literal: String(
-                                    "start",
-                                ),
+                                literal: String {
+                                    value: "start",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -92,9 +93,10 @@ description: "input: \nfn test(command: string) {\n  match command {\n    \"star
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "start",
-                                        ),
+                                        literal: String {
+                                            value: "start",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -120,9 +122,10 @@ description: "input: \nfn test(command: string) {\n  match command {\n    \"star
                         },
                         MatchArm {
                             pattern: Literal {
-                                literal: String(
-                                    "stop",
-                                ),
+                                literal: String {
+                                    value: "stop",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -148,9 +151,10 @@ description: "input: \nfn test(command: string) {\n  match command {\n    \"star
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "stop",
-                                        ),
+                                        literal: String {
+                                            value: "stop",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -198,9 +202,10 @@ description: "input: \nfn test(command: string) {\n  match command {\n    \"star
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Unknown command",
-                                        ),
+                                        literal: String {
+                                            value: "Unknown command",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

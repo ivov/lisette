@@ -123,9 +123,10 @@ description: "input: \nfn test(x: int) -> string {\n  match x {\n    1 | 2 | 3 =
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "small",
-                                ),
+                                literal: String {
+                                    value: "small",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -145,9 +146,10 @@ description: "input: \nfn test(x: int) -> string {\n  match x {\n    1 | 2 | 3 =
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "other",
-                                ),
+                                literal: String {
+                                    value: "other",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },

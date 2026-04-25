@@ -1,0 +1,45 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: r\"abc"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: RawString,
+            text: "r\"abc",
+            byte_offset: 0,
+            byte_length: 5,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 5,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Unterminated raw string literal",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 0,
+                        byte_length: 5,
+                    },
+                    "raw string not closed",
+                ),
+            ],
+            help: Some(
+                "Add a closing double quote",
+            ),
+            note: None,
+            code: "lex.unterminated_raw_string",
+        },
+    ],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

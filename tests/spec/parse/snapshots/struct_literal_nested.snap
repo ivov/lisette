@@ -127,9 +127,10 @@ description: "input: \nfn test(user: User) {\n  let data = Data {\n    id: 1,\n 
                                                 byte_length: 6,
                                             },
                                             value: Literal {
-                                                literal: String(
-                                                    "active",
-                                                ),
+                                                literal: String {
+                                                    value: "active",
+                                                    raw: false,
+                                                },
                                                 ty: Var {
                                                     id: uninferred,
                                                 },

@@ -1,0 +1,44 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: let r = 1"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Let,
+            text: "let",
+            byte_offset: 0,
+            byte_length: 3,
+        },
+        Token {
+            kind: Identifier,
+            text: "r",
+            byte_offset: 4,
+            byte_length: 1,
+        },
+        Token {
+            kind: Equal,
+            text: "=",
+            byte_offset: 6,
+            byte_length: 1,
+        },
+        Token {
+            kind: Integer,
+            text: "1",
+            byte_offset: 8,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 9,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

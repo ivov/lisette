@@ -3516,3 +3516,49 @@ fn test() { func(a, b, ..xs,); }
 "#;
     assert_parse_snapshot!(input);
 }
+
+#[test]
+fn raw_string_literal_assignment() {
+    let input = r#"
+fn test() { let x = r"\d+\.\d+"; }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn raw_string_in_function_arg() {
+    let input = r#"
+fn test() { f(r"C:\Users\me"); }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn raw_string_in_slice() {
+    let input = r#"
+fn test() { let xs = [r"\d", r"\s", "plain"]; }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn raw_string_in_match_pattern() {
+    let input = r#"
+fn test() {
+  match s {
+    r"\d+" => 1,
+    "plain" => 2,
+    _ => 0,
+  }
+}
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn raw_string_in_rawgo_directive() {
+    let input = r#"
+fn test() { @rawgo(r"if x > 0 {\n}") }
+"#;
+    assert_parse_snapshot!(input);
+}

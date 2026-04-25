@@ -88,9 +88,10 @@ description: "input: \nfn test(x: int) -> string {\n  match x {\n    -5 => \"neg
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "negative five",
-                                ),
+                                literal: String {
+                                    value: "negative five",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -119,9 +120,10 @@ description: "input: \nfn test(x: int) -> string {\n  match x {\n    -5 => \"neg
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "negative one",
-                                ),
+                                literal: String {
+                                    value: "negative one",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -148,9 +150,10 @@ description: "input: \nfn test(x: int) -> string {\n  match x {\n    -5 => \"neg
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "zero",
-                                ),
+                                literal: String {
+                                    value: "zero",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -170,9 +173,10 @@ description: "input: \nfn test(x: int) -> string {\n  match x {\n    -5 => \"neg
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "other",
-                                ),
+                                literal: String {
+                                    value: "other",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },

@@ -608,5 +608,8 @@ partial_match_all_variants: PASS
 partial_unwrap_or: PASS
 partial_is_ok: PASS
 partial_is_both: PASS
+raw_string_backslashes: PASS
+raw_string_pattern_match: PASS
+raw_string_equals_escaped: PASS
 
 All tests completed

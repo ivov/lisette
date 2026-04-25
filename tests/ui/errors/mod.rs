@@ -6213,3 +6213,25 @@ fn main() {
 "#;
     assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn parse_backtick_in_expression_simple() {
+    let input = r#"
+fn main() {
+  let x = `hello`
+  let _ = x
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_backtick_in_expression_with_embedded_quote() {
+    let input = r#"
+fn main() {
+  let x = `has "quote" inside`
+  let _ = x
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}

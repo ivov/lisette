@@ -109,9 +109,10 @@ description: "input: \nfn test(x: int) -> string {\n  match x {\n    0 | 1 => \"
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "binary",
-                                ),
+                                literal: String {
+                                    value: "binary",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -189,9 +190,10 @@ description: "input: \nfn test(x: int) -> string {\n  match x {\n    0 | 1 => \"
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "small prime",
-                                ),
+                                literal: String {
+                                    value: "small prime",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -211,9 +213,10 @@ description: "input: \nfn test(x: int) -> string {\n  match x {\n    0 | 1 => \"
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "other",
-                                ),
+                                literal: String {
+                                    value: "other",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },

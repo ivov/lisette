@@ -114,6 +114,88 @@ impl<'source> Lexer<'source> {
         self.errors.push(error);
     }
 
+    pub(super) fn error_unterminated_raw_string(&mut self, start_offset: usize, length: usize) {
+        let span = self.span(start_offset as u32, length as u32);
+        let error = ParseError::new(
+            "Unterminated raw string literal",
+            span,
+            "raw string not closed",
+        )
+        .with_lex_code("unterminated_raw_string")
+        .with_help("Add a closing double quote");
+        self.errors.push(error);
+    }
+
+    pub(super) fn error_raw_string_in_interpolation(&mut self, offset: usize) {
+        let span = self.span(offset as u32, 2);
+        let error = ParseError::new(
+            "Raw string in f-string interpolation",
+            span,
+            "raw strings are not allowed inside `{...}`",
+        )
+        .with_lex_code("raw_string_in_interpolation")
+        .with_help("Extract the raw string into a `let` binding above the f-string");
+        self.errors.push(error);
+    }
+
+    pub(super) fn error_unsupported_raw_format_string(
+        &mut self,
+        offset: usize,
+        length: usize,
+        prefix: &str,
+    ) {
+        let span = self.span(offset as u32, length as u32);
+        let help = if prefix == "fr" {
+            "Raw format strings are not yet implemented. When supported, the canonical spelling will be `rf\"...\"`. For now, use a regular f-string with escaped backslashes"
+        } else {
+            "Raw format strings are not yet implemented. For now, use a regular f-string with escaped backslashes"
+        };
+        let error = ParseError::new(
+            "Raw format strings are currently not supported",
+            span,
+            "not yet implemented",
+        )
+        .with_lex_code("unsupported_raw_format_string")
+        .with_help(help);
+        self.errors.push(error);
+    }
+
+    pub(super) fn error_unsupported_hash_delimited_raw_string(
+        &mut self,
+        offset: usize,
+        length: usize,
+    ) {
+        let span = self.span(offset as u32, length as u32);
+        let error = ParseError::new(
+            "Hash-delimited raw strings are not supported",
+            span,
+            "not yet implemented",
+        )
+        .with_lex_code("unsupported_hash_delimited_raw_string")
+        .with_help(
+            "Hash-delimited raw strings (`r#\"...\"#`) are not yet implemented. For now, use a regular string with escaped quotes",
+        );
+        self.errors.push(error);
+    }
+
+    pub(super) fn error_disallowed_byte_in_raw_string(&mut self, offset: usize, byte: u8) {
+        let span = self.span(offset as u32, 1);
+        let (label, help) = match byte {
+            0 => (
+                "NUL byte is not allowed in string literals",
+                "Go source cannot contain NUL. Remove this byte",
+            ),
+            _ => (
+                "byte is not allowed in raw string content",
+                "Remove this byte or use a non-raw string literal",
+            ),
+        };
+        let error = ParseError::new("Disallowed byte in raw string", span, label)
+            .with_lex_code("disallowed_byte_in_raw_string")
+            .with_help(help);
+        self.errors.push(error);
+    }
+
     pub(super) fn error_unterminated_format_string(&mut self, start_offset: usize, length: usize) {
         let span = self.span(start_offset as u32, length as u32);
         let error = ParseError::new(

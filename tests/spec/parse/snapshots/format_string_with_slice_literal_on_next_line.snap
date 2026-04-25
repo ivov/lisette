@@ -56,9 +56,10 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                         },
                     },
                     value: Literal {
-                        literal: String(
-                            "test",
-                        ),
+                        literal: String {
+                            value: "test",
+                            raw: false,
+                        },
                         ty: Var {
                             id: uninferred,
                         },
@@ -176,9 +177,10 @@ description: "input: \nfn test() -> Slice<string> {\n  let name = \"test\"\n  le
                                     qualified: None,
                                 },
                                 right: Literal {
-                                    literal: String(
-                                        "2",
-                                    ),
+                                    literal: String {
+                                        value: "2",
+                                        raw: false,
+                                    },
                                     ty: Var {
                                         id: uninferred,
                                     },

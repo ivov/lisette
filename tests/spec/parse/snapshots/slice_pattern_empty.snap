@@ -101,9 +101,10 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [] => 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "empty",
-                                        ),
+                                        literal: String {
+                                            value: "empty",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -151,9 +152,10 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [] => 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "not empty",
-                                        ),
+                                        literal: String {
+                                            value: "not empty",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

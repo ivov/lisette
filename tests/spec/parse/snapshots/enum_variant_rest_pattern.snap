@@ -217,9 +217,10 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "triangle",
-                                        ),
+                                        literal: String {
+                                            value: "triangle",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -273,9 +274,10 @@ description: "input: \nenum Shape { Triangle(int, int, int), Circle(float) }\nfn
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "circle",
-                                        ),
+                                        literal: String {
+                                            value: "circle",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

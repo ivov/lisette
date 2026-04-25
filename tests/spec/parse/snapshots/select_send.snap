@@ -132,9 +132,10 @@ description: "input: \nfn test(ch: Sender<int>) {\n  select {\n    ch.send(42) =
                                     },
                                     args: [
                                         Literal {
-                                            literal: String(
-                                                "sent",
-                                            ),
+                                            literal: String {
+                                                value: "sent",
+                                                raw: false,
+                                            },
                                             ty: Var {
                                                 id: uninferred,
                                             },

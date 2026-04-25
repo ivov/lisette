@@ -204,9 +204,10 @@ description: "input: \nfn calculate(a: int, b: int) -> int {\n  let result = a +
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Large!\\n",
-                                        ),
+                                        literal: String {
+                                            value: "Large!\\n",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

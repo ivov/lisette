@@ -1,0 +1,39 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: r##\"foo\"##"
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 10,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Hash-delimited raw strings are not supported",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 0,
+                        byte_length: 10,
+                    },
+                    "not yet implemented",
+                ),
+            ],
+            help: Some(
+                "Hash-delimited raw strings (`r#\"...\"#`) are not yet implemented. For now, use a regular string with escaped quotes",
+            ),
+            note: None,
+            code: "lex.unsupported_hash_delimited_raw_string",
+        },
+    ],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

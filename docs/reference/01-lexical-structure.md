@@ -96,6 +96,17 @@ Escape sequences:
 | `\r`     | Carriage return |
 | `\t`     | Tab             |
 
+### Raw string literals
+
+A raw string literal begins with `r"` and ends with `"`. Inside, every character is literal, i.e. backslashes are not escapes.
+
+```rust
+let pattern = r"([a-zA-Z])(\d)"
+let path    = r"C:\Users\me"
+```
+
+Raw strings are single-line and cannot contain a double quote.
+
 ### Format strings
 
 A format string begins with `f"` and can contain interpolated expressions in `{}`.

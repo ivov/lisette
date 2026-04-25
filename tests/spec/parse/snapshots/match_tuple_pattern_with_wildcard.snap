@@ -93,9 +93,10 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                             pattern: Tuple {
                                 elements: [
                                     Literal {
-                                        literal: String(
-                                            "status",
-                                        ),
+                                        literal: String {
+                                            value: "status",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -143,9 +144,10 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Status code:",
-                                        ),
+                                        literal: String {
+                                            value: "Status code:",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -235,9 +237,10 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Active",
-                                        ),
+                                        literal: String {
+                                            value: "Active",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -285,9 +288,10 @@ description: "input: \nfn test(triple: (string, int, bool)) {\n  match triple {\
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Other",
-                                        ),
+                                        literal: String {
+                                            value: "Other",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

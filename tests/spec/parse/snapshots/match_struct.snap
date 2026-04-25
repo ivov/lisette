@@ -127,9 +127,10 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Origin",
-                                        ),
+                                        literal: String {
+                                            value: "Origin",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -212,9 +213,10 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "On X axis",
-                                        ),
+                                        literal: String {
+                                            value: "On X axis",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -310,9 +312,10 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "On Y axis",
-                                        ),
+                                        literal: String {
+                                            value: "On Y axis",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -402,9 +405,10 @@ description: "input: \nfn test(p: Point) {\n  match p {\n    Point { x: 0, y: 0 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Somewhere else",
-                                        ),
+                                        literal: String {
+                                            value: "Somewhere else",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

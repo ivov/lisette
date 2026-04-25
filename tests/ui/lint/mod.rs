@@ -3373,3 +3373,39 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn unnecessary_raw_string() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let msg = r"hello";
+  msg
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_raw_string_empty() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let msg = r"";
+  msg
+}
+"#
+    );
+}
+
+#[test]
+fn unnecessary_raw_string_in_pattern() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let s = "hello"
+  let _ = match s { r"hello" => 1, _ => 0 }
+}
+"#
+    );
+}

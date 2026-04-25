@@ -77,9 +77,10 @@ description: "input: \nfn display<T: Display>(value: T) -> string {\n  return \"
             items: [
                 Return {
                     expression: Literal {
-                        literal: String(
-                            "displayed",
-                        ),
+                        literal: String {
+                            value: "displayed",
+                            raw: false,
+                        },
                         ty: Var {
                             id: uninferred,
                         },

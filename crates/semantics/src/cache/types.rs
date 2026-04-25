@@ -83,7 +83,10 @@ impl CachedLiteral {
                 text: text.clone(),
             },
             Literal::Boolean(v) => CachedLiteral::Boolean(*v),
-            Literal::String(v) => CachedLiteral::String(v.clone()),
+            Literal::String { value, raw } => {
+                debug_assert!(!raw, "raw strings are not allowed in value-enum variants");
+                CachedLiteral::String(value.clone())
+            }
             Literal::Char(v) => CachedLiteral::Char(v.clone()),
             // These shouldn't appear in ValueEnum variants
             Literal::Imaginary(_) | Literal::FormatString(_) | Literal::Slice(_) => {
@@ -107,7 +110,10 @@ impl CachedLiteral {
                 text: text.clone(),
             },
             CachedLiteral::Boolean(v) => Literal::Boolean(*v),
-            CachedLiteral::String(v) => Literal::String(v.clone()),
+            CachedLiteral::String(v) => Literal::String {
+                value: v.clone(),
+                raw: false,
+            },
             CachedLiteral::Char(v) => Literal::Char(v.clone()),
         }
     }

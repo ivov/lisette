@@ -1348,3 +1348,18 @@ fn call_with_spread_arg() {
 fn call_with_leading_args_and_spread_arg() {
     assert_format_snapshot!("fn test() { foo(a, b, ..args) }");
 }
+
+#[test]
+fn raw_string_roundtrip() {
+    assert_format_snapshot!(r#"fn test() { let x = r"a\nb" }"#);
+}
+
+#[test]
+fn raw_string_with_regex_roundtrip() {
+    assert_format_snapshot!(r#"fn test() { let re = r"([a-zA-Z])(\d)" }"#);
+}
+
+#[test]
+fn raw_string_with_windows_path_roundtrip() {
+    assert_format_snapshot!(r#"fn test() { let p = r"C:\Users\me" }"#);
+}

@@ -83,12 +83,12 @@ impl TaskState<'_> {
                 }
             }
 
-            Literal::String(string) => {
+            Literal::String { value, raw } => {
                 let string_ty = self.type_string();
                 self.unify(store, expected_ty, &string_ty, &span);
 
                 Expression::Literal {
-                    literal: Literal::String(string),
+                    literal: Literal::String { value, raw },
                     ty: string_ty,
                     span,
                 }

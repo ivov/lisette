@@ -1,0 +1,38 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: r\n\"hello\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: Identifier,
+            text: "r",
+            byte_offset: 0,
+            byte_length: 1,
+        },
+        Token {
+            kind: Semicolon,
+            text: "",
+            byte_offset: 1,
+            byte_length: 0,
+        },
+        Token {
+            kind: String,
+            text: "\"hello\"",
+            byte_offset: 2,
+            byte_length: 7,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 9,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

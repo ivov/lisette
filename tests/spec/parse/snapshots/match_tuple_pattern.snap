@@ -134,9 +134,10 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Origin",
-                                        ),
+                                        literal: String {
+                                            value: "Origin",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -208,9 +209,10 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "On X axis",
-                                        ),
+                                        literal: String {
+                                            value: "On X axis",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -295,9 +297,10 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "On Y axis",
-                                        ),
+                                        literal: String {
+                                            value: "On Y axis",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -376,9 +379,10 @@ description: "input: \nfn test(pair: (int, int)) {\n  match pair {\n    (0, 0) =
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Coords",
-                                        ),
+                                        literal: String {
+                                            value: "Coords",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

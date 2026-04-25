@@ -7,7 +7,7 @@ use syntax::program::Definition;
 use syntax::types::Type;
 
 use crate::Emitter;
-use crate::expressions::literals::convert_escape_sequences;
+use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
 use crate::names::generics;
 use crate::patterns::decision_tree::{collect_pattern_info, emit_tree_bindings};
 use crate::write_line;
@@ -58,9 +58,10 @@ pub(crate) fn emit_pattern_literal(literal: &Literal) -> String {
         }
         Literal::Float { value, text } => text.clone().unwrap_or_else(|| value.to_string()),
         Literal::Boolean(b) => b.to_string(),
-        Literal::String(s) => {
-            format!("\"{}\"", convert_escape_sequences(s))
+        Literal::String { value, raw: false } => {
+            format!("\"{}\"", convert_escape_sequences(value))
         }
+        Literal::String { value, raw: true } => emit_raw_string(value),
         Literal::Char(c) => {
             format!("'{}'", convert_escape_sequences(c))
         }

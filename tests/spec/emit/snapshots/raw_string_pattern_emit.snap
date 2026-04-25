@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test(s: string) -> int {\n  match s {\n    r\"\\d+\" => 1,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+func test(s string) int {
+	if s == `\d+` {
+		return 1
+	}
+	return 0
+}

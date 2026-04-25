@@ -222,6 +222,7 @@
 
 ; Literals
 (string_literal) @string
+(raw_string_literal) @string
 (format_string) @string
 (char_literal) @character
 (boolean_literal) @boolean

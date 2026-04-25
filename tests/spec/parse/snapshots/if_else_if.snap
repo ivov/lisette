@@ -104,9 +104,10 @@ description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "very large",
-                                        ),
+                                        literal: String {
+                                            value: "very large",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -196,9 +197,10 @@ description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large
                                     },
                                     args: [
                                         Literal {
-                                            literal: String(
-                                                "large",
-                                            ),
+                                            literal: String {
+                                                value: "large",
+                                                raw: false,
+                                            },
                                             ty: Var {
                                                 id: uninferred,
                                             },
@@ -249,9 +251,10 @@ description: "input: \nfn test(a: int) {\n  if a > 100 {\n    print(\"very large
                                     },
                                     args: [
                                         Literal {
-                                            literal: String(
-                                                "small or medium",
-                                            ),
+                                            literal: String {
+                                                value: "small or medium",
+                                                raw: false,
+                                            },
                                             ty: Var {
                                                 id: uninferred,
                                             },

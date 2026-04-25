@@ -14,7 +14,8 @@ use checks::{
     check_empty_match_arm, check_excess_parens_on_condition, check_expression_naming,
     check_identical_if_branches, check_match_literal_collection, check_pattern_naming,
     check_rest_only_slice_pattern, check_self_assignment, check_self_comparison,
-    check_single_arm_match, check_uninterpolated_fstring,
+    check_single_arm_match, check_uninterpolated_fstring, check_unnecessary_raw_string_expression,
+    check_unnecessary_raw_string_pattern,
 };
 use visitor::visit_ast;
 
@@ -40,6 +41,7 @@ impl AstLintGroup {
                 check_match_literal_collection(expression, &mut diagnostics.borrow_mut());
                 check_single_arm_match(expression, &mut diagnostics.borrow_mut());
                 check_uninterpolated_fstring(expression, &mut diagnostics.borrow_mut());
+                check_unnecessary_raw_string_expression(expression, &mut diagnostics.borrow_mut());
                 check_expression_naming(expression, is_d_lis, &mut diagnostics.borrow_mut());
                 check_struct_attributes(expression, &mut diagnostics.borrow_mut());
                 check_attributes(expression, &mut diagnostics.borrow_mut());
@@ -47,6 +49,7 @@ impl AstLintGroup {
             &mut |pattern| {
                 check_rest_only_slice_pattern(pattern, &mut diagnostics.borrow_mut());
                 check_pattern_naming(pattern, is_d_lis, &mut diagnostics.borrow_mut());
+                check_unnecessary_raw_string_pattern(pattern, &mut diagnostics.borrow_mut());
             },
         );
 

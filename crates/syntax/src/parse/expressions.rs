@@ -29,7 +29,9 @@ impl<'source> Parser<'source> {
         }
 
         match self.current_token().kind {
-            Integer | Imaginary | Boolean | Char | String | Float => self.parse_literal(),
+            Integer | Imaginary | Boolean | Char | String | RawString | Float => {
+                self.parse_literal()
+            }
             FormatStringStart => self.parse_format_string(),
             LeftParen => self.parse_parenthesized_expression(),
             LeftCurlyBrace => self.parse_block_expression(),
@@ -68,6 +70,8 @@ impl<'source> Parser<'source> {
                     span,
                 }
             }
+
+            Backtick => self.recover_backtick_as_raw_string(),
 
             _ => self.unexpected_token("expr"),
         }
@@ -176,7 +180,31 @@ impl<'source> Parser<'source> {
                     debug_assert!(false, "lexer produced String token without quotes: {:?}", s);
                     s
                 };
-                Literal::String(s_stripped.to_string())
+                Literal::String {
+                    value: s_stripped.to_string(),
+                    raw: false,
+                }
+            }
+            RawString => {
+                let s = self.current_token().text;
+                self.next();
+                let s_stripped = if s.len() >= 3 && s.starts_with("r\"") && s.ends_with('"') {
+                    &s[2..s.len() - 1]
+                } else if s.len() >= 2 && s.starts_with("r\"") {
+                    // unterminated raw string — strip prefix only
+                    &s[2..]
+                } else {
+                    debug_assert!(
+                        false,
+                        "lexer produced RawString token without prefix: {:?}",
+                        s
+                    );
+                    s
+                };
+                Literal::String {
+                    value: s_stripped.to_string(),
+                    raw: true,
+                }
             }
             Char => {
                 let c = self.current_token().text;
@@ -1445,6 +1473,42 @@ impl<'source> Parser<'source> {
             span,
             binding_id: None,
             qualified: None,
+        }
+    }
+
+    fn recover_backtick_as_raw_string(&mut self) -> Expression {
+        let token = self.current_token();
+        let span = self.span_from_token(token);
+        let raw = token.text;
+        let inner = if raw.len() >= 2 && raw.starts_with('`') && raw.ends_with('`') {
+            &raw[1..raw.len() - 1]
+        } else {
+            raw
+        };
+        let help = if inner.contains('"') {
+            "Lisette uses `r\"...\"` for raw strings, not backticks like Go".to_string()
+        } else {
+            format!(
+                "Lisette uses `r\"...\"` for raw strings, not backticks like Go, so replace with `r\"{}\"`",
+                inner
+            )
+        };
+        let error = ParseError::new(
+            "Backticks are not raw strings in Lisette",
+            span,
+            "expected `r\"...\"`",
+        )
+        .with_parse_code("backtick_in_expression")
+        .with_help(help);
+        self.errors.push(error);
+        self.next();
+        Expression::Literal {
+            literal: Literal::String {
+                value: inner.to_string(),
+                raw: true,
+            },
+            ty: Type::uninferred(),
+            span,
         }
     }
 }

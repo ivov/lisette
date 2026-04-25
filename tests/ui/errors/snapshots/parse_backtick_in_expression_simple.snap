@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Backticks are not raw strings in Lisette
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let x = `hello`
+   ·           ───┬───
+   ·              ╰── expected `r"..."`
+ 4 │   let _ = x
+   ╰────
+  help: Lisette uses `r"..."` for raw strings, not backticks like Go, so replace with `r"hello"` · code: [parse.backtick_in_expression]

@@ -144,9 +144,10 @@ description: "input: \nfn test(opt_res: Option<Result<int, string>>) {\n  match 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Success:",
-                                        ),
+                                        literal: String {
+                                            value: "Success:",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -236,9 +237,10 @@ description: "input: \nfn test(opt_res: Option<Result<int, string>>) {\n  match 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Inner Error:",
-                                        ),
+                                        literal: String {
+                                            value: "Inner Error:",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -305,9 +307,10 @@ description: "input: \nfn test(opt_res: Option<Result<int, string>>) {\n  match 
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "No value",
-                                        ),
+                                        literal: String {
+                                            value: "No value",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

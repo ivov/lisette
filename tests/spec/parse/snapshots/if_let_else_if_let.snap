@@ -288,9 +288,10 @@ description: "input: \nfn test(a: Option<int>, b: Option<int>) {\n  if let Some(
                                     },
                                     args: [
                                         Literal {
-                                            literal: String(
-                                                "both none",
-                                            ),
+                                            literal: String {
+                                                value: "both none",
+                                                raw: false,
+                                            },
                                             ty: Var {
                                                 id: uninferred,
                                             },

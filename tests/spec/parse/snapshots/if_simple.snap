@@ -104,9 +104,10 @@ description: "input: \nfn test(a: int) {\n  if a > 10 {\n    print(\"large\");\n
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "large",
-                                        ),
+                                        literal: String {
+                                            value: "large",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

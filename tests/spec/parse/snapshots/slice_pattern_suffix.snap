@@ -108,9 +108,10 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..ini
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "last is",
-                                        ),
+                                        literal: String {
+                                            value: "last is",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -176,9 +177,10 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..ini
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "empty",
-                                        ),
+                                        literal: String {
+                                            value: "empty",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

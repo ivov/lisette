@@ -156,9 +156,10 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "warm",
-                                ),
+                                literal: String {
+                                    value: "warm",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -184,9 +185,10 @@ description: "input: \nenum Color { Red, Green, Blue }\nfn test(c: Color) -> str
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "cool",
-                                ),
+                                literal: String {
+                                    value: "cool",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },

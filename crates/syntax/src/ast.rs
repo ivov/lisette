@@ -1661,7 +1661,10 @@ pub enum Literal {
     /// Imaginary coefficient, e.g. `4i` stores `4.0`
     Imaginary(f64),
     Boolean(bool),
-    String(String),
+    String {
+        value: String,
+        raw: bool,
+    },
     FormatString(Vec<FormatStringPart>),
     Char(String),
     Slice(Vec<Expression>),

@@ -31,9 +31,9 @@ impl<'source> Parser<'source> {
 
         let text = match args.into_iter().next() {
             Some(Expression::Literal {
-                literal: Literal::String(s),
+                literal: Literal::String { value, .. },
                 ..
-            }) => s,
+            }) => value,
 
             _ => {
                 self.track_error("invalid call to rawgo", "Use `@rawgo(\"go code\")`.");

@@ -225,9 +225,10 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Running",
-                                        ),
+                                        literal: String {
+                                            value: "Running",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -281,9 +282,10 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Stopped",
-                                        ),
+                                        literal: String {
+                                            value: "Stopped",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -358,9 +360,10 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Error without code",
-                                        ),
+                                        literal: String {
+                                            value: "Error without code",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -445,9 +448,10 @@ description: "input: \nenum State { Running(int), Stopped, Error(string, Option<
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "Error with code",
-                                        ),
+                                        literal: String {
+                                            value: "Error with code",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

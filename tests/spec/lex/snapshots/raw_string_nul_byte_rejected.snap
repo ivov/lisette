@@ -1,0 +1,45 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: r\"a\u0000b\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: RawString,
+            text: "r\"a\0b\"",
+            byte_offset: 0,
+            byte_length: 6,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 6,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Disallowed byte in raw string",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 3,
+                        byte_length: 1,
+                    },
+                    "NUL byte is not allowed in string literals",
+                ),
+            ],
+            help: Some(
+                "Go source cannot contain NUL. Remove this byte",
+            ),
+            note: None,
+            code: "lex.disallowed_byte_in_raw_string",
+        },
+    ],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

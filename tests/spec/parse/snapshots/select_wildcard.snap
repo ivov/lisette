@@ -41,9 +41,10 @@ description: "input: \nfn test() {\n  select {\n    _ => print(\"default\"),\n  
                                     },
                                     args: [
                                         Literal {
-                                            literal: String(
-                                                "default",
-                                            ),
+                                            literal: String {
+                                                value: "default",
+                                                raw: false,
+                                            },
                                             ty: Var {
                                                 id: uninferred,
                                             },

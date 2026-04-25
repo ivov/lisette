@@ -48,9 +48,10 @@ description: "input: \nfn test() {\n  let message: string = \"hello\";\n}\n"
                         },
                     },
                     value: Literal {
-                        literal: String(
-                            "hello",
-                        ),
+                        literal: String {
+                            value: "hello",
+                            raw: false,
+                        },
                         ty: Var {
                             id: uninferred,
                         },

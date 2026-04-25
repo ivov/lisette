@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/literals.rs
+description: "input: \nfn test() -> string {\n  r\"C:\\Users\"\n}\n"
+---
+package main
+
+func test() string {
+	return `C:\Users`
+}

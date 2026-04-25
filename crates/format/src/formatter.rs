@@ -534,7 +534,8 @@ impl<'a> Formatter<'a> {
                 }
             }
             Literal::Boolean(b) => Document::str(if *b { "true" } else { "false" }),
-            Literal::String(s) => Document::string(format!("\"{s}\"")),
+            Literal::String { value, raw: true } => Document::string(format!("r\"{value}\"")),
+            Literal::String { value, raw: false } => Document::string(format!("\"{value}\"")),
             Literal::Char(c) => Document::string(format!("'{c}'")),
             Literal::Slice(elements) => self.slice(elements),
             Literal::FormatString(parts) => self.format_string(parts),

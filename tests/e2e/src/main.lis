@@ -4158,6 +4158,10 @@ fn main() {
   report("partial_is_ok", test_partial_is_ok(), 1)
   report("partial_is_both", test_partial_is_both(), 1)
 
+  report("raw_string_backslashes", test_raw_string_backslashes(), 100)
+  report("raw_string_pattern_match", test_raw_string_pattern_match(), 100)
+  report("raw_string_equals_escaped", test_raw_string_equals_escaped(), 100)
+
   fmt.Print("\nAll tests completed\n")
 }
 
@@ -4229,4 +4233,23 @@ fn test_partial_is_ok() -> int {
 
 fn test_partial_is_both() -> int {
   if make_partial_both().is_both() { 1 } else { 0 }
+}
+
+fn test_raw_string_backslashes() -> int {
+  let path = r"C:\Users\me"
+  if path == "C:\\Users\\me" { 100 } else { 0 }
+}
+
+fn test_raw_string_pattern_match() -> int {
+  let re = r"\d+"
+  match re {
+    r"\d+" => 100,
+    _ => 0,
+  }
+}
+
+fn test_raw_string_equals_escaped() -> int {
+  let raw = r"a\nb"
+  let escaped = "a\\nb"
+  if raw == escaped { 100 } else { 0 }
 }

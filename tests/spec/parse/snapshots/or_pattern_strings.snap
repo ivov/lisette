@@ -74,9 +74,10 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                             pattern: Or {
                                 patterns: [
                                     Literal {
-                                        literal: String(
-                                            "yes",
-                                        ),
+                                        literal: String {
+                                            value: "yes",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -87,9 +88,10 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         },
                                     },
                                     Literal {
-                                        literal: String(
-                                            "y",
-                                        ),
+                                        literal: String {
+                                            value: "y",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -100,9 +102,10 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         },
                                     },
                                     Literal {
-                                        literal: String(
-                                            "true",
-                                        ),
+                                        literal: String {
+                                            value: "true",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -138,9 +141,10 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                             pattern: Or {
                                 patterns: [
                                     Literal {
-                                        literal: String(
-                                            "no",
-                                        ),
+                                        literal: String {
+                                            value: "no",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -151,9 +155,10 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         },
                                     },
                                     Literal {
-                                        literal: String(
-                                            "n",
-                                        ),
+                                        literal: String {
+                                            value: "n",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },
@@ -164,9 +169,10 @@ description: "input: \nfn test(s: string) -> int {\n  match s {\n    \"yes\" | \
                                         },
                                     },
                                     Literal {
-                                        literal: String(
-                                            "false",
-                                        ),
+                                        literal: String {
+                                            value: "false",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

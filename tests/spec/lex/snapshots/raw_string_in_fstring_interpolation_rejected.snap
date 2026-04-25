@@ -1,0 +1,63 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: f\"{r\"\\d\"}\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: FormatStringStart,
+            text: "f\"",
+            byte_offset: 0,
+            byte_length: 2,
+        },
+        Token {
+            kind: FormatStringInterpolationStart,
+            text: "{",
+            byte_offset: 2,
+            byte_length: 1,
+        },
+        Token {
+            kind: FormatStringInterpolationEnd,
+            text: "}",
+            byte_offset: 8,
+            byte_length: 1,
+        },
+        Token {
+            kind: FormatStringEnd,
+            text: "\"",
+            byte_offset: 9,
+            byte_length: 1,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 10,
+            byte_length: 0,
+        },
+    ],
+    errors: [
+        ParseError {
+            message: "Raw string in f-string interpolation",
+            labels: [
+                (
+                    Span {
+                        file_id: 0,
+                        byte_offset: 3,
+                        byte_length: 2,
+                    },
+                    "raw strings are not allowed inside `{...}`",
+                ),
+            ],
+            help: Some(
+                "Extract the raw string into a `let` binding above the f-string",
+            ),
+            note: None,
+            code: "lex.raw_string_in_interpolation",
+        },
+    ],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

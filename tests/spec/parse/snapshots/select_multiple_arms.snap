@@ -192,9 +192,10 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                     },
                                     args: [
                                         Literal {
-                                            literal: String(
-                                                "hello",
-                                            ),
+                                            literal: String {
+                                                value: "hello",
+                                                raw: false,
+                                            },
                                             ty: Var {
                                                 id: uninferred,
                                             },
@@ -233,9 +234,10 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                     },
                                     args: [
                                         Literal {
-                                            literal: String(
-                                                "sent",
-                                            ),
+                                            literal: String {
+                                                value: "sent",
+                                                raw: false,
+                                            },
                                             ty: Var {
                                                 id: uninferred,
                                             },
@@ -278,9 +280,10 @@ description: "input: \nfn test(ch1: Receiver<int>, ch2: Sender<string>) {\n  sel
                                     },
                                     args: [
                                         Literal {
-                                            literal: String(
-                                                "default",
-                                            ),
+                                            literal: String {
+                                                value: "default",
+                                                raw: false,
+                                            },
                                             ty: Var {
                                                 id: uninferred,
                                             },

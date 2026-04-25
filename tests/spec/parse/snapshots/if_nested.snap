@@ -170,9 +170,10 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                             },
                                             args: [
                                                 Literal {
-                                                    literal: String(
-                                                        "both positive",
-                                                    ),
+                                                    literal: String {
+                                                        value: "both positive",
+                                                        raw: false,
+                                                    },
                                                     ty: Var {
                                                         id: uninferred,
                                                     },
@@ -223,9 +224,10 @@ description: "input: \nfn test(a: int, b: int) {\n  if a > 0 {\n    if b > 0 {\n
                                             },
                                             args: [
                                                 Literal {
-                                                    literal: String(
-                                                        "a positive, b non-positive",
-                                                    ),
+                                                    literal: String {
+                                                        value: "a positive, b non-positive",
+                                                        raw: false,
+                                                    },
                                                     ty: Var {
                                                         id: uninferred,
                                                     },

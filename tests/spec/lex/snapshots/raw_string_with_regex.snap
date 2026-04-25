@@ -1,0 +1,26 @@
+---
+source: tests/spec/lex/mod.rs
+description: "input: r\"([a-zA-Z])(\\d)\""
+---
+LexResult {
+    tokens: [
+        Token {
+            kind: RawString,
+            text: "r\"([a-zA-Z])(\\d)\"",
+            byte_offset: 0,
+            byte_length: 17,
+        },
+        Token {
+            kind: EOF,
+            text: "",
+            byte_offset: 17,
+            byte_length: 0,
+        },
+    ],
+    errors: [],
+    trivia: Trivia {
+        comments: [],
+        doc_comments: [],
+        blank_lines: [],
+    },
+}

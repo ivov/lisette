@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() { let p = r\"C:\\Users\\me\" }"
+---
+fn test() {
+  let p = r"C:\Users\me"
+}

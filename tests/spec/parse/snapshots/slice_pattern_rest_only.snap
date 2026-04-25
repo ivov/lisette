@@ -107,9 +107,10 @@ description: "input: \nfn test(items: Slice<int>) {\n  match items {\n    [..] =
                                 },
                                 args: [
                                     Literal {
-                                        literal: String(
-                                            "any slice",
-                                        ),
+                                        literal: String {
+                                            value: "any slice",
+                                            raw: false,
+                                        },
                                         ty: Var {
                                             id: uninferred,
                                         },

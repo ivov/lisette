@@ -1,0 +1,46 @@
+---
+source: tests/spec/parse/mod.rs
+description: "input: \nfn test() { @rawgo(r\"if x > 0 {\\n}\") }\n"
+---
+[
+    Function {
+        doc: None,
+        attributes: [],
+        name: "test",
+        name_span: Span {
+            file_id: 0,
+            byte_offset: 4,
+            byte_length: 4,
+        },
+        generics: [],
+        params: [],
+        return_annotation: Unknown,
+        return_type: Var {
+            id: uninferred,
+        },
+        visibility: Private,
+        body: Block {
+            items: [
+                RawGo {
+                    text: "if x > 0 {\\n}",
+                },
+            ],
+            ty: Var {
+                id: uninferred,
+            },
+            span: Span {
+                file_id: 0,
+                byte_offset: 11,
+                byte_length: 28,
+            },
+        },
+        ty: Var {
+            id: uninferred,
+        },
+        span: Span {
+            file_id: 0,
+            byte_offset: 1,
+            byte_length: 38,
+        },
+    },
+]

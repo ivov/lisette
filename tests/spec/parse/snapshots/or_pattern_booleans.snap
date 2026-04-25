@@ -201,9 +201,10 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "same",
-                                ),
+                                literal: String {
+                                    value: "same",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },
@@ -295,9 +296,10 @@ description: "input: \nfn test(a: bool, b: bool) -> string {\n  match (a, b) {\n
                                 },
                             },
                             expression: Literal {
-                                literal: String(
-                                    "different",
-                                ),
+                                literal: String {
+                                    value: "different",
+                                    raw: false,
+                                },
                                 ty: Var {
                                     id: uninferred,
                                 },

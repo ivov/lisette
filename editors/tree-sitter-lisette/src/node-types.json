@@ -252,6 +252,10 @@
         "named": true
       },
       {
+        "type": "raw_string_literal",
+        "named": true
+      },
+      {
         "type": "string_literal",
         "named": true
       }
@@ -279,6 +283,10 @@
       },
       {
         "type": "negative_literal",
+        "named": true
+      },
+      {
+        "type": "raw_string_literal",
         "named": true
       },
       {
@@ -3447,7 +3455,8 @@
   },
   {
     "type": "line_comment",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "loop",
@@ -3463,6 +3472,10 @@
   },
   {
     "type": "never_type",
+    "named": true
+  },
+  {
+    "type": "raw_string_literal",
     "named": true
   },
   {
