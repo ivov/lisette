@@ -2,13 +2,12 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-use fs2::FileExt;
-
 use crate::go_cli;
+use crate::lock::acquire_mutation_lock;
 use crate::output::{print_add_success, print_preview_notice, print_progress};
 use crate::workspace::GoWorkspace;
 use crate::{cli_error, error};
-use deps::{GoModule, remove_go_dep, upsert_go_dep};
+use deps::{GoModule, remove_go_dep, resolve_empty_via, trim_dead_via_parents, upsert_go_dep};
 
 struct ParsedDependency {
     module_path: String,
@@ -318,7 +317,7 @@ fn miscased_known_host(path: &str) -> Option<String> {
     None
 }
 
-fn find_project_root() -> Option<PathBuf> {
+pub(crate) fn find_project_root() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     let mut current: &Path = &cwd;
     loop {
@@ -368,7 +367,7 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         return Err(1);
     }
 
-    print_preview_notice();
+    print_preview_notice("lis add");
 
     let project_target_dir = project_root.join("target");
     if project_target_dir.is_file() {
@@ -387,7 +386,7 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         return Err(1);
     }
 
-    let lock = acquire_add_lock(&project_target_dir)?;
+    let lock = acquire_mutation_lock(&project_target_dir)?;
 
     let locator = deps::TypedefLocator::new(
         manifest.go_deps(),
@@ -444,35 +443,6 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         resolved_version: dep_version,
         _lock: lock,
     })
-}
-
-fn acquire_add_lock(target_dir: &Path) -> Result<File, i32> {
-    let lock_path = target_dir.join(".lis-add.lock");
-    let file = match File::create(&lock_path) {
-        Ok(f) => f,
-        Err(e) => {
-            error!(
-                "failed to create lock file",
-                format!("Failed to create `{}`: {}", lock_path.display(), e)
-            );
-            return Err(1);
-        }
-    };
-
-    if let Err(e) = file.try_lock_exclusive() {
-        if e.kind() == std::io::ErrorKind::WouldBlock {
-            cli_error!(
-                "Another `lis add` is in progress",
-                "A concurrent `lis add` holds the project lock",
-                "Wait for the other invocation to finish, then retry"
-            );
-        } else {
-            error!("failed to acquire lock", format!("{}", e));
-        }
-        return Err(1);
-    }
-
-    Ok(file)
 }
 
 /// Walk the dependency tree reachable from `dep` and cache typedefs for every
@@ -706,56 +676,14 @@ fn apply_graph_to_manifest(
         })?;
     }
 
-    prune_stale_via(project_root)?;
+    trim_dead_via_parents(project_root).map_err(|msg| {
+        error!("failed to update manifest", msg);
+        1
+    })?;
+    resolve_empty_via(project_root, &[]).map_err(|msg| {
+        error!("failed to update manifest", msg);
+        1
+    })?;
 
     Ok(upgraded)
-}
-
-/// Drop `via` entries that point to parents no longer present in the manifest,
-/// and remove transitives left with an empty `via` list.
-fn prune_stale_via(project_root: &Path) -> Result<(), i32> {
-    let manifest = match deps::parse_manifest(project_root) {
-        Ok(m) => m,
-        Err(msg) => {
-            error!("failed to re-read manifest for hygiene pass", msg);
-            return Err(1);
-        }
-    };
-    let live_deps = manifest.go_deps();
-    let live_paths: std::collections::HashSet<&str> =
-        live_deps.keys().map(|s| s.as_str()).collect();
-
-    let mut sorted: Vec<(&String, &deps::GoDependency)> = live_deps.iter().collect();
-    sorted.sort_by(|a, b| a.0.cmp(b.0));
-
-    for (dep_path, dep) in &sorted {
-        let Some(ref via) = dep.via else { continue };
-
-        let mut canonical: Vec<String> = via
-            .iter()
-            .filter(|parent| live_paths.contains(parent.as_str()))
-            .cloned()
-            .collect();
-        canonical.sort();
-        canonical.dedup();
-
-        if canonical.iter().eq(via.iter()) {
-            continue;
-        }
-
-        if canonical.is_empty() {
-            remove_go_dep(project_root, dep_path).map_err(|msg| {
-                error!("failed to update manifest", msg);
-                1
-            })?;
-            continue;
-        }
-
-        upsert_go_dep(project_root, dep_path, &dep.version, Some(canonical)).map_err(|msg| {
-            error!("failed to update manifest", msg);
-            1
-        })?;
-    }
-
-    Ok(())
 }

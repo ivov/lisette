@@ -2,7 +2,9 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::project_manifest::{GoDependency, Manifest, check_toolchain_version, parse_manifest};
+use crate::project_manifest::{
+    GoDependency, Manifest, check_toolchain_version, find_module_for_pkg, parse_manifest,
+};
 use crate::{GoModule, GoPackage, typedef_cache_dir};
 
 #[derive(Debug)]
@@ -87,7 +89,7 @@ impl TypedefLocator {
             };
         }
 
-        let Some((module_path, dep)) = self.find_module_for_pkg(package_path) else {
+        let Some((module_path, dep)) = find_module_for_pkg(&self.deps, package_path) else {
             return TypedefLocatorResult::UndeclaredImport;
         };
 
@@ -126,26 +128,5 @@ impl TypedefLocator {
                 version: version.clone(),
             },
         }
-    }
-
-    /// Find the longest declared module path that is a prefix of the package path.
-    fn find_module_for_pkg(&self, pkg_path: &str) -> Option<(&str, &GoDependency)> {
-        let mut best: Option<(&str, &GoDependency)> = None;
-
-        for (module_path, dep) in &self.deps {
-            let is_match = pkg_path == module_path.as_str()
-                || (pkg_path.starts_with(module_path.as_str())
-                    && pkg_path.as_bytes().get(module_path.len()) == Some(&b'/'));
-
-            if is_match
-                && best
-                    .as_ref()
-                    .is_none_or(|(prev, _)| module_path.len() > prev.len())
-            {
-                best = Some((module_path.as_str(), dep));
-            }
-        }
-
-        best
     }
 }

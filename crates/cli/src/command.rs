@@ -31,6 +31,7 @@ pub enum Command {
     Add {
         dependency: String,
     },
+    Sync,
     Lsp,
     Bindgen {
         package: String,
@@ -196,6 +197,17 @@ impl Command {
                 }),
             },
 
+            "sync" => {
+                if let Some(extra) = arguments.next() {
+                    return Err(ParseError::UnexpectedArgument {
+                        message: format!("unexpected argument `{}`", extra),
+                        reason: "`lis sync` takes no arguments".to_string(),
+                        hint: "Run `lis sync` from the project root".to_string(),
+                    });
+                }
+                Ok(Command::Sync)
+            }
+
             "lsp" => Ok(Command::Lsp),
 
             "learn" => Ok(Command::Learn),
@@ -294,6 +306,7 @@ impl Command {
             "help",
             "version",
             "add",
+            "sync",
             "learn",
             "doc",
             "completions",

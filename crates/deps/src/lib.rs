@@ -4,8 +4,8 @@ mod typedef_locator;
 use std::path::{Path, PathBuf};
 
 pub use project_manifest::{
-    GoDependency, Manifest, check_toolchain_version, parse_manifest, remove_go_dep, upsert_go_dep,
-    validate_project_name,
+    GoDependency, Manifest, ResolveReport, TrimmedVia, check_toolchain_version, parse_manifest,
+    remove_go_dep, resolve_empty_via, trim_dead_via_parents, upsert_go_dep, validate_project_name,
 };
 pub use typedef_locator::{TypedefLocator, TypedefLocatorResult, TypedefOrigin};
 

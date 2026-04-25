@@ -2,6 +2,7 @@ mod agents_md;
 mod command;
 mod go_cli;
 mod handlers;
+mod lock;
 mod output;
 mod panic;
 mod typedef_regen;
@@ -81,6 +82,7 @@ fn main() {
             0
         }
         Command::Add { dependency } => handlers::add(&dependency),
+        Command::Sync => handlers::sync(),
         Command::Lsp => handlers::lsp(),
         Command::Bindgen {
             package,

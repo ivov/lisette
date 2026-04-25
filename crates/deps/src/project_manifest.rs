@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::Path;
 
@@ -229,6 +229,121 @@ pub fn remove_go_dep(project_root: &Path, go_dep_path: &str) -> Result<(), Strin
     }
 
     save_manifest(&path, &encoding, &manifest)
+}
+
+/// Trimmed transitive dep. `removed_parents` are parents dropped from `via`.
+pub struct TrimmedVia {
+    pub module_path: String,
+    pub removed_parents: Vec<String>,
+}
+
+pub struct ResolveReport {
+    pub promoted: Vec<String>,
+    pub removed: Vec<String>,
+}
+
+/// Drop `via` parents that are no longer manifest keys. Never deletes entries.
+/// `resolve_empty_via` handles entries left with `via = []`.
+pub fn trim_dead_via_parents(project_root: &Path) -> Result<Vec<TrimmedVia>, String> {
+    let manifest = parse_manifest(project_root)?;
+    let live_deps = manifest.go_deps();
+    let live_paths: HashSet<&str> = live_deps.keys().map(|s| s.as_str()).collect();
+
+    let mut trimmed = Vec::new();
+
+    for (dep_path, dep) in &live_deps {
+        let Some(ref via) = dep.via else { continue };
+
+        let removed_parents: Vec<String> = via
+            .iter()
+            .filter(|parent| !live_paths.contains(parent.as_str()))
+            .cloned()
+            .collect();
+
+        if removed_parents.is_empty() {
+            continue;
+        }
+
+        let mut canonical: Vec<String> = via
+            .iter()
+            .filter(|parent| live_paths.contains(parent.as_str()))
+            .cloned()
+            .collect();
+        canonical.sort();
+        canonical.dedup();
+
+        upsert_go_dep(project_root, dep_path, &dep.version, Some(canonical))?;
+        trimmed.push(TrimmedVia {
+            module_path: dep_path.clone(),
+            removed_parents,
+        });
+    }
+
+    Ok(trimmed)
+}
+
+/// For each entry with `via = []`, promote (drop the `via` field) if any
+/// `imported_pkgs` path maps to it by longest-declared-prefix; otherwise
+/// remove the entry.
+///
+/// Each import maps to a single best key — its longest declared prefix. E.g.
+/// `k8s.io/api/core/v1` maps to `k8s.io/api` (not `k8s.io`) when both are
+/// declared, preventing double-counting against nested keys.
+pub fn resolve_empty_via(
+    project_root: &Path,
+    imported_pkgs: &[String],
+) -> Result<ResolveReport, String> {
+    let manifest = parse_manifest(project_root)?;
+    let live_deps = manifest.go_deps();
+
+    let mut matched: HashSet<String> = HashSet::new();
+    for pkg in imported_pkgs {
+        if let Some((module, _)) = find_module_for_pkg(&live_deps, pkg) {
+            matched.insert(module.to_string());
+        }
+    }
+
+    let mut promoted = Vec::new();
+    let mut removed = Vec::new();
+
+    for (dep_path, dep) in &live_deps {
+        let Some(ref via) = dep.via else { continue };
+        if !via.is_empty() {
+            continue;
+        }
+
+        if matched.contains(dep_path.as_str()) {
+            upsert_go_dep(project_root, dep_path, &dep.version, None)?;
+            promoted.push(dep_path.clone());
+        } else {
+            remove_go_dep(project_root, dep_path)?;
+            removed.push(dep_path.clone());
+        }
+    }
+
+    Ok(ResolveReport { promoted, removed })
+}
+
+/// Longest declared module path that is a prefix of `pkg_path`, matching the
+/// full key or a key followed by `/`.
+pub(crate) fn find_module_for_pkg<'a>(
+    deps: &'a BTreeMap<String, GoDependency>,
+    pkg_path: &str,
+) -> Option<(&'a str, &'a GoDependency)> {
+    let mut best: Option<(&str, &GoDependency)> = None;
+    for (module_path, dep) in deps {
+        let is_match = pkg_path == module_path.as_str()
+            || (pkg_path.starts_with(module_path.as_str())
+                && pkg_path.as_bytes().get(module_path.len()) == Some(&b'/'));
+        if is_match
+            && best
+                .as_ref()
+                .is_none_or(|(prev, _)| module_path.len() > prev.len())
+        {
+            best = Some((module_path.as_str(), dep));
+        }
+    }
+    best
 }
 
 fn ensure_go_deps_table(

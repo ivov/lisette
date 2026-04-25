@@ -245,6 +245,55 @@ fn graph_declared_dep_missing_typedef() {
 }
 
 #[test]
+fn graph_subpackage_missing_typedef_points_at_add() {
+    use std::collections::BTreeMap;
+
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", r#"import "go:k8s.io/api/core/v1""#);
+
+    let mut store = Store::new();
+    store.module_ids.push("main".to_string());
+
+    let mut go_deps = BTreeMap::new();
+    go_deps.insert(
+        "k8s.io/api".to_string(),
+        deps::GoDependency {
+            version: "v0.30.0".to_string(),
+            via: None,
+        },
+    );
+    let resolver = deps::TypedefLocator::new(go_deps, None, None);
+
+    let sink = LocalSink::new();
+    let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
+
+    assert!(sink.has_errors());
+
+    let diags = sink.take();
+    let missing = diags
+        .iter()
+        .find(|d| d.code_str() == Some("resolve.missing_go_typedef"))
+        .expect("missing_go_typedef diagnostic");
+    let help = missing.plain_help().unwrap_or("");
+    assert!(
+        help.contains("Subpackage"),
+        "subpackage variant should mention `Subpackage`, got: {help}",
+    );
+    assert!(
+        help.contains("k8s.io/api/core/v1"),
+        "subpackage variant should reference the imported package path, got: {help}",
+    );
+    assert!(
+        help.contains("lis add k8s.io/api@v0.30.0"),
+        "subpackage variant should suggest `lis add <module>@<version>` (which runs reconcile and writes missing subpackage typedefs), got: {help}",
+    );
+    assert!(
+        !help.contains("lis sync") && !help.contains("lis check"),
+        "subpackage variant must not suggest `lis sync` or `lis check` — neither regenerates a missing subpackage typedef when the module dir already contains the root .d.lis, got: {help}",
+    );
+}
+
+#[test]
 fn store_get_definition_domain_style_go_module() {
     let mut store = Store::new();
     store.add_module("go:github.com/gorilla/mux");

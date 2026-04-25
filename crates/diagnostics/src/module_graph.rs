@@ -69,13 +69,22 @@ pub fn missing_go_typedef(
     version: &str,
     span: Span,
 ) -> LisetteDiagnostic {
+    let help = if go_pkg == module {
+        format!(
+            "Module `{}` {} is declared but no typedef was found. Run `lis check` to regenerate all typedefs, or `lis add {}@{}` to regenerate this one.",
+            module, version, module, version
+        )
+    } else {
+        format!(
+            "Subpackage `{}` of module `{}` {} has no typedef. Run `lis add {}@{}` to regenerate the module's typedefs, including any subpackages.",
+            go_pkg, module, version, module, version
+        )
+    };
+
     LisetteDiagnostic::error("Missing Go typedef")
         .with_resolve_code("missing_go_typedef")
         .with_span_label(&span, "no .d.lis file found")
-        .with_help(format!(
-            "Package `{}` is declared via `{}` {} but no typedef was found. Run `lis check` to regenerate all typedefs, or `lis add {}@{}` to regenerate this one.",
-            go_pkg, module, version, module, version
-        ))
+        .with_help(help)
 }
 
 pub fn unreadable_go_typedef(path: &std::path::Path, error: &str, span: Span) -> LisetteDiagnostic {

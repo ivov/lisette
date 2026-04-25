@@ -8,3 +8,4 @@ pub mod infer;
 mod lex;
 mod parse;
 mod pattern_analysis;
+mod sync;

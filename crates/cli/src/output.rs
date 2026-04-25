@@ -176,20 +176,20 @@ pub fn capitalize_first(s: &str) -> String {
     }
 }
 
-pub fn print_preview_notice() {
+pub fn print_preview_notice(command: &str) {
     eprintln!();
     if use_color() {
         eprintln!(
             "  ! You are running an unfinished feature: {}",
-            "lis add".bright_magenta()
+            command.bright_magenta()
         );
         eprintln!(
             "  ! Support for third-party Go dependencies is {}",
             "not yet stable".yellow().underline()
         );
     } else {
-        eprintln!("  ! You are running an unfinished feature: lis add");
-        eprintln!("  ! Support for third-party Go dependencies is not yet stable");
+        eprintln!("  ! You are running an unfinished feature: {}", command);
+        eprintln!("  ! Support for third-party Go dependencies is experimental");
     }
     eprintln!("  ! Bug reports are welcome: https://github.com/ivov/lisette/issues");
     eprintln!();
@@ -300,6 +300,62 @@ fn print_tree_node(
             colored,
             visited,
         );
+    }
+}
+
+pub fn print_sync_summary(trimmed: &[deps::TrimmedVia], promoted: &[String], removed: &[String]) {
+    eprintln!();
+
+    if trimmed.is_empty() && promoted.is_empty() && removed.is_empty() {
+        if use_color() {
+            eprintln!("  {} Manifest already in sync", "✓".green());
+        } else {
+            eprintln!("  ✓ Manifest already in sync");
+        }
+        return;
+    }
+
+    let colored = use_color();
+
+    let promoted_set: std::collections::HashSet<&str> =
+        promoted.iter().map(String::as_str).collect();
+    let removed_set: std::collections::HashSet<&str> = removed.iter().map(String::as_str).collect();
+
+    for entry in trimmed {
+        if promoted_set.contains(entry.module_path.as_str())
+            || removed_set.contains(entry.module_path.as_str())
+        {
+            continue;
+        }
+        let parents = entry.removed_parents.join(", ");
+        if colored {
+            eprintln!(
+                "  ↓ Trimmed via for {} (removed: {})",
+                entry.module_path.green(),
+                parents.blue()
+            );
+        } else {
+            eprintln!(
+                "  ↓ Trimmed via for {} (removed: {})",
+                entry.module_path, parents
+            );
+        }
+    }
+
+    for path in promoted {
+        if colored {
+            eprintln!("  ↑ Promoted {} to direct", path.green());
+        } else {
+            eprintln!("  ↑ Promoted {} to direct", path);
+        }
+    }
+
+    for path in removed {
+        if colored {
+            eprintln!("  − Removed {}", path.green());
+        } else {
+            eprintln!("  − Removed {}", path);
+        }
     }
 }
 
