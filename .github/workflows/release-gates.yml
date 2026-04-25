@@ -11,13 +11,10 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  IS_RELEASE_PR: ${{ startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
-
 jobs:
   emit-runtime-gate:
     name: Emit runtime suite
-    if: env.IS_RELEASE_PR == 'true'
+    if: ${{ startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -39,7 +36,7 @@ jobs:
 
   windows-build-gate:
     name: Windows build
-    if: env.IS_RELEASE_PR == 'true'
+    if: ${{ startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -54,7 +51,7 @@ jobs:
 
   packaging-gate:
     name: Packaging dry-run
-    if: env.IS_RELEASE_PR == 'true'
+    if: ${{ startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
