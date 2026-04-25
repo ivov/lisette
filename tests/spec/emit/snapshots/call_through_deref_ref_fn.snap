@@ -11,7 +11,7 @@ func apply(f *IntFn, x int) int {
 }
 
 func test() int {
-	double := func(x int) int {
+	var double IntFn = func(x int) int {
 		return x * 2
 	}
 	return apply(&double, 3)

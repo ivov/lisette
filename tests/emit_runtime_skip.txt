@@ -42,6 +42,5 @@ newtype_nested_field_assign_eval_order      # eval-order: out-of-range index pro
 slice_range_eval_order_captured             # eval-order: out-of-range slice proves capture
 
 # --- FIXME: codegen bugs surfaced by the runtime suite ---
-call_through_deref_ref_fn                   # FIXME: emits *func type but call site expects *IntFn alias
 prelude_method_value_type_instantiation     # FIXME: function-value capture of prelude fn — needs capture-site lowering
 prelude_some_ok_constructor_value           # FIXME: function-value capture of prelude fn — needs capture-site lowering

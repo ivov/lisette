@@ -240,6 +240,9 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
     /// 1. The value is a literal (integer or float), possibly negated
     /// 2. The binding type differs from Go's default inference for that literal
     /// 3. The binding type is an interface (Go's := would infer the concrete type)
+    /// 4. The binding type is a defined-fn-type alias and the value emits as a
+    ///    bare `func(...)` literal — without `var`, Go infers the anonymous
+    ///    func type and `&binding` no longer matches `*Alias` at call sites.
     fn needs_explicit_type_declaration(&self) -> bool {
         let binding_ty = &self.binding.ty;
 
@@ -248,6 +251,12 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             if *binding_ty != value_ty {
                 return true;
             }
+        }
+
+        if is_fn_alias_nominal(binding_ty)
+            && matches!(self.value.unwrap_parens(), Expression::Lambda { .. })
+        {
+            return true;
         }
 
         let inner_value = unwrap_unary_negation(self.value);
@@ -677,6 +686,25 @@ fn unwrap_unary_negation(expression: &Expression) -> &Expression {
         Expression::Paren { expression, .. } => unwrap_unary_negation(expression),
         _ => expression,
     }
+}
+
+fn is_fn_alias_nominal(ty: &Type) -> bool {
+    let resolved = match ty {
+        Type::Forall { body, .. } => body.as_ref(),
+        other => other,
+    };
+    let Type::Nominal {
+        underlying_ty: Some(inner),
+        ..
+    } = resolved
+    else {
+        return false;
+    };
+    let inner = match inner.as_ref() {
+        Type::Forall { body, .. } => body.as_ref(),
+        other => other,
+    };
+    matches!(inner, Type::Function { .. })
 }
 
 /// Check if an expression contains a binding with the given name.

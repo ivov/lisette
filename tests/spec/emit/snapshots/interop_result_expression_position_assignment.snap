@@ -9,7 +9,7 @@ import "strconv"
 type F func(string) (int, error)
 
 func main() {
-	f := func(_ string) (int, error) {
+	var f F = func(_ string) (int, error) {
 		return 0, nil
 	}
 	var u any
