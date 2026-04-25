@@ -1731,3 +1731,73 @@ fn handle(msg: Msg) -> int {
 "#;
     infer(input).assert_exhaustiveness_error();
 }
+
+#[test]
+fn test_redundant_string_pattern_raw_vs_escaped() {
+    let input = r#"
+fn classify(s: string) -> int {
+  match s {
+    r"a\nb" => 1,
+    "a\\nb" => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_redundancy_error();
+}
+
+#[test]
+fn test_redundant_string_pattern_unicode_escape_vs_literal() {
+    let input = r#"
+fn classify(s: string) -> int {
+  match s {
+    "A" => 1,
+    "\u{0041}" => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_redundancy_error();
+}
+
+#[test]
+fn test_redundant_string_pattern_hex_escape_vs_literal() {
+    let input = r#"
+fn classify(s: string) -> int {
+  match s {
+    "A" => 1,
+    "\x41" => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_redundancy_error();
+}
+
+#[test]
+fn test_redundant_string_pattern_octal_escape_vs_literal() {
+    let input = r#"
+fn classify(s: string) -> int {
+  match s {
+    "A" => 1,
+    "\101" => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_redundancy_error();
+}
+
+#[test]
+fn test_redundant_string_pattern_newline_spellings() {
+    let input = r#"
+fn classify(s: string) -> int {
+  match s {
+    "\n" => 1,
+    "\u{000A}" => 2,
+    _ => 0,
+  }
+}
+"#;
+    infer(input).assert_redundancy_error();
+}

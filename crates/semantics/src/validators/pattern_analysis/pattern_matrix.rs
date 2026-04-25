@@ -2,6 +2,7 @@ use rustc_hash::FxHashSet as HashSet;
 
 use syntax::ast::Literal;
 
+use super::escape::{equals_target, runtime_bytes};
 use super::types::*;
 
 pub enum ScrutineeSignature {
@@ -48,11 +49,16 @@ pub fn specialize_by_wildcard(rows: &[Row]) -> Vec<Row> {
 }
 
 pub fn specialize_by_literal(rows: &[Row], literal: &Literal) -> Vec<Row> {
+    let target_bytes = runtime_bytes(literal);
     rows.iter()
         .filter_map(|row| {
             let first = row.first()?;
             match first {
-                NormalizedPattern::Literal(lit) if lit == literal => Some(row[1..].to_vec()),
+                NormalizedPattern::Literal(lit)
+                    if equals_target(lit, literal, target_bytes.as_deref()) =>
+                {
+                    Some(row[1..].to_vec())
+                }
                 NormalizedPattern::Wildcard => Some(row[1..].to_vec()),
                 _ => None,
             }
