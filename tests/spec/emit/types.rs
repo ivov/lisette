@@ -2691,6 +2691,42 @@ fn main() {
 }
 
 #[test]
+fn struct_user_string_with_wrong_signature_does_not_suppress_auto() {
+    let input = r#"
+struct A { a: string }
+
+impl A {
+  fn String(self) -> int {
+    42
+  }
+}
+
+fn main() {
+  let _ = A { a: "x" }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ufcs_stringer_on_specialized_impl_does_not_suppress_auto() {
+    let input = r#"
+struct Box<T> { v: T }
+
+impl Box<int> {
+  fn String(self) -> string {
+    "int_box"
+  }
+}
+
+fn main() {
+  let _ = Box { v: 42 }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_user_pascal_string_and_go_string_methods() {
     let input = r#"
 struct Point { x: int, y: int }

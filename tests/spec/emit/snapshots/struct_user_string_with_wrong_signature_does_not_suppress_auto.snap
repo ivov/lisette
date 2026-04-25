@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct A { a: string }\n\nimpl A {\n  fn String(self) -> int {\n    42\n  }\n}\n\nfn main() {\n  let _ = A { a: \"x\" }\n}\n"
+---
+package main
+
+import "fmt"
+
+type A struct {
+	a string
+}
+
+func (a A) String() string {
+	return fmt.Sprintf("A { a: %v }", a.a)
+}
+
+func (a A) String() int {
+	return 42
+}
+
+func main() {
+	_ = A{a: "x"}
+}

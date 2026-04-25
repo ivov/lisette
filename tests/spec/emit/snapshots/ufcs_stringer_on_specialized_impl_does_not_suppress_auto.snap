@@ -1,7 +1,7 @@
 ---
-source: tests/spec/build/mod.rs
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Box<T> { v: T }\n\nimpl Box<int> {\n  fn String(self) -> string {\n    \"int_box\"\n  }\n}\n\nfn main() {\n  let _ = Box { v: 42 }\n}\n"
 ---
-// === main.go ===
 package main
 
 import "fmt"
@@ -19,6 +19,5 @@ func Box_String(_ Box[int]) string {
 }
 
 func main() {
-	b := Box[int]{v: 42}
-	fmt.Println(b)
+	_ = Box[int]{v: 42}
 }
