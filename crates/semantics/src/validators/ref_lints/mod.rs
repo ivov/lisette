@@ -13,7 +13,7 @@ use syntax::program::{File, FileImport};
 use super::Lint as LintEnum;
 use super::ast_lints::attributes::SERIALIZATION_KEYS;
 use super::lints::LintConfig;
-use extract::{AliasMap, extract_references};
+use extract::{AliasMap, extract_references, is_upper};
 use reference_graph::{
     EnumVariantId, EnumVariantInfo, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId,
     StructFieldInfo,
@@ -249,7 +249,9 @@ fn collect_items(
                         } = method
                         {
                             let id = ModuleItemId::new(&module.id, name);
-                            let is_entry = *visibility == Visibility::Public;
+                            let is_entry = *visibility == Visibility::Public
+                                || is_upper(name)
+                                || matches!(name.as_str(), "string" | "goString" | "error");
                             graph.add_item(id, *name_span, ItemKind::Function, is_entry);
                         }
                     }

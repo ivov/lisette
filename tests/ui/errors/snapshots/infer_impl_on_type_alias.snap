@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot implement methods on type alias
+   ╭─[test.lis:4:6]
+ 3 │ 
+ 4 │ impl UserId {
+   ·      ───┬──
+   ·         ╰── type alias
+ 5 │   fn bump(self) -> int {
+   ╰────
+  help: A type alias cannot carry its own methods. Either add methods to the underlying type directly or define a tuple struct instead · code: [infer.impl_on_type_alias]

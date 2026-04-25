@@ -1,0 +1,24 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Box[T any] struct {
+	v T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { v: %v }", b.v)
+}
+
+func Box_String(_ Box[int]) string {
+	return "int_box"
+}
+
+func main() {
+	b := Box[int]{v: 42}
+	fmt.Println(b)
+}

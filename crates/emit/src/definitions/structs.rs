@@ -5,7 +5,7 @@ use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
 use syntax::program::Definition;
-use syntax::types::Type;
+use syntax::types::{SimpleKind, Type};
 
 impl Emitter<'_> {
     pub(crate) fn emit_struct_definition(
@@ -224,13 +224,12 @@ impl Emitter<'_> {
         )
     }
 
-    /// Returns the name for the auto-generated stringer method, or `None` if no
-    /// auto-generated method should be emitted. Both Lisette casing (`string`,
-    /// `goString`) and Go casing (`String`, `GoString`) count as user-defined.
-    ///
-    /// - No user stringer → auto-generated method is `"String"`
-    /// - User stringer only → auto-generated method is `"GoString"`
-    /// - User stringer + go-stringer → `None` (skip, user covers both)
+    /// Returns the auto-stringer method name to emit, or `None` to skip.
+    /// A user method only suppresses auto-emission when it matches
+    /// `fn NAME(self) -> string` *and* emits as a real Go receiver method.
+    /// UFCS-emitted methods (specialized impls, extra type params, mixed
+    /// impl blocks) become free functions in Go and do not satisfy Go
+    /// interfaces, so they do not count.
     pub(super) fn stringer_method_name(&self, name: &str) -> Option<&'static str> {
         let qualified = format!("{}.{}", self.current_module, name);
         let methods = self
@@ -244,16 +243,44 @@ impl Emitter<'_> {
                 | Definition::TypeAlias { methods, .. } => Some(methods),
                 _ => None,
             });
-        let has_stringer = methods
-            .is_some_and(|m| m.contains_key("string") || m.contains_key(ENUM_STRINGER_METHOD));
-        let has_go_stringer = methods
-            .is_some_and(|m| m.contains_key("goString") || m.contains_key(ENUM_GO_STRINGER_METHOD));
+
+        let is_user_stringer = |method_name: &str| {
+            methods.is_some_and(|m| is_stringer_signature(m.get(method_name)))
+                && !self
+                    .ctx
+                    .ufcs_methods
+                    .contains(&(qualified.clone(), method_name.to_string()))
+        };
+
+        let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
+
+        let has_go_stringer =
+            is_user_stringer("goString") || is_user_stringer(ENUM_GO_STRINGER_METHOD);
         match (has_stringer, has_go_stringer) {
             (true, true) => None,
             (true, false) => Some(ENUM_GO_STRINGER_METHOD),
             _ => Some(ENUM_STRINGER_METHOD),
         }
     }
+}
+
+fn is_stringer_signature(method_ty: Option<&Type>) -> bool {
+    let Some(ty) = method_ty else {
+        return false;
+    };
+    let func = match ty {
+        Type::Forall { body, .. } => body.as_ref(),
+        other => other,
+    };
+    let Type::Function {
+        params,
+        return_type,
+        ..
+    } = func
+    else {
+        return false;
+    };
+    params.len() == 1 && matches!(return_type.as_ref(), Type::Simple(SimpleKind::String))
 }
 
 fn is_option_type(ty: &Type) -> bool {

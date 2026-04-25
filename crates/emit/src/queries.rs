@@ -84,6 +84,7 @@ impl Emitter<'_> {
 
     pub(crate) fn method_needs_export(&self, method_name: &str) -> bool {
         self.module.exported_method_names.contains(method_name)
+            || matches!(method_name, "string" | "goString" | "error")
     }
 
     pub(crate) fn has_field(&self, struct_ty: &Type, field_name: &str) -> bool {

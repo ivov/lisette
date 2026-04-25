@@ -153,6 +153,21 @@ impl TaskState<'_> {
             return;
         }
 
+        if !self.is_d_lis(&*store)
+            && let Some(module) = store.get_module(&module_id)
+            && matches!(
+                module.definitions.get(&receiver_qualified_name),
+                Some(Definition::TypeAlias { .. })
+            )
+        {
+            self.sink.push(diagnostics::infer::impl_on_type_alias(
+                type_name,
+                annotation.get_span(),
+            ));
+            self.scopes.pop();
+            return;
+        }
+
         let mut impl_bounds: Vec<syntax::types::Bound> = Vec::new();
         for g in generics {
             for b in &g.bounds {

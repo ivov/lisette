@@ -1,0 +1,24 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+func main() {
+	e := MyErr{msg: "boom"}
+	fmt.Println(e)
+}
+
+type MyErr struct {
+	msg string
+}
+
+func (m MyErr) String() string {
+	return fmt.Sprintf("MyErr { msg: %v }", m.msg)
+}
+
+func (m MyErr) Error() string {
+	return "ERR: " + m.msg
+}

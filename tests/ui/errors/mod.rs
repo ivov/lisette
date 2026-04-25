@@ -4670,6 +4670,22 @@ fn test() {
 }
 
 #[test]
+fn infer_impl_on_type_alias() {
+    let source = r#"
+type UserId = int
+
+impl UserId {
+  fn bump(self) -> int {
+    self + 1
+  }
+}
+
+fn main() {}
+"#;
+    assert_infer_error_snapshot!(source);
+}
+
+#[test]
 fn infer_impl_on_foreign_type() {
     let mut fs = MockFileSystem::new();
 

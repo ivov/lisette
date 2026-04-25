@@ -1,0 +1,24 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type A struct {
+	a string
+}
+
+func (a A) GoString() string {
+	return fmt.Sprintf("A { a: %v }", a.a)
+}
+
+func (a A) String() string {
+	return "lis_" + a.a
+}
+
+func main() {
+	a := A{a: "x"}
+	fmt.Println(a)
+}

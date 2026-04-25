@@ -2056,6 +2056,16 @@ pub fn impl_on_foreign_type(type_name: &str, module_name: &str, span: Span) -> L
         ))
 }
 
+pub fn impl_on_type_alias(_type_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot implement methods on type alias")
+        .with_infer_code("impl_on_type_alias")
+        .with_span_label(&span, "type alias")
+        .with_help(
+            "A type alias cannot carry its own methods. Either add methods to the underlying \
+             type directly or define a tuple struct instead",
+        )
+}
+
 pub fn prelude_type_shadowed(name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot shadow prelude type")
         .with_infer_code("prelude_type_shadowed")
