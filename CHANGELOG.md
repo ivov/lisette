@@ -2,6 +2,12 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.21](https://github.com/ivov/lisette/compare/lisette-v0.1.20...lisette-v0.1.21) - 2026-04-25
+
+- fix: do not lower-classify prelude-fn callees [#186](https://github.com/ivov/lisette/pull/186) [`8ad9926`](https://github.com/ivov/lisette/commit/8ad992603b33817b773eae9221ab2ab94a6e428f)
+- fix: use %p for func-typed fields in auto-stringers [#188](https://github.com/ivov/lisette/pull/188) [`6331009`](https://github.com/ivov/lisette/commit/633100914497636b78e55ee57f76c6f0a6fc11cd)
+- fix: avoid unused go bindings in select-recv and while-let [#189](https://github.com/ivov/lisette/pull/189) [`7be8550`](https://github.com/ivov/lisette/commit/7be8550fda99cb3b75227aa331c64b41b058459e)
+
 ## [0.1.20](https://github.com/ivov/lisette/compare/lisette-v0.1.19...lisette-v0.1.20) - 2026-04-25
 
 - feat: add sentinel-int hint and lower any nilable err type [`c11e1de`](https://github.com/ivov/lisette/commit/c11e1de139756c1a324e9dd345a4bc05c6e6ca12)
