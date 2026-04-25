@@ -43,6 +43,5 @@ slice_range_eval_order_captured             # eval-order: out-of-range slice pro
 
 # --- FIXME: codegen bugs surfaced by the runtime suite ---
 call_through_deref_ref_fn                   # FIXME: emits *func type but call site expects *IntFn alias
-struct_user_string_with_wrong_signature_does_not_suppress_auto  # FIXME: emits duplicate String method
 prelude_method_value_type_instantiation     # FIXME: function-value capture of prelude fn — needs capture-site lowering
 prelude_some_ok_constructor_value           # FIXME: function-value capture of prelude fn — needs capture-site lowering

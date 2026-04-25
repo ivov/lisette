@@ -1474,6 +1474,48 @@ impl Counter {
 }
 
 #[test]
+fn infer_stringer_signature_mismatch_returns_int() {
+    let input = r#"
+struct A { a: string }
+
+impl A {
+  fn String(self) -> int {
+    42
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_stringer_signature_mismatch_lowercase_extra_param() {
+    let input = r#"
+struct A { a: string }
+
+impl A {
+  fn string(self, prefix: string) -> string {
+    prefix + self.a
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_go_stringer_signature_mismatch() {
+    let input = r#"
+struct A { a: string }
+
+impl A {
+  fn GoString(self) -> int {
+    0
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_unknown_outside_typedef() {
     let input = r#"
 fn test() {

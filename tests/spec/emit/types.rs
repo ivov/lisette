@@ -2691,24 +2691,6 @@ fn main() {
 }
 
 #[test]
-fn struct_user_string_with_wrong_signature_does_not_suppress_auto() {
-    let input = r#"
-struct A { a: string }
-
-impl A {
-  fn String(self) -> int {
-    42
-  }
-}
-
-fn main() {
-  let _ = A { a: "x" }
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn ufcs_stringer_on_specialized_impl_does_not_suppress_auto() {
     let input = r#"
 struct Box<T> { v: T }

@@ -18,6 +18,7 @@ mod post_inference;
 mod prelude_shadowing;
 mod receivers;
 mod ref_lints;
+mod stringer_signature;
 pub(crate) mod temp_producing;
 mod unused_expressions;
 mod visibility;
@@ -76,6 +77,7 @@ fn run_per_file(ctx: &mut ValidatorContext<'_>) {
     duplicate_bindings::run(ctx.typed_ast, ctx.sink);
     irrefutable_patterns::run(ctx.typed_ast, ctx.sink);
     receivers::run(ctx.typed_ast, ctx.sink);
+    stringer_signature::run(ctx.typed_ast, ctx.sink);
     prelude_shadowing::run(ctx.typed_ast, store, ctx.sink);
     generics::run(ctx.typed_ast, ctx.module_id, store, ctx.facts, ctx.sink);
     newtype::run(ctx.typed_ast, store, ctx.sink);

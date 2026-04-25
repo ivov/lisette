@@ -307,6 +307,19 @@ pub fn receiver_must_be_named_self(actual_name: &str, span: Span) -> LisetteDiag
         ))
 }
 
+pub fn stringer_signature_mismatch(method_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Reserved method signature")
+        .with_infer_code("stringer_signature_mismatch")
+        .with_span_label(
+            &span,
+            format!("`{}` must have signature `(self) -> string`", method_name),
+        )
+        .with_help(format!(
+            "`{}` is reserved for the Go `fmt.Stringer` (or `fmt.GoStringer`) interface and is auto-emitted by Lisette. Either change the signature to `(self) -> string`, or rename the method",
+            method_name
+        ))
+}
+
 pub fn disallowed_mutation(
     variable_name: &str,
     span: Span,
