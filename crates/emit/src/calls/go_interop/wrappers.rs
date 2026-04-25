@@ -243,7 +243,7 @@ impl Emitter<'_> {
     ) -> String {
         match shape {
             AbiShape::PartialTuple => self.emit_partial_wrapping(output, call_str, result_ty),
-            AbiShape::CommaOk => self.emit_comma_ok_wrapping(output, call_str, result_ty),
+            AbiShape::CommaOk => self.emit_comma_ok_wrapping(output, call_str, result_ty, false),
             AbiShape::NullableReturn => {
                 let raw_var = self.fresh_var(Some("raw"));
                 self.declare(&raw_var);
@@ -423,7 +423,7 @@ impl Emitter<'_> {
         let result_var = match strategy {
             GoCallStrategy::Result => self.emit_result_wrapping(&mut body, &call_str, &return_type),
             GoCallStrategy::CommaOk => {
-                self.emit_comma_ok_wrapping(&mut body, &call_str, &return_type)
+                self.emit_comma_ok_wrapping(&mut body, &call_str, &return_type, true)
             }
             GoCallStrategy::NullableReturn => {
                 let raw_var = self.fresh_var(Some("raw"));
@@ -632,7 +632,14 @@ impl Emitter<'_> {
         self.declare(&cb_var);
         write_line!(output, "{} := {}", cb_var, fn_value);
 
-        let call_str = format!("{}({})", cb_var, arg_names.join(", "));
+        let mut prelude = String::new();
+        let inner_args: Vec<String> = arg_names
+            .iter()
+            .zip(params.iter())
+            .map(|(name, param_ty)| self.lower_arg_to_tagged(&mut prelude, name, param_ty))
+            .collect();
+
+        let call_str = format!("{}({})", cb_var, inner_args.join(", "));
 
         // Option<fn> adaptation only fires in interface-method shims. Here
         // a closure-valued Option means the caller owns the nil check.
@@ -648,6 +655,50 @@ impl Emitter<'_> {
             return fn_value.to_string();
         };
 
-        format!("func({params_str}) {go_ret} {{\n{body}}}")
+        format!("func({params_str}) {go_ret} {{\n{prelude}{body}}}")
+    }
+
+    /// Convert a fn-typed wrapper arg from lowered Go ABI back to tagged for
+    /// the inner call. Identity for non-fn args and for fn args with no
+    /// lowered return.
+    pub(crate) fn lower_arg_to_tagged(
+        &mut self,
+        prelude: &mut String,
+        arg_name: &str,
+        param_ty: &Type,
+    ) -> String {
+        let unwrapped = param_ty.unwrap_forall();
+        let Type::Function {
+            params: inner_params,
+            return_type: inner_ret,
+            ..
+        } = unwrapped
+        else {
+            return arg_name.to_string();
+        };
+        let inner_ret = inner_ret.as_ref();
+        let Some(shape) = self.classify_direct_emission(inner_ret) else {
+            return arg_name.to_string();
+        };
+
+        let (inner_param_strs, inner_arg_names) = self.build_wrapper_params(inner_params);
+        let inner_call = format!("{}({})", arg_name, inner_arg_names.join(", "));
+        let tagged_ret = self.go_type_as_string(inner_ret);
+
+        let mut body = String::new();
+        let result_var = self.emit_callee_abi_wrapping(&mut body, &shape, &inner_call, inner_ret);
+        write_line!(body, "return {}", result_var);
+
+        let tagged_var = self.fresh_var(Some("tagged"));
+        self.declare(&tagged_var);
+        write_line!(
+            prelude,
+            "{} := func({}) {} {{\n{}}}",
+            tagged_var,
+            inner_param_strs.join(", "),
+            tagged_ret,
+            body
+        );
+        tagged_var
     }
 }

@@ -286,6 +286,22 @@ impl Emitter<'_> {
         }
     }
 
+    /// Prelude fn refs emit with tagged Go return (`Option[T]`); user fns
+    /// and lambdas emit with the lowered ABI (`(T, bool)`).
+    pub(crate) fn is_tagged_shape_fn_value(expression: &Expression) -> bool {
+        let inner = expression.unwrap_parens();
+        if inner.as_option_constructor().is_some()
+            || inner.as_result_constructor().is_some()
+            || inner.as_partial_constructor().is_some()
+        {
+            return true;
+        }
+        matches!(
+            inner,
+            Expression::Identifier { qualified: Some(q), .. } if q.starts_with("prelude.")
+        )
+    }
+
     /// Lowered shape of a callee. Type-driven so it fires regardless of
     /// whether the callee is a direct ref, local, parameter, or field.
     pub(crate) fn classify_callee_abi(&self, callee: &Expression) -> Option<AbiShape> {

@@ -150,6 +150,31 @@ impl Emitter<'_> {
         self.emit_operand(output, expression)
     }
 
+    /// Wrap a captured tagged-shape prelude fn ref into a lowered-ABI closure
+    /// so its Go type matches what the rest of the pipeline expects.
+    fn maybe_lower_tagged_fn_ref(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        ty: &Type,
+        raw: String,
+    ) -> String {
+        if self.emitting_call_callee || self.suppress_go_fn_short_circuit {
+            return raw;
+        }
+        if !Self::is_tagged_shape_fn_value(expression) {
+            return raw;
+        }
+        let fn_ty = ty.unwrap_forall();
+        let Type::Function { return_type, .. } = fn_ty else {
+            return raw;
+        };
+        if self.classify_direct_emission(return_type).is_none() {
+            return raw;
+        }
+        self.emit_lisette_callback_wrapper(output, &raw, fn_ty)
+    }
+
     /// True when a Go function value's natural ABI matches the slot's
     /// lowered shape — wrapping would be identity.
     fn go_fn_matches_lowered_slot(
@@ -199,7 +224,10 @@ impl Emitter<'_> {
     pub(crate) fn emit_operand(&mut self, output: &mut String, expression: &Expression) -> String {
         match expression {
             Expression::Literal { literal, ty, .. } => self.emit_literal(output, literal, ty),
-            Expression::Identifier { value, ty, .. } => self.emit_identifier(value, ty),
+            Expression::Identifier { value, ty, .. } => {
+                let raw = self.emit_identifier(value, ty);
+                self.maybe_lower_tagged_fn_ref(output, expression, ty, raw)
+            }
             Expression::Binary {
                 operator,
                 left,

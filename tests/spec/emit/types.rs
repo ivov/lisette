@@ -2471,6 +2471,20 @@ fn main() {
 }
 
 #[test]
+fn user_fn_option_tuple_return_call() {
+    let input = r#"
+fn maybe_pair(n: int) -> Option<(int, int)> {
+  if n > 0 { Some((n, n + 1)) } else { None }
+}
+fn main() {
+  let r = maybe_pair(5)
+  let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn prelude_some_ok_constructor_value() {
     let input = r#"
 fn main() {

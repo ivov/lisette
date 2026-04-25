@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn main() {\n  let f = Option.and_then\n  let x = f(Some(1), |v| Some(v * 2))\n  let _ = x\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	cb_1 := lisette.OptionAndThen[int, int]
+	f := func(arg0 lisette.Option[int], arg1 func(int) (int, bool)) (int, bool) {
+		tagged_3 := func(arg0 int) lisette.Option[int] {
+			return lisette.OptionFromCommaOk[int](arg1(arg0))
+		}
+		opt_4 := cb_1(arg0, tagged_3)
+		if opt_4.Tag == lisette.OptionSome {
+			return opt_4.SomeVal, true
+		}
+		return *new(int), false
+	}
+	option_5 := lisette.OptionFromCommaOk[int](f(lisette.MakeOptionSome(1), func(v int) (int, bool) {
+		return v * 2, true
+	}))
+	_ = option_5
+}

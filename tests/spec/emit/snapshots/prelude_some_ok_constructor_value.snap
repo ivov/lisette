@@ -7,7 +7,14 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
-	f := lisette.MakeOptionSome[int]
-	option_1 := lisette.OptionFromCommaOk[int](f(42))
-	_ = option_1
+	cb_1 := lisette.MakeOptionSome[int]
+	f := func(arg0 int) (int, bool) {
+		opt_2 := cb_1(arg0)
+		if opt_2.Tag == lisette.OptionSome {
+			return opt_2.SomeVal, true
+		}
+		return *new(int), false
+	}
+	option_3 := lisette.OptionFromCommaOk[int](f(42))
+	_ = option_3
 }

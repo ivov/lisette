@@ -70,6 +70,23 @@ impl Emitter<'_> {
         let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
         let staged = self.stage_composite(expression);
         self.suppress_go_fn_short_circuit = saved;
+
+        if suppress
+            && !matches!(expression.unwrap_parens(), Expression::Lambda { .. })
+            && !Self::is_tagged_shape_fn_value(expression)
+            && self.classify_go_fn_value(expression).is_none()
+            && let Some(param_ty) = param_ty
+            && let syntax::types::Type::Function { return_type, .. } = param_ty.unwrap_forall()
+            && self.classify_direct_emission(return_type).is_some()
+        {
+            let mut setup = staged.setup;
+            let cb_var = self.fresh_var(Some("cb"));
+            self.declare(&cb_var);
+            write_line!(setup, "{} := {}", cb_var, staged.value);
+            let tagged = self.lower_arg_to_tagged(&mut setup, &cb_var, param_ty);
+            return Staged::new(setup, tagged);
+        }
+
         staged
     }
 

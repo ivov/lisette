@@ -10,8 +10,6 @@
 #   eval-order   — test exercises evaluation-order codegen; the panic is the
 #                  assertion mechanism (out-of-bounds index proves the
 #                  captured-then-mutated value was used, etc.).
-#   FIXME        — real codegen bug surfaced by the runtime suite. Listed
-#                  here so the gate stays green; remove the line once fixed.
 
 # --- hang/block ---
 blocking_receive                            # hang/block: receive on channel with no sender
@@ -40,7 +38,3 @@ ufcs_call_return_only_type_args             # intentional: explicit panic in tes
 index_access_eval_order_captured            # eval-order: out-of-range index proves capture
 newtype_nested_field_assign_eval_order      # eval-order: out-of-range index proves capture
 slice_range_eval_order_captured             # eval-order: out-of-range slice proves capture
-
-# --- FIXME: codegen bugs surfaced by the runtime suite ---
-prelude_method_value_type_instantiation     # FIXME: function-value capture of prelude fn — needs capture-site lowering
-prelude_some_ok_constructor_value           # FIXME: function-value capture of prelude fn — needs capture-site lowering

@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn doubler(x: int) -> Option<int> { Some(x * 2) }\nfn main() {\n  let opt: Option<int> = Some(1)\n  let r = opt.and_then(doubler)\n  let _ = r\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func doubler(x int) (int, bool) {
+	return x * 2, true
+}
+
+func main() {
+	opt := lisette.MakeOptionSome(1)
+	cb_1 := doubler
+	tagged_3 := func(arg0 int) lisette.Option[int] {
+		return lisette.OptionFromCommaOk[int](cb_1(arg0))
+	}
+	_ = lisette.OptionAndThen(opt, tagged_3)
+}

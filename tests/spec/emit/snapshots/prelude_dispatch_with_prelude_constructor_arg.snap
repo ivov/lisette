@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn main() {\n  let opt: Option<int> = Some(1)\n  let r = opt.and_then(Some)\n  let _ = r\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func main() {
+	opt := lisette.MakeOptionSome(1)
+	_ = lisette.OptionAndThen(opt, lisette.MakeOptionSome[int])
+}

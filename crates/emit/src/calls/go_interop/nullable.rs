@@ -12,7 +12,7 @@ impl Emitter<'_> {
         option_ty: &Type,
     ) -> String {
         let call_str = self.emit_call(output, call_expression, None);
-        self.emit_comma_ok_wrapping(output, &call_str, option_ty)
+        self.emit_comma_ok_wrapping(output, &call_str, option_ty, true)
     }
 
     pub(super) fn emit_go_sentinel_call_wrapped(
@@ -54,11 +54,15 @@ impl Emitter<'_> {
         option_var
     }
 
+    /// Wrap a comma-ok-returning call into a tagged `Option`. `tuple_flattened`
+    /// distinguishes Go-imported callees that return `(T1, ..., Tn, bool)` from
+    /// Lisette callees whose lowered signature is `(Tuple_n[...], bool)`.
     pub(crate) fn emit_comma_ok_wrapping(
         &mut self,
         output: &mut String,
         call_str: &str,
         option_ty: &Type,
+        tuple_flattened: bool,
     ) -> String {
         self.flags.needs_stdlib = true;
 
@@ -66,7 +70,10 @@ impl Emitter<'_> {
         let inner_tuple_arity = inner_ty.tuple_arity();
         let needs_nilable_validation = self.is_nullable_option(option_ty);
 
-        if inner_tuple_arity.is_none() && !needs_nilable_validation {
+        let needs_complex =
+            needs_nilable_validation || (tuple_flattened && inner_tuple_arity.is_some());
+
+        if !needs_complex {
             let inner_ty_str = self.go_type_as_string(&inner_ty);
             let option_var = self.fresh_var(Some("option"));
             self.declare(&option_var);
@@ -82,7 +89,7 @@ impl Emitter<'_> {
 
         let fallible = Fallible::from_type(option_ty).expect("Option type expected");
 
-        let val_vars = if let Some(arity) = inner_tuple_arity {
+        let val_vars = if tuple_flattened && let Some(arity) = inner_tuple_arity {
             self.create_temp_vars("ret", arity)
         } else {
             self.create_temp_vars("ret", 1)
@@ -97,7 +104,7 @@ impl Emitter<'_> {
             .collect();
         write_line!(output, "{} := {}", all_vars.join(", "), call_str);
 
-        let val_expression = if inner_tuple_arity.is_some() {
+        let val_expression = if tuple_flattened && inner_tuple_arity.is_some() {
             self.build_tuple_literal(&val_vars, &inner_ty)
         } else {
             val_vars[0].clone()

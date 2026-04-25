@@ -667,3 +667,67 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn prelude_method_value_capture_with_option_returning_callback() {
+    let input = r#"
+fn main() {
+  let f = Option.and_then
+  let x = f(Some(1), |v| Some(v * 2))
+  let _ = x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn prelude_dispatch_with_prelude_constructor_arg() {
+    let input = r#"
+fn main() {
+  let opt: Option<int> = Some(1)
+  let r = opt.and_then(Some)
+  let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn prelude_dispatch_with_user_fn_arg() {
+    let input = r#"
+fn doubler(x: int) -> Option<int> { Some(x * 2) }
+fn main() {
+  let opt: Option<int> = Some(1)
+  let r = opt.and_then(doubler)
+  let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn prelude_dispatch_with_captured_prelude_constructor() {
+    let input = r#"
+fn main() {
+  let g = Some
+  let opt: Option<int> = Some(1)
+  let r = opt.and_then(g)
+  let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn prelude_dispatch_with_captured_user_fn_local() {
+    let input = r#"
+fn doubler(x: int) -> Option<int> { Some(x * 2) }
+fn main() {
+  let g = doubler
+  let opt: Option<int> = Some(1)
+  let r = opt.and_then(g)
+  let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
