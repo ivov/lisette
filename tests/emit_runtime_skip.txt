@@ -1,0 +1,56 @@
+# Tests that legitimately cannot run as a self-contained Go test, plus tests
+# pending a codegen fix. One snapshot stem per line, with an inline `#` reason.
+#
+# Categories:
+#   hang/block   — code is correct but blocks indefinitely without a peer
+#                  (channel send without receiver, infinite loop, WaitGroup
+#                  with no Done, etc.).
+#   intentional  — test demonstrates panic semantics; running it is supposed
+#                  to panic.
+#   eval-order   — test exercises evaluation-order codegen; the panic is the
+#                  assertion mechanism (out-of-bounds index proves the
+#                  captured-then-mutated value was used, etc.).
+#   FIXME        — real codegen bug surfaced by the runtime suite. Listed
+#                  here so the gate stays green; remove the line once fixed.
+
+# --- hang/block ---
+blocking_receive                            # hang/block: receive on channel with no sender
+blocking_receive_match                      # hang/block: receive on channel with no sender
+blocking_send                               # hang/block: send on channel with no receiver
+channel_iteration                           # hang/block: for..in on channel with no producer
+channel_split_destructure                   # hang/block: receive on channel with no sender
+defer_channel_send                          # hang/block: deferred send blocks at function exit
+go_opaque_type_struct_literal               # hang/block: sync.WaitGroup.Wait with no matching Done
+nested_block_continue_in_if_branch          # hang/block: continue in always-true branch loops forever
+nested_block_continue_in_let                # hang/block: continue in let-bound block loops forever
+select_match_receive_unused_binding         # hang/block: select on channel with no sender
+select_send_value_eval_order                # hang/block: select-send with no receiver
+try_block_diverging_final_expression        # hang/block: try-block contains `loop {}`
+
+# --- intentional panic ---
+builtin_panic                               # intentional: explicit panic("...") in test body
+if_with_user_never_branch_tail              # intentional: if-branch calls Never-returning fn
+never_returning_user_function_in_body       # intentional: test body calls Never-returning fn
+try_block_panic_tail_option_context         # intentional: explicit panic in try-block tail
+try_block_panic_tail_result_context         # intentional: explicit panic in try-block tail
+try_block_user_never_tail_result_context    # intentional: tail calls Never-returning fn
+ufcs_call_return_only_type_args             # intentional: explicit panic in test body
+
+# --- eval-order (panic is the assertion mechanism) ---
+index_access_eval_order_captured            # eval-order: out-of-range index proves capture
+newtype_nested_field_assign_eval_order      # eval-order: out-of-range index proves capture
+slice_range_eval_order_captured             # eval-order: out-of-range slice proves capture
+
+# --- FIXME: codegen bugs surfaced by the runtime suite ---
+let_else_or_pattern_scope_leak_after        # FIXME: pattern binding leaks past let-else block (panic("shadow") fires when it should not)
+call_through_deref_ref_fn                   # FIXME: emits *func type but call site expects *IntFn alias
+enum_tuple_variant_with_fn_type             # FIXME: emits %v on uncalled func value (go vet error)
+interop_result_map_field_assignment         # FIXME: emits %v on uncalled func value (go vet error)
+interop_result_struct_field                 # FIXME: emits %v on uncalled func value (go vet error)
+select_match_receive_complex_unused_recv    # FIXME: emits unused `ok` binding (go compile error)
+struct_user_string_with_wrong_signature_does_not_suppress_auto  # FIXME: emits duplicate String method
+while_let_or_pattern_unused_branch_binding  # FIXME: emits unused `x_1` binding (go compile error)
+prelude_method_value_type_instantiation     # FIXME: OptionFromCommaOk called with 1 arg, prelude expects 2
+prelude_some_ok_constructor_value           # FIXME: OptionFromCommaOk arity mismatch
+prelude_ufcs_static_call_option_map         # FIXME: OptionFromCommaOk arity mismatch
+unit_call_in_assert_type                    # FIXME: OptionFromCommaOk arity mismatch

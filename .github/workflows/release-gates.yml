@@ -1,0 +1,68 @@
+name: Release PR gates
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: release-gates-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  IS_RELEASE_PR: ${{ startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
+
+jobs:
+  emit-runtime-gate:
+    name: Emit runtime suite
+    if: env.IS_RELEASE_PR == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - uses: extractions/setup-just@v3
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run emit runtime suite
+        run: just test-emit-runtime
+
+  windows-build-gate:
+    name: Windows build
+    if: env.IS_RELEASE_PR == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build lisette
+        run: cargo build -p lisette
+
+  packaging-gate:
+    name: Packaging dry-run
+    if: env.IS_RELEASE_PR == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Cargo publish dry-run
+        run: cargo publish --workspace --dry-run

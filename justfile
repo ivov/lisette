@@ -36,6 +36,9 @@ test-accept:
 test-e2e:
     cargo test -p tests --test suite e2e
 
+test-emit-runtime:
+    cargo test -p tests --test emit_runtime -- --nocapture
+
 test-cov:
     cargo llvm-cov -p tests --test suite --test lsp --html --open
 

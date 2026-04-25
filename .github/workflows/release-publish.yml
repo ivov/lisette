@@ -1,38 +1,18 @@
-name: Release
+name: Publish release
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
 
 jobs:
-  prepare:
-    name: Prepare release PR
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    concurrency:
-      group: release-plz-${{ github.ref }}
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
-
-      - name: Install Rust toolchain
-        run: rustup show
-
-      - uses: release-plz/action@v0.5
-        with:
-          command: release-pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
-
   publish:
-    name: Publish Go modules to Go proxy and compiler to crates.io
+    name: Publish prelude, bindgen, compiler
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: release')
     runs-on: ubuntu-latest
     permissions:
       contents: write
