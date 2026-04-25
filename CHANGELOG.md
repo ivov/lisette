@@ -2,6 +2,16 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.20](https://github.com/ivov/lisette/compare/lisette-v0.1.19...lisette-v0.1.20) - 2026-04-25
+
+- feat: add sentinel-int hint and lower any nilable err type [`c11e1de`](https://github.com/ivov/lisette/commit/c11e1de139756c1a324e9dd345a4bc05c6e6ca12)
+- fix: harden go interface dispatch for user impl methods [#175](https://github.com/ivov/lisette/pull/175) [`9194ef5`](https://github.com/ivov/lisette/commit/9194ef52825ca3b47a02bf1bba8e501c666e5e1a)
+- fix: normalize string escapes when comparing patterns [#182](https://github.com/ivov/lisette/pull/182) [`22b0157`](https://github.com/ivov/lisette/commit/22b015769cd4fe1ab068b40624462adf295502ad)
+- feat: introduce raw string literals [#179](https://github.com/ivov/lisette/pull/179) [`4dcd1cb`](https://github.com/ivov/lisette/commit/4dcd1cbefbefb786ea4d8342c25a7d5802adbd2e)
+- refactor: lower wrapping types to go-native abi at function boundaries [#184](https://github.com/ivov/lisette/pull/184) [`541e21d`](https://github.com/ivov/lisette/commit/541e21dfd9d15cb7c50dbbe8fe72e19efc4dc205)
+- docs: surface lis lsp in help and quickstart [#181](https://github.com/ivov/lisette/pull/181) [`61da796`](https://github.com/ivov/lisette/commit/61da796c876ff1b9dfacd07229f7061d638099bd)
+- feat: add lis sync to reconcile manifest with source [#183](https://github.com/ivov/lisette/pull/183) [`3d694a8`](https://github.com/ivov/lisette/commit/3d694a844817a96e53bdccc273d88d26cfe40000)
+
 ## [0.1.19](https://github.com/ivov/lisette/compare/lisette-v0.1.18...lisette-v0.1.19) - 2026-04-24
 
 - ci: ship prebuilt binaries [#165](https://github.com/ivov/lisette/pull/165) [`a11eda1`](https://github.com/ivov/lisette/commit/a11eda1696aa2e0c9b3e7cc311d8031125a17529)
