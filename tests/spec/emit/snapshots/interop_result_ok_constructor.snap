@@ -9,21 +9,28 @@ import (
 	"strconv"
 )
 
-func make_() lisette.Result[func(string) lisette.Result[int, error], error] {
-	return lisette.MakeResultOk[func(string) lisette.Result[int, error], error](func(arg0 string) lisette.Result[int, error] {
-		ret_1, ret_2 := strconv.Atoi(arg0)
-		if ret_2 != nil {
-			return lisette.MakeResultErr[int, error](ret_2)
-		}
-		return lisette.MakeResultOk[int, error](ret_1)
-	})
+func make_() (func(string) (int, error), error) {
+	return strconv.Atoi, nil
 }
 
 func main() {
-	r := make_()
+	ret_1, ret_2 := make_()
+	var r lisette.Result[func(string) (int, error), error]
+	if ret_2 != nil {
+		r = lisette.MakeResultErr[func(string) (int, error), error](ret_2)
+	} else {
+		r = lisette.MakeResultOk[func(string) (int, error), error](ret_1)
+	}
 	if r.Tag == lisette.ResultOk {
 		f := r.OkVal
-		r2 := f("1")
+		ret_4, ret_5 := f("1")
+		var result_6 lisette.Result[int, error]
+		if ret_5 != nil {
+			result_6 = lisette.MakeResultErr[int, error](ret_5)
+		} else {
+			result_6 = lisette.MakeResultOk[int, error](ret_4)
+		}
+		r2 := result_6
 		if r2.Tag == lisette.ResultOk {
 			_ = r2.OkVal
 		} else {

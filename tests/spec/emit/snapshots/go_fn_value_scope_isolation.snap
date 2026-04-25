@@ -6,20 +6,13 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
 )
 
 func main() {
 	{
-		f := func(arg0 string) lisette.Result[int, error] {
-			ret_1, ret_2 := strconv.Atoi(arg0)
-			if ret_2 != nil {
-				return lisette.MakeResultErr[int, error](ret_2)
-			}
-			return lisette.MakeResultOk[int, error](ret_1)
-		}
-		_ = f("1")
+		f := strconv.Atoi
+		f("1")
 	}
 	f := func(_ string) int {
 		return 0

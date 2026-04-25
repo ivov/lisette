@@ -164,8 +164,9 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
 
     /// Get the ok type string from the current return context, falling back to the fallible's ok type.
     pub(crate) fn contextual_ok_type_string(&mut self) -> String {
-        if let Some(ty) = &self.emitter.current_return_context {
-            self.emitter.go_type_as_string(&ty.ok_type())
+        if let Some(ctx) = &self.emitter.current_return_context {
+            let ok_ty = ctx.ty.ok_type();
+            self.emitter.go_type_as_string(&ok_ty)
         } else {
             self.ok_type_string()
         }

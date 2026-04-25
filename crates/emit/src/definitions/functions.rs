@@ -79,10 +79,10 @@ impl Emitter<'_> {
             && self
                 .current_return_context
                 .as_ref()
-                .is_some_and(|ty| !ty.is_unit())
+                .is_some_and(|ctx| !ctx.ty.is_unit())
         {
-            let return_ty = self.current_return_context.as_ref().unwrap();
-            let zero = self.zero_value(return_ty);
+            let return_ty = self.current_return_context.as_ref().unwrap().ty.clone();
+            let zero = self.zero_value(&return_ty);
             write_line!(output, "return {}", zero);
         }
     }
@@ -94,7 +94,10 @@ impl Emitter<'_> {
         self.with_position(Position::Tail, |this| {
             if !requires_temp_var(last) {
                 let expression = this.emit_value(output, last);
-                let return_ty = this.current_return_context.clone();
+                let return_ty = this
+                    .current_return_context
+                    .as_ref()
+                    .map(|ctx| ctx.ty.clone());
                 let expression =
                     this.apply_type_coercion(output, return_ty.as_ref(), last, expression);
                 output.push_str(&this.wrap_value(&expression));
@@ -167,7 +170,11 @@ impl Emitter<'_> {
         let return_ty_string = if has_return {
             match ty {
                 Type::Function { return_type, .. } => {
-                    format!(" {}", self.go_type_as_string(return_type))
+                    if let Some(shape) = self.classify_direct_emission(return_type) {
+                        format!(" {}", self.render_lowered_return_ty(&shape, return_type))
+                    } else {
+                        format!(" {}", self.go_type_as_string(return_type))
+                    }
                 }
                 _ => String::new(),
             }
@@ -179,7 +186,8 @@ impl Emitter<'_> {
 
         let saved_return_context = self.current_return_context.clone();
         if let Type::Function { return_type, .. } = ty {
-            self.current_return_context = Some(return_type.as_ref().clone());
+            self.current_return_context =
+                Some(crate::ReturnContext::new(return_type.as_ref().clone()));
         }
 
         let mut body_string = String::new();
@@ -228,7 +236,9 @@ impl Emitter<'_> {
         let directive = self.maybe_line_directive(&function_definition.name_span);
 
         let saved_return_context = self.current_return_context.clone();
-        self.current_return_context = Some(function_definition.return_type.clone());
+        self.current_return_context = Some(crate::ReturnContext::new(
+            function_definition.return_type.clone(),
+        ));
 
         let (function_definition, receiver) =
             self.change_go_builtin_methods(function_definition, receiver);
@@ -285,6 +295,9 @@ impl Emitter<'_> {
 
         let return_ty = if function_definition.return_type.is_unit() {
             String::new()
+        } else if let Some(shape) = self.classify_direct_emission(&function_definition.return_type)
+        {
+            self.render_lowered_return_ty(&shape, &function_definition.return_type)
         } else {
             self.go_type_as_string(&function_definition.return_type)
         };

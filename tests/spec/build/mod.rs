@@ -4136,3 +4136,163 @@ fn main() {
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
+
+#[test]
+fn user_marshal_json_lowers_to_go_abi_shape() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:encoding/json"
+import "go:fmt"
+
+struct Widget { id: int }
+
+impl Widget {
+  fn MarshalJSON(self) -> Result<Slice<uint8>, error> {
+    Ok("\"custom\"" as Slice<uint8>)
+  }
+}
+
+fn main() {
+  let w = Widget { id: 7 }
+  match json.Marshal(w) {
+    Ok(b) => fmt.Println(b as string),
+    Err(e) => fmt.Println(e),
+  }
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn user_close_lowers_to_bare_error() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct Resource {}
+
+impl Resource {
+  fn Close(self) -> Result<(), error> {
+    Ok(())
+  }
+}
+
+fn main() {
+  let r = Resource {}
+  let _ = r.Close()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn non_error_err_slot_stays_tagged() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct MyError { msg: string }
+
+fn parse(s: string) -> Result<int, MyError> {
+  if s == "ok" {
+    Ok(1)
+  } else {
+    Err(MyError { msg: "bad" })
+  }
+}
+
+fn main() {
+  match parse("ok") {
+    Ok(_) => {},
+    Err(_) => {},
+  }
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn nested_result_inner_stays_tagged() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn outer() -> Result<Result<int, error>, error> {
+  Ok(Ok(1))
+}
+
+fn main() {
+  let _ = outer()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+/// Regression: a function whose return type is a type alias of
+/// `Result<T, error>` must lower to the Go `(T, error)` ABI shape, not
+/// crash on `ok_type()` against the unresolved alias.
+#[test]
+fn aliased_result_return_lowers() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+type R = Result<int, error>
+
+fn parse() -> R {
+  Ok(1)
+}
+
+fn main() {
+  let _ = parse()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+/// Regression: a `Result<T, E>` whose err slot is a type alias of `error`
+/// (`type MyErr = error`) must lower the same as a literal `Result<T, error>`.
+#[test]
+fn aliased_error_err_slot_lowers() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+type MyErr = error
+
+fn parse() -> Result<int, MyErr> {
+  Ok(1)
+}
+
+fn main() {
+  let _ = parse()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}

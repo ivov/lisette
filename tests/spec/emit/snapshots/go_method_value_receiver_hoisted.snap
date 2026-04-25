@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 )
 
 func make_(counter *int) *bytes.Buffer {
@@ -15,20 +14,13 @@ func make_(counter *int) *bytes.Buffer {
 	return bytes.NewBufferString("a\nb\n")
 }
 
-func use_fn(f func(uint8) lisette.Result[string, error]) {
-	_ = f(10)
-	_ = f(10)
+func use_fn(f func(uint8) (string, error)) {
+	f(10)
+	f(10)
 }
 
 func main() {
 	count := 0
-	fn_1 := make_(&count).ReadString
-	use_fn(func(arg0 uint8) lisette.Result[string, error] {
-		ret_2, ret_3 := fn_1(arg0)
-		if ret_3 != nil {
-			return lisette.MakeResultErr[string, error](ret_3)
-		}
-		return lisette.MakeResultOk[string, error](ret_2)
-	})
+	use_fn(make_(&count).ReadString)
 	fmt.Println(count)
 }

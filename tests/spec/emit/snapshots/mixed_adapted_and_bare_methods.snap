@@ -4,10 +4,7 @@ description: "input: \nimport \"go:example.com/mixed\"\n\nstruct Svc {}\n\nimpl 
 ---
 package main
 
-import (
-	"example.com/mixed"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/mixed"
 
 type Svc struct{}
 
@@ -15,8 +12,8 @@ func (s Svc) String() string {
 	return "Svc"
 }
 
-func (s Svc) Load(_ string) lisette.Result[int, error] {
-	return lisette.MakeResultOk[int, error](1)
+func (s Svc) Load(_ string) (int, error) {
+	return 1, nil
 }
 
 func (s Svc) Name() string {
@@ -37,11 +34,7 @@ type _lisAdapter_Svc_Service_0 struct {
 }
 
 func (a _lisAdapter_Svc_Service_0) Load(arg0 string) (int, error) {
-	res_1 := a.inner.Load(arg0)
-	if res_1.Tag == lisette.ResultOk {
-		return res_1.OkVal, nil
-	}
-	return *new(int), res_1.ErrVal
+	return a.inner.Load(arg0)
 }
 
 func (a _lisAdapter_Svc_Service_0) Name() string {

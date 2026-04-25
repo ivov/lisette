@@ -137,6 +137,9 @@ impl Emitter<'_> {
 
     pub(crate) fn emit_value(&mut self, output: &mut String, expression: &Expression) -> String {
         if let Some(strategy) = self.classify_go_fn_value(expression) {
+            if self.go_fn_matches_lowered_slot(expression, &strategy) {
+                return self.emit_operand(output, expression);
+            }
             return self.emit_go_fn_wrapper(output, expression, &strategy);
         }
 
@@ -145,6 +148,32 @@ impl Emitter<'_> {
         }
 
         self.emit_operand(output, expression)
+    }
+
+    /// True when a Go function value's natural ABI matches the slot's
+    /// lowered shape — wrapping would be identity.
+    fn go_fn_matches_lowered_slot(
+        &self,
+        expression: &Expression,
+        strategy: &crate::GoCallStrategy,
+    ) -> bool {
+        if self.suppress_go_fn_short_circuit {
+            return false;
+        }
+        let fn_ty = expression.get_type();
+        let Type::Function { return_type, .. } = fn_ty.unwrap_forall() else {
+            return false;
+        };
+        let Some(shape) = self.classify_direct_emission(return_type) else {
+            return false;
+        };
+        matches!(
+            (strategy, &shape),
+            (
+                crate::GoCallStrategy::Result,
+                crate::types::abi::AbiShape::ResultTuple | crate::types::abi::AbiShape::BareError,
+            )
+        )
     }
 
     pub(crate) fn emit_composite_value(
@@ -182,6 +211,14 @@ impl Emitter<'_> {
             Expression::Call { ty, .. } => {
                 if let Some(strategy) = self.resolve_go_call_strategy(expression) {
                     self.emit_go_wrapped_call(output, expression, &strategy, ty)
+                } else if let Expression::Call {
+                    expression: callee, ..
+                } = expression
+                    && self.classify_callee_abi(callee).is_some()
+                {
+                    self.flags.needs_stdlib = true;
+                    let call_str = self.emit_call(output, expression, Some(ty));
+                    self.emit_result_wrapping(output, &call_str, ty)
                 } else {
                     self.emit_call(output, expression, Some(ty))
                 }

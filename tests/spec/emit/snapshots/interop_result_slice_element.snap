@@ -10,14 +10,14 @@ import (
 )
 
 func main() {
-	arr := []func(string) lisette.Result[int, error]{func(arg0 string) lisette.Result[int, error] {
-		ret_1, ret_2 := strconv.Atoi(arg0)
-		if ret_2 != nil {
-			return lisette.MakeResultErr[int, error](ret_2)
-		}
-		return lisette.MakeResultOk[int, error](ret_1)
-	}}
-	r := arr[0]("1")
+	arr := []func(string) (int, error){strconv.Atoi}
+	ret_1, ret_2 := arr[0]("1")
+	var r lisette.Result[int, error]
+	if ret_2 != nil {
+		r = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		r = lisette.MakeResultOk[int, error](ret_1)
+	}
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal
 	} else {

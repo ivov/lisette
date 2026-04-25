@@ -3745,6 +3745,29 @@ fn byte_uint8_alias_in_generic_type() {
 }
 
 #[test]
+fn byte_uint8_alias_in_interface_method_signature() {
+    infer(
+        r#"
+    import "go:encoding"
+
+    struct Widget { id: int }
+
+    impl Widget {
+      fn MarshalText(self) -> Result<Slice<byte>, error> {
+        Ok("custom-text" as Slice<byte>)
+      }
+    }
+
+    fn main() {
+      let w = Widget { id: 7 }
+      let _: encoding.TextMarshaler = w
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn impl_block_generic_bound_struct_field_method() {
     infer(
         r#"

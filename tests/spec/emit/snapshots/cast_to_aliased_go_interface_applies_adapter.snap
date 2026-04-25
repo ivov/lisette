@@ -15,8 +15,8 @@ func (l Loader) String() string {
 	return "Loader"
 }
 
-func (l Loader) Load(_ string) lisette.Result[int, error] {
-	return lisette.MakeResultOk[int, error](1)
+func (l Loader) Load(_ string) (int, error) {
+	return 1, nil
 }
 
 func run(s svc.Alias) int {
@@ -43,9 +43,5 @@ type _lisAdapter_Loader_Service_0 struct {
 }
 
 func (a _lisAdapter_Loader_Service_0) Load(arg0 string) (int, error) {
-	res_1 := a.inner.Load(arg0)
-	if res_1.Tag == lisette.ResultOk {
-		return res_1.OkVal, nil
-	}
-	return *new(int), res_1.ErrVal
+	return a.inner.Load(arg0)
 }

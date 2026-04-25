@@ -97,7 +97,7 @@ impl Emitter<'_> {
         self.emit_result_wrapping(output, &call_str, result_ty)
     }
 
-    pub(super) fn emit_result_wrapping(
+    pub(crate) fn emit_result_wrapping(
         &mut self,
         output: &mut String,
         call_str: &str,

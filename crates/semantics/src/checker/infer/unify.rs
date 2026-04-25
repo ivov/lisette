@@ -453,6 +453,9 @@ impl TaskState<'_> {
                     self.unify_type_params(store, e1.iter().zip(e2.iter()), span)?;
                 }
                 (Type::Simple(k1), Type::Simple(k2)) if k1 == k2 => {}
+                // byte ↔ uint8, rune ↔ int32 in invariant generic positions
+                // (e.g. `Slice<byte>` conforming to a `Slice<uint8>` method).
+                (Type::Simple(k1), Type::Simple(k2)) if simple_kinds_are_go_aliases(*k1, *k2) => {}
                 (Type::Simple(kind), Nominal { id, params, .. })
                 | (Nominal { id, params, .. }, Type::Simple(kind))
                     if params.is_empty()

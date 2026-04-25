@@ -4,14 +4,11 @@ description: "input: \nimport \"go:errors\"\n\nfn might_fail(n: int) -> Result<i
 ---
 package main
 
-import (
-	"errors"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "errors"
 
-func might_fail(n int) lisette.Result[int, error] {
+func might_fail(n int) (int, error) {
 	if n < 0 {
-		return lisette.MakeResultErr[int, error](errors.New("negative"))
+		return *new(int), errors.New("negative")
 	}
-	return lisette.MakeResultOk[int, error](n)
+	return n, nil
 }

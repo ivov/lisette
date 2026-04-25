@@ -237,6 +237,36 @@ impl Emitter<'_> {
 
         let inner_call = format!("a.inner.{}({})", method.name, param_names.join(", "));
 
+        // Inner method already lowers — forward its multi-return directly.
+        if let Some(shape) = self.classify_direct_emission(&method.return_type) {
+            let (go_ret, body) = match shape {
+                crate::types::abi::AbiShape::BareError => {
+                    ("error".to_string(), format!("return {}\n", inner_call))
+                }
+                crate::types::abi::AbiShape::ResultTuple => {
+                    let ok_ty = self.peel_alias(&method.return_type).ok_type();
+                    let ok_ty_str = self.go_type_as_string(&ok_ty);
+                    (
+                        format!("({}, error)", ok_ty_str),
+                        format!("return {}\n", inner_call),
+                    )
+                }
+            };
+            let ret_suffix = format!(" {}", go_ret);
+            write_line!(
+                decl,
+                "func (a {}) {}({}){} {{",
+                adapter_name,
+                method.name,
+                params_decl.join(", "),
+                ret_suffix
+            );
+            decl.push_str(&body);
+            write_line!(decl, "}}");
+            self.exit_scope();
+            return;
+        }
+
         let (go_ret, body) = match self.emit_return_adapter(&inner_call, &method.return_type) {
             Some((ret, body)) => (ret, body),
             None => {
@@ -269,8 +299,8 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn resolve_tuple_slot_types(&mut self, inferred: Vec<Type>) -> Vec<Type> {
-        let return_slots = self.current_return_context.as_ref().and_then(|ret| {
-            let Type::Tuple(slots) = ret else {
+        let return_slots = self.current_return_context.as_ref().and_then(|ctx| {
+            let Type::Tuple(slots) = &ctx.ty else {
                 return None;
             };
             (slots.len() == inferred.len()).then(|| slots.clone())

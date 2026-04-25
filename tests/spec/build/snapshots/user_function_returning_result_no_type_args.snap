@@ -6,25 +6,20 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"strconv"
 )
 
-func parse_int(s string) lisette.Result[int, error] {
-	ret_1, ret_2 := strconv.Atoi(s)
-	if ret_2 != nil {
-		return lisette.MakeResultErr[int, error](ret_2)
-	}
-	return lisette.MakeResultOk[int, error](ret_1)
+func parse_int(s string) (int, error) {
+	return strconv.Atoi(s)
 }
 
 func main() {
-	subject_1 := parse_int("42")
-	if subject_1.Tag == lisette.ResultOk {
-		n := subject_1.OkVal
+	ret_1, ret_2 := parse_int("42")
+	if ret_2 == nil {
+		n := ret_1
 		fmt.Println(n)
 	} else {
-		e := subject_1.ErrVal
+		e := ret_2
 		fmt.Println(e)
 	}
 }

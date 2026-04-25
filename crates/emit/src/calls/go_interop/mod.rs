@@ -193,6 +193,7 @@ impl Emitter<'_> {
         };
 
         let has_strategy = self.resolve_go_call_strategy(call_expression).is_some();
+        let has_lowered_callee = self.classify_callee_abi(callee).is_some();
 
         let has_array_return = if let Expression::DotAccess {
             expression: receiver_expression,
@@ -206,7 +207,7 @@ impl Emitter<'_> {
             false
         };
 
-        if !has_strategy && !has_array_return {
+        if !has_strategy && !has_array_return && !has_lowered_callee {
             return None;
         }
 

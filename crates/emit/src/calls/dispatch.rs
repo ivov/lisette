@@ -200,14 +200,7 @@ impl Emitter<'_> {
         if let Expression::DotAccess { .. } = ctx.function {
             self.emit_native_method_dot_access(output, ctx)
         } else {
-            self.emit_native_method_identifier(
-                output,
-                ctx.args,
-                ctx.spread,
-                ctx.type_args,
-                ctx.native_type,
-                ctx.method,
-            )
+            self.emit_native_method_identifier(output, ctx)
         }
     }
 

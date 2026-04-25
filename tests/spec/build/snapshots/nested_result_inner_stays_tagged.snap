@@ -1,0 +1,15 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func outer() (lisette.Result[int, error], error) {
+	return lisette.MakeResultOk[int, error](1), nil
+}
+
+func main() {
+	outer()
+}

@@ -10,20 +10,22 @@ import (
 )
 
 func main() {
-	f := func(arg0 string) lisette.Result[int, error] {
-		ret_1, ret_2 := strconv.Atoi(arg0)
-		if ret_2 != nil {
-			return lisette.MakeResultErr[int, error](ret_2)
-		}
-		return lisette.MakeResultOk[int, error](ret_1)
+	f := strconv.Atoi
+	ret_1, ret_2 := f("42")
+	var r lisette.Result[int, error]
+	if ret_2 != nil {
+		r = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		r = lisette.MakeResultOk[int, error](ret_1)
 	}
-	_ = f("42")
-	f = func(arg0 string) lisette.Result[int, error] {
-		ret_4, ret_5 := strconv.Atoi(arg0)
-		if ret_5 != nil {
-			return lisette.MakeResultErr[int, error](ret_5)
-		}
-		return lisette.MakeResultOk[int, error](ret_4)
+	_ = r
+	f = strconv.Atoi
+	ret_4, ret_5 := f("99")
+	var result_6 lisette.Result[int, error]
+	if ret_5 != nil {
+		result_6 = lisette.MakeResultErr[int, error](ret_5)
+	} else {
+		result_6 = lisette.MakeResultOk[int, error](ret_4)
 	}
-	_ = f("99")
+	_ = result_6
 }

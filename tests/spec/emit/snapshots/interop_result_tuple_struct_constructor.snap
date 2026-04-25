@@ -10,7 +10,7 @@ import (
 	"strconv"
 )
 
-type F func(string) lisette.Result[int, error]
+type F func(string) (int, error)
 
 type Pair struct {
 	F0 F
@@ -23,16 +23,16 @@ func (p Pair) String() string {
 
 func main() {
 	p := Pair{
-		F0: func(arg0 string) lisette.Result[int, error] {
-			ret_1, ret_2 := strconv.Atoi(arg0)
-			if ret_2 != nil {
-				return lisette.MakeResultErr[int, error](ret_2)
-			}
-			return lisette.MakeResultOk[int, error](ret_1)
-		},
+		F0: strconv.Atoi,
 		F1: 1,
 	}
-	r := p.F0("1")
+	ret_1, ret_2 := p.F0("1")
+	var r lisette.Result[int, error]
+	if ret_2 != nil {
+		r = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		r = lisette.MakeResultOk[int, error](ret_1)
+	}
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal
 	} else {

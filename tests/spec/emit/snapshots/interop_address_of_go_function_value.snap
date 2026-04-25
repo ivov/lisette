@@ -4,18 +4,9 @@ description: "input: \nimport \"go:strconv\"\n\nfn main() {\n  let r = &strconv.
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strconv"
-)
+import "strconv"
 
 func main() {
-	ref_4 := func(arg0 string) lisette.Result[int, error] {
-		ret_1, ret_2 := strconv.Atoi(arg0)
-		if ret_2 != nil {
-			return lisette.MakeResultErr[int, error](ret_2)
-		}
-		return lisette.MakeResultOk[int, error](ret_1)
-	}
-	_ = &ref_4
+	ref_1 := strconv.Atoi
+	_ = &ref_1
 }

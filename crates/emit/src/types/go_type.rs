@@ -42,6 +42,10 @@ impl GoType {
         self.go_imports.extend(other.go_imports.iter().cloned());
     }
 
+    pub(crate) fn merge_from(&mut self, other: &GoType) {
+        self.merge(other);
+    }
+
     fn merge_all<'a>(&mut self, others: impl IntoIterator<Item = &'a GoType>) {
         for other in others {
             self.merge(other);
@@ -270,7 +274,12 @@ impl Emitter<'_> {
 
     fn emit_function_type(&self, params: &[Type], return_ty: &Type) -> GoType {
         let param_types: Vec<GoType> = params.iter().map(|p| self.go_type(p)).collect();
-        let return_type = self.go_type(return_ty);
+
+        let lowered = self.classify_direct_emission(return_ty);
+        let return_type = match &lowered {
+            Some(shape) => self.lowered_return_go_type(shape, return_ty),
+            None => self.go_type(return_ty),
+        };
 
         let args = param_types
             .iter()
@@ -278,8 +287,8 @@ impl Emitter<'_> {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let is_void =
-            return_ty.is_unit() || return_type.code == "struct{}" || return_type.code == "any";
+        let is_void = lowered.is_none()
+            && (return_ty.is_unit() || return_type.code == "struct{}" || return_type.code == "any");
 
         let code = if is_void {
             format!("func({})", args)
@@ -414,15 +423,25 @@ impl Emitter<'_> {
                     .iter()
                     .map(|p| self.go_type_from_annotation(p))
                     .collect();
-                let return_go_type = self.go_type_from_annotation(return_type);
+
+                let lowered = self.classify_annotation_direct_emission(return_type);
+                let (return_go_type, is_void) = match &lowered {
+                    Some(shape) => (
+                        self.lowered_return_go_type_from_annotation(shape, return_type),
+                        false,
+                    ),
+                    None => {
+                        let r = self.go_type_from_annotation(return_type);
+                        let void = r.code == "any" || r.code == "struct{}";
+                        (r, void)
+                    }
+                };
 
                 let args = param_types
                     .iter()
                     .map(|t| t.code.as_str())
                     .collect::<Vec<_>>()
                     .join(", ");
-
-                let is_void = return_go_type.code == "any" || return_go_type.code == "struct{}";
 
                 let code = if is_void {
                     format!("func({})", args)

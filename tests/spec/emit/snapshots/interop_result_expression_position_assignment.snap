@@ -4,26 +4,17 @@ description: "input: \nimport \"go:strconv\"\n\ntype F = fn(string) -> Result<in
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strconv"
-)
+import "strconv"
 
-type F func(string) lisette.Result[int, error]
+type F func(string) (int, error)
 
 func main() {
-	f := func(_ string) lisette.Result[int, error] {
-		return lisette.MakeResultOk[int, error](0)
+	f := func(_ string) (int, error) {
+		return 0, nil
 	}
 	var u any
-	f = func(arg0 string) lisette.Result[int, error] {
-		ret_1, ret_2 := strconv.Atoi(arg0)
-		if ret_2 != nil {
-			return lisette.MakeResultErr[int, error](ret_2)
-		}
-		return lisette.MakeResultOk[int, error](ret_1)
-	}
+	f = strconv.Atoi
 	u = struct{}{}
 	_ = u
-	_ = f("1")
+	f("1")
 }

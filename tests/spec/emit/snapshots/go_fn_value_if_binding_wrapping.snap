@@ -12,24 +12,18 @@ import (
 
 func main() {
 	cond := true
-	var f func(string) lisette.Result[int, error]
+	var f func(string) (int, error)
 	if cond {
-		f = func(arg0 string) lisette.Result[int, error] {
-			ret_1, ret_2 := strconv.Atoi(arg0)
-			if ret_2 != nil {
-				return lisette.MakeResultErr[int, error](ret_2)
-			}
-			return lisette.MakeResultOk[int, error](ret_1)
-		}
+		f = strconv.Atoi
 	} else {
-		f = func(arg0 string) lisette.Result[int, error] {
-			ret_4, ret_5 := strconv.Atoi(arg0)
-			if ret_5 != nil {
-				return lisette.MakeResultErr[int, error](ret_5)
-			}
-			return lisette.MakeResultOk[int, error](ret_4)
-		}
+		f = strconv.Atoi
 	}
-	r := f("99")
+	ret_1, ret_2 := f("99")
+	var r lisette.Result[int, error]
+	if ret_2 != nil {
+		r = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		r = lisette.MakeResultOk[int, error](ret_1)
+	}
 	fmt.Println(r)
 }

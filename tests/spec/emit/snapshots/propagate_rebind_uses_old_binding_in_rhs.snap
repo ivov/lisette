@@ -10,20 +10,22 @@ import (
 	"strconv"
 )
 
-func parse(s string) lisette.Result[int, error] {
-	ret_1, ret_2 := strconv.Atoi(s)
-	if ret_2 != nil {
-		return lisette.MakeResultErr[int, error](ret_2)
-	}
-	return lisette.MakeResultOk[int, error](ret_1)
+func parse(s string) (int, error) {
+	return strconv.Atoi(s)
 }
 
-func process() lisette.Result[int, error] {
+func process() (int, error) {
 	x := 42
-	check_2 := parse(fmt.Sprint(x))
-	if check_2.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, error](check_2.ErrVal)
+	ret_2, ret_3 := parse(fmt.Sprint(x))
+	var check_5 lisette.Result[int, error]
+	if ret_3 != nil {
+		check_5 = lisette.MakeResultErr[int, error](ret_3)
+	} else {
+		check_5 = lisette.MakeResultOk[int, error](ret_2)
 	}
-	x_1 := check_2.OkVal
-	return lisette.MakeResultOk[int, error](x_1 + 1)
+	if check_5.Tag != lisette.ResultOk {
+		return *new(int), check_5.ErrVal
+	}
+	x_1 := check_5.OkVal
+	return x_1 + 1, nil
 }

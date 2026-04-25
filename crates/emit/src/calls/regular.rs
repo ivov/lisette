@@ -317,6 +317,22 @@ impl Emitter<'_> {
             None
         })?;
 
+        // Identity wrapper when both ends already lower.
+        let arg_ty = arg.get_type();
+        if let Type::Function {
+            return_type: arg_ret,
+            ..
+        } = arg_ty.unwrap_forall()
+            && let Type::Function {
+                return_type: param_ret,
+                ..
+            } = &param_fn_ty
+            && self.classify_direct_emission(arg_ret).is_some()
+            && self.classify_direct_emission(param_ret).is_some()
+        {
+            return Some(self.emit_value(output, arg));
+        }
+
         let value = self.emit_value(output, arg);
         Some(self.emit_lisette_callback_wrapper(output, &value, &param_fn_ty))
     }

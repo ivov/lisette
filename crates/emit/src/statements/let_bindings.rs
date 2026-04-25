@@ -298,7 +298,12 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
                 let binding_ty = &self.binding.ty;
                 if !binding_ty.is_variable() && !binding_ty.ok_type().is_variable() {
                     self.emitter.go_type_as_string(binding_ty)
-                } else if let Some(ctx_ty) = self.emitter.current_return_context.clone() {
+                } else if let Some(ctx_ty) = self
+                    .emitter
+                    .current_return_context
+                    .as_ref()
+                    .map(|c| c.ty.clone())
+                {
                     if Fallible::from_type(&ctx_ty).is_some() {
                         self.emitter.go_type_as_string(&ctx_ty)
                     } else {
@@ -753,10 +758,18 @@ impl Emitter<'_> {
             return;
         }
 
-        if self
+        let is_go_multi_return = self
             .resolve_go_call_strategy(value)
-            .is_some_and(|s| s.is_multi_return())
+            .is_some_and(|s| s.is_multi_return());
+        let is_lowered_lisette_call = if let Expression::Call {
+            expression: callee, ..
+        } = value
         {
+            self.classify_callee_abi(callee).is_some()
+        } else {
+            false
+        };
+        if is_go_multi_return || is_lowered_lisette_call {
             let call_str = self.emit_call(output, value, None);
             write_line!(output, "{}", call_str);
         } else {

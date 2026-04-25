@@ -11,7 +11,7 @@ import (
 )
 
 type Holder struct {
-	f func(string) lisette.Result[int, error]
+	f func(string) (int, error)
 }
 
 func (h Holder) String() string {
@@ -20,23 +20,17 @@ func (h Holder) String() string {
 
 func main() {
 	m := make(map[string]Holder)
-	m["a"] = Holder{f: func(arg0 string) lisette.Result[int, error] {
-		ret_1, ret_2 := strconv.Atoi(arg0)
-		if ret_2 != nil {
-			return lisette.MakeResultErr[int, error](ret_2)
-		}
-		return lisette.MakeResultOk[int, error](ret_1)
-	}}
+	m["a"] = Holder{f: strconv.Atoi}
 	entry := m["a"]
-	entry.f = func(arg0 string) lisette.Result[int, error] {
-		ret_4, ret_5 := strconv.Atoi(arg0)
-		if ret_5 != nil {
-			return lisette.MakeResultErr[int, error](ret_5)
-		}
-		return lisette.MakeResultOk[int, error](ret_4)
-	}
+	entry.f = strconv.Atoi
 	m["a"] = entry
-	r := m["a"].f("1")
+	ret_1, ret_2 := m["a"].f("1")
+	var r lisette.Result[int, error]
+	if ret_2 != nil {
+		r = lisette.MakeResultErr[int, error](ret_2)
+	} else {
+		r = lisette.MakeResultOk[int, error](ret_1)
+	}
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal
 	} else {

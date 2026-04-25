@@ -1,5 +1,6 @@
 use crate::Emitter;
-use crate::control_flow::fallible::{ConstructorKind, Fallible, FallibleEmitter};
+use crate::control_flow::fallible::{ConstructorKind, Fallible, FallibleEmitter, RESULT_OK_TAG};
+use crate::types::abi::AbiShape;
 use crate::types::emitter::Position;
 use crate::utils::{inline_trivial_bindings, optimize_region};
 use crate::write_line;
@@ -53,17 +54,35 @@ impl Emitter<'_> {
         });
 
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
-        let err_return = {
-            let mut fe = FallibleEmitter::new(self, &fallible);
-            fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)))
-        };
-        write_line!(
-            output,
-            "if {}.Tag != {} {{\nreturn {}\n}}",
-            check_var,
-            fallible.success_tag(),
-            err_return
-        );
+
+        if let Some(shape) = self.current_lowered_abi() {
+            let err_expr = format!("{}{}", check_var, err_field);
+            let return_ty = self
+                .current_return_context
+                .as_ref()
+                .map(|ctx| ctx.ty.clone())
+                .expect("lowered abi");
+            let lowered_err = self.format_lowered_err_return(&shape, &return_ty, &err_expr);
+            write_line!(
+                output,
+                "if {}.Tag != {} {{\n{}\n}}",
+                check_var,
+                fallible.success_tag(),
+                lowered_err
+            );
+        } else {
+            let err_return = {
+                let mut fe = FallibleEmitter::new(self, &fallible);
+                fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)))
+            };
+            write_line!(
+                output,
+                "if {}.Tag != {} {{\nreturn {}\n}}",
+                check_var,
+                fallible.success_tag(),
+                err_return
+            );
+        }
 
         if result_var != "_" {
             write_line!(
@@ -76,6 +95,65 @@ impl Emitter<'_> {
         }
 
         result_var
+    }
+
+    /// Lower early-return body for an error expression.
+    pub(crate) fn format_lowered_err_return(
+        &mut self,
+        shape: &AbiShape,
+        return_ty: &Type,
+        err_expr: &str,
+    ) -> String {
+        match shape {
+            AbiShape::BareError => format!("return {}", err_expr),
+            AbiShape::ResultTuple => {
+                let ok_ty = self.peel_alias(return_ty).ok_type();
+                let ok_ty_str = self.go_type_as_string(&ok_ty);
+                format!("return *new({}), {}", ok_ty_str, err_expr)
+            }
+        }
+    }
+
+    /// Lower tail-return body for an Ok value expression.
+    pub(crate) fn format_lowered_ok_return(&mut self, shape: &AbiShape, ok_expr: &str) -> String {
+        match shape {
+            AbiShape::BareError => "return nil".to_string(),
+            AbiShape::ResultTuple => format!("return {}, nil", ok_expr),
+        }
+    }
+
+    /// Destructure a Lisette `Result` value into a lowered Go-tuple return.
+    pub(crate) fn emit_lowered_result_return(
+        &mut self,
+        output: &mut String,
+        result_value: &str,
+        return_ty: &Type,
+        shape: &AbiShape,
+    ) {
+        match shape {
+            AbiShape::BareError => {
+                write_line!(
+                    output,
+                    "if {}.Tag == {} {{\nreturn nil\n}}\nreturn {}.ErrVal",
+                    result_value,
+                    RESULT_OK_TAG,
+                    result_value
+                );
+            }
+            AbiShape::ResultTuple => {
+                let ok_ty = self.peel_alias(return_ty).ok_type();
+                let ok_ty_str = self.go_type_as_string(&ok_ty);
+                write_line!(
+                    output,
+                    "if {}.Tag == {} {{\nreturn {}.OkVal, nil\n}}\nreturn *new({}), {}.ErrVal",
+                    result_value,
+                    RESULT_OK_TAG,
+                    result_value,
+                    ok_ty_str,
+                    result_value
+                );
+            }
+        }
     }
 
     /// Assign the propagated expression to a fresh `check` temp so its
@@ -180,7 +258,7 @@ impl Emitter<'_> {
         let is_unit = self
             .current_return_context
             .as_ref()
-            .is_some_and(|ty| ty.is_unit());
+            .is_some_and(|ctx| ctx.ty.is_unit());
 
         if is_unit {
             let is_pure = matches!(
@@ -196,7 +274,10 @@ impl Emitter<'_> {
         } else if !self.emit_wrapped_return(output, expression) {
             let expression_string =
                 self.with_position(Position::Tail, |this| this.emit_value(output, expression));
-            let return_ty = self.current_return_context.clone();
+            let return_ty = self
+                .current_return_context
+                .as_ref()
+                .map(|ctx| ctx.ty.clone());
             let expression_string =
                 self.apply_type_coercion(output, return_ty.as_ref(), expression, expression_string);
             write_line!(output, "return {}", expression_string);
@@ -219,8 +300,8 @@ impl Emitter<'_> {
         let return_ty = self
             .current_return_context
             .as_ref()
-            .filter(|ctx_ty| Fallible::from_type(ctx_ty).is_some())
-            .cloned()
+            .map(|ctx| ctx.ty.clone())
+            .filter(|ty| Fallible::from_type(ty).is_some())
             .unwrap_or(expression_ty);
 
         let Some(fallible) = Fallible::from_type(&return_ty) else {
@@ -229,9 +310,20 @@ impl Emitter<'_> {
 
         self.flags.needs_stdlib = true;
 
+        let force_tagged = self
+            .current_return_context
+            .as_ref()
+            .is_some_and(|ctx| ctx.force_tagged);
+        let lowered = if force_tagged {
+            None
+        } else {
+            self.classify_direct_emission(&return_ty)
+        };
+
         if let Expression::Identifier { .. } = expression
             && fallible.classify_constructor(expression) == Some(ConstructorKind::Failure)
         {
+            // Only `None` reaches here — `Err` always has a payload.
             let mut fe = FallibleEmitter::new(self, &fallible);
             let failure = fe.emit_failure(None);
             write_line!(output, "return {}", failure);
@@ -239,17 +331,33 @@ impl Emitter<'_> {
         }
 
         if matches!(expression, Expression::Call { .. }) {
-            self.emit_wrapped_call_return(output, expression, &fallible, &return_ty);
+            self.emit_wrapped_call_return(
+                output,
+                expression,
+                &fallible,
+                &return_ty,
+                lowered.as_ref(),
+            );
             return true;
         }
 
         if matches!(expression, Expression::If { .. } | Expression::Match { .. }) {
-            self.emit_wrapped_branching_return(output, expression, &fallible, &return_ty);
+            self.emit_wrapped_branching_return(
+                output,
+                expression,
+                &fallible,
+                &return_ty,
+                lowered.as_ref(),
+            );
             return true;
         }
 
         let value = self.emit_value(output, expression);
-        write_line!(output, "return {}", value);
+        if let Some(shape) = lowered {
+            self.emit_lowered_result_return(output, &value, &return_ty, &shape);
+        } else {
+            write_line!(output, "return {}", value);
+        }
         true
     }
 
@@ -262,6 +370,7 @@ impl Emitter<'_> {
         expression: &Expression,
         fallible: &Fallible,
         return_ty: &Type,
+        lowered: Option<&AbiShape>,
     ) {
         let Expression::Call {
             expression: call_expression,
@@ -273,33 +382,120 @@ impl Emitter<'_> {
         };
         match fallible.classify_constructor(call_expression) {
             Some(ConstructorKind::Success) => {
-                let arg = self.emit_composite_value(output, &args[0]);
-                let mut fe = FallibleEmitter::new(self, fallible);
-                let success = fe.emit_success(&arg);
-                write_line!(output, "return {}", success);
-            }
-            Some(ConstructorKind::Failure) => {
-                let failure = if fallible.is_result() {
+                if let Some(shape) = lowered {
+                    let ok_arg = if fallible.ok_ty().is_unit() {
+                        if !args.is_empty() {
+                            let _ = self.emit_composite_value(output, &args[0]);
+                        }
+                        String::new()
+                    } else {
+                        self.emit_composite_value(output, &args[0])
+                    };
+                    let line = self.format_lowered_ok_return(shape, &ok_arg);
+                    write_line!(output, "{}", line);
+                } else {
                     let arg = self.emit_composite_value(output, &args[0]);
                     let mut fe = FallibleEmitter::new(self, fallible);
-                    fe.emit_failure(Some(&arg))
-                } else {
-                    let mut fe = FallibleEmitter::new(self, fallible);
-                    fe.emit_failure(None)
-                };
-                write_line!(output, "return {}", failure);
-            }
-            None => {
-                if let Some(strategy) = self.resolve_go_call_strategy(expression) {
-                    let result_var =
-                        self.emit_go_wrapped_call(output, expression, &strategy, return_ty);
-                    write_line!(output, "return {}", result_var);
-                } else {
-                    let call = self.emit_call(output, expression, None);
-                    write_line!(output, "return {}", call);
+                    let success = fe.emit_success(&arg);
+                    write_line!(output, "return {}", success);
                 }
             }
+            Some(ConstructorKind::Failure) => {
+                if let Some(shape) = lowered {
+                    let err_expr = if !args.is_empty() {
+                        self.emit_composite_value(output, &args[0])
+                    } else {
+                        unreachable!("lowered Result Err must carry a payload");
+                    };
+                    let line = self.format_lowered_err_return(shape, return_ty, &err_expr);
+                    write_line!(output, "{}", line);
+                } else {
+                    let failure = if fallible.is_result() {
+                        let arg = self.emit_composite_value(output, &args[0]);
+                        let mut fe = FallibleEmitter::new(self, fallible);
+                        fe.emit_failure(Some(&arg))
+                    } else {
+                        let mut fe = FallibleEmitter::new(self, fallible);
+                        fe.emit_failure(None)
+                    };
+                    write_line!(output, "return {}", failure);
+                }
+            }
+            None => self.emit_wrapped_passthrough_return(
+                output,
+                expression,
+                call_expression,
+                return_ty,
+                lowered,
+            ),
         }
+    }
+
+    /// Tail return for a non-constructor call.
+    fn emit_wrapped_passthrough_return(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        call_expression: &Expression,
+        return_ty: &Type,
+        lowered: Option<&AbiShape>,
+    ) {
+        if let Some(shape) = lowered
+            && self.callee_matches_lowered_shape(call_expression, shape)
+        {
+            let call = self.emit_call(output, expression, None);
+            write_line!(output, "return {}", call);
+            return;
+        }
+        if let Some(strategy) = self.resolve_go_call_strategy(expression) {
+            let result_var = self.emit_go_wrapped_call(output, expression, &strategy, return_ty);
+            if let Some(shape) = lowered {
+                self.emit_lowered_result_return(output, &result_var, return_ty, shape);
+            } else {
+                write_line!(output, "return {}", result_var);
+            }
+            return;
+        }
+        if let Some(shape) = lowered {
+            let value = self.emit_value(output, expression);
+            self.emit_lowered_result_return(output, &value, return_ty, shape);
+            return;
+        }
+        let call = self.emit_call(output, expression, None);
+        write_line!(output, "return {}", call);
+    }
+
+    /// True when the callee's natural multi-return matches the enclosing
+    /// shape, so a tail return can forward without rewrapping.
+    fn callee_matches_lowered_shape(
+        &self,
+        callee: &Expression,
+        enclosing_shape: &AbiShape,
+    ) -> bool {
+        let inner = callee.unwrap_parens();
+        if let Expression::DotAccess {
+            expression: receiver,
+            ..
+        } = inner
+            && Self::is_go_receiver(receiver)
+        {
+            let callee_ty = callee.get_type();
+            if let Type::Function { return_type, .. } = callee_ty.unwrap_forall()
+                && let Some(strategy) = self.classify_go_return_type(return_type, &[])
+            {
+                return matches!(
+                    (strategy, enclosing_shape),
+                    (
+                        crate::GoCallStrategy::Result,
+                        AbiShape::ResultTuple | AbiShape::BareError
+                    )
+                );
+            }
+        }
+        if let Some(callee_shape) = self.classify_callee_abi(callee) {
+            return callee_shape == *enclosing_shape;
+        }
+        false
     }
 
     /// Emit an If/Match as a wrapped return by materializing its branches
@@ -311,6 +507,7 @@ impl Emitter<'_> {
         expression: &Expression,
         fallible: &Fallible,
         return_ty: &Type,
+        lowered: Option<&AbiShape>,
     ) {
         let temp_var = self.fresh_var(None);
         self.declare(&temp_var);
@@ -330,7 +527,11 @@ impl Emitter<'_> {
 
         self.assign_target_ty = saved_target_ty;
 
-        write_line!(output, "return {}", temp_var);
+        if let Some(shape) = lowered {
+            self.emit_lowered_result_return(output, &temp_var, return_ty, shape);
+        } else {
+            write_line!(output, "return {}", temp_var);
+        }
         optimize_region(output, pre_len, Some(&temp_var));
     }
 
@@ -356,8 +557,10 @@ impl Emitter<'_> {
         write_line!(output, "{} := func() {} {{", result_var, full_ty);
         let closure_body_start = output.len();
 
-        let saved_return_context = self.current_return_context.clone();
-        self.current_return_context = Some(effective_ty.clone());
+        // The IIFE's signature is the tagged `Result`, so its body must too.
+        let saved_return_context = self
+            .current_return_context
+            .replace(crate::ReturnContext::tagged(effective_ty.clone()));
 
         self.with_fresh_scope(|emitter| {
             emitter.emit_try_body(output, items, &fallible);
@@ -390,8 +593,8 @@ impl Emitter<'_> {
         }
         self.current_return_context
             .as_ref()
-            .filter(|ctx_ty| Fallible::from_type(ctx_ty).is_some())
-            .cloned()
+            .map(|ctx| ctx.ty.clone())
+            .filter(|ty| Fallible::from_type(ty).is_some())
             .unwrap_or_else(|| ty.clone())
     }
 
@@ -521,8 +724,9 @@ impl Emitter<'_> {
             inner_ty_str
         );
 
-        let saved_return_context = self.current_return_context.clone();
-        self.current_return_context = Some(fallible.ok_ty().clone());
+        let saved_return_context = self
+            .current_return_context
+            .replace(crate::ReturnContext::new(fallible.ok_ty().clone()));
 
         self.with_fresh_scope(|emitter| {
             emitter.emit_recover_body(output, items, &fallible);

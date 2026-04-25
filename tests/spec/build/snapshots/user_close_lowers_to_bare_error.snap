@@ -1,0 +1,20 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+type Resource struct{}
+
+func (r Resource) String() string {
+	return "Resource"
+}
+
+func (r Resource) Close() error {
+	return nil
+}
+
+func main() {
+	r := Resource{}
+	r.Close()
+}

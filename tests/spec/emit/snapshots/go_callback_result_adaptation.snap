@@ -4,20 +4,10 @@ description: "input: \nimport \"go:flag\"\n\nfn main() {\n  flag.Func(\"verbose\
 ---
 package main
 
-import (
-	"flag"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "flag"
 
 func main() {
-	cb_1 := func(_ string) lisette.Result[struct{}, error] {
-		return lisette.MakeResultOk[struct{}, error](struct{}{})
-	}
-	flag.Func("verbose", "enable verbose", func(arg0 string) error {
-		res_2 := cb_1(arg0)
-		if res_2.Tag == lisette.ResultOk {
-			return nil
-		}
-		return res_2.ErrVal
+	flag.Func("verbose", "enable verbose", func(_ string) error {
+		return nil
 	})
 }

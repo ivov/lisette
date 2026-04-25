@@ -4,21 +4,12 @@ description: "input: \nimport \"go:strconv\"\n\nfn main() {\n  let ch = Channel.
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"strconv"
-)
+import "strconv"
 
 func main() {
-	ch := make(chan func(string) lisette.Result[int, error])
+	ch := make(chan func(string) (int, error))
 	select {
-	case ch <- func(arg0 string) lisette.Result[int, error] {
-		ret_1, ret_2 := strconv.Atoi(arg0)
-		if ret_2 != nil {
-			return lisette.MakeResultErr[int, error](ret_2)
-		}
-		return lisette.MakeResultOk[int, error](ret_1)
-	}:
+	case ch <- strconv.Atoi:
 		_ = 0
 	default:
 		_ = 1

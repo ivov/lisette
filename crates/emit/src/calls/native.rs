@@ -3,7 +3,7 @@ use crate::Emitter;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
 use crate::utils::Staged;
-use syntax::ast::{Annotation, Expression};
+use syntax::ast::Expression;
 
 #[derive(Clone, Copy)]
 pub(super) enum InlineImport {
@@ -244,9 +244,7 @@ impl Emitter<'_> {
         let mut all_stages: Vec<Staged> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
         all_stages.push(self.stage_operand(expression));
-        for arg in ctx.args {
-            all_stages.push(self.stage_composite(arg));
-        }
+        all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
         let all_values = self.sequence_with_spread(output, all_stages, ctx.spread, false, "_arg");
         let raw_receiver = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
@@ -301,19 +299,15 @@ impl Emitter<'_> {
     pub(super) fn emit_native_method_identifier(
         &mut self,
         output: &mut String,
-        args: &[Expression],
-        spread: Option<&Expression>,
-        type_args: &[Annotation],
-        native_type: &NativeGoType,
-        method: &str,
+        ctx: &NativeCallContext,
     ) -> String {
-        let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
-        let emitted_args = self.sequence_with_spread(output, stages, spread, false, "_arg");
+        let stages = self.stage_native_method_args(ctx.function, ctx.args);
+        let emitted_args = self.sequence_with_spread(output, stages, ctx.spread, false, "_arg");
         if !emitted_args.is_empty() {
             let receiver = &emitted_args[0];
             let remaining_args = &emitted_args[1..];
             if let Some((inlined, extra_import)) =
-                try_inline_native_method(native_type, method, receiver, remaining_args)
+                try_inline_native_method(ctx.native_type, ctx.method, receiver, remaining_args)
             {
                 self.apply_inline_import(extra_import);
                 return inlined;
@@ -324,10 +318,10 @@ impl Emitter<'_> {
         let fn_name = format!(
             "{}.{}{}",
             go_name::GO_STDLIB_PKG,
-            native_type.method_prefix(),
-            go_name::snake_to_camel(method)
+            ctx.native_type.method_prefix(),
+            go_name::snake_to_camel(ctx.method)
         );
-        let type_args_string = self.format_type_args_from_annotations(type_args);
+        let type_args_string = self.format_type_args_from_annotations(ctx.type_args);
         format!(
             "{}{}({})",
             fn_name,

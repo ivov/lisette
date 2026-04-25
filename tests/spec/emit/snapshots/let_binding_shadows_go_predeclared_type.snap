@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-func parse(s string) lisette.Result[int, error] {
+func parse(s string) (int, error) {
 	_ = "context"
 	ret_1, ret_2 := strconv.Atoi(s)
 	var result lisette.Result[int, error]
@@ -18,10 +18,16 @@ func parse(s string) lisette.Result[int, error] {
 	} else {
 		result = lisette.MakeResultOk[int, error](ret_1)
 	}
+	var tmp_4 lisette.Result[int, error]
 	if result.Tag == lisette.ResultOk {
 		n := result.OkVal
-		return lisette.MakeResultOk[int, error](n)
+		tmp_4 = lisette.MakeResultOk[int, error](n)
+	} else {
+		e := result.ErrVal
+		tmp_4 = lisette.MakeResultErr[int, error](e)
 	}
-	e := result.ErrVal
-	return lisette.MakeResultErr[int, error](e)
+	if tmp_4.Tag == lisette.ResultOk {
+		return tmp_4.OkVal, nil
+	}
+	return *new(int), tmp_4.ErrVal
 }

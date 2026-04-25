@@ -1,0 +1,17 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type R = lisette.Result[int, error]
+
+func parse() (int, error) {
+	return 1, nil
+}
+
+func main() {
+	parse()
+}

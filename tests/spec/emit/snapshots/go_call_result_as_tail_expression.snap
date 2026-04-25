@@ -4,15 +4,8 @@ description: "input: \nimport \"go:fmt\"\n\nfn print_hello() -> Result<int, erro
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
-func print_hello() lisette.Result[int, error] {
-	ret_1, ret_2 := fmt.Println("hello")
-	if ret_2 != nil {
-		return lisette.MakeResultErr[int, error](ret_2)
-	}
-	return lisette.MakeResultOk[int, error](ret_1)
+func print_hello() (int, error) {
+	return fmt.Println("hello")
 }

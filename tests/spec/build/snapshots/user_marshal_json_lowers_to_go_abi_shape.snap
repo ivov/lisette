@@ -1,0 +1,41 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Widget struct {
+	id int
+}
+
+func (w Widget) String() string {
+	return fmt.Sprintf("Widget { id: %v }", w.id)
+}
+
+func (w Widget) MarshalJSON() ([]uint8, error) {
+	return []uint8("\"custom\""), nil
+}
+
+func main() {
+	w := Widget{id: 7}
+	ret_2, ret_3 := json.Marshal(w)
+	var subject_1 lisette.Result[[]uint8, error]
+	if ret_3 != nil {
+		subject_1 = lisette.MakeResultErr[[]uint8, error](ret_3)
+	} else {
+		subject_1 = lisette.MakeResultOk[[]uint8, error](ret_2)
+	}
+	if subject_1.Tag == lisette.ResultOk {
+		b := subject_1.OkVal
+		fmt.Println(string(b))
+	} else {
+		e := subject_1.ErrVal
+		fmt.Println(e)
+	}
+}

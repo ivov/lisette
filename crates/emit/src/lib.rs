@@ -139,7 +139,7 @@ pub struct Emitter<'a> {
     // These are implicit arguments — ideally parameters, but
     // plumbing through deep call chains is impractical.
     position: Position,
-    current_return_context: Option<Type>,
+    current_return_context: Option<ReturnContext>,
     /// Target type for Option/Result assignment (interface coercion).
     assign_target_ty: Option<Type>,
     /// Generic function identifiers should NOT add type args when used as callees
@@ -156,6 +156,34 @@ pub struct Emitter<'a> {
     /// Declared slot type during tuple staging; recovers Go alias type args that
     /// call-site inference loses in assign-position match arms.
     current_slot_expected_ty: Option<Type>,
+    /// Set when the destination is a Go-side function (e.g. a generic
+    /// `func(T) U` callback) that needs the unlowered single-return form.
+    suppress_go_fn_short_circuit: bool,
+}
+
+/// `force_tagged` is set inside try-block IIFEs whose outer signature is
+/// the unwrapped `Result`; their body must return the tagged form even
+/// when `ty` would normally lower.
+#[derive(Clone)]
+pub(crate) struct ReturnContext {
+    pub(crate) ty: Type,
+    pub(crate) force_tagged: bool,
+}
+
+impl ReturnContext {
+    pub(crate) fn new(ty: Type) -> Self {
+        Self {
+            ty,
+            force_tagged: false,
+        }
+    }
+
+    pub(crate) fn tagged(ty: Type) -> Self {
+        Self {
+            ty,
+            force_tagged: true,
+        }
+    }
 }
 
 impl<'a> Emitter<'a> {
@@ -278,6 +306,7 @@ impl<'a> Emitter<'a> {
             in_condition: false,
             skip_array_return_wrap: false,
             current_slot_expected_ty: None,
+            suppress_go_fn_short_circuit: false,
         }
     }
 

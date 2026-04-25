@@ -1,0 +1,15 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+type MyErr = error
+
+func parse() (int, error) {
+	return 1, nil
+}
+
+func main() {
+	parse()
+}

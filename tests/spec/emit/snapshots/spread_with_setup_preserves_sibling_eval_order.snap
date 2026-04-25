@@ -10,20 +10,26 @@ func side_a() int {
 	return 1
 }
 
-func get_xs() lisette.Result[[]int, error] {
-	return lisette.MakeResultOk[[]int, error]([]int{1, 2, 3})
+func get_xs() ([]int, error) {
+	return []int{1, 2, 3}, nil
 }
 
 func variadic(_ int, _ ...int) int {
 	return 0
 }
 
-func run() lisette.Result[int, error] {
-	_arg_3 := side_a()
-	check_1 := get_xs()
-	if check_1.Tag != lisette.ResultOk {
-		return lisette.MakeResultErr[int, error](check_1.ErrVal)
+func run() (int, error) {
+	_arg_6 := side_a()
+	ret_1, ret_2 := get_xs()
+	var check_4 lisette.Result[[]int, error]
+	if ret_2 != nil {
+		check_4 = lisette.MakeResultErr[[]int, error](ret_2)
+	} else {
+		check_4 = lisette.MakeResultOk[[]int, error](ret_1)
 	}
-	result_2 := check_1.OkVal
-	return lisette.MakeResultOk[int, error](variadic(_arg_3, result_2...))
+	if check_4.Tag != lisette.ResultOk {
+		return *new(int), check_4.ErrVal
+	}
+	result_5 := check_4.OkVal
+	return variadic(_arg_6, result_5...), nil
 }

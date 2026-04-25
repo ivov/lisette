@@ -6,18 +6,10 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-	"io"
 	"os"
 )
 
 func main() {
-	f := func(arg0 io.Writer, arg1 string, arg2 ...any) lisette.Result[int, error] {
-		ret_1, ret_2 := fmt.Fprintf(arg0, arg1, arg2...)
-		if ret_2 != nil {
-			return lisette.MakeResultErr[int, error](ret_2)
-		}
-		return lisette.MakeResultOk[int, error](ret_1)
-	}
-	_ = f(os.Stdout, "hi %d", 3)
+	f := fmt.Fprintf
+	f(os.Stdout, "hi %d", 3)
 }

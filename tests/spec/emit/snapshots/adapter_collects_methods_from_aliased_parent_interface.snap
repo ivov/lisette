@@ -4,10 +4,7 @@ description: "input: \nimport \"go:example.com/shapes\"\n\nstruct Square {}\n\ni
 ---
 package main
 
-import (
-	"example.com/shapes"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/shapes"
 
 type Square struct{}
 
@@ -15,8 +12,8 @@ func (s Square) String() string {
 	return "Square"
 }
 
-func (s Square) Area() lisette.Result[int, error] {
-	return lisette.MakeResultOk[int, error](4)
+func (s Square) Area() (int, error) {
+	return 4, nil
 }
 
 func (s Square) Name() string {
@@ -41,9 +38,5 @@ func (a _lisAdapter_Square_Shape_0) Name() string {
 }
 
 func (a _lisAdapter_Square_Shape_0) Area() (int, error) {
-	res_1 := a.inner.Area()
-	if res_1.Tag == lisette.ResultOk {
-		return res_1.OkVal, nil
-	}
-	return *new(int), res_1.ErrVal
+	return a.inner.Area()
 }

@@ -4,10 +4,7 @@ description: "input: \nstruct MyError { msg: string }\n\nimpl MyError {\n  fn Er
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
 type MyError struct {
 	msg string
@@ -21,6 +18,6 @@ func (m MyError) Error() string {
 	return m.msg
 }
 
-func might_fail() lisette.Result[int, error] {
-	return lisette.MakeResultErr[int, error](MyError{msg: "oops"})
+func might_fail() (int, error) {
+	return *new(int), MyError{msg: "oops"}
 }

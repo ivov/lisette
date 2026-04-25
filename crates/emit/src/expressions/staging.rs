@@ -58,6 +58,36 @@ impl Emitter<'_> {
         Staged::new(setup, value)
     }
 
+    /// Stage all args of a native-method call, suppressing the Go-fn
+    /// identity short-circuit on function-typed params (Go-prelude generic
+    /// callbacks reject multi-return shapes).
+    pub(crate) fn stage_native_method_args(
+        &mut self,
+        function: &Expression,
+        args: &[Expression],
+    ) -> Vec<Staged> {
+        let fn_ty = function.get_type();
+        let suppressions: Vec<bool> = match fn_ty.unwrap_forall() {
+            syntax::types::Type::Function { params, .. } => (0..args.len())
+                .map(|i| {
+                    params.get(i).is_some_and(|p| {
+                        matches!(p.unwrap_forall(), syntax::types::Type::Function { .. })
+                    })
+                })
+                .collect(),
+            _ => vec![false; args.len()],
+        };
+        args.iter()
+            .zip(suppressions)
+            .map(|(arg, suppress)| {
+                let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
+                let staged = self.stage_composite(arg);
+                self.suppress_go_fn_short_circuit = saved;
+                staged
+            })
+            .collect()
+    }
+
     /// Like `sequence`, but also stages the spread as a sibling (so its
     /// setup participates in eval-order) and appends `...` to its value.
     pub(crate) fn sequence_with_spread(
