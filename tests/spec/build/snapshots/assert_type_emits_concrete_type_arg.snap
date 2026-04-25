@@ -12,8 +12,7 @@ import (
 
 func main() {
 	raw := store.Get_value("count")
-	option_2 := lisette.OptionFromCommaOk[int](lisette.AssertType[int](raw))
-	subject_1 := option_2
+	subject_1 := lisette.AssertType[int](raw)
 	if subject_1.Tag == lisette.OptionSome {
 		n := subject_1.SomeVal
 		fmt.Print(n)

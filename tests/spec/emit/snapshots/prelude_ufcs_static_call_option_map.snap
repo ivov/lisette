@@ -8,8 +8,8 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
 	opt := lisette.MakeOptionSome(1)
-	option_1 := lisette.OptionFromCommaOk[int](lisette.OptionMap(opt, func(x int) int {
+	mapped := lisette.OptionMap(opt, func(x int) int {
 		return x + 1
-	}))
-	_ = option_1
+	})
+	_ = mapped
 }

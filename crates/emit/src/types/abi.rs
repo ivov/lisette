@@ -316,12 +316,27 @@ impl Emitter<'_> {
             {
                 return None;
             }
+            // Type-namespace dispatch like `Option.map(opt, f)` — prelude helper, tagged return.
+            if matches!(
+                &**receiver,
+                Expression::Identifier { qualified: Some(q), .. } if q.starts_with("prelude.")
+            ) {
+                return None;
+            }
         }
         // Tagged-type constructors compile to `lisette.Make…(...)`,
         // not multi-return Go calls.
         if inner.as_result_constructor().is_some()
             || inner.as_option_constructor().is_some()
             || inner.as_partial_constructor().is_some()
+        {
+            return None;
+        }
+        // Prelude function refs (`assert_type(x)`) — prelude helper, tagged return.
+        if let Expression::Identifier {
+            qualified: Some(q), ..
+        } = inner
+            && q.starts_with("prelude.")
         {
             return None;
         }

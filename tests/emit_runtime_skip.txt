@@ -50,7 +50,5 @@ interop_result_struct_field                 # FIXME: emits %v on uncalled func v
 select_match_receive_complex_unused_recv    # FIXME: emits unused `ok` binding (go compile error)
 struct_user_string_with_wrong_signature_does_not_suppress_auto  # FIXME: emits duplicate String method
 while_let_or_pattern_unused_branch_binding  # FIXME: emits unused `x_1` binding (go compile error)
-prelude_method_value_type_instantiation     # FIXME: OptionFromCommaOk called with 1 arg, prelude expects 2
-prelude_some_ok_constructor_value           # FIXME: OptionFromCommaOk arity mismatch
-prelude_ufcs_static_call_option_map         # FIXME: OptionFromCommaOk arity mismatch
-unit_call_in_assert_type                    # FIXME: OptionFromCommaOk arity mismatch
+prelude_method_value_type_instantiation     # FIXME: function-value capture of prelude fn — needs capture-site lowering
+prelude_some_ok_constructor_value           # FIXME: function-value capture of prelude fn — needs capture-site lowering
