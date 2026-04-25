@@ -3131,7 +3131,7 @@ fn test() {
 }
 
 #[test]
-fn let_else_or_pattern_scope_leak_after() {
+fn let_else_or_pattern_outer_preserved_when_pattern_uses_different_name() {
     let input = r#"
 enum E {
   A(int),
@@ -3140,12 +3140,12 @@ enum E {
 }
 fn test() {
   let x = 5
-  let _ = x
   let e = E.A(9)
-  let E.A(x) | E.B(x) = e else {
+  let E.A(y) | E.B(y) = e else {
     return
   }
-  if x != 5 { panic("shadow") }
+  if y != 9 { panic("pattern") }
+  if x != 5 { panic("outer") }
 }
 "#;
     assert_emit_snapshot!(input);

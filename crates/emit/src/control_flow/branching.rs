@@ -132,14 +132,31 @@ impl Emitter<'_> {
         if let Pattern::Or { patterns, .. } = pattern
             && Self::pattern_has_bindings(pattern)
         {
-            for (i, alternative_pattern) in patterns.iter().enumerate() {
-                let (checks, bindings) =
-                    decision_tree::collect_pattern_info(self, alternative_pattern, None);
-                let condition = decision_tree::render_condition(&checks, &subject_var);
+            let mut alternatives: Vec<_> = patterns
+                .iter()
+                .map(|alt| decision_tree::collect_pattern_info(self, alt, None))
+                .collect();
+
+            let unused_names: rustc_hash::FxHashSet<String> = alternatives
+                .iter()
+                .flat_map(|(_, bindings)| bindings.iter())
+                .filter(|b| b.go_name.is_none())
+                .map(|b| b.lisette_name.clone())
+                .collect();
+            for (_, bindings) in alternatives.iter_mut() {
+                for binding in bindings.iter_mut() {
+                    if unused_names.contains(&binding.lisette_name) {
+                        binding.go_name = None;
+                    }
+                }
+            }
+
+            for (i, (checks, bindings)) in alternatives.iter().enumerate() {
+                let condition = decision_tree::render_condition(checks, &subject_var);
 
                 self.emit_branch_header(output, &condition, false, i == 0);
 
-                decision_tree::emit_tree_bindings(self, output, &bindings, &subject_var);
+                decision_tree::emit_tree_bindings(self, output, bindings, &subject_var);
                 self.emit_block(output, body);
             }
 

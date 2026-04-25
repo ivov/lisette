@@ -22,6 +22,7 @@ func test() {
 	lisette.ChannelSend(ch, P{v: 1})
 	select {
 	case recv_1, ok := <-ch:
+		_ = ok
 		_ = recv_1
 	default:
 	}

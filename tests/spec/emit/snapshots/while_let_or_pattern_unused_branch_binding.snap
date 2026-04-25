@@ -52,7 +52,6 @@ func test() {
 		if e.Tag == EA {
 			panic("unexpected")
 		} else if e.Tag == EB {
-			x_1 := e.B
 			panic("unexpected")
 		}
 		break

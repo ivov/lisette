@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nenum E {\n  A(int),\n  B(int),\n  C,\n}\nfn test() {\n  let x = 5\n  let _ = x\n  let e = E.A(9)\n  let E.A(x) | E.B(x) = e else {\n    return\n  }\n  if x != 5 { panic(\"shadow\") }\n}\n"
+description: "input: \nenum E {\n  A(int),\n  B(int),\n  C,\n}\nfn test() {\n  let x = 5\n  let e = E.A(9)\n  let E.A(y) | E.B(y) = e else {\n    return\n  }\n  if y != 9 { panic(\"pattern\") }\n  if x != 5 { panic(\"outer\") }\n}\n"
 ---
 package main
 
@@ -46,17 +46,20 @@ func (e E) String() string {
 }
 
 func test() {
-	_ = 5
+	x := 5
 	e := MakeEA(9)
-	var x_1 int
+	var y int
 	if e.Tag == EA {
-		x_1 = e.A
+		y = e.A
 	} else if e.Tag == EB {
-		x_1 = e.B
+		y = e.B
 	} else {
 		return
 	}
-	if x_1 != 5 {
-		panic("shadow")
+	if y != 9 {
+		panic("pattern")
+	}
+	if x != 5 {
+		panic("outer")
 	}
 }

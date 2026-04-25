@@ -466,7 +466,8 @@ impl Emitter<'_> {
 
         let ok_var = self.fresh_ok_var();
         write_line!(output, "case {}, {} := <-{}:", case_var, ok_var, channel);
-        let guard = (case_var != "_").then(|| DiscardGuard::new(output, &case_var));
+        let recv_guard = (case_var != "_").then(|| DiscardGuard::new(output, &case_var));
+        let ok_guard = DiscardGuard::new(output, &ok_var);
 
         let some_content = self.render_receive_some_arm(
             output,
@@ -487,9 +488,10 @@ impl Emitter<'_> {
             none_content.as_deref(),
         );
 
-        if let Some(guard) = guard {
+        if let Some(guard) = recv_guard {
             guard.finish(output);
         }
+        ok_guard.finish(output);
 
         self.scope.bindings.restore();
     }

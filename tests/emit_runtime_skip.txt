@@ -42,10 +42,7 @@ newtype_nested_field_assign_eval_order      # eval-order: out-of-range index pro
 slice_range_eval_order_captured             # eval-order: out-of-range slice proves capture
 
 # --- FIXME: codegen bugs surfaced by the runtime suite ---
-let_else_or_pattern_scope_leak_after        # FIXME: pattern binding leaks past let-else block (panic("shadow") fires when it should not)
 call_through_deref_ref_fn                   # FIXME: emits *func type but call site expects *IntFn alias
-select_match_receive_complex_unused_recv    # FIXME: emits unused `ok` binding (go compile error)
 struct_user_string_with_wrong_signature_does_not_suppress_auto  # FIXME: emits duplicate String method
-while_let_or_pattern_unused_branch_binding  # FIXME: emits unused `x_1` binding (go compile error)
 prelude_method_value_type_instantiation     # FIXME: function-value capture of prelude fn — needs capture-site lowering
 prelude_some_ok_constructor_value           # FIXME: function-value capture of prelude fn — needs capture-site lowering
