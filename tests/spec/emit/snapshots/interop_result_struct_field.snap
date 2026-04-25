@@ -15,7 +15,7 @@ type Parser struct {
 }
 
 func (p Parser) String() string {
-	return fmt.Sprintf("Parser { parse: %v }", p.parse)
+	return fmt.Sprintf("Parser { parse: %p }", p.parse)
 }
 
 func main() {

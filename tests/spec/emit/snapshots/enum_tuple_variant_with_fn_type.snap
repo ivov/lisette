@@ -31,7 +31,7 @@ func (t Transform[T]) String() string {
 	case TransformIdentity:
 		return "Transform.Identity"
 	case TransformApply:
-		return fmt.Sprintf("Transform.Apply(%v)", t.Apply)
+		return fmt.Sprintf("Transform.Apply(%p)", t.Apply)
 	default:
 		return fmt.Sprintf("Transform(%d)", t.Tag)
 	}

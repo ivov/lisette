@@ -19,7 +19,7 @@ type Handler[T any] struct {
 }
 
 func (h Handler[T]) String() string {
-	return fmt.Sprintf("Handler { callback: %v }", h.callback)
+	return fmt.Sprintf("Handler { callback: %p }", h.callback)
 }
 
 type ETag int

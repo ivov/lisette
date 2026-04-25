@@ -15,7 +15,7 @@ type Holder struct {
 }
 
 func (h Holder) String() string {
-	return fmt.Sprintf("Holder { f: %v }", h.f)
+	return fmt.Sprintf("Holder { f: %p }", h.f)
 }
 
 func main() {

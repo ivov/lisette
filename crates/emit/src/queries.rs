@@ -2,13 +2,12 @@ use rustc_hash::FxHashMap as HashMap;
 
 use crate::Emitter;
 use crate::control_flow::fallible;
-use crate::definitions::enum_layout::{EnumLayout, FieldTypeMap};
+use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
+use crate::definitions::structs::is_raw_function_type;
 use crate::names::go_name;
 use syntax::ast::{Pattern, RestPattern, StructKind};
 use syntax::program::Definition;
 use syntax::types::{Type, substitute};
-
-// -- Definition queries ----------------------------------------------------
 
 impl Emitter<'_> {
     pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<String> {
@@ -311,12 +310,20 @@ impl Emitter<'_> {
             for (vi, variant) in variants.iter().enumerate() {
                 for (fi, field) in variant.fields.iter().enumerate() {
                     let mut go_type = self.go_type_as_string(&field.ty);
+                    let recursive = Self::is_recursive_type(&field.ty, &enum_id);
 
-                    if Self::is_recursive_type(&field.ty, &enum_id) {
+                    if recursive {
                         go_type = format!("*{}", go_type);
                     }
 
-                    field_types.insert((vi, fi), go_type);
+                    let is_function = !recursive && is_raw_function_type(&field.ty);
+                    field_types.insert(
+                        (vi, fi),
+                        FieldTypeInfo {
+                            go_type,
+                            is_function,
+                        },
+                    );
                 }
             }
 

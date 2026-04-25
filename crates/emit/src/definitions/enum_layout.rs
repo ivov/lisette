@@ -1,5 +1,6 @@
 use rustc_hash::FxHashMap as HashMap;
 
+use crate::definitions::structs::stringer_verb;
 use crate::names::go_name;
 use syntax::ast::{EnumVariant, Generic};
 
@@ -30,9 +31,16 @@ pub(crate) struct FieldLayout {
     pub(crate) source_name: String,
     pub(crate) go_name: String,
     pub(crate) go_type: String,
+    pub(crate) is_function: bool,
 }
 
-pub(crate) type FieldTypeMap = HashMap<(usize, usize), String>;
+#[derive(Debug, Clone)]
+pub(crate) struct FieldTypeInfo {
+    pub(crate) go_type: String,
+    pub(crate) is_function: bool,
+}
+
+pub(crate) type FieldTypeMap = HashMap<(usize, usize), FieldTypeInfo>;
 
 impl EnumLayout {
     pub(crate) fn new(
@@ -93,15 +101,17 @@ impl EnumLayout {
                     enum_name,
                 );
 
-                let go_type = field_types
-                    .get(&(variant_index, fi))
-                    .cloned()
+                let info = field_types.get(&(variant_index, fi));
+                let go_type = info
+                    .map(|i| i.go_type.clone())
                     .unwrap_or_else(|| "any".to_string());
+                let is_function = info.is_some_and(|i| i.is_function);
 
                 FieldLayout {
                     source_name,
                     go_name,
                     go_type,
+                    is_function,
                 }
             })
             .collect();
@@ -248,7 +258,7 @@ impl EnumLayout {
                 let format_parts: Vec<String> = variant
                     .fields
                     .iter()
-                    .map(|f| format!("{}: %v", f.source_name))
+                    .map(|f| format!("{}: {}", f.source_name, stringer_verb(f.is_function)))
                     .collect();
                 let args: Vec<String> = variant
                     .fields
@@ -263,12 +273,20 @@ impl EnumLayout {
                     args.join(", ")
                 ));
             } else if variant.fields.len() == 1 {
+                let f = &variant.fields[0];
                 lines.push(format!(
-                    "return fmt.Sprintf(\"{}.{}(%v)\", {receiver}.{})",
-                    self.enum_name, variant.name, variant.fields[0].go_name
+                    "return fmt.Sprintf(\"{}.{}({})\", {receiver}.{})",
+                    self.enum_name,
+                    variant.name,
+                    stringer_verb(f.is_function),
+                    f.go_name
                 ));
             } else {
-                let placeholders = vec!["%v"; variant.fields.len()];
+                let placeholders: Vec<&str> = variant
+                    .fields
+                    .iter()
+                    .map(|f| stringer_verb(f.is_function))
+                    .collect();
                 let args: Vec<String> = variant
                     .fields
                     .iter()

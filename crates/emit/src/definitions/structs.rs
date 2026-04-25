@@ -26,7 +26,7 @@ impl Emitter<'_> {
             return self.emit_tuple_struct(name, &generics_string, fields, &generics);
         }
 
-        let (field_strings, go_field_names): (Vec<String>, Vec<(String, String)>) = fields
+        let (field_strings, stringer_fields): (Vec<String>, Vec<StringerField>) = fields
             .iter()
             .map(|f| self.emit_struct_field(f, name, struct_attrs))
             .unzip();
@@ -49,10 +49,10 @@ impl Emitter<'_> {
             let string_method = self.emit_struct_stringer_method(
                 name,
                 &receiver_generics,
-                &go_field_names,
+                &stringer_fields,
                 stringer_name,
             );
-            if !go_field_names.is_empty() {
+            if !stringer_fields.is_empty() {
                 self.ensure_imported.insert("fmt".to_string());
             }
             format!("{definition}\n\n{string_method}")
@@ -95,13 +95,13 @@ impl Emitter<'_> {
     }
 
     /// Emit one Go struct field, returning the field source code paired with
-    /// the (source-name, Go-name) mapping used by the stringer and tag lookups.
+    /// stringer metadata used by the stringer and tag lookups.
     fn emit_struct_field(
         &mut self,
         f: &StructFieldDefinition,
         struct_name: &str,
         struct_attrs: &[Attribute],
-    ) -> (String, (String, String)) {
+    ) -> (String, StringerField) {
         let tag_configs = interpret_field_attributes(f, struct_attrs);
         let needs_omitzero = is_option_type(&f.ty);
         let tag_string = format_tag_string(&f.name, &tag_configs, needs_omitzero);
@@ -127,7 +127,12 @@ impl Emitter<'_> {
 
         let field_with_doc = format!("{}{}", self.emit_doc(&f.doc), field_definition);
 
-        (field_with_doc, (f.name.to_string(), field_name))
+        let stringer_field = StringerField {
+            source_name: f.name.to_string(),
+            go_name: field_name,
+            is_function: is_raw_function_type(&f.ty),
+        };
+        (field_with_doc, stringer_field)
     }
 
     fn emit_tuple_struct_definition(
@@ -165,7 +170,7 @@ impl Emitter<'_> {
         &self,
         name: &str,
         receiver_generics: &str,
-        fields: &[(String, String)],
+        fields: &[StringerField],
         method_name: &str,
     ) -> String {
         let receiver = crate::utils::receiver_name(name);
@@ -176,11 +181,13 @@ impl Emitter<'_> {
                 "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn \"{name}\"\n}}"
             );
         }
-        let format_parts: Vec<String> =
-            fields.iter().map(|(src, _)| format!("{src}: %v")).collect();
+        let format_parts: Vec<String> = fields
+            .iter()
+            .map(|f| format!("{}: {}", f.source_name, stringer_verb(f.is_function)))
+            .collect();
         let args: Vec<String> = fields
             .iter()
-            .map(|(_, go)| format!("{receiver}.{go}"))
+            .map(|f| format!("{receiver}.{}", f.go_name))
             .collect();
         format!(
             "func ({receiver} {receiver_type}) {method_name}() string {{\nreturn fmt.Sprintf(\"{name} {{ {} }}\", {})\n}}",
@@ -262,6 +269,24 @@ impl Emitter<'_> {
             _ => Some(ENUM_STRINGER_METHOD),
         }
     }
+}
+
+pub(crate) struct StringerField {
+    source_name: String,
+    go_name: String,
+    is_function: bool,
+}
+
+pub(crate) fn is_raw_function_type(ty: &Type) -> bool {
+    match ty {
+        Type::Function { .. } => true,
+        Type::Forall { body, .. } => is_raw_function_type(body),
+        _ => false,
+    }
+}
+
+pub(crate) fn stringer_verb(is_function: bool) -> &'static str {
+    if is_function { "%p" } else { "%v" }
 }
 
 fn is_stringer_signature(method_ty: Option<&Type>) -> bool {

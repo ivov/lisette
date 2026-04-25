@@ -4,6 +4,6 @@ mod functions;
 mod impls;
 pub(crate) mod interface_adapter;
 mod interfaces;
-mod structs;
+pub(crate) mod structs;
 mod tags;
 mod toplevel;

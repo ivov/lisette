@@ -44,9 +44,6 @@ slice_range_eval_order_captured             # eval-order: out-of-range slice pro
 # --- FIXME: codegen bugs surfaced by the runtime suite ---
 let_else_or_pattern_scope_leak_after        # FIXME: pattern binding leaks past let-else block (panic("shadow") fires when it should not)
 call_through_deref_ref_fn                   # FIXME: emits *func type but call site expects *IntFn alias
-enum_tuple_variant_with_fn_type             # FIXME: emits %v on uncalled func value (go vet error)
-interop_result_map_field_assignment         # FIXME: emits %v on uncalled func value (go vet error)
-interop_result_struct_field                 # FIXME: emits %v on uncalled func value (go vet error)
 select_match_receive_complex_unused_recv    # FIXME: emits unused `ok` binding (go compile error)
 struct_user_string_with_wrong_signature_does_not_suppress_auto  # FIXME: emits duplicate String method
 while_let_or_pattern_unused_branch_binding  # FIXME: emits unused `x_1` binding (go compile error)
