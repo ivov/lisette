@@ -32,6 +32,8 @@ return {
 }
 ```
 
+- **Other editors**: Point the editor's LSP client at `lis lsp` for files matching `*.lis`
+
 ## Try it out
 
 Generate a sample task manager project:
@@ -154,6 +156,10 @@ Commands:
     learn      Generate a sample project
     doc        Explore the prelude and Go stdlib
     help       Print this message
+
+Integrations:
+    completions  Generate shell completion scripts (bash, zsh, fish)
+    lsp          Start the language server (for editor extensions)
 
 Hint: Run `lis help <command>` to learn more about a command.
 ```

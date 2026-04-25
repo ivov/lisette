@@ -21,8 +21,9 @@ Commands:
     `doc`      Explore the prelude and Go stdlib
     `help`     Print this message
 
-Shell:
+Integrations:
     `completions`  Generate shell completion scripts (bash, zsh, fish)
+    `lsp`          Start the language server (used by editor extensions)
 
 Hint: Run `lis help <command>` to learn more about a command.
       New to Lisette? See https://lisette.run/quickstart",
@@ -130,7 +131,7 @@ Abbreviation: `x`",
         "lsp" => print_help(
             "`lis lsp`
 
-Start the Lisette language server, for use by IDEs.",
+Start the Lisette language server over stdio, for use by editor extensions.",
         ),
 
         "bindgen" => print_help(
