@@ -6,7 +6,11 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test() lisette.Option[int] {
+func test() (int, bool) {
 	ch := make(chan int)
-	return lisette.ChannelReceive(ch)
+	v_1 := lisette.ChannelReceive(ch)
+	if v_1.Tag == lisette.OptionSome {
+		return v_1.SomeVal, true
+	}
+	return *new(int), false
 }

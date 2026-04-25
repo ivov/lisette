@@ -1,0 +1,30 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "io"
+
+type Dev struct{}
+
+func (d Dev) String() string {
+	return "Dev"
+}
+
+func (d Dev) Read(_ []uint8) (int, error) {
+	return 0, nil
+}
+
+func (d Dev) Write(_ []uint8) (int, error) {
+	return 0, nil
+}
+
+func use_rw(_ io.ReadWriter) int {
+	return 0
+}
+
+func main() {
+	d := Dev{}
+	_ = use_rw(d)
+}

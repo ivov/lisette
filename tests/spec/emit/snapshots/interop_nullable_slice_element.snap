@@ -10,14 +10,10 @@ import (
 )
 
 func main() {
-	arr := []func(string) lisette.Option[*flag.Flag]{func(arg0 string) lisette.Option[*flag.Flag] {
-		raw_1 := flag.Lookup(arg0)
-		if raw_1 != nil {
-			return lisette.MakeOptionSome[*flag.Flag](raw_1)
-		}
-		return lisette.MakeOptionNone[*flag.Flag]()
-	}}
-	r := arr[0]("verbose")
+	arr := []func(string) *flag.Flag{flag.Lookup}
+	raw_1 := arr[0]("verbose")
+	option_2 := lisette.OptionFromNilable[*flag.Flag](raw_1, raw_1 == nil)
+	r := option_2
 	if r.Tag == lisette.OptionSome {
 		_ = r.SomeVal
 	}

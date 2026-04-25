@@ -53,6 +53,11 @@ impl Emitter<'_> {
         let Some(shape) = self.classify_callee_abi(callee) else {
             return false;
         };
+        // Match-fusion only handles `Result`'s binary `Ok`/`Err` arms;
+        // Partial (3-way) and Option (Some/None) fall through to lift-then-match.
+        if !matches!(shape, AbiShape::ResultTuple | AbiShape::BareError) {
+            return false;
+        }
         let Some((ok_arm, err_arm)) = classify_result_arms(arms) else {
             return false;
         };
@@ -74,6 +79,10 @@ impl Emitter<'_> {
                 Some(v)
             }
             AbiShape::BareError => None,
+            AbiShape::PartialTuple
+            | AbiShape::CommaOk
+            | AbiShape::NullableReturn
+            | AbiShape::Tuple { .. } => unreachable!("rejected above"),
         };
         let err_var = self.fresh_var(Some("ret"));
         self.declare(&err_var);
@@ -84,19 +93,23 @@ impl Emitter<'_> {
         }
 
         write_line!(output, "if {} == nil {{", err_var);
+        self.scope.bindings.save();
         if let (Some(name), Some(val)) = (ok_binding, &val_var)
             && name != "_"
         {
             self.bind_fused(output, name, val);
         }
         self.emit_in_position(output, &ok_arm.expression);
+        self.scope.bindings.restore();
         output.push_str("} else {\n");
+        self.scope.bindings.save();
         if let Some(name) = err_binding
             && name != "_"
         {
             self.bind_fused(output, name, &err_var);
         }
         self.emit_in_position(output, &err_arm.expression);
+        self.scope.bindings.restore();
         output.push_str("}\n");
         true
     }
@@ -194,6 +207,10 @@ fn ok_arm_payload_is_omitted(arm: &MatchArm, shape: &AbiShape) -> bool {
         AbiShape::BareError => {
             fields.is_empty() || matches!(fields.as_slice(), [Pattern::Unit { .. }])
         }
-        AbiShape::ResultTuple => false,
+        AbiShape::ResultTuple
+        | AbiShape::PartialTuple
+        | AbiShape::CommaOk
+        | AbiShape::NullableReturn
+        | AbiShape::Tuple { .. } => false,
     }
 }

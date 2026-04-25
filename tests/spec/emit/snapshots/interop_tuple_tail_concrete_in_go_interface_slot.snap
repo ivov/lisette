@@ -4,10 +4,7 @@ description: "input: \nimport \"go:fmt\"\n\nstruct Counter {\n  count: int,\n}\n
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
 type Counter struct {
 	count int
@@ -21,6 +18,6 @@ func (c Counter) String() string {
 	return fmt.Sprint(c.count)
 }
 
-func make_pair(c Counter) lisette.Tuple2[fmt.Stringer, int] {
-	return lisette.MakeTuple2[fmt.Stringer, int](c, c.count)
+func make_pair(c Counter) (fmt.Stringer, int) {
+	return c, c.count
 }

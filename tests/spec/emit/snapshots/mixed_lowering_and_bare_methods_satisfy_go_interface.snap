@@ -26,17 +26,5 @@ func run(s mixed.Service) string {
 
 func main() {
 	s := Svc{}
-	_ = run(_lisAdapter_Svc_Service_0{inner: s})
-}
-
-type _lisAdapter_Svc_Service_0 struct {
-	inner Svc
-}
-
-func (a _lisAdapter_Svc_Service_0) Load(arg0 string) (int, error) {
-	return a.inner.Load(arg0)
-}
-
-func (a _lisAdapter_Svc_Service_0) Name() string {
-	return a.inner.Name()
+	_ = run(s)
 }

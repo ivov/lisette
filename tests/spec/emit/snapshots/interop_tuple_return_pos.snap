@@ -9,14 +9,13 @@ import (
 	"path"
 )
 
-func make_splitter() func(string) lisette.Tuple2[string, string] {
-	return func(arg0 string) lisette.Tuple2[string, string] {
-		ret_1, ret_2 := path.Split(arg0)
-		return lisette.MakeTuple2(ret_1, ret_2)
-	}
+func make_splitter() func(string) (string, string) {
+	return path.Split
 }
 
 func main() {
 	f := make_splitter()
-	_ = f("/foo/bar.txt")
+	ret_1, ret_2 := f("/foo/bar.txt")
+	tup_3 := lisette.MakeTuple2(ret_1, ret_2)
+	_ = tup_3
 }

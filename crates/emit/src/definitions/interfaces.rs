@@ -51,7 +51,7 @@ impl Emitter<'_> {
         }
 
         for item in items {
-            output.push(self.emit_interface_method(item, is_public));
+            output.push(self.emit_interface_method(name, item, is_public));
         }
 
         output.push("}".to_string());
@@ -59,10 +59,15 @@ impl Emitter<'_> {
         output.join("\n")
     }
 
-    /// Emit one interface method signature. Drops a leading `self` receiver
-    /// from the param list since interface methods take their receiver
-    /// implicitly. Unit returns (`struct{}`) are elided from the Go signature.
-    fn emit_interface_method(&mut self, item: &Expression, is_public: bool) -> String {
+    /// Emit one interface method signature: drop the implicit `self`,
+    /// elide unit returns, and apply hint-aware boundary lowering so
+    /// user interface methods emit the same Go shape struct impls do.
+    fn emit_interface_method(
+        &mut self,
+        interface_name: &str,
+        item: &Expression,
+        is_public: bool,
+    ) -> String {
         let func = item.to_function_definition();
         let ty = item.get_type();
         let all_args = ty
@@ -78,10 +83,16 @@ impl Emitter<'_> {
             .skip(if has_self_receiver { 1 } else { 0 })
             .map(|a| self.go_type_as_string(a))
             .collect();
-        let return_type = self.go_type_as_string(
-            ty.get_function_ret()
-                .expect("interface method must have return type"),
-        );
+        let raw_return_ty = ty
+            .get_function_ret()
+            .expect("interface method must have return type")
+            .clone();
+        let qualified_id = format!("{}.{}", self.current_module, interface_name);
+        let hints = self.go_interface_method_hints(&qualified_id, &func.name);
+        let return_type = match self.classify_with_go_hints(&raw_return_ty, &hints) {
+            Some(shape) => self.render_lowered_return_ty(&shape, &raw_return_ty),
+            None => self.go_type_as_string(&raw_return_ty),
+        };
 
         let method_name = if is_public || self.method_needs_export(&func.name) {
             go_name::capitalize_first(&func.name)

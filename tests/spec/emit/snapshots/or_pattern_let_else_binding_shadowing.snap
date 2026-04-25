@@ -6,12 +6,13 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func maybe() lisette.Option[int] {
-	return lisette.MakeOptionSome[int](1)
+func maybe() (int, bool) {
+	return 1, true
 }
 
 func main() {
-	subject_1 := maybe()
+	option_2 := lisette.OptionFromCommaOk[int](maybe())
+	subject_1 := option_2
 	var x int
 	if subject_1.Tag == lisette.OptionSome {
 		x = subject_1.SomeVal

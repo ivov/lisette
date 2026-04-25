@@ -48,6 +48,10 @@ impl Emitter<'_> {
             return;
         }
 
+        if self.try_emit_lowered_tail_return(output, last) {
+            return;
+        }
+
         if self.emit_wrapped_return(output, last) {
             return;
         }
@@ -167,10 +171,16 @@ impl Emitter<'_> {
         let has_return = matches!(ty, Type::Function { return_type, .. }
             if !return_type.is_unit() && !return_type.is_variable());
 
+        // When the lambda flows into a Go-prelude generic callback that
+        // expects the unlowered single-return form, suppress the lambda's
+        // own return-type lowering so signature and body match.
+        let suppress_lowering = self.suppress_go_fn_short_circuit;
         let return_ty_string = if has_return {
             match ty {
                 Type::Function { return_type, .. } => {
-                    if let Some(shape) = self.classify_direct_emission(return_type) {
+                    if !suppress_lowering
+                        && let Some(shape) = self.classify_direct_emission(return_type)
+                    {
                         format!(" {}", self.render_lowered_return_ty(&shape, return_type))
                     } else {
                         format!(" {}", self.go_type_as_string(return_type))
@@ -186,9 +196,13 @@ impl Emitter<'_> {
 
         let saved_return_context = self.current_return_context.clone();
         if let Type::Function { return_type, .. } = ty {
-            self.current_return_context =
-                Some(crate::ReturnContext::new(return_type.as_ref().clone()));
+            self.current_return_context = Some(if suppress_lowering {
+                crate::ReturnContext::tagged(return_type.as_ref().clone())
+            } else {
+                crate::ReturnContext::new(return_type.as_ref().clone())
+            });
         }
+        let saved_suppress = std::mem::replace(&mut self.suppress_go_fn_short_circuit, false);
 
         let mut body_string = String::new();
 
@@ -204,6 +218,7 @@ impl Emitter<'_> {
         self.scope.bindings.restore();
 
         self.current_return_context = saved_return_context;
+        self.suppress_go_fn_short_circuit = saved_suppress;
 
         format!(
             "func({}){} {{\n{}}}",

@@ -6,11 +6,11 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func maybe(flag bool) lisette.Option[int] {
+func maybe(flag bool) (int, bool) {
 	if flag {
-		return lisette.MakeOptionSome[int](42)
+		return 42, true
 	}
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 }
 
 func test() int {
@@ -22,7 +22,8 @@ loop_1:
 			break loop_1
 		}
 		if count == 1 {
-			subject_2 := maybe(true)
+			option_3 := lisette.OptionFromCommaOk[int](maybe(true))
+			subject_2 := option_3
 			if subject_2.Tag != lisette.OptionSome {
 				break loop_1
 			}

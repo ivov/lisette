@@ -25,6 +25,24 @@ func MakeOptionNone[T any]() Option[T] {
 	return Option[T]{Tag: OptionNone}
 }
 
+// OptionFromCommaOk wraps a Go comma-ok pair `(value, ok)` into an
+// `Option[T]`.
+func OptionFromCommaOk[T any](val T, ok bool) Option[T] {
+	if ok {
+		return Option[T]{Tag: OptionSome, SomeVal: val}
+	}
+	return Option[T]{Tag: OptionNone}
+}
+
+// OptionFromNilable wraps a Go nilable `T` (pointer, function, interface,
+// map, slice, channel) into an `Option[T]`.
+func OptionFromNilable[T any](val T, isNil bool) Option[T] {
+	if isNil {
+		return Option[T]{Tag: OptionNone}
+	}
+	return Option[T]{Tag: OptionSome, SomeVal: val}
+}
+
 func (opt Option[T]) IsSome() bool {
 	return opt.Tag == OptionSome
 }

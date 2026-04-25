@@ -10,5 +10,6 @@ func noop() {}
 
 func main() {
 	noop()
-	_ = lisette.AssertType[struct{}](struct{}{})
+	option_1 := lisette.OptionFromCommaOk[struct{}](lisette.AssertType[struct{}](struct{}{}))
+	_ = option_1
 }

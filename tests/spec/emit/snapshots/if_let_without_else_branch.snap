@@ -9,15 +9,16 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func divide(a, b int) lisette.Option[int] {
+func divide(a, b int) (int, bool) {
 	if b == 0 {
-		return lisette.MakeOptionNone[int]()
+		return *new(int), false
 	}
-	return lisette.MakeOptionSome[int](a / b)
+	return a / b, true
 }
 
 func test() {
-	subject_1 := divide(100, 10)
+	option_2 := lisette.OptionFromCommaOk[int](divide(100, 10))
+	subject_1 := option_2
 	if subject_1.Tag == lisette.OptionSome {
 		x := subject_1.SomeVal
 		fmt.Printf("Result: %v\n", x)

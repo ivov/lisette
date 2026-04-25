@@ -1,0 +1,25 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+func parse() (int, error) {
+	return 1, nil
+}
+
+func main() {
+	x := 100
+	fmt.Println(x)
+	x_1 := 200
+	ret_2, ret_3 := parse()
+	if ret_3 == nil {
+		x := ret_2
+		fmt.Println(x)
+	} else {
+		fmt.Println("err")
+	}
+	fmt.Println(x_1)
+}

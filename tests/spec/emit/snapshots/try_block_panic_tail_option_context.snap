@@ -6,7 +6,7 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test() lisette.Option[int] {
+func test() (int, bool) {
 	tryResult_1 := func() lisette.Option[int] {
 		check_2 := lisette.MakeOptionSome(1)
 		if check_2.Tag != lisette.OptionSome {
@@ -14,5 +14,9 @@ func test() lisette.Option[int] {
 		}
 		panic("fatal")
 	}()
-	return tryResult_1
+	v_3 := tryResult_1
+	if v_3.Tag == lisette.OptionSome {
+		return v_3.SomeVal, true
+	}
+	return *new(int), false
 }

@@ -1,0 +1,23 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Widget struct {
+	id int
+}
+
+func (w Widget) String() string {
+	return fmt.Sprintf("Widget { id: %v }", w.id)
+}
+
+func (w Widget) MarshalText() ([]byte, error) {
+	return []byte("custom"), nil
+}
+
+func main() {
+	_ = Widget{id: 7}
+}

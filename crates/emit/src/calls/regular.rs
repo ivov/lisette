@@ -12,6 +12,9 @@ struct CallArgsContext<'a> {
     fn_param_types: &'a [Type],
     pointer_indices: &'a HashSet<usize>,
     is_go_call: bool,
+    /// Suppresses the Go-fn identity short-circuit on fn-typed params
+    /// dispatching into prelude generic helpers (e.g. `OptionAndThen`).
+    is_prelude_dispatch: bool,
     spread: Option<&'a Expression>,
     wrap_spread_to_any: bool,
 }
@@ -105,15 +108,22 @@ impl Emitter<'_> {
             _ => vec![],
         };
 
-        let is_go_call = matches!(
-            function.unwrap_parens(),
-            Expression::DotAccess { expression, .. } if Self::is_go_receiver(expression)
-        );
+        let (is_go_call, is_prelude_dispatch) = match function.unwrap_parens() {
+            Expression::DotAccess { expression, .. } => {
+                let is_prelude = matches!(
+                    expression.get_type().strip_refs().unwrap_forall(),
+                    Type::Nominal { id, .. } if id.starts_with("prelude.")
+                );
+                (Self::is_go_receiver(expression), is_prelude)
+            }
+            _ => (false, false),
+        };
 
         let ctx = CallArgsContext {
             fn_param_types: &fn_param_types,
             pointer_indices: &pointer_indices,
             is_go_call,
+            is_prelude_dispatch,
             spread,
             wrap_spread_to_any: Self::spread_needs_any_wrap(function, spread),
         };
@@ -269,7 +279,12 @@ impl Emitter<'_> {
             return format!("&{}", temp);
         }
 
+        let suppress = ctx.is_prelude_dispatch
+            && effective_param_ty
+                .is_some_and(|p| matches!(p.unwrap_forall(), Type::Function { .. }));
+        let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
         let value = self.emit_composite_value(output, arg);
+        self.suppress_go_fn_short_circuit = saved;
         match effective_param_ty {
             Some(target) => {
                 let coercion = Coercion::resolve(self, &arg.get_type(), target);

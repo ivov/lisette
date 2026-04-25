@@ -11,12 +11,7 @@ import (
 )
 
 func main() {
-	ret_1, ret_2 := comment.DefaultLookupPackage("math")
-	var result lisette.Option[string]
-	if ret_2 {
-		result = lisette.MakeOptionSome[string](ret_1)
-	} else {
-		result = lisette.MakeOptionNone[string]()
-	}
+	option_1 := lisette.OptionFromCommaOk[string](comment.DefaultLookupPackage("math"))
+	result := option_1
 	fmt.Print(result.IsSome())
 }

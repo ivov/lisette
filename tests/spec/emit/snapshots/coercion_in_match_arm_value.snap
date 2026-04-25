@@ -4,10 +4,7 @@ description: "input: \nimport \"go:io\"\n\nstruct A {}\nstruct B {}\n\nimpl A {\
 ---
 package main
 
-import (
-	lisette "github.com/ivov/lisette/prelude"
-	"io"
-)
+import "io"
 
 type A struct{}
 
@@ -21,51 +18,21 @@ func (b B) String() string {
 	return "B"
 }
 
-func (a A) Read(_ []uint8) lisette.Partial[int, error] {
-	return lisette.MakePartialOk[int, error](0)
+func (a A) Read(_ []uint8) (int, error) {
+	return 0, nil
 }
 
-func (b B) Read(_ []uint8) lisette.Partial[int, error] {
-	return lisette.MakePartialOk[int, error](0)
+func (b B) Read(_ []uint8) (int, error) {
+	return 0, nil
 }
 
 func pick(flag bool) io.Reader {
 	if flag {
-		return _lisAdapter_A_Reader_0{inner: A{}}
+		return A{}
 	}
-	return _lisAdapter_B_Reader_1{inner: B{}}
+	return B{}
 }
 
 func main() {
 	_ = pick(true)
-}
-
-type _lisAdapter_A_Reader_0 struct {
-	inner A
-}
-
-func (a _lisAdapter_A_Reader_0) Read(arg0 []uint8) (int, error) {
-	res_1 := a.inner.Read(arg0)
-	if res_1.Tag == lisette.PartialOk {
-		return res_1.OkVal, nil
-	}
-	if res_1.Tag == lisette.PartialErr {
-		return *new(int), res_1.ErrVal
-	}
-	return res_1.OkVal, res_1.ErrVal
-}
-
-type _lisAdapter_B_Reader_1 struct {
-	inner B
-}
-
-func (a _lisAdapter_B_Reader_1) Read(arg0 []uint8) (int, error) {
-	res_2 := a.inner.Read(arg0)
-	if res_2.Tag == lisette.PartialOk {
-		return res_2.OkVal, nil
-	}
-	if res_2.Tag == lisette.PartialErr {
-		return *new(int), res_2.ErrVal
-	}
-	return res_2.OkVal, res_2.ErrVal
 }

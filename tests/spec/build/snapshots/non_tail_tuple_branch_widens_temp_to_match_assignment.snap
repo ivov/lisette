@@ -1,0 +1,44 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"io"
+)
+
+type Reader1 struct{}
+
+func (r Reader1) String() string {
+	return "Reader1"
+}
+
+type Reader2 struct{}
+
+func (r Reader2) String() string {
+	return "Reader2"
+}
+
+func (r Reader1) Read(_ []uint8) (int, error) {
+	return 0, nil
+}
+
+func (r Reader2) Read(_ []uint8) (int, error) {
+	return 1, nil
+}
+
+func pick(flag bool) (io.Reader, int) {
+	var tup_1 lisette.Tuple2[io.Reader, int]
+	if flag {
+		tup_1 = lisette.MakeTuple2[io.Reader, int](Reader1{}, 1)
+	} else {
+		tup_1 = lisette.MakeTuple2[io.Reader, int](Reader2{}, 2)
+	}
+	return tup_1.First, tup_1.Second
+}
+
+func main() {
+	pick(true)
+}

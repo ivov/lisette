@@ -4,11 +4,9 @@ description: "input: \nfn test(flag: bool) -> Option<int> {\n  if flag {\n    So
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func test(flag bool) lisette.Option[int] {
+func test(flag bool) (int, bool) {
 	if flag {
-		return lisette.MakeOptionSome[int](42)
+		return 42, true
 	}
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 }

@@ -14,11 +14,7 @@ func main() {
 	l := list.New()
 	_ = l.PushBack(42)
 	raw_1 := l.Front()
-	var front lisette.Option[*list.Element]
-	if raw_1 != nil {
-		front = lisette.MakeOptionSome[*list.Element](raw_1)
-	} else {
-		front = lisette.MakeOptionNone[*list.Element]()
-	}
+	option_2 := lisette.OptionFromNilable[*list.Element](raw_1, raw_1 == nil)
+	front := option_2
 	fmt.Print(front.IsSome())
 }

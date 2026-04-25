@@ -5,6 +5,7 @@ use crate::control_flow::fallible::{
 };
 use crate::is_order_sensitive;
 use crate::names::go_name;
+use crate::types::abi::{AbiShape, tuple_element_types};
 use crate::utils::optimize_region;
 use crate::write_line;
 use syntax::ast::Expression;
@@ -45,7 +46,7 @@ impl Emitter<'_> {
         self.emit_partial_wrapping(output, &call_str, partial_ty)
     }
 
-    pub(super) fn emit_partial_wrapping(
+    pub(crate) fn emit_partial_wrapping(
         &mut self,
         output: &mut String,
         call_str: &str,
@@ -229,6 +230,47 @@ impl Emitter<'_> {
         let mut fe = FallibleEmitter::new(self, fallible);
         let nil_err = fe.emit_failure(Some("errors.New(\"unexpected nil\")"));
         write_line!(output, "{} = {}", result_var, nil_err);
+    }
+
+    /// Wrap a lowered-callee `call_str` into the Lisette tagged shape declared
+    /// by `result_ty`.
+    pub(crate) fn emit_callee_abi_wrapping(
+        &mut self,
+        output: &mut String,
+        shape: &AbiShape,
+        call_str: &str,
+        result_ty: &Type,
+    ) -> String {
+        match shape {
+            AbiShape::PartialTuple => self.emit_partial_wrapping(output, call_str, result_ty),
+            AbiShape::CommaOk => self.emit_comma_ok_wrapping(output, call_str, result_ty),
+            AbiShape::NullableReturn => {
+                let raw_var = self.fresh_var(Some("raw"));
+                self.declare(&raw_var);
+                write_line!(output, "{} := {}", raw_var, call_str);
+                self.emit_nil_check_option_wrap(output, &raw_var, result_ty)
+            }
+            AbiShape::ResultTuple | AbiShape::BareError => {
+                self.emit_result_wrapping(output, call_str, result_ty)
+            }
+            AbiShape::Tuple { arity } => {
+                let temps = self.create_temp_vars("ret", *arity);
+                write_line!(output, "{} := {}", temps.join(", "), call_str);
+                let slot_tys = tuple_element_types(&self.peel_alias(result_ty));
+                let wrapped: Vec<String> = temps
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| {
+                        slot_tys
+                            .get(i)
+                            .filter(|slot_ty| self.is_nullable_option(slot_ty))
+                            .map(|slot_ty| self.emit_nil_check_option_wrap(output, v, slot_ty))
+                            .unwrap_or_else(|| v.clone())
+                    })
+                    .collect();
+                self.emit_tuple_from_vars(output, &wrapped, result_ty)
+            }
+        }
     }
 
     pub(crate) fn classify_go_fn_value(&self, expression: &Expression) -> Option<GoCallStrategy> {

@@ -1,0 +1,39 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "crypto/tls"
+
+type MyCache struct{}
+
+func (m MyCache) String() string {
+	return "MyCache"
+}
+
+func (m MyCache) Get(_ string) *tls.ClientSessionState {
+	return nil
+}
+
+func (m MyCache) Put(_ string, _ *tls.ClientSessionState) {}
+
+func use_cache(_ tls.ClientSessionCache) {}
+
+func main() {
+	c := MyCache{}
+	use_cache(_lisAdapter_MyCache_ClientSessionCache_0{inner: c})
+}
+
+type _lisAdapter_MyCache_ClientSessionCache_0 struct {
+	inner MyCache
+}
+
+func (a _lisAdapter_MyCache_ClientSessionCache_0) Put(arg0 string, arg1 *tls.ClientSessionState) {
+	a.inner.Put(arg0, arg1)
+}
+
+func (a _lisAdapter_MyCache_ClientSessionCache_0) Get(arg0 string) (*tls.ClientSessionState, bool) {
+	val_1 := a.inner.Get(arg0)
+	return val_1, val_1 != nil
+}

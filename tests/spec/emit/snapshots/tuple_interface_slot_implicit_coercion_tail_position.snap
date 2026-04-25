@@ -4,10 +4,7 @@ description: "input: \nimport \"go:example.com/tea\"\n\nstruct Model {}\n\nimpl 
 ---
 package main
 
-import (
-	"example.com/tea"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/tea"
 
 type Model struct{}
 
@@ -15,12 +12,12 @@ func (m Model) String() string {
 	return "Model"
 }
 
-func (m Model) Init() lisette.Option[tea.Cmd] {
-	return lisette.MakeOptionNone[tea.Cmd]()
+func (m Model) Init() tea.Cmd {
+	return nil
 }
 
-func (m Model) Update(_ tea.Msg) lisette.Tuple2[tea.Model, lisette.Option[tea.Cmd]] {
-	return lisette.MakeTuple2[tea.Model, lisette.Option[tea.Cmd]](_lisAdapter_Model_Model_0{inner: m}, lisette.MakeOptionSome[tea.Cmd](tea.Quit))
+func (m Model) Update(_ tea.Msg) (tea.Model, tea.Cmd) {
+	return m, tea.Quit
 }
 
 func (m Model) View() string {
@@ -28,33 +25,5 @@ func (m Model) View() string {
 }
 
 func main() {
-	_ = tea.NewProgram(_lisAdapter_Model_Model_0{inner: Model{}})
-}
-
-type _lisAdapter_Model_Model_0 struct {
-	inner Model
-}
-
-func (a _lisAdapter_Model_Model_0) View() string {
-	return a.inner.View()
-}
-
-func (a _lisAdapter_Model_Model_0) Init() tea.Cmd {
-	opt_1 := a.inner.Init()
-	if opt_1.Tag == lisette.OptionSome {
-		return opt_1.SomeVal
-	}
-	return nil
-}
-
-func (a _lisAdapter_Model_Model_0) Update(arg0 tea.Msg) (tea.Model, tea.Cmd) {
-	tup_2 := a.inner.Update(arg0)
-	sub_4 := func() tea.Cmd {
-		opt_3 := tup_2.Second
-		if opt_3.Tag == lisette.OptionSome {
-			return opt_3.SomeVal
-		}
-		return nil
-	}()
-	return tup_2.First, sub_4
+	_ = tea.NewProgram(Model{})
 }

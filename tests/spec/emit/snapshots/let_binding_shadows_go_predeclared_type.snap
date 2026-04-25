@@ -18,16 +18,10 @@ func parse(s string) (int, error) {
 	} else {
 		result = lisette.MakeResultOk[int, error](ret_1)
 	}
-	var tmp_4 lisette.Result[int, error]
 	if result.Tag == lisette.ResultOk {
 		n := result.OkVal
-		tmp_4 = lisette.MakeResultOk[int, error](n)
-	} else {
-		e := result.ErrVal
-		tmp_4 = lisette.MakeResultErr[int, error](e)
+		return n, nil
 	}
-	if tmp_4.Tag == lisette.ResultOk {
-		return tmp_4.OkVal, nil
-	}
-	return *new(int), tmp_4.ErrVal
+	e := result.ErrVal
+	return *new(int), e
 }

@@ -953,6 +953,20 @@ impl Expression {
         }
     }
 
+    pub fn as_partial_constructor(&self) -> Option<&'static str> {
+        let variant = match self {
+            Expression::Identifier { value, .. } => Some(value.as_str()),
+            _ => None,
+        }?;
+
+        match variant {
+            "Partial.Ok" => Some("Ok"),
+            "Partial.Err" => Some("Err"),
+            "Partial.Both" => Some("Both"),
+            _ => None,
+        }
+    }
+
     pub fn get_type(&self) -> Type {
         match self {
             Self::Literal { ty, .. }

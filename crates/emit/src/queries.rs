@@ -237,7 +237,9 @@ impl Emitter<'_> {
             return false;
         }
         let inner = ty.ok_type();
-        inner.is_ref() || self.as_interface(&inner).is_some() || self.is_go_function_alias(&inner)
+        inner.is_ref()
+            || self.as_interface(&inner).is_some()
+            || self.resolve_to_function_type(&inner).is_some()
     }
 
     /// Returns true if the Option wraps a Go interface type (not a pointer).

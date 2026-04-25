@@ -4,13 +4,11 @@ description: "input: \nfn make_pair() -> (fn() -> int, fn()) {\n  let get = || -
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func make_pair() lisette.Tuple2[func() int, func()] {
+func make_pair() (func() int, func()) {
 	get := func() int {
 		return 42
 	}
 	inc := func() {
 	}
-	return lisette.MakeTuple2(get, inc)
+	return get, inc
 }

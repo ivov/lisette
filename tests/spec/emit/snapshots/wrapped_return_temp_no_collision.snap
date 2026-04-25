@@ -4,17 +4,15 @@ description: "input: \nfn foo() -> Option<int> {\n  return if true { Some(1) } e
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func foo() lisette.Option[int] {
+func foo() (int, bool) {
 	if true {
-		return lisette.MakeOptionSome[int](1)
+		return 1, true
 	}
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 	_ = 7
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 }
 
 func main() {
-	_ = foo()
+	foo()
 }

@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: "input: \nimport \"go:example.com/tea\"\n\nstruct Model {}\n\nimpl Model {\n  fn Update(self, msg: tea.Msg) -> (tea.Model, Option<tea.Cmd>) {\n    (self as tea.Model, Some(tea.Quit))\n  }\n  fn View(self) -> string { \"\" }\n}\n\nfn main() {\n  let _ = tea.NewProgram(Model {} as tea.Model)\n}\n"
+---
+package main
+
+import "example.com/tea"
+
+type Model struct{}
+
+func (m Model) String() string {
+	return "Model"
+}
+
+func (m Model) Update(_ tea.Msg) (tea.Model, tea.Cmd) {
+	return m, tea.Quit
+}
+
+func (m Model) View() string {
+	return ""
+}
+
+func main() {
+	_ = tea.NewProgram(Model{})
+}

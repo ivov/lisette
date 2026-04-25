@@ -6,14 +6,15 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func maybe() lisette.Option[int] {
-	return lisette.MakeOptionSome[int](1)
+func maybe() (int, bool) {
+	return 1, true
 }
 
-func test() lisette.Option[struct{}] {
-	check_1 := maybe()
-	if check_1.Tag != lisette.OptionSome {
-		return lisette.MakeOptionNone[struct{}]()
+func test() (struct{}, bool) {
+	option_1 := lisette.OptionFromCommaOk[int](maybe())
+	check_2 := option_1
+	if check_2.Tag != lisette.OptionSome {
+		return *new(struct{}), false
 	}
-	return lisette.MakeOptionSome[struct{}](struct{}{})
+	return struct{}{}, true
 }

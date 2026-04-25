@@ -8,15 +8,16 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func noop() {}
 
-func maybe(b bool) lisette.Option[int] {
+func maybe(b bool) (int, bool) {
 	if b {
-		return lisette.MakeOptionSome[int](42)
+		return 42, true
 	}
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 }
 
 func test() {
-	subject_1 := maybe(true)
+	option_2 := lisette.OptionFromCommaOk[int](maybe(true))
+	subject_1 := option_2
 	if subject_1.Tag == lisette.OptionSome {
 		noop()
 	} else {

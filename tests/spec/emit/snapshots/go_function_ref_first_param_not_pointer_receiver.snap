@@ -10,19 +10,12 @@ import (
 )
 
 func main() {
-	f := func(arg0 *flag.Flag) lisette.Tuple2[string, string] {
-		ret_1, ret_2 := flag.UnquoteUsage(arg0)
-		return lisette.MakeTuple2(ret_1, ret_2)
-	}
-	raw_4 := flag.Lookup("verbose")
-	var fl lisette.Option[*flag.Flag]
-	if raw_4 != nil {
-		fl = lisette.MakeOptionSome[*flag.Flag](raw_4)
-	} else {
-		fl = lisette.MakeOptionNone[*flag.Flag]()
-	}
+	f := flag.UnquoteUsage
+	raw_1 := flag.Lookup("verbose")
+	option_2 := lisette.OptionFromNilable[*flag.Flag](raw_1, raw_1 == nil)
+	fl := option_2
 	if fl.Tag == lisette.OptionSome {
 		v := fl.SomeVal
-		_ = f(v)
+		f(v)
 	}
 }

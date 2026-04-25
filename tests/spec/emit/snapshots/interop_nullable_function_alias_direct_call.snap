@@ -11,12 +11,8 @@ import (
 
 func main() {
 	raw_1 := scheduler.MakeCmd()
-	var cmd lisette.Option[scheduler.Cmd]
-	if raw_1 != nil {
-		cmd = lisette.MakeOptionSome[scheduler.Cmd](raw_1)
-	} else {
-		cmd = lisette.MakeOptionNone[scheduler.Cmd]()
-	}
+	option_2 := lisette.OptionFromNilable[scheduler.Cmd](raw_1, raw_1 == nil)
+	cmd := option_2
 	if cmd.Tag == lisette.OptionSome {
 		_ = cmd.SomeVal
 	}

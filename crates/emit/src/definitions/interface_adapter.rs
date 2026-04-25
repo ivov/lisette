@@ -15,6 +15,8 @@ pub(crate) struct AdapterMethod {
     pub(crate) name: EcoString,
     pub(crate) param_types: Vec<Type>,
     pub(crate) return_type: Type,
+    pub(crate) user_shape: Option<crate::types::abi::AbiShape>,
+    pub(crate) interface_shape: Option<crate::types::abi::AbiShape>,
 }
 
 impl Emitter<'_> {
@@ -62,14 +64,21 @@ impl Emitter<'_> {
         }
     }
 
-    fn collect_all_interface_methods(&self, iface: &Interface) -> Vec<(EcoString, Type)> {
-        let mut result: Vec<(EcoString, Type)> = Vec::new();
+    /// Collect own + transitively inherited methods, tagged with the id
+    /// of the interface that *declared* each one. Methods are registered
+    /// under the declaring interface, so hint lookup needs that id.
+    fn collect_all_interface_methods(
+        &self,
+        root_id: &str,
+        iface: &Interface,
+    ) -> Vec<(EcoString, Type, EcoString)> {
+        let mut result: Vec<(EcoString, Type, EcoString)> = Vec::new();
         let mut seen: std::collections::HashSet<EcoString> = std::collections::HashSet::new();
-        let mut queue: Vec<&Interface> = vec![iface];
-        while let Some(current) = queue.pop() {
+        let mut queue: Vec<(&Interface, EcoString)> = vec![(iface, EcoString::from(root_id))];
+        while let Some((current, current_id)) = queue.pop() {
             for (name, ty) in &current.methods {
                 if seen.insert(name.clone()) {
-                    result.push((name.clone(), ty.clone()));
+                    result.push((name.clone(), ty.clone(), current_id.clone()));
                 }
             }
             for parent_ty in &current.parents {
@@ -82,21 +91,21 @@ impl Emitter<'_> {
                     ..
                 }) = self.ctx.definitions.get(id.as_str())
                 {
-                    queue.push(parent_def);
+                    queue.push((parent_def, id.as_eco().clone()));
                 }
             }
         }
         result
     }
 
+    /// Adapter is needed when any method's natural emit shape differs
+    /// from the interface's hint-shifted shape (e.g. `#[go(comma_ok)]`
+    /// shifts `*T` to `(*T, bool)`).
     pub(crate) fn needs_adapter(&self, source_ty: &Type, target_ty: &Type) -> Option<AdapterPlan> {
         let target = self.peel_alias(target_ty);
         let Type::Nominal { id: target_id, .. } = &target else {
             return None;
         };
-        if !target_id.starts_with(GO_IMPORT_PREFIX) {
-            return None;
-        }
         let Some(Definition::Interface { definition, .. }) =
             self.ctx.definitions.get(target_id.as_str())
         else {
@@ -118,11 +127,11 @@ impl Emitter<'_> {
             return None;
         };
 
-        let all_iface_methods = self.collect_all_interface_methods(definition);
-        let mut methods = Vec::with_capacity(all_iface_methods.len());
+        let all_interface_methods = self.collect_all_interface_methods(target_id, definition);
+        let mut methods = Vec::with_capacity(all_interface_methods.len());
         let mut any_adapted = false;
 
-        for (method_name, _iface_method_ty) in &all_iface_methods {
+        for (method_name, _interface_method_ty, declaring_id) in &all_interface_methods {
             let impl_ty = struct_methods.get(method_name)?;
             let Type::Function {
                 params,
@@ -138,17 +147,30 @@ impl Emitter<'_> {
                 params[1..].to_vec()
             };
             let return_ty = (**return_type).clone();
-            if return_ty.is_result()
-                || return_ty.is_partial()
-                || return_ty.is_option()
-                || return_ty.tuple_arity().is_some_and(|n| n >= 2)
-            {
+
+            // Compute the natural shape once and shift it for the interface
+            // side if a `#[go(...)]` hint applies, instead of re-walking
+            // `peel_alias` twice via two `classify_direct_emission` calls.
+            let user_shape = self.classify_direct_emission(&return_ty);
+            let interface_hints = self.go_interface_method_hints(declaring_id, method_name);
+            let interface_shape = match user_shape.as_ref() {
+                Some(crate::types::abi::AbiShape::NullableReturn)
+                    if interface_hints.iter().any(|h| h == "comma_ok") =>
+                {
+                    Some(crate::types::abi::AbiShape::CommaOk)
+                }
+                other => other.cloned(),
+            };
+            if user_shape != interface_shape {
                 any_adapted = true;
             }
+
             methods.push(AdapterMethod {
                 name: method_name.clone(),
                 param_types: method_params,
                 return_type: return_ty,
+                user_shape,
+                interface_shape,
             });
         }
 
@@ -162,6 +184,64 @@ impl Emitter<'_> {
             concrete_ty: source_ty.clone(),
             methods,
         })
+    }
+
+    /// `NullableReturn` → `CommaOk` bridge for `#[go(comma_ok)]` methods.
+    fn emit_hint_shift_bridge(
+        &mut self,
+        inner_call: &str,
+        return_ty: &Type,
+        user_shape: &crate::types::abi::AbiShape,
+        interface_shape: &crate::types::abi::AbiShape,
+    ) -> Option<(String, String)> {
+        use crate::types::abi::AbiShape as A;
+        let (A::NullableReturn, A::CommaOk) = (user_shape, interface_shape) else {
+            return None;
+        };
+        let inner = self.peel_alias(return_ty).ok_type();
+        let is_interface = self.as_interface(&inner).is_some();
+        let val = self.fresh_var(Some("val"));
+        self.declare(&val);
+        let nil_check = if is_interface {
+            self.flags.needs_stdlib = true;
+            format!("!lisette.IsNilInterface({})", val)
+        } else {
+            format!("{} != nil", val)
+        };
+        let go_ret = self.render_lowered_return_ty(&A::CommaOk, return_ty);
+        let body = format!("{val} := {inner_call}\nreturn {val}, {nil_check}\n");
+        Some((go_ret, body))
+    }
+
+    /// `#[go(...)]` hints on an interface method (user-defined or
+    /// Go-imported), looked up by `{interface_id}.{method_name}`.
+    pub(crate) fn go_interface_method_hints(
+        &self,
+        interface_id: &str,
+        method_name: &str,
+    ) -> Vec<String> {
+        let qualified = format!("{}.{}", interface_id, method_name);
+        self.ctx
+            .definitions
+            .get(qualified.as_str())
+            .map(|d| d.go_hints().to_vec())
+            .unwrap_or_default()
+    }
+
+    /// Classify with `#[go(...)]` hints — `comma_ok` shifts the default
+    /// `NullableReturn` to `CommaOk` for nilable `Option`s.
+    pub(crate) fn classify_with_go_hints(
+        &self,
+        return_ty: &Type,
+        hints: &[String],
+    ) -> Option<crate::types::abi::AbiShape> {
+        let base = self.classify_direct_emission(return_ty)?;
+        if matches!(base, crate::types::abi::AbiShape::NullableReturn)
+            && hints.iter().any(|h| h == "comma_ok")
+        {
+            return Some(crate::types::abi::AbiShape::CommaOk);
+        }
+        Some(base)
     }
 
     fn concrete_dedup_key(concrete_ty: &Type, concrete_id: &EcoString) -> EcoString {
@@ -237,30 +317,27 @@ impl Emitter<'_> {
 
         let inner_call = format!("a.inner.{}({})", method.name, param_names.join(", "));
 
-        // Inner method already lowers — forward its multi-return directly.
-        if let Some(shape) = self.classify_direct_emission(&method.return_type) {
-            let (go_ret, body) = match shape {
-                crate::types::abi::AbiShape::BareError => {
-                    ("error".to_string(), format!("return {}\n", inner_call))
-                }
-                crate::types::abi::AbiShape::ResultTuple => {
-                    let ok_ty = self.peel_alias(&method.return_type).ok_type();
-                    let ok_ty_str = self.go_type_as_string(&ok_ty);
-                    (
-                        format!("({}, error)", ok_ty_str),
-                        format!("return {}\n", inner_call),
-                    )
-                }
-            };
-            let ret_suffix = format!(" {}", go_ret);
-            write_line!(
-                decl,
-                "func (a {}) {}({}){} {{",
-                adapter_name,
-                method.name,
-                params_decl.join(", "),
-                ret_suffix
-            );
+        let user_shape = method.user_shape.clone();
+        let interface_shape = method.interface_shape.clone();
+        let params_str = params_decl.join(", ");
+
+        if user_shape == interface_shape
+            && let Some(shape) = user_shape
+        {
+            let go_ret = self.render_lowered_return_ty(&shape, &method.return_type);
+            write_method_header(decl, adapter_name, &method.name, &params_str, &go_ret);
+            decl.push_str(&format!("return {}\n", inner_call));
+            write_line!(decl, "}}");
+            self.exit_scope();
+            return;
+        }
+
+        if let (Some(user), Some(interface)) = (user_shape, interface_shape)
+            && user != interface
+            && let Some((go_ret, body)) =
+                self.emit_hint_shift_bridge(&inner_call, &method.return_type, &user, &interface)
+        {
+            write_method_header(decl, adapter_name, &method.name, &params_str, &go_ret);
             decl.push_str(&body);
             write_line!(decl, "}}");
             self.exit_scope();
@@ -318,10 +395,11 @@ impl Emitter<'_> {
             .iter()
             .zip(inferred.iter())
             .map(|(declared, inferred_slot)| {
-                if self.needs_adapter(inferred_slot, declared).is_some()
+                let needs_widening = self.needs_adapter(inferred_slot, declared).is_some()
+                    || self.as_interface(declared).is_some()
                     || (declared.get_qualified_id().is_some()
-                        && declared.get_qualified_id() == inferred_slot.get_qualified_id())
-                {
+                        && declared.get_qualified_id() == inferred_slot.get_qualified_id());
+                if needs_widening {
                     declared.clone()
                 } else {
                     inferred_slot.clone()
@@ -343,4 +421,21 @@ impl Emitter<'_> {
         let iface_name = go_path.rsplit('.').next().unwrap_or(go_path);
         format!("_lisAdapter_{}_{}_{}", concrete_name, iface_name, index)
     }
+}
+
+fn write_method_header(
+    decl: &mut String,
+    adapter_name: &str,
+    method_name: &str,
+    params: &str,
+    go_ret: &str,
+) {
+    write_line!(
+        decl,
+        "func (a {}) {}({}) {} {{",
+        adapter_name,
+        method_name,
+        params,
+        go_ret
+    );
 }

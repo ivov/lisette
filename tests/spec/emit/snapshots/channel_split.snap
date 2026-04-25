@@ -6,7 +6,8 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test() lisette.Tuple2[chan<- int, <-chan int] {
+func test() (chan<- int, <-chan int) {
 	ch := make(chan int)
-	return lisette.ChannelSplit(ch)
+	tup_1 := lisette.ChannelSplit(ch)
+	return tup_1.First, tup_1.Second
 }

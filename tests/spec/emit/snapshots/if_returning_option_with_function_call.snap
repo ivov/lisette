@@ -4,15 +4,13 @@ description: "input: \nfn get_value() -> Option<int> {\n  Some(99)\n}\n\nfn test
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func get_value() lisette.Option[int] {
-	return lisette.MakeOptionSome[int](99)
+func get_value() (int, bool) {
+	return 99, true
 }
 
-func test(flag bool) lisette.Option[int] {
+func test(flag bool) (int, bool) {
 	if flag {
-		return lisette.MakeOptionSome[int](42)
+		return 42, true
 	}
 	return get_value()
 }

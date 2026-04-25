@@ -6,20 +6,22 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func maybe_int(x int) lisette.Option[int] {
+func maybe_int(x int) (int, bool) {
 	if x > 0 {
-		return lisette.MakeOptionSome[int](x)
+		return x, true
 	}
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 }
 
-func maybe_string(s string) lisette.Option[string] {
+func maybe_string(s string) (string, bool) {
 	if s != "" {
-		return lisette.MakeOptionSome[string](s)
+		return s, true
 	}
-	return lisette.MakeOptionNone[string]()
+	return *new(string), false
 }
 
 func test() {
-	_ = lisette.MakeTuple2(maybe_int(5), maybe_string("hello"))
+	option_1 := lisette.OptionFromCommaOk[int](maybe_int(5))
+	option_2 := lisette.OptionFromCommaOk[string](maybe_string("hello"))
+	_ = lisette.MakeTuple2(option_1, option_2)
 }

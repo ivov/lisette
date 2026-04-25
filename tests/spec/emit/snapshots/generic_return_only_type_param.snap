@@ -4,12 +4,10 @@ description: "input: \nfn default_value<T>() -> Option<T> {\n  None\n}\n\nfn tes
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func default_value[T any]() lisette.Option[T] {
-	return lisette.MakeOptionNone[T]()
+func default_value[T any]() (T, bool) {
+	return *new(T), false
 }
 
-func test() lisette.Option[int] {
+func test() (int, bool) {
 	return default_value[int]()
 }

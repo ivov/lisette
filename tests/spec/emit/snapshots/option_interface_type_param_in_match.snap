@@ -4,10 +4,7 @@ description: "input: \ninterface Printable {\n  fn to_string(self) -> string\n}\
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
 type Printable interface {
 	To_string() string
@@ -37,13 +34,13 @@ func (c Circle) To_string() string {
 	return "circle"
 }
 
-func find_it(n int) lisette.Option[Printable] {
+func find_it(n int) Printable {
 	switch n {
 	case 1:
-		return lisette.MakeOptionSome[Printable](Box{label: "found"})
+		return Box{label: "found"}
 	case 2:
-		return lisette.MakeOptionSome[Printable](Circle{radius: 10})
+		return Circle{radius: 10}
 	default:
-		return lisette.MakeOptionNone[Printable]()
+		return nil
 	}
 }

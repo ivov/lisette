@@ -6,6 +6,6 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test() lisette.Option[lisette.Option[int]] {
-	return lisette.MakeOptionSome[lisette.Option[int]](lisette.MakeOptionNone[int]())
+func test() (lisette.Option[int], bool) {
+	return lisette.MakeOptionNone[int](), true
 }

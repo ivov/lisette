@@ -4,10 +4,7 @@ description: "input: \nstruct Thing {\n  name: string,\n}\n\nimpl Thing {\n  fn 
 ---
 package main
 
-import (
-	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "fmt"
 
 type Thing struct {
 	name string
@@ -17,13 +14,13 @@ func (t Thing) String() string {
 	return fmt.Sprintf("Thing { name: %v }", t.name)
 }
 
-func Thing_maybe_create(name string) lisette.Option[Thing] {
+func Thing_maybe_create(name string) (Thing, bool) {
 	if len(name) > 0 {
-		return lisette.MakeOptionSome[Thing](Thing{name: name})
+		return Thing{name: name}, true
 	}
-	return lisette.MakeOptionNone[Thing]()
+	return *new(Thing), false
 }
 
-func test() lisette.Option[Thing] {
+func test() (Thing, bool) {
 	return Thing_maybe_create("hello")
 }

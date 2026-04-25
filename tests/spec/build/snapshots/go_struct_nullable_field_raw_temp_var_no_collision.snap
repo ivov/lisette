@@ -23,12 +23,8 @@ func main() {
 		Replace: unwrap_2,
 	}
 	raw_3 := mod_.Replace
-	var r lisette.Option[*debug.Module]
-	if raw_3 != nil {
-		r = lisette.MakeOptionSome[*debug.Module](raw_3)
-	} else {
-		r = lisette.MakeOptionNone[*debug.Module]()
-	}
+	option_4 := lisette.OptionFromNilable[*debug.Module](raw_3, raw_3 == nil)
+	r := option_4
 	raw_1 := 3
 	fmt.Println(r)
 	fmt.Println(raw_1)

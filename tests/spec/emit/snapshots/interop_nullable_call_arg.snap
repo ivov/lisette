@@ -9,8 +9,10 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func apply(f func(string) lisette.Option[*flag.Flag], name string) bool {
-	subject_1 := f(name)
+func apply(f func(string) *flag.Flag, name string) bool {
+	raw_2 := f(name)
+	option_3 := lisette.OptionFromNilable[*flag.Flag](raw_2, raw_2 == nil)
+	subject_1 := option_3
 	if subject_1.Tag == lisette.OptionSome {
 		return true
 	}
@@ -18,12 +20,5 @@ func apply(f func(string) lisette.Option[*flag.Flag], name string) bool {
 }
 
 func main() {
-	r := apply(func(arg0 string) lisette.Option[*flag.Flag] {
-		raw_1 := flag.Lookup(arg0)
-		if raw_1 != nil {
-			return lisette.MakeOptionSome[*flag.Flag](raw_1)
-		}
-		return lisette.MakeOptionNone[*flag.Flag]()
-	}, "verbose")
-	_ = r
+	_ = apply(flag.Lookup, "verbose")
 }

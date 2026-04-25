@@ -6,9 +6,15 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test(flag bool) lisette.Option[int] {
+func test(flag bool) (int, bool) {
+	var v_1 lisette.Option[int]
 	if flag {
-		return lisette.MakeOptionSome[int](42)
+		v_1 = lisette.MakeOptionSome[int](42)
+	} else {
+		v_1 = lisette.MakeOptionNone[int]()
 	}
-	return lisette.MakeOptionNone[int]()
+	if v_1.Tag == lisette.OptionSome {
+		return v_1.SomeVal, true
+	}
+	return *new(int), false
 }

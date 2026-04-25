@@ -4,8 +4,6 @@ description: "input: \nfn test() -> Option<()> {\n  Some(())\n}\n"
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func test() lisette.Option[struct{}] {
-	return lisette.MakeOptionSome[struct{}](struct{}{})
+func test() (struct{}, bool) {
+	return struct{}{}, true
 }

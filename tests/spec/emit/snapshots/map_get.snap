@@ -6,6 +6,10 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test(m map[string]int, key string) lisette.Option[int] {
-	return lisette.MapGet(m, key)
+func test(m map[string]int, key string) (int, bool) {
+	v_1 := lisette.MapGet(m, key)
+	if v_1.Tag == lisette.OptionSome {
+		return v_1.SomeVal, true
+	}
+	return *new(int), false
 }

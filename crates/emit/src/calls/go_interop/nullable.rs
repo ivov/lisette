@@ -15,7 +15,7 @@ impl Emitter<'_> {
         self.emit_comma_ok_wrapping(output, &call_str, option_ty)
     }
 
-    pub(super) fn emit_comma_ok_wrapping(
+    pub(crate) fn emit_comma_ok_wrapping(
         &mut self,
         output: &mut String,
         call_str: &str,
@@ -23,10 +23,25 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        let fallible = Fallible::from_type(option_ty).expect("Option type expected");
-
         let inner_ty = option_ty.ok_type();
         let inner_tuple_arity = inner_ty.tuple_arity();
+        let needs_nilable_validation = self.is_nullable_option(option_ty);
+
+        if inner_tuple_arity.is_none() && !needs_nilable_validation {
+            let inner_ty_str = self.go_type_as_string(&inner_ty);
+            let option_var = self.fresh_var(Some("option"));
+            self.declare(&option_var);
+            write_line!(
+                output,
+                "{} := lisette.OptionFromCommaOk[{}]({})",
+                option_var,
+                inner_ty_str,
+                call_str
+            );
+            return option_var;
+        }
+
+        let fallible = Fallible::from_type(option_ty).expect("Option type expected");
 
         let val_vars = if let Some(arity) = inner_tuple_arity {
             self.create_temp_vars("ret", arity)
@@ -87,33 +102,23 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        let fallible = Fallible::from_type(option_ty).expect("Option type expected");
-
-        let mut fe = FallibleEmitter::new(self, &fallible);
-        let option_ty_str = fe.full_type_string();
-        let option_var = fe.emitter.fresh_var(Some("option"));
-        fe.emitter.declare(&option_var);
-
-        let is_interface = self.is_interface_option(option_ty);
-        write_line!(output, "var {} {}", option_var, option_ty_str);
-        if is_interface {
-            write_line!(output, "if !lisette.IsNilInterface({}) {{", raw_value);
+        let inner_ty = option_ty.ok_type();
+        let inner_ty_str = self.go_type_as_string(&inner_ty);
+        let is_nil_check = if self.is_interface_option(option_ty) {
+            format!("lisette.IsNilInterface({})", raw_value)
         } else {
-            write_line!(output, "if {} != nil {{", raw_value);
-        }
-
-        let mut fe = FallibleEmitter::new(self, &fallible);
-        let some_wrapper = fe.emit_success(raw_value);
-        write_line!(output, "{} = {}", option_var, some_wrapper);
-
-        output.push_str("} else {\n");
-
-        let mut fe = FallibleEmitter::new(self, &fallible);
-        let none_wrapper = fe.emit_failure(None);
-        write_line!(output, "{} = {}", option_var, none_wrapper);
-
-        output.push_str("}\n");
-
+            format!("{} == nil", raw_value)
+        };
+        let option_var = self.fresh_var(Some("option"));
+        self.declare(&option_var);
+        write_line!(
+            output,
+            "{} := lisette.OptionFromNilable[{}]({}, {})",
+            option_var,
+            inner_ty_str,
+            raw_value,
+            is_nil_check
+        );
         option_var
     }
 

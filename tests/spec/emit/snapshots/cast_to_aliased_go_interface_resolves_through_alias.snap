@@ -35,13 +35,5 @@ func run(s svc.Alias) int {
 
 func main() {
 	l := Loader{}
-	_ = run(_lisAdapter_Loader_Service_0{inner: l})
-}
-
-type _lisAdapter_Loader_Service_0 struct {
-	inner Loader
-}
-
-func (a _lisAdapter_Loader_Service_0) Load(arg0 string) (int, error) {
-	return a.inner.Load(arg0)
+	_ = run(l)
 }

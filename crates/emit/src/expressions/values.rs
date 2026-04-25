@@ -167,13 +167,16 @@ impl Emitter<'_> {
         let Some(shape) = self.classify_direct_emission(return_type) else {
             return false;
         };
-        matches!(
-            (strategy, &shape),
-            (
-                crate::GoCallStrategy::Result,
-                crate::types::abi::AbiShape::ResultTuple | crate::types::abi::AbiShape::BareError,
-            )
-        )
+        use crate::GoCallStrategy as G;
+        use crate::types::abi::AbiShape as A;
+        match (strategy, &shape) {
+            (G::Result, A::ResultTuple | A::BareError)
+            | (G::Partial, A::PartialTuple)
+            | (G::CommaOk, A::CommaOk)
+            | (G::NullableReturn, A::NullableReturn) => true,
+            (G::Tuple { arity: a }, A::Tuple { arity: b }) => a == b,
+            _ => false,
+        }
     }
 
     pub(crate) fn emit_composite_value(
@@ -214,11 +217,11 @@ impl Emitter<'_> {
                 } else if let Expression::Call {
                     expression: callee, ..
                 } = expression
-                    && self.classify_callee_abi(callee).is_some()
+                    && let Some(shape) = self.classify_callee_abi(callee)
                 {
                     self.flags.needs_stdlib = true;
                     let call_str = self.emit_call(output, expression, Some(ty));
-                    self.emit_result_wrapping(output, &call_str, ty)
+                    self.emit_callee_abi_wrapping(output, &shape, &call_str, ty)
                 } else {
                     self.emit_call(output, expression, Some(ty))
                 }

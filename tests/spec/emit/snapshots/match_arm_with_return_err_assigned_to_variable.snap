@@ -9,16 +9,17 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func safe_divide(a, b float64) lisette.Option[float64] {
+func safe_divide(a, b float64) (float64, bool) {
 	if b == 0.0 {
-		return lisette.MakeOptionNone[float64]()
+		return *new(float64), false
 	}
-	return lisette.MakeOptionSome[float64](a / b)
+	return a / b, true
 }
 
 func parse_and_divide(a, b float64) lisette.Result[string, string] {
 	var result float64
-	subject_1 := safe_divide(a, b)
+	option_2 := lisette.OptionFromCommaOk[float64](safe_divide(a, b))
+	subject_1 := option_2
 	if subject_1.Tag == lisette.OptionSome {
 		result = subject_1.SomeVal
 	} else {

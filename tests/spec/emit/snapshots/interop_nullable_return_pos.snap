@@ -9,19 +9,15 @@ import (
 	lisette "github.com/ivov/lisette/prelude"
 )
 
-func make_lookup() func(string) lisette.Option[*flag.Flag] {
-	return func(arg0 string) lisette.Option[*flag.Flag] {
-		raw_1 := flag.Lookup(arg0)
-		if raw_1 != nil {
-			return lisette.MakeOptionSome[*flag.Flag](raw_1)
-		}
-		return lisette.MakeOptionNone[*flag.Flag]()
-	}
+func make_lookup() func(string) *flag.Flag {
+	return flag.Lookup
 }
 
 func main() {
 	f := make_lookup()
-	r := f("verbose")
+	raw_1 := f("verbose")
+	option_2 := lisette.OptionFromNilable[*flag.Flag](raw_1, raw_1 == nil)
+	r := option_2
 	if r.Tag == lisette.OptionSome {
 		_ = r.SomeVal
 	}

@@ -6,11 +6,11 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test() lisette.Option[int] {
+func test() (int, bool) {
 	x := lisette.MakeOptionSome(42)
 	if x.Tag != lisette.OptionSome {
-		return lisette.MakeOptionNone[int]()
+		return *new(int), false
 	}
 	y := x.SomeVal
-	return lisette.MakeOptionSome[int](y + 1)
+	return y + 1, true
 }

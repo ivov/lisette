@@ -58,33 +58,34 @@ impl Emitter<'_> {
         Staged::new(setup, value)
     }
 
-    /// Stage all args of a native-method call, suppressing the Go-fn
-    /// identity short-circuit on function-typed params (Go-prelude generic
-    /// callbacks reject multi-return shapes).
+    /// Suppresses the Go-fn identity short-circuit when the formal param
+    /// is function-typed (prelude generic callbacks reject multi-return).
+    pub(crate) fn stage_prelude_arg(
+        &mut self,
+        expression: &Expression,
+        param_ty: Option<&syntax::types::Type>,
+    ) -> Staged {
+        let suppress = param_ty
+            .is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function { .. }));
+        let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
+        let staged = self.stage_composite(expression);
+        self.suppress_go_fn_short_circuit = saved;
+        staged
+    }
+
     pub(crate) fn stage_native_method_args(
         &mut self,
         function: &Expression,
         args: &[Expression],
     ) -> Vec<Staged> {
         let fn_ty = function.get_type();
-        let suppressions: Vec<bool> = match fn_ty.unwrap_forall() {
-            syntax::types::Type::Function { params, .. } => (0..args.len())
-                .map(|i| {
-                    params.get(i).is_some_and(|p| {
-                        matches!(p.unwrap_forall(), syntax::types::Type::Function { .. })
-                    })
-                })
-                .collect(),
-            _ => vec![false; args.len()],
+        let formal_params: &[syntax::types::Type] = match fn_ty.unwrap_forall() {
+            syntax::types::Type::Function { params, .. } => params,
+            _ => &[],
         };
         args.iter()
-            .zip(suppressions)
-            .map(|(arg, suppress)| {
-                let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
-                let staged = self.stage_composite(arg);
-                self.suppress_go_fn_short_circuit = saved;
-                staged
-            })
+            .enumerate()
+            .map(|(i, arg)| self.stage_prelude_arg(arg, formal_params.get(i)))
             .collect()
     }
 

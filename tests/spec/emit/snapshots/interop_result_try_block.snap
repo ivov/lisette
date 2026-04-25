@@ -17,10 +17,11 @@ func make_() (func(string) (int, error), error) {
 		}
 		return lisette.MakeResultOk[func(string) (int, error), error](strconv.Atoi)
 	}()
-	if tryResult_1.Tag == lisette.ResultOk {
-		return tryResult_1.OkVal, nil
+	v_3 := tryResult_1
+	if v_3.Tag == lisette.ResultOk {
+		return v_3.OkVal, nil
 	}
-	return *new(func(string) (int, error)), tryResult_1.ErrVal
+	return *new(func(string) (int, error)), v_3.ErrVal
 }
 
 func main() {

@@ -13,12 +13,8 @@ import (
 func main() {
 	ctx := context.Background()
 	raw_2 := ctx.Err()
-	var subject_1 lisette.Option[error]
-	if !lisette.IsNilInterface(raw_2) {
-		subject_1 = lisette.MakeOptionSome[error](raw_2)
-	} else {
-		subject_1 = lisette.MakeOptionNone[error]()
-	}
+	option_3 := lisette.OptionFromNilable[error](raw_2, lisette.IsNilInterface(raw_2))
+	subject_1 := option_3
 	if subject_1.Tag == lisette.OptionSome {
 		e := subject_1.SomeVal
 		fmt.Println(e.Error())

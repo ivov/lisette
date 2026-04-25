@@ -6,6 +6,6 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test() lisette.Option[lisette.Result[int, string]] {
-	return lisette.MakeOptionSome[lisette.Result[int, string]](lisette.MakeResultOk[int, string](42))
+func test() (lisette.Result[int, string], bool) {
+	return lisette.MakeResultOk[int, string](42), true
 }

@@ -26,17 +26,5 @@ func describe(s shapes.Shape) string {
 
 func main() {
 	s := Square{}
-	_ = describe(_lisAdapter_Square_Shape_0{inner: s})
-}
-
-type _lisAdapter_Square_Shape_0 struct {
-	inner Square
-}
-
-func (a _lisAdapter_Square_Shape_0) Name() string {
-	return a.inner.Name()
-}
-
-func (a _lisAdapter_Square_Shape_0) Area() (int, error) {
-	return a.inner.Area()
+	_ = describe(s)
 }

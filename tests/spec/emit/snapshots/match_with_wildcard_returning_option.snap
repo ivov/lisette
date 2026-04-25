@@ -4,15 +4,13 @@ description: "input: \nfn test(n: int) -> Option<int> {\n  match n {\n    1 => S
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func test(n int) lisette.Option[int] {
+func test(n int) (int, bool) {
 	switch n {
 	case 1:
-		return lisette.MakeOptionSome[int](10)
+		return 10, true
 	case 2:
-		return lisette.MakeOptionSome[int](20)
+		return 20, true
 	default:
-		return lisette.MakeOptionNone[int]()
+		return *new(int), false
 	}
 }

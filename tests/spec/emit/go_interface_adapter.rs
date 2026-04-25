@@ -1,10 +1,7 @@
 use crate::assert_emit_snapshot_with_go_typedefs;
 
-// Issue #90: a Lisette concrete whose `Read` returns `Partial<int, error>`
-// must be wrappable as `io.Reader`. The adapter unpacks Partial into
-// Go's native `(int, error)`.
 #[test]
-fn partial_return_is_wrapped_when_used_as_go_interface() {
+fn partial_return_lowers_to_satisfy_go_interface() {
     let input = r#"
 import "go:io"
 
@@ -61,10 +58,8 @@ pub interface Greeter {
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/simple", typedef)]);
 }
 
-// Mixed adaptation: one method's return is adapted, another is bare.
-// The adapter forwards both; only the adapted method runs the shim.
 #[test]
-fn mixed_adapted_and_bare_methods() {
+fn mixed_lowering_and_bare_methods_satisfy_go_interface() {
     let input = r#"
 import "go:example.com/mixed"
 
@@ -97,10 +92,8 @@ pub interface Service {
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/mixed", typedef)]);
 }
 
-// Two cast sites that refer to the same (concrete, interface) pair
-// share a single synthesized adapter type declaration.
 #[test]
-fn adapter_type_is_deduplicated_across_cast_sites() {
+fn repeated_cast_to_go_interface_uses_lowered_struct_directly() {
     let input = r#"
 import "go:io"
 
@@ -331,14 +324,8 @@ fn main() {
     assert_emit_snapshot_with_go_typedefs!(input, &[]);
 }
 
-// Regression: an interface that embeds another interface must expose
-// its inherited methods in the synthesized adapter. A Lisette struct
-// satisfying `ReadWriteCloser` (which embeds `Reader` and `Writer`)
-// must have the adapter emit `Read` and `Write` even though
-// `ReadWriteCloser.methods` is empty — inherited methods live under
-// `parents`.
 #[test]
-fn adapter_includes_methods_inherited_from_parent_interfaces() {
+fn struct_satisfies_go_interface_with_inherited_methods() {
     let input = r#"
 import "go:example.com/rw"
 
@@ -379,14 +366,8 @@ pub interface ReadWriter {
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/rw", typedef)]);
 }
 
-// Regression: Option<Ref<T>> and Option<Interface> are nullable Go
-// shapes. A Lisette impl of a Go interface method returning such an
-// Option must emit the adapter's Go method with the bare nilable
-// pointer/interface and unwrap `Some(v) -> v, None -> nil`. The old
-// behavior emitted `(T, bool)` which does not satisfy the Go
-// interface.
 #[test]
-fn option_ref_in_interface_method_adapts_to_bare_nilable_pointer() {
+fn option_ref_lowers_to_bare_nilable_pointer_in_interface_impl() {
     let input = r#"
 import "go:example.com/store"
 
@@ -417,15 +398,6 @@ pub interface Storage {
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/store", typedef)]);
 }
 
-// Regression for tea.Cmd alias collapse. A Go function-type alias
-// (`type Cmd func() Msg`) used inside an `Option<Cmd>` in return
-// position must preserve the Cmd name end-to-end — otherwise Go's
-// strict generic inference instantiates `Option[func() Msg]` and
-// rejects it where `Option[Cmd]` is expected. The fix required:
-// (1) `infer_tuple` resolving expected_ty through type variables,
-// (2) `is_generic_container_with_interface` firing for go:-prefixed
-// params, and (3) `resolve_call_type_args` emitting explicit type
-// args for Go function aliases on Some/Ok/Err.
 #[test]
 fn go_named_function_alias_preserved_through_option_tuple_return() {
     let input = r#"
@@ -582,7 +554,7 @@ fn main() {
 }
 
 #[test]
-fn cast_to_aliased_go_interface_applies_adapter() {
+fn cast_to_aliased_go_interface_resolves_through_alias() {
     let input = r#"
 import "go:example.com/svc"
 
@@ -616,7 +588,7 @@ pub type Alias = Service
 }
 
 #[test]
-fn adapter_collects_methods_from_aliased_parent_interface() {
+fn struct_satisfies_go_interface_with_aliased_parent() {
     let input = r#"
 import "go:example.com/shapes"
 
@@ -651,4 +623,42 @@ pub interface Shape {
 }
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/shapes", typedef)]);
+}
+
+#[test]
+fn nilable_option_in_tuple_slot_lowers_directly_satisfying_go_interface() {
+    let input = r#"
+import "go:example.com/tea"
+
+struct Model {}
+
+impl Model {
+  fn Update(self, msg: tea.Msg) -> (tea.Model, Option<tea.Cmd>) {
+    (self as tea.Model, Some(tea.Quit))
+  }
+  fn View(self) -> string { "" }
+}
+
+fn main() {
+  let _ = tea.NewProgram(Model {} as tea.Model)
+}
+"#;
+    let typedef = r#"// Package: tea
+
+pub interface Msg {}
+
+pub type Cmd = fn() -> Msg
+
+pub interface Model {
+  fn Update(arg0: Msg) -> (Model, Option<Cmd>)
+  fn View() -> string
+}
+
+pub type Program
+
+pub fn NewProgram(model: Model) -> Ref<Program>
+
+pub fn Quit() -> Msg
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/tea", typedef)]);
 }

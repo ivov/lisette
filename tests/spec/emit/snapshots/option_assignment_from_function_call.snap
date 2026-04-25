@@ -6,11 +6,11 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_value() lisette.Option[int] {
-	return lisette.MakeOptionSome[int](42)
+func get_value() (int, bool) {
+	return 42, true
 }
 
 func test() {
 	_ = lisette.MakeOptionNone[int]()
-	_ = get_value()
+	get_value()
 }

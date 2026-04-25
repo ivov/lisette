@@ -4,12 +4,10 @@ description: "input: \nfn assert_type(x: int) -> Option<int> {\n  Some(x)\n}\n\n
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func assert_type(x int) lisette.Option[int] {
-	return lisette.MakeOptionSome[int](x)
+func assert_type(x int) (int, bool) {
+	return x, true
 }
 
-func test() lisette.Option[int] {
+func test() (int, bool) {
 	return assert_type(42)
 }

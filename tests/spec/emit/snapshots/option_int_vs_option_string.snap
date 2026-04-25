@@ -4,12 +4,10 @@ description: "input: \nfn test_int() -> Option<int> {\n  Some(42)\n}\n\nfn test_
 ---
 package main
 
-import lisette "github.com/ivov/lisette/prelude"
-
-func test_int() lisette.Option[int] {
-	return lisette.MakeOptionSome[int](42)
+func test_int() (int, bool) {
+	return 42, true
 }
 
-func test_string() lisette.Option[string] {
-	return lisette.MakeOptionSome[string]("hello")
+func test_string() (string, bool) {
+	return "hello", true
 }

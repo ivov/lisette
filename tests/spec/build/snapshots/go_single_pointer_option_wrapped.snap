@@ -12,11 +12,7 @@ import (
 
 func main() {
 	raw_1 := flag.Lookup("verbose")
-	var result lisette.Option[*flag.Flag]
-	if raw_1 != nil {
-		result = lisette.MakeOptionSome[*flag.Flag](raw_1)
-	} else {
-		result = lisette.MakeOptionNone[*flag.Flag]()
-	}
+	option_2 := lisette.OptionFromNilable[*flag.Flag](raw_1, raw_1 == nil)
+	result := option_2
 	fmt.Print(result.IsSome())
 }

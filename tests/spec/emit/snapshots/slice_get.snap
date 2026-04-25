@@ -6,6 +6,10 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test(s []int, i int) lisette.Option[int] {
-	return lisette.SliceGet(s, i)
+func test(s []int, i int) (int, bool) {
+	v_1 := lisette.SliceGet(s, i)
+	if v_1.Tag == lisette.OptionSome {
+		return v_1.SomeVal, true
+	}
+	return *new(int), false
 }

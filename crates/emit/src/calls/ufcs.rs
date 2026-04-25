@@ -98,12 +98,19 @@ impl Emitter<'_> {
 
         let coercion = *coercion;
 
-        // Stage receiver + args together for eval-order sequencing
+        // The DotAccess function type curries `self` out, so its params
+        // line up 1:1 with the user args. Pair each so a function-typed
+        // param suppresses the Go-fn-value identity short-circuit before
+        // dispatch into prelude helpers like `lisette.OptionAndThen`.
+        let formal_params: Vec<Type> = match function.get_type().unwrap_forall() {
+            Type::Function { params, .. } => params.clone(),
+            _ => Vec::new(),
+        };
         let mut all_stages: Vec<Staged> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
         all_stages.push(self.stage_operand(receiver));
-        for arg in args {
-            all_stages.push(self.stage_composite(arg));
+        for (i, arg) in args.iter().enumerate() {
+            all_stages.push(self.stage_prelude_arg(arg, formal_params.get(i)));
         }
         let all_values = self.sequence_with_spread(output, all_stages, spread, false, "_arg");
         let receiver_arg = all_values[0].clone();

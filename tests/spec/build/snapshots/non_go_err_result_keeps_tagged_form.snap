@@ -1,0 +1,41 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type LoadError struct {
+	msg string
+}
+
+func (l LoadError) String() string {
+	return fmt.Sprintf("LoadError { msg: %v }", l.msg)
+}
+
+type Loader struct{}
+
+func (l Loader) String() string {
+	return "Loader"
+}
+
+func (l Loader) Load(_ string) lisette.Result[int, LoadError] {
+	return lisette.MakeResultOk[int, LoadError](0)
+}
+
+func run(l Loader) int {
+	subject_1 := l.Load("k")
+	if subject_1.Tag == lisette.ResultOk {
+		return subject_1.OkVal
+	}
+	return -1
+}
+
+func main() {
+	l := Loader{}
+	_ = run(l)
+}

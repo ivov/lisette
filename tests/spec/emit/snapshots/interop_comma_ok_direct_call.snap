@@ -10,13 +10,8 @@ import (
 )
 
 func main() {
-	ret_1, ret_2 := os.LookupEnv("HOME")
-	var r lisette.Option[string]
-	if ret_2 {
-		r = lisette.MakeOptionSome[string](ret_1)
-	} else {
-		r = lisette.MakeOptionNone[string]()
-	}
+	option_1 := lisette.OptionFromCommaOk[string](os.LookupEnv("HOME"))
+	r := option_1
 	if r.Tag == lisette.OptionSome {
 		_ = r.SomeVal
 	} else {

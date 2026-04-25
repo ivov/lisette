@@ -6,7 +6,6 @@ package main
 
 import (
 	"fmt"
-	lisette "github.com/ivov/lisette/prelude"
 	"io"
 )
 
@@ -16,8 +15,8 @@ func (d Doubler) String() string {
 	return "Doubler"
 }
 
-func (d Doubler) Read(_ []uint8) lisette.Partial[int, error] {
-	return lisette.MakePartialOk[int, error](0)
+func (d Doubler) Read(_ []uint8) (int, error) {
+	return 0, nil
 }
 
 type Wrapper struct {
@@ -30,20 +29,5 @@ func (w Wrapper) String() string {
 
 func main() {
 	d := Doubler{}
-	_ = Wrapper{reader: _lisAdapter_Doubler_Reader_0{inner: d}}
-}
-
-type _lisAdapter_Doubler_Reader_0 struct {
-	inner Doubler
-}
-
-func (a _lisAdapter_Doubler_Reader_0) Read(arg0 []uint8) (int, error) {
-	res_1 := a.inner.Read(arg0)
-	if res_1.Tag == lisette.PartialOk {
-		return res_1.OkVal, nil
-	}
-	if res_1.Tag == lisette.PartialErr {
-		return *new(int), res_1.ErrVal
-	}
-	return res_1.OkVal, res_1.ErrVal
+	_ = Wrapper{reader: d}
 }

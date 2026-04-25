@@ -218,7 +218,7 @@ impl Emitter<'_> {
         Some(call_str)
     }
 
-    pub(super) fn create_temp_vars(&mut self, hint: &str, count: usize) -> Vec<String> {
+    pub(crate) fn create_temp_vars(&mut self, hint: &str, count: usize) -> Vec<String> {
         (0..count)
             .map(|_| {
                 let v = self.fresh_var(Some(hint));
@@ -233,7 +233,7 @@ impl Emitter<'_> {
         format!("lisette.MakeTuple{}({})", vars.len(), vars.join(", "))
     }
 
-    pub(super) fn emit_tuple_from_vars(
+    pub(crate) fn emit_tuple_from_vars(
         &mut self,
         output: &mut String,
         vars: &[String],

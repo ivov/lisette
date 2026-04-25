@@ -17,13 +17,14 @@ func (w Wrapper) String() string {
 	return fmt.Sprintf("Wrapper { opt: %v }", w.opt)
 }
 
-func get_opt(b bool) lisette.Option[int] {
+func get_opt(b bool) (int, bool) {
 	if b {
-		return lisette.MakeOptionSome[int](42)
+		return 42, true
 	}
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 }
 
 func test() {
-	_ = Wrapper{opt: get_opt(true)}
+	option_1 := lisette.OptionFromCommaOk[int](get_opt(true))
+	_ = Wrapper{opt: option_1}
 }

@@ -1,0 +1,33 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Callback func() int
+
+func maybe_get() Callback {
+	return func() int {
+		return 42
+	}
+}
+
+func run(cb lisette.Option[Callback]) int {
+	if cb.Tag == lisette.OptionSome {
+		f := cb.SomeVal
+		return f()
+	}
+	return -1
+}
+
+func main() {
+	raw_1 := maybe_get()
+	option_2 := lisette.OptionFromNilable[Callback](raw_1, raw_1 == nil)
+	cb := option_2
+	fmt.Println(run(cb))
+}

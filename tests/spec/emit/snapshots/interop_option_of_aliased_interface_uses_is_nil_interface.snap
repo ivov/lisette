@@ -12,12 +12,8 @@ import (
 
 func main() {
 	raw_2 := evts.Peek()
-	var subject_1 lisette.Option[evts.Msg]
-	if !lisette.IsNilInterface(raw_2) {
-		subject_1 = lisette.MakeOptionSome[evts.Msg](raw_2)
-	} else {
-		subject_1 = lisette.MakeOptionNone[evts.Msg]()
-	}
+	option_3 := lisette.OptionFromNilable[evts.Msg](raw_2, lisette.IsNilInterface(raw_2))
+	subject_1 := option_3
 	if subject_1.Tag == lisette.OptionSome {
 		e := subject_1.SomeVal
 		fmt.Println(e)

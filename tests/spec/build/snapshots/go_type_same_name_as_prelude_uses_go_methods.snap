@@ -13,13 +13,8 @@ import (
 func main() {
 	m := sync.Map{}
 	m.Store("key", "value")
-	ret_2, ret_3 := m.Load("key")
-	var subject_1 lisette.Option[any]
-	if ret_3 {
-		subject_1 = lisette.MakeOptionSome[any](ret_2)
-	} else {
-		subject_1 = lisette.MakeOptionNone[any]()
-	}
+	option_2 := lisette.OptionFromCommaOk[any](m.Load("key"))
+	subject_1 := option_2
 	if subject_1.Tag == lisette.OptionSome {
 		v := subject_1.SomeVal
 		fmt.Printf("got: %v\n", v)

@@ -4,27 +4,22 @@ description: "input: \nimport \"go:example.com/events\"\n\nfn handle(e: events.E
 ---
 package main
 
-import (
-	"example.com/events"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/events"
 
-func handle(e events.Event) lisette.Option[int] {
+func handle(e events.Event) (int, bool) {
 	switch e := e.(type) {
 	case events.Click:
 		x := e.X
 		if x > 100 {
-			return lisette.MakeOptionSome[int](x * 10)
-		} else {
-			x_2 := e.X
-			if x_2 > 0 {
-				return lisette.MakeOptionSome[int](x_2)
-			} else {
-				x := e.X
-				return lisette.MakeOptionSome[int](-x)
-			}
+			return x * 10, true
 		}
+		x_1 := e.X
+		if x_1 > 0 {
+			return x_1, true
+		}
+		x_2 := e.X
+		return -x_2, true
 	default:
-		return lisette.MakeOptionNone[int]()
+		return *new(int), false
 	}
 }

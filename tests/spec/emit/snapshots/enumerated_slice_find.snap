@@ -6,9 +6,13 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func test(s []int) lisette.Option[lisette.Tuple2[int, int]] {
-	return lisette.EnumeratedSliceFind(s, func(arg_1 lisette.Tuple2[int, int]) bool {
+func test(s []int) (lisette.Tuple2[int, int], bool) {
+	v_2 := lisette.EnumeratedSliceFind(s, func(arg_1 lisette.Tuple2[int, int]) bool {
 		v := arg_1.Second
 		return v > 10
 	})
+	if v_2.Tag == lisette.OptionSome {
+		return v_2.SomeVal, true
+	}
+	return *new(lisette.Tuple2[int, int]), false
 }

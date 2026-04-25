@@ -6,11 +6,11 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func maybe_int(b bool) lisette.Option[int] {
+func maybe_int(b bool) (int, bool) {
 	if b {
-		return lisette.MakeOptionSome[int](42)
+		return 42, true
 	}
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 }
 
 func unwrap_or(o lisette.Option[int], fallback int) int {
@@ -21,5 +21,6 @@ func unwrap_or(o lisette.Option[int], fallback int) int {
 }
 
 func test() int {
-	return unwrap_or(maybe_int(true), 0)
+	option_1 := lisette.OptionFromCommaOk[int](maybe_int(true))
+	return unwrap_or(option_1, 0)
 }

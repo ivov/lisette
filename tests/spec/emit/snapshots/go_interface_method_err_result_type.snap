@@ -13,11 +13,7 @@ import (
 func main() {
 	ctx := context.Background()
 	raw_1 := ctx.Err()
-	var err lisette.Option[error]
-	if !lisette.IsNilInterface(raw_1) {
-		err = lisette.MakeOptionSome[error](raw_1)
-	} else {
-		err = lisette.MakeOptionNone[error]()
-	}
+	option_2 := lisette.OptionFromNilable[error](raw_1, lisette.IsNilInterface(raw_1))
+	err := option_2
 	fmt.Printf("err=%v\n", err)
 }

@@ -8,5 +8,6 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
 	f := lisette.MakeOptionSome[int]
-	_ = f(42)
+	option_1 := lisette.OptionFromCommaOk[int](f(42))
+	_ = option_1
 }

@@ -6,14 +6,14 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func get_nested(outer lisette.Option[lisette.Option[int]]) lisette.Option[int] {
+func get_nested(outer lisette.Option[lisette.Option[int]]) (int, bool) {
 	if outer.Tag != lisette.OptionSome {
-		return lisette.MakeOptionNone[int]()
+		return *new(int), false
 	}
 	inner := outer.SomeVal
 	if inner.Tag != lisette.OptionSome {
-		return lisette.MakeOptionNone[int]()
+		return *new(int), false
 	}
 	val := inner.SomeVal
-	return lisette.MakeOptionSome[int](val)
+	return val, true
 }

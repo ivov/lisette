@@ -240,12 +240,29 @@ impl Emitter<'_> {
         }
     }
 
+    fn target_binds_to_discard(&self, target: &Expression) -> bool {
+        let Expression::Identifier { value, .. } = target.unwrap_parens() else {
+            return false;
+        };
+        match self.scope.bindings.get(value) {
+            Some(go_name) => go_name == "_",
+            None => value == "_",
+        }
+    }
+
     fn emit_simple_assignment(
         &mut self,
         output: &mut String,
         target: &Expression,
         value: &Expression,
     ) {
+        // `_ = expr` routes through `emit_discard`, which knows how to
+        // drop a lowered multi-return as a side-effect statement.
+        if self.target_binds_to_discard(target) {
+            self.emit_discard(output, value);
+            return;
+        }
+
         let is_go_nullable = matches!(target, Expression::DotAccess { expression, ty, .. }
                 if Self::is_go_imported_type(&expression.get_type())
                     && self.is_go_nullable(ty));

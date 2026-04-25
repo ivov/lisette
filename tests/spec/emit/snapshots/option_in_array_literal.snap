@@ -6,13 +6,17 @@ package main
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func maybe(x int) lisette.Option[int] {
+func maybe(x int) (int, bool) {
 	if x > 0 {
-		return lisette.MakeOptionSome[int](x)
+		return x, true
 	}
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 }
 
 func test() {
-	_ = []lisette.Option[int]{maybe(1), maybe(0), maybe(3), maybe(-1)}
+	option_1 := lisette.OptionFromCommaOk[int](maybe(1))
+	option_2 := lisette.OptionFromCommaOk[int](maybe(0))
+	option_3 := lisette.OptionFromCommaOk[int](maybe(3))
+	option_4 := lisette.OptionFromCommaOk[int](maybe(-1))
+	_ = []lisette.Option[int]{option_1, option_2, option_3, option_4}
 }

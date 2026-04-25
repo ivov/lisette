@@ -407,6 +407,10 @@ impl Emitter<'_> {
                 self.emit_branching_directly(output, last);
             }
             _ => {
+                output.push_str(&directive);
+                if self.emit_wrapped_return(output, last) {
+                    return;
+                }
                 let expression_string = self.emit_value(output, last);
                 let return_ty = self
                     .current_return_context
@@ -414,7 +418,7 @@ impl Emitter<'_> {
                     .map(|ctx| ctx.ty.clone());
                 let expression_string =
                     self.apply_type_coercion(output, return_ty.as_ref(), last, expression_string);
-                write_line!(output, "{}return {}", directive, expression_string);
+                write_line!(output, "return {}", expression_string);
             }
         }
     }

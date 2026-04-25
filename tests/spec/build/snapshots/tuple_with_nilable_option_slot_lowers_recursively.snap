@@ -1,0 +1,33 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Cmd func() int
+
+func produce() (int, Cmd) {
+	return 42, func() int {
+		return 7
+	}
+}
+
+func consume() int {
+	ret_2, ret_3 := produce()
+	option_4 := lisette.OptionFromNilable[Cmd](ret_3, ret_3 == nil)
+	tup_5 := lisette.MakeTuple2(ret_2, option_4)
+	tmp_1 := tup_5
+	n := tmp_1.First
+	c := tmp_1.Second
+	if c.Tag == lisette.OptionSome {
+		f := c.SomeVal
+		return n + f()
+	}
+	return n
+}
+
+func main() {
+	_ = consume()
+}

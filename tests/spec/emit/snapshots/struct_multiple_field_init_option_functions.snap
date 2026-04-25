@@ -18,23 +18,25 @@ func (m MultiWrapper) String() string {
 	return fmt.Sprintf("MultiWrapper { first: %v, second: %v }", m.first, m.second)
 }
 
-func get_int(x int) lisette.Option[int] {
+func get_int(x int) (int, bool) {
 	if x > 0 {
-		return lisette.MakeOptionSome[int](x)
+		return x, true
 	}
-	return lisette.MakeOptionNone[int]()
+	return *new(int), false
 }
 
-func get_string(s string) lisette.Option[string] {
+func get_string(s string) (string, bool) {
 	if s != "" {
-		return lisette.MakeOptionSome[string](s)
+		return s, true
 	}
-	return lisette.MakeOptionNone[string]()
+	return *new(string), false
 }
 
 func test() {
+	option_1 := lisette.OptionFromCommaOk[int](get_int(5))
+	option_2 := lisette.OptionFromCommaOk[string](get_string("hello"))
 	_ = MultiWrapper{
-		first:  get_int(5),
-		second: get_string("hello"),
+		first:  option_1,
+		second: option_2,
 	}
 }

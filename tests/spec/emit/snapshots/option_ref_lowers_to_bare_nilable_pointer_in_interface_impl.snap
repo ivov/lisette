@@ -4,10 +4,7 @@ description: "input: \nimport \"go:example.com/store\"\n\nstruct Store {}\n\nimp
 ---
 package main
 
-import (
-	"example.com/store"
-	lisette "github.com/ivov/lisette/prelude"
-)
+import "example.com/store"
 
 type Store struct{}
 
@@ -15,8 +12,8 @@ func (s Store) String() string {
 	return "Store"
 }
 
-func (s Store) Find(_ string) lisette.Option[*store.Entry] {
-	return lisette.MakeOptionNone[*store.Entry]()
+func (s Store) Find(_ string) *store.Entry {
+	return nil
 }
 
 func use_store(s store.Storage) {
@@ -25,17 +22,5 @@ func use_store(s store.Storage) {
 
 func main() {
 	s := Store{}
-	use_store(_lisAdapter_Store_Storage_0{inner: s})
-}
-
-type _lisAdapter_Store_Storage_0 struct {
-	inner Store
-}
-
-func (a _lisAdapter_Store_Storage_0) Find(arg0 string) *store.Entry {
-	opt_1 := a.inner.Find(arg0)
-	if opt_1.Tag == lisette.OptionSome {
-		return opt_1.SomeVal
-	}
-	return nil
+	use_store(s)
 }
