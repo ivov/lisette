@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Missing bound on type parameter
+   ╭─[test.lis:5:23]
+ 4 │ fn wrapper<T>(x: T) {
+ 5 │   requires_comparable(x)
+   ·                       ┬
+   ·                       ╰── does not satisfy `Comparable`
+ 6 │ }
+   ╰────
+  help: The parameter must be `Comparable` but the argument is unbounded. Add this bound to the enclosing function: `<T: Comparable>` · code: [infer.missing_bound_on_param]

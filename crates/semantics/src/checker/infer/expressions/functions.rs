@@ -7,6 +7,7 @@ use syntax::program::{CallKind, Definition, NativeTypeKind};
 use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
 use super::super::TaskState;
+use super::super::unify::Dispatched;
 use super::primitives::contains_deref;
 use crate::checker::scopes::UseContext;
 use crate::store::{ENTRY_MODULE_ID, Store};
@@ -138,7 +139,7 @@ impl TaskState<'_> {
             let qualified_name = self.qualify_name(&g.name);
 
             for b in &g.bounds {
-                let bound_ty = self.convert_to_type(store, b, &span);
+                let bound_ty = self.convert_bound_to_type(store, b, &span);
 
                 self.scopes
                     .current_mut()
@@ -870,6 +871,17 @@ impl TaskState<'_> {
                 continue;
             }
 
+            let span = args
+                .iter()
+                .find(|arg| arg.get_type().resolve_in(&self.env) == resolved_ty)
+                .map(|arg| arg.get_span())
+                .unwrap_or_else(|| *fallback_span);
+
+            if self.dispatch_builtin_bound(store, bound, &resolved_ty, &span) == Dispatched::Handled
+            {
+                continue;
+            }
+
             let interface_ty = bound.ty.resolve_in(&self.env);
             let Type::Nominal { id, params, .. } = interface_ty else {
                 continue;
@@ -878,12 +890,6 @@ impl TaskState<'_> {
             let Some(interface) = store.get_interface(&id).cloned() else {
                 continue;
             };
-
-            let span = args
-                .iter()
-                .find(|arg| arg.get_type().resolve_in(&self.env) == resolved_ty)
-                .map(|arg| arg.get_span())
-                .unwrap_or_else(|| *fallback_span);
 
             let _ = self.satisfies_interface(store, &resolved_ty, &interface, &params, &span);
         }

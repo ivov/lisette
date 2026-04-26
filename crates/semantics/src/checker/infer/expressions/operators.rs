@@ -1,4 +1,5 @@
 use crate::checker::EnvResolve;
+use crate::checker::TypeEnv;
 use crate::store::Store;
 use syntax::ast::{BinaryOperator, Expression, Literal, Span, UnaryOperator};
 use syntax::program::Definition;
@@ -8,6 +9,85 @@ use BinaryOperator::*;
 use UnaryOperator::*;
 
 use super::super::TaskState;
+
+/// Returns the first non-comparable shape per Go's `comparable` rules, or `None` if comparable.
+pub(crate) fn check_not_comparable(
+    env: &TypeEnv,
+    store: &Store,
+    ty: &Type,
+) -> Option<&'static str> {
+    if matches!(ty, Type::Function { .. }) {
+        return Some("functions");
+    }
+
+    if ty.has_name("Slice") {
+        return Some("slices");
+    }
+    if ty.has_name("Map") {
+        return Some("maps");
+    }
+
+    if ty.has_name("Ref") || ty.has_name("Channel") {
+        return None;
+    }
+
+    if matches!(ty, Type::Var { .. }) {
+        return None;
+    }
+
+    if matches!(ty, Type::Parameter(_)) {
+        return Some("type parameters (Go requires the `comparable` constraint)");
+    }
+
+    if let Some(name) = ty.get_qualified_id()
+        && let Some(definition) = store.get_definition(name)
+    {
+        let type_args = ty.get_type_params().unwrap_or_default();
+        let generics = match &definition {
+            Definition::Struct { generics, .. } | Definition::Enum { generics, .. } => {
+                generics.as_slice()
+            }
+            _ => &[],
+        };
+        let sub_map = generics
+            .iter()
+            .map(|g| g.name.clone())
+            .zip(type_args.iter().cloned())
+            .collect();
+
+        match definition {
+            Definition::Struct { fields, .. } => {
+                for f in fields {
+                    let field_ty = substitute(&f.ty.resolve_in(env), &sub_map);
+                    if check_not_comparable(env, store, &field_ty).is_some() {
+                        return Some("a struct containing non-comparable fields");
+                    }
+                }
+            }
+            Definition::Enum { variants, .. } => {
+                for v in variants {
+                    for f in v.fields.iter() {
+                        let field_ty = substitute(&f.ty.resolve_in(env), &sub_map);
+                        if check_not_comparable(env, store, &field_ty).is_some() {
+                            return Some("an enum containing non-comparable fields");
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let Type::Tuple(elems) = ty {
+        for e in elems {
+            if check_not_comparable(env, store, &e.resolve_in(env)).is_some() {
+                return Some("a tuple containing non-comparable elements");
+            }
+        }
+    }
+
+    None
+}
 
 impl TaskState<'_> {
     pub(super) fn infer_unary(
@@ -497,6 +577,12 @@ impl TaskState<'_> {
             return;
         }
 
+        if let Type::Parameter(name) = &resolved_ty
+            && self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Ordered)
+        {
+            return;
+        }
+
         if !resolved_ty.is_ordered() && !resolved_ty.is_string() && !resolved_ty.is_boolean() {
             self.sink
                 .push(diagnostics::infer::not_orderable(&resolved_ty, *span));
@@ -508,92 +594,15 @@ impl TaskState<'_> {
         if resolved.is_error() {
             return;
         }
-        if let Some(reason) = self.check_not_comparable(store, &resolved) {
+        if let Type::Parameter(name) = &resolved
+            && self.parameter_satisfies_bound(name, super::super::unify::BuiltinBound::Comparable)
+        {
+            return;
+        }
+        if let Some(reason) = check_not_comparable(&self.env, store, &resolved) {
             self.sink
                 .push(diagnostics::infer::not_comparable(&resolved, reason, *span));
         }
-    }
-
-    fn check_not_comparable(&self, store: &Store, ty: &Type) -> Option<&'static str> {
-        if matches!(ty, Type::Function { .. }) {
-            return Some("functions");
-        }
-
-        if ty.has_name("Slice") {
-            return Some("slices");
-        }
-        if ty.has_name("Map") {
-            return Some("maps");
-        }
-
-        // Ref and Channel are always comparable (pointer/reference equality) — don't recurse
-        if ty.has_name("Ref") || ty.has_name("Channel") {
-            return None;
-        }
-
-        if matches!(ty, Type::Var { .. }) {
-            return None;
-        }
-
-        // Type parameters (generic T) — Go requires `comparable` constraint
-        if matches!(ty, Type::Parameter(_)) {
-            return Some("type parameters (Go requires the `comparable` constraint)");
-        }
-
-        // Structs and enums: recurse into fields with generic substitution.
-        // For generic types like Option<Color>, the definition has fields with
-        // type parameter T — substitute T → Color before checking comparability.
-        if let Some(name) = ty.get_qualified_id()
-            && let Some(definition) = store.get_definition(name)
-        {
-            let type_args = ty.get_type_params().unwrap_or_default();
-            let generics = match &definition {
-                Definition::Struct { generics, .. } | Definition::Enum { generics, .. } => {
-                    generics.as_slice()
-                }
-                _ => &[],
-            };
-            let sub_map = generics
-                .iter()
-                .map(|g| g.name.clone())
-                .zip(type_args.iter().cloned())
-                .collect();
-
-            match definition {
-                Definition::Struct { fields, .. } => {
-                    for f in fields {
-                        let field_ty = substitute(&f.ty.resolve_in(&self.env), &sub_map);
-                        if self.check_not_comparable(store, &field_ty).is_some() {
-                            return Some("a struct containing non-comparable fields");
-                        }
-                    }
-                }
-                Definition::Enum { variants, .. } => {
-                    for v in variants {
-                        for f in v.fields.iter() {
-                            let field_ty = substitute(&f.ty.resolve_in(&self.env), &sub_map);
-                            if self.check_not_comparable(store, &field_ty).is_some() {
-                                return Some("an enum containing non-comparable fields");
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        if let Type::Tuple(elems) = ty {
-            for e in elems {
-                if self
-                    .check_not_comparable(store, &e.resolve_in(&self.env))
-                    .is_some()
-                {
-                    return Some("a tuple containing non-comparable elements");
-                }
-            }
-        }
-
-        None
     }
 
     fn unify_binary_operands(

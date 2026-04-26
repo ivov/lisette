@@ -524,6 +524,11 @@ type Unknown
 ///   }
 type Never
 
+/// Marker for Go's `comparable` constraint. A type satisfies `Comparable`
+/// when it admits `==` and `!=` (everything except slices, maps, functions,
+/// and aggregates that contain them). Only usable as a type-parameter bound.
+type Comparable
+
 /// Zero or more arguments of type `T`. Only valid as the last parameter
 /// of a function. Corresponds to Go's `...T` syntax.
 ///

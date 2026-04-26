@@ -171,7 +171,7 @@ impl TaskState<'_> {
         let mut impl_bounds: Vec<syntax::types::Bound> = Vec::new();
         for g in generics {
             for b in &g.bounds {
-                let bound_ty = self.convert_to_type(&*store, b, span);
+                let bound_ty = self.convert_bound_to_type(&*store, b, span);
                 impl_bounds.push(syntax::types::Bound {
                     param_name: g.name.clone(),
                     generic: Type::Parameter(g.name.clone()),

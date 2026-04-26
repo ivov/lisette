@@ -4712,6 +4712,174 @@ fn test() {
 }
 
 #[test]
+fn infer_comparable_bound_rejects_slice() {
+    let input = r#"
+fn requires_comparable<T: Comparable>(_x: T) {}
+
+fn test() {
+  requires_comparable([1, 2, 3])
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_ordered_bound_rejects_bool() {
+    let input = r#"
+import "go:cmp"
+
+fn requires_ordered<T: cmp.Ordered>(_x: T) {}
+
+fn test() {
+  requires_ordered(true)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_missing_bound_on_param_for_comparable() {
+    let input = r#"
+fn requires_comparable<T: Comparable>(_x: T) {}
+
+fn wrapper<T>(x: T) {
+  requires_comparable(x)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_missing_bound_on_param_for_ordered() {
+    let input = r#"
+import "go:cmp"
+
+fn requires_ordered<T: cmp.Ordered>(_x: T) {}
+
+fn wrapper<T>(x: T) {
+  requires_ordered(x)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_propagated_bound_no_error() {
+    let input = r#"
+import "go:cmp"
+
+fn requires_ordered<T: cmp.Ordered>(_x: T) {}
+
+fn wrapper<T: cmp.Ordered>(x: T) {
+  requires_ordered(x)
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_ordered_bound_allows_lt_in_body() {
+    let input = r#"
+import "go:cmp"
+
+fn less<T: cmp.Ordered>(a: T, b: T) -> bool { a < b }
+fn user() -> bool { less(1, 2) }
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_comparable_bound_allows_eq_in_body() {
+    let input = r#"
+fn eq<T: Comparable>(a: T, b: T) -> bool { a == b }
+fn user() -> bool { eq(1, 1) }
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_shadowed_inner_generic_does_not_inherit_bound() {
+    let input = r#"
+import "go:cmp"
+
+fn requires_ordered<T: cmp.Ordered>(_x: T) {}
+
+struct Box<T> {}
+
+impl<T: cmp.Ordered> Box<T> {
+  fn bad<T>(self, x: T) { requires_ordered(x) }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_comparable_in_param_position_rejected() {
+    let input = r#"
+fn takes(_x: Comparable) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_ordered_in_param_position_rejected() {
+    let input = r#"
+import "go:cmp"
+
+fn takes(_x: cmp.Ordered) {}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_ordered_satisfies_comparable_in_wrapper() {
+    let input = r#"
+import "go:cmp"
+
+fn requires_comparable<T: Comparable>(_x: T) {}
+
+fn wrapper<T: cmp.Ordered>(x: T) {
+  requires_comparable(x)
+}
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_comparable_does_not_satisfy_ordered_in_wrapper() {
+    let input = r#"
+import "go:cmp"
+
+fn requires_ordered<T: cmp.Ordered>(_x: T) {}
+
+fn wrapper<T: Comparable>(x: T) {
+  requires_ordered(x)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_impl_on_type_alias() {
     let source = r#"
 type UserId = int

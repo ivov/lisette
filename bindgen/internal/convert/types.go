@@ -124,7 +124,13 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter)
 		return namedToLisette(t, seen, conv)
 
 	case *types.TypeParam:
-		return TypeResult{LisetteType: t.Obj().Name()}
+		name := t.Obj().Name()
+		if conv != nil && conv.typeParamSubstitutions != nil {
+			if substituted, ok := conv.typeParamSubstitutions[name]; ok {
+				return TypeResult{LisetteType: substituted}
+			}
+		}
+		return TypeResult{LisetteType: name}
 
 	case *types.Struct:
 		if t.NumFields() == 0 {

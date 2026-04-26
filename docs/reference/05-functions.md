@@ -82,6 +82,18 @@ fn combine<T: Display, U: Debug>(a: T, b: U) -> string {
 }
 ```
 
+Two built-in bounds are predeclared:
+
+- `Comparable` (in the prelude) for types that admit `==` and `!=`.
+- `cmp.Ordered` (in `go:cmp`) for types that admit `<`, `>`, etc.
+
+```rust
+import "go:cmp"
+
+fn dedupe<T: Comparable>(xs: Slice<T>) -> Slice<T> { /* ... */ }
+fn sort<T: cmp.Ordered>(xs: Slice<T>) { /* ... */ }
+```
+
 ## Mutable parameters
 
 Parameters are immutable by default. If a function mutates a parameter (e.g. sorting a slice in place), mark it with `mut`:

@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `cmp.Ordered` is a bound, not a value type
+   ╭─[test.lis:4:14]
+ 3 │ 
+ 4 │ fn takes(_x: cmp.Ordered) {}
+   ·              ─────┬─────
+   ·                   ╰── not allowed here
+   ╰────
+  help: Use `cmp.Ordered` only as a bound to constrain a generic parameter, e.g. `fn f<T: cmp.Ordered>(x: T)` · code: [infer.bound_only_in_value_position]

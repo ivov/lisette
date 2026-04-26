@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Bound not satisfied
+   ╭─[test.lis:5:23]
+ 4 │ fn test() {
+ 5 │   requires_comparable([1, 2, 3])
+   ·                       ────┬────
+   ·                           ╰── does not satisfy `Comparable`
+ 6 │ }
+   ╰────
+  help: The parameter must be `Comparable` but the argument is not comparable. Relax the bound or pass an argument that satisfies it · code: [infer.not_comparable_bound]

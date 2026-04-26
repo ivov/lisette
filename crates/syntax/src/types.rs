@@ -891,6 +891,38 @@ impl Type {
         self.as_simple().is_some_and(SimpleKind::is_ordered)
     }
 
+    /// True for Go's `cmp.Ordered` set: ints, floats, strings, and named aliases over them.
+    pub fn satisfies_ordered_constraint(&self) -> bool {
+        if let Some(kind) = self.as_simple() {
+            return matches!(
+                kind,
+                SimpleKind::Int
+                    | SimpleKind::Int8
+                    | SimpleKind::Int16
+                    | SimpleKind::Int32
+                    | SimpleKind::Int64
+                    | SimpleKind::Uint
+                    | SimpleKind::Uint8
+                    | SimpleKind::Uint16
+                    | SimpleKind::Uint32
+                    | SimpleKind::Uint64
+                    | SimpleKind::Uintptr
+                    | SimpleKind::Byte
+                    | SimpleKind::Rune
+                    | SimpleKind::Float32
+                    | SimpleKind::Float64
+                    | SimpleKind::String
+            );
+        }
+        match self {
+            Type::Nominal { underlying_ty, .. } => underlying_ty
+                .as_deref()
+                .is_some_and(Type::satisfies_ordered_constraint),
+            Type::Parameter(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_complex(&self) -> bool {
         self.as_simple().is_some_and(SimpleKind::is_complex)
     }

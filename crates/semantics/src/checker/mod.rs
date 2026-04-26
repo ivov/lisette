@@ -97,6 +97,10 @@ pub struct TaskState<'s> {
     pub ufcs_methods: HashSet<(String, String)>,
     /// Typed files produced by inference.
     pub typed_files: Vec<(String, File)>,
+    /// Reentrancy counter: > 0 while resolving a generic bound annotation.
+    /// Lets `convert_to_type` admit bound-only markers (e.g. `Comparable`)
+    /// without flagging them as misuse in value positions.
+    pub bound_position_depth: u32,
 }
 
 impl<'s> TaskState<'s> {
@@ -113,6 +117,7 @@ impl<'s> TaskState<'s> {
             method_cache: RefCell::new(HashMap::default()),
             ufcs_methods: HashSet::default(),
             typed_files: Vec::new(),
+            bound_position_depth: 0,
         }
     }
 
@@ -214,7 +219,7 @@ impl<'s> TaskState<'s> {
     ) {
         for g in generics {
             for b in &g.bounds {
-                self.convert_to_type(store, b, span);
+                self.convert_bound_to_type(store, b, span);
             }
         }
     }
@@ -715,6 +720,7 @@ fn is_reserved_import_alias(name: &str) -> bool {
         // Lisette prelude types and constructors
         | "Option"
         | "Result"
+        | "Comparable"
         | "Some"
         | "None"
         | "Ok"

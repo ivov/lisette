@@ -304,6 +304,28 @@ impl Scopes {
         all_bounds
     }
 
+    pub fn for_each_bound_on_param<F: FnMut(&Type)>(&self, param_name: &str, mut visit: F) {
+        for scope in self.stack.iter().rev() {
+            let introduces = scope
+                .type_params
+                .as_ref()
+                .is_some_and(|tp| tp.contains_key(param_name));
+            if !introduces {
+                continue;
+            }
+            if let Some(ref bounds) = scope.trait_bounds {
+                for (key, types) in bounds {
+                    if key.last_segment() == param_name {
+                        for ty in types {
+                            visit(ty);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+    }
+
     pub fn increment_loop_depth(&self) {
         self.current().loop_depth.increment();
     }

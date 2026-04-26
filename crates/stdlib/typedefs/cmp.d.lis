@@ -3,14 +3,24 @@
 // Go: 1.25.5
 // Lisette: 0.1.20
 
-// SKIPPED: Compare - constraint:comparable
-// type constraint T cannot be represented
+/// Compare returns
+/// 
+/// 	-1 if x is less than y,
+/// 	 0 if x equals y,
+/// 	+1 if x is greater than y.
+/// 
+/// For floating-point types, a NaN is considered less than any non-NaN,
+/// a NaN is considered equal to a NaN, and -0.0 is equal to 0.0.
+pub fn Compare<T: Ordered>(x: T, y: T) -> int
 
-// SKIPPED: Less - constraint:comparable
-// type constraint T cannot be represented
+/// Less reports whether x is less than y.
+/// For floating-point types, a NaN is considered less than any non-NaN,
+/// and -0.0 is not less than (is equal to) 0.0.
+pub fn Less<T: Ordered>(x: T, y: T) -> bool
 
-// SKIPPED: Or - constraint:comparable
-// type constraint T cannot be represented
+/// Or returns the first of its arguments that is not equal to the zero value.
+/// If no argument is non-zero, it returns the zero value.
+pub fn Or<T: Comparable>(vals: VarArgs<T>) -> T
 
 /// Ordered is a constraint that permits any ordered type: any type
 /// that supports the operators < <= >= >.

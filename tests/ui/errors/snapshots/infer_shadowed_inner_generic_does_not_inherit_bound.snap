@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Missing bound on type parameter
+    ╭─[test.lis:9:44]
+  8 │ impl<T: cmp.Ordered> Box<T> {
+  9 │   fn bad<T>(self, x: T) { requires_ordered(x) }
+    ·                                            ┬
+    ·                                            ╰── does not satisfy `Ordered`
+ 10 │ }
+    ╰────
+  help: The parameter must be `cmp.Ordered` but the argument is unbounded. Add this bound to the enclosing function: `<T: cmp.Ordered>` · code: [infer.missing_bound_on_param]

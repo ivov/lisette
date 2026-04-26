@@ -708,6 +708,55 @@ pub fn not_comparable(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic 
         ))
 }
 
+pub fn not_orderable_bound(param_name: &str, ty: &Type, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Bound not satisfied")
+        .with_infer_code("not_orderable_bound")
+        .with_span_label(
+            &span,
+            format!("`{}` does not satisfy `cmp.Ordered`", ty),
+        )
+        .with_help(format!(
+            "The type parameter `{}` requires `cmp.Ordered`; only integers, floats, and strings (and their named aliases) satisfy it",
+            param_name
+        ))
+}
+
+pub fn not_comparable_bound(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Bound not satisfied")
+        .with_infer_code("not_comparable_bound")
+        .with_span_label(&span, "does not satisfy `Comparable`")
+        .with_help(
+            "The parameter must be `Comparable` but the argument is not comparable. \
+             Relax the bound or pass an argument that satisfies it",
+        )
+}
+
+pub fn bound_only_in_value_position(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`{}` is a bound, not a value type", name))
+        .with_infer_code("bound_only_in_value_position")
+        .with_span_label(&span, "not allowed here")
+        .with_help(format!(
+            "Use `{}` only as a bound to constrain a generic parameter, e.g. `fn f<T: {}>(x: T)`",
+            name, name
+        ))
+}
+
+pub fn missing_bound_on_param(
+    param_name: &str,
+    required_bound: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    let short = required_bound.rsplit('.').next().unwrap_or(required_bound);
+    LisetteDiagnostic::error("Missing bound on type parameter")
+        .with_infer_code("missing_bound_on_param")
+        .with_span_label(&span, format!("does not satisfy `{}`", short))
+        .with_help(format!(
+            "The parameter must be `{}` but the argument is unbounded. \
+             Add this bound to the enclosing function: `<{}: {}>`",
+            required_bound, param_name, required_bound
+        ))
+}
+
 pub fn division_by_zero(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Division by zero")
         .with_infer_code("division_by_zero")

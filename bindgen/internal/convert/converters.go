@@ -46,6 +46,18 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 		return
 	}
 
+	// Scan first: param/return processing must observe `S ~[]E` substitutions.
+	typeParams, substitutions, skip := collectTypeParams(signature.TypeParams(), false, c)
+	if skip != nil {
+		result.SkipReason = skip
+		return
+	}
+	result.TypeParams = typeParams
+
+	prevSubs := c.typeParamSubstitutions
+	c.typeParamSubstitutions = substitutions
+	defer func() { c.typeParamSubstitutions = prevSubs }()
+
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, result.Name)
 
 	params := signature.Params()
@@ -115,13 +127,6 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	if (isSinglePointerReturn && !forceNonNilable) || (forceNilable && !returnType.NilableReturnApplied) {
 		result.ReturnType = fmt.Sprintf("Option<%s>", result.ReturnType)
 	}
-
-	typeParams, skip := collectTypeParams(signature.TypeParams(), false)
-	if skip != nil {
-		result.SkipReason = skip
-		return
-	}
-	result.TypeParams = typeParams
 }
 
 // applySentinelInt rewrites a bare `int` return into `Option<int>` when
@@ -148,7 +153,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	if symbolExport.ReceiverVariable != nil {
 		if symbolExport.IsPromoted {
 			typeName := symbolExport.BaseType.Obj().Name()
-			typeParams := extractReceiverTypeParams(symbolExport.BaseType)
+			typeParams := extractReceiverTypeParams(symbolExport.BaseType, c)
 			isPointerReceiver := symbolExport.NeedsPointerReceiver
 
 			recvLisetteType := typeName
@@ -172,16 +177,16 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 
 			isPointerReceiver := false
 			typeName := ""
-			var typeParams []string
+			var typeParams TypeParamSpecs
 			if pointer, ok := symbolExport.ReceiverVariable.Type().(*types.Pointer); ok {
 				isPointerReceiver = true
 				if named, ok := pointer.Elem().(*types.Named); ok {
 					typeName = named.Obj().Name()
-					typeParams = extractReceiverTypeParams(named)
+					typeParams = extractReceiverTypeParams(named, c)
 				}
 			} else if named, ok := symbolExport.ReceiverVariable.Type().(*types.Named); ok {
 				typeName = named.Obj().Name()
-				typeParams = extractReceiverTypeParams(named)
+				typeParams = extractReceiverTypeParams(named, c)
 			}
 
 			result.Receiver = &Receiver{
@@ -278,12 +283,19 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	}
 
 	if symbolExport.BaseType != nil {
-		_, skip := collectTypeParams(symbolExport.BaseType.TypeParams(), false)
+		_, _, skip := collectTypeParams(symbolExport.BaseType.TypeParams(), false, c)
 		if skip != nil {
 			result.SkipReason = skip
 			return
 		}
 	}
+
+	methodSpecs, _, skip := collectTypeParams(signature.TypeParams(), false, c)
+	if skip != nil {
+		result.SkipReason = skip
+		return
+	}
+	result.TypeParams = methodSpecs
 }
 
 func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport) {
@@ -305,7 +317,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		return
 	}
 
-	typeParams, skip := collectTypeParams(named.TypeParams(), true)
+	typeParams, _, skip := collectTypeParams(named.TypeParams(), true, c)
 	if skip != nil {
 		result.SkipReason = skip
 		return
@@ -567,47 +579,86 @@ func formatConstantValue(val constant.Value) string {
 	}
 }
 
-func collectTypeParams(typeParams *types.TypeParamList, emitOpaque bool) ([]string, *SkipReason) {
+// `S ~[]E` shapes go into substitutions (caller rewrites `S` to `Slice<E>`)
+// rather than into specs. Recognized bounds register their imports on conv.
+func collectTypeParams(
+	typeParams *types.TypeParamList,
+	emitOpaque bool,
+	conv *Converter,
+) (specs TypeParamSpecs, substitutions map[string]string, skip *SkipReason) {
 	if typeParams == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	var names []string
 	for tp := range typeParams.TypeParams() {
+		name := tp.Obj().Name()
 		constraint := tp.Constraint()
-		if iface, ok := constraint.Underlying().(*types.Interface); ok {
-			if !isAnyConstraint(iface) {
-				return nil, &SkipReason{
-					Code:           "constraint:" + describeConstraint(iface),
-					Message:        fmt.Sprintf("type constraint %s cannot be represented", tp.Obj().Name()),
-					EmitOpaqueType: emitOpaque,
+
+		if elemName, ok := recognizeSliceShape(constraint); ok {
+			if substitutions == nil {
+				substitutions = make(map[string]string)
+			}
+			substitutions[name] = fmt.Sprintf("Slice<%s>", elemName)
+			continue
+		}
+
+		if isAnyConstraint(constraint) {
+			specs = append(specs, TypeParamSpec{Name: name})
+			continue
+		}
+
+		var currentPkg string
+		if conv != nil {
+			currentPkg = conv.currentPkgPath
+		}
+		if boundExpr, ok, imports := recognizeBound(constraint, currentPkg); ok {
+			for _, path := range imports {
+				if conv != nil {
+					conv.trackExternalPkg(path, path)
 				}
 			}
+			specs = append(specs, TypeParamSpec{Name: name, Bound: boundExpr})
+			continue
 		}
-		names = append(names, tp.Obj().Name())
+
+		iface, _ := constraint.Underlying().(*types.Interface)
+		return nil, nil, &SkipReason{
+			Code:           "constraint:" + describeConstraint(iface),
+			Message:        fmt.Sprintf("type constraint %s cannot be represented", name),
+			EmitOpaqueType: emitOpaque,
+		}
 	}
-	return names, nil
+	return specs, substitutions, nil
 }
 
-func extractReceiverTypeParams(named *types.Named) []string {
+func extractReceiverTypeParams(named *types.Named, conv *Converter) TypeParamSpecs {
 	origin := named.Origin()
 	typeParams := origin.TypeParams()
 	if typeParams == nil || typeParams.Len() == 0 {
 		return nil
 	}
 
-	var names []string
-	for tp := range typeParams.TypeParams() {
-		names = append(names, tp.Obj().Name())
+	specs, _, skip := collectTypeParams(typeParams, false, conv)
+	if skip != nil {
+		// Base type emits the skip; impl block falls back to bare names.
+		var fallback TypeParamSpecs
+		for tp := range typeParams.TypeParams() {
+			fallback = append(fallback, TypeParamSpec{Name: tp.Obj().Name()})
+		}
+		return fallback
 	}
-	return names
+	return specs
 }
 
-func isAnyConstraint(constraint *types.Interface) bool {
+func isAnyConstraint(constraint types.Type) bool {
 	if constraint == nil {
 		return true
 	}
-	return constraint.Empty()
+	iface, ok := constraint.Underlying().(*types.Interface)
+	if !ok {
+		return false
+	}
+	return iface.Empty()
 }
 
 func describeConstraint(constraint *types.Interface) string {

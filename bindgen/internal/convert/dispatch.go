@@ -17,7 +17,7 @@ type ConvertResult struct {
 	Params           []FunctionParameter
 	ReturnType       string
 	Receiver         *Receiver // for methods
-	TypeParams       []string
+	TypeParams       TypeParamSpecs
 	Fields           []StructField     // for structs
 	InterfaceMethods []InterfaceMethod // for interfaces
 	Variants         []EnumVariant     // for enums (via iota)
@@ -45,7 +45,7 @@ type Receiver struct {
 	Type         string
 	IsPointer    bool
 	BaseTypeName string
-	TypeParams   []string // Type parameters of the receiver type (for generic types)
+	TypeParams   TypeParamSpecs // Type parameters of the receiver type (for generic types)
 }
 
 type StructField struct {
@@ -82,6 +82,8 @@ type Converter struct {
 	nonNilCache          map[token.Pos]nilCacheResult // lazily built; proven non-nil results
 	crossPkgConverters   map[string]*Converter        // lazily built; cached converters for imported packages
 	noCrossPkg           bool                         // when true, skip cross-package transitive analysis
+	// Set per-function-conversion: maps `S` to `Slice<E>` for the `S ~[]E` shape.
+	typeParamSubstitutions map[string]string
 }
 
 func NewConverter(pkgPath string, pkg *packages.Package, cfg *config.Config) *Converter {

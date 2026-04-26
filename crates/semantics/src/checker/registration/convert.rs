@@ -10,6 +10,21 @@ use crate::checker::TaskState;
 use crate::store::Store;
 
 impl TaskState<'_> {
+    /// Resolves a generic-bound annotation. Bound-only markers like
+    /// `Comparable` are admitted here; the same names in value position
+    /// are flagged inside `convert_to_type`.
+    pub fn convert_bound_to_type(
+        &mut self,
+        store: &Store,
+        annotation: &Annotation,
+        span: &Span,
+    ) -> Type {
+        self.bound_position_depth += 1;
+        let result = self.convert_to_type(store, annotation, span);
+        self.bound_position_depth -= 1;
+        result
+    }
+
     pub fn convert_to_type(&mut self, store: &Store, annotation: &Annotation, span: &Span) -> Type {
         match annotation {
             Annotation::Unknown => self.new_type_var(),
@@ -91,6 +106,18 @@ impl TaskState<'_> {
                     self.sink.push(diagnostics::infer::unknown_outside_typedef(
                         *annotation_span,
                     ));
+                }
+
+                if self.bound_position_depth == 0
+                    && let Some(builtin) =
+                        crate::checker::infer::BuiltinBound::from_qualified_id(&qualified_name)
+                {
+                    self.sink
+                        .push(diagnostics::infer::bound_only_in_value_position(
+                            builtin.label(),
+                            *annotation_span,
+                        ));
+                    return Type::Error;
                 }
 
                 let (generics, body) = match &ty {

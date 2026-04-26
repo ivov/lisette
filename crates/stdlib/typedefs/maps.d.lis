@@ -11,8 +11,9 @@ import "go:iter"
 // SKIPPED: Clone - constraint:union
 // type constraint M cannot be represented
 
-// SKIPPED: Collect - constraint:comparable
-// type constraint K cannot be represented
+/// Collect collects key-value pairs from seq into a new map
+/// and returns it.
+pub fn Collect<K: Comparable, V>(seq: iter.Seq2<K, V>) -> Map<K, V>
 
 // SKIPPED: Copy - constraint:union
 // type constraint M1 cannot be represented

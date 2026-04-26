@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `Comparable` is a bound, not a value type
+   ╭─[test.lis:2:14]
+ 1 │ 
+ 2 │ fn takes(_x: Comparable) {}
+   ·              ─────┬────
+   ·                   ╰── not allowed here
+   ╰────
+  help: Use `Comparable` only as a bound to constrain a generic parameter, e.g. `fn f<T: Comparable>(x: T)` · code: [infer.bound_only_in_value_position]

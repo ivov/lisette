@@ -3,119 +3,220 @@
 // Go: 1.25.5
 // Lisette: 0.1.20
 
+import "go:cmp"
 import "go:iter"
 
-// SKIPPED: All - constraint:union
-// type constraint Slice cannot be represented
+/// All returns an iterator over index-value pairs in the slice
+/// in the usual order.
+pub fn All<E>(s: Slice<E>) -> iter.Seq2<int, E>
 
-// SKIPPED: AppendSeq - constraint:union
-// type constraint Slice cannot be represented
+/// AppendSeq appends the values from seq to the slice and
+/// returns the extended slice.
+/// If seq is empty, the result preserves the nilness of s.
+pub fn AppendSeq<E>(s: Slice<E>, seq: iter.Seq<E>) -> Slice<E>
 
-// SKIPPED: Backward - constraint:union
-// type constraint Slice cannot be represented
+/// Backward returns an iterator over index-value pairs in the slice,
+/// traversing it backward with descending indices.
+pub fn Backward<E>(s: Slice<E>) -> iter.Seq2<int, E>
 
-// SKIPPED: BinarySearch - constraint:union
-// type constraint S cannot be represented
+/// BinarySearch searches for target in a sorted slice and returns the earliest
+/// position where target is found, or the position where target would appear
+/// in the sort order; it also returns a bool saying whether the target is
+/// really found in the slice. The slice must be sorted in increasing order.
+pub fn BinarySearch<E: cmp.Ordered>(x: Slice<E>, target: E) -> Option<int>
 
-// SKIPPED: BinarySearchFunc - constraint:union
-// type constraint S cannot be represented
+/// BinarySearchFunc works like [BinarySearch], but uses a custom comparison
+/// function. The slice must be sorted in increasing order, where "increasing"
+/// is defined by cmp. cmp should return 0 if the slice element matches
+/// the target, a negative number if the slice element precedes the target,
+/// or a positive number if the slice element follows the target.
+/// cmp must implement the same ordering as the slice, such that if
+/// cmp(a, t) < 0 and cmp(b, t) >= 0, then a must precede b in the slice.
+pub fn BinarySearchFunc<E, T>(x: Slice<E>, target: T, cmp: fn(E, T) -> int) -> Option<int>
 
-// SKIPPED: Chunk - constraint:union
-// type constraint Slice cannot be represented
+/// Chunk returns an iterator over consecutive sub-slices of up to n elements of s.
+/// All but the last sub-slice will have size n.
+/// All sub-slices are clipped to have no capacity beyond the length.
+/// If s is empty, the sequence is empty: there is no empty slice in the sequence.
+/// Chunk panics if n is less than 1.
+pub fn Chunk<E>(s: Slice<E>, n: int) -> iter.Seq<Slice<E>>
 
-// SKIPPED: Clip - constraint:union
-// type constraint S cannot be represented
+/// Clip removes unused capacity from the slice, returning s[:len(s):len(s)].
+/// The result preserves the nilness of s.
+pub fn Clip<E>(s: Slice<E>) -> Slice<E>
 
-// SKIPPED: Clone - constraint:union
-// type constraint S cannot be represented
+/// Clone returns a copy of the slice.
+/// The elements are copied using assignment, so this is a shallow clone.
+/// The result may have additional unused capacity.
+/// The result preserves the nilness of s.
+pub fn Clone<E>(s: Slice<E>) -> Slice<E>
 
 /// Collect collects values from seq into a new slice and returns it.
 /// If seq is empty, the result is nil.
 pub fn Collect<E>(seq: iter.Seq<E>) -> Slice<E>
 
-// SKIPPED: Compact - constraint:union
-// type constraint S cannot be represented
+/// Compact replaces consecutive runs of equal elements with a single copy.
+/// This is like the uniq command found on Unix.
+/// Compact modifies the contents of the slice s and returns the modified slice,
+/// which may have a smaller length.
+/// Compact zeroes the elements between the new length and the original length.
+/// The result preserves the nilness of s.
+pub fn Compact<E: Comparable>(s: Slice<E>) -> Slice<E>
 
-// SKIPPED: CompactFunc - constraint:union
-// type constraint S cannot be represented
+/// CompactFunc is like [Compact] but uses an equality function to compare elements.
+/// For runs of elements that compare equal, CompactFunc keeps the first one.
+/// CompactFunc zeroes the elements between the new length and the original length.
+/// The result preserves the nilness of s.
+pub fn CompactFunc<E>(s: Slice<E>, eq: fn(E, E) -> bool) -> Slice<E>
 
-// SKIPPED: Compare - constraint:union
-// type constraint S cannot be represented
+/// Compare compares the elements of s1 and s2, using [cmp.Compare] on each pair
+/// of elements. The elements are compared sequentially, starting at index 0,
+/// until one element is not equal to the other.
+/// The result of comparing the first non-matching elements is returned.
+/// If both slices are equal until one of them ends, the shorter slice is
+/// considered less than the longer one.
+/// The result is 0 if s1 == s2, -1 if s1 < s2, and +1 if s1 > s2.
+pub fn Compare<E: cmp.Ordered>(s1: Slice<E>, s2: Slice<E>) -> int
 
-// SKIPPED: CompareFunc - constraint:union
-// type constraint S1 cannot be represented
+/// CompareFunc is like [Compare] but uses a custom comparison function on each
+/// pair of elements.
+/// The result is the first non-zero result of cmp; if cmp always
+/// returns 0 the result is 0 if len(s1) == len(s2), -1 if len(s1) < len(s2),
+/// and +1 if len(s1) > len(s2).
+pub fn CompareFunc<E1, E2>(s1: Slice<E1>, s2: Slice<E2>, cmp: fn(E1, E2) -> int) -> int
 
-// SKIPPED: Concat - constraint:union
-// type constraint S cannot be represented
+/// Concat returns a new slice concatenating the passed in slices.
+/// If the concatenation is empty, the result is nil.
+pub fn Concat<E>(slices: VarArgs<Slice<E>>) -> Slice<E>
 
-// SKIPPED: Contains - constraint:union
-// type constraint S cannot be represented
+/// Contains reports whether v is present in s.
+pub fn Contains<E: Comparable>(s: Slice<E>, v: E) -> bool
 
-// SKIPPED: ContainsFunc - constraint:union
-// type constraint S cannot be represented
+/// ContainsFunc reports whether at least one
+/// element e of s satisfies f(e).
+pub fn ContainsFunc<E>(s: Slice<E>, f: fn(E) -> bool) -> bool
 
-// SKIPPED: Delete - constraint:union
-// type constraint S cannot be represented
+/// Delete removes the elements s[i:j] from s, returning the modified slice.
+/// Delete panics if j > len(s) or s[i:j] is not a valid slice of s.
+/// Delete is O(len(s)-i), so if many items must be deleted, it is better to
+/// make a single call deleting them all together than to delete one at a time.
+/// Delete zeroes the elements s[len(s)-(j-i):len(s)].
+/// If the result is empty, it has the same nilness as s.
+pub fn Delete<E>(s: Slice<E>, i: int, j: int) -> Slice<E>
 
-// SKIPPED: DeleteFunc - constraint:union
-// type constraint S cannot be represented
+/// DeleteFunc removes any elements from s for which del returns true,
+/// returning the modified slice.
+/// DeleteFunc zeroes the elements between the new length and the original length.
+/// If the result is empty, it has the same nilness as s.
+pub fn DeleteFunc<E>(s: Slice<E>, del: fn(E) -> bool) -> Slice<E>
 
-// SKIPPED: Equal - constraint:union
-// type constraint S cannot be represented
+/// Equal reports whether two slices are equal: the same length and all
+/// elements equal. If the lengths are different, Equal returns false.
+/// Otherwise, the elements are compared in increasing index order, and the
+/// comparison stops at the first unequal pair.
+/// Empty and nil slices are considered equal.
+/// Floating point NaNs are not considered equal.
+pub fn Equal<E: Comparable>(s1: Slice<E>, s2: Slice<E>) -> bool
 
-// SKIPPED: EqualFunc - constraint:union
-// type constraint S1 cannot be represented
+/// EqualFunc reports whether two slices are equal using an equality
+/// function on each pair of elements. If the lengths are different,
+/// EqualFunc returns false. Otherwise, the elements are compared in
+/// increasing index order, and the comparison stops at the first index
+/// for which eq returns false.
+pub fn EqualFunc<E1, E2>(s1: Slice<E1>, s2: Slice<E2>, eq: fn(E1, E2) -> bool) -> bool
 
-// SKIPPED: Grow - constraint:union
-// type constraint S cannot be represented
+/// Grow increases the slice's capacity, if necessary, to guarantee space for
+/// another n elements. After Grow(n), at least n elements can be appended
+/// to the slice without another allocation. If n is negative or too large to
+/// allocate the memory, Grow panics.
+/// The result preserves the nilness of s.
+pub fn Grow<E>(s: Slice<E>, n: int) -> Slice<E>
 
-// SKIPPED: Index - constraint:union
-// type constraint S cannot be represented
+/// Index returns the index of the first occurrence of v in s,
+/// or -1 if not present.
+pub fn Index<E: Comparable>(s: Slice<E>, v: E) -> int
 
-// SKIPPED: IndexFunc - constraint:union
-// type constraint S cannot be represented
+/// IndexFunc returns the first index i satisfying f(s[i]),
+/// or -1 if none do.
+pub fn IndexFunc<E>(s: Slice<E>, f: fn(E) -> bool) -> int
 
-// SKIPPED: Insert - constraint:union
-// type constraint S cannot be represented
+/// Insert inserts the values v... into s at index i,
+/// returning the modified slice.
+/// The elements at s[i:] are shifted up to make room.
+/// In the returned slice r, r[i] == v[0],
+/// and, if i < len(s), r[i+len(v)] == value originally at r[i].
+/// Insert panics if i > len(s).
+/// This function is O(len(s) + len(v)).
+/// If the result is empty, it has the same nilness as s.
+pub fn Insert<E>(s: Slice<E>, i: int, v: VarArgs<E>) -> Slice<E>
 
-// SKIPPED: IsSorted - constraint:union
-// type constraint S cannot be represented
+/// IsSorted reports whether x is sorted in ascending order.
+pub fn IsSorted<E: cmp.Ordered>(x: Slice<E>) -> bool
 
-// SKIPPED: IsSortedFunc - constraint:union
-// type constraint S cannot be represented
+/// IsSortedFunc reports whether x is sorted in ascending order, with cmp as the
+/// comparison function as defined by [SortFunc].
+pub fn IsSortedFunc<E>(x: Slice<E>, cmp: fn(E, E) -> int) -> bool
 
-// SKIPPED: Max - constraint:union
-// type constraint S cannot be represented
+/// Max returns the maximal value in x. It panics if x is empty.
+/// For floating-point E, Max propagates NaNs (any NaN value in x
+/// forces the output to be NaN).
+pub fn Max<E: cmp.Ordered>(x: Slice<E>) -> E
 
-// SKIPPED: MaxFunc - constraint:union
-// type constraint S cannot be represented
+/// MaxFunc returns the maximal value in x, using cmp to compare elements.
+/// It panics if x is empty. If there is more than one maximal element
+/// according to the cmp function, MaxFunc returns the first one.
+pub fn MaxFunc<E>(x: Slice<E>, cmp: fn(E, E) -> int) -> E
 
-// SKIPPED: Min - constraint:union
-// type constraint S cannot be represented
+/// Min returns the minimal value in x. It panics if x is empty.
+/// For floating-point numbers, Min propagates NaNs (any NaN value in x
+/// forces the output to be NaN).
+pub fn Min<E: cmp.Ordered>(x: Slice<E>) -> E
 
-// SKIPPED: MinFunc - constraint:union
-// type constraint S cannot be represented
+/// MinFunc returns the minimal value in x, using cmp to compare elements.
+/// It panics if x is empty. If there is more than one minimal element
+/// according to the cmp function, MinFunc returns the first one.
+pub fn MinFunc<E>(x: Slice<E>, cmp: fn(E, E) -> int) -> E
 
-// SKIPPED: Repeat - constraint:union
-// type constraint S cannot be represented
+/// Repeat returns a new slice that repeats the provided slice the given number of times.
+/// The result has length and capacity (len(x) * count).
+/// The result is never nil.
+/// Repeat panics if count is negative or if the result of (len(x) * count)
+/// overflows.
+pub fn Repeat<E>(x: Slice<E>, count: int) -> Slice<E>
 
-// SKIPPED: Replace - constraint:union
-// type constraint S cannot be represented
+/// Replace replaces the elements s[i:j] by the given v, and returns the
+/// modified slice.
+/// Replace panics if j > len(s) or s[i:j] is not a valid slice of s.
+/// When len(v) < (j-i), Replace zeroes the elements between the new length and the original length.
+/// If the result is empty, it has the same nilness as s.
+pub fn Replace<E>(s: Slice<E>, i: int, j: int, v: VarArgs<E>) -> Slice<E>
 
-// SKIPPED: Reverse - constraint:union
-// type constraint S cannot be represented
+/// Reverse reverses the elements of the slice in place.
+pub fn Reverse<E>(s: Slice<E>)
 
-// SKIPPED: Sort - constraint:union
-// type constraint S cannot be represented
+/// Sort sorts a slice of any ordered type in ascending order.
+/// When sorting floating-point numbers, NaNs are ordered before other values.
+pub fn Sort<E: cmp.Ordered>(x: Slice<E>)
 
-// SKIPPED: SortFunc - constraint:union
-// type constraint S cannot be represented
+/// SortFunc sorts the slice x in ascending order as determined by the cmp
+/// function. This sort is not guaranteed to be stable.
+/// cmp(a, b) should return a negative number when a < b, a positive number when
+/// a > b and zero when a == b or a and b are incomparable in the sense of
+/// a strict weak ordering.
+/// 
+/// SortFunc requires that cmp is a strict weak ordering.
+/// See https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings.
+/// The function should return 0 for incomparable items.
+pub fn SortFunc<E>(x: Slice<E>, cmp: fn(E, E) -> int)
 
-// SKIPPED: SortStableFunc - constraint:union
-// type constraint S cannot be represented
+/// SortStableFunc sorts the slice x while keeping the original order of equal
+/// elements, using cmp to compare elements in the same way as [SortFunc].
+pub fn SortStableFunc<E>(x: Slice<E>, cmp: fn(E, E) -> int)
 
-// SKIPPED: Sorted - constraint:comparable
-// type constraint E cannot be represented
+/// Sorted collects values from seq into a new slice, sorts the slice,
+/// and returns it.
+/// If seq is empty, the result is nil.
+pub fn Sorted<E: cmp.Ordered>(seq: iter.Seq<E>) -> Slice<E>
 
 /// SortedFunc collects values from seq into a new slice, sorts the slice
 /// using the comparison function, and returns it.
@@ -129,5 +230,5 @@ pub fn SortedFunc<E>(seq: iter.Seq<E>, cmp: fn(E, E) -> int) -> Slice<E>
 /// If seq is empty, the result is nil.
 pub fn SortedStableFunc<E>(seq: iter.Seq<E>, cmp: fn(E, E) -> int) -> Slice<E>
 
-// SKIPPED: Values - constraint:union
-// type constraint Slice cannot be represented
+/// Values returns an iterator that yields the slice elements in order.
+pub fn Values<E>(s: Slice<E>) -> iter.Seq<E>

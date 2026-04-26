@@ -1,5 +1,7 @@
 package generics
 
+import "cmp"
+
 // Basic generic types
 
 type Box[T any] struct {
@@ -86,4 +88,17 @@ func Swap[T, U any](a T, b U) (U, T) {
 // Inline union constraint with non-comparable types
 func Either[T []int | []string](v T) T {
 	return v
+}
+
+// cmp.Ordered constraint (named-identity recognizer)
+func MinOrdered[T cmp.Ordered](a, b T) T {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// Slice-shape rewrite: S ~[]E with E: cmp.Ordered
+func SortInts[S ~[]E, E cmp.Ordered](x S) S {
+	return x
 }

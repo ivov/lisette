@@ -787,7 +787,7 @@ impl TaskState<'_> {
             let qualified_name = self.qualify_name(&g.name);
 
             for b in &g.bounds {
-                let bound_ty = self.convert_to_type(store, b, span);
+                let bound_ty = self.convert_bound_to_type(store, b, span);
 
                 self.scopes
                     .current_mut()

@@ -8,6 +8,35 @@ use syntax::types::{Bound, Type, TypeVarId};
 use super::super::TaskState;
 use crate::checker::type_env::VarState;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BuiltinBound {
+    Ordered,
+    Comparable,
+}
+
+impl BuiltinBound {
+    pub(crate) fn from_qualified_id(qualified: &str) -> Option<Self> {
+        match qualified {
+            "go:cmp.Ordered" => Some(Self::Ordered),
+            "prelude.Comparable" => Some(Self::Comparable),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Ordered => "cmp.Ordered",
+            Self::Comparable => "Comparable",
+        }
+    }
+
+    /// True when a parameter declared `T: self` satisfies a callee that
+    /// requires `T: target`. Encodes Go's `cmp.Ordered ⊂ Comparable`.
+    pub(crate) fn satisfies(self, target: Self) -> bool {
+        self == target || (self == Self::Ordered && target == Self::Comparable)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnifyError {
     TypeMismatch,
@@ -16,6 +45,12 @@ pub enum UnifyError {
     #[allow(clippy::box_collection)] // Intentional: shrinks Result<(), UnifyError> on hot path
     Multiple(Box<Vec<UnifyError>>),
     AlreadyReported,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dispatched {
+    Handled,
+    Fallthrough,
 }
 
 impl TaskState<'_> {
@@ -629,6 +664,10 @@ impl TaskState<'_> {
             return;
         }
 
+        if self.dispatch_builtin_bound(store, bound, &resolved_ty, span) == Dispatched::Handled {
+            return;
+        }
+
         let interface_ty = bound.ty.resolve_in(&self.env);
         let Type::Nominal { id, params, .. } = interface_ty else {
             return;
@@ -639,6 +678,76 @@ impl TaskState<'_> {
         };
 
         let _ = self.satisfies_interface(store, &resolved_ty, &interface, &params, span);
+    }
+
+    /// Built-in bound recognition; falls through to the interface path on miss.
+    pub(super) fn dispatch_builtin_bound(
+        &mut self,
+        store: &Store,
+        bound: &Bound,
+        resolved_generic: &Type,
+        span: &Span,
+    ) -> Dispatched {
+        let bound_ty = bound.ty.resolve_in(&self.env);
+        let Some(builtin) = bound_ty
+            .get_qualified_id()
+            .and_then(BuiltinBound::from_qualified_id)
+        else {
+            return Dispatched::Fallthrough;
+        };
+
+        if let Type::Parameter(param_name) = resolved_generic {
+            if !self.parameter_satisfies_bound(param_name, builtin) {
+                self.sink.push(diagnostics::infer::missing_bound_on_param(
+                    param_name,
+                    builtin.label(),
+                    *span,
+                ));
+            }
+            return Dispatched::Handled;
+        }
+
+        match builtin {
+            BuiltinBound::Ordered if !resolved_generic.satisfies_ordered_constraint() => {
+                self.sink.push(diagnostics::infer::not_orderable_bound(
+                    bound.param_name.as_str(),
+                    resolved_generic,
+                    *span,
+                ));
+            }
+            BuiltinBound::Comparable => {
+                if super::expressions::operators::check_not_comparable(
+                    &self.env,
+                    store,
+                    resolved_generic,
+                )
+                .is_some()
+                {
+                    self.sink
+                        .push(diagnostics::infer::not_comparable_bound(*span));
+                }
+            }
+            BuiltinBound::Ordered => {}
+        }
+        Dispatched::Handled
+    }
+
+    pub(super) fn parameter_satisfies_bound(&self, param_name: &str, target: BuiltinBound) -> bool {
+        let mut found = false;
+        self.scopes.for_each_bound_on_param(param_name, |bound_ty| {
+            if found {
+                return;
+            }
+            if let Some(declared) = bound_ty
+                .resolve_in(&self.env)
+                .get_qualified_id()
+                .and_then(BuiltinBound::from_qualified_id)
+                && declared.satisfies(target)
+            {
+                found = true;
+            }
+        });
+        found
     }
 
     fn unification_diagnostic(

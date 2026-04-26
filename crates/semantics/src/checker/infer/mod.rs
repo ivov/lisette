@@ -4,6 +4,8 @@ mod interface;
 mod unify;
 mod validation;
 
+pub(crate) use unify::BuiltinBound;
+
 use rustc_hash::FxHashMap as HashMap;
 
 use super::TaskState;

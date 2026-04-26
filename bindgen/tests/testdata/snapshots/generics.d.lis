@@ -3,6 +3,8 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+import "go:cmp"
+
 /// Empty constraint (any)
 pub fn Clone<T>(v: T) -> T
 
@@ -11,11 +13,17 @@ pub fn Clone<T>(v: T) -> T
 
 pub fn Identity<T>(x: T) -> T
 
-// SKIPPED: Max - constraint:comparable
-// type constraint T cannot be represented
+/// Comparable constraint
+pub fn Max<T: Comparable>(a: T, b: T) -> T
 
 // SKIPPED: Min - constraint:comparable
 // type constraint T cannot be represented
+
+/// cmp.Ordered constraint (named-identity recognizer)
+pub fn MinOrdered<T: cmp.Ordered>(a: T, b: T) -> T
+
+/// Slice-shape rewrite: S ~[]E with E: cmp.Ordered
+pub fn SortInts<E: cmp.Ordered>(x: Slice<E>) -> Slice<E>
 
 /// Multiple constraints
 pub fn Swap<T, U>(a: T, b: U) -> (U, T)
@@ -24,9 +32,11 @@ pub struct Box<T> {
   pub Value: T,
 }
 
-// SKIPPED: ConstrainedPair - constraint:comparable
-// type constraint K cannot be represented
-pub type ConstrainedPair
+/// Multiple type parameters with different constraints
+pub struct ConstrainedPair<K: Comparable, V> {
+  pub Key: K,
+  pub Value: V,
+}
 
 pub type Container<T>
 
@@ -43,8 +53,10 @@ pub interface Transformer<T> {
   fn Transform(arg0: T) -> T
 }
 
-// SKIPPED: GetKey - constraint:comparable
-// type constraint K cannot be represented
+impl<K: Comparable, V> ConstrainedPair<K, V> {
+  /// Method on constrained generic
+  fn GetKey(self) -> K
+}
 
 impl<T> Container<T> {
   fn Add(self: Ref<Container<T>>, item: T)

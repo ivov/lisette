@@ -156,14 +156,13 @@ func (e *Emitter) EmitImplBlocks() {
 			continue
 		}
 
-		var typeParams []string
+		var typeParams convert.TypeParamSpecs
 		if methods[0].Receiver != nil {
 			typeParams = methods[0].Receiver.TypeParams
 		}
 
 		if len(typeParams) > 0 {
-			typeParamList := strings.Join(typeParams, ", ")
-			fmt.Fprintf(&e.buf, "impl<%s> %s<%s> {\n", typeParamList, typeName, typeParamList)
+			fmt.Fprintf(&e.buf, "impl<%s> %s<%s> {\n", typeParams.FormatDecl(), typeName, typeParams.FormatUse())
 		} else {
 			fmt.Fprintf(&e.buf, "impl %s {\n", typeName)
 		}
@@ -211,12 +210,7 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 	functionSignature.WriteString("pub fn ")
 	functionSignature.WriteString(result.Name)
 
-	if len(result.TypeParams) > 0 {
-		functionSignature.WriteString("<")
-		functionSignature.WriteString(strings.Join(result.TypeParams, ", "))
-		functionSignature.WriteString(">")
-	}
-
+	functionSignature.WriteString(result.TypeParams.DeclBlock())
 	functionSignature.WriteString("(")
 	var params []string
 	for _, p := range result.Params {
@@ -288,19 +282,11 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
 	methodSignature.WriteString("  fn ")
 	methodSignature.WriteString(result.Name)
 
-	if len(result.TypeParams) > 0 {
-		methodSignature.WriteString("<")
-		methodSignature.WriteString(strings.Join(result.TypeParams, ", "))
-		methodSignature.WriteString(">")
-	}
-
+	methodSignature.WriteString(result.TypeParams.DeclBlock())
 	methodSignature.WriteString("(")
 	var params []string
 	if result.Receiver != nil && result.Receiver.IsPointer {
-		typeName := result.Receiver.BaseTypeName
-		if len(result.Receiver.TypeParams) > 0 {
-			typeName += "<" + strings.Join(result.Receiver.TypeParams, ", ") + ">"
-		}
+		typeName := result.Receiver.BaseTypeName + result.Receiver.TypeParams.UseBlock()
 		params = append(params, fmt.Sprintf("self: Ref<%s>", typeName))
 	} else {
 		params = append(params, "self")
@@ -335,12 +321,7 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 		var signature strings.Builder
 		signature.WriteString("pub interface ")
 		signature.WriteString(typeName)
-
-		if len(result.TypeParams) > 0 {
-			signature.WriteString("<")
-			signature.WriteString(strings.Join(result.TypeParams, ", "))
-			signature.WriteString(">")
-		}
+		signature.WriteString(result.TypeParams.DeclBlock())
 
 		if len(result.InterfaceMethods) == 0 {
 			signature.WriteString(" {}")
@@ -386,12 +367,7 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 		var sig strings.Builder
 		sig.WriteString("pub struct ")
 		sig.WriteString(typeName)
-
-		if len(result.TypeParams) > 0 {
-			sig.WriteString("<")
-			sig.WriteString(strings.Join(result.TypeParams, ", "))
-			sig.WriteString(">")
-		}
+		sig.WriteString(result.TypeParams.DeclBlock())
 
 		sig.WriteString(" {\n")
 		for _, f := range result.Fields {
@@ -421,25 +397,13 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 		if strings.HasPrefix(result.LisetteType, "fn(") || result.IsTypeAlias {
 			sig.WriteString("pub type ")
 			sig.WriteString(typeName)
-
-			if len(result.TypeParams) > 0 {
-				sig.WriteString("<")
-				sig.WriteString(strings.Join(result.TypeParams, ", "))
-				sig.WriteString(">")
-			}
-
+			sig.WriteString(result.TypeParams.DeclBlock())
 			sig.WriteString(" = ")
 			sig.WriteString(result.LisetteType)
 		} else {
 			sig.WriteString("pub struct ")
 			sig.WriteString(typeName)
-
-			if len(result.TypeParams) > 0 {
-				sig.WriteString("<")
-				sig.WriteString(strings.Join(result.TypeParams, ", "))
-				sig.WriteString(">")
-			}
-
+			sig.WriteString(result.TypeParams.DeclBlock())
 			sig.WriteString("(")
 			sig.WriteString(result.LisetteType)
 			sig.WriteString(")")
@@ -453,12 +417,7 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 	var signature strings.Builder
 	signature.WriteString("pub type ")
 	signature.WriteString(typeName)
-
-	if len(result.TypeParams) > 0 {
-		signature.WriteString("<")
-		signature.WriteString(strings.Join(result.TypeParams, ", "))
-		signature.WriteString(">")
-	}
+	signature.WriteString(result.TypeParams.DeclBlock())
 
 	e.buf.WriteString(signature.String())
 	e.buf.WriteString("\n\n")
