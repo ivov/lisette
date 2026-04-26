@@ -2246,6 +2246,55 @@ fn shadowing_prelude_types_is_forbidden() {
 }
 
 #[test]
+fn module_named_after_go_builtin_is_sanitized() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("panic", "panic.lis", "pub fn helper() -> int { 0 }");
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import user_panic "panic"
+
+fn main() {
+  let _ = user_panic.helper()
+  panic("boom")
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn shadowing_prelude_functions_is_forbidden() {
+    for (fn_name, definition) in [
+        ("panic", "pub fn panic(x: int) -> int { x }"),
+        ("imaginary", "pub fn imaginary(x: int) -> int { x }"),
+        (
+            "assert_type",
+            "pub fn assert_type(x: int) -> Option<int> { Some(x) }",
+        ),
+        ("complex", "pub fn complex(x: int) -> int { x }"),
+        ("real", "pub fn real(x: int) -> int { x }"),
+    ] {
+        let mut fs = MockFileSystem::new();
+        fs.add_file("lib", "lib.lis", definition);
+        fs.add_file(ENTRY_MODULE_ID, "main.lis", "import \"lib\"\nfn main() {}");
+
+        let result = compile_check(fs);
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|e| e.code_str() == Some("infer.prelude_function_shadowed")),
+            "Expected prelude shadowing error for `{}`, got: {:?}",
+            fn_name,
+            result.errors
+        );
+    }
+}
+
+#[test]
 fn import_alias_static_method_call() {
     let mut fs = MockFileSystem::new();
 

@@ -725,5 +725,8 @@ fn is_reserved_import_alias(name: &str) -> bool {
         | "None"
         | "Ok"
         | "Err"
+        // Lisette prelude functions not already covered by Go builtins above
+        | "assert_type"
+        | "imaginary"
     )
 }

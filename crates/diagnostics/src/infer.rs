@@ -2138,6 +2138,16 @@ pub fn prelude_type_shadowed(name: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn prelude_function_shadowed(name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot shadow prelude function")
+        .with_infer_code("prelude_function_shadowed")
+        .with_span_label(&span, format!("`{}` is a prelude function", name))
+        .with_help(format!(
+            "Choose a different name — `{}` is defined in the prelude and cannot be redefined",
+            name
+        ))
+}
+
 pub fn non_pub_interface_with_pub_impl(
     interface_name: &str,
     struct_name: &str,

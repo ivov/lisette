@@ -1,0 +1,20 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import user_panic "github.com/user/myproject/panic"
+
+func main() {
+	_ = user_panic.Helper()
+	panic("boom")
+}
+
+
+// === panic/panic.go ===
+package panic_
+
+func Helper() int {
+	return 0
+}

@@ -52,9 +52,8 @@ pub(crate) fn module_of_type_id(id: &str) -> &str {
 pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
     let has_bad_chars = name.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_');
     let starts_with_digit = name.starts_with(|c: char| c.is_ascii_digit());
-    let is_reserved = GO_KEYWORDS.contains(&name) || GO_BUILTINS.contains(&name);
 
-    if !has_bad_chars && !starts_with_digit && !is_reserved {
+    if !has_bad_chars && !starts_with_digit && !is_reserved_package_name(name) {
         return Cow::Borrowed(name);
     }
 
@@ -73,7 +72,7 @@ pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
         result.insert(0, '_');
     }
 
-    if GO_KEYWORDS.contains(&result.as_str()) || GO_BUILTINS.contains(&result.as_str()) {
+    if is_reserved_package_name(&result) {
         result.push('_');
     }
 
@@ -194,12 +193,8 @@ pub(crate) fn variant_by_id(
     }
 }
 
-/// Go predeclared identifiers (builtin functions and constants) that should
-/// not be shadowed by user-defined names.
+/// Go predeclared identifiers (builtin functions, types, constants).
 /// See: https://go.dev/ref/spec#Predeclared_identifiers
-///
-/// Note: `complex`, `panic`, and `real` are excluded because they are also
-/// exposed as Lisette builtins that map directly to Go builtins.
 const GO_BUILTINS: &[&str] = &[
     // Builtin functions
     "any",
@@ -207,6 +202,7 @@ const GO_BUILTINS: &[&str] = &[
     "cap",
     "clear",
     "close",
+    "complex",
     "copy",
     "delete",
     "imag",
@@ -216,8 +212,10 @@ const GO_BUILTINS: &[&str] = &[
     "max",
     "min",
     "new",
+    "panic",
     "print",
     "println",
+    "real",
     "recover",
     // Predeclared types
     "bool",
@@ -256,8 +254,22 @@ pub(crate) fn escape_keyword(name: &str) -> Cow<'_, str> {
     }
 }
 
+/// Go builtins re-exposed by the Lisette prelude under the same name. The
+/// `prelude_function_shadowed` diagnostic forbids user code from declaring
+/// identifiers with these names, so the emitter need not escape them.
+const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "panic", "real"];
+
+fn is_reserved_package_name(name: &str) -> bool {
+    GO_KEYWORDS.contains(&name) || GO_BUILTINS.contains(&name)
+}
+
+fn is_reserved_identifier(name: &str) -> bool {
+    GO_KEYWORDS.contains(&name)
+        || (GO_BUILTINS.contains(&name) && !PRELUDE_BUILTIN_NAMES.contains(&name))
+}
+
 pub(crate) fn escape_reserved(name: &str) -> Cow<'_, str> {
-    if GO_KEYWORDS.contains(&name) || GO_BUILTINS.contains(&name) {
+    if is_reserved_identifier(name) {
         Cow::Owned(format!("{}_", name))
     } else {
         Cow::Borrowed(name)

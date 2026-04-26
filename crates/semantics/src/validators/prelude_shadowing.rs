@@ -8,7 +8,26 @@ pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
         return;
     };
     for item in typed_ast {
+        check_top_level_function(item, prelude_module, sink);
         visit_expression(item, prelude_module, sink);
+    }
+}
+
+fn check_top_level_function(
+    item: &Expression,
+    prelude_module: &syntax::program::Module,
+    sink: &LocalSink,
+) {
+    if let Expression::Function {
+        name, name_span, ..
+    } = item
+    {
+        let qualified = format!("prelude.{}", name);
+        if prelude_module.definitions.contains_key(qualified.as_str()) {
+            sink.push(diagnostics::infer::prelude_function_shadowed(
+                name, *name_span,
+            ));
+        }
     }
 }
 

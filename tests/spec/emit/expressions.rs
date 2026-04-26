@@ -3496,34 +3496,6 @@ fn test() -> Channel<int> {
 }
 
 #[test]
-fn user_function_imaginary_not_hijacked() {
-    let input = r#"
-fn imaginary(x: int) -> int {
-  x * 2
-}
-
-fn test() -> int {
-  imaginary(5)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn user_function_assert_type_not_hijacked() {
-    let input = r#"
-fn assert_type(x: int) -> Option<int> {
-  Some(x)
-}
-
-fn test() -> Option<int> {
-  assert_type(42)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn local_binding_imaginary_not_hijacked() {
     let input = r#"
 fn id(x: int) -> int { x }
