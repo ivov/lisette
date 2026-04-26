@@ -17,7 +17,7 @@ pub(crate) enum BuiltinBound {
 impl BuiltinBound {
     pub(crate) fn from_qualified_id(qualified: &str) -> Option<Self> {
         match qualified {
-            "go:cmp.Ordered" => Some(Self::Ordered),
+            "go:cmp.Ordered" | "prelude.Ordered" => Some(Self::Ordered),
             "prelude.Comparable" => Some(Self::Comparable),
             _ => None,
         }
@@ -709,11 +709,8 @@ impl TaskState<'_> {
 
         match builtin {
             BuiltinBound::Ordered if !resolved_generic.satisfies_ordered_constraint() => {
-                self.sink.push(diagnostics::infer::not_orderable_bound(
-                    bound.param_name.as_str(),
-                    resolved_generic,
-                    *span,
-                ));
+                self.sink
+                    .push(diagnostics::infer::not_orderable_bound(*span));
             }
             BuiltinBound::Comparable => {
                 if super::expressions::operators::check_not_comparable(

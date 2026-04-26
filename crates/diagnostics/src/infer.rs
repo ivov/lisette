@@ -708,17 +708,14 @@ pub fn not_comparable(ty: &Type, reason: &str, span: Span) -> LisetteDiagnostic 
         ))
 }
 
-pub fn not_orderable_bound(param_name: &str, ty: &Type, span: Span) -> LisetteDiagnostic {
+pub fn not_orderable_bound(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Bound not satisfied")
         .with_infer_code("not_orderable_bound")
-        .with_span_label(
-            &span,
-            format!("`{}` does not satisfy `cmp.Ordered`", ty),
+        .with_span_label(&span, "does not satisfy `cmp.Ordered`")
+        .with_help(
+            "The type parameter must be `cmp.Ordered` but the argument is not orderable. \
+             Relax the bound or pass an argument that satisfies it",
         )
-        .with_help(format!(
-            "The type parameter `{}` requires `cmp.Ordered`; only integers, floats, and strings (and their named aliases) satisfy it",
-            param_name
-        ))
 }
 
 pub fn not_comparable_bound(span: Span) -> LisetteDiagnostic {

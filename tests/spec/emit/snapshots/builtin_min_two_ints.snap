@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test() -> int {\n  min(1, 2)\n}\n"
+---
+package main
+
+func test() int {
+	return min(1, 2)
+}

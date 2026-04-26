@@ -257,7 +257,7 @@ pub(crate) fn escape_keyword(name: &str) -> Cow<'_, str> {
 /// Go builtins re-exposed by the Lisette prelude under the same name. The
 /// `prelude_function_shadowed` diagnostic forbids user code from declaring
 /// identifiers with these names, so the emitter need not escape them.
-const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "panic", "real"];
+const PRELUDE_BUILTIN_NAMES: &[&str] = &["complex", "max", "min", "panic", "real"];
 
 fn is_reserved_package_name(name: &str) -> bool {
     GO_KEYWORDS.contains(&name) || GO_BUILTINS.contains(&name)

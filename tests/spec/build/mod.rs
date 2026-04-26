@@ -2276,6 +2276,8 @@ fn shadowing_prelude_functions_is_forbidden() {
         ),
         ("complex", "pub fn complex(x: int) -> int { x }"),
         ("real", "pub fn real(x: int) -> int { x }"),
+        ("min", "pub fn min(x: int) -> int { x }"),
+        ("max", "pub fn max(x: int) -> int { x }"),
     ] {
         let mut fs = MockFileSystem::new();
         fs.add_file("lib", "lib.lis", definition);

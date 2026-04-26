@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \nfn test() -> string {\n  min(\"a\", \"b\")\n}\n"
+---
+package main
+
+func test() string {
+	return min("a", "b")
+}

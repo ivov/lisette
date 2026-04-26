@@ -4880,6 +4880,58 @@ fn wrapper<T: Comparable>(x: T) {
 }
 
 #[test]
+fn infer_prelude_min_rejects_bool() {
+    let input = r#"
+fn test() -> bool {
+  min(true, false)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_prelude_max_rejects_struct() {
+    let input = r#"
+struct Point { x: int, y: int }
+
+fn test(a: Point, b: Point) -> Point {
+  max(a, b)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_prelude_min_max_accepts_int_and_string() {
+    let input = r#"
+fn test_int() -> int { min(1, 2, 3) }
+fn test_float() -> float64 { max(1.0, 2.0) }
+fn test_string() -> string { min("a", "b", "c") }
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn infer_prelude_min_max_accepts_user_cmp_ordered_bound() {
+    let input = r#"
+import "go:cmp"
+
+fn pick<T: cmp.Ordered>(a: T, b: T) -> T { min(a, b) }
+"#;
+    let result = crate::_harness::infer::infer(input);
+    assert!(
+        result.errors.is_empty(),
+        "Expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn infer_impl_on_type_alias() {
     let source = r#"
 type UserId = int

@@ -721,6 +721,7 @@ fn is_reserved_import_alias(name: &str) -> bool {
         | "Option"
         | "Result"
         | "Comparable"
+        | "Ordered"
         | "Some"
         | "None"
         | "Ok"

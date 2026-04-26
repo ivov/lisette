@@ -2,11 +2,11 @@
 source: tests/ui/errors/mod.rs
 ---
   [error] Bound not satisfied
-   ╭─[test.lis:7:20]
- 6 │ fn test() {
- 7 │   requires_ordered(true)
-   ·                    ──┬─
-   ·                      ╰── does not satisfy `cmp.Ordered`
- 8 │ }
+   ╭─[test.lis:3:7]
+ 2 │ fn test() -> bool {
+ 3 │   min(true, false)
+   ·       ──┬─
+   ·         ╰── does not satisfy `cmp.Ordered`
+ 4 │ }
    ╰────
   help: The type parameter must be `cmp.Ordered` but the argument is not orderable. Relax the bound or pass an argument that satisfies it · code: [infer.not_orderable_bound]

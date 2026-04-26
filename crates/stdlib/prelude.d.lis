@@ -529,6 +529,11 @@ type Never
 /// and aggregates that contain them). Only usable as a type-parameter bound.
 type Comparable
 
+/// Marker for Go's `cmp.Ordered` constraint. A type satisfies `Ordered` when
+/// it admits `<`, `<=`, `>=`, `>` (signed/unsigned ints, floats, and `string`).
+/// Only usable as a type-parameter bound.
+type Ordered
+
 /// Zero or more arguments of type `T`. Only valid as the last parameter
 /// of a function. Corresponds to Go's `...T` syntax.
 ///
@@ -597,3 +602,11 @@ fn imaginary(c: complex128) -> float64
 ///   panic("something went wrong")
 ///   panic(err)
 fn panic(msg: Unknown) -> Never
+
+/// Returns the smallest of its arguments. All arguments must be of the same
+/// type and (signed/unsigned ints, floats, or `string`).
+fn min<T: Ordered>(x: T, rest: VarArgs<T>) -> T
+
+/// Returns the largest of its arguments. All arguments must be of the same
+/// type and (signed/unsigned ints, floats, or `string`).
+fn max<T: Ordered>(x: T, rest: VarArgs<T>) -> T

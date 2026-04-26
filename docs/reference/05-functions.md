@@ -82,16 +82,16 @@ fn combine<T: Display, U: Debug>(a: T, b: U) -> string {
 }
 ```
 
-Two built-in bounds are predeclared:
+Two bounds are built in:
 
-- `Comparable` (in the prelude) for types that admit `==` and `!=`.
-- `cmp.Ordered` (in `go:cmp`) for types that admit `<`, `>`, etc.
+- `Comparable` for types that admit `==` and `!=` (everything except slices, maps, functions, and structs or tuples that contain them)
+- `Ordered` for types that admit `<`, `>`, `<=`, and `>=` (signed and unsigned integers, floats, and `string`)
+
+`Ordered` implies `Comparable`, so `==` and `!=` are also available on a type bound by `Ordered`.
 
 ```rust
-import "go:cmp"
-
-fn dedupe<T: Comparable>(xs: Slice<T>) -> Slice<T> { /* ... */ }
-fn sort<T: cmp.Ordered>(xs: Slice<T>) { /* ... */ }
+fn dedupe<T: Comparable>(xs: Slice<T>) -> Slice<T> { ... }
+fn sorted<T: Ordered>(xs: Slice<T>) -> Slice<T> { ... }
 ```
 
 ## Mutable parameters

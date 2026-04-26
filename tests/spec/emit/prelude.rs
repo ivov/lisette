@@ -615,6 +615,36 @@ fn test(err: error) {
 }
 
 #[test]
+fn builtin_min_two_ints() {
+    let input = r#"
+fn test() -> int {
+  min(1, 2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn builtin_max_three_floats() {
+    let input = r#"
+fn test() -> float64 {
+  max(1.0, 2.0, 3.0)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn builtin_min_strings() {
+    let input = r#"
+fn test() -> string {
+  min("a", "b")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn string_is_empty_negated() {
     let input = r#"
 fn test(s: string) -> bool {
