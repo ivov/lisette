@@ -4102,3 +4102,124 @@ fn take_int(c: MyContainer<int>) -> int {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn distinct_aliases_unify_inside_option() {
+    infer(
+        r#"
+type T1 = int
+type T2 = int
+
+fn main() {
+  let _: Option<T1> = Some(1 as T2)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn distinct_aliases_unify_inside_nested_option() {
+    infer(
+        r#"
+type T1 = int
+type T2 = int
+
+fn make() -> T2 { 1 as T2 }
+
+fn main() {
+  let _: Option<Option<T1>> = Some(Some(make()))
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn distinct_aliases_unify_inside_map_value() {
+    infer(
+        r#"
+type T1 = int
+type T2 = int
+
+fn make() -> T2 { 1 as T2 }
+
+fn main() {
+  let _: Map<string, T1> = Map.from([("a", make())])
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn aliases_of_different_underlying_types_inside_option_error() {
+    infer(
+        r#"
+type T1 = int
+type T2 = string
+
+fn main() {
+  let _: Option<T1> = Some("hello" as T2)
+}
+"#,
+    )
+    .assert_infer_code("type_mismatch");
+}
+
+#[test]
+fn cast_through_slice_with_alias_arg() {
+    infer(
+        r#"
+type UserId = int
+
+fn main() {
+  let _ = [1, 2, 3] as Slice<UserId>
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn cast_through_tuple_with_alias_elements() {
+    infer(
+        r#"
+type T1 = int
+
+fn main() {
+  let _ = (1, 2) as (T1, T1)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn cast_through_generic_alias_to_underlying_generic() {
+    infer(
+        r#"
+type MyOpt<T> = Option<T>
+type T1 = int
+
+fn main() {
+  let _ = Some(1) as MyOpt<T1>
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn cast_through_slice_with_distinct_underlying_alias_rejected() {
+    infer(
+        r#"
+type T2 = string
+
+fn main() {
+  let _ = [1] as Slice<T2>
+}
+"#,
+    )
+    .assert_infer_code("invalid_cast");
+}

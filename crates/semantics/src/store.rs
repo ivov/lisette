@@ -264,6 +264,39 @@ impl Store {
         current
     }
 
+    pub fn peel_alias_deep(&self, ty: &Type) -> Type {
+        match self.peel_alias(ty) {
+            Type::Compound { kind, args } => Type::Compound {
+                kind,
+                args: args.iter().map(|a| self.peel_alias_deep(a)).collect(),
+            },
+            Type::Tuple(elements) => {
+                Type::Tuple(elements.iter().map(|e| self.peel_alias_deep(e)).collect())
+            }
+            Type::Nominal {
+                id,
+                params,
+                underlying_ty,
+            } => Type::Nominal {
+                id,
+                params: params.iter().map(|p| self.peel_alias_deep(p)).collect(),
+                underlying_ty,
+            },
+            Type::Function {
+                params,
+                param_mutability,
+                bounds,
+                return_type,
+            } => Type::Function {
+                params: params.iter().map(|p| self.peel_alias_deep(p)).collect(),
+                param_mutability,
+                bounds,
+                return_type: Box::new(self.peel_alias_deep(&return_type)),
+            },
+            other => other,
+        }
+    }
+
     pub fn get_own_methods(&self, qualified_name: &str) -> Option<&MethodSignatures> {
         match self.get_definition(qualified_name)? {
             Definition::Struct { methods, .. } => Some(methods),

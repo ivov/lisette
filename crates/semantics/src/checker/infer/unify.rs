@@ -511,25 +511,32 @@ impl TaskState<'_> {
                     let params = params.clone();
                     self.unify_type_params(store, args.iter().zip(params.iter()), span)?;
                 }
-                // A type alias (`type Foo = Bar`) appears as a Nominal with
-                // `underlying_ty` set. When the other side is the bare body
-                // (Simple/Compound/Function), unwrap the alias. Symmetric.
+                // Unwrap a transparent alias (Nominal with `underlying_ty`)
+                // against the bare body or another Nominal — without this,
+                // aliases of the same type fail to unify in invariant
+                // positions (e.g. `Option<UserId>` vs `Option<int>`).
                 (
                     Nominal {
                         underlying_ty: Some(underlying),
                         ..
                     },
-                    Type::Simple(_) | Type::Compound { .. } | Function { .. },
+                    Type::Simple(_) | Type::Compound { .. } | Function { .. } | Nominal { .. },
                 )
                 | (
-                    Type::Simple(_) | Type::Compound { .. } | Function { .. },
+                    Type::Simple(_) | Type::Compound { .. } | Function { .. } | Nominal { .. },
                     Nominal {
                         underlying_ty: Some(underlying),
                         ..
                     },
                 ) => {
                     let u = underlying.as_ref().clone();
-                    let other = if matches!(&r1, Nominal { .. }) {
+                    let other = if matches!(
+                        &r1,
+                        Nominal {
+                            underlying_ty: Some(_),
+                            ..
+                        }
+                    ) {
                         r2.clone()
                     } else {
                         r1.clone()

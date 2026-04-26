@@ -63,15 +63,7 @@ impl TaskState<'_> {
             return;
         }
 
-        // Type alias <-> underlying type (e.g., fn as HandlerFunc, HandlerFunc as fn)
-        if let Some(underlying) = target_ty.get_underlying()
-            && source_ty == *underlying
-        {
-            return;
-        }
-        if let Some(underlying) = source_ty.get_underlying()
-            && target_ty == *underlying
-        {
+        if store.peel_alias_deep(&source_ty) == store.peel_alias_deep(&target_ty) {
             return;
         }
 
