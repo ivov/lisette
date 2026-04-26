@@ -215,6 +215,10 @@
           "Level.AppendText": ["b"],
           "LevelVar.AppendText": ["b"]
         },
+        "maps": {
+          "DeleteFunc": ["m"],
+          "Insert": ["m"]
+        },
         "math/big": {
           "Float.Append": ["buf"],
           "Float.AppendText": ["b"],

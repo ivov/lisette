@@ -579,8 +579,9 @@ func formatConstantValue(val constant.Value) string {
 	}
 }
 
-// `S ~[]E` shapes go into substitutions (caller rewrites `S` to `Slice<E>`)
-// rather than into specs. Recognized bounds register their imports on conv.
+// `S ~[]E` and `M ~map[K]V` shapes go into substitutions (caller rewrites `S`
+// to `Slice<E>` or `M` to `Map<K, V>`) rather than into specs. Recognized
+// bounds register their imports on conv.
 func collectTypeParams(
 	typeParams *types.TypeParamList,
 	emitOpaque bool,
@@ -599,6 +600,14 @@ func collectTypeParams(
 				substitutions = make(map[string]string)
 			}
 			substitutions[name] = fmt.Sprintf("Slice<%s>", elemName)
+			continue
+		}
+
+		if keyName, valName, ok := recognizeMapShape(constraint); ok {
+			if substitutions == nil {
+				substitutions = make(map[string]string)
+			}
+			substitutions[name] = fmt.Sprintf("Map<%s, %s>", keyName, valName)
 			continue
 		}
 

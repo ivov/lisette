@@ -85,26 +85,35 @@ func recognizeBound(constraint types.Type, currentPkgPath string) (boundExpr str
 	return "", false, nil
 }
 
-// Detects `S ~[]E`: one embedded *types.Union with one tilde'd *types.Slice
-// term over a *types.TypeParam. Returns the inner E's name so callers can
-// rewrite `S` to `Slice<E>`.
-func recognizeSliceShape(constraint types.Type) (sliceElemTypeParamName string, ok bool) {
+// Unwraps `interface { ~T }` to its inner T, the shared shape of every
+// type-set-as-shape recognizer below.
+func singleTildeTerm(constraint types.Type) (types.Type, bool) {
 	iface, isIface := constraint.Underlying().(*types.Interface)
 	if !isIface {
-		return "", false
+		return nil, false
 	}
 	if iface.NumEmbeddeds() != 1 {
-		return "", false
+		return nil, false
 	}
 	union, isUnion := iface.EmbeddedType(0).(*types.Union)
 	if !isUnion || union.Len() != 1 {
-		return "", false
+		return nil, false
 	}
 	term := union.Term(0)
 	if !term.Tilde() {
+		return nil, false
+	}
+	return term.Type(), true
+}
+
+// Detects `S ~[]E` over a *types.TypeParam. Returns the inner E's name so
+// callers can rewrite `S` to `Slice<E>`.
+func recognizeSliceShape(constraint types.Type) (sliceElemTypeParamName string, ok bool) {
+	inner, ok := singleTildeTerm(constraint)
+	if !ok {
 		return "", false
 	}
-	slice, isSlice := term.Type().(*types.Slice)
+	slice, isSlice := inner.(*types.Slice)
 	if !isSlice {
 		return "", false
 	}
@@ -113,4 +122,23 @@ func recognizeSliceShape(constraint types.Type) (sliceElemTypeParamName string, 
 		return "", false
 	}
 	return tp.Obj().Name(), true
+}
+
+// Detects `M ~map[K]V` over *types.TypeParam key and value. Returns the inner
+// K's and V's names so callers can rewrite `M` to `Map<K, V>`.
+func recognizeMapShape(constraint types.Type) (keyName, valName string, ok bool) {
+	inner, ok := singleTildeTerm(constraint)
+	if !ok {
+		return "", "", false
+	}
+	m, isMap := inner.(*types.Map)
+	if !isMap {
+		return "", "", false
+	}
+	k, kIsTp := m.Key().(*types.TypeParam)
+	v, vIsTp := m.Elem().(*types.TypeParam)
+	if !kIsTp || !vIsTp {
+		return "", "", false
+	}
+	return k.Obj().Name(), v.Obj().Name(), true
 }

@@ -5,33 +5,50 @@
 
 import "go:iter"
 
-// SKIPPED: All - constraint:union
-// type constraint Map cannot be represented
+/// All returns an iterator over key-value pairs from m.
+/// The iteration order is not specified and is not guaranteed
+/// to be the same from one call to the next.
+pub fn All<K: Comparable, V>(m: Map<K, V>) -> iter.Seq2<K, V>
 
-// SKIPPED: Clone - constraint:union
-// type constraint M cannot be represented
+/// Clone returns a copy of m.  This is a shallow clone:
+/// the new keys and values are set using ordinary assignment.
+pub fn Clone<K: Comparable, V>(m: Map<K, V>) -> Map<K, V>
 
 /// Collect collects key-value pairs from seq into a new map
 /// and returns it.
 pub fn Collect<K: Comparable, V>(seq: iter.Seq2<K, V>) -> Map<K, V>
 
-// SKIPPED: Copy - constraint:union
-// type constraint M1 cannot be represented
+/// Copy copies all key/value pairs in src adding them to dst.
+/// When a key in src is already present in dst,
+/// the value in dst will be overwritten by the value associated
+/// with the key in src.
+pub fn Copy<K: Comparable, V>(mut dst: Map<K, V>, src: Map<K, V>)
 
-// SKIPPED: DeleteFunc - constraint:union
-// type constraint M cannot be represented
+/// DeleteFunc deletes any key/value pairs from m for which del returns true.
+pub fn DeleteFunc<K: Comparable, V>(mut m: Map<K, V>, del: fn(K, V) -> bool)
 
-// SKIPPED: Equal - constraint:union
-// type constraint M1 cannot be represented
+/// Equal reports whether two maps contain the same key/value pairs.
+/// Values are compared using ==.
+pub fn Equal<K: Comparable, V: Comparable>(m1: Map<K, V>, m2: Map<K, V>) -> bool
 
-// SKIPPED: EqualFunc - constraint:union
-// type constraint M1 cannot be represented
+/// EqualFunc is like Equal, but compares values using eq.
+/// Keys are still compared with ==.
+pub fn EqualFunc<K: Comparable, V1, V2>(
+  m1: Map<K, V1>,
+  m2: Map<K, V2>,
+  eq: fn(V1, V2) -> bool,
+) -> bool
 
-// SKIPPED: Insert - constraint:union
-// type constraint Map cannot be represented
+/// Insert adds the key-value pairs from seq to m.
+/// If a key in seq already exists in m, its value will be overwritten.
+pub fn Insert<K: Comparable, V>(mut m: Map<K, V>, seq: iter.Seq2<K, V>)
 
-// SKIPPED: Keys - constraint:union
-// type constraint Map cannot be represented
+/// Keys returns an iterator over keys in m.
+/// The iteration order is not specified and is not guaranteed
+/// to be the same from one call to the next.
+pub fn Keys<K: Comparable, V>(m: Map<K, V>) -> iter.Seq<K>
 
-// SKIPPED: Values - constraint:union
-// type constraint Map cannot be represented
+/// Values returns an iterator over values in m.
+/// The iteration order is not specified and is not guaranteed
+/// to be the same from one call to the next.
+pub fn Values<K: Comparable, V>(m: Map<K, V>) -> iter.Seq<V>

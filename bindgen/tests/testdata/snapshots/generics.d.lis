@@ -13,6 +13,18 @@ pub fn Clone<T>(v: T) -> T
 
 pub fn Identity<T>(x: T) -> T
 
+/// Map-shape rewrite: single map, V any.
+pub fn MapClone<K: Comparable, V>(m: Map<K, V>) -> Map<K, V>
+
+/// Map-shape rewrite: two maps, shared V (V any).
+pub fn MapCopy<K: Comparable, V>(mut dst: Map<K, V>, src: Map<K, V>)
+
+/// Map-shape rewrite: two maps, shared V (V comparable).
+pub fn MapEqual<K: Comparable, V: Comparable>(m1: Map<K, V>, m2: Map<K, V>) -> bool
+
+/// Map-shape rewrite: two maps, distinct V.
+pub fn MapEqualFunc<K: Comparable, V1, V2>(m1: Map<K, V1>, m2: Map<K, V2>, eq: fn(V1, V2) -> bool) -> bool
+
 /// Comparable constraint
 pub fn Max<T: Comparable>(a: T, b: T) -> T
 

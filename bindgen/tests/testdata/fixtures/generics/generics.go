@@ -102,3 +102,22 @@ func MinOrdered[T cmp.Ordered](a, b T) T {
 func SortInts[S ~[]E, E cmp.Ordered](x S) S {
 	return x
 }
+
+// Map-shape rewrite: single map, V any.
+func MapClone[M ~map[K]V, K comparable, V any](m M) M {
+	return m
+}
+
+// Map-shape rewrite: two maps, shared V (V any).
+func MapCopy[M1, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
+}
+
+// Map-shape rewrite: two maps, shared V (V comparable).
+func MapEqual[M1, M2 ~map[K]V, K, V comparable](m1 M1, m2 M2) bool {
+	return false
+}
+
+// Map-shape rewrite: two maps, distinct V.
+func MapEqualFunc[M1 ~map[K]V1, M2 ~map[K]V2, K comparable, V1, V2 any](m1 M1, m2 M2, eq func(V1, V2) bool) bool {
+	return false
+}
