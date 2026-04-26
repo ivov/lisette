@@ -2,6 +2,22 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.21](https://github.com/ivov/lisette/compare/lisette-v0.1.20...lisette-v0.1.21) - 2026-04-26
+
+- feat: recognize M ~map[K]V as type-parameter shape [#198](https://github.com/ivov/lisette/pull/198) [`b22621e`](https://github.com/ivov/lisette/commit/b22621e2e44b9d7b661e624f2c9337a3d387016e)
+- fix: do not lower-classify prelude-fn callees [#186](https://github.com/ivov/lisette/pull/186) [`8ad9926`](https://github.com/ivov/lisette/commit/8ad992603b33817b773eae9221ab2ab94a6e428f)
+- fix: use %p for func-typed fields in auto-stringers [#188](https://github.com/ivov/lisette/pull/188) [`6331009`](https://github.com/ivov/lisette/commit/633100914497636b78e55ee57f76c6f0a6fc11cd)
+- fix: avoid unused go bindings in select-recv and while-let [#189](https://github.com/ivov/lisette/pull/189) [`7be8550`](https://github.com/ivov/lisette/commit/7be8550fda99cb3b75227aa331c64b41b058459e)
+- fix: preserve fn-alias type on let-bound lambdas [#192](https://github.com/ivov/lisette/pull/192) [`a931695`](https://github.com/ivov/lisette/commit/a93169581c6611c4674f4ef05334d9b7ea02f8fc)
+- fix: convert fn values to match prelude callback abi [#194](https://github.com/ivov/lisette/pull/194) [`18d093b`](https://github.com/ivov/lisette/commit/18d093bf81c7503dc4aebd819d80e1e381257e21)
+- fix: emit address-of for option fields at go struct literals [#196](https://github.com/ivov/lisette/pull/196) [`8958143`](https://github.com/ivov/lisette/commit/8958143ac567c75d14fa17eb4104a576a1b81e79)
+- fix: option-wrap nilable go fn-typed struct fields [#201](https://github.com/ivov/lisette/pull/201) [`1ce66e0`](https://github.com/ivov/lisette/commit/1ce66e039a599565fe95daedaba2e6dc4395d16f)
+- feat: reject String/GoString impl methods with wrong signature [#191](https://github.com/ivov/lisette/pull/191) [`4097a1b`](https://github.com/ivov/lisette/commit/4097a1b8cd6fad1799edd0aaec6af83824aeaff7)
+- feat: forbid shadowing prelude functions [#199](https://github.com/ivov/lisette/pull/199) [`f908124`](https://github.com/ivov/lisette/commit/f9081241ca2fdff0ec0337820aa59090295ba633)
+- feat: add min and max prelude builtins [#200](https://github.com/ivov/lisette/pull/200) [`4c3d8d5`](https://github.com/ivov/lisette/commit/4c3d8d5125f3ac875f685ab7feab93166099980f)
+- fix: alias transparency with generics [#203](https://github.com/ivov/lisette/pull/203) [`5b10e59`](https://github.com/ivov/lisette/commit/5b10e5927827738666e048d0f7a4c23a156b149e)
+- feat: support Comparable and cmp.Ordered as type-parameter bounds [#197](https://github.com/ivov/lisette/pull/197) [`e762d8c`](https://github.com/ivov/lisette/commit/e762d8c659f610b1f947b58c775037daf29e564a)
+
 ## [0.1.20](https://github.com/ivov/lisette/compare/lisette-v0.1.19...lisette-v0.1.20) - 2026-04-25
 
 - feat: add sentinel-int hint and lower any nilable err type [`c11e1de`](https://github.com/ivov/lisette/commit/c11e1de139756c1a324e9dd345a4bc05c6e6ca12)
