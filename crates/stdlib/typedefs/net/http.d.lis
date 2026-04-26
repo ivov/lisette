@@ -460,7 +460,7 @@ pub fn TimeoutHandler(h: Handler, dt: time.Duration, msg: string) -> Handler
 ///     If Jar is nil, the initial cookies are forwarded without change.
 pub struct Client {
   pub Transport: Option<RoundTripper>,
-  pub CheckRedirect: fn(Ref<Request>, Slice<Ref<Request>>) -> Result<(), error>,
+  pub CheckRedirect: Option<fn(Ref<Request>, Slice<Ref<Request>>) -> Result<(), error>>,
   pub Jar: Option<CookieJar>,
   pub Timeout: time.Duration,
 }
@@ -605,7 +605,7 @@ pub struct HTTP2Config {
   pub PingTimeout: time.Duration,
   pub WriteByteTimeout: time.Duration,
   pub PermitProhibitedCipherSuites: bool,
-  pub CountError: fn(string) -> (),
+  pub CountError: Option<fn(string) -> ()>,
 }
 
 /// A Handler responds to an HTTP request.
@@ -712,7 +712,7 @@ pub struct Request {
   pub ProtoMinor: int,
   pub Header: Header,
   pub Body: Option<io.ReadCloser>,
-  pub GetBody: fn() -> Result<io.ReadCloser, error>,
+  pub GetBody: Option<fn() -> Result<io.ReadCloser, error>>,
   pub ContentLength: int64,
   pub TransferEncoding: Slice<string>,
   pub Close: bool,
@@ -916,11 +916,11 @@ pub struct Server {
   pub WriteTimeout: time.Duration,
   pub IdleTimeout: time.Duration,
   pub MaxHeaderBytes: int,
-  pub TLSNextProto: Map<string, fn(Ref<Server>, Ref<tls.Conn>, Handler) -> ()>,
-  pub ConnState: fn(net.Conn, ConnState) -> (),
+  pub TLSNextProto: Map<string, Option<fn(Ref<Server>, Ref<tls.Conn>, Handler) -> ()>>,
+  pub ConnState: Option<fn(net.Conn, ConnState) -> ()>,
   pub ErrorLog: Option<Ref<log.Logger>>,
-  pub BaseContext: fn(net.Listener) -> context.Context,
-  pub ConnContext: fn(context.Context, net.Conn) -> context.Context,
+  pub BaseContext: Option<fn(net.Listener) -> context.Context>,
+  pub ConnContext: Option<fn(context.Context, net.Conn) -> context.Context>,
   pub HTTP2: Option<Ref<HTTP2Config>>,
   pub Protocols: Option<Ref<Protocols>>,
 }
@@ -960,12 +960,12 @@ pub struct Server {
 /// value is a zero-length slice, the request is treated as idempotent but the
 /// header is not sent on the wire.
 pub struct Transport {
-  pub Proxy: fn(Ref<Request>) -> Result<Ref<url.URL>, error>,
-  pub OnProxyConnectResponse: fn(context.Context, Ref<url.URL>, Ref<Request>, Ref<Response>) -> Result<(), error>,
-  pub DialContext: fn(context.Context, string, string) -> Result<net.Conn, error>,
-  pub Dial: fn(string, string) -> Result<net.Conn, error>,
-  pub DialTLSContext: fn(context.Context, string, string) -> Result<net.Conn, error>,
-  pub DialTLS: fn(string, string) -> Result<net.Conn, error>,
+  pub Proxy: Option<fn(Ref<Request>) -> Result<Ref<url.URL>, error>>,
+  pub OnProxyConnectResponse: Option<fn(context.Context, Ref<url.URL>, Ref<Request>, Ref<Response>) -> Result<(), error>>,
+  pub DialContext: Option<fn(context.Context, string, string) -> Result<net.Conn, error>>,
+  pub Dial: Option<fn(string, string) -> Result<net.Conn, error>>,
+  pub DialTLSContext: Option<fn(context.Context, string, string) -> Result<net.Conn, error>>,
+  pub DialTLS: Option<fn(string, string) -> Result<net.Conn, error>>,
   pub TLSClientConfig: Option<Ref<tls.Config>>,
   pub TLSHandshakeTimeout: time.Duration,
   pub DisableKeepAlives: bool,
@@ -976,9 +976,9 @@ pub struct Transport {
   pub IdleConnTimeout: time.Duration,
   pub ResponseHeaderTimeout: time.Duration,
   pub ExpectContinueTimeout: time.Duration,
-  pub TLSNextProto: Map<string, fn(string, Ref<tls.Conn>) -> RoundTripper>,
+  pub TLSNextProto: Map<string, Option<fn(string, Ref<tls.Conn>) -> RoundTripper>>,
   pub ProxyConnectHeader: Header,
-  pub GetProxyConnectHeader: fn(context.Context, Ref<url.URL>, string) -> Result<Header, error>,
+  pub GetProxyConnectHeader: Option<fn(context.Context, Ref<url.URL>, string) -> Result<Header, error>>,
   pub MaxResponseHeaderBytes: int64,
   pub WriteBufferSize: int,
   pub ReadBufferSize: int,

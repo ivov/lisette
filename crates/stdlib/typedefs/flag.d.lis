@@ -200,7 +200,7 @@ pub struct Flag {
 /// [Flag] names must be unique within a FlagSet. An attempt to define a flag whose
 /// name is already in use will cause a panic.
 pub struct FlagSet {
-  pub Usage: fn() -> (),
+  pub Usage: Option<fn() -> ()>,
 }
 
 /// Getter is an interface that allows the contents of a [Value] to be retrieved.

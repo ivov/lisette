@@ -67,7 +67,7 @@ pub fn TypeByExtension(ext: string) -> string
 
 /// A WordDecoder decodes MIME headers containing RFC 2047 encoded-words.
 pub struct WordDecoder {
-  pub CharsetReader: fn(string, io.Reader) -> Result<io.Reader, error>,
+  pub CharsetReader: Option<fn(string, io.Reader) -> Result<io.Reader, error>>,
 }
 
 /// ErrInvalidMediaParameter is returned by [ParseMediaType] if

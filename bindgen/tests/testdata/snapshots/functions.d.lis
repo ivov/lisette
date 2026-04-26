@@ -14,12 +14,12 @@ pub fn Printf(format: string, args: VarArgs<Unknown>)
 
 /// Function type with unsafe return in struct field
 pub struct BadFactory {
-  pub Create: fn() -> Unknown,
+  pub Create: Option<fn() -> Unknown>,
 }
 
 /// Function type with unsafe param in struct field - triggers signatureToLisette skip path
 pub struct BadHandler {
-  pub Process: fn(Unknown) -> int,
+  pub Process: Option<fn(Unknown) -> int>,
 }
 
 /// Function type returning skipped type with ok - tests analyzeReturns skip in Option path
@@ -30,19 +30,19 @@ pub type BadResultFn
 
 /// Function type with just error return - tests single error path
 pub struct ErrorOnly {
-  pub Try: fn() -> Result<(), error>,
+  pub Try: Option<fn() -> Result<(), error>>,
 }
 
 /// Function returning multiple values including error
 pub struct Fetcher {
-  pub Fetch: fn(string) -> Result<Slice<uint8>, error>,
+  pub Fetch: Option<fn(string) -> Result<Slice<uint8>, error>>,
 }
 
 pub type Handler = fn(int) -> Result<(), error>
 
 /// Variadic function type
 pub struct Logger {
-  pub Log: fn(string, VarArgs<Unknown>) -> (),
+  pub Log: Option<fn(string, VarArgs<Unknown>) -> ()>,
 }
 
 pub type MultiReturn = fn() -> Result<int, error>

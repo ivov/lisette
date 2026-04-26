@@ -85,6 +85,15 @@ type Handler struct {
 	GetCoords func() (x, y, z float64)              // Tuple pattern
 }
 
+// Named function-type alias used as a struct field — same nilability as
+// anonymous func fields
+type Validator func(input string) error
+
+type Form struct {
+	Validate Validator
+	Name     string
+}
+
 // Function that takes a callback
 func WithCallback(cb func(int) bool) {}
 

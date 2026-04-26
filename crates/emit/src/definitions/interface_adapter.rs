@@ -48,20 +48,15 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
-        if matches!(ty, Type::Function { .. }) {
-            return Some(ty.clone());
+        fn as_function(ty: &Type) -> Option<Type> {
+            if matches!(ty, Type::Function { .. }) {
+                return Some(ty.clone());
+            }
+            ty.get_underlying()
+                .filter(|u| matches!(u, Type::Function { .. }))
+                .cloned()
         }
-        if let Some(underlying) = ty.get_underlying()
-            && matches!(underlying, Type::Function { .. })
-        {
-            return Some(underlying.clone());
-        }
-        let peeled = self.peel_alias(ty);
-        if matches!(peeled, Type::Function { .. }) {
-            Some(peeled)
-        } else {
-            None
-        }
+        as_function(ty).or_else(|| as_function(&self.peel_alias(ty)))
     }
 
     /// Collect own + transitively inherited methods, tagged with the id

@@ -40,7 +40,7 @@ pub struct Cmd {
   pub Process: Option<Ref<os.Process>>,
   pub ProcessState: Option<Ref<os.ProcessState>>,
   pub Err: error,
-  pub Cancel: fn() -> Result<(), error>,
+  pub Cancel: Option<fn() -> Result<(), error>>,
   pub WaitDelay: time.Duration,
 }
 

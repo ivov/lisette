@@ -19,11 +19,11 @@ pub struct Position {
 
 /// A Scanner implements reading of Unicode characters and tokens from an [io.Reader].
 pub struct Scanner {
-  pub Error: fn(Ref<Scanner>, string) -> (),
+  pub Error: Option<fn(Ref<Scanner>, string) -> ()>,
   pub ErrorCount: int,
   pub Mode: uint,
   pub Whitespace: uint64,
-  pub IsIdentRune: fn(int32, int) -> bool,
+  pub IsIdentRune: Option<fn(int32, int) -> bool>,
   pub Position: Position,
 }
 

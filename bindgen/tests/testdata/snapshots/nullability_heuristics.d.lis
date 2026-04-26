@@ -11,6 +11,8 @@ pub fn Beta() -> Ref<Widget>
 
 pub fn Delta() -> Ref<Widget>
 
+pub fn DirectMakeKnob(name: string) -> Ref<Knob>
+
 pub fn Epsilon() -> Ref<Widget>
 
 pub fn Eta() -> Ref<Widget>
@@ -21,11 +23,15 @@ pub fn Gamma() -> Ref<Widget>
 
 pub fn GetDefault() -> Option<Ref<Builder>>
 
+pub fn IndirectMakeKnob(name: string) -> Ref<Knob>
+
 pub fn Iota() -> Ref<Widget>
 
 pub fn Kappa() -> Ref<Widget>
 
 pub fn Lambda() -> Ref<Widget>
+
+pub fn MakeKnob() -> Ref<Knob>
 
 pub fn Reset() -> Ref<Builder>
 
@@ -52,6 +58,8 @@ pub struct Gadget {
 }
 
 pub type ItemIterator
+
+pub type Knob
 
 pub struct Result {
   pub Value: string,

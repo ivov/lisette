@@ -171,12 +171,12 @@ pub type F
 /// it is part of the implementation of the "go test" command.
 pub struct InternalBenchmark {
   pub Name: string,
-  pub F: fn(Ref<B>) -> (),
+  pub F: Option<fn(Ref<B>) -> ()>,
 }
 
 pub struct InternalExample {
   pub Name: string,
-  pub F: fn() -> (),
+  pub F: Option<fn() -> ()>,
   pub Output: string,
   pub Unordered: bool,
 }
@@ -185,14 +185,14 @@ pub struct InternalExample {
 /// cross-package; it is part of the implementation of the "go test" command.
 pub struct InternalFuzzTarget {
   pub Name: string,
-  pub Fn: fn(Ref<F>) -> (),
+  pub Fn: Option<fn(Ref<F>) -> ()>,
 }
 
 /// InternalTest is an internal type but exported because it is cross-package;
 /// it is part of the implementation of the "go test" command.
 pub struct InternalTest {
   pub Name: string,
-  pub F: fn(Ref<T>) -> (),
+  pub F: Option<fn(Ref<T>) -> ()>,
 }
 
 /// M is a type passed to a TestMain function to run the actual tests.

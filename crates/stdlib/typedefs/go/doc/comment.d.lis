@@ -84,8 +84,8 @@ pub struct Paragraph {
 /// in order to customize the details of the parsing process.
 pub struct Parser {
   pub Words: Map<string, string>,
-  pub LookupPackage: fn(string) -> Option<string>,
-  pub LookupSym: fn(string, string) -> bool,
+  pub LookupPackage: Option<fn(string) -> Option<string>>,
+  pub LookupSym: Option<fn(string, string) -> bool>,
 }
 
 /// A Plain is a string rendered as plain text (not italicized).
@@ -97,8 +97,8 @@ pub struct Plain(string)
 /// in order to customize the details of the printing process.
 pub struct Printer {
   pub HeadingLevel: int,
-  pub HeadingID: fn(Ref<Heading>) -> string,
-  pub DocLinkURL: fn(Ref<DocLink>) -> string,
+  pub HeadingID: Option<fn(Ref<Heading>) -> string>,
+  pub DocLinkURL: Option<fn(Ref<DocLink>) -> string>,
   pub DocLinkBaseURL: string,
   pub TextPrefix: string,
   pub TextCodePrefix: string,

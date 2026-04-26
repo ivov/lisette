@@ -217,7 +217,7 @@ pub struct Decoder {
   pub Strict: bool,
   pub AutoClose: Slice<string>,
   pub Entity: Map<string, string>,
-  pub CharsetReader: fn(string, io.Reader) -> Result<io.Reader, error>,
+  pub CharsetReader: Option<fn(string, io.Reader) -> Result<io.Reader, error>>,
   pub DefaultSpace: string,
 }
 

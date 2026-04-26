@@ -546,8 +546,8 @@ pub struct Dialer {
   pub KeepAliveConfig: KeepAliveConfig,
   pub Resolver: Option<Ref<Resolver>>,
   pub Cancel: Receiver<()>,
-  pub Control: fn(string, string, syscall.RawConn) -> Result<(), error>,
-  pub ControlContext: fn(context.Context, string, string, syscall.RawConn) -> Result<(), error>,
+  pub Control: Option<fn(string, string, syscall.RawConn) -> Result<(), error>>,
+  pub ControlContext: Option<fn(context.Context, string, string, syscall.RawConn) -> Result<(), error>>,
 }
 
 /// An Error represents a network error.
@@ -633,7 +633,7 @@ pub struct KeepAliveConfig {
 
 /// ListenConfig contains options for listening to an address.
 pub struct ListenConfig {
-  pub Control: fn(string, string, syscall.RawConn) -> Result<(), error>,
+  pub Control: Option<fn(string, string, syscall.RawConn) -> Result<(), error>>,
   pub KeepAlive: time.Duration,
   pub KeepAliveConfig: KeepAliveConfig,
 }
@@ -694,7 +694,7 @@ pub struct ParseError {
 pub struct Resolver {
   pub PreferGo: bool,
   pub StrictErrors: bool,
-  pub Dial: fn(context.Context, string, string) -> Result<Conn, error>,
+  pub Dial: Option<fn(context.Context, string, string) -> Result<Conn, error>>,
 }
 
 /// An SRV represents a single DNS SRV record.

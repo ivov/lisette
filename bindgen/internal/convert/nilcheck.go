@@ -300,13 +300,13 @@ func (c *Converter) isProvenNonNilLocalVar(obj types.Object, fn *ast.FuncDecl) b
 						// Multi-value: x, y := foo() — can't prove individual positions
 						initNonNil = false
 					} else if i < len(s.Rhs) {
-						initNonNil = c.isProvenNonNilExprSimple(s.Rhs[i])
+						initNonNil = c.isProvenNonNilExpr(s.Rhs[i], fn)
 					}
 				} else {
 					if len(s.Lhs) > 1 && len(s.Rhs) == 1 {
 						allReassignNonNil = false
 					} else if i < len(s.Rhs) {
-						if !c.isProvenNonNilExprSimple(s.Rhs[i]) {
+						if !c.isProvenNonNilExpr(s.Rhs[i], fn) {
 							allReassignNonNil = false
 						}
 					} else {

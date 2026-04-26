@@ -36,13 +36,13 @@ pub struct Context {
   pub ToolTags: Slice<string>,
   pub ReleaseTags: Slice<string>,
   pub InstallSuffix: string,
-  pub JoinPath: fn(VarArgs<string>) -> string,
-  pub SplitPathList: fn(string) -> Slice<string>,
-  pub IsAbsPath: fn(string) -> bool,
-  pub IsDir: fn(string) -> bool,
-  pub HasSubdir: fn(string, string) -> Option<string>,
-  pub ReadDir: fn(string) -> Result<Slice<fs.FileInfo>, error>,
-  pub OpenFile: fn(string) -> Result<io.ReadCloser, error>,
+  pub JoinPath: Option<fn(VarArgs<string>) -> string>,
+  pub SplitPathList: Option<fn(string) -> Slice<string>>,
+  pub IsAbsPath: Option<fn(string) -> bool>,
+  pub IsDir: Option<fn(string) -> bool>,
+  pub HasSubdir: Option<fn(string, string) -> Option<string>>,
+  pub ReadDir: Option<fn(string) -> Result<Slice<fs.FileInfo>, error>>,
+  pub OpenFile: Option<fn(string) -> Result<io.ReadCloser, error>>,
 }
 
 /// A Directive is a Go directive comment (//go:zzz...) found in a source file.

@@ -100,14 +100,14 @@ pub struct ProxyRequest {
 /// The Rewrite function may be used to add hop-by-hop headers to the request,
 /// and the ModifyResponse function may be used to remove them from the response.
 pub struct ReverseProxy {
-  pub Rewrite: fn(Ref<ProxyRequest>) -> (),
-  pub Director: fn(Ref<http.Request>) -> (),
+  pub Rewrite: Option<fn(Ref<ProxyRequest>) -> ()>,
+  pub Director: Option<fn(Ref<http.Request>) -> ()>,
   pub Transport: Option<http.RoundTripper>,
   pub FlushInterval: time.Duration,
   pub ErrorLog: Option<Ref<log.Logger>>,
   pub BufferPool: Option<BufferPool>,
-  pub ModifyResponse: fn(Ref<http.Response>) -> Result<(), error>,
-  pub ErrorHandler: fn(http.ResponseWriter, Ref<http.Request>, error) -> (),
+  pub ModifyResponse: Option<fn(Ref<http.Response>) -> Result<(), error>>,
+  pub ErrorHandler: Option<fn(http.ResponseWriter, Ref<http.Request>, error) -> ()>,
 }
 
 /// ServerConn is an artifact of Go's early HTTP implementation.

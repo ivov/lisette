@@ -151,7 +151,7 @@ pub type Once
 /// 
 /// [the Go memory model]: https://go.dev/ref/mem
 pub struct Pool {
-  pub New: fn() -> Unknown,
+  pub New: Option<fn() -> Unknown>,
 }
 
 /// A RWMutex is a reader/writer mutual exclusion lock.

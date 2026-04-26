@@ -29,22 +29,22 @@ pub fn WithClientTrace(ctx: context.Context, trace: Ref<ClientTrace>) -> context
 /// 
 /// See https://blog.golang.org/http-tracing for more.
 pub struct ClientTrace {
-  pub GetConn: fn(string) -> (),
-  pub GotConn: fn(GotConnInfo) -> (),
-  pub PutIdleConn: fn(error) -> (),
-  pub GotFirstResponseByte: fn() -> (),
-  pub Got100Continue: fn() -> (),
-  pub Got1xxResponse: fn(int, textproto.MIMEHeader) -> Result<(), error>,
-  pub DNSStart: fn(DNSStartInfo) -> (),
-  pub DNSDone: fn(DNSDoneInfo) -> (),
-  pub ConnectStart: fn(string, string) -> (),
-  pub ConnectDone: fn(string, string, error) -> (),
-  pub TLSHandshakeStart: fn() -> (),
-  pub TLSHandshakeDone: fn(tls.ConnectionState, error) -> (),
-  pub WroteHeaderField: fn(string, Slice<string>) -> (),
-  pub WroteHeaders: fn() -> (),
-  pub Wait100Continue: fn() -> (),
-  pub WroteRequest: fn(WroteRequestInfo) -> (),
+  pub GetConn: Option<fn(string) -> ()>,
+  pub GotConn: Option<fn(GotConnInfo) -> ()>,
+  pub PutIdleConn: Option<fn(error) -> ()>,
+  pub GotFirstResponseByte: Option<fn() -> ()>,
+  pub Got100Continue: Option<fn() -> ()>,
+  pub Got1xxResponse: Option<fn(int, textproto.MIMEHeader) -> Result<(), error>>,
+  pub DNSStart: Option<fn(DNSStartInfo) -> ()>,
+  pub DNSDone: Option<fn(DNSDoneInfo) -> ()>,
+  pub ConnectStart: Option<fn(string, string) -> ()>,
+  pub ConnectDone: Option<fn(string, string, error) -> ()>,
+  pub TLSHandshakeStart: Option<fn() -> ()>,
+  pub TLSHandshakeDone: Option<fn(tls.ConnectionState, error) -> ()>,
+  pub WroteHeaderField: Option<fn(string, Slice<string>) -> ()>,
+  pub WroteHeaders: Option<fn() -> ()>,
+  pub Wait100Continue: Option<fn() -> ()>,
+  pub WroteRequest: Option<fn(WroteRequestInfo) -> ()>,
 }
 
 /// DNSDoneInfo contains information about the results of a DNS lookup.

@@ -52,7 +52,7 @@ pub struct Config {
   pub MaxCount: int,
   pub MaxCountScale: float64,
   pub Rand: Option<Ref<rand.Rand>>,
-  pub Values: fn(Slice<reflect.Value>, Ref<rand.Rand>) -> (),
+  pub Values: Option<fn(Slice<reflect.Value>, Ref<rand.Rand>) -> ()>,
 }
 
 /// A Generator can generate random values of its own type.

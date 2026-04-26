@@ -471,7 +471,7 @@ pub struct Config {
   pub GoVersion: string,
   pub IgnoreFuncBodies: bool,
   pub FakeImportC: bool,
-  pub Error: fn(error) -> (),
+  pub Error: Option<fn(error) -> ()>,
   pub Importer: Option<Importer>,
   pub Sizes: Option<Sizes>,
   pub DisableUnusedImportCheck: bool,

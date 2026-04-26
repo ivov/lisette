@@ -299,8 +299,19 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 	return TypeResult{LisetteType: typeName}
 }
 
+// wrapOption wraps a converted type in `Option<...>`, propagating SkipReason.
+func wrapOption(r TypeResult) TypeResult {
+	if r.SkipReason != nil {
+		return r
+	}
+	return TypeResult{LisetteType: fmt.Sprintf("Option<%s>", r.LisetteType)}
+}
+
 // toLisetteNilableRecursive converts a Go type to Lisette in a nilable context.
-// Pointers become Option<Ref<T>> and named non-error interfaces become Option<Name>.
+// Pointers become Option<Ref<T>>, named non-error interfaces become Option<Name>,
+// and function types (including named func aliases) become Option<fn(...)> /
+// Option<Name> — Go func values are nilable, and zero-value (nil) is meaningful
+// in struct literals.
 // The nilable flag propagates into collection element types (Slice, Map values).
 func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Converter) TypeResult {
 	switch t := t.(type) {
@@ -314,15 +325,17 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 		}
 		return TypeResult{LisetteType: fmt.Sprintf("Option<Ref<%s>>", elem.LisetteType)}
 
+	case *types.Signature:
+		return wrapOption(toLisetteRecursive(t, seen, conv))
+
 	case *types.Named:
-		if iface, ok := t.Underlying().(*types.Interface); ok {
-			if !iface.Empty() && !isErrorInterface(iface) {
-				result := namedToLisette(t, seen, conv)
-				if result.SkipReason != nil {
-					return result
-				}
-				return TypeResult{LisetteType: fmt.Sprintf("Option<%s>", result.LisetteType)}
+		switch u := t.Underlying().(type) {
+		case *types.Interface:
+			if !u.Empty() && !isErrorInterface(u) {
+				return wrapOption(namedToLisette(t, seen, conv))
 			}
+		case *types.Signature:
+			return wrapOption(namedToLisette(t, seen, conv))
 		}
 		return namedToLisette(t, seen, conv)
 
@@ -353,6 +366,9 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 			return val
 		}
 		return TypeResult{LisetteType: fmt.Sprintf("Map<%s, %s>", key.LisetteType, val.LisetteType)}
+
+	case *types.Alias:
+		return toLisetteNilableRecursive(t.Rhs(), seen, conv)
 
 	default:
 		return toLisetteRecursive(t, seen, conv)

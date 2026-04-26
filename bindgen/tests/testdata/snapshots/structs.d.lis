@@ -33,12 +33,17 @@ pub struct Extended {
   pub Extra: string,
 }
 
+pub struct Form {
+  pub Validate: Option<Validator>,
+  pub Name: string,
+}
+
 pub struct Handler {
-  pub OnSuccess: fn(string) -> (),
-  pub OnError: fn(error) -> (),
-  pub Transform: fn(Slice<uint8>) -> Result<Slice<uint8>, error>,
-  pub Lookup: fn(string) -> Option<int>,
-  pub GetCoords: fn() -> (float64, float64, float64),
+  pub OnSuccess: Option<fn(string) -> ()>,
+  pub OnError: Option<fn(error) -> ()>,
+  pub Transform: Option<fn(Slice<uint8>) -> Result<Slice<uint8>, error>>,
+  pub Lookup: Option<fn(string) -> Option<int>>,
+  pub GetCoords: Option<fn() -> (float64, float64, float64)>,
 }
 
 /// Mixed visibility (unexported fields ignored)
@@ -81,6 +86,10 @@ pub struct Tree {
   pub Right: Option<Ref<Tree>>,
   pub Data: string,
 }
+
+/// Named function-type alias used as a struct field — same nilability as
+/// anonymous func fields
+pub type Validator = fn(string) -> Result<(), error>
 
 /// Struct embedding interface
 pub struct Wrapper {
