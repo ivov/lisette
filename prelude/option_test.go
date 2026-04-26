@@ -1,8 +1,18 @@
 package lisette
 
 import (
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
+	"time"
+)
+
+var (
+	_ driver.Valuer = Option[int]{}
+	_ sql.Scanner   = (*Option[int])(nil)
 )
 
 func TestOptionSome(t *testing.T) {
@@ -185,5 +195,121 @@ func TestOptionZip(t *testing.T) {
 	zipped := OptionZip(a, b)
 	if zipped.IsNone() {
 		t.Fatal("expected Some")
+	}
+}
+
+func TestOptionValueSome(t *testing.T) {
+	cases := []struct {
+		name string
+		opt  driver.Valuer
+		want any
+	}{
+		{"int", MakeOptionSome(42), int64(42)},
+		{"string", MakeOptionSome("hello"), "hello"},
+		{"bool", MakeOptionSome(true), true},
+		{"float32", MakeOptionSome(float32(1.5)), float64(1.5)},
+		{"uint", MakeOptionSome(uint(7)), int64(7)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := c.opt.Value()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != c.want {
+				t.Fatalf("got %v (%T), want %v (%T)", got, got, c.want, c.want)
+			}
+		})
+	}
+}
+
+func TestOptionValueNone(t *testing.T) {
+	got, err := MakeOptionNone[int]().Value()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("None should Value to nil, got %v", got)
+	}
+}
+
+func TestOptionValueTime(t *testing.T) {
+	tm := time.Date(2026, 4, 26, 12, 0, 0, 0, time.UTC)
+	got, err := MakeOptionSome(tm).Value()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.(time.Time).Equal(tm) {
+		t.Fatalf("got %v, want %v", got, tm)
+	}
+}
+
+func TestOptionValueBytes(t *testing.T) {
+	got, err := MakeOptionSome([]byte{1, 2, 3}).Value()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got.([]byte)) != "\x01\x02\x03" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestOptionValueUnsupported(t *testing.T) {
+	type weird struct{ X int }
+	_, err := MakeOptionSome(weird{1}).Value()
+	if err == nil {
+		t.Fatal("expected error for unsupported type")
+	}
+	if !strings.Contains(err.Error(), "weird") {
+		t.Fatalf("error should mention type, got %v", err)
+	}
+}
+
+func TestOptionValueUint64HighBit(t *testing.T) {
+	_, err := MakeOptionSome(uint64(1) << 63).Value()
+	if err == nil {
+		t.Fatal("expected error for uint64 with high bit set")
+	}
+}
+
+func TestOptionScanNil(t *testing.T) {
+	opt := MakeOptionSome(99)
+	if err := opt.Scan(nil); err != nil {
+		t.Fatal(err)
+	}
+	if !opt.IsNone() {
+		t.Fatalf("expected None, got %v", opt)
+	}
+}
+
+func TestOptionScanInt(t *testing.T) {
+	var opt Option[int]
+	if err := opt.Scan(int64(42)); err != nil {
+		t.Fatal(err)
+	}
+	if !opt.IsSome() || opt.SomeVal != 42 {
+		t.Fatalf("got %v, want Some(42)", opt)
+	}
+}
+
+type optionScanFailer struct{}
+
+func (f *optionScanFailer) Scan(src any) error { return errors.New("scan boom") }
+
+func TestOptionScanCustomScannerError(t *testing.T) {
+	var opt Option[optionScanFailer]
+	if err := opt.Scan("x"); err == nil || !strings.Contains(err.Error(), "scan boom") {
+		t.Fatalf("expected scan boom error, got %v", err)
+	}
+}
+
+func TestOptionScanNilUnsupportedT(t *testing.T) {
+	type weird struct{ X int }
+	var opt Option[weird]
+	if err := opt.Scan(nil); err != nil {
+		t.Fatal(err)
+	}
+	if !opt.IsNone() {
+		t.Fatal("nil should scan to None")
 	}
 }

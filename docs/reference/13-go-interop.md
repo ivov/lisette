@@ -207,6 +207,19 @@ match flag.Lookup("verbose") {
 }
 ```
 
+`Option<T>` implements `database/sql.Scanner` and `database/sql/driver.Valuer`, so it can stand in for [`sql.Null[T]`](https://pkg.go.dev/database/sql#Null) when reading or writing nullable columns:
+
+```rust
+import "go:database/sql"
+
+let mut name: Option<string> = None
+let mut age: Option<int> = None
+db.QueryRow("SELECT name, age FROM users WHERE id = ?", id).Scan(&name, &age)?
+
+let new_age: Option<int> = Some(30)
+db.Exec("UPDATE users SET age = ? WHERE id = ?", new_age, id)?
+```
+
 Go functions that mutate a parameter declare it with `mut`
 
 ```rust

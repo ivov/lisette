@@ -1,6 +1,8 @@
 package lisette
 
 import (
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 )
@@ -110,6 +112,26 @@ func (opt *Option[T]) UnmarshalJSON(data []byte) error {
 	}
 	opt.Tag = OptionSome
 	return json.Unmarshal(data, &opt.SomeVal)
+}
+
+func (opt *Option[T]) Scan(src any) error {
+	var n sql.Null[T]
+	if err := n.Scan(src); err != nil {
+		return err
+	}
+	if n.Valid {
+		*opt = Option[T]{Tag: OptionSome, SomeVal: n.V}
+	} else {
+		*opt = Option[T]{Tag: OptionNone}
+	}
+	return nil
+}
+
+func (opt Option[T]) Value() (driver.Value, error) {
+	if opt.Tag == OptionNone {
+		return nil, nil
+	}
+	return sql.Null[T]{V: opt.SomeVal, Valid: true}.Value()
 }
 
 func OptionMap[T any, U any](opt Option[T], f func(T) U) Option[U] {
