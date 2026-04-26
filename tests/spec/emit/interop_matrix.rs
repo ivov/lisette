@@ -1139,3 +1139,71 @@ pub fn Peek() -> Option<Msg>
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/evts", typedef)]);
 }
+
+#[test]
+fn interop_struct_literal_option_to_pointer_named_scalar() {
+    let input = r#"
+import "go:example.com/cb"
+
+fn main() {
+  let _ = cb.Options {
+    Direction: Some(cb.DirectionDefault),
+  }
+}
+"#;
+    let typedef = r#"
+pub type Direction = int
+
+pub const DirectionDefault: Direction = 0
+
+pub struct Options {
+  pub Direction: Option<Direction>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cb", typedef)]);
+}
+
+#[test]
+fn interop_struct_literal_option_to_pointer_struct() {
+    let input = r#"
+import "go:example.com/cb"
+
+fn main() {
+  let inner = cb.Inner { Tag: "x" }
+  let _ = cb.Outer {
+    Slot: Some(&inner),
+  }
+}
+"#;
+    let typedef = r#"
+pub struct Inner {
+  pub Tag: string,
+}
+
+pub struct Outer {
+  pub Slot: Option<Ref<Inner>>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cb", typedef)]);
+}
+
+#[test]
+fn interop_struct_literal_option_none_to_pointer() {
+    let input = r#"
+import "go:example.com/cb"
+
+fn main() {
+  let _ = cb.Options {
+    Direction: None,
+  }
+}
+"#;
+    let typedef = r#"
+pub type Direction = int
+
+pub struct Options {
+  pub Direction: Option<Direction>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cb", typedef)]);
+}

@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:example.com/cb\"\n\nfn main() {\n  let inner = cb.Inner { Tag: \"x\" }\n  let _ = cb.Outer {\n    Slot: Some(&inner),\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/cb"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	inner := cb.Inner{Tag: "x"}
+	opt_1 := lisette.MakeOptionSome(&inner)
+	var unwrap_2 *cb.Inner
+	if opt_1.Tag == lisette.OptionSome {
+		unwrap_2 = opt_1.SomeVal
+	}
+	_ = cb.Outer{Slot: unwrap_2}
+}

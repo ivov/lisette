@@ -244,6 +244,14 @@ impl Emitter<'_> {
         ty.is_option() && self.is_nilable_go_type(&ty.ok_type())
     }
 
+    /// True when a Go-imported struct field declared `Option<T>` (T non-nilable)
+    /// receives a value of the same shape — the field is `*T` underneath, so
+    /// the value must be bridged with address-of.
+    pub(crate) fn needs_go_pointer_bridge(&self, value_ty: &Type, field_ty: Option<&Type>) -> bool {
+        let is_non_nullable_option = |t: &Type| t.is_option() && !self.is_nullable_option(t);
+        is_non_nullable_option(value_ty) && field_ty.is_some_and(is_non_nullable_option)
+    }
+
     /// Returns true if the Option wraps a Go interface type (not a pointer).
     /// These need `IsNilInterface` instead of `!= nil` to catch typed nils.
     pub(crate) fn is_interface_option(&self, ty: &Type) -> bool {

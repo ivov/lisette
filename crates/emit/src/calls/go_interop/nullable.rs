@@ -193,6 +193,32 @@ impl Emitter<'_> {
         unwrapped_var
     }
 
+    /// Bridge `Option<T>` to Go `*T` when T is not naturally nilable.
+    pub(crate) fn emit_option_unwrap_to_go_pointer(
+        &mut self,
+        output: &mut String,
+        option_value: &str,
+        option_ty: &Type,
+    ) -> String {
+        let inner_ty = option_ty.ok_type();
+        let go_inner_ty = self.go_type_as_string(&inner_ty);
+
+        let opt_var = self.fresh_var(Some("opt"));
+        self.declare(&opt_var);
+        let ptr_var = self.fresh_var(Some("ptr"));
+        self.declare(&ptr_var);
+
+        self.flags.needs_stdlib = true;
+
+        write_line!(output, "{} := {}", opt_var, option_value);
+        write_line!(output, "var {} *{}", ptr_var, go_inner_ty);
+        write_line!(output, "if {}.Tag == {} {{", opt_var, OPTION_SOME_TAG);
+        write_line!(output, "{} = &{}.SomeVal", ptr_var, opt_var);
+        output.push_str("}\n");
+
+        ptr_var
+    }
+
     pub(crate) fn emit_collection_nullable_wrap(
         &mut self,
         output: &mut String,

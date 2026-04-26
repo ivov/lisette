@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:example.com/cb\"\n\nfn main() {\n  let _ = cb.Options {\n    Direction: None,\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/cb"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	opt_1 := lisette.MakeOptionNone[cb.Direction]()
+	var ptr_2 *cb.Direction
+	if opt_1.Tag == lisette.OptionSome {
+		ptr_2 = &opt_1.SomeVal
+	}
+	_ = cb.Options{Direction: ptr_2}
+}

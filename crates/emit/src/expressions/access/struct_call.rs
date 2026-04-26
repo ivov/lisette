@@ -66,12 +66,18 @@ impl Emitter<'_> {
             let field_name = self.resolve_struct_call_field_name(&f.name, ty, &ctx);
             let mut value = emitted_values[fi].clone();
             value = self.wrap_recursive_enum_field(output, value, f, &ctx);
+            let value_ty = f.value.get_type();
+            let field_ty = self.lookup_struct_field_ty(ty, &f.name);
             if is_go_struct {
-                let coercion = Coercion::resolve_unwrap_go_nullable(self, &f.value.get_type());
-                value = coercion.apply(self, output, value);
+                if self.needs_go_pointer_bridge(&value_ty, field_ty.as_ref()) {
+                    value = self.emit_option_unwrap_to_go_pointer(output, &value, &value_ty);
+                } else {
+                    let coercion = Coercion::resolve_unwrap_go_nullable(self, &value_ty);
+                    value = coercion.apply(self, output, value);
+                }
             }
-            if let Some(field_ty) = self.lookup_struct_field_ty(ty, &f.name) {
-                let coercion = Coercion::resolve(self, &f.value.get_type(), &field_ty);
+            if let Some(field_ty) = field_ty.as_ref() {
+                let coercion = Coercion::resolve(self, &value_ty, field_ty);
                 value = coercion.apply(self, output, value);
             }
             field_names.push(field_name);
