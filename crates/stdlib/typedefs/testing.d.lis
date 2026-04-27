@@ -218,22 +218,22 @@ pub interface TB {
   fn Chdir(dir: string)
   fn Cleanup(arg0: fn() -> ())
   fn Context() -> context.Context
-  fn Error(args: Slice<Unknown>)
-  fn Errorf(format: string, args: Slice<Unknown>)
+  fn Error(args: VarArgs<Unknown>)
+  fn Errorf(format: string, args: VarArgs<Unknown>)
   fn Fail()
   fn FailNow()
   fn Failed() -> bool
-  fn Fatal(args: Slice<Unknown>)
-  fn Fatalf(format: string, args: Slice<Unknown>)
+  fn Fatal(args: VarArgs<Unknown>)
+  fn Fatalf(format: string, args: VarArgs<Unknown>)
   fn Helper()
-  fn Log(args: Slice<Unknown>)
-  fn Logf(format: string, args: Slice<Unknown>)
+  fn Log(args: VarArgs<Unknown>)
+  fn Logf(format: string, args: VarArgs<Unknown>)
   fn Name() -> string
   fn Output() -> io.Writer
   fn Setenv(key: string, value: string)
-  fn Skip(args: Slice<Unknown>)
+  fn Skip(args: VarArgs<Unknown>)
   fn SkipNow()
-  fn Skipf(format: string, args: Slice<Unknown>)
+  fn Skipf(format: string, args: VarArgs<Unknown>)
   fn Skipped() -> bool
   fn TempDir() -> string
 }

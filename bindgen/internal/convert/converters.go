@@ -1056,6 +1056,11 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 				return nil, false
 			}
 
+			typeStr := paramType.LisetteType
+			if signature.Variadic() && j == signature.Params().Len()-1 {
+				typeStr = sliceToVarArgs(typeStr)
+			}
+
 			name := param.Name()
 			if name == "" {
 				name = fmt.Sprintf("arg%d", j)
@@ -1064,8 +1069,8 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 
 			params = append(params, FunctionParameter{
 				Name:    name,
-				Type:    paramType.LisetteType,
-				Mutable: isMutableParam(mutParams, name, paramType.LisetteType, method.Name()),
+				Type:    typeStr,
+				Mutable: isMutableParam(mutParams, name, typeStr, method.Name()),
 			})
 		}
 

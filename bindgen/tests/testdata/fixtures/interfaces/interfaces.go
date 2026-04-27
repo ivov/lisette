@@ -66,5 +66,10 @@ type Cache interface {
 	Set(key string, value *Node)
 }
 
+// Variadic method on interface
+type Logger interface {
+	Logf(format string, args ...any)
+}
+
 // Function returning custom error
 func Validate(s string) error { return nil }

@@ -18,6 +18,11 @@ pub interface Cache {
 
 pub interface Empty {}
 
+/// Variadic method on interface
+pub interface Logger {
+  fn Logf(format: string, args: VarArgs<Unknown>)
+}
+
 /// Error interface - should be detected as error
 pub struct MyError(error)
 
