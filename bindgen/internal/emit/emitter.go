@@ -19,12 +19,13 @@ type stats struct {
 }
 
 type Emitter struct {
-	buf     strings.Builder
-	stats   stats
-	skipped int
-	methods map[string][]convert.ConvertResult // receiver type name -> methods
-	cfg     *config.Config
-	pkgPath string
+	buf        strings.Builder
+	stats      stats
+	skipped    int
+	methods    map[string][]convert.ConvertResult // receiver type name -> methods
+	cfg        *config.Config
+	pkgPath    string
+	pkgAliases map[string]string // package path -> local prefix used in references
 }
 
 func NewEmitter(cfg *config.Config, pkgPath string) *Emitter {
@@ -72,6 +73,8 @@ func (e *Emitter) EmitImports(externalPkgs convert.ExternalPkgs) {
 		return
 	}
 
+	e.pkgAliases = computePkgAliases(externalPkgs)
+
 	paths := make([]string, 0, len(externalPkgs))
 	for path := range externalPkgs {
 		paths = append(paths, path)
@@ -79,10 +82,61 @@ func (e *Emitter) EmitImports(externalPkgs convert.ExternalPkgs) {
 	slices.Sort(paths)
 
 	for _, path := range paths {
-		fmt.Fprintf(&e.buf, "import \"go:%s\"\n", path)
+		prefix := e.pkgAliases[path]
+		if prefix == externalPkgs[path] {
+			fmt.Fprintf(&e.buf, "import \"go:%s\"\n", path)
+		} else {
+			fmt.Fprintf(&e.buf, "import %s \"go:%s\"\n", prefix, path)
+		}
 	}
 
 	e.buf.WriteString("\n")
+}
+
+// computePkgAliases resolves each path to a local prefix. On a Go-declared
+// name collision (e.g. `html/template` vs `text/template`) the lexicographically
+// first path keeps the bare name; later paths get a `<parent>_<base>` alias.
+func computePkgAliases(externalPkgs convert.ExternalPkgs) map[string]string {
+	byName := make(map[string][]string)
+	for path, name := range externalPkgs {
+		byName[name] = append(byName[name], path)
+	}
+
+	aliases := make(map[string]string, len(externalPkgs))
+	for name, paths := range byName {
+		if len(paths) == 1 {
+			aliases[paths[0]] = name
+			continue
+		}
+		slices.Sort(paths)
+		aliases[paths[0]] = name
+		for _, path := range paths[1:] {
+			aliases[path] = aliasForPath(path)
+		}
+	}
+	return aliases
+}
+
+func aliasForPath(path string) string {
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 {
+		return sanitizeIdent(path)
+	}
+	return sanitizeIdent(parts[len(parts)-2]) + "_" + sanitizeIdent(parts[len(parts)-1])
+}
+
+func sanitizeIdent(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+	}
+	return b.String()
 }
 
 func (e *Emitter) EmitExport(result convert.ConvertResult) {
@@ -187,7 +241,15 @@ func (e *Emitter) Summary() string {
 }
 
 func (e *Emitter) String() string {
-	return strings.TrimRight(e.buf.String(), "\n") + "\n"
+	raw := e.buf.String()
+	if len(e.pkgAliases) > 0 {
+		pairs := make([]string, 0, len(e.pkgAliases)*2)
+		for path, prefix := range e.pkgAliases {
+			pairs = append(pairs, convert.PkgRefStart+path+convert.PkgRefEnd, prefix)
+		}
+		raw = strings.NewReplacer(pairs...).Replace(raw)
+	}
+	return strings.TrimRight(raw, "\n") + "\n"
 }
 
 func (e *Emitter) emitFunction(result convert.ConvertResult) {

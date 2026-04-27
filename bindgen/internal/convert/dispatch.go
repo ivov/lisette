@@ -70,6 +70,18 @@ type EnumVariant struct {
 // ExternalPkgs maps package paths to package names (e.g., "time" -> "time").
 type ExternalPkgs map[string]string
 
+// ASCII SOH/STX, used to wrap a package path in reference strings so the
+// emitter can substitute it with the resolved local prefix after collision
+// detection. Neither byte can appear in identifiers or doc text.
+const (
+	PkgRefStart = "\x01"
+	PkgRefEnd   = "\x02"
+)
+
+func PkgRef(path string) string {
+	return PkgRefStart + path + PkgRefEnd
+}
+
 type Converter struct {
 	currentPkgPath       string
 	externalPkgs         ExternalPkgs

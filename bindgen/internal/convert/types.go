@@ -262,7 +262,8 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 			}}
 		}
 		isExternal = true
-		pkgPrefix = pkg.Name()
+		// Sentinel-wrapped path; the emitter resolves it after collision detection.
+		pkgPrefix = PkgRef(pkg.Path())
 		conv.trackExternalPkg(pkg.Path(), pkg.Name())
 	}
 
