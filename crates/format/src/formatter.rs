@@ -5,7 +5,7 @@ use syntax::ast::{
     Annotation, Attribute, AttributeArg, BinaryOperator, Binding, EnumVariant, Expression,
     FormatStringPart, Generic, ImportAlias, Literal, MatchArm, ParentInterface, Pattern,
     RestPattern, SelectArm, SelectArmPattern, Span, StructFieldAssignment, StructFieldDefinition,
-    StructFieldPattern, StructKind, UnaryOperator, VariantFields, Visibility,
+    StructFieldPattern, StructKind, StructSpread, UnaryOperator, VariantFields, Visibility,
 };
 
 pub struct Formatter<'a> {
@@ -1073,7 +1073,7 @@ impl<'a> Formatter<'a> {
         &mut self,
         name: &'a str,
         fields: &'a [StructFieldAssignment],
-        spread: &'a Option<Expression>,
+        spread: &'a StructSpread,
     ) -> Document<'a> {
         let mut field_docs: Vec<_> = fields
             .iter()
@@ -1089,11 +1089,18 @@ impl<'a> Formatter<'a> {
             })
             .collect();
 
-        if let Some(spread_expression) = spread {
-            let start = spread_expression.get_span().byte_offset;
-            let comments = self.comments.take_comments_before(start);
-            let spread_doc = Document::str("..").append(self.expression(spread_expression));
-            field_docs.push(prepend_comments(spread_doc, comments));
+        match spread {
+            StructSpread::None => {}
+            StructSpread::From(spread_expression) => {
+                let start = spread_expression.get_span().byte_offset;
+                let comments = self.comments.take_comments_before(start);
+                let spread_doc = Document::str("..").append(self.expression(spread_expression));
+                field_docs.push(prepend_comments(spread_doc, comments));
+            }
+            StructSpread::ZeroFill { span } => {
+                let comments = self.comments.take_comments_before(span.byte_offset);
+                field_docs.push(prepend_comments(Document::str(".."), comments));
+            }
         }
 
         if field_docs.is_empty() {

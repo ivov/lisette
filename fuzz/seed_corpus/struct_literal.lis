@@ -16,3 +16,15 @@ fn test4(user: User) {
     payload: Payload { user, status: "active" },
   };
 }
+
+fn test5() {
+  let p = Point { x: 1, .. };
+}
+
+fn test6() {
+  let p = Point { .. };
+}
+
+fn test7() {
+  let p = Point { x: 1, .., };
+}

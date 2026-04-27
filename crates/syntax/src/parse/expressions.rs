@@ -3,7 +3,8 @@ use ecow::EcoString;
 use super::{MAX_TUPLE_ARITY, ParseError, Parser};
 use crate::ast::{
     Annotation, Attribute, BinaryOperator, Binding, Expression, FormatStringPart, ImportAlias,
-    Literal, SelectArm, SelectArmPattern, Span, StructFieldAssignment, UnaryOperator, Visibility,
+    Literal, SelectArm, SelectArmPattern, Span, StructFieldAssignment, StructSpread, UnaryOperator,
+    Visibility,
 };
 use crate::lex::TokenKind::{self, *};
 use crate::types::Type;
@@ -272,7 +273,7 @@ impl<'source> Parser<'source> {
         self.ensure(LeftCurlyBrace);
 
         let mut field_assignments = vec![];
-        let mut spread = None;
+        let mut spread = StructSpread::None;
         let mut seen_fields: Vec<(EcoString, Span)> = vec![];
 
         while self.is_not(RightCurlyBrace) {
@@ -285,15 +286,14 @@ impl<'source> Parser<'source> {
                     break;
                 }
 
+                let dotdot_token = self.current_token();
+                let dotdot_span = self.span_from_token(dotdot_token);
                 self.ensure(DotDot);
 
                 if self.is(RightCurlyBrace) || self.is(Comma) {
-                    self.track_error(
-                        "not allowed",
-                        "Use `..struct` to spread the fields of one struct into another",
-                    );
+                    spread = StructSpread::ZeroFill { span: dotdot_span };
                 } else {
-                    spread = Some(self.parse_expression());
+                    spread = StructSpread::From(Box::new(self.parse_expression()));
                 }
 
                 self.expect_comma_or(RightCurlyBrace);
@@ -345,7 +345,7 @@ impl<'source> Parser<'source> {
             ty: Type::uninferred(),
             name,
             field_assignments,
-            spread: spread.into(),
+            spread,
             span: self.span_from_offset(start_offset),
         }
     }

@@ -134,7 +134,7 @@ where
             for assignment in field_assignments {
                 visit_node(&assignment.value, expression_visitor, pattern_visitor);
             }
-            if let Some(spread_expression) = spread.as_ref() {
+            if let Some(spread_expression) = spread.as_expression() {
                 visit_node(spread_expression, expression_visitor, pattern_visitor);
             }
         }

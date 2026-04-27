@@ -194,6 +194,70 @@ fn test(p: Point) {
 }
 
 #[test]
+fn struct_zero_fill_lisette_primitives() {
+    let input = r#"
+struct Conf { name: string, count: int, on: bool }
+
+fn test() -> Conf {
+  Conf { name: "x", .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_zero_fill_lisette_option_emits_none() {
+    let input = r#"
+struct Conf { name: string, opt: Option<int> }
+
+fn test() -> Conf {
+  Conf { name: "x", .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_zero_fill_nested_user_struct_recurses() {
+    let input = r#"
+struct Inner { opt: Option<int>, items: Slice<int> }
+struct Outer { inner: Inner }
+
+fn test() -> Outer {
+  Outer { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_zero_fill_lisette_slice_and_map_non_nil() {
+    let input = r#"
+struct Conf { items: Slice<int>, lookup: Map<string, int> }
+
+fn test() -> Conf {
+  Conf { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_zero_fill_enum_struct_variant() {
+    let input = r#"
+enum Action {
+  Move { x: int, y: int, dist: int },
+  Stop,
+}
+
+fn test() -> Action {
+  Action.Move { x: 5, .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn deref_field_access() {
     let input = r#"
 struct Counter { value: int }

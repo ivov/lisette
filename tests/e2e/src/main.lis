@@ -2078,7 +2078,7 @@ fn test_multi_type_params_swap() -> int {
 struct MutPoint { x: int, y: int }
 
 fn test_field_assignment() -> int {
-  let mut p = MutPoint { x: 0, y: 0 }
+  let mut p = MutPoint { .. }
   p.x = 10
   p.y = 20
   p.x + p.y

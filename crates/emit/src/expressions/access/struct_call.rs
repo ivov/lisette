@@ -1,7 +1,8 @@
 use rustc_hash::FxHashSet as HashSet;
 
-use syntax::ast::{Expression, StructFieldAssignment};
-use syntax::types::Type;
+use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
+use syntax::program::Definition;
+use syntax::types::{CompoundKind, SimpleKind, Type};
 
 use crate::Emitter;
 use crate::definitions::enum_layout;
@@ -42,7 +43,7 @@ impl Emitter<'_> {
         output: &mut String,
         name: &str,
         field_assignments: &[StructFieldAssignment],
-        spread: &Option<Expression>,
+        spread: &StructSpread,
         ty: &Type,
     ) -> String {
         let ctx = self.analyze_struct_call(name, ty);
@@ -91,25 +92,182 @@ impl Emitter<'_> {
             field_pairs.insert(0, tag);
         }
 
-        if let Some(base) = spread {
-            // Never-typed spread base diverges — emit as statement and
-            // return a zero-value struct literal (dead code follows).
-            if base.get_type().is_never() {
-                self.emit_statement(output, base);
-                return format!("{}{{}}", ctx.go_type);
+        match spread {
+            StructSpread::From(base) => {
+                // Never-typed spread base diverges — emit as statement and
+                // return a zero-value struct literal (dead code follows).
+                if base.get_type().is_never() {
+                    self.emit_statement(output, base);
+                    return format!("{}{{}}", ctx.go_type);
+                }
+                let mut field_side_effects: Vec<bool> = Vec::new();
+                if ctx.enum_ctx.is_some() {
+                    field_side_effects.push(false); // tag field is a constant
+                }
+                field_side_effects.extend(
+                    field_assignments
+                        .iter()
+                        .map(|f| is_order_sensitive(&f.value)),
+                );
+                self.emit_struct_update(output, base, &field_pairs, &field_side_effects)
             }
-            let mut field_side_effects: Vec<bool> = Vec::new();
-            if ctx.enum_ctx.is_some() {
-                field_side_effects.push(false); // tag field is a constant
+            StructSpread::ZeroFill { .. } if !is_go_struct => {
+                let assigned: HashSet<&str> =
+                    field_assignments.iter().map(|f| f.name.as_str()).collect();
+                let unspecified =
+                    self.lookup_unspecified_fields(ty, name, ctx.enum_ctx.as_ref(), &assigned);
+                if let Some(unspecified) = unspecified {
+                    for (field_name, field_ty) in unspecified {
+                        let go_field_name =
+                            self.resolve_struct_call_field_name(&field_name, ty, &ctx);
+                        let zero = self.lisette_zero(&field_ty);
+                        field_pairs.push((go_field_name, zero));
+                    }
+                }
+                self.emit_struct_literal(&ctx.go_type, &field_pairs)
             }
-            field_side_effects.extend(
-                field_assignments
-                    .iter()
-                    .map(|f| is_order_sensitive(&f.value)),
-            );
-            self.emit_struct_update(output, base, &field_pairs, &field_side_effects)
+            StructSpread::ZeroFill { .. } | StructSpread::None => {
+                self.emit_struct_literal(&ctx.go_type, &field_pairs)
+            }
+        }
+    }
+
+    /// Look up unspecified fields of a Lisette-defined struct or enum struct variant,
+    /// with type substitution applied so generic-typed fields resolve to concrete types.
+    /// `name` is needed only for the variant case (to pick the variant within the enum).
+    fn lookup_unspecified_fields(
+        &self,
+        ty: &Type,
+        name: &str,
+        enum_ctx: Option<&EnumCallContext>,
+        assigned: &HashSet<&str>,
+    ) -> Option<Vec<(ecow::EcoString, Type)>> {
+        let params = match ty.strip_refs() {
+            Type::Nominal { params, .. } => params,
+            _ => Vec::new(),
+        };
+
+        if let Some(enum_ctx) = enum_ctx {
+            let Some(Definition::Enum {
+                variants, generics, ..
+            }) = self.ctx.definitions.get(enum_ctx.enum_id.as_str())
+            else {
+                return None;
+            };
+            let variant_name = name.rsplit('.').next()?;
+            let variant = variants.iter().find(|v| v.name == variant_name)?;
+            let map = generics_substitution(generics.iter().map(|g| g.name.clone()), &params);
+            return Some(unspecified_pairs(
+                variant.fields.iter().map(|f| (&f.name, &f.ty)),
+                assigned,
+                &map,
+            ));
+        }
+
+        let Type::Nominal { id, .. } = ty.strip_refs() else {
+            return None;
+        };
+        let Some(Definition::Struct {
+            fields, ty: def_ty, ..
+        }) = self.ctx.definitions.get(id.as_str())
+        else {
+            return None;
+        };
+        let map = forall_substitution(def_ty, &params);
+        Some(unspecified_pairs(
+            fields.iter().map(|f| (&f.name, &f.ty)),
+            assigned,
+            &map,
+        ))
+    }
+    fn go_imported_zero(&mut self, ty: &Type, id: &str) -> String {
+        if self.as_interface(ty).is_some() || self.resolve_to_function_type(ty).is_some() {
+            return "nil".to_string();
+        }
+        let go_ty = self.go_type_as_string(ty);
+        let is_struct_like = matches!(
+            self.ctx.definitions.get(id),
+            Some(Definition::Struct { .. })
+        ) || matches!(
+            self.ctx.definitions.get(id),
+            Some(Definition::TypeAlias { annotation, .. }) if annotation.is_opaque()
+        );
+        if is_struct_like {
+            format!("{}{{}}", go_ty)
         } else {
-            self.emit_struct_literal(&ctx.go_type, &field_pairs)
+            format!("*new({})", go_ty)
+        }
+    }
+
+    pub(crate) fn lisette_zero(&mut self, ty: &Type) -> String {
+        match ty {
+            Type::Simple(kind) => match kind {
+                SimpleKind::Bool => "false".to_string(),
+                SimpleKind::String => "\"\"".to_string(),
+                SimpleKind::Unit => "struct{}{}".to_string(),
+                _ => "0".to_string(),
+            },
+            Type::Compound { kind, args } => match kind {
+                CompoundKind::Slice => {
+                    let inner = args
+                        .first()
+                        .map(|a| self.go_type_as_string(a))
+                        .unwrap_or_else(|| "any".to_string());
+                    format!("[]{}{{}}", inner)
+                }
+                CompoundKind::Map => {
+                    let key = args
+                        .first()
+                        .map(|a| self.go_type_as_string(a))
+                        .unwrap_or_else(|| "any".to_string());
+                    let val = args
+                        .get(1)
+                        .map(|a| self.go_type_as_string(a))
+                        .unwrap_or_else(|| "any".to_string());
+                    format!("map[{}]{}{{}}", key, val)
+                }
+                _ => format!("{}{{}}", self.go_type_as_string(ty)),
+            },
+            Type::Nominal { id, params, .. } => {
+                if id.as_str() == "prelude.Option" {
+                    let inner = params
+                        .first()
+                        .map(|a| self.go_type_as_string(a))
+                        .unwrap_or_else(|| "any".to_string());
+                    self.flags.needs_stdlib = true;
+                    return format!("{}.MakeOptionNone[{}]()", go_name::GO_STDLIB_PKG, inner);
+                }
+                if go_name::is_go_import(id.as_str()) {
+                    return self.go_imported_zero(ty, id.as_str());
+                }
+                if let Some(fields) =
+                    self.lookup_unspecified_fields(ty, "", None, &HashSet::default())
+                {
+                    let go_ty = self.go_type_as_string(ty);
+                    let pairs: Vec<(String, String)> = fields
+                        .into_iter()
+                        .map(|(name, field_ty)| {
+                            let go_name = if self.field_is_public(ty, &name) {
+                                go_name::make_exported(&name)
+                            } else {
+                                go_name::escape_keyword(&name).into_owned()
+                            };
+                            (go_name, self.lisette_zero(&field_ty))
+                        })
+                        .collect();
+                    return self.emit_struct_literal(&go_ty, &pairs);
+                }
+                if let Some(underlying) = ty.get_underlying() {
+                    return self.lisette_zero(underlying);
+                }
+                format!("{}{{}}", self.go_type_as_string(ty))
+            }
+            Type::Tuple(elements) => {
+                let go_ty = self.go_type_as_string(ty);
+                let parts: Vec<String> = elements.iter().map(|e| self.lisette_zero(e)).collect();
+                format!("{}{{{}}}", go_ty, parts.join(", "))
+            }
+            _ => format!("{}{{}}", self.go_type_as_string(ty)),
         }
     }
 
@@ -328,4 +486,45 @@ impl Emitter<'_> {
 
         tmp
     }
+}
+
+fn forall_substitution(def_ty: &Type, params: &[Type]) -> syntax::types::SubstitutionMap {
+    if let Type::Forall { vars, .. } = def_ty
+        && !vars.is_empty()
+        && vars.len() == params.len()
+    {
+        generics_substitution(vars.iter().cloned(), params)
+    } else {
+        syntax::types::SubstitutionMap::default()
+    }
+}
+
+fn generics_substitution(
+    vars: impl Iterator<Item = ecow::EcoString>,
+    params: &[Type],
+) -> syntax::types::SubstitutionMap {
+    let mut map = syntax::types::SubstitutionMap::default();
+    for (var, param) in vars.zip(params.iter()) {
+        map.insert(var, param.clone());
+    }
+    map
+}
+
+fn apply_substitution(ty: &Type, map: &syntax::types::SubstitutionMap) -> Type {
+    if map.is_empty() {
+        ty.clone()
+    } else {
+        syntax::types::substitute(ty, map)
+    }
+}
+
+fn unspecified_pairs<'a>(
+    fields: impl Iterator<Item = (&'a ecow::EcoString, &'a Type)>,
+    assigned: &HashSet<&str>,
+    map: &syntax::types::SubstitutionMap,
+) -> Vec<(ecow::EcoString, Type)> {
+    fields
+        .filter(|(name, _)| !assigned.contains(name.as_str()))
+        .map(|(name, ty)| (name.clone(), apply_substitution(ty, map)))
+        .collect()
 }

@@ -41,6 +41,13 @@ let p1 = Point { x: 10, y: 20 }
 let p2 = Point { x: 50, ..p1 }   // x: 50, y: 20
 ```
 
+The zero-fill spread `..` fills any unspecified fields with their zero value:
+
+```rust
+let p = Point { x: 10, .. }   // y: 0
+let q = Point { .. }          // x: 0, y: 0
+```
+
 ### Tuple structs
 
 A tuple struct has positional fields instead of named fields.

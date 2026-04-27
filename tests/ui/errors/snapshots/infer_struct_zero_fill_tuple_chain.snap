@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Field has no zero value
+   ╭─[test.lis:5:20]
+ 4 │ fn test() {
+ 5 │   let _o = Outer { .. };
+   ·                    ─┬
+   ·                     ╰── no zero available
+ 6 │ }
+   ╰────
+  help: Field `t.1` of type `Channel<int>` has no zero value. Provide an explicit value for `t`, or wrap the field type in `Option<T>` · code: [infer.field_no_zero]

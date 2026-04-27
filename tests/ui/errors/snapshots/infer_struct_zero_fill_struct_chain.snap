@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Field has no zero value
+   ╭─[test.lis:6:20]
+ 5 │ fn test() {
+ 6 │   let _o = Outer { .. };
+   ·                    ─┬
+   ·                     ╰── no zero available
+ 7 │ }
+   ╰────
+  help: Field `inner.bad` of type `Channel<int>` has no zero value. Provide an explicit value for `inner`, or wrap the field type in `Option<T>` · code: [infer.field_no_zero]

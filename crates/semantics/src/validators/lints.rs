@@ -65,6 +65,7 @@ pub enum Lint {
     UnreachableIfLetElse,
     TryBlockNoSuccessPath,
     ExcessParensOnCondition,
+    ReplaceableWithZeroFill,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -92,12 +93,22 @@ pub fn lint_all_modules(
         if module.is_internal() {
             continue;
         }
-        lint_module(module, go_package_names, facts, &config, sink, unused);
+        lint_module(
+            module,
+            store,
+            go_package_names,
+            facts,
+            &config,
+            sink,
+            unused,
+        );
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn lint_module(
     module: &Module,
+    store: &crate::store::Store,
     go_package_names: &HashMap<String, String>,
     facts: &Facts,
     config: &LintConfig,
@@ -116,6 +127,18 @@ fn lint_module(
         };
         diagnostics.extend(AstLintGroup.check(&ctx));
     }
+
+    let zero_fill_sink = diagnostics::LocalSink::new();
+    for file in module.files.values() {
+        super::replaceable_with_zero_fill::run(
+            &file.items,
+            &file.source,
+            &module.id,
+            store,
+            &zero_fill_sink,
+        );
+    }
+    diagnostics.extend(zero_fill_sink.take());
 
     let ref_result =
         super::ref_lints::run_ref_lints(module, &module.files, go_package_names, config, facts);

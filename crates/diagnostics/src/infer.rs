@@ -626,6 +626,64 @@ pub fn private_field_in_spread(
         ))
 }
 
+pub fn private_field_in_zero_fill(
+    field_name: &str,
+    struct_name: &str,
+    owning_module: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Private field")
+        .with_resolve_code("private_field_zero_fill")
+        .with_span_label(&span, "private")
+        .with_help(format!(
+            "`{}` of `{}` cannot be zero-filled because `{}` is private to module `{}`. \
+             Provide an explicit value, or have `{}` expose `{}` as `pub` or offer a \
+             constructor.",
+            field_name, struct_name, field_name, owning_module, owning_module, field_name
+        ))
+}
+
+pub fn field_no_zero(
+    struct_name: &str,
+    field_name: &str,
+    field_ty: &Type,
+    chain: &[&str],
+    private: Option<(&str, &str, &str)>,
+    span: Span,
+) -> LisetteDiagnostic {
+    let main = match private {
+        Some((priv_struct, priv_field, priv_module)) => format!(
+            "`{}` of `{}` cannot be zero-filled because `{}.{}` is private to module `{}`. \
+             Provide an explicit value for `{}`, or have `{}` expose `{}` as `pub`.",
+            field_name,
+            struct_name,
+            priv_struct,
+            priv_field,
+            priv_module,
+            field_name,
+            priv_module,
+            priv_field
+        ),
+        None if chain.is_empty() => format!(
+            "Field `{}` of type `{}` has no zero value. Provide an explicit value, \
+             or wrap the field type in `Option<T>`.",
+            field_name, field_ty
+        ),
+        None => format!(
+            "Field `{}.{}` of type `{}` has no zero value. Provide an explicit value for \
+             `{}`, or wrap the field type in `Option<T>`.",
+            field_name,
+            chain.join("."),
+            field_ty,
+            field_name
+        ),
+    };
+    LisetteDiagnostic::error("Field has no zero value")
+        .with_infer_code("field_no_zero")
+        .with_span_label(&span, "no zero available")
+        .with_help(main)
+}
+
 pub fn member_not_found(
     ty: &Type,
     field: &str,

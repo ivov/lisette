@@ -19,6 +19,7 @@ channel_iteration                           # hang/block: for..in on channel wit
 channel_split_destructure                   # hang/block: receive on channel with no sender
 defer_channel_send                          # hang/block: deferred send blocks at function exit
 go_opaque_type_struct_literal               # hang/block: sync.WaitGroup.Wait with no matching Done
+go_opaque_type_zero_fill_spread              # hang/block: sync.WaitGroup.Wait with no matching Done
 nested_block_continue_in_if_branch          # hang/block: continue in always-true branch loops forever
 nested_block_continue_in_let                # hang/block: continue in let-bound block loops forever
 select_match_receive_unused_binding         # hang/block: select on channel with no sender

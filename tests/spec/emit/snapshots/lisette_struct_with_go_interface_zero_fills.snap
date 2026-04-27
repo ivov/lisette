@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"go:context\"\n\nstruct Wrapper { ctx: context.Context }\n\nfn test() -> Wrapper {\n  Wrapper { .. }\n}\n"
+---
+package main
+
+import (
+	"context"
+	"fmt"
+)
+
+type Wrapper struct {
+	ctx context.Context
+}
+
+func (w Wrapper) String() string {
+	return fmt.Sprintf("Wrapper { ctx: %v }", w.ctx)
+}
+
+func test() Wrapper {
+	return Wrapper{ctx: nil}
+}

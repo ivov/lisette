@@ -81,7 +81,7 @@ impl TaskState<'_> {
             } => {
                 let mut values: Vec<&Expression> =
                     field_assignments.iter().map(|fa| &*fa.value).collect();
-                if let Some(s) = spread.as_ref() {
+                if let Some(s) = spread.as_expression() {
                     values.push(s);
                 }
                 self.check_sibling_ref_aliasing_refs(&values);

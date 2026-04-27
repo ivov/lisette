@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Field has no zero value
+    ╭─[main.lis:9:19]
+  8 │ fn main() {
+  9 │   let o = Outer { .. };
+    ·                   ─┬
+    ·                    ╰── no zero available
+ 10 │   let _ = o;
+    ╰────
+  help: `inner` of `Outer` cannot be zero-filled because `Inner.b` is private to module `other`. Provide an explicit value for `inner`, or have `other` expose `b` as `pub` · code: [infer.field_no_zero]

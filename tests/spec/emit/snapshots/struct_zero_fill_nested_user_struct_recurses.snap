@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Inner { opt: Option<int>, items: Slice<int> }\nstruct Outer { inner: Inner }\n\nfn test() -> Outer {\n  Outer { .. }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Inner struct {
+	opt   lisette.Option[int]
+	items []int
+}
+
+func (i Inner) String() string {
+	return fmt.Sprintf("Inner { opt: %v, items: %v }", i.opt, i.items)
+}
+
+type Outer struct {
+	inner Inner
+}
+
+func (o Outer) String() string {
+	return fmt.Sprintf("Outer { inner: %v }", o.inner)
+}
+
+func test() Outer {
+	return Outer{inner: Inner{
+		opt:   lisette.MakeOptionNone[int](),
+		items: []int{},
+	}}
+}

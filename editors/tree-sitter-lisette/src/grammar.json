@@ -3416,6 +3416,10 @@
                         {
                           "type": "SYMBOL",
                           "name": "base_field_initializer"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "zero_fill_initializer"
                         }
                       ]
                     },
@@ -3442,6 +3446,10 @@
                               {
                                 "type": "SYMBOL",
                                 "name": "base_field_initializer"
+                              },
+                              {
+                                "type": "SYMBOL",
+                                "name": "zero_fill_initializer"
                               }
                             ]
                           }
@@ -3525,6 +3533,14 @@
           "name": "_expression"
         }
       ]
+    },
+    "zero_fill_initializer": {
+      "type": "PREC",
+      "value": 1,
+      "content": {
+        "type": "STRING",
+        "value": ".."
+      }
     },
     "if_expression": {
       "type": "PREC_RIGHT",

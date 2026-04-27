@@ -1,8 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{
-    Annotation, Expression, ImportAlias, Pattern, SelectArm, SelectArmPattern,
-    StructFieldAssignment,
+    Annotation, Expression, ImportAlias, Pattern, SelectArm, SelectArmPattern, StructSpread,
 };
 use syntax::program::File;
 use syntax::program::{Definition, Module};
@@ -83,21 +82,8 @@ fn walk_expression(
             );
         }
 
-        Expression::StructCall {
-            name,
-            field_assignments,
-            spread,
-            ..
-        } => {
-            walk_struct_call(
-                module,
-                name,
-                field_assignments,
-                spread,
-                graph,
-                alias_map,
-                ctx,
-            );
+        Expression::StructCall { .. } => {
+            walk_struct_call(module, expression, graph, alias_map, ctx);
         }
 
         Expression::DotAccess {
@@ -402,13 +388,21 @@ fn walk_call(
 
 fn walk_struct_call(
     module: &Module,
-    name: &str,
-    field_assignments: &[StructFieldAssignment],
-    spread: &Option<Expression>,
+    expression: &Expression,
     graph: &mut ReferenceGraph,
     alias_map: &AliasMap,
     ctx: Option<&ModuleItemId>,
 ) {
+    let Expression::StructCall {
+        name,
+        field_assignments,
+        spread,
+        ty,
+        ..
+    } = expression
+    else {
+        return;
+    };
     let parts: Vec<&str> = name.split('.').collect();
     if !parts.is_empty() && !is_upper(parts[0]) {
         add_ref(graph, ctx, alias_map, module, parts[0]);
@@ -423,17 +417,37 @@ fn walk_struct_call(
     for f in field_assignments {
         walk_expression(module, &f.value, graph, alias_map, ctx);
     }
-    if let Some(spread_expression) = spread.as_ref() {
-        walk_expression(module, spread_expression, graph, alias_map, ctx);
-        if let Some(ty_name) = type_name(&spread_expression.get_type()) {
-            let explicit: HashSet<&str> =
-                field_assignments.iter().map(|f| f.name.as_str()).collect();
-            let qname = Symbol::from_parts(&module.id, &ty_name);
-            if let Some(Definition::Struct { fields, .. }) = module.definitions.get(qname.as_str())
-            {
-                for field in fields {
-                    if !explicit.contains(field.name.as_str()) {
-                        graph.mark_struct_field_used(StructFieldId::new(&ty_name, &field.name));
+    match spread {
+        StructSpread::None => {}
+        StructSpread::From(spread_expression) => {
+            walk_expression(module, spread_expression, graph, alias_map, ctx);
+            if let Some(ty_name) = type_name(&spread_expression.get_type()) {
+                let explicit: HashSet<&str> =
+                    field_assignments.iter().map(|f| f.name.as_str()).collect();
+                let qname = Symbol::from_parts(&module.id, &ty_name);
+                if let Some(Definition::Struct { fields, .. }) =
+                    module.definitions.get(qname.as_str())
+                {
+                    for field in fields {
+                        if !explicit.contains(field.name.as_str()) {
+                            graph.mark_struct_field_used(StructFieldId::new(&ty_name, &field.name));
+                        }
+                    }
+                }
+            }
+        }
+        StructSpread::ZeroFill { .. } => {
+            if let Some(ty_name) = type_name(ty) {
+                let explicit: HashSet<&str> =
+                    field_assignments.iter().map(|f| f.name.as_str()).collect();
+                let qname = Symbol::from_parts(&module.id, &ty_name);
+                if let Some(Definition::Struct { fields, .. }) =
+                    module.definitions.get(qname.as_str())
+                {
+                    for field in fields {
+                        if !explicit.contains(field.name.as_str()) {
+                            graph.mark_struct_field_used(StructFieldId::new(&ty_name, &field.name));
+                        }
                     }
                 }
             }

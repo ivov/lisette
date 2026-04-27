@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"go:time\"\n\nstruct Wrapper { d: time.Duration }\n\nfn test() -> Wrapper {\n  Wrapper { .. }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+type Wrapper struct {
+	d time.Duration
+}
+
+func (w Wrapper) String() string {
+	return fmt.Sprintf("Wrapper { d: %v }", w.d)
+}
+
+func test() Wrapper {
+	return Wrapper{d: *new(time.Duration)}
+}

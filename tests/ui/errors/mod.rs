@@ -1286,6 +1286,76 @@ fn test() {
 }
 
 #[test]
+fn infer_struct_zero_fill_no_zero_for_field() {
+    let input = r#"
+struct Bad {
+  ok: int,
+  bad: Channel<int>,
+}
+
+fn test() {
+  let p = Bad { ok: 1, .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_zero_fill_no_zero_for_ref_field() {
+    let input = r#"
+struct Bad {
+  ok: int,
+  bad: Ref<int>,
+}
+
+fn test() {
+  let p = Bad { ok: 1, .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_zero_fill_tuple_chain() {
+    let input = r#"
+struct Outer { t: (int, Channel<int>) }
+
+fn test() {
+  let _o = Outer { .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_struct_zero_fill_struct_chain() {
+    let input = r#"
+struct Inner { bad: Channel<int> }
+struct Outer { inner: Inner }
+
+fn test() {
+  let _o = Outer { .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_struct_variant_zero_fill_no_zero_for_field() {
+    let input = r#"
+enum Action {
+  Move { x: int, dst: Channel<int> },
+  Stop,
+}
+
+fn test() {
+  let m = Action.Move { x: 5, .. };
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_struct_not_found() {
     let input = r#"
 fn test() {
@@ -2080,18 +2150,6 @@ fn test(items: Slice<int>) {
   match items {
     [..rest, last] => 0,
   }
-}
-"#;
-    assert_parse_error_snapshot!(input);
-}
-
-#[test]
-fn parse_struct_rest_in_expression() {
-    let input = r#"
-struct Point { x: int, y: int }
-
-fn test() {
-  let p = Point { x: 1, .. };
 }
 "#;
     assert_parse_error_snapshot!(input);
@@ -2942,6 +3000,67 @@ import "shapes"
 fn main() {
   let p = shapes.make_point();
   let q = shapes.Point { y: 10, ..p };
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_private_field_in_struct_zero_fill_direct() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+pub struct Point {
+  x: int,
+  pub y: int,
+}
+"#,
+    );
+
+    let source = r#"
+import "shapes"
+
+fn main() {
+  let q = shapes.Point { y: 10, .. };
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_private_field_in_struct_zero_fill_transitive() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "other",
+        "lib.lis",
+        r#"
+pub struct Inner {
+  pub a: int,
+  b: int,
+}
+"#,
+    );
+
+    let source = r#"
+import "other"
+
+struct Outer {
+  inner: other.Inner,
+}
+
+fn main() {
+  let o = Outer { .. };
+  let _ = o;
 }
 "#;
     fs.add_file("main", "main.lis", source);

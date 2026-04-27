@@ -63,7 +63,7 @@ description: "input: \nfn test() { let result = Point { x: 1, ..base_point }; }\
                                 },
                             },
                         ],
-                        spread: Some(
+                        spread: From(
                             Identifier {
                                 value: "base_point",
                                 ty: Var {

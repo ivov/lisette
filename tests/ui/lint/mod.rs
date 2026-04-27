@@ -758,6 +758,21 @@ fn main() {
 }
 
 #[test]
+fn zero_fill_through_alias_does_not_warn_unused_fields() {
+    assert_no_lint_warnings!(
+        r#"
+struct Inner { x: int, y: int }
+type Alias = Inner
+
+fn main() {
+  let a = Alias { .. }
+  a.x + a.y
+}
+"#
+    );
+}
+
+#[test]
 fn unused_enum() {
     assert_lint_snapshot!(
         r#"
@@ -880,7 +895,7 @@ pub struct Point {
 }
 
 fn create_point() -> Point {
-  Point { x: 0, y: 0 }
+  Point { x: 1, y: 2 }
 }
 
 fn main() {
@@ -1177,7 +1192,7 @@ struct Config {
 }
 
 fn main() {
-  let base = Config { debug: false, verbose: false, port: 8080 };
+  let base = Config { debug: true, verbose: true, port: 8080 };
   let dev = Config { debug: true, ..base };
   if dev.debug { dev.port } else { 0 }
 }
@@ -3405,6 +3420,163 @@ fn unnecessary_raw_string_in_pattern() {
 fn main() {
   let s = "hello"
   let _ = match s { r"hello" => 1, _ => 0 }
+}
+"#
+    );
+}
+
+#[test]
+fn replaceable_with_zero_fill_lisette_struct() {
+    assert_lint_snapshot!(
+        r#"
+struct Conf { name: string, count: int, on: bool, retries: int }
+
+fn main() -> int {
+  let c = Conf { name: "x", count: 0, on: false, retries: 0 };
+  let on_n = if c.on { 1 } else { 0 }
+  c.name.length() + c.count + on_n + c.retries
+}
+"#
+    );
+}
+
+#[test]
+fn replaceable_with_zero_fill_enum_variant() {
+    assert_lint_snapshot!(
+        r#"
+enum Action {
+  Move { x: int, y: int, z: int, dist: int },
+  Stop,
+}
+
+fn main() -> int {
+  let m = Action.Move { x: 5, y: 0, z: 0, dist: 0 };
+  let _ = Action.Stop
+  match m {
+    Action.Move { x, y, z, dist } => x + y + z + dist,
+    Action.Stop => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn replaceable_with_zero_fill_all_fields_zero() {
+    assert_lint_snapshot!(
+        r#"
+struct Point3 { x: int, y: int, z: int }
+
+fn main() -> int {
+  let p = Point3 { x: 0, y: 0, z: 0 };
+  p.x + p.y + p.z
+}
+"#
+    );
+}
+
+#[test]
+fn replaceable_with_zero_fill_multiline_literal() {
+    assert_lint_snapshot!(
+        r#"
+struct Conf { name: string, count: int, on: bool, retries: int }
+
+fn main() -> int {
+  let c = Conf {
+    name: "x",
+    count: 0,
+    on: false,
+    retries: 0,
+  }
+  let on_n = if c.on { 1 } else { 0 }
+  c.name.length() + c.count + on_n + c.retries
+}
+"#
+    );
+}
+
+#[test]
+fn replaceable_with_zero_fill_below_threshold_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Conf { name: string, count: int, on: bool }
+
+fn main() -> int {
+  let c = Conf { name: "x", count: 0, on: false };
+  let on_n = if c.on { 1 } else { 0 }
+  c.name.length() + c.count + on_n
+}
+"#
+    );
+}
+
+#[test]
+fn replaceable_with_zero_fill_already_uses_spread_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Conf { name: string, count: int, on: bool }
+
+fn main() -> int {
+  let c = Conf { count: 0, on: false, .. };
+  let on_n = if c.on { 1 } else { 0 }
+  c.name.length() + c.count + on_n
+}
+"#
+    );
+}
+
+#[test]
+fn replaceable_with_zero_fill_binding_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Conf { count: int, more: int, name: string }
+
+fn main() -> int {
+  let zero = 0;
+  let c = Conf { count: zero, more: zero, name: "x" };
+  c.count + c.more + c.name.length()
+}
+"#
+    );
+}
+
+#[test]
+fn replaceable_with_zero_fill_incomplete_literal_no_warning() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+struct Conf {
+  title: string,
+  count: int,
+  on: bool,
+  retries: int,
+  ch: Channel<int>,
+}
+
+fn main() -> string {
+  let c = Conf { title: "x", count: 0, on: false, retries: 0 };
+  c.title
+}
+"#,
+    );
+    let zero_fill = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.replaceable_with_zero_fill"));
+    assert!(
+        !zero_fill,
+        "expected no replaceable_with_zero_fill warning on incomplete literal, got: {:?}",
+        warnings
+    );
+}
+
+#[test]
+fn replaceable_with_zero_fill_constructor_call_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Conf { name: string, items: Slice<int>, lookup: Map<string, int> }
+
+fn main() -> int {
+  let c = Conf { name: "x", items: Slice.new<int>(), lookup: Map.new<string, int>() };
+  c.name.length() + c.items.len() + c.lookup.len()
 }
 "#
     );

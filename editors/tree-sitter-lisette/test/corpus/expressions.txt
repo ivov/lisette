@@ -342,6 +342,61 @@ let p = Point { x: 1, y: 2 }
           value: (integer_literal))))))
 
 ================================================================================
+Struct expression with zero-fill spread
+================================================================================
+
+let p = Point { x: 1, .. }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (struct_expression
+      name: (type_identifier)
+      body: (field_initializer_list
+        (field_initializer
+          field: (field_identifier)
+          value: (integer_literal))
+        (zero_fill_initializer)))))
+
+================================================================================
+Struct expression zero-fill only
+================================================================================
+
+let p = Point { .. }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (struct_expression
+      name: (type_identifier)
+      body: (field_initializer_list
+        (zero_fill_initializer)))))
+
+================================================================================
+Struct expression with base spread
+================================================================================
+
+let p = Point { x: 1, ..base }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (struct_expression
+      name: (type_identifier)
+      body: (field_initializer_list
+        (field_initializer
+          field: (field_identifier)
+          value: (integer_literal))
+        (base_field_initializer
+          (identifier))))))
+
+================================================================================
 Closure
 ================================================================================
 

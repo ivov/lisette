@@ -153,7 +153,7 @@ description: "input: \nstruct Bar { x: int }\nfn test(base: Bar) {\n  let foo = 
                         right: StructCall {
                             name: "Bar",
                             field_assignments: [],
-                            spread: Some(
+                            spread: From(
                                 Identifier {
                                     value: "base",
                                     ty: Var {

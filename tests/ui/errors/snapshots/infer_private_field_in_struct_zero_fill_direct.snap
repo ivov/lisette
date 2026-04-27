@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Private field
+   ╭─[main.lis:5:33]
+ 4 │ fn main() {
+ 5 │   let q = shapes.Point { y: 10, .. };
+   ·                                 ─┬
+   ·                                  ╰── private
+ 6 │ }
+   ╰────
+  help: `x` of `shapes.Point` cannot be zero-filled because `x` is private to module `shapes`. Provide an explicit value, or have `shapes` expose `x` as `pub` or offer a constructor · code: [resolve.private_field_zero_fill]

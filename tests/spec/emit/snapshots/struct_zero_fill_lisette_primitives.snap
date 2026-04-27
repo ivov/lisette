@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Conf { name: string, count: int, on: bool }\n\nfn test() -> Conf {\n  Conf { name: \"x\", .. }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Conf struct {
+	name  string
+	count int
+	on    bool
+}
+
+func (c Conf) String() string {
+	return fmt.Sprintf("Conf { name: %v, count: %v, on: %v }", c.name, c.count, c.on)
+}
+
+func test() Conf {
+	return Conf{
+		name:  "x",
+		count: 0,
+		on:    false,
+	}
+}

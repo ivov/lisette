@@ -1,0 +1,26 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Conf { name: string, opt: Option<int> }\n\nfn test() -> Conf {\n  Conf { name: \"x\", .. }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Conf struct {
+	name string
+	opt  lisette.Option[int]
+}
+
+func (c Conf) String() string {
+	return fmt.Sprintf("Conf { name: %v, opt: %v }", c.name, c.opt)
+}
+
+func test() Conf {
+	return Conf{
+		name: "x",
+		opt:  lisette.MakeOptionNone[int](),
+	}
+}

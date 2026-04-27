@@ -249,6 +249,21 @@ pub fn ineffective_try_block(span: &Span) -> LisetteDiagnostic {
         .with_help("A `try` block is effective only if the expression may succeed or fail")
 }
 
+pub fn replaceable_with_zero_fill(span: &Span, kept: &str, struct_name: &str) -> LisetteDiagnostic {
+    let example = if kept.is_empty() {
+        format!("`{} {{ .. }}`", struct_name)
+    } else {
+        format!("`{} {{ {}, .. }}`", struct_name, kept)
+    };
+    LisetteDiagnostic::warn("Replaceable with zero-fill spread")
+        .with_lint_code("replaceable_with_zero_fill")
+        .with_span_label(span, "has zero-valued fields")
+        .with_help(format!(
+            "Replace zero-valued fields with zero-fill spread: {}",
+            example
+        ))
+}
+
 pub fn double_negation(span: &Span, is_bool: bool) -> LisetteDiagnostic {
     let (code, msg) = if is_bool {
         ("double_bool_negation", "Double boolean negation")

@@ -1,5 +1,5 @@
 pub(crate) mod addressability;
-mod expressions;
+pub(crate) mod expressions;
 mod interface;
 mod unify;
 mod validation;

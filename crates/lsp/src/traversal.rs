@@ -84,7 +84,7 @@ fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Optio
         } => field_assignments
             .iter()
             .find_map(|fa| c(&fa.value))
-            .or_else(|| spread.as_ref().as_ref().and_then(c)),
+            .or_else(|| spread.as_expression().and_then(c)),
 
         Expression::DotAccess { expression, .. }
         | Expression::Return { expression, .. }

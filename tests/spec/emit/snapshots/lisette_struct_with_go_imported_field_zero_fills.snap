@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"go:net/http\"\n\nstruct Wrapper { srv: http.Server }\n\nfn test() -> Wrapper {\n  Wrapper { .. }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+type Wrapper struct {
+	srv http.Server
+}
+
+func (w Wrapper) String() string {
+	return fmt.Sprintf("Wrapper { srv: %v }", w.srv)
+}
+
+func test() Wrapper {
+	return Wrapper{srv: http.Server{}}
+}

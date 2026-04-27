@@ -1321,6 +1321,10 @@
         {
           "type": "shorthand_field_initializer",
           "named": true
+        },
+        {
+          "type": "zero_fill_initializer",
+          "named": true
         }
       ]
     }
@@ -3200,6 +3204,11 @@
         ]
       }
     }
+  },
+  {
+    "type": "zero_fill_initializer",
+    "named": true,
+    "fields": {}
   },
   {
     "type": "!",

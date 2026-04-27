@@ -228,7 +228,7 @@ pub fn check(expression: &Expression, ctx: &PatternAnalysisContext, sink: &Local
         Expression::Enum { .. } => {}
         Expression::Struct { .. } => {}
         Expression::StructCall { spread, .. } => {
-            if let Some(expression) = &**spread {
+            if let Some(expression) = spread.as_expression() {
                 check(expression, ctx, sink);
             }
         }

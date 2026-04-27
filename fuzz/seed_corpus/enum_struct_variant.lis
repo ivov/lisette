@@ -16,3 +16,11 @@ enum Shape {
   Rectangle { width: int, height: int },
   Triangle { base: int, height: int },
 }
+
+fn make_move() -> Message {
+  Message.Move { x: 5, .. }
+}
+
+fn make_click() -> Event {
+  Event.Click { .. }
+}

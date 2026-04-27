@@ -2802,6 +2802,30 @@ fn test(base: Point) { let p = Point { ..base, }; }
 }
 
 #[test]
+fn struct_zero_fill_with_fields() {
+    let input = r#"
+fn test() { let p = Point { x: 1, .. }; }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn struct_zero_fill_only() {
+    let input = r#"
+fn test() { let p = Point { .. }; }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn struct_zero_fill_trailing_comma() {
+    let input = r#"
+fn test() { let p = Point { x: 1, .., }; }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
 fn call_with_type_arg_simple() {
     let input = r#"
 fn test() { func<int>(x); }

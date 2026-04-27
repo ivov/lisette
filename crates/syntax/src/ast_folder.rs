@@ -1,4 +1,6 @@
-use crate::ast::{Expression, FormatStringPart, MatchArm, SelectArm, SelectArmPattern};
+use crate::ast::{
+    Expression, FormatStringPart, MatchArm, SelectArm, SelectArmPattern, StructSpread,
+};
 
 pub trait AstFolder {
     type Error;
@@ -264,7 +266,13 @@ pub trait AstFolder {
                         Ok(f)
                     })
                     .collect::<Result<_, Self::Error>>()?,
-                spread: Box::new((*spread).map(|e| self.fold_expression(e)).transpose()?),
+                spread: match spread {
+                    StructSpread::None => StructSpread::None,
+                    StructSpread::From(e) => {
+                        StructSpread::From(Box::new(self.fold_expression(*e)?))
+                    }
+                    StructSpread::ZeroFill { span } => StructSpread::ZeroFill { span },
+                },
                 ty,
                 span,
             },

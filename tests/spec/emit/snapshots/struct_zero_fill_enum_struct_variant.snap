@@ -1,0 +1,49 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nenum Action {\n  Move { x: int, y: int, dist: int },\n  Stop,\n}\n\nfn test() -> Action {\n  Action.Move { x: 5, .. }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeActionMove(arg0 int, arg1 int, arg2 int) Action {
+	return Action{Tag: ActionMove, X: arg0, Y: arg1, Dist: arg2}
+}
+
+func MakeActionStop() Action {
+	return Action{Tag: ActionStop}
+}
+
+type ActionTag int
+
+const (
+	ActionMove ActionTag = iota
+	ActionStop
+)
+
+type Action struct {
+	Tag  ActionTag
+	X    int
+	Y    int
+	Dist int
+}
+
+func (a Action) String() string {
+	switch a.Tag {
+	case ActionMove:
+		return fmt.Sprintf("Action.Move { x: %v, y: %v, dist: %v }", a.X, a.Y, a.Dist)
+	case ActionStop:
+		return "Action.Stop"
+	default:
+		return fmt.Sprintf("Action(%d)", a.Tag)
+	}
+}
+
+func test() Action {
+	return Action{
+		Tag:  ActionMove,
+		X:    5,
+		Y:    0,
+		Dist: 0,
+	}
+}

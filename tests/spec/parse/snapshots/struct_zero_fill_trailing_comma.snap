@@ -1,6 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test(defaults: Config) {\n  let cfg = Config { enabled: true, ..defaults };\n}\n"
+description: "input: \nfn test() { let p = Point { x: 1, .., }; }\n"
 ---
 [
     Function {
@@ -13,33 +13,7 @@ description: "input: \nfn test(defaults: Config) {\n  let cfg = Config { enabled
             byte_length: 4,
         },
         generics: [],
-        params: [
-            Binding {
-                pattern: Identifier {
-                    identifier: "defaults",
-                    span: Span {
-                        file_id: 0,
-                        byte_offset: 9,
-                        byte_length: 8,
-                    },
-                },
-                annotation: Some(
-                    Constructor {
-                        name: "Config",
-                        params: [],
-                        span: Span {
-                            file_id: 0,
-                            byte_offset: 19,
-                            byte_length: 6,
-                        },
-                    },
-                ),
-                typed_pattern: None,
-                ty: Var {
-                    id: uninferred,
-                },
-            },
-        ],
+        params: [],
         return_annotation: Unknown,
         return_type: Var {
             id: uninferred,
@@ -50,11 +24,11 @@ description: "input: \nfn test(defaults: Config) {\n  let cfg = Config { enabled
                 Let {
                     binding: Binding {
                         pattern: Identifier {
-                            identifier: "cfg",
+                            identifier: "p",
                             span: Span {
                                 file_id: 0,
-                                byte_offset: 35,
-                                byte_length: 3,
+                                byte_offset: 17,
+                                byte_length: 1,
                             },
                         },
                         annotation: None,
@@ -64,52 +38,45 @@ description: "input: \nfn test(defaults: Config) {\n  let cfg = Config { enabled
                         },
                     },
                     value: StructCall {
-                        name: "Config",
+                        name: "Point",
                         field_assignments: [
                             StructFieldAssignment {
-                                name: "enabled",
+                                name: "x",
                                 name_span: Span {
                                     file_id: 0,
-                                    byte_offset: 50,
-                                    byte_length: 7,
+                                    byte_offset: 29,
+                                    byte_length: 1,
                                 },
                                 value: Literal {
-                                    literal: Boolean(
-                                        true,
-                                    ),
+                                    literal: Integer {
+                                        value: 1,
+                                        text: None,
+                                    },
                                     ty: Var {
                                         id: uninferred,
                                     },
                                     span: Span {
                                         file_id: 0,
-                                        byte_offset: 59,
-                                        byte_length: 4,
+                                        byte_offset: 32,
+                                        byte_length: 1,
                                     },
                                 },
                             },
                         ],
-                        spread: From(
-                            Identifier {
-                                value: "defaults",
-                                ty: Var {
-                                    id: uninferred,
-                                },
-                                span: Span {
-                                    file_id: 0,
-                                    byte_offset: 67,
-                                    byte_length: 8,
-                                },
-                                binding_id: None,
-                                qualified: None,
+                        spread: ZeroFill {
+                            span: Span {
+                                file_id: 0,
+                                byte_offset: 35,
+                                byte_length: 2,
                             },
-                        ),
+                        },
                         ty: Var {
                             id: uninferred,
                         },
                         span: Span {
                             file_id: 0,
-                            byte_offset: 41,
-                            byte_length: 36,
+                            byte_offset: 21,
+                            byte_length: 19,
                         },
                     },
                     mutable: false,
@@ -122,8 +89,8 @@ description: "input: \nfn test(defaults: Config) {\n  let cfg = Config { enabled
                     },
                     span: Span {
                         file_id: 0,
-                        byte_offset: 31,
-                        byte_length: 46,
+                        byte_offset: 13,
+                        byte_length: 27,
                     },
                 },
             ],
@@ -132,8 +99,8 @@ description: "input: \nfn test(defaults: Config) {\n  let cfg = Config { enabled
             },
             span: Span {
                 file_id: 0,
-                byte_offset: 27,
-                byte_length: 53,
+                byte_offset: 11,
+                byte_length: 32,
             },
         },
         ty: Var {
@@ -142,7 +109,7 @@ description: "input: \nfn test(defaults: Config) {\n  let cfg = Config { enabled
         span: Span {
             file_id: 0,
             byte_offset: 1,
-            byte_length: 79,
+            byte_length: 42,
         },
     },
 ]

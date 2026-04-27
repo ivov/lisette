@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Replaceable with zero-fill spread
+   ╭─[test.lis:8:11]
+ 7 │ fn main() -> int {
+ 8 │   let m = Action.Move { x: 5, y: 0, z: 0, dist: 0 };
+   ·           ─────┬─────
+   ·                ╰── has zero-valued fields
+ 9 │   let _ = Action.Stop
+   ╰────
+  help: Replace zero-valued fields with zero-fill spread: `Action.Move { x: 5, .. }` · code: [lint.replaceable_with_zero_fill]

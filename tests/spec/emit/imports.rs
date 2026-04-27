@@ -166,6 +166,62 @@ fn test() {
 }
 
 #[test]
+fn go_opaque_type_zero_fill_spread() {
+    let input = r#"
+import "go:sync"
+
+fn test() {
+  let mut wg = sync.WaitGroup { .. }
+  wg.Add(1)
+  wg.Wait()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn lisette_struct_with_go_imported_field_zero_fills() {
+    let input = r#"
+import "go:net/http"
+
+struct Wrapper { srv: http.Server }
+
+fn test() -> Wrapper {
+  Wrapper { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn lisette_struct_with_go_named_scalar_zero_fills() {
+    let input = r#"
+import "go:time"
+
+struct Wrapper { d: time.Duration }
+
+fn test() -> Wrapper {
+  Wrapper { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn lisette_struct_with_go_interface_zero_fills() {
+    let input = r#"
+import "go:context"
+
+struct Wrapper { ctx: context.Context }
+
+fn test() -> Wrapper {
+  Wrapper { .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn third_party_go_import_path_emitted_in_full() {
     let input = r#"
 import "go:github.com/bwmarrin/discordgo"

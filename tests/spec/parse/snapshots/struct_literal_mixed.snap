@@ -135,7 +135,7 @@ description: "input: \nfn test(x: int, base: Point) {\n  let p = Point { x, y: 1
                                 },
                             },
                         ],
-                        spread: Some(
+                        spread: From(
                             Identifier {
                                 value: "base",
                                 ty: Var {

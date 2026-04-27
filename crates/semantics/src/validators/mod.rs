@@ -18,6 +18,7 @@ mod post_inference;
 mod prelude_shadowing;
 mod receivers;
 mod ref_lints;
+pub(crate) mod replaceable_with_zero_fill;
 mod stringer_signature;
 pub(crate) mod temp_producing;
 mod unused_expressions;

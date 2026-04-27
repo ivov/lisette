@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Replaceable with zero-fill spread
+   ╭─[test.lis:5:11]
+ 4 │ fn main() -> int {
+ 5 │   let c = Conf {
+   ·           ──┬─
+   ·             ╰── has zero-valued fields
+ 6 │     name: "x",
+   ╰────
+  help: Replace zero-valued fields with zero-fill spread: `Conf { name: "x", .. }` · code: [lint.replaceable_with_zero_fill]

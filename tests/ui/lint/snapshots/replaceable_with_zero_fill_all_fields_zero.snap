@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Replaceable with zero-fill spread
+   ╭─[test.lis:5:11]
+ 4 │ fn main() -> int {
+ 5 │   let p = Point3 { x: 0, y: 0, z: 0 };
+   ·           ───┬──
+   ·              ╰── has zero-valued fields
+ 6 │   p.x + p.y + p.z
+   ╰────
+  help: Replace zero-valued fields with zero-fill spread: `Point3 { .. }` · code: [lint.replaceable_with_zero_fill]

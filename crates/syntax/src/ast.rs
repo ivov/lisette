@@ -402,6 +402,38 @@ pub struct StructFieldAssignment {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum StructSpread {
+    None,
+    From(Box<Expression>),
+    ZeroFill { span: Span },
+}
+
+impl StructSpread {
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+
+    pub fn is_some(&self) -> bool {
+        !self.is_none()
+    }
+
+    pub fn span(&self) -> Option<Span> {
+        match self {
+            Self::None => None,
+            Self::From(e) => Some(e.get_span()),
+            Self::ZeroFill { span } => Some(*span),
+        }
+    }
+
+    pub fn as_expression(&self) -> Option<&Expression> {
+        match self {
+            Self::From(e) => Some(e),
+            Self::None | Self::ZeroFill { .. } => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Annotation {
     Constructor {
@@ -597,7 +629,7 @@ pub enum Expression {
     StructCall {
         name: EcoString,
         field_assignments: Vec<StructFieldAssignment>,
-        spread: Box<Option<Expression>>,
+        spread: StructSpread,
         ty: Type,
         span: Span,
     },
@@ -1296,7 +1328,7 @@ impl Expression {
             } => {
                 let mut c: Vec<&Expression> =
                     field_assignments.iter().map(|f| f.value.as_ref()).collect();
-                if let Some(s) = spread.as_ref() {
+                if let Some(s) = spread.as_expression() {
                     c.push(s);
                 }
                 c
