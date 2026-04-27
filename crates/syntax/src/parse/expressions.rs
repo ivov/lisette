@@ -983,6 +983,9 @@ impl<'source> Parser<'source> {
                     "invalid assignment target",
                     "Only variables, fields, and indices can be assigned to.",
                 );
+                self.next();
+                let _rhs = self.parse_expression();
+                return lhs;
             }
             self.next();
             let rhs = self.parse_expression();

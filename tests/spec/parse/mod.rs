@@ -2921,6 +2921,42 @@ fn test() {
 }
 
 #[test]
+fn compound_assignment_on_block_no_exponential_blowup() {
+    use std::fmt::Write;
+    use syntax::lex::Lexer;
+    use syntax::parse::Parser;
+
+    let levels = 20;
+    let mut input = String::from("fn test() {\n");
+    for _ in 0..levels {
+        input.push('{');
+    }
+    input.push('a');
+    for _ in 0..levels {
+        input.push_str(" } -= 0");
+    }
+    input.push_str("\n}\n");
+
+    let lex = Lexer::new(&input, 0).lex();
+    let parse_result = Parser::new(lex.tokens, &input).parse();
+
+    struct Counter(usize);
+    impl Write for Counter {
+        fn write_str(&mut self, s: &str) -> std::fmt::Result {
+            self.0 += s.len();
+            if self.0 >= 100_000 {
+                Err(std::fmt::Error)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    let mut counter = Counter(0);
+    let result = write!(counter, "{:?}", parse_result.ast);
+    assert!(result.is_ok(), "AST debug output exceeded 100 KiB");
+}
+
+#[test]
 fn range_exclusive() {
     let input = r#"
 fn test() { let r = 0..10; }
