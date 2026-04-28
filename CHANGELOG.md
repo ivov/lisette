@@ -2,6 +2,17 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.1.22](https://github.com/ivov/lisette/compare/lisette-v0.1.21...lisette-v0.1.22) - 2026-04-28
+
+- fix: bind variadic interface methods to VarArgs [#211](https://github.com/ivov/lisette/pull/211) [`500865b`](https://github.com/ivov/lisette/commit/500865be30ad6b3c33a16c66bcd3b965c7a30375)
+- feat: silence unused_value on fluent-builder method returns [#218](https://github.com/ivov/lisette/pull/218) [`1266fde`](https://github.com/ivov/lisette/commit/1266fdebdfc8dc3fff6cbd0ae4de570c167852d7)
+- feat: lift interface{} params to Ref<T> for reflection decoders [#219](https://github.com/ivov/lisette/pull/219) [`6f7b04a`](https://github.com/ivov/lisette/commit/6f7b04a4b6e0f00145c011dbe05609f5893fd67f)
+- feat: suggest go prefix for unprefixed declared go deps [#215](https://github.com/ivov/lisette/pull/215) [`490709e`](https://github.com/ivov/lisette/commit/490709ef90048cc525c014bea04e20a4048bd744)
+- feat: do not require trailing () in unit-context lambdas [#216](https://github.com/ivov/lisette/pull/216) [`49e44be`](https://github.com/ivov/lisette/commit/49e44be0bfc47578dd63a803694bb4a5dfa30fbb)
+- feat: zero-fill spread [#210](https://github.com/ivov/lisette/pull/210) [`9681887`](https://github.com/ivov/lisette/commit/9681887c997b4c3d6e63e4107d883294edf3e679)
+- fix: avoid cloning lhs on compound assign with invalid target [#209](https://github.com/ivov/lisette/pull/209) [`e481af2`](https://github.com/ivov/lisette/commit/e481af2e5562e96cbb788b696aec5b600407eb30)
+- feat: multi-line string literals [#208](https://github.com/ivov/lisette/pull/208) [`05127d9`](https://github.com/ivov/lisette/commit/05127d9af9a29c60eadde2b9856ec3cce6bd1179)
+
 ## [0.1.21](https://github.com/ivov/lisette/compare/lisette-v0.1.20...lisette-v0.1.21) - 2026-04-26
 
 - feat: recognize M ~map[K]V as type-parameter shape [#198](https://github.com/ivov/lisette/pull/198) [`b22621e`](https://github.com/ivov/lisette/commit/b22621e2e44b9d7b661e624f2c9337a3d387016e)
