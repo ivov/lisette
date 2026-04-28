@@ -12,6 +12,10 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - feat: zero-fill spread [#210](https://github.com/ivov/lisette/pull/210) [`9681887`](https://github.com/ivov/lisette/commit/9681887c997b4c3d6e63e4107d883294edf3e679)
 - fix: avoid cloning lhs on compound assign with invalid target [#209](https://github.com/ivov/lisette/pull/209) [`e481af2`](https://github.com/ivov/lisette/commit/e481af2e5562e96cbb788b696aec5b600407eb30)
 - feat: multi-line string literals [#208](https://github.com/ivov/lisette/pull/208) [`05127d9`](https://github.com/ivov/lisette/commit/05127d9af9a29c60eadde2b9856ec3cce6bd1179)
+- ci: pin workflow actions to immutable SHAs [#220](https://github.com/ivov/lisette/pull/220) [`30c05ea`](https://github.com/ivov/lisette/commit/30c05ead8613c3435c79da9bc27023adc8b17650)
+- fix: alias single-segment paths colliding with longer external paths [#217](https://github.com/ivov/lisette/pull/217) [`efd89d3`](https://github.com/ivov/lisette/commit/efd89d330115c0a3dbab95b8c30562d74f7973b9)
+- fix: alias bindgen imports that collide on package name [#212](https://github.com/ivov/lisette/pull/212) [`fbf4f74`](https://github.com/ivov/lisette/commit/fbf4f746c9b0e45f78bd362f8674b69b01a1ce8b)
+- feat: support sql.Scanner and driver.Valuer on option [#206](https://github.com/ivov/lisette/pull/206) [`6091db8`](https://github.com/ivov/lisette/commit/6091db8e03b00bb0d765f52586a483c9da29a8de)
 
 ## [0.1.21](https://github.com/ivov/lisette/compare/lisette-v0.1.20...lisette-v0.1.21) - 2026-04-26
 
