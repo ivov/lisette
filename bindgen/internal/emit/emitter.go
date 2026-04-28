@@ -94,8 +94,10 @@ func (e *Emitter) EmitImports(externalPkgs convert.ExternalPkgs) {
 }
 
 // computePkgAliases resolves each path to a local prefix. On a Go-declared
-// name collision (e.g. `html/template` vs `text/template`) the lexicographically
-// first path keeps the bare name; later paths get a `<parent>_<base>` alias.
+// name collision (e.g. `html/template` vs `text/template`) the path with
+// the fewest segments keeps the bare name (lex tiebreaker); later paths
+// get a `<parent>_<base>` alias. Shortest-first matters because
+// `aliasForPath` cannot synthesize an alias for a single-segment path.
 func computePkgAliases(externalPkgs convert.ExternalPkgs) map[string]string {
 	byName := make(map[string][]string)
 	for path, name := range externalPkgs {
@@ -108,7 +110,12 @@ func computePkgAliases(externalPkgs convert.ExternalPkgs) map[string]string {
 			aliases[paths[0]] = name
 			continue
 		}
-		slices.Sort(paths)
+		slices.SortFunc(paths, func(a, b string) int {
+			if as, bs := strings.Count(a, "/"), strings.Count(b, "/"); as != bs {
+				return as - bs
+			}
+			return strings.Compare(a, b)
+		})
 		aliases[paths[0]] = name
 		for _, path := range paths[1:] {
 			aliases[path] = aliasForPath(path)
