@@ -45,19 +45,19 @@ jobs:
     if: ${{ !startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
 
       - name: Install Rust toolchain
         run: rustup show
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
         with:
           go-version: "1.25"
           cache: false
 
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # ratchet:extractions/setup-just@v3
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
 
       - name: Check formatting
         run: just format-check
@@ -80,14 +80,14 @@ jobs:
       - name: Test prelude Go module
         run: cd prelude && go test ./...
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
         with:
           tool: cargo-shear@1.6.0
 
       - name: Check unused dependencies
         run: cargo shear
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
         with:
           tool: cargo-deny@0.19.0
 

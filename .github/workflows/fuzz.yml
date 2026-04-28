@@ -11,17 +11,17 @@ jobs:
   fuzz-parse:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@5b842231ba77f5c045dba54ac5560fed2db780e2 # ratchet:dtolnay/rust-toolchain@nightly
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
         with:
           workspaces: fuzz -> target
 
       - name: Cache cargo-fuzz binary
         id: cache-cargo-fuzz
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache@v5
         with:
           path: ~/.cargo/bin/cargo-fuzz
           key: cargo-fuzz-0.13.1
@@ -31,12 +31,12 @@ jobs:
         run: cargo install cargo-fuzz --version 0.13.1 --locked
 
       - name: Restore fuzz-parse corpus
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/restore@v5
         with:
           path: fuzz/corpus/parse
           key: fuzz-corpus-parse
 
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # ratchet:extractions/setup-just@v3
 
       - name: Minimize fuzz-parse corpus
         run: cargo +nightly fuzz cmin parse -- -rss_limit_mb=2048
@@ -46,14 +46,14 @@ jobs:
 
       - name: Save fuzz-parse corpus
         if: always()
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/save@v5
         with:
           path: fuzz/corpus/parse
           key: fuzz-corpus-parse-${{ github.run_id }}
 
       - name: Upload crash artifacts
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
         with:
           name: fuzz-crash-parse
           path: fuzz/artifacts/
@@ -74,17 +74,17 @@ jobs:
   fuzz-infer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@5b842231ba77f5c045dba54ac5560fed2db780e2 # ratchet:dtolnay/rust-toolchain@nightly
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
         with:
           workspaces: fuzz -> target
 
       - name: Cache cargo-fuzz binary
         id: cache-cargo-fuzz
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache@v5
         with:
           path: ~/.cargo/bin/cargo-fuzz
           key: cargo-fuzz-0.13.1
@@ -94,12 +94,12 @@ jobs:
         run: cargo install cargo-fuzz --version 0.13.1 --locked
 
       - name: Restore fuzz-infer corpus
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/restore@v5
         with:
           path: fuzz/corpus/infer
           key: fuzz-corpus-infer
 
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # ratchet:extractions/setup-just@v3
 
       - name: Minimize fuzz-infer corpus
         run: cargo +nightly fuzz cmin infer -- -rss_limit_mb=2048
@@ -109,14 +109,14 @@ jobs:
 
       - name: Save fuzz-infer corpus
         if: always()
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # ratchet:actions/cache/save@v5
         with:
           path: fuzz/corpus/infer
           key: fuzz-corpus-infer-${{ github.run_id }}
 
       - name: Upload crash artifacts
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v6
         with:
           name: fuzz-crash-infer
           path: fuzz/artifacts/

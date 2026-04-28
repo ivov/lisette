@@ -95,3 +95,15 @@ commit-stdlib-typedefs version:
 # Build the playground and write output to docs/play/ (served at lisette.run/play)
 rebuild-playground:
     cd playground && npm install && npm run build:wasm && npm run build
+
+ci-pin:
+    ratchet pin .github/workflows/*.yml
+
+ci-update:
+    ratchet update .github/workflows/*.yml
+
+ci-upgrade:
+    ratchet upgrade .github/workflows/*.yml
+
+ci-lint:
+    ratchet lint .github/workflows/*.yml
