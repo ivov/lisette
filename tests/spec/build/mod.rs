@@ -1,4 +1,6 @@
-use crate::_harness::build::{compile_check, compile_check_standalone};
+use crate::_harness::build::{
+    compile_check, compile_check_standalone, compile_check_with_locator, locator_with_go_dep,
+};
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::infer::infer;
 use crate::assert_build_snapshot;
@@ -3822,6 +3824,87 @@ fn main() {}
     fs.add_file("./sub", "lib.lis", "pub struct Foo {}\n");
 
     let result = compile_check(fs);
+    assert_eq!(result.errors.len(), 1);
+    assert_eq!(
+        result.errors[0].code_str(),
+        Some("resolve.invalid_module_path")
+    );
+}
+
+#[test]
+fn declared_go_dep_without_prefix_suggests_go_prefix() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"import "github.com/gin-gonic/gin"
+
+fn main() {}
+"#,
+    );
+
+    let result = compile_check_with_locator(
+        fs,
+        locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
+    );
+    assert_eq!(result.errors.len(), 1);
+    assert_eq!(
+        result.errors[0].code_str(),
+        Some("resolve.missing_go_prefix")
+    );
+    let rendered = result.errors[0].plain_help().unwrap_or_default();
+    assert!(
+        rendered.contains("import \"go:github.com/gin-gonic/gin\""),
+        "expected suggestion in help, got: {}",
+        rendered
+    );
+}
+
+#[test]
+fn declared_go_dep_subpackage_without_prefix_suggests_go_prefix() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"import "github.com/gin-gonic/gin/render"
+
+fn main() {}
+"#,
+    );
+
+    let result = compile_check_with_locator(
+        fs,
+        locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
+    );
+    assert_eq!(result.errors.len(), 1);
+    assert_eq!(
+        result.errors[0].code_str(),
+        Some("resolve.missing_go_prefix")
+    );
+    let rendered = result.errors[0].plain_help().unwrap_or_default();
+    assert!(
+        rendered.contains("import \"go:github.com/gin-gonic/gin/render\""),
+        "expected suggestion in help, got: {}",
+        rendered
+    );
+}
+
+#[test]
+fn undeclared_dotted_path_keeps_generic_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"import "github.com/some/other"
+
+fn main() {}
+"#,
+    );
+
+    let result = compile_check_with_locator(
+        fs,
+        locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
+    );
     assert_eq!(result.errors.len(), 1);
     assert_eq!(
         result.errors[0].code_str(),

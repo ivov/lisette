@@ -8,7 +8,11 @@ use super::filesystem::MockFileSystem;
 
 const ENTRY_FILE_ID: u32 = 0;
 
-pub fn compile_check(fs: MockFileSystem) -> SemanticResult {
+fn compile_with(
+    fs: MockFileSystem,
+    config: SemanticConfig,
+    locator: deps::TypedefLocator,
+) -> SemanticResult {
     let main_source = fs
         .scan_folder(ENTRY_MODULE_ID)
         .get("main.lis")
@@ -21,49 +25,67 @@ pub fn compile_check(fs: MockFileSystem) -> SemanticResult {
     }
 
     analyze(AnalyzeInput {
-        config: SemanticConfig {
-            run_lints: true,
-            standalone_mode: false,
-            load_siblings: true,
-        },
+        config,
         loader: &fs,
         source: main_source,
         filename: "main.lis".to_string(),
         ast: build_result.ast,
         project_root: None,
-        locator: deps::TypedefLocator::default(),
+        locator,
         compile_phase: semantics::analyze::CompilePhase::Check,
     })
     .0
 }
 
+pub fn compile_check(fs: MockFileSystem) -> SemanticResult {
+    compile_with(
+        fs,
+        SemanticConfig {
+            run_lints: true,
+            standalone_mode: false,
+            load_siblings: true,
+        },
+        deps::TypedefLocator::default(),
+    )
+}
+
+pub fn compile_check_with_locator(
+    fs: MockFileSystem,
+    locator: deps::TypedefLocator,
+) -> SemanticResult {
+    compile_with(
+        fs,
+        SemanticConfig {
+            run_lints: true,
+            standalone_mode: false,
+            load_siblings: true,
+        },
+        locator,
+    )
+}
+
 pub fn compile_check_standalone(fs: MockFileSystem) -> SemanticResult {
-    let main_source = fs
-        .scan_folder(ENTRY_MODULE_ID)
-        .get("main.lis")
-        .cloned()
-        .expect("main.lis must exist");
-
-    let build_result = syntax::build_ast(&main_source, ENTRY_FILE_ID);
-    if build_result.failed() {
-        return SemanticResult::with_parse_errors(build_result.errors, ENTRY_MODULE_ID);
-    }
-
-    analyze(AnalyzeInput {
-        config: SemanticConfig {
+    compile_with(
+        fs,
+        SemanticConfig {
             run_lints: true,
             standalone_mode: true,
             load_siblings: false,
         },
-        loader: &fs,
-        source: main_source,
-        filename: "main.lis".to_string(),
-        ast: build_result.ast,
-        project_root: None,
-        locator: deps::TypedefLocator::default(),
-        compile_phase: semantics::analyze::CompilePhase::Check,
-    })
-    .0
+        deps::TypedefLocator::default(),
+    )
+}
+
+pub fn locator_with_go_dep(module_path: &str, version: &str) -> deps::TypedefLocator {
+    let mut go_deps = std::collections::BTreeMap::new();
+    go_deps.insert(
+        module_path.to_string(),
+        deps::GoDependency {
+            version: version.to_string(),
+            via: None,
+        },
+    );
+    deps::TypedefLocator::new(go_deps, None, None)
 }
 
 pub fn compile_project(fs: MockFileSystem, go_module: &str) -> String {

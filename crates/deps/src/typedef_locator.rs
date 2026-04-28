@@ -76,6 +76,10 @@ impl TypedefLocator {
         &self.deps
     }
 
+    pub fn is_declared_go_dep(&self, package_path: &str) -> bool {
+        find_module_for_pkg(&self.deps, package_path).is_some()
+    }
+
     /// Returns the `.d.lis` content for a Go package (without `go:` prefix).
     /// Checks embedded stdlib typedefs first, then the on-disk cache.
     pub fn find_typedef_content(&self, package_path: &str) -> TypedefLocatorResult {

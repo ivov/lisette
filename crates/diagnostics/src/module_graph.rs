@@ -40,6 +40,16 @@ pub fn invalid_module_path(module_name: &str, span: Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn missing_go_prefix(module_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Invalid module path `{}`", module_name))
+        .with_resolve_code("missing_go_prefix")
+        .with_span_label(&span, "Go imports require the `go:` prefix")
+        .with_help(format!(
+            "`{0}` is a declared Go dependency. Did you mean `import \"go:{0}\"`?",
+            module_name
+        ))
+}
+
 pub fn cannot_import_prelude(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
         .with_resolve_code("cannot_import_prelude")

@@ -210,10 +210,17 @@ fn collect_imports(
         }
 
         if file_import.name.contains('.') {
-            sink.push(diagnostics::module_graph::invalid_module_path(
-                &file_import.name,
-                file_import.name_span,
-            ));
+            if locator.is_declared_go_dep(&file_import.name) {
+                sink.push(diagnostics::module_graph::missing_go_prefix(
+                    &file_import.name,
+                    file_import.name_span,
+                ));
+            } else {
+                sink.push(diagnostics::module_graph::invalid_module_path(
+                    &file_import.name,
+                    file_import.name_span,
+                ));
+            }
             continue;
         }
 
