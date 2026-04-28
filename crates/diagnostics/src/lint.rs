@@ -324,6 +324,15 @@ pub fn empty_match_arm(span: &Span) -> LisetteDiagnostic {
         .with_help("Return `()` to indicate an intentional no-op in a match arm")
 }
 
+pub fn discarded_lambda_value(span: &Span, body_ty: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Discarded lambda value")
+        .with_lint_code("discarded_lambda_value")
+        .with_span_label(span, format!("value of type `{}` is discarded", body_ty))
+        .with_help(
+            "The lambda signature requires `()`, which does not match the value it is returning. End the lambda body with `()` or bind the value with `let _ = expr`.",
+        )
+}
+
 pub fn unnecessary_parens(span: &Span, keyword: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Unnecessary parens")
         .with_lint_code("excess_parens_on_condition")

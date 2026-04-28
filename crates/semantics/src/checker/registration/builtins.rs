@@ -207,4 +207,15 @@ impl TaskState<'_> {
             }
         })
     }
+
+    pub fn has_fn_type_param(&self, ty: &Type) -> bool {
+        let resolved = ty.resolve_in(&self.env);
+        let Some(params) = resolved.get_type_params() else {
+            return false;
+        };
+
+        params
+            .iter()
+            .any(|p| matches!(p.resolve_in(&self.env), Type::Function { .. }))
+    }
 }

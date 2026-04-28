@@ -1,0 +1,13 @@
+---
+source: tests/ui/lint/mod.rs
+assertion_line: 3587
+---
+  [warning] Discarded lambda value
+   ╭─[test.lis:4:13]
+ 3 │ fn main() {
+ 4 │   take(|| { 42 })
+   ·             ─┬
+   ·              ╰── value of type `int` is discarded
+ 5 │ }
+   ╰────
+  help: The lambda signature requires `()`, which does not match the value it is returning. End the lambda body with `()` or bind the value with `let _ = expr` · code: [lint.discarded_lambda_value]

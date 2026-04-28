@@ -3581,3 +3581,28 @@ fn main() -> int {
 "#
     );
 }
+
+#[test]
+fn discarded_lambda_value_bare_literal() {
+    assert_lint_snapshot!(
+        r#"
+fn take(f: fn() -> ()) { f() }
+fn main() {
+  take(|| { 42 })
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_lambda_value_silent_on_call() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+fn take(f: fn() -> ()) { f() }
+fn main() {
+  take(|| { fmt.Println("hi") })
+}
+"#
+    );
+}

@@ -5177,22 +5177,6 @@ fn test() {
 }
 
 #[test]
-fn infer_closure_return_type_mismatch() {
-    let input = r#"
-import "go:fmt"
-
-fn handler(f: fn(string)) {
-  f("test")
-}
-
-fn test() {
-  handler(|e: string| { fmt.Println(e) })
-}
-"#;
-    assert_infer_error_snapshot!(input);
-}
-
-#[test]
 fn lex_invalid_escape_sequence_in_string() {
     let input = r#"
 fn main() {

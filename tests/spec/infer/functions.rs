@@ -1583,6 +1583,53 @@ fn lambda_implicit_unit_return_allows_any_body() {
 }
 
 #[test]
+fn lambda_contextual_unit_return_allows_call_returning_result() {
+    infer(
+        r#"
+import "go:fmt"
+
+fn take(f: fn() -> ()) { f() }
+
+fn main() {
+  take(|| { fmt.Println("hi") })
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn lambda_in_option_callback_allows_call_returning_result() {
+    infer(
+        r#"
+import "go:fmt"
+
+struct Cmd {
+  pub Run: Option<fn(string) -> ()>,
+}
+
+fn main() {
+  let _c = Cmd {
+    Run: Some(|name: string| { fmt.Println(name) }),
+  }
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn lambda_explicit_unit_annotation_still_rejects_non_unit_body() {
+    infer(
+        r#"
+fn take(f: fn() -> ()) { f() }
+fn main() { take(|| -> () { 42 }) }
+"#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
 fn private_function_not_accessible_via_module_struct() {
     let mut fs = MockFileSystem::new();
 
