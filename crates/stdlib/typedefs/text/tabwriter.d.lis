@@ -120,6 +120,7 @@ impl Writer {
   /// 			(for correct-looking results, tabwidth must correspond
   /// 			to the tab width in the viewer displaying the result)
   /// 	flags		formatting control
+  #[allow(unused_value)]
   fn Init(
     self: Ref<Writer>,
     output: io.Writer,

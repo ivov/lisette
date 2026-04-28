@@ -30,6 +30,7 @@ impl List {
   fn Front(self: Ref<List>) -> Option<Ref<Element>>
 
   /// Init initializes or clears list l.
+  #[allow(unused_value)]
   fn Init(self: Ref<List>) -> Ref<List>
 
   /// InsertAfter inserts a new element e with value v immediately after mark and returns e.

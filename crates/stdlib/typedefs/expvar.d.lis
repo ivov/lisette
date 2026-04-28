@@ -103,6 +103,7 @@ impl Map {
   fn Get(self: Ref<Map>, key: string) -> Option<Var>
 
   /// Init removes all keys from the map.
+  #[allow(unused_value)]
   fn Init(self: Ref<Map>) -> Ref<Map>
 
   fn Set(self: Ref<Map>, key: string, av: Var)

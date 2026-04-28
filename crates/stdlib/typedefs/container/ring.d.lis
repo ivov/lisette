@@ -42,6 +42,7 @@ impl Ring {
 
   /// Move moves n % r.Len() elements backward (n < 0) or forward (n >= 0)
   /// in the ring and returns that ring element. r must not be empty.
+  #[allow(unused_value)]
   fn Move(self: Ref<Ring>, n: int) -> Ref<Ring>
 
   /// Next returns the next ring element. r must not be empty.

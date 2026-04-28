@@ -158,6 +158,7 @@ impl ErrNaN {
 impl Float {
   /// Abs sets z to the (possibly rounded) value |x| (the absolute value of x)
   /// and returns z.
+  #[allow(unused_value)]
   fn Abs(self: Ref<Float>, x: Ref<Float>) -> Ref<Float>
 
   /// Acc returns the accuracy of x produced by the most recent
@@ -171,6 +172,7 @@ impl Float {
   /// z's accuracy reports the result error relative to the exact (not rounded)
   /// result. Add panics with [ErrNaN] if x and y are infinities with opposite
   /// signs. The value of z is undefined in that case.
+  #[allow(unused_value)]
   fn Add(self: Ref<Float>, x: Ref<Float>, y: Ref<Float>) -> Ref<Float>
 
   /// Append appends to buf the string form of the floating-point number x,
@@ -284,10 +286,12 @@ impl Float {
   /// Precision, rounding, and accuracy reporting are as for [Float.Add].
   /// Mul panics with [ErrNaN] if one operand is zero and the other
   /// operand an infinity. The value of z is undefined in that case.
+  #[allow(unused_value)]
   fn Mul(self: Ref<Float>, x: Ref<Float>, y: Ref<Float>) -> Ref<Float>
 
   /// Neg sets z to the (possibly rounded) value of x with its sign negated,
   /// and returns z.
+  #[allow(unused_value)]
   fn Neg(self: Ref<Float>, x: Ref<Float>) -> Ref<Float>
 
   /// Parse parses s which must contain a text representation of a floating-
@@ -345,6 +349,7 @@ impl Float {
   /// Precision, rounding, and accuracy reporting are as for [Float.Add].
   /// Quo panics with [ErrNaN] if both operands are zero or infinities.
   /// The value of z is undefined in that case.
+  #[allow(unused_value)]
   fn Quo(self: Ref<Float>, x: Ref<Float>, y: Ref<Float>) -> Ref<Float>
 
   /// Rat returns the rational number corresponding to x;
@@ -367,27 +372,32 @@ impl Float {
   /// Rounding is performed according to z's precision and rounding
   /// mode; and z's accuracy reports the result error relative to the
   /// exact (not rounded) result.
+  #[allow(unused_value)]
   fn Set(self: Ref<Float>, x: Ref<Float>) -> Ref<Float>
 
   /// SetFloat64 sets z to the (possibly rounded) value of x and returns z.
   /// If z's precision is 0, it is changed to 53 (and rounding will have
   /// no effect). SetFloat64 panics with [ErrNaN] if x is a NaN.
+  #[allow(unused_value)]
   fn SetFloat64(self: Ref<Float>, x: float64) -> Ref<Float>
 
   /// SetInf sets z to the infinite Float -Inf if signbit is
   /// set, or +Inf if signbit is not set, and returns z. The
   /// precision of z is unchanged and the result is always
   /// [Exact].
+  #[allow(unused_value)]
   fn SetInf(self: Ref<Float>, signbit: bool) -> Ref<Float>
 
   /// SetInt sets z to the (possibly rounded) value of x and returns z.
   /// If z's precision is 0, it is changed to the larger of x.BitLen()
   /// or 64 (and rounding will have no effect).
+  #[allow(unused_value)]
   fn SetInt(self: Ref<Float>, x: Ref<Int>) -> Ref<Float>
 
   /// SetInt64 sets z to the (possibly rounded) value of x and returns z.
   /// If z's precision is 0, it is changed to 64 (and rounding will have
   /// no effect).
+  #[allow(unused_value)]
   fn SetInt64(self: Ref<Float>, x: int64) -> Ref<Float>
 
   /// SetMantExp sets z to mant × 2**exp and returns z.
@@ -407,11 +417,13 @@ impl Float {
   /// 
   /// z and mant may be the same in which case z's exponent
   /// is set to exp.
+  #[allow(unused_value)]
   fn SetMantExp(self: Ref<Float>, mant: Ref<Float>, exp: int) -> Ref<Float>
 
   /// SetMode sets z's rounding mode to mode and returns an exact z.
   /// z remains unchanged otherwise.
   /// z.SetMode(z.Mode()) is a cheap way to set z's accuracy to [Exact].
+  #[allow(unused_value)]
   fn SetMode(self: Ref<Float>, mode: RoundingMode) -> Ref<Float>
 
   /// SetPrec sets z's precision to prec and returns the (possibly) rounded
@@ -419,11 +431,13 @@ impl Float {
   /// cannot be represented in prec bits without loss of precision.
   /// SetPrec(0) maps all finite values to ±0; infinite values remain unchanged.
   /// If prec > [MaxPrec], it is set to [MaxPrec].
+  #[allow(unused_value)]
   fn SetPrec(self: Ref<Float>, prec: uint) -> Ref<Float>
 
   /// SetRat sets z to the (possibly rounded) value of x and returns z.
   /// If z's precision is 0, it is changed to the largest of a.BitLen(),
   /// b.BitLen(), or 64; with x = a/b.
+  #[allow(unused_value)]
   fn SetRat(self: Ref<Float>, x: Ref<Rat>) -> Ref<Float>
 
   /// SetString sets z to the value of s and returns z and a boolean indicating
@@ -437,6 +451,7 @@ impl Float {
   /// SetUint64 sets z to the (possibly rounded) value of x and returns z.
   /// If z's precision is 0, it is changed to 64 (and rounding will have
   /// no effect).
+  #[allow(unused_value)]
   fn SetUint64(self: Ref<Float>, x: uint64) -> Ref<Float>
 
   /// Sign returns:
@@ -457,6 +472,7 @@ impl Float {
   /// 
   /// The function panics if z < 0. The value of z is undefined in that
   /// case.
+  #[allow(unused_value)]
   fn Sqrt(self: Ref<Float>, x: Ref<Float>) -> Ref<Float>
 
   /// String formats x like x.Text('g', 10).
@@ -467,6 +483,7 @@ impl Float {
   /// Precision, rounding, and accuracy reporting are as for [Float.Add].
   /// Sub panics with [ErrNaN] if x and y are infinities with equal
   /// signs. The value of z is undefined in that case.
+  #[allow(unused_value)]
   fn Sub(self: Ref<Float>, x: Ref<Float>, y: Ref<Float>) -> Ref<Float>
 
   /// Text converts the floating-point number x to a string according
@@ -517,15 +534,19 @@ impl Float {
 
 impl Int {
   /// Abs sets z to |x| (the absolute value of x) and returns z.
+  #[allow(unused_value)]
   fn Abs(self: Ref<Int>, x: Ref<Int>) -> Ref<Int>
 
   /// Add sets z to the sum x+y and returns z.
+  #[allow(unused_value)]
   fn Add(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// And sets z = x & y and returns z.
+  #[allow(unused_value)]
   fn And(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// AndNot sets z = x &^ y and returns z.
+  #[allow(unused_value)]
   fn AndNot(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// Append appends the string representation of x, as generated by
@@ -536,6 +557,7 @@ impl Int {
   fn AppendText(self: Ref<Int>, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
 
   /// Binomial sets z to the binomial coefficient C(n, k) and returns z.
+  #[allow(unused_value)]
   fn Binomial(self: Ref<Int>, n: int64, k: int64) -> Ref<Int>
 
   /// Bit returns the value of the i'th bit of x. That is, it
@@ -573,6 +595,7 @@ impl Int {
   /// Div sets z to the quotient x/y for y != 0 and returns z.
   /// If y == 0, a division-by-zero run-time panic occurs.
   /// Div implements Euclidean division (unlike Go); see [Int.DivMod] for more details.
+  #[allow(unused_value)]
   fn Div(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// DivMod sets z to the quotient x div y and m to the modulus x mod y
@@ -597,6 +620,7 @@ impl Int {
   /// 
   /// Modular exponentiation of inputs of a particular size is not a
   /// cryptographically constant-time operation.
+  #[allow(unused_value)]
   fn Exp(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>, m: Ref<Int>) -> Ref<Int>
 
   /// FillBytes sets buf to the absolute value of x, storing it as a zero-extended
@@ -633,6 +657,7 @@ impl Int {
   /// If a == 0 and b != 0, GCD sets z = |b|, x = 0, y = sign(b) * 1.
   /// 
   /// If a != 0 and b == 0, GCD sets z = |a|, x = sign(a) * 1, y = 0.
+  #[allow(unused_value)]
   fn GCD(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>, a: Ref<Int>, b: Ref<Int>) -> Ref<Int>
 
   /// GobDecode implements the [encoding/gob.GobDecoder] interface.
@@ -652,6 +677,7 @@ impl Int {
   fn IsUint64(self: Ref<Int>) -> bool
 
   /// Lsh sets z = x << n and returns z.
+  #[allow(unused_value)]
   fn Lsh(self: Ref<Int>, x: Ref<Int>, n: uint) -> Ref<Int>
 
   /// MarshalJSON implements the [encoding/json.Marshaler] interface.
@@ -663,6 +689,7 @@ impl Int {
   /// Mod sets z to the modulus x%y for y != 0 and returns z.
   /// If y == 0, a division-by-zero run-time panic occurs.
   /// Mod implements Euclidean modulus (unlike Go); see [Int.DivMod] for more details.
+  #[allow(unused_value)]
   fn Mod(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// ModInverse sets z to the multiplicative inverse of g in the ring ℤ/nℤ
@@ -678,20 +705,25 @@ impl Int {
   fn ModSqrt(self: Ref<Int>, x: Ref<Int>, p: Ref<Int>) -> Ref<Int>
 
   /// Mul sets z to the product x*y and returns z.
+  #[allow(unused_value)]
   fn Mul(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// MulRange sets z to the product of all integers
   /// in the range [a, b] inclusively and returns z.
   /// If a > b (empty range), the result is 1.
+  #[allow(unused_value)]
   fn MulRange(self: Ref<Int>, a: int64, b: int64) -> Ref<Int>
 
   /// Neg sets z to -x and returns z.
+  #[allow(unused_value)]
   fn Neg(self: Ref<Int>, x: Ref<Int>) -> Ref<Int>
 
   /// Not sets z = ^x and returns z.
+  #[allow(unused_value)]
   fn Not(self: Ref<Int>, x: Ref<Int>) -> Ref<Int>
 
   /// Or sets z = x | y and returns z.
+  #[allow(unused_value)]
   fn Or(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// ProbablyPrime reports whether x is probably prime,
@@ -716,6 +748,7 @@ impl Int {
   /// Quo sets z to the quotient x/y for y != 0 and returns z.
   /// If y == 0, a division-by-zero run-time panic occurs.
   /// Quo implements truncated division (like Go); see [Int.QuoRem] for more details.
+  #[allow(unused_value)]
   fn Quo(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// QuoRem sets z to the quotient x/y and r to the remainder x%y
@@ -735,14 +768,17 @@ impl Int {
   /// 
   /// As this uses the [math/rand] package, it must not be used for
   /// security-sensitive work. Use [crypto/rand.Int] instead.
+  #[allow(unused_value)]
   fn Rand(self: Ref<Int>, rnd: Ref<rand.Rand>, n: Ref<Int>) -> Ref<Int>
 
   /// Rem sets z to the remainder x%y for y != 0 and returns z.
   /// If y == 0, a division-by-zero run-time panic occurs.
   /// Rem implements truncated modulus (like Go); see [Int.QuoRem] for more details.
+  #[allow(unused_value)]
   fn Rem(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// Rsh sets z = x >> n and returns z.
+  #[allow(unused_value)]
   fn Rsh(self: Ref<Int>, x: Ref<Int>, n: uint) -> Ref<Int>
 
   /// Scan is a support routine for [fmt.Scanner]; it sets z to the value of
@@ -751,6 +787,7 @@ impl Int {
   fn Scan(self: Ref<Int>, s: fmt.ScanState, ch: int32) -> Result<(), error>
 
   /// Set sets z to x and returns z.
+  #[allow(unused_value)]
   fn Set(self: Ref<Int>, x: Ref<Int>) -> Ref<Int>
 
   /// SetBit sets z to x, with x's i'th bit set to b (0 or 1).
@@ -758,6 +795,7 @@ impl Int {
   ///   - if b is 1, SetBit sets z = x | (1 << i);
   ///   - if b is 0, SetBit sets z = x &^ (1 << i);
   ///   - if b is not 0 or 1, SetBit will panic.
+  #[allow(unused_value)]
   fn SetBit(self: Ref<Int>, x: Ref<Int>, i: int, b: uint) -> Ref<Int>
 
   /// SetBits provides raw (unchecked but fast) access to z by setting its
@@ -765,13 +803,16 @@ impl Int {
   /// z. The result and abs share the same underlying array.
   /// SetBits is intended to support implementation of missing low-level [Int]
   /// functionality outside this package; it should be avoided otherwise.
+  #[allow(unused_value)]
   fn SetBits(self: Ref<Int>, abs: Slice<Word>) -> Ref<Int>
 
   /// SetBytes interprets buf as the bytes of a big-endian unsigned
   /// integer, sets z to that value, and returns z.
+  #[allow(unused_value)]
   fn SetBytes(self: Ref<Int>, buf: Slice<uint8>) -> Ref<Int>
 
   /// SetInt64 sets z to x and returns z.
+  #[allow(unused_value)]
   fn SetInt64(self: Ref<Int>, x: int64) -> Ref<Int>
 
   /// SetString sets z to the value of s, interpreted in the given base,
@@ -800,6 +841,7 @@ impl Int {
   fn SetString(self: Ref<Int>, s: string, base: int) -> Option<Ref<Int>>
 
   /// SetUint64 sets z to x and returns z.
+  #[allow(unused_value)]
   fn SetUint64(self: Ref<Int>, x: uint64) -> Ref<Int>
 
   /// Sign returns:
@@ -810,6 +852,7 @@ impl Int {
 
   /// Sqrt sets z to ⌊√x⌋, the largest integer such that z² ≤ x, and returns z.
   /// It panics if x is negative.
+  #[allow(unused_value)]
   fn Sqrt(self: Ref<Int>, x: Ref<Int>) -> Ref<Int>
 
   /// String returns the decimal representation of x as generated by
@@ -817,6 +860,7 @@ impl Int {
   fn String(self: Ref<Int>) -> string
 
   /// Sub sets z to the difference x-y and returns z.
+  #[allow(unused_value)]
   fn Sub(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 
   /// Text returns the string representation of x in the given base.
@@ -842,14 +886,17 @@ impl Int {
   fn UnmarshalText(self: Ref<Int>, text: Slice<uint8>) -> Result<(), error>
 
   /// Xor sets z = x ^ y and returns z.
+  #[allow(unused_value)]
   fn Xor(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>) -> Ref<Int>
 }
 
 impl Rat {
   /// Abs sets z to |x| (the absolute value of x) and returns z.
+  #[allow(unused_value)]
   fn Abs(self: Ref<Rat>, x: Ref<Rat>) -> Ref<Rat>
 
   /// Add sets z to the sum x+y and returns z.
+  #[allow(unused_value)]
   fn Add(self: Ref<Rat>, x: Ref<Rat>, y: Ref<Rat>) -> Ref<Rat>
 
   /// AppendText implements the [encoding.TextAppender] interface.
@@ -911,6 +958,7 @@ impl Rat {
 
   /// Inv sets z to 1/x and returns z.
   /// If x == 0, Inv panics.
+  #[allow(unused_value)]
   fn Inv(self: Ref<Rat>, x: Ref<Rat>) -> Ref<Rat>
 
   /// IsInt reports whether the denominator of x is 1.
@@ -920,9 +968,11 @@ impl Rat {
   fn MarshalText(self: Ref<Rat>) -> Result<Slice<uint8>, error>
 
   /// Mul sets z to the product x*y and returns z.
+  #[allow(unused_value)]
   fn Mul(self: Ref<Rat>, x: Ref<Rat>, y: Ref<Rat>) -> Ref<Rat>
 
   /// Neg sets z to -x and returns z.
+  #[allow(unused_value)]
   fn Neg(self: Ref<Rat>, x: Ref<Rat>) -> Ref<Rat>
 
   /// Num returns the numerator of x; it may be <= 0.
@@ -933,6 +983,7 @@ impl Rat {
 
   /// Quo sets z to the quotient x/y and returns z.
   /// If y == 0, Quo panics.
+  #[allow(unused_value)]
   fn Quo(self: Ref<Rat>, x: Ref<Rat>, y: Ref<Rat>) -> Ref<Rat>
 
   /// RatString returns a string representation of x in the form "a/b" if b != 1,
@@ -944,6 +995,7 @@ impl Rat {
   fn Scan(self: Ref<Rat>, s: fmt.ScanState, ch: int32) -> Result<(), error>
 
   /// Set sets z to x (by making a copy of x) and returns z.
+  #[allow(unused_value)]
   fn Set(self: Ref<Rat>, x: Ref<Rat>) -> Ref<Rat>
 
   /// SetFloat64 sets z to exactly f and returns z.
@@ -952,16 +1004,20 @@ impl Rat {
 
   /// SetFrac sets z to a/b and returns z.
   /// If b == 0, SetFrac panics.
+  #[allow(unused_value)]
   fn SetFrac(self: Ref<Rat>, a: Ref<Int>, b: Ref<Int>) -> Ref<Rat>
 
   /// SetFrac64 sets z to a/b and returns z.
   /// If b == 0, SetFrac64 panics.
+  #[allow(unused_value)]
   fn SetFrac64(self: Ref<Rat>, a: int64, b: int64) -> Ref<Rat>
 
   /// SetInt sets z to x (by making a copy of x) and returns z.
+  #[allow(unused_value)]
   fn SetInt(self: Ref<Rat>, x: Ref<Int>) -> Ref<Rat>
 
   /// SetInt64 sets z to x and returns z.
+  #[allow(unused_value)]
   fn SetInt64(self: Ref<Rat>, x: int64) -> Ref<Rat>
 
   /// SetString sets z to the value of s and returns z and a boolean indicating
@@ -986,6 +1042,7 @@ impl Rat {
   fn SetString(self: Ref<Rat>, s: string) -> Option<Ref<Rat>>
 
   /// SetUint64 sets z to x and returns z.
+  #[allow(unused_value)]
   fn SetUint64(self: Ref<Rat>, x: uint64) -> Ref<Rat>
 
   /// Sign returns:
@@ -998,6 +1055,7 @@ impl Rat {
   fn String(self: Ref<Rat>) -> string
 
   /// Sub sets z to the difference x-y and returns z.
+  #[allow(unused_value)]
   fn Sub(self: Ref<Rat>, x: Ref<Rat>, y: Ref<Rat>) -> Ref<Rat>
 
   /// UnmarshalText implements the [encoding.TextUnmarshaler] interface.

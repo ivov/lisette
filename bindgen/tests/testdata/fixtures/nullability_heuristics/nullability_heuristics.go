@@ -23,7 +23,10 @@ type Builder struct{ buf []byte }
 
 func (b *Builder) Reset() *Builder                 { b.buf = nil; return b }
 func (b *Builder) Append(data []byte) *Builder     { b.buf = append(b.buf, data...); return b }
-func (b *Builder) SetTag(key, val string) *Builder { return b }
+func (b *Builder) SetTag(key, val string) *Builder {
+	b.buf = append(b.buf, []byte(key+"="+val)...)
+	return b
+}
 
 var defaultBuilder = &Builder{}
 

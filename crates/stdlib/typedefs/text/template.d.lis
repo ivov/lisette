@@ -112,6 +112,7 @@ impl Template {
   /// definitions will inherit the settings. An empty delimiter stands for the
   /// corresponding default: {{ or }}.
   /// The return value is the template, so calls can be chained.
+  #[allow(unused_value)]
   fn Delims(self: Ref<Template>, left: string, right: string) -> Ref<Template>
 
   /// ErrorContext returns a textual representation of the location of the node in the input text.
@@ -151,6 +152,7 @@ impl Template {
   /// type or if the name cannot be used syntactically as a function in a template.
   /// It is legal to overwrite elements of the map. The return value is the template,
   /// so calls can be chained.
+  #[allow(unused_value)]
   fn Funcs(self: Ref<Template>, funcMap: FuncMap) -> Ref<Template>
 
   /// Lookup returns the template with the given name that is associated with t.
@@ -187,6 +189,7 @@ impl Template {
   /// 		The operation returns the zero value for the map type's element.
   /// 	"missingkey=error"
   /// 		Execution stops immediately with an error.
+  #[allow(unused_value)]
   fn Option(self: Ref<Template>, opt: VarArgs<string>) -> Ref<Template>
 
   /// Parse parses text as a template body for t.
