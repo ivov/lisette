@@ -39,6 +39,62 @@ func isReferenceType(typeStr string) bool {
 	return strings.HasPrefix(typeStr, "Slice<") || strings.HasPrefix(typeStr, "Map<")
 }
 
+// liftReflectionDecodeParams returns (specs, nil) when not whitelisted or no
+// `interface{}` params are liftable; the index map encodes per-param Ref<T>
+// rewrites for the caller to apply during the param loop.
+func (c *Converter) liftReflectionDecodeParams(
+	sig *types.Signature,
+	qualifiedName string,
+	specs TypeParamSpecs,
+) (TypeParamSpecs, map[int]string) {
+	if !c.cfg.IsReflectionDecode(c.currentPkgPath, qualifiedName) {
+		return specs, nil
+	}
+	used := make(map[string]bool, len(specs))
+	for _, s := range specs {
+		used[s.Name] = true
+	}
+	var overrides map[int]string
+	params := sig.Params()
+	for i := 0; i < params.Len(); i++ {
+		if sig.Variadic() && i == params.Len()-1 {
+			continue
+		}
+		t := params.At(i).Type()
+		for {
+			alias, ok := t.(*types.Alias)
+			if !ok {
+				break
+			}
+			t = alias.Rhs()
+		}
+		iface, ok := t.(*types.Interface)
+		if !ok || !iface.Empty() || isErrorInterface(iface) {
+			continue
+		}
+		name := freshTypeParamName(used)
+		used[name] = true
+		specs = append(specs, TypeParamSpec{Name: name})
+		if overrides == nil {
+			overrides = make(map[int]string)
+		}
+		overrides[i] = fmt.Sprintf("Ref<%s>", name)
+	}
+	return specs, overrides
+}
+
+func freshTypeParamName(used map[string]bool) string {
+	if !used["T"] {
+		return "T"
+	}
+	for n := 2; ; n++ {
+		candidate := fmt.Sprintf("T%d", n)
+		if !used[candidate] {
+			return candidate
+		}
+	}
+}
+
 func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.SymbolExport) {
 	signature, ok := symbolExport.GoType.(*types.Signature)
 	if !ok {
@@ -58,6 +114,9 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	c.typeParamSubstitutions = substitutions
 	defer func() { c.typeParamSubstitutions = prevSubs }()
 
+	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, result.Name, result.TypeParams)
+	result.TypeParams = liftedSpecs
+
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, result.Name)
 
 	params := signature.Params()
@@ -72,6 +131,9 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 		typeStr := paramType.LisetteType
 		if signature.Variadic() && i == params.Len()-1 {
 			typeStr = sliceToVarArgs(typeStr)
+		}
+		if override, ok := paramOverrides[i]; ok {
+			typeStr = override
 		}
 
 		name := param.Name()
@@ -204,6 +266,13 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		qualifiedName = result.Receiver.BaseTypeName + "." + result.Name
 	}
 
+	methodSpecs, _, skip := collectTypeParams(signature.TypeParams(), false, c)
+	if skip != nil {
+		result.SkipReason = skip
+		return
+	}
+	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, qualifiedName, methodSpecs)
+
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, qualifiedName)
 
 	params := signature.Params()
@@ -218,6 +287,9 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		typeStr := paramType.LisetteType
 		if signature.Variadic() && i == params.Len()-1 {
 			typeStr = sliceToVarArgs(typeStr)
+		}
+		if override, ok := paramOverrides[i]; ok {
+			typeStr = override
 		}
 
 		name := param.Name()
@@ -290,12 +362,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		}
 	}
 
-	methodSpecs, _, skip := collectTypeParams(signature.TypeParams(), false, c)
-	if skip != nil {
-		result.SkipReason = skip
-		return
-	}
-	result.TypeParams = methodSpecs
+	result.TypeParams = liftedSpecs
 }
 
 func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport) {

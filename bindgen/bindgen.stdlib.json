@@ -375,6 +375,12 @@
         "image/color": ["*"],
         "io/ioutil": ["Discard"],
         "unicode": ["*"]
+      },
+      "reflection_decode": {
+        "encoding/json": ["Unmarshal", "Decoder.Decode"],
+        "encoding/xml": ["Unmarshal", "Decoder.Decode", "Decoder.DecodeElement"],
+        "encoding/gob": ["Decoder.Decode"],
+        "encoding/binary": ["Read"]
       }
     }
   }

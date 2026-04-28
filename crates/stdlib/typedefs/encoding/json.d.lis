@@ -265,7 +265,7 @@ pub fn NewEncoder(w: io.Writer) -> Ref<Encoder>
 /// invalid UTF-16 surrogate pairs are not treated as an error.
 /// Instead, they are replaced by the Unicode replacement
 /// character U+FFFD.
-pub fn Unmarshal(data: Slice<uint8>, v: Unknown) -> Result<(), error>
+pub fn Unmarshal<T>(data: Slice<uint8>, v: Ref<T>) -> Result<(), error>
 
 /// Valid reports whether data is a valid JSON encoding.
 pub fn Valid(data: Slice<uint8>) -> bool
@@ -384,7 +384,7 @@ impl Decoder {
   /// 
   /// See the documentation for [Unmarshal] for details about
   /// the conversion of JSON into a Go value.
-  fn Decode(self: Ref<Decoder>, v: Unknown) -> Result<(), error>
+  fn Decode<T>(self: Ref<Decoder>, v: Ref<T>) -> Result<(), error>
 
   /// DisallowUnknownFields causes the Decoder to return an error when the destination
   /// is a struct and the input contains object keys which do not match any

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ivov/lisette/bindgen/internal/cli"
+	"github.com/ivov/lisette/bindgen/internal/config"
 )
 
 var update = flag.Bool("update", false, "update snapshot files")
@@ -84,7 +85,17 @@ func snapshotPathFor(fixturePath string) string {
 }
 
 func runBindgen(t *testing.T, pkgPath string) []byte {
-	result, err := cli.GeneratePkg("./"+pkgPath, "0.0.0", "0.0.0", nil)
+	var cfg *config.Config
+	cfgPath := filepath.Join(pkgPath, "bindgen.json")
+	if _, err := os.Stat(cfgPath); err == nil {
+		loaded, err := config.LoadConfig(cfgPath, nil)
+		if err != nil {
+			t.Fatalf("failed to load fixture config %s: %v", cfgPath, err)
+		}
+		cfg = &loaded
+	}
+
+	result, err := cli.GeneratePkg("./"+pkgPath, "0.0.0", "0.0.0", cfg)
 	if err != nil {
 		t.Fatalf("bindgen failed: %v", err)
 	}

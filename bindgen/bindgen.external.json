@@ -1813,6 +1813,44 @@
         "periph.io/x/conn/v3/pin": [
           "*"
         ]
+      },
+      "reflection_decode": {
+        "github.com/spf13/viper": [
+          "Unmarshal",
+          "UnmarshalKey",
+          "UnmarshalExact",
+          "Viper.Unmarshal",
+          "Viper.UnmarshalKey",
+          "Viper.UnmarshalExact"
+        ],
+        "gopkg.in/yaml.v3": [
+          "Unmarshal",
+          "Decoder.Decode"
+        ],
+        "gopkg.in/yaml.v2": [
+          "Unmarshal",
+          "UnmarshalStrict",
+          "Decoder.Decode"
+        ],
+        "github.com/goccy/go-yaml": [
+          "Unmarshal",
+          "UnmarshalWithOptions",
+          "Decoder.Decode"
+        ],
+        "github.com/BurntSushi/toml": [
+          "Unmarshal",
+          "Decoder.Decode"
+        ],
+        "github.com/pelletier/go-toml/v2": [
+          "Unmarshal",
+          "Decoder.Decode"
+        ],
+        "github.com/go-viper/mapstructure/v2": [
+          "Decode",
+          "WeakDecode",
+          "DecodeMetadata",
+          "WeakDecodeMetadata"
+        ]
       }
     }
   }

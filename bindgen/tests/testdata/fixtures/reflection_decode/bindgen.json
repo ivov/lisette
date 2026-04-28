@@ -1,0 +1,18 @@
+{
+  "overrides": {
+    "types": {
+      "reflection_decode": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/reflection_decode": [
+          "Unmarshal",
+          "UnmarshalKey",
+          "DecodeBoth",
+          "ScanRow",
+          "DecodeWithErr",
+          "DecodeAny",
+          "Decoder.Decode",
+          "Codec.Unmarshal"
+        ]
+      }
+    }
+  }
+}

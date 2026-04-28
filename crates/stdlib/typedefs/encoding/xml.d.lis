@@ -194,7 +194,7 @@ pub fn NewTokenDecoder(t: TokenReader) -> Ref<Decoder>
 /// A missing element or empty attribute value will be unmarshaled as a zero value.
 /// If the field is a slice, a zero value will be appended to the field. Otherwise, the
 /// field will be set to its zero value.
-pub fn Unmarshal(data: Slice<uint8>, v: Unknown) -> Result<(), error>
+pub fn Unmarshal<T>(data: Slice<uint8>, v: Ref<T>) -> Result<(), error>
 
 /// An Attr represents an attribute in an XML element (Name=Value).
 pub struct Attr {
@@ -394,13 +394,13 @@ impl Comment {
 impl Decoder {
   /// Decode works like [Unmarshal], except it reads the decoder
   /// stream to find the start element.
-  fn Decode(self: Ref<Decoder>, v: Unknown) -> Result<(), error>
+  fn Decode<T>(self: Ref<Decoder>, v: Ref<T>) -> Result<(), error>
 
   /// DecodeElement works like [Unmarshal] except that it takes
   /// a pointer to the start XML element to decode into v.
   /// It is useful when a client reads some raw XML tokens itself
   /// but also wants to defer to [Unmarshal] for some elements.
-  fn DecodeElement(self: Ref<Decoder>, v: Unknown, start: Ref<StartElement>) -> Result<(), error>
+  fn DecodeElement<T>(self: Ref<Decoder>, v: Ref<T>, start: Ref<StartElement>) -> Result<(), error>
 
   /// InputOffset returns the input stream byte offset of the current decoder position.
   /// The offset gives the location of the end of the most recently returned token

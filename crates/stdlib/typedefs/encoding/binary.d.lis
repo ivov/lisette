@@ -55,7 +55,7 @@ pub fn PutVarint(mut buf: Slice<uint8>, x: int64) -> int
 /// The error is [io.EOF] only if no bytes were read.
 /// If an [io.EOF] happens after reading some but not all the bytes,
 /// Read returns [io.ErrUnexpectedEOF].
-pub fn Read(r: io.Reader, order: ByteOrder, data: Unknown) -> Result<(), error>
+pub fn Read<T>(r: io.Reader, order: ByteOrder, data: Ref<T>) -> Result<(), error>
 
 /// ReadUvarint reads an encoded unsigned integer from r and returns it as a uint64.
 /// The error is [io.EOF] only if no bytes were read.

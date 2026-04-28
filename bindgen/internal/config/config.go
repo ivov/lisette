@@ -38,6 +38,10 @@ type TypeOverrides struct {
 	// "absent" with `-1`. Bindgen rewrites the return to `Option<int>`
 	// and emits `#[go(sentinel_minus_one)]`.
 	SentinelMinusOne map[string][]string `json:"sentinel_minus_one"`
+	// ReflectionDecode declares functions whose `interface{}` params reach
+	// Go reflection; each such param is lifted to a fresh `T` and rewritten
+	// to `Ref<T>`.
+	ReflectionDecode map[string][]string `json:"reflection_decode"`
 }
 
 // LoadConfig loads bindgen configuration from the given path.
@@ -180,6 +184,20 @@ func (c *Config) SentinelInt(pkg, name string) (int, bool) {
 		return -1, true
 	}
 	return 0, false
+}
+
+// IsReflectionDecode reports whether the given function or method is
+// configured to lift its `interface{}` params to `Ref<T>`. Uses "Type.Method"
+// dot notation for methods.
+func (c *Config) IsReflectionDecode(pkg, name string) bool {
+	if c == nil {
+		return false
+	}
+	names, ok := lookupWithGlob(c.Overrides.Types.ReflectionDecode, pkg)
+	if !ok {
+		return false
+	}
+	return matchesWildcard(names, name)
 }
 
 // IsNeverReturn returns true if the given function or method in the given
