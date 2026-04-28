@@ -339,6 +339,9 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
 			e.buf.WriteString("  #[allow(unused_result)]\n")
 		}
 	}
+	if result.BuilderMethod {
+		e.buf.WriteString("  #[allow(unused_value)]\n")
+	}
 
 	var methodSignature strings.Builder
 	methodSignature.WriteString("  fn ")

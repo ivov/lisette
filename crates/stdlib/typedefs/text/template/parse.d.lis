@@ -420,11 +420,13 @@ impl IdentifierNode {
   /// SetPos sets the position. [NewIdentifier] is a public method so we can't modify its signature.
   /// Chained for convenience.
   /// TODO: fix one day?
+  #[allow(unused_value)]
   fn SetPos(self: Ref<IdentifierNode>, pos: Pos) -> Ref<IdentifierNode>
 
   /// SetTree sets the parent tree for the node. [NewIdentifier] is a public method so we can't modify its signature.
   /// Chained for convenience.
   /// TODO: fix one day?
+  #[allow(unused_value)]
   fn SetTree(self: Ref<IdentifierNode>, t: Ref<Tree>) -> Ref<IdentifierNode>
 
   fn String(self: Ref<IdentifierNode>) -> string

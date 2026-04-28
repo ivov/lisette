@@ -32,6 +32,8 @@ type ConvertResult struct {
 	// rewrites the return type to Option<int> and emits the matching
 	// flag-name annotation (e.g. `#[go(sentinel_minus_one)]`).
 	SentinelInt *int
+	// BuilderMethod suppresses unused_value on fluent-chain returns the caller typically discards.
+	BuilderMethod bool
 }
 
 type FunctionParameter struct {

@@ -21,6 +21,7 @@ type Overrides struct {
 // LintOverrides holds lint-suppression overrides.
 type LintOverrides struct {
 	AllowUnusedResult map[string][]string `json:"allow_unused_result"`
+	DenyUnusedValue   map[string][]string `json:"deny_unused_value"`
 }
 
 // TypeOverrides holds type-conversion overrides.
@@ -75,6 +76,18 @@ func (c *Config) ShouldAllowUnusedResult(pkg, funcName string) bool {
 		return false
 	}
 	return matchesWildcard(funcs, funcName)
+}
+
+// ShouldDenyUnusedValue forces the AST fluent-method heuristic off for curated methods that match its shape but semantically return new values.
+func (c *Config) ShouldDenyUnusedValue(pkg, name string) bool {
+	if c == nil {
+		return false
+	}
+	names, ok := lookupWithGlob(c.Overrides.Lints.DenyUnusedValue, pkg)
+	if !ok {
+		return false
+	}
+	return matchesWildcard(names, name)
 }
 
 // ShouldWrapNilableReturn returns true if the given function or method in the given

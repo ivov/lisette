@@ -5,6 +5,10 @@
         "bytes": ["Buffer.WriteByte", "Buffer.WriteRune", "Buffer.WriteString"],
         "fmt": ["Print", "Printf", "Println", "Fprint", "Fprintf", "Fprintln"],
         "strings": ["Builder.WriteByte", "Builder.WriteRune", "Builder.WriteString"]
+      },
+      "deny_unused_value": {
+        "go/types": ["TypeParam.Underlying"],
+        "html/template": ["Template.New"]
       }
     },
     "types": {

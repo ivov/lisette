@@ -210,6 +210,7 @@ impl Scanner {
   /// Init initializes a [Scanner] with a new source and returns s.
   /// [Scanner.Error] is set to nil, [Scanner.ErrorCount] is set to 0, [Scanner.Mode] is set to [GoTokens],
   /// and [Scanner.Whitespace] is set to [GoWhitespace].
+  #[allow(unused_value)]
   fn Init(self: Ref<Scanner>, src: io.Reader) -> Ref<Scanner>
 
   /// IsValid reports whether the position is valid.

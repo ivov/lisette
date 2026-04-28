@@ -74,8 +74,11 @@ pub struct Widget {
 }
 
 impl Builder {
+  #[allow(unused_value)]
   fn Append(self: Ref<Builder>, data: Slice<uint8>) -> Ref<Builder>
+  #[allow(unused_value)]
   fn Reset(self: Ref<Builder>) -> Ref<Builder>
+  #[allow(unused_value)]
   fn SetTag(self: Ref<Builder>, key: string, val: string) -> Ref<Builder>
 }
 

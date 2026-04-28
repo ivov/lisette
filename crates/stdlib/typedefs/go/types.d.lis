@@ -1104,6 +1104,7 @@ impl Interface {
   /// panic occurs. Complete returns the receiver.
   /// 
   /// Interface types that have been completed are safe for concurrent use.
+  #[allow(unused_value)]
   fn Complete(self: Ref<Interface>) -> Ref<Interface>
 
   /// Embedded returns the i'th embedded defined (*[Named]) type of interface t for 0 <= i < t.NumEmbeddeds().
