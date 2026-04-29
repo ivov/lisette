@@ -1240,18 +1240,9 @@ impl Type {
             Type::Var { id, hint } => match vars.get(&id.0) {
                 Some(g) => Type::Parameter(g.clone()),
                 None => {
-                    let name: EcoString = hint.clone().unwrap_or_else(|| {
-                        char::from_digit(
-                            (vars.len() + 10)
-                                .try_into()
-                                .expect("type var count fits in u32"),
-                            16,
-                        )
-                        .expect("type var index is valid hex digit")
-                        .to_uppercase()
-                        .to_string()
-                        .into()
-                    });
+                    let name: EcoString = hint
+                        .clone()
+                        .unwrap_or_else(|| alpha_index(vars.len()).into());
 
                     vars.insert(id.0, name.clone());
                     Type::Parameter(name)
@@ -1360,5 +1351,94 @@ impl Type {
             }
             _ => false,
         }
+    }
+}
+
+/// 0 → "A", 25 → "Z", 26 → "AA", 27 → "AB", ... (bijective base-26 over A-Z).
+fn alpha_index(idx: usize) -> String {
+    let mut s = String::new();
+    let mut n = idx + 1;
+    while n > 0 {
+        n -= 1;
+        s.insert(0, (b'A' + (n % 26) as u8) as char);
+        n /= 26;
+    }
+    s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alpha_index_single() {
+        assert_eq!(alpha_index(0), "A");
+        assert_eq!(alpha_index(5), "F");
+        assert_eq!(alpha_index(25), "Z");
+    }
+
+    #[test]
+    fn alpha_index_double() {
+        assert_eq!(alpha_index(26), "AA");
+        assert_eq!(alpha_index(27), "AB");
+        assert_eq!(alpha_index(51), "AZ");
+        assert_eq!(alpha_index(52), "BA");
+        assert_eq!(alpha_index(701), "ZZ");
+    }
+
+    #[test]
+    fn alpha_index_triple() {
+        assert_eq!(alpha_index(702), "AAA");
+    }
+
+    fn unhinted_var(id: u32) -> Type {
+        Type::Var {
+            id: TypeVarId(id),
+            hint: None,
+        }
+    }
+
+    #[test]
+    fn remove_vars_handles_more_than_six_unhinted_vars() {
+        let func = Type::Function {
+            params: (0..6).map(unhinted_var).collect(),
+            param_mutability: vec![false; 6],
+            bounds: vec![],
+            return_type: Box::new(unhinted_var(6)),
+        };
+
+        let (resolved, generics) = Type::remove_vars(&[&func]);
+
+        assert_eq!(generics.len(), 7);
+        let Type::Function {
+            params,
+            return_type,
+            ..
+        } = &resolved[0]
+        else {
+            panic!("expected function type");
+        };
+        let names: Vec<_> = params
+            .iter()
+            .chain(std::iter::once(return_type.as_ref()))
+            .map(|p| match p {
+                Type::Parameter(name) => name.to_string(),
+                other => panic!("expected parameter, got {:?}", other),
+            })
+            .collect();
+        assert_eq!(names, vec!["A", "B", "C", "D", "E", "F", "G"]);
+    }
+
+    #[test]
+    fn remove_vars_handles_dozens_of_unhinted_vars() {
+        let params: Vec<Type> = (0..30).map(unhinted_var).collect();
+        let func = Type::Function {
+            params: params.clone(),
+            param_mutability: vec![false; params.len()],
+            bounds: vec![],
+            return_type: Box::new(Type::Simple(SimpleKind::Unit)),
+        };
+        let (_, generics) = Type::remove_vars(&[&func]);
+        assert_eq!(generics.len(), 30);
     }
 }
