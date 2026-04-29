@@ -16,7 +16,7 @@ pub fn New() -> hash.Hash
 pub fn Sum(data: Slice<uint8>) -> Slice<uint8>
 
 /// The blocksize of SHA-1 in bytes.
-const BlockSize = 64
+pub const BlockSize = 64
 
 /// The size of a SHA-1 checksum in bytes.
-const Size = 20
+pub const Size = 20

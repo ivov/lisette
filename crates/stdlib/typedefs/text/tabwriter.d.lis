@@ -74,13 +74,13 @@ pub fn NewWriter(
 pub type Writer
 
 /// Formatting can be controlled with these flags.
-const AlignRight = 4
+pub const AlignRight = 4
 
 /// Formatting can be controlled with these flags.
-const Debug = 32
+pub const Debug = 32
 
 /// Formatting can be controlled with these flags.
-const DiscardEmptyColumns = 8
+pub const DiscardEmptyColumns = 8
 
 /// To escape a text segment, bracket it with Escape characters.
 /// For instance, the tab in this string "Ignore this tab: \xff\t\xff"
@@ -88,16 +88,16 @@ const DiscardEmptyColumns = 8
 /// width one for formatting purposes.
 /// 
 /// The value 0xff was chosen because it cannot appear in a valid UTF-8 sequence.
-const Escape = 255
+pub const Escape = 255
 
 /// Formatting can be controlled with these flags.
-const FilterHTML = 1
+pub const FilterHTML = 1
 
 /// Formatting can be controlled with these flags.
-const StripEscape = 2
+pub const StripEscape = 2
 
 /// Formatting can be controlled with these flags.
-const TabIndent = 16
+pub const TabIndent = 16
 
 impl Writer {
   /// Flush should be called after the last call to [Writer.Write] to ensure

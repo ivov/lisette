@@ -126,13 +126,13 @@ pub interface ByteOrder {
 }
 
 /// MaxVarintLenN is the maximum length of a varint-encoded N-bit integer.
-const MaxVarintLen16 = 3
+pub const MaxVarintLen16 = 3
 
 /// MaxVarintLenN is the maximum length of a varint-encoded N-bit integer.
-const MaxVarintLen32 = 5
+pub const MaxVarintLen32 = 5
 
 /// MaxVarintLenN is the maximum length of a varint-encoded N-bit integer.
-const MaxVarintLen64 = 10
+pub const MaxVarintLen64 = 10
 
 pub var BigEndian: ()
 

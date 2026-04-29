@@ -228,11 +228,11 @@ pub interface Value {
   fn String() -> string
 }
 
-const ContinueOnError: ErrorHandling = 0
+pub const ContinueOnError: ErrorHandling = 0
 
-const ExitOnError: ErrorHandling = 1
+pub const ExitOnError: ErrorHandling = 1
 
-const PanicOnError: ErrorHandling = 2
+pub const PanicOnError: ErrorHandling = 2
 
 pub var CommandLine: Ref<FlagSet>
 

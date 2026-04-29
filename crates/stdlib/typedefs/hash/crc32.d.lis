@@ -36,16 +36,16 @@ pub fn Update(crc: uint32, tab: Ref<Table>, p: Slice<uint8>) -> uint32
 pub struct Table(Slice<uint32>)
 
 /// Predefined polynomials.
-const Castagnoli = 0x82f63b78
+pub const Castagnoli = 0x82f63b78
 
 /// Predefined polynomials.
-const IEEE = 0xedb88320
+pub const IEEE = 0xedb88320
 
 /// Predefined polynomials.
-const Koopman = 0xeb31d82e
+pub const Koopman = 0xeb31d82e
 
 /// The size of a CRC-32 checksum in bytes.
-const Size = 4
+pub const Size = 4
 
 /// IEEETable is the table for the [IEEE] polynomial.
 pub var IEEETable: Ref<Table>

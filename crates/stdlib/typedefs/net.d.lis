@@ -748,23 +748,23 @@ pub type UnixListener
 
 pub struct UnknownNetworkError(string)
 
-const FlagBroadcast: Flags = 2
+pub const FlagBroadcast: Flags = 2
 
-const FlagLoopback: Flags = 4
+pub const FlagLoopback: Flags = 4
 
-const FlagMulticast: Flags = 16
+pub const FlagMulticast: Flags = 16
 
-const FlagPointToPoint: Flags = 8
+pub const FlagPointToPoint: Flags = 8
 
-const FlagRunning: Flags = 32
+pub const FlagRunning: Flags = 32
 
-const FlagUp: Flags = 1
-
-/// IP address lengths (bytes).
-const IPv4len = 4
+pub const FlagUp: Flags = 1
 
 /// IP address lengths (bytes).
-const IPv6len = 16
+pub const IPv4len = 4
+
+/// IP address lengths (bytes).
+pub const IPv6len = 16
 
 /// DefaultResolver is the resolver used by the package-level Lookup
 /// functions and by Dialers without a specified Resolver.

@@ -31,17 +31,17 @@ pub type EncapsulationKey1024
 /// decapsulated by the corresponding DecapsulationKey768.
 pub type EncapsulationKey768
 
-const CiphertextSize1024 = 1568
+pub const CiphertextSize1024 = 1568
 
-const CiphertextSize768 = 1088
+pub const CiphertextSize768 = 1088
 
-const EncapsulationKeySize1024 = 1568
+pub const EncapsulationKeySize1024 = 1568
 
-const EncapsulationKeySize768 = 1184
+pub const EncapsulationKeySize768 = 1184
 
-const SeedSize = 64
+pub const SeedSize = 64
 
-const SharedKeySize = 32
+pub const SharedKeySize = 32
 
 impl DecapsulationKey1024 {
   /// Bytes returns the decapsulation key as a 64-byte seed in the "d || z" form.

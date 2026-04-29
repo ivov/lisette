@@ -51,23 +51,23 @@ pub struct Writer {
 
 /// These constants are copied from the [flate] package, so that code that imports
 /// [compress/gzip] does not also have to import [compress/flate].
-const BestCompression = 9
+pub const BestCompression = 9
 
 /// These constants are copied from the [flate] package, so that code that imports
 /// [compress/gzip] does not also have to import [compress/flate].
-const BestSpeed = 1
+pub const BestSpeed = 1
 
 /// These constants are copied from the [flate] package, so that code that imports
 /// [compress/gzip] does not also have to import [compress/flate].
-const DefaultCompression = -1
+pub const DefaultCompression = -1
 
 /// These constants are copied from the [flate] package, so that code that imports
 /// [compress/gzip] does not also have to import [compress/flate].
-const HuffmanOnly = -2
+pub const HuffmanOnly = -2
 
 /// These constants are copied from the [flate] package, so that code that imports
 /// [compress/gzip] does not also have to import [compress/flate].
-const NoCompression = 0
+pub const NoCompression = 0
 
 pub var ErrChecksum: error
 

@@ -47,13 +47,13 @@ pub struct Sym {
   pub Name: string,
 }
 
-const Magic386 = 491
+pub const Magic386 = 491
 
-const Magic64 = 0x8000
+pub const Magic64 = 0x8000
 
-const MagicAMD64 = 35479
+pub const MagicAMD64 = 35479
 
-const MagicARM = 1607
+pub const MagicARM = 1607
 
 /// ErrNoSymbols is returned by [File.Symbols] if there is no such section
 /// in the File.

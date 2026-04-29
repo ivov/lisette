@@ -518,71 +518,71 @@ pub struct Thread {
 /// A Type is the Mach-O file type, e.g. an object file, executable, or dynamic library.
 pub struct Type(uint32)
 
-const FlagAllModsBound = 0x1000
+pub const FlagAllModsBound = 0x1000
 
-const FlagAllowStackExecution = 0x20000
+pub const FlagAllowStackExecution = 0x20000
 
-const FlagAppExtensionSafe = 0x2000000
+pub const FlagAppExtensionSafe = 0x2000000
 
-const FlagBindAtLoad = 0x8
+pub const FlagBindAtLoad = 0x8
 
-const FlagBindsToWeak = 0x10000
+pub const FlagBindsToWeak = 0x10000
 
-const FlagCanonical = 0x4000
+pub const FlagCanonical = 0x4000
 
-const FlagDeadStrippableDylib = 0x400000
+pub const FlagDeadStrippableDylib = 0x400000
 
-const FlagDyldLink = 0x4
+pub const FlagDyldLink = 0x4
 
-const FlagForceFlat = 0x100
+pub const FlagForceFlat = 0x100
 
-const FlagHasTLVDescriptors = 0x800000
+pub const FlagHasTLVDescriptors = 0x800000
 
-const FlagIncrLink = 0x2
+pub const FlagIncrLink = 0x2
 
-const FlagLazyInit = 0x40
+pub const FlagLazyInit = 0x40
 
-const FlagNoFixPrebinding = 0x400
+pub const FlagNoFixPrebinding = 0x400
 
-const FlagNoHeapExecution = 0x1000000
+pub const FlagNoHeapExecution = 0x1000000
 
-const FlagNoMultiDefs = 0x200
+pub const FlagNoMultiDefs = 0x200
 
-const FlagNoReexportedDylibs = 0x100000
+pub const FlagNoReexportedDylibs = 0x100000
 
-const FlagNoUndefs = 0x1
+pub const FlagNoUndefs = 0x1
 
-const FlagPIE = 0x200000
+pub const FlagPIE = 0x200000
 
-const FlagPrebindable = 0x800
+pub const FlagPrebindable = 0x800
 
-const FlagPrebound = 0x10
+pub const FlagPrebound = 0x10
 
-const FlagRootSafe = 0x40000
+pub const FlagRootSafe = 0x40000
 
-const FlagSetuidSafe = 0x80000
+pub const FlagSetuidSafe = 0x80000
 
-const FlagSplitSegs = 0x20
+pub const FlagSplitSegs = 0x20
 
-const FlagSubsectionsViaSymbols = 0x2000
+pub const FlagSubsectionsViaSymbols = 0x2000
 
-const FlagTwoLevel = 0x80
+pub const FlagTwoLevel = 0x80
 
-const FlagWeakDefines = 0x8000
+pub const FlagWeakDefines = 0x8000
 
-const Magic32 = 0xfeedface
+pub const Magic32 = 0xfeedface
 
-const Magic64 = 0xfeedfacf
+pub const Magic64 = 0xfeedfacf
 
-const MagicFat = 0xcafebabe
+pub const MagicFat = 0xcafebabe
 
-const TypeBundle: Type = 8
+pub const TypeBundle: Type = 8
 
-const TypeDylib: Type = 6
+pub const TypeDylib: Type = 6
 
-const TypeExec: Type = 2
+pub const TypeExec: Type = 2
 
-const TypeObj: Type = 1
+pub const TypeObj: Type = 1
 
 /// ErrNotFat is returned from [NewFatFile] or [OpenFat] when the file is not a
 /// universal binary but may be a thin binary, based on its magic number.

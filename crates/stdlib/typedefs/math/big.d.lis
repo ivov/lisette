@@ -136,16 +136,16 @@ pub type Rat
 pub struct Word(uint)
 
 /// MaxBase is the largest number base accepted for string conversions.
-const MaxBase = 62
+pub const MaxBase = 62
 
 /// Exponent and precision limits.
-const MaxExp = 2147483647
+pub const MaxExp = 2147483647
 
 /// Exponent and precision limits.
-const MaxPrec = 4294967295
+pub const MaxPrec = 4294967295
 
 /// Exponent and precision limits.
-const MinExp = -2147483648
+pub const MinExp = -2147483648
 
 impl Accuracy {
   fn String(self) -> string

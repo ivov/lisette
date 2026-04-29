@@ -45,12 +45,12 @@ pub fn Sum512_224(data: Slice<uint8>) -> Slice<uint8>
 #[go(array_return)]
 pub fn Sum512_256(data: Slice<uint8>) -> Slice<uint8>
 
-const BlockSize = 128
+pub const BlockSize = 128
 
-const Size = 64
+pub const Size = 64
 
-const Size224 = 28
+pub const Size224 = 28
 
-const Size256 = 32
+pub const Size256 = 32
 
-const Size384 = 48
+pub const Size384 = 48

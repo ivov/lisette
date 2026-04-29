@@ -506,163 +506,163 @@ pub struct SyscallError {
 
 /// DevNull is the name of the operating system's “null device.”
 /// On Unix-like systems, it is "/dev/null"; on Windows, "NUL".
-const DevNull = "/dev/null"
+pub const DevNull = "/dev/null"
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeAppend: fs.FileMode = 1073741824
+pub const ModeAppend: fs.FileMode = 1073741824
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeCharDevice: fs.FileMode = 2097152
+pub const ModeCharDevice: fs.FileMode = 2097152
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeDevice: fs.FileMode = 67108864
+pub const ModeDevice: fs.FileMode = 67108864
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeDir: fs.FileMode = 2147483648
+pub const ModeDir: fs.FileMode = 2147483648
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeExclusive: fs.FileMode = 536870912
+pub const ModeExclusive: fs.FileMode = 536870912
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeIrregular: fs.FileMode = 524288
+pub const ModeIrregular: fs.FileMode = 524288
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeNamedPipe: fs.FileMode = 33554432
+pub const ModeNamedPipe: fs.FileMode = 33554432
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModePerm: fs.FileMode = 511
+pub const ModePerm: fs.FileMode = 511
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeSetgid: fs.FileMode = 4194304
+pub const ModeSetgid: fs.FileMode = 4194304
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeSetuid: fs.FileMode = 8388608
+pub const ModeSetuid: fs.FileMode = 8388608
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeSocket: fs.FileMode = 16777216
+pub const ModeSocket: fs.FileMode = 16777216
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeSticky: fs.FileMode = 1048576
+pub const ModeSticky: fs.FileMode = 1048576
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeSymlink: fs.FileMode = 134217728
+pub const ModeSymlink: fs.FileMode = 134217728
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeTemporary: fs.FileMode = 268435456
+pub const ModeTemporary: fs.FileMode = 268435456
 
 /// The defined file mode bits are the most significant bits of the [FileMode].
 /// The nine least-significant bits are the standard Unix rwxrwxrwx permissions.
 /// The values of these bits should be considered part of the public API and
 /// may be used in wire protocols or disk representations: they must not be
 /// changed, although new bits might be added.
-const ModeType: fs.FileMode = 2401763328
+pub const ModeType: fs.FileMode = 2401763328
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-const O_APPEND = 8
+pub const O_APPEND = 8
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-const O_CREATE = 512
+pub const O_CREATE = 512
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-const O_EXCL = 2048
+pub const O_EXCL = 2048
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-const O_RDONLY = 0
+pub const O_RDONLY = 0
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-const O_RDWR = 2
+pub const O_RDWR = 2
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-const O_SYNC = 128
+pub const O_SYNC = 128
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-const O_TRUNC = 1024
+pub const O_TRUNC = 1024
 
 /// Flags to OpenFile wrapping those of the underlying system. Not all
 /// flags may be implemented on a given system.
-const O_WRONLY = 1
+pub const O_WRONLY = 1
 
-const PathListSeparator = 58
+pub const PathListSeparator = 58
 
-const PathSeparator = 47
+pub const PathSeparator = 47
 
 /// Seek whence values.
 /// 
 /// Deprecated: Use io.SeekStart, io.SeekCurrent, and io.SeekEnd.
-const SEEK_CUR = 1
+pub const SEEK_CUR = 1
 
 /// Seek whence values.
 /// 
 /// Deprecated: Use io.SeekStart, io.SeekCurrent, and io.SeekEnd.
-const SEEK_END = 2
+pub const SEEK_END = 2
 
 /// Seek whence values.
 /// 
 /// Deprecated: Use io.SeekStart, io.SeekCurrent, and io.SeekEnd.
-const SEEK_SET = 0
+pub const SEEK_SET = 0
 
 /// Args hold the command-line arguments, starting with the program name.
 pub var Args: Slice<string>

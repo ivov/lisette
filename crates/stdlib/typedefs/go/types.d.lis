@@ -778,37 +778,37 @@ pub type Union
 /// A Variable represents a declared variable (including function parameters and results, and struct fields).
 pub type Var
 
-const FieldVal: SelectionKind = 0
+pub const FieldVal: SelectionKind = 0
 
-const IsBoolean: BasicInfo = 1
+pub const IsBoolean: BasicInfo = 1
 
-const IsComplex: BasicInfo = 16
+pub const IsComplex: BasicInfo = 16
 
-const IsConstType: BasicInfo = 59
+pub const IsConstType: BasicInfo = 59
 
-const IsFloat: BasicInfo = 8
+pub const IsFloat: BasicInfo = 8
 
-const IsInteger: BasicInfo = 2
+pub const IsInteger: BasicInfo = 2
 
-const IsNumeric: BasicInfo = 26
+pub const IsNumeric: BasicInfo = 26
 
-const IsOrdered: BasicInfo = 42
+pub const IsOrdered: BasicInfo = 42
 
-const IsString: BasicInfo = 32
+pub const IsString: BasicInfo = 32
 
-const IsUnsigned: BasicInfo = 4
+pub const IsUnsigned: BasicInfo = 4
 
-const IsUntyped: BasicInfo = 64
+pub const IsUntyped: BasicInfo = 64
 
-const MethodExpr: SelectionKind = 2
+pub const MethodExpr: SelectionKind = 2
 
-const MethodVal: SelectionKind = 1
+pub const MethodVal: SelectionKind = 1
 
-const RecvOnly: ChanDir = 2
+pub const RecvOnly: ChanDir = 2
 
-const SendOnly: ChanDir = 1
+pub const SendOnly: ChanDir = 1
 
-const SendRecv: ChanDir = 0
+pub const SendRecv: ChanDir = 0
 
 /// Typ contains the predeclared *Basic types indexed by their
 /// corresponding BasicKind.

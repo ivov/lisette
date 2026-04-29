@@ -146,70 +146,70 @@ pub struct SyntaxError {
 }
 
 /// ASN.1 class types represent the namespace of the tag.
-const ClassApplication = 1
+pub const ClassApplication = 1
 
 /// ASN.1 class types represent the namespace of the tag.
-const ClassContextSpecific = 2
+pub const ClassContextSpecific = 2
 
 /// ASN.1 class types represent the namespace of the tag.
-const ClassPrivate = 3
+pub const ClassPrivate = 3
 
 /// ASN.1 class types represent the namespace of the tag.
-const ClassUniversal = 0
+pub const ClassUniversal = 0
 
 /// ASN.1 tags represent the type of the following object.
-const TagBMPString = 30
+pub const TagBMPString = 30
 
 /// ASN.1 tags represent the type of the following object.
-const TagBitString = 3
+pub const TagBitString = 3
 
 /// ASN.1 tags represent the type of the following object.
-const TagBoolean = 1
+pub const TagBoolean = 1
 
 /// ASN.1 tags represent the type of the following object.
-const TagEnum = 10
+pub const TagEnum = 10
 
 /// ASN.1 tags represent the type of the following object.
-const TagGeneralString = 27
+pub const TagGeneralString = 27
 
 /// ASN.1 tags represent the type of the following object.
-const TagGeneralizedTime = 24
+pub const TagGeneralizedTime = 24
 
 /// ASN.1 tags represent the type of the following object.
-const TagIA5String = 22
+pub const TagIA5String = 22
 
 /// ASN.1 tags represent the type of the following object.
-const TagInteger = 2
+pub const TagInteger = 2
 
 /// ASN.1 tags represent the type of the following object.
-const TagNull = 5
+pub const TagNull = 5
 
 /// ASN.1 tags represent the type of the following object.
-const TagNumericString = 18
+pub const TagNumericString = 18
 
 /// ASN.1 tags represent the type of the following object.
-const TagOID = 6
+pub const TagOID = 6
 
 /// ASN.1 tags represent the type of the following object.
-const TagOctetString = 4
+pub const TagOctetString = 4
 
 /// ASN.1 tags represent the type of the following object.
-const TagPrintableString = 19
+pub const TagPrintableString = 19
 
 /// ASN.1 tags represent the type of the following object.
-const TagSequence = 16
+pub const TagSequence = 16
 
 /// ASN.1 tags represent the type of the following object.
-const TagSet = 17
+pub const TagSet = 17
 
 /// ASN.1 tags represent the type of the following object.
-const TagT61String = 20
+pub const TagT61String = 20
 
 /// ASN.1 tags represent the type of the following object.
-const TagUTCTime = 23
+pub const TagUTCTime = 23
 
 /// ASN.1 tags represent the type of the following object.
-const TagUTF8String = 12
+pub const TagUTF8String = 12
 
 /// NullBytes contains bytes representing the DER-encoded ASN.1 NULL type.
 pub var NullBytes: Slice<uint8>

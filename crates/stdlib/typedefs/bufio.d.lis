@@ -106,7 +106,7 @@ pub type SplitFunc = fn(Slice<uint8>, bool) -> Result<(int, Slice<uint8>), error
 /// the underlying [io.Writer].
 pub type Writer
 
-const MaxScanTokenSize = 65536
+pub const MaxScanTokenSize = 65536
 
 /// Errors returned by Scanner.
 pub var ErrAdvanceTooFar: error

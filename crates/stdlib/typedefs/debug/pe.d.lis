@@ -198,285 +198,285 @@ pub struct Symbol {
   pub StorageClass: uint8,
 }
 
-const COFFSymbolSize = 18
+pub const COFFSymbolSize = 18
 
 /// These constants make up the possible values for the 'Selection'
 /// field in an AuxFormat5.
-const IMAGE_COMDAT_SELECT_ANY = 2
+pub const IMAGE_COMDAT_SELECT_ANY = 2
 
 /// These constants make up the possible values for the 'Selection'
 /// field in an AuxFormat5.
-const IMAGE_COMDAT_SELECT_ASSOCIATIVE = 5
+pub const IMAGE_COMDAT_SELECT_ASSOCIATIVE = 5
 
 /// These constants make up the possible values for the 'Selection'
 /// field in an AuxFormat5.
-const IMAGE_COMDAT_SELECT_EXACT_MATCH = 4
+pub const IMAGE_COMDAT_SELECT_EXACT_MATCH = 4
 
 /// These constants make up the possible values for the 'Selection'
 /// field in an AuxFormat5.
-const IMAGE_COMDAT_SELECT_LARGEST = 6
+pub const IMAGE_COMDAT_SELECT_LARGEST = 6
 
 /// These constants make up the possible values for the 'Selection'
 /// field in an AuxFormat5.
-const IMAGE_COMDAT_SELECT_NODUPLICATES = 1
+pub const IMAGE_COMDAT_SELECT_NODUPLICATES = 1
 
 /// These constants make up the possible values for the 'Selection'
 /// field in an AuxFormat5.
-const IMAGE_COMDAT_SELECT_SAME_SIZE = 3
+pub const IMAGE_COMDAT_SELECT_SAME_SIZE = 3
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_ARCHITECTURE = 7
+pub const IMAGE_DIRECTORY_ENTRY_ARCHITECTURE = 7
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_BASERELOC = 5
+pub const IMAGE_DIRECTORY_ENTRY_BASERELOC = 5
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT = 11
+pub const IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT = 11
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR = 14
+pub const IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR = 14
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_DEBUG = 6
+pub const IMAGE_DIRECTORY_ENTRY_DEBUG = 6
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT = 13
+pub const IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT = 13
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_EXCEPTION = 3
+pub const IMAGE_DIRECTORY_ENTRY_EXCEPTION = 3
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_EXPORT = 0
+pub const IMAGE_DIRECTORY_ENTRY_EXPORT = 0
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_GLOBALPTR = 8
+pub const IMAGE_DIRECTORY_ENTRY_GLOBALPTR = 8
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_IAT = 12
+pub const IMAGE_DIRECTORY_ENTRY_IAT = 12
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_IMPORT = 1
+pub const IMAGE_DIRECTORY_ENTRY_IMPORT = 1
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG = 10
+pub const IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG = 10
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_RESOURCE = 2
+pub const IMAGE_DIRECTORY_ENTRY_RESOURCE = 2
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_SECURITY = 4
+pub const IMAGE_DIRECTORY_ENTRY_SECURITY = 4
 
 /// IMAGE_DIRECTORY_ENTRY constants
-const IMAGE_DIRECTORY_ENTRY_TLS = 9
+pub const IMAGE_DIRECTORY_ENTRY_TLS = 9
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_APPCONTAINER = 0x1000
+pub const IMAGE_DLLCHARACTERISTICS_APPCONTAINER = 0x1000
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = 0x0040
+pub const IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = 0x0040
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY = 0x0080
+pub const IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY = 0x0080
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_GUARD_CF = 0x4000
+pub const IMAGE_DLLCHARACTERISTICS_GUARD_CF = 0x4000
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020
+pub const IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_NO_BIND = 0x0800
+pub const IMAGE_DLLCHARACTERISTICS_NO_BIND = 0x0800
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_NO_ISOLATION = 0x0200
+pub const IMAGE_DLLCHARACTERISTICS_NO_ISOLATION = 0x0200
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_NO_SEH = 0x0400
+pub const IMAGE_DLLCHARACTERISTICS_NO_SEH = 0x0400
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_NX_COMPAT = 0x0100
+pub const IMAGE_DLLCHARACTERISTICS_NX_COMPAT = 0x0100
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE = 0x8000
+pub const IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE = 0x8000
 
 /// OptionalHeader64.DllCharacteristics and OptionalHeader32.DllCharacteristics
 /// values. These can be combined together.
-const IMAGE_DLLCHARACTERISTICS_WDM_DRIVER = 0x2000
+pub const IMAGE_DLLCHARACTERISTICS_WDM_DRIVER = 0x2000
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_32BIT_MACHINE = 0x0100
+pub const IMAGE_FILE_32BIT_MACHINE = 0x0100
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_AGGRESIVE_WS_TRIM = 0x0010
+pub const IMAGE_FILE_AGGRESIVE_WS_TRIM = 0x0010
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_BYTES_REVERSED_HI = 0x8000
+pub const IMAGE_FILE_BYTES_REVERSED_HI = 0x8000
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_BYTES_REVERSED_LO = 0x0080
+pub const IMAGE_FILE_BYTES_REVERSED_LO = 0x0080
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_DEBUG_STRIPPED = 0x0200
+pub const IMAGE_FILE_DEBUG_STRIPPED = 0x0200
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_DLL = 0x2000
+pub const IMAGE_FILE_DLL = 0x2000
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002
+pub const IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_LARGE_ADDRESS_AWARE = 0x0020
+pub const IMAGE_FILE_LARGE_ADDRESS_AWARE = 0x0020
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_LINE_NUMS_STRIPPED = 0x0004
+pub const IMAGE_FILE_LINE_NUMS_STRIPPED = 0x0004
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_LOCAL_SYMS_STRIPPED = 0x0008
+pub const IMAGE_FILE_LOCAL_SYMS_STRIPPED = 0x0008
 
-const IMAGE_FILE_MACHINE_AM33 = 0x1d3
+pub const IMAGE_FILE_MACHINE_AM33 = 0x1d3
 
-const IMAGE_FILE_MACHINE_AMD64 = 0x8664
+pub const IMAGE_FILE_MACHINE_AMD64 = 0x8664
 
-const IMAGE_FILE_MACHINE_ARM = 0x1c0
+pub const IMAGE_FILE_MACHINE_ARM = 0x1c0
 
-const IMAGE_FILE_MACHINE_ARM64 = 0xaa64
+pub const IMAGE_FILE_MACHINE_ARM64 = 0xaa64
 
-const IMAGE_FILE_MACHINE_ARMNT = 0x1c4
+pub const IMAGE_FILE_MACHINE_ARMNT = 0x1c4
 
-const IMAGE_FILE_MACHINE_EBC = 0xebc
+pub const IMAGE_FILE_MACHINE_EBC = 0xebc
 
-const IMAGE_FILE_MACHINE_I386 = 0x14c
+pub const IMAGE_FILE_MACHINE_I386 = 0x14c
 
-const IMAGE_FILE_MACHINE_IA64 = 0x200
+pub const IMAGE_FILE_MACHINE_IA64 = 0x200
 
-const IMAGE_FILE_MACHINE_LOONGARCH32 = 0x6232
+pub const IMAGE_FILE_MACHINE_LOONGARCH32 = 0x6232
 
-const IMAGE_FILE_MACHINE_LOONGARCH64 = 0x6264
+pub const IMAGE_FILE_MACHINE_LOONGARCH64 = 0x6264
 
-const IMAGE_FILE_MACHINE_M32R = 0x9041
+pub const IMAGE_FILE_MACHINE_M32R = 0x9041
 
-const IMAGE_FILE_MACHINE_MIPS16 = 0x266
+pub const IMAGE_FILE_MACHINE_MIPS16 = 0x266
 
-const IMAGE_FILE_MACHINE_MIPSFPU = 0x366
+pub const IMAGE_FILE_MACHINE_MIPSFPU = 0x366
 
-const IMAGE_FILE_MACHINE_MIPSFPU16 = 0x466
+pub const IMAGE_FILE_MACHINE_MIPSFPU16 = 0x466
 
-const IMAGE_FILE_MACHINE_POWERPC = 0x1f0
+pub const IMAGE_FILE_MACHINE_POWERPC = 0x1f0
 
-const IMAGE_FILE_MACHINE_POWERPCFP = 0x1f1
+pub const IMAGE_FILE_MACHINE_POWERPCFP = 0x1f1
 
-const IMAGE_FILE_MACHINE_R4000 = 0x166
+pub const IMAGE_FILE_MACHINE_R4000 = 0x166
 
-const IMAGE_FILE_MACHINE_RISCV128 = 0x5128
+pub const IMAGE_FILE_MACHINE_RISCV128 = 0x5128
 
-const IMAGE_FILE_MACHINE_RISCV32 = 0x5032
+pub const IMAGE_FILE_MACHINE_RISCV32 = 0x5032
 
-const IMAGE_FILE_MACHINE_RISCV64 = 0x5064
+pub const IMAGE_FILE_MACHINE_RISCV64 = 0x5064
 
-const IMAGE_FILE_MACHINE_SH3 = 0x1a2
+pub const IMAGE_FILE_MACHINE_SH3 = 0x1a2
 
-const IMAGE_FILE_MACHINE_SH3DSP = 0x1a3
+pub const IMAGE_FILE_MACHINE_SH3DSP = 0x1a3
 
-const IMAGE_FILE_MACHINE_SH4 = 0x1a6
+pub const IMAGE_FILE_MACHINE_SH4 = 0x1a6
 
-const IMAGE_FILE_MACHINE_SH5 = 0x1a8
+pub const IMAGE_FILE_MACHINE_SH5 = 0x1a8
 
-const IMAGE_FILE_MACHINE_THUMB = 0x1c2
+pub const IMAGE_FILE_MACHINE_THUMB = 0x1c2
 
-const IMAGE_FILE_MACHINE_UNKNOWN = 0x0
+pub const IMAGE_FILE_MACHINE_UNKNOWN = 0x0
 
-const IMAGE_FILE_MACHINE_WCEMIPSV2 = 0x169
-
-/// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_NET_RUN_FROM_SWAP = 0x0800
+pub const IMAGE_FILE_MACHINE_WCEMIPSV2 = 0x169
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_RELOCS_STRIPPED = 0x0001
+pub const IMAGE_FILE_NET_RUN_FROM_SWAP = 0x0800
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP = 0x0400
+pub const IMAGE_FILE_RELOCS_STRIPPED = 0x0001
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_SYSTEM = 0x1000
+pub const IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP = 0x0400
 
 /// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
-const IMAGE_FILE_UP_SYSTEM_ONLY = 0x4000
+pub const IMAGE_FILE_SYSTEM = 0x1000
+
+/// Values of IMAGE_FILE_HEADER.Characteristics. These can be combined together.
+pub const IMAGE_FILE_UP_SYSTEM_ONLY = 0x4000
 
 /// Section characteristics flags.
-const IMAGE_SCN_CNT_CODE = 0x00000020
+pub const IMAGE_SCN_CNT_CODE = 0x00000020
 
 /// Section characteristics flags.
-const IMAGE_SCN_CNT_INITIALIZED_DATA = 0x00000040
+pub const IMAGE_SCN_CNT_INITIALIZED_DATA = 0x00000040
 
 /// Section characteristics flags.
-const IMAGE_SCN_CNT_UNINITIALIZED_DATA = 0x00000080
+pub const IMAGE_SCN_CNT_UNINITIALIZED_DATA = 0x00000080
 
 /// Section characteristics flags.
-const IMAGE_SCN_LNK_COMDAT = 0x00001000
+pub const IMAGE_SCN_LNK_COMDAT = 0x00001000
 
 /// Section characteristics flags.
-const IMAGE_SCN_MEM_DISCARDABLE = 0x02000000
+pub const IMAGE_SCN_MEM_DISCARDABLE = 0x02000000
 
 /// Section characteristics flags.
-const IMAGE_SCN_MEM_EXECUTE = 0x20000000
+pub const IMAGE_SCN_MEM_EXECUTE = 0x20000000
 
 /// Section characteristics flags.
-const IMAGE_SCN_MEM_READ = 0x40000000
+pub const IMAGE_SCN_MEM_READ = 0x40000000
 
 /// Section characteristics flags.
-const IMAGE_SCN_MEM_WRITE = 0x80000000
+pub const IMAGE_SCN_MEM_WRITE = 0x80000000
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_EFI_APPLICATION = 10
+pub const IMAGE_SUBSYSTEM_EFI_APPLICATION = 10
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER = 11
+pub const IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER = 11
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_EFI_ROM = 13
+pub const IMAGE_SUBSYSTEM_EFI_ROM = 13
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER = 12
+pub const IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER = 12
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_NATIVE = 1
+pub const IMAGE_SUBSYSTEM_NATIVE = 1
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_NATIVE_WINDOWS = 8
+pub const IMAGE_SUBSYSTEM_NATIVE_WINDOWS = 8
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_OS2_CUI = 5
+pub const IMAGE_SUBSYSTEM_OS2_CUI = 5
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_POSIX_CUI = 7
+pub const IMAGE_SUBSYSTEM_POSIX_CUI = 7
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_UNKNOWN = 0
+pub const IMAGE_SUBSYSTEM_UNKNOWN = 0
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION = 16
+pub const IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION = 16
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_WINDOWS_CE_GUI = 9
+pub const IMAGE_SUBSYSTEM_WINDOWS_CE_GUI = 9
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_WINDOWS_CUI = 3
+pub const IMAGE_SUBSYSTEM_WINDOWS_CUI = 3
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_WINDOWS_GUI = 2
+pub const IMAGE_SUBSYSTEM_WINDOWS_GUI = 2
 
 /// OptionalHeader64.Subsystem and OptionalHeader32.Subsystem values.
-const IMAGE_SUBSYSTEM_XBOX = 14
+pub const IMAGE_SUBSYSTEM_XBOX = 14
 
 impl COFFSymbol {
   /// FullName finds real name of symbol sym. Normally name is stored

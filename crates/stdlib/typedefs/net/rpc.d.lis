@@ -122,9 +122,9 @@ pub interface ServerCodec {
 /// the remote side of the RPC connection.
 pub struct ServerError(string)
 
-const DefaultDebugPath = "/debug/rpc"
+pub const DefaultDebugPath = "/debug/rpc"
 
-const DefaultRPCPath = "/_goRPC_"
+pub const DefaultRPCPath = "/_goRPC_"
 
 /// DefaultServer is the default instance of [*Server].
 pub var DefaultServer: Ref<Server>

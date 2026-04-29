@@ -103,55 +103,55 @@ pub type Reader
 /// and then Writer can be treated as an io.Writer to supply that file's data.
 pub type Writer
 
-const FormatGNU: Format = 8
+pub const FormatGNU: Format = 8
 
-const FormatPAX: Format = 4
+pub const FormatPAX: Format = 4
 
-const FormatUSTAR: Format = 2
+pub const FormatUSTAR: Format = 2
 
-const FormatUnknown: Format = 0
-
-/// Type flags for Header.Typeflag.
-const TypeBlock = 52
+pub const FormatUnknown: Format = 0
 
 /// Type flags for Header.Typeflag.
-const TypeChar = 51
+pub const TypeBlock = 52
 
 /// Type flags for Header.Typeflag.
-const TypeCont = 55
+pub const TypeChar = 51
 
 /// Type flags for Header.Typeflag.
-const TypeDir = 53
+pub const TypeCont = 55
 
 /// Type flags for Header.Typeflag.
-const TypeFifo = 54
+pub const TypeDir = 53
 
 /// Type flags for Header.Typeflag.
-const TypeGNULongLink = 75
+pub const TypeFifo = 54
 
 /// Type flags for Header.Typeflag.
-const TypeGNULongName = 76
+pub const TypeGNULongLink = 75
 
 /// Type flags for Header.Typeflag.
-const TypeGNUSparse = 83
+pub const TypeGNULongName = 76
 
 /// Type flags for Header.Typeflag.
-const TypeLink = 49
+pub const TypeGNUSparse = 83
 
 /// Type flags for Header.Typeflag.
-const TypeReg = 48
+pub const TypeLink = 49
 
 /// Type flags for Header.Typeflag.
-const TypeRegA = 0
+pub const TypeReg = 48
 
 /// Type flags for Header.Typeflag.
-const TypeSymlink = 50
+pub const TypeRegA = 0
 
 /// Type flags for Header.Typeflag.
-const TypeXGlobalHeader = 103
+pub const TypeSymlink = 50
 
 /// Type flags for Header.Typeflag.
-const TypeXHeader = 120
+pub const TypeXGlobalHeader = 103
+
+/// Type flags for Header.Typeflag.
+pub const TypeXHeader = 120
 
 pub var ErrFieldTooLong: error
 

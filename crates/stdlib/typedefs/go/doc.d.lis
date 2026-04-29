@@ -157,11 +157,11 @@ pub struct Value {
   pub Decl: Option<Ref<ast.GenDecl>>,
 }
 
-const AllDecls: Mode = 1
+pub const AllDecls: Mode = 1
 
-const AllMethods: Mode = 2
+pub const AllMethods: Mode = 2
 
-const PreserveAST: Mode = 4
+pub const PreserveAST: Mode = 4
 
 /// IllegalPrefixes is a list of lower-case prefixes that identify
 /// a comment as not being a doc comment.

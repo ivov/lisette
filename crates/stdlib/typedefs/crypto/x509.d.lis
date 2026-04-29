@@ -606,43 +606,43 @@ pub struct VerifyOptions {
   pub CertificatePolicies: Slice<OID>,
 }
 
-const DSA: PublicKeyAlgorithm = 2
+pub const DSA: PublicKeyAlgorithm = 2
 
-const ECDSA: PublicKeyAlgorithm = 3
+pub const ECDSA: PublicKeyAlgorithm = 3
 
-const Ed25519: PublicKeyAlgorithm = 4
+pub const Ed25519: PublicKeyAlgorithm = 4
 
-const KeyUsageCRLSign: KeyUsage = 64
+pub const KeyUsageCRLSign: KeyUsage = 64
 
-const KeyUsageCertSign: KeyUsage = 32
+pub const KeyUsageCertSign: KeyUsage = 32
 
-const KeyUsageContentCommitment: KeyUsage = 2
+pub const KeyUsageContentCommitment: KeyUsage = 2
 
-const KeyUsageDataEncipherment: KeyUsage = 8
+pub const KeyUsageDataEncipherment: KeyUsage = 8
 
-const KeyUsageDecipherOnly: KeyUsage = 256
+pub const KeyUsageDecipherOnly: KeyUsage = 256
 
-const KeyUsageDigitalSignature: KeyUsage = 1
+pub const KeyUsageDigitalSignature: KeyUsage = 1
 
-const KeyUsageEncipherOnly: KeyUsage = 128
+pub const KeyUsageEncipherOnly: KeyUsage = 128
 
-const KeyUsageKeyAgreement: KeyUsage = 16
+pub const KeyUsageKeyAgreement: KeyUsage = 16
 
-const KeyUsageKeyEncipherment: KeyUsage = 4
+pub const KeyUsageKeyEncipherment: KeyUsage = 4
 
-const PEMCipher3DES: PEMCipher = 2
+pub const PEMCipher3DES: PEMCipher = 2
 
-const PEMCipherAES128: PEMCipher = 3
+pub const PEMCipherAES128: PEMCipher = 3
 
-const PEMCipherAES192: PEMCipher = 4
+pub const PEMCipherAES192: PEMCipher = 4
 
-const PEMCipherAES256: PEMCipher = 5
+pub const PEMCipherAES256: PEMCipher = 5
 
-const PEMCipherDES: PEMCipher = 1
+pub const PEMCipherDES: PEMCipher = 1
 
-const RSA: PublicKeyAlgorithm = 1
+pub const RSA: PublicKeyAlgorithm = 1
 
-const UnknownPublicKeyAlgorithm: PublicKeyAlgorithm = 0
+pub const UnknownPublicKeyAlgorithm: PublicKeyAlgorithm = 0
 
 /// ErrUnsupportedAlgorithm results from attempting to perform an operation that
 /// involves algorithms that are not currently implemented.

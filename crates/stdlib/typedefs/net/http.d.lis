@@ -990,322 +990,322 @@ pub struct Transport {
 /// DefaultMaxHeaderBytes is the maximum permitted size of the headers
 /// in an HTTP request.
 /// This can be overridden by setting [Server.MaxHeaderBytes].
-const DefaultMaxHeaderBytes = 1048576
+pub const DefaultMaxHeaderBytes = 1048576
 
 /// DefaultMaxIdleConnsPerHost is the default value of [Transport]'s
 /// MaxIdleConnsPerHost.
-const DefaultMaxIdleConnsPerHost = 2
+pub const DefaultMaxIdleConnsPerHost = 2
 
 /// Common HTTP methods.
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
-const MethodConnect = "CONNECT"
+pub const MethodConnect = "CONNECT"
 
 /// Common HTTP methods.
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
-const MethodDelete = "DELETE"
+pub const MethodDelete = "DELETE"
 
 /// Common HTTP methods.
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
-const MethodGet = "GET"
+pub const MethodGet = "GET"
 
 /// Common HTTP methods.
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
-const MethodHead = "HEAD"
+pub const MethodHead = "HEAD"
 
 /// Common HTTP methods.
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
-const MethodOptions = "OPTIONS"
+pub const MethodOptions = "OPTIONS"
 
 /// Common HTTP methods.
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
-const MethodPatch = "PATCH"
+pub const MethodPatch = "PATCH"
 
 /// Common HTTP methods.
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
-const MethodPost = "POST"
+pub const MethodPost = "POST"
 
 /// Common HTTP methods.
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
-const MethodPut = "PUT"
+pub const MethodPut = "PUT"
 
 /// Common HTTP methods.
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
-const MethodTrace = "TRACE"
+pub const MethodTrace = "TRACE"
 
-const SameSiteDefaultMode: SameSite = 1
+pub const SameSiteDefaultMode: SameSite = 1
 
-const SameSiteLaxMode: SameSite = 2
+pub const SameSiteLaxMode: SameSite = 2
 
-const SameSiteNoneMode: SameSite = 4
+pub const SameSiteNoneMode: SameSite = 4
 
-const SameSiteStrictMode: SameSite = 3
+pub const SameSiteStrictMode: SameSite = 3
 
-const StateActive: ConnState = 1
+pub const StateActive: ConnState = 1
 
-const StateClosed: ConnState = 4
+pub const StateClosed: ConnState = 4
 
-const StateHijacked: ConnState = 3
+pub const StateHijacked: ConnState = 3
 
-const StateIdle: ConnState = 2
+pub const StateIdle: ConnState = 2
 
-const StateNew: ConnState = 0
-
-/// HTTP status codes as registered with IANA.
-/// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusAccepted = 202
+pub const StateNew: ConnState = 0
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusAlreadyReported = 208
+pub const StatusAccepted = 202
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusBadGateway = 502
+pub const StatusAlreadyReported = 208
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusBadRequest = 400
+pub const StatusBadGateway = 502
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusConflict = 409
+pub const StatusBadRequest = 400
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusContinue = 100
+pub const StatusConflict = 409
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusCreated = 201
+pub const StatusContinue = 100
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusEarlyHints = 103
+pub const StatusCreated = 201
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusExpectationFailed = 417
+pub const StatusEarlyHints = 103
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusFailedDependency = 424
+pub const StatusExpectationFailed = 417
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusForbidden = 403
+pub const StatusFailedDependency = 424
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusFound = 302
+pub const StatusForbidden = 403
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusGatewayTimeout = 504
+pub const StatusFound = 302
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusGone = 410
+pub const StatusGatewayTimeout = 504
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusHTTPVersionNotSupported = 505
+pub const StatusGone = 410
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusIMUsed = 226
+pub const StatusHTTPVersionNotSupported = 505
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusInsufficientStorage = 507
+pub const StatusIMUsed = 226
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusInternalServerError = 500
+pub const StatusInsufficientStorage = 507
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusLengthRequired = 411
+pub const StatusInternalServerError = 500
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusLocked = 423
+pub const StatusLengthRequired = 411
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusLoopDetected = 508
+pub const StatusLocked = 423
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusMethodNotAllowed = 405
+pub const StatusLoopDetected = 508
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusMisdirectedRequest = 421
+pub const StatusMethodNotAllowed = 405
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusMovedPermanently = 301
+pub const StatusMisdirectedRequest = 421
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusMultiStatus = 207
+pub const StatusMovedPermanently = 301
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusMultipleChoices = 300
+pub const StatusMultiStatus = 207
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusNetworkAuthenticationRequired = 511
+pub const StatusMultipleChoices = 300
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusNoContent = 204
+pub const StatusNetworkAuthenticationRequired = 511
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusNonAuthoritativeInfo = 203
+pub const StatusNoContent = 204
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusNotAcceptable = 406
+pub const StatusNonAuthoritativeInfo = 203
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusNotExtended = 510
+pub const StatusNotAcceptable = 406
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusNotFound = 404
+pub const StatusNotExtended = 510
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusNotImplemented = 501
+pub const StatusNotFound = 404
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusNotModified = 304
+pub const StatusNotImplemented = 501
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusOK = 200
+pub const StatusNotModified = 304
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusPartialContent = 206
+pub const StatusOK = 200
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusPaymentRequired = 402
+pub const StatusPartialContent = 206
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusPermanentRedirect = 308
+pub const StatusPaymentRequired = 402
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusPreconditionFailed = 412
+pub const StatusPermanentRedirect = 308
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusPreconditionRequired = 428
+pub const StatusPreconditionFailed = 412
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusProcessing = 102
+pub const StatusPreconditionRequired = 428
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusProxyAuthRequired = 407
+pub const StatusProcessing = 102
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusRequestEntityTooLarge = 413
+pub const StatusProxyAuthRequired = 407
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusRequestHeaderFieldsTooLarge = 431
+pub const StatusRequestEntityTooLarge = 413
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusRequestTimeout = 408
+pub const StatusRequestHeaderFieldsTooLarge = 431
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusRequestURITooLong = 414
+pub const StatusRequestTimeout = 408
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusRequestedRangeNotSatisfiable = 416
+pub const StatusRequestURITooLong = 414
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusResetContent = 205
+pub const StatusRequestedRangeNotSatisfiable = 416
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusSeeOther = 303
+pub const StatusResetContent = 205
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusServiceUnavailable = 503
+pub const StatusSeeOther = 303
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusSwitchingProtocols = 101
+pub const StatusServiceUnavailable = 503
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusTeapot = 418
+pub const StatusSwitchingProtocols = 101
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusTemporaryRedirect = 307
+pub const StatusTeapot = 418
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusTooEarly = 425
+pub const StatusTemporaryRedirect = 307
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusTooManyRequests = 429
+pub const StatusTooEarly = 425
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusUnauthorized = 401
+pub const StatusTooManyRequests = 429
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusUnavailableForLegalReasons = 451
+pub const StatusUnauthorized = 401
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusUnprocessableEntity = 422
+pub const StatusUnavailableForLegalReasons = 451
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusUnsupportedMediaType = 415
+pub const StatusUnprocessableEntity = 422
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusUpgradeRequired = 426
+pub const StatusUnsupportedMediaType = 415
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusUseProxy = 305
+pub const StatusUpgradeRequired = 426
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-const StatusVariantAlsoNegotiates = 506
+pub const StatusUseProxy = 305
+
+/// HTTP status codes as registered with IANA.
+/// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+pub const StatusVariantAlsoNegotiates = 506
 
 /// TimeFormat is the time format to use when generating times in HTTP
 /// headers. It is like [time.RFC1123] but hard-codes GMT as the time
@@ -1313,7 +1313,7 @@ const StatusVariantAlsoNegotiates = 506
 /// generate the correct format.
 /// 
 /// For parsing this time format, see [ParseTime].
-const TimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
+pub const TimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 
 /// TrailerPrefix is a magic prefix for [ResponseWriter.Header] map keys
 /// that, if present, signals that the map entry is actually for
@@ -1328,7 +1328,7 @@ const TimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 /// 
 /// 	https://pkg.go.dev/net/http#ResponseWriter
 /// 	https://pkg.go.dev/net/http#example-ResponseWriter-Trailers
-const TrailerPrefix = "Trailer:"
+pub const TrailerPrefix = "Trailer:"
 
 /// DefaultClient is the default [Client] and is used by [Get], [Head], and [Post].
 pub var DefaultClient: Ref<Client>

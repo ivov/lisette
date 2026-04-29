@@ -25,9 +25,9 @@ pub struct CorruptInputError(int64)
 /// The alternate "base32hex" encoding is used in DNSSEC.
 pub type Encoding
 
-const NoPadding = -1
+pub const NoPadding = -1
 
-const StdPadding = 61
+pub const StdPadding = 61
 
 /// HexEncoding is the “Extended Hex Alphabet” defined in RFC 4648.
 /// It is typically used in DNS.

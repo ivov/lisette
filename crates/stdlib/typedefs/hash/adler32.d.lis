@@ -16,4 +16,4 @@ pub fn Checksum(data: Slice<uint8>) -> uint32
 pub fn New() -> hash.Hash32
 
 /// The size of an Adler-32 checksum in bytes.
-const Size = 4
+pub const Size = 4

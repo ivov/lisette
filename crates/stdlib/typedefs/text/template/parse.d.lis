@@ -287,9 +287,9 @@ pub struct WithNode {
   pub BranchNode: BranchNode,
 }
 
-const ParseComments: Mode = 1
+pub const ParseComments: Mode = 1
 
-const SkipFuncCheck: Mode = 2
+pub const SkipFuncCheck: Mode = 2
 
 impl ActionNode {
   fn Copy(self: Ref<ActionNode>) -> Node

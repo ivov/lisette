@@ -125,13 +125,13 @@ pub struct Package {
   pub XTestEmbedPatternPos: Map<string, Slice<token.Position>>,
 }
 
-const AllowBinary: ImportMode = 2
+pub const AllowBinary: ImportMode = 2
 
-const FindOnly: ImportMode = 1
+pub const FindOnly: ImportMode = 1
 
-const IgnoreVendor: ImportMode = 8
+pub const IgnoreVendor: ImportMode = 8
 
-const ImportComment: ImportMode = 4
+pub const ImportComment: ImportMode = 4
 
 pub var Default: Context
 

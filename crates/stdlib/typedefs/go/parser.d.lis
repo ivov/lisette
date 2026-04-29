@@ -93,18 +93,18 @@ pub fn ParseFile(
 /// parser functionality.
 pub struct Mode(uint)
 
-const AllErrors: Mode = 32
+pub const AllErrors: Mode = 32
 
-const DeclarationErrors: Mode = 16
+pub const DeclarationErrors: Mode = 16
 
-const ImportsOnly: Mode = 2
+pub const ImportsOnly: Mode = 2
 
-const PackageClauseOnly: Mode = 1
+pub const PackageClauseOnly: Mode = 1
 
-const ParseComments: Mode = 4
+pub const ParseComments: Mode = 4
 
-const SkipObjectResolution: Mode = 64
+pub const SkipObjectResolution: Mode = 64
 
-const SpuriousErrors: Mode = 32
+pub const SpuriousErrors: Mode = 32
 
-const Trace: Mode = 8
+pub const Trace: Mode = 8

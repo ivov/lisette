@@ -249,9 +249,9 @@ pub struct PublicKey {
   pub E: int,
 }
 
-const PSSSaltLengthAuto = 0
+pub const PSSSaltLengthAuto = 0
 
-const PSSSaltLengthEqualsHash = -1
+pub const PSSSaltLengthEqualsHash = -1
 
 /// ErrDecryption represents a failure to decrypt a message.
 /// It is deliberately vague to avoid adaptive attacks.

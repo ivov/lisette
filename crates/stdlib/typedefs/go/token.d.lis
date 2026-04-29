@@ -337,23 +337,23 @@ pub struct Position {
 /// starting with precedence 1 up to unary operators. The highest
 /// precedence serves as "catch-all" precedence for selector,
 /// indexing, and other operator and delimiter tokens.
-const HighestPrec = 7
+pub const HighestPrec = 7
 
 /// A set of constants for precedence-based expression parsing.
 /// Non-operators have lowest precedence, followed by operators
 /// starting with precedence 1 up to unary operators. The highest
 /// precedence serves as "catch-all" precedence for selector,
 /// indexing, and other operator and delimiter tokens.
-const LowestPrec = 0
+pub const LowestPrec = 0
 
-const NoPos: Pos = 0
+pub const NoPos: Pos = 0
 
 /// A set of constants for precedence-based expression parsing.
 /// Non-operators have lowest precedence, followed by operators
 /// starting with precedence 1 up to unary operators. The highest
 /// precedence serves as "catch-all" precedence for selector,
 /// indexing, and other operator and delimiter tokens.
-const UnaryPrec = 6
+pub const UnaryPrec = 6
 
 impl File {
   /// AddLine adds the line offset for a new line.

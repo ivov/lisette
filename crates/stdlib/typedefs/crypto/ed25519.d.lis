@@ -57,13 +57,13 @@ pub struct PrivateKey(Slice<uint8>)
 /// PublicKey is the type of Ed25519 public keys.
 pub struct PublicKey(Slice<uint8>)
 
-const PrivateKeySize = 64
+pub const PrivateKeySize = 64
 
-const PublicKeySize = 32
+pub const PublicKeySize = 32
 
-const SeedSize = 32
+pub const SeedSize = 32
 
-const SignatureSize = 64
+pub const SignatureSize = 64
 
 impl Options {
   /// HashFunc returns o.Hash.

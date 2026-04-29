@@ -374,13 +374,13 @@ pub interface WriterTo {
 }
 
 /// Seek whence values.
-const SeekCurrent = 1
+pub const SeekCurrent = 1
 
 /// Seek whence values.
-const SeekEnd = 2
+pub const SeekEnd = 2
 
 /// Seek whence values.
-const SeekStart = 0
+pub const SeekStart = 0
 
 pub var Discard: Writer
 

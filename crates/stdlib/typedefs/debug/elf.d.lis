@@ -4594,167 +4594,167 @@ pub struct Symbol {
 pub struct VersionIndex(uint16)
 
 /// Magic number for the elf trampoline, chosen wisely to be an immediate value.
-const ARM_MAGIC_TRAMP_NUMBER = 0x5c000003
+pub const ARM_MAGIC_TRAMP_NUMBER = 0x5c000003
 
-const DF_1_CONFALT: DynFlag1 = 0x00002000
+pub const DF_1_CONFALT: DynFlag1 = 0x00002000
 
-const DF_1_DIRECT: DynFlag1 = 0x00000100
+pub const DF_1_DIRECT: DynFlag1 = 0x00000100
 
-const DF_1_DISPRELDNE: DynFlag1 = 0x00008000
+pub const DF_1_DISPRELDNE: DynFlag1 = 0x00008000
 
-const DF_1_DISPRELPND: DynFlag1 = 0x00010000
+pub const DF_1_DISPRELPND: DynFlag1 = 0x00010000
 
-const DF_1_EDITED: DynFlag1 = 0x00200000
+pub const DF_1_EDITED: DynFlag1 = 0x00200000
 
-const DF_1_ENDFILTEE: DynFlag1 = 0x00004000
+pub const DF_1_ENDFILTEE: DynFlag1 = 0x00004000
 
-const DF_1_GLOBAL: DynFlag1 = 0x00000002
+pub const DF_1_GLOBAL: DynFlag1 = 0x00000002
 
-const DF_1_GLOBAUDIT: DynFlag1 = 0x01000000
+pub const DF_1_GLOBAUDIT: DynFlag1 = 0x01000000
 
-const DF_1_GROUP: DynFlag1 = 0x00000004
+pub const DF_1_GROUP: DynFlag1 = 0x00000004
 
-const DF_1_IGNMULDEF: DynFlag1 = 0x00040000
+pub const DF_1_IGNMULDEF: DynFlag1 = 0x00040000
 
-const DF_1_INITFIRST: DynFlag1 = 0x00000020
+pub const DF_1_INITFIRST: DynFlag1 = 0x00000020
 
-const DF_1_INTERPOSE: DynFlag1 = 0x00000400
+pub const DF_1_INTERPOSE: DynFlag1 = 0x00000400
 
-const DF_1_KMOD: DynFlag1 = 0x10000000
+pub const DF_1_KMOD: DynFlag1 = 0x10000000
 
-const DF_1_LOADFLTR: DynFlag1 = 0x00000010
+pub const DF_1_LOADFLTR: DynFlag1 = 0x00000010
 
-const DF_1_NOCOMMON: DynFlag1 = 0x40000000
+pub const DF_1_NOCOMMON: DynFlag1 = 0x40000000
 
-const DF_1_NODEFLIB: DynFlag1 = 0x00000800
+pub const DF_1_NODEFLIB: DynFlag1 = 0x00000800
 
-const DF_1_NODELETE: DynFlag1 = 0x00000008
+pub const DF_1_NODELETE: DynFlag1 = 0x00000008
 
-const DF_1_NODIRECT: DynFlag1 = 0x00020000
+pub const DF_1_NODIRECT: DynFlag1 = 0x00020000
 
-const DF_1_NODUMP: DynFlag1 = 0x00001000
+pub const DF_1_NODUMP: DynFlag1 = 0x00001000
 
-const DF_1_NOHDR: DynFlag1 = 0x00100000
+pub const DF_1_NOHDR: DynFlag1 = 0x00100000
 
-const DF_1_NOKSYMS: DynFlag1 = 0x00080000
+pub const DF_1_NOKSYMS: DynFlag1 = 0x00080000
 
-const DF_1_NOOPEN: DynFlag1 = 0x00000040
+pub const DF_1_NOOPEN: DynFlag1 = 0x00000040
 
-const DF_1_NORELOC: DynFlag1 = 0x00400000
+pub const DF_1_NORELOC: DynFlag1 = 0x00400000
 
-const DF_1_NOW: DynFlag1 = 0x00000001
+pub const DF_1_NOW: DynFlag1 = 0x00000001
 
-const DF_1_ORIGIN: DynFlag1 = 0x00000080
+pub const DF_1_ORIGIN: DynFlag1 = 0x00000080
 
-const DF_1_PIE: DynFlag1 = 0x08000000
+pub const DF_1_PIE: DynFlag1 = 0x08000000
 
-const DF_1_SINGLETON: DynFlag1 = 0x02000000
+pub const DF_1_SINGLETON: DynFlag1 = 0x02000000
 
-const DF_1_STUB: DynFlag1 = 0x04000000
+pub const DF_1_STUB: DynFlag1 = 0x04000000
 
-const DF_1_SYMINTPOSE: DynFlag1 = 0x00800000
+pub const DF_1_SYMINTPOSE: DynFlag1 = 0x00800000
 
-const DF_1_TRANS: DynFlag1 = 0x00000200
+pub const DF_1_TRANS: DynFlag1 = 0x00000200
 
-const DF_1_WEAKFILTER: DynFlag1 = 0x20000000
+pub const DF_1_WEAKFILTER: DynFlag1 = 0x20000000
 
-const DF_BIND_NOW: DynFlag = 0x0008
+pub const DF_BIND_NOW: DynFlag = 0x0008
 
-const DF_ORIGIN: DynFlag = 0x0001
+pub const DF_ORIGIN: DynFlag = 0x0001
 
-const DF_STATIC_TLS: DynFlag = 0x0010
+pub const DF_STATIC_TLS: DynFlag = 0x0010
 
-const DF_SYMBOLIC: DynFlag = 0x0002
+pub const DF_SYMBOLIC: DynFlag = 0x0002
 
-const DF_TEXTREL: DynFlag = 0x0004
-
-/// Indexes into the Header.Ident array.
-const EI_ABIVERSION = 8
+pub const DF_TEXTREL: DynFlag = 0x0004
 
 /// Indexes into the Header.Ident array.
-const EI_CLASS = 4
+pub const EI_ABIVERSION = 8
 
 /// Indexes into the Header.Ident array.
-const EI_DATA = 5
+pub const EI_CLASS = 4
 
 /// Indexes into the Header.Ident array.
-const EI_NIDENT = 16
+pub const EI_DATA = 5
 
 /// Indexes into the Header.Ident array.
-const EI_OSABI = 7
+pub const EI_NIDENT = 16
 
 /// Indexes into the Header.Ident array.
-const EI_PAD = 9
+pub const EI_OSABI = 7
 
 /// Indexes into the Header.Ident array.
-const EI_VERSION = 6
+pub const EI_PAD = 9
 
-const ELFCLASS32: Class = 1
+/// Indexes into the Header.Ident array.
+pub const EI_VERSION = 6
 
-const ELFCLASS64: Class = 2
+pub const ELFCLASS32: Class = 1
 
-const ELFCLASSNONE: Class = 0
+pub const ELFCLASS64: Class = 2
 
-const ELFDATA2LSB: Data = 1
+pub const ELFCLASSNONE: Class = 0
 
-const ELFDATA2MSB: Data = 2
+pub const ELFDATA2LSB: Data = 1
 
-const ELFDATANONE: Data = 0
+pub const ELFDATA2MSB: Data = 2
+
+pub const ELFDATANONE: Data = 0
 
 /// Initial magic number for ELF files.
-const ELFMAG = "\x7fELF"
+pub const ELFMAG = "\x7fELF"
 
-const NT_FPREGSET: NType = 2
+pub const NT_FPREGSET: NType = 2
 
-const NT_PRPSINFO: NType = 3
+pub const NT_PRPSINFO: NType = 3
 
-const NT_PRSTATUS: NType = 1
+pub const NT_PRSTATUS: NType = 1
 
-const PF_MASKOS: ProgFlag = 0x0ff00000
+pub const PF_MASKOS: ProgFlag = 0x0ff00000
 
-const PF_MASKPROC: ProgFlag = 0xf0000000
+pub const PF_MASKPROC: ProgFlag = 0xf0000000
 
-const PF_R: ProgFlag = 0x4
+pub const PF_R: ProgFlag = 0x4
 
-const PF_W: ProgFlag = 0x2
+pub const PF_W: ProgFlag = 0x2
 
-const PF_X: ProgFlag = 0x1
+pub const PF_X: ProgFlag = 0x1
 
-const SHF_ALLOC: SectionFlag = 0x2
+pub const SHF_ALLOC: SectionFlag = 0x2
 
-const SHF_COMPRESSED: SectionFlag = 0x800
+pub const SHF_COMPRESSED: SectionFlag = 0x800
 
-const SHF_EXECINSTR: SectionFlag = 0x4
+pub const SHF_EXECINSTR: SectionFlag = 0x4
 
-const SHF_GROUP: SectionFlag = 0x200
+pub const SHF_GROUP: SectionFlag = 0x200
 
-const SHF_INFO_LINK: SectionFlag = 0x40
+pub const SHF_INFO_LINK: SectionFlag = 0x40
 
-const SHF_LINK_ORDER: SectionFlag = 0x80
+pub const SHF_LINK_ORDER: SectionFlag = 0x80
 
-const SHF_MASKOS: SectionFlag = 0x0ff00000
+pub const SHF_MASKOS: SectionFlag = 0x0ff00000
 
-const SHF_MASKPROC: SectionFlag = 0xf0000000
+pub const SHF_MASKPROC: SectionFlag = 0xf0000000
 
-const SHF_MERGE: SectionFlag = 0x10
+pub const SHF_MERGE: SectionFlag = 0x10
 
-const SHF_OS_NONCONFORMING: SectionFlag = 0x100
+pub const SHF_OS_NONCONFORMING: SectionFlag = 0x100
 
-const SHF_STRINGS: SectionFlag = 0x20
+pub const SHF_STRINGS: SectionFlag = 0x20
 
-const SHF_TLS: SectionFlag = 0x400
+pub const SHF_TLS: SectionFlag = 0x400
 
-const SHF_WRITE: SectionFlag = 0x1
+pub const SHF_WRITE: SectionFlag = 0x1
 
-const Sym32Size = 16
+pub const Sym32Size = 16
 
-const Sym64Size = 24
+pub const Sym64Size = 24
 
-const VER_FLG_BASE: DynamicVersionFlag = 0x1
+pub const VER_FLG_BASE: DynamicVersionFlag = 0x1
 
-const VER_FLG_INFO: DynamicVersionFlag = 0x4
+pub const VER_FLG_INFO: DynamicVersionFlag = 0x4
 
-const VER_FLG_WEAK: DynamicVersionFlag = 0x2
+pub const VER_FLG_WEAK: DynamicVersionFlag = 0x2
 
 /// ErrNoSymbols is returned by [File.Symbols] and [File.DynamicSymbols]
 /// if there is no such section in the File.

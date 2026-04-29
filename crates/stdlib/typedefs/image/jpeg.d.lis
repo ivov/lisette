@@ -37,7 +37,7 @@ pub interface Reader {
 pub struct UnsupportedError(string)
 
 /// DefaultQuality is the default quality encoding parameter.
-const DefaultQuality = 75
+pub const DefaultQuality = 75
 
 impl FormatError {
   fn Error(self) -> string

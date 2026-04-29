@@ -16,7 +16,7 @@ pub fn New() -> hash.Hash
 pub fn Sum(data: Slice<uint8>) -> Slice<uint8>
 
 /// The blocksize of MD5 in bytes.
-const BlockSize = 64
+pub const BlockSize = 64
 
 /// The size of an MD5 checksum in bytes.
-const Size = 16
+pub const Size = 16

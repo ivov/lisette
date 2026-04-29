@@ -367,7 +367,7 @@ pub struct UnsupportedTypeError {
   pub Type: Option<reflect.Type>,
 }
 
-const Header = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+pub const Header = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 
 /// HTMLAutoClose is the set of HTML elements that
 /// should be considered to close automatically.

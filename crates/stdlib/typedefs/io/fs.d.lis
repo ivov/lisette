@@ -244,35 +244,35 @@ pub interface SubFS {
 ///     for that directory to report the error.
 pub type WalkDirFunc = fn(string, DirEntry, error) -> Result<(), error>
 
-const ModeAppend: FileMode = 1073741824
+pub const ModeAppend: FileMode = 1073741824
 
-const ModeCharDevice: FileMode = 2097152
+pub const ModeCharDevice: FileMode = 2097152
 
-const ModeDevice: FileMode = 67108864
+pub const ModeDevice: FileMode = 67108864
 
-const ModeDir: FileMode = 2147483648
+pub const ModeDir: FileMode = 2147483648
 
-const ModeExclusive: FileMode = 536870912
+pub const ModeExclusive: FileMode = 536870912
 
-const ModeIrregular: FileMode = 524288
+pub const ModeIrregular: FileMode = 524288
 
-const ModeNamedPipe: FileMode = 33554432
+pub const ModeNamedPipe: FileMode = 33554432
 
-const ModePerm: FileMode = 0777
+pub const ModePerm: FileMode = 0777
 
-const ModeSetgid: FileMode = 4194304
+pub const ModeSetgid: FileMode = 4194304
 
-const ModeSetuid: FileMode = 8388608
+pub const ModeSetuid: FileMode = 8388608
 
-const ModeSocket: FileMode = 16777216
+pub const ModeSocket: FileMode = 16777216
 
-const ModeSticky: FileMode = 1048576
+pub const ModeSticky: FileMode = 1048576
 
-const ModeSymlink: FileMode = 134217728
+pub const ModeSymlink: FileMode = 134217728
 
-const ModeTemporary: FileMode = 268435456
+pub const ModeTemporary: FileMode = 268435456
 
-const ModeType: FileMode = 2401763328
+pub const ModeType: FileMode = 2401763328
 
 /// Generic file system errors.
 /// Errors returned by file systems can be tested against these errors

@@ -1593,3025 +1593,3025 @@ pub struct Timeval32 {
 
 pub struct WaitStatus(uint32)
 
-const AF_APPLETALK = 0x10
+pub const AF_APPLETALK = 0x10
 
-const AF_CCITT = 0xa
+pub const AF_CCITT = 0xa
 
-const AF_CHAOS = 0x5
+pub const AF_CHAOS = 0x5
 
-const AF_CNT = 0x15
+pub const AF_CNT = 0x15
 
-const AF_COIP = 0x14
+pub const AF_COIP = 0x14
 
-const AF_DATAKIT = 0x9
+pub const AF_DATAKIT = 0x9
 
-const AF_DECnet = 0xc
+pub const AF_DECnet = 0xc
 
-const AF_DLI = 0xd
+pub const AF_DLI = 0xd
 
-const AF_E164 = 0x1c
+pub const AF_E164 = 0x1c
 
-const AF_ECMA = 0x8
+pub const AF_ECMA = 0x8
 
-const AF_HYLINK = 0xf
+pub const AF_HYLINK = 0xf
 
-const AF_IEEE80211 = 0x25
+pub const AF_IEEE80211 = 0x25
 
-const AF_IMPLINK = 0x3
+pub const AF_IMPLINK = 0x3
 
-const AF_INET = 0x2
+pub const AF_INET = 0x2
 
-const AF_INET6 = 0x1e
+pub const AF_INET6 = 0x1e
 
-const AF_IPX = 0x17
+pub const AF_IPX = 0x17
 
-const AF_ISDN = 0x1c
+pub const AF_ISDN = 0x1c
 
-const AF_ISO = 0x7
+pub const AF_ISO = 0x7
 
-const AF_LAT = 0xe
+pub const AF_LAT = 0xe
 
-const AF_LINK = 0x12
+pub const AF_LINK = 0x12
 
-const AF_LOCAL = 0x1
+pub const AF_LOCAL = 0x1
 
-const AF_MAX = 0x28
+pub const AF_MAX = 0x28
 
-const AF_NATM = 0x1f
+pub const AF_NATM = 0x1f
 
-const AF_NDRV = 0x1b
+pub const AF_NDRV = 0x1b
 
-const AF_NETBIOS = 0x21
+pub const AF_NETBIOS = 0x21
 
-const AF_NS = 0x6
+pub const AF_NS = 0x6
 
-const AF_OSI = 0x7
+pub const AF_OSI = 0x7
 
-const AF_PPP = 0x22
+pub const AF_PPP = 0x22
 
-const AF_PUP = 0x4
+pub const AF_PUP = 0x4
 
-const AF_RESERVED_36 = 0x24
+pub const AF_RESERVED_36 = 0x24
 
-const AF_ROUTE = 0x11
+pub const AF_ROUTE = 0x11
 
-const AF_SIP = 0x18
+pub const AF_SIP = 0x18
 
-const AF_SNA = 0xb
+pub const AF_SNA = 0xb
 
-const AF_SYSTEM = 0x20
+pub const AF_SYSTEM = 0x20
 
-const AF_UNIX = 0x1
+pub const AF_UNIX = 0x1
 
-const AF_UNSPEC = 0x0
+pub const AF_UNSPEC = 0x0
 
-const AF_UTUN = 0x26
+pub const AF_UTUN = 0x26
 
-const B0 = 0x0
+pub const B0 = 0x0
 
-const B110 = 0x6e
+pub const B110 = 0x6e
 
-const B115200 = 0x1c200
+pub const B115200 = 0x1c200
 
-const B1200 = 0x4b0
+pub const B1200 = 0x4b0
 
-const B134 = 0x86
+pub const B134 = 0x86
 
-const B14400 = 0x3840
+pub const B14400 = 0x3840
 
-const B150 = 0x96
+pub const B150 = 0x96
 
-const B1800 = 0x708
+pub const B1800 = 0x708
 
-const B19200 = 0x4b00
+pub const B19200 = 0x4b00
 
-const B200 = 0xc8
+pub const B200 = 0xc8
 
-const B230400 = 0x38400
+pub const B230400 = 0x38400
 
-const B2400 = 0x960
+pub const B2400 = 0x960
 
-const B28800 = 0x7080
+pub const B28800 = 0x7080
 
-const B300 = 0x12c
+pub const B300 = 0x12c
 
-const B38400 = 0x9600
+pub const B38400 = 0x9600
 
-const B4800 = 0x12c0
+pub const B4800 = 0x12c0
 
-const B50 = 0x32
+pub const B50 = 0x32
 
-const B57600 = 0xe100
+pub const B57600 = 0xe100
 
-const B600 = 0x258
+pub const B600 = 0x258
 
-const B7200 = 0x1c20
+pub const B7200 = 0x1c20
 
-const B75 = 0x4b
+pub const B75 = 0x4b
 
-const B76800 = 0x12c00
+pub const B76800 = 0x12c00
 
-const B9600 = 0x2580
+pub const B9600 = 0x2580
 
-const BIOCFLUSH = 0x20004268
+pub const BIOCFLUSH = 0x20004268
 
-const BIOCGBLEN = 0x40044266
+pub const BIOCGBLEN = 0x40044266
 
-const BIOCGDLT = 0x4004426a
+pub const BIOCGDLT = 0x4004426a
 
-const BIOCGDLTLIST = 0xc00c4279
+pub const BIOCGDLTLIST = 0xc00c4279
 
-const BIOCGETIF = 0x4020426b
+pub const BIOCGETIF = 0x4020426b
 
-const BIOCGHDRCMPLT = 0x40044274
+pub const BIOCGHDRCMPLT = 0x40044274
 
-const BIOCGRSIG = 0x40044272
+pub const BIOCGRSIG = 0x40044272
 
-const BIOCGRTIMEOUT = 0x4010426e
+pub const BIOCGRTIMEOUT = 0x4010426e
 
-const BIOCGSEESENT = 0x40044276
+pub const BIOCGSEESENT = 0x40044276
 
-const BIOCGSTATS = 0x4008426f
+pub const BIOCGSTATS = 0x4008426f
 
-const BIOCIMMEDIATE = 0x80044270
+pub const BIOCIMMEDIATE = 0x80044270
 
-const BIOCPROMISC = 0x20004269
+pub const BIOCPROMISC = 0x20004269
 
-const BIOCSBLEN = 0xc0044266
+pub const BIOCSBLEN = 0xc0044266
 
-const BIOCSDLT = 0x80044278
+pub const BIOCSDLT = 0x80044278
 
-const BIOCSETF = 0x80104267
+pub const BIOCSETF = 0x80104267
 
-const BIOCSETIF = 0x8020426c
+pub const BIOCSETIF = 0x8020426c
 
-const BIOCSHDRCMPLT = 0x80044275
+pub const BIOCSHDRCMPLT = 0x80044275
 
-const BIOCSRSIG = 0x80044273
+pub const BIOCSRSIG = 0x80044273
 
-const BIOCSRTIMEOUT = 0x8010426d
+pub const BIOCSRTIMEOUT = 0x8010426d
 
-const BIOCSSEESENT = 0x80044277
+pub const BIOCSSEESENT = 0x80044277
 
-const BIOCVERSION = 0x40044271
+pub const BIOCVERSION = 0x40044271
 
-const BPF_A = 0x10
+pub const BPF_A = 0x10
 
-const BPF_ABS = 0x20
+pub const BPF_ABS = 0x20
 
-const BPF_ADD = 0x0
+pub const BPF_ADD = 0x0
 
-const BPF_ALIGNMENT = 0x4
+pub const BPF_ALIGNMENT = 0x4
 
-const BPF_ALU = 0x4
+pub const BPF_ALU = 0x4
 
-const BPF_AND = 0x50
+pub const BPF_AND = 0x50
 
-const BPF_B = 0x10
+pub const BPF_B = 0x10
 
-const BPF_DIV = 0x30
+pub const BPF_DIV = 0x30
 
-const BPF_H = 0x8
+pub const BPF_H = 0x8
 
-const BPF_IMM = 0x0
+pub const BPF_IMM = 0x0
 
-const BPF_IND = 0x40
+pub const BPF_IND = 0x40
 
-const BPF_JA = 0x0
+pub const BPF_JA = 0x0
 
-const BPF_JEQ = 0x10
+pub const BPF_JEQ = 0x10
 
-const BPF_JGE = 0x30
+pub const BPF_JGE = 0x30
 
-const BPF_JGT = 0x20
+pub const BPF_JGT = 0x20
 
-const BPF_JMP = 0x5
+pub const BPF_JMP = 0x5
 
-const BPF_JSET = 0x40
+pub const BPF_JSET = 0x40
 
-const BPF_K = 0x0
+pub const BPF_K = 0x0
 
-const BPF_LD = 0x0
+pub const BPF_LD = 0x0
 
-const BPF_LDX = 0x1
+pub const BPF_LDX = 0x1
 
-const BPF_LEN = 0x80
+pub const BPF_LEN = 0x80
 
-const BPF_LSH = 0x60
+pub const BPF_LSH = 0x60
 
-const BPF_MAJOR_VERSION = 0x1
+pub const BPF_MAJOR_VERSION = 0x1
 
-const BPF_MAXBUFSIZE = 0x80000
+pub const BPF_MAXBUFSIZE = 0x80000
 
-const BPF_MAXINSNS = 0x200
+pub const BPF_MAXINSNS = 0x200
 
-const BPF_MEM = 0x60
+pub const BPF_MEM = 0x60
 
-const BPF_MEMWORDS = 0x10
+pub const BPF_MEMWORDS = 0x10
 
-const BPF_MINBUFSIZE = 0x20
+pub const BPF_MINBUFSIZE = 0x20
 
-const BPF_MINOR_VERSION = 0x1
+pub const BPF_MINOR_VERSION = 0x1
 
-const BPF_MISC = 0x7
+pub const BPF_MISC = 0x7
 
-const BPF_MSH = 0xa0
+pub const BPF_MSH = 0xa0
 
-const BPF_MUL = 0x20
+pub const BPF_MUL = 0x20
 
-const BPF_NEG = 0x80
+pub const BPF_NEG = 0x80
 
-const BPF_OR = 0x40
+pub const BPF_OR = 0x40
 
-const BPF_RELEASE = 0x30bb6
+pub const BPF_RELEASE = 0x30bb6
 
-const BPF_RET = 0x6
+pub const BPF_RET = 0x6
 
-const BPF_RSH = 0x70
+pub const BPF_RSH = 0x70
 
-const BPF_ST = 0x2
+pub const BPF_ST = 0x2
 
-const BPF_STX = 0x3
+pub const BPF_STX = 0x3
 
-const BPF_SUB = 0x10
+pub const BPF_SUB = 0x10
 
-const BPF_TAX = 0x0
+pub const BPF_TAX = 0x0
 
-const BPF_TXA = 0x80
+pub const BPF_TXA = 0x80
 
-const BPF_W = 0x0
+pub const BPF_W = 0x0
 
-const BPF_X = 0x8
+pub const BPF_X = 0x8
 
-const BRKINT = 0x2
+pub const BRKINT = 0x2
 
-const CFLUSH = 0xf
+pub const CFLUSH = 0xf
 
-const CLOCAL = 0x8000
+pub const CLOCAL = 0x8000
 
-const CREAD = 0x800
+pub const CREAD = 0x800
 
-const CS5 = 0x0
+pub const CS5 = 0x0
 
-const CS6 = 0x100
+pub const CS6 = 0x100
 
-const CS7 = 0x200
+pub const CS7 = 0x200
 
-const CS8 = 0x300
+pub const CS8 = 0x300
 
-const CSIZE = 0x300
+pub const CSIZE = 0x300
 
-const CSTART = 0x11
+pub const CSTART = 0x11
 
-const CSTATUS = 0x14
+pub const CSTATUS = 0x14
 
-const CSTOP = 0x13
+pub const CSTOP = 0x13
 
-const CSTOPB = 0x400
+pub const CSTOPB = 0x400
 
-const CSUSP = 0x1a
+pub const CSUSP = 0x1a
 
-const CTL_MAXNAME = 0xc
+pub const CTL_MAXNAME = 0xc
 
-const CTL_NET = 0x4
+pub const CTL_NET = 0x4
 
-const DLT_APPLE_IP_OVER_IEEE1394 = 0x8a
+pub const DLT_APPLE_IP_OVER_IEEE1394 = 0x8a
 
-const DLT_ARCNET = 0x7
+pub const DLT_ARCNET = 0x7
 
-const DLT_ATM_CLIP = 0x13
+pub const DLT_ATM_CLIP = 0x13
 
-const DLT_ATM_RFC1483 = 0xb
+pub const DLT_ATM_RFC1483 = 0xb
 
-const DLT_AX25 = 0x3
+pub const DLT_AX25 = 0x3
 
-const DLT_CHAOS = 0x5
+pub const DLT_CHAOS = 0x5
 
-const DLT_CHDLC = 0x68
+pub const DLT_CHDLC = 0x68
 
-const DLT_C_HDLC = 0x68
+pub const DLT_C_HDLC = 0x68
 
-const DLT_EN10MB = 0x1
+pub const DLT_EN10MB = 0x1
 
-const DLT_EN3MB = 0x2
+pub const DLT_EN3MB = 0x2
 
-const DLT_FDDI = 0xa
+pub const DLT_FDDI = 0xa
 
-const DLT_IEEE802 = 0x6
+pub const DLT_IEEE802 = 0x6
 
-const DLT_IEEE802_11 = 0x69
+pub const DLT_IEEE802_11 = 0x69
 
-const DLT_IEEE802_11_RADIO = 0x7f
+pub const DLT_IEEE802_11_RADIO = 0x7f
 
-const DLT_IEEE802_11_RADIO_AVS = 0xa3
+pub const DLT_IEEE802_11_RADIO_AVS = 0xa3
 
-const DLT_LINUX_SLL = 0x71
+pub const DLT_LINUX_SLL = 0x71
 
-const DLT_LOOP = 0x6c
+pub const DLT_LOOP = 0x6c
 
-const DLT_NULL = 0x0
+pub const DLT_NULL = 0x0
 
-const DLT_PFLOG = 0x75
+pub const DLT_PFLOG = 0x75
 
-const DLT_PFSYNC = 0x12
+pub const DLT_PFSYNC = 0x12
 
-const DLT_PPP = 0x9
+pub const DLT_PPP = 0x9
 
-const DLT_PPP_BSDOS = 0x10
+pub const DLT_PPP_BSDOS = 0x10
 
-const DLT_PPP_SERIAL = 0x32
+pub const DLT_PPP_SERIAL = 0x32
 
-const DLT_PRONET = 0x4
+pub const DLT_PRONET = 0x4
 
-const DLT_RAW = 0xc
+pub const DLT_RAW = 0xc
 
-const DLT_SLIP = 0x8
+pub const DLT_SLIP = 0x8
 
-const DLT_SLIP_BSDOS = 0xf
+pub const DLT_SLIP_BSDOS = 0xf
 
-const DT_BLK = 0x6
+pub const DT_BLK = 0x6
 
-const DT_CHR = 0x2
+pub const DT_CHR = 0x2
 
-const DT_DIR = 0x4
+pub const DT_DIR = 0x4
 
-const DT_FIFO = 0x1
+pub const DT_FIFO = 0x1
 
-const DT_LNK = 0xa
+pub const DT_LNK = 0xa
 
-const DT_REG = 0x8
+pub const DT_REG = 0x8
 
-const DT_SOCK = 0xc
+pub const DT_SOCK = 0xc
 
-const DT_UNKNOWN = 0x0
+pub const DT_UNKNOWN = 0x0
 
-const DT_WHT = 0xe
+pub const DT_WHT = 0xe
 
-const ECHO = 0x8
+pub const ECHO = 0x8
 
-const ECHOCTL = 0x40
+pub const ECHOCTL = 0x40
 
-const ECHOE = 0x2
+pub const ECHOE = 0x2
 
-const ECHOK = 0x4
+pub const ECHOK = 0x4
 
-const ECHOKE = 0x1
+pub const ECHOKE = 0x1
 
-const ECHONL = 0x10
+pub const ECHONL = 0x10
 
-const ECHOPRT = 0x20
+pub const ECHOPRT = 0x20
 
-const EVFILT_AIO = -0x3
+pub const EVFILT_AIO = -0x3
 
-const EVFILT_FS = -0x9
+pub const EVFILT_FS = -0x9
 
-const EVFILT_MACHPORT = -0x8
+pub const EVFILT_MACHPORT = -0x8
 
-const EVFILT_PROC = -0x5
+pub const EVFILT_PROC = -0x5
 
-const EVFILT_READ = -0x1
+pub const EVFILT_READ = -0x1
 
-const EVFILT_SIGNAL = -0x6
+pub const EVFILT_SIGNAL = -0x6
 
-const EVFILT_SYSCOUNT = 0xe
+pub const EVFILT_SYSCOUNT = 0xe
 
-const EVFILT_THREADMARKER = 0xe
+pub const EVFILT_THREADMARKER = 0xe
 
-const EVFILT_TIMER = -0x7
+pub const EVFILT_TIMER = -0x7
 
-const EVFILT_USER = -0xa
+pub const EVFILT_USER = -0xa
 
-const EVFILT_VM = -0xc
+pub const EVFILT_VM = -0xc
 
-const EVFILT_VNODE = -0x4
+pub const EVFILT_VNODE = -0x4
 
-const EVFILT_WRITE = -0x2
+pub const EVFILT_WRITE = -0x2
 
-const EV_ADD = 0x1
+pub const EV_ADD = 0x1
 
-const EV_CLEAR = 0x20
+pub const EV_CLEAR = 0x20
 
-const EV_DELETE = 0x2
+pub const EV_DELETE = 0x2
 
-const EV_DISABLE = 0x8
+pub const EV_DISABLE = 0x8
 
-const EV_DISPATCH = 0x80
+pub const EV_DISPATCH = 0x80
 
-const EV_ENABLE = 0x4
+pub const EV_ENABLE = 0x4
 
-const EV_EOF = 0x8000
+pub const EV_EOF = 0x8000
 
-const EV_ERROR = 0x4000
+pub const EV_ERROR = 0x4000
 
-const EV_FLAG0 = 0x1000
+pub const EV_FLAG0 = 0x1000
 
-const EV_FLAG1 = 0x2000
+pub const EV_FLAG1 = 0x2000
 
-const EV_ONESHOT = 0x10
+pub const EV_ONESHOT = 0x10
 
-const EV_OOBAND = 0x2000
+pub const EV_OOBAND = 0x2000
 
-const EV_POLL = 0x1000
+pub const EV_POLL = 0x1000
 
-const EV_RECEIPT = 0x40
+pub const EV_RECEIPT = 0x40
 
-const EV_SYSFLAGS = 0xf000
+pub const EV_SYSFLAGS = 0xf000
 
-const EXTA = 0x4b00
+pub const EXTA = 0x4b00
 
-const EXTB = 0x9600
+pub const EXTB = 0x9600
 
-const EXTPROC = 0x800
+pub const EXTPROC = 0x800
 
-const FD_CLOEXEC = 0x1
+pub const FD_CLOEXEC = 0x1
 
-const FD_SETSIZE = 0x400
+pub const FD_SETSIZE = 0x400
 
-const FLUSHO = 0x800000
+pub const FLUSHO = 0x800000
 
-const F_ADDFILESIGS = 0x3d
+pub const F_ADDFILESIGS = 0x3d
 
-const F_ADDSIGS = 0x3b
+pub const F_ADDSIGS = 0x3b
 
-const F_ALLOCATEALL = 0x4
+pub const F_ALLOCATEALL = 0x4
 
-const F_ALLOCATECONTIG = 0x2
+pub const F_ALLOCATECONTIG = 0x2
 
-const F_CHKCLEAN = 0x29
+pub const F_CHKCLEAN = 0x29
 
-const F_DUPFD = 0x0
+pub const F_DUPFD = 0x0
 
-const F_DUPFD_CLOEXEC = 0x43
+pub const F_DUPFD_CLOEXEC = 0x43
 
-const F_FINDSIGS = 0x4e
+pub const F_FINDSIGS = 0x4e
 
-const F_FLUSH_DATA = 0x28
+pub const F_FLUSH_DATA = 0x28
 
-const F_FREEZE_FS = 0x35
+pub const F_FREEZE_FS = 0x35
 
-const F_FULLFSYNC = 0x33
+pub const F_FULLFSYNC = 0x33
 
-const F_GETCODEDIR = 0x48
+pub const F_GETCODEDIR = 0x48
 
-const F_GETFD = 0x1
+pub const F_GETFD = 0x1
 
-const F_GETFL = 0x3
+pub const F_GETFL = 0x3
 
-const F_GETLK = 0x7
+pub const F_GETLK = 0x7
 
-const F_GETLKPID = 0x42
+pub const F_GETLKPID = 0x42
 
-const F_GETNOSIGPIPE = 0x4a
+pub const F_GETNOSIGPIPE = 0x4a
 
-const F_GETOWN = 0x5
+pub const F_GETOWN = 0x5
 
-const F_GETPATH = 0x32
+pub const F_GETPATH = 0x32
 
-const F_GETPATH_MTMINFO = 0x47
+pub const F_GETPATH_MTMINFO = 0x47
 
-const F_GETPROTECTIONCLASS = 0x3f
+pub const F_GETPROTECTIONCLASS = 0x3f
 
-const F_GETPROTECTIONLEVEL = 0x4d
+pub const F_GETPROTECTIONLEVEL = 0x4d
 
-const F_GLOBAL_NOCACHE = 0x37
+pub const F_GLOBAL_NOCACHE = 0x37
 
-const F_LOG2PHYS = 0x31
+pub const F_LOG2PHYS = 0x31
 
-const F_LOG2PHYS_EXT = 0x41
+pub const F_LOG2PHYS_EXT = 0x41
 
-const F_NOCACHE = 0x30
+pub const F_NOCACHE = 0x30
 
-const F_NODIRECT = 0x3e
+pub const F_NODIRECT = 0x3e
 
-const F_OK = 0x0
+pub const F_OK = 0x0
 
-const F_PATHPKG_CHECK = 0x34
+pub const F_PATHPKG_CHECK = 0x34
 
-const F_PEOFPOSMODE = 0x3
+pub const F_PEOFPOSMODE = 0x3
 
-const F_PREALLOCATE = 0x2a
+pub const F_PREALLOCATE = 0x2a
 
-const F_RDADVISE = 0x2c
+pub const F_RDADVISE = 0x2c
 
-const F_RDAHEAD = 0x2d
+pub const F_RDAHEAD = 0x2d
 
-const F_RDLCK = 0x1
+pub const F_RDLCK = 0x1
 
-const F_SETBACKINGSTORE = 0x46
+pub const F_SETBACKINGSTORE = 0x46
 
-const F_SETFD = 0x2
+pub const F_SETFD = 0x2
 
-const F_SETFL = 0x4
+pub const F_SETFL = 0x4
 
-const F_SETLK = 0x8
+pub const F_SETLK = 0x8
 
-const F_SETLKW = 0x9
+pub const F_SETLKW = 0x9
 
-const F_SETLKWTIMEOUT = 0xa
+pub const F_SETLKWTIMEOUT = 0xa
 
-const F_SETNOSIGPIPE = 0x49
+pub const F_SETNOSIGPIPE = 0x49
 
-const F_SETOWN = 0x6
+pub const F_SETOWN = 0x6
 
-const F_SETPROTECTIONCLASS = 0x40
+pub const F_SETPROTECTIONCLASS = 0x40
 
-const F_SETSIZE = 0x2b
+pub const F_SETSIZE = 0x2b
 
-const F_SINGLE_WRITER = 0x4c
+pub const F_SINGLE_WRITER = 0x4c
 
-const F_THAW_FS = 0x36
+pub const F_THAW_FS = 0x36
 
-const F_TRANSCODEKEY = 0x4b
+pub const F_TRANSCODEKEY = 0x4b
 
-const F_UNLCK = 0x2
+pub const F_UNLCK = 0x2
 
-const F_VOLPOSMODE = 0x4
+pub const F_VOLPOSMODE = 0x4
 
-const F_WRLCK = 0x3
+pub const F_WRLCK = 0x3
 
-const HUPCL = 0x4000
+pub const HUPCL = 0x4000
 
-const ICANON = 0x100
+pub const ICANON = 0x100
 
-const ICMP6_FILTER = 0x12
+pub const ICMP6_FILTER = 0x12
 
-const ICRNL = 0x100
+pub const ICRNL = 0x100
 
-const IEXTEN = 0x400
+pub const IEXTEN = 0x400
 
-const IFF_ALLMULTI = 0x200
+pub const IFF_ALLMULTI = 0x200
 
-const IFF_ALTPHYS = 0x4000
+pub const IFF_ALTPHYS = 0x4000
 
-const IFF_BROADCAST = 0x2
+pub const IFF_BROADCAST = 0x2
 
-const IFF_DEBUG = 0x4
+pub const IFF_DEBUG = 0x4
 
-const IFF_LINK0 = 0x1000
+pub const IFF_LINK0 = 0x1000
 
-const IFF_LINK1 = 0x2000
+pub const IFF_LINK1 = 0x2000
 
-const IFF_LINK2 = 0x4000
+pub const IFF_LINK2 = 0x4000
 
-const IFF_LOOPBACK = 0x8
+pub const IFF_LOOPBACK = 0x8
 
-const IFF_MULTICAST = 0x8000
+pub const IFF_MULTICAST = 0x8000
 
-const IFF_NOARP = 0x80
+pub const IFF_NOARP = 0x80
 
-const IFF_NOTRAILERS = 0x20
+pub const IFF_NOTRAILERS = 0x20
 
-const IFF_OACTIVE = 0x400
+pub const IFF_OACTIVE = 0x400
 
-const IFF_POINTOPOINT = 0x10
+pub const IFF_POINTOPOINT = 0x10
 
-const IFF_PROMISC = 0x100
+pub const IFF_PROMISC = 0x100
 
-const IFF_RUNNING = 0x40
+pub const IFF_RUNNING = 0x40
 
-const IFF_SIMPLEX = 0x800
+pub const IFF_SIMPLEX = 0x800
 
-const IFF_UP = 0x1
+pub const IFF_UP = 0x1
 
-const IFNAMSIZ = 0x10
+pub const IFNAMSIZ = 0x10
 
-const IFT_1822 = 0x2
+pub const IFT_1822 = 0x2
 
-const IFT_AAL5 = 0x31
+pub const IFT_AAL5 = 0x31
 
-const IFT_ARCNET = 0x23
+pub const IFT_ARCNET = 0x23
 
-const IFT_ARCNETPLUS = 0x24
+pub const IFT_ARCNETPLUS = 0x24
 
-const IFT_ATM = 0x25
+pub const IFT_ATM = 0x25
 
-const IFT_BRIDGE = 0xd1
+pub const IFT_BRIDGE = 0xd1
 
-const IFT_CARP = 0xf8
+pub const IFT_CARP = 0xf8
 
-const IFT_CELLULAR = 0xff
+pub const IFT_CELLULAR = 0xff
 
-const IFT_CEPT = 0x13
+pub const IFT_CEPT = 0x13
 
-const IFT_DS3 = 0x1e
+pub const IFT_DS3 = 0x1e
 
-const IFT_ENC = 0xf4
+pub const IFT_ENC = 0xf4
 
-const IFT_EON = 0x19
+pub const IFT_EON = 0x19
 
-const IFT_ETHER = 0x6
+pub const IFT_ETHER = 0x6
 
-const IFT_FAITH = 0x38
+pub const IFT_FAITH = 0x38
 
-const IFT_FDDI = 0xf
+pub const IFT_FDDI = 0xf
 
-const IFT_FRELAY = 0x20
+pub const IFT_FRELAY = 0x20
 
-const IFT_FRELAYDCE = 0x2c
+pub const IFT_FRELAYDCE = 0x2c
 
-const IFT_GIF = 0x37
+pub const IFT_GIF = 0x37
 
-const IFT_HDH1822 = 0x3
+pub const IFT_HDH1822 = 0x3
 
-const IFT_HIPPI = 0x2f
+pub const IFT_HIPPI = 0x2f
 
-const IFT_HSSI = 0x2e
+pub const IFT_HSSI = 0x2e
 
-const IFT_HY = 0xe
+pub const IFT_HY = 0xe
 
-const IFT_IEEE1394 = 0x90
+pub const IFT_IEEE1394 = 0x90
 
-const IFT_IEEE8023ADLAG = 0x88
+pub const IFT_IEEE8023ADLAG = 0x88
 
-const IFT_ISDNBASIC = 0x14
+pub const IFT_ISDNBASIC = 0x14
 
-const IFT_ISDNPRIMARY = 0x15
+pub const IFT_ISDNPRIMARY = 0x15
 
-const IFT_ISO88022LLC = 0x29
+pub const IFT_ISO88022LLC = 0x29
 
-const IFT_ISO88023 = 0x7
+pub const IFT_ISO88023 = 0x7
 
-const IFT_ISO88024 = 0x8
+pub const IFT_ISO88024 = 0x8
 
-const IFT_ISO88025 = 0x9
+pub const IFT_ISO88025 = 0x9
 
-const IFT_ISO88026 = 0xa
+pub const IFT_ISO88026 = 0xa
 
-const IFT_L2VLAN = 0x87
+pub const IFT_L2VLAN = 0x87
 
-const IFT_LAPB = 0x10
+pub const IFT_LAPB = 0x10
 
-const IFT_LOCALTALK = 0x2a
+pub const IFT_LOCALTALK = 0x2a
 
-const IFT_LOOP = 0x18
+pub const IFT_LOOP = 0x18
 
-const IFT_MIOX25 = 0x26
+pub const IFT_MIOX25 = 0x26
 
-const IFT_MODEM = 0x30
+pub const IFT_MODEM = 0x30
 
-const IFT_NSIP = 0x1b
+pub const IFT_NSIP = 0x1b
 
-const IFT_OTHER = 0x1
+pub const IFT_OTHER = 0x1
 
-const IFT_P10 = 0xc
+pub const IFT_P10 = 0xc
 
-const IFT_P80 = 0xd
+pub const IFT_P80 = 0xd
 
-const IFT_PARA = 0x22
+pub const IFT_PARA = 0x22
 
-const IFT_PDP = 0xff
+pub const IFT_PDP = 0xff
 
-const IFT_PFLOG = 0xf5
+pub const IFT_PFLOG = 0xf5
 
-const IFT_PFSYNC = 0xf6
+pub const IFT_PFSYNC = 0xf6
 
-const IFT_PPP = 0x17
+pub const IFT_PPP = 0x17
 
-const IFT_PROPMUX = 0x36
+pub const IFT_PROPMUX = 0x36
 
-const IFT_PROPVIRTUAL = 0x35
+pub const IFT_PROPVIRTUAL = 0x35
 
-const IFT_PTPSERIAL = 0x16
+pub const IFT_PTPSERIAL = 0x16
 
-const IFT_RS232 = 0x21
+pub const IFT_RS232 = 0x21
 
-const IFT_SDLC = 0x11
+pub const IFT_SDLC = 0x11
 
-const IFT_SIP = 0x1f
+pub const IFT_SIP = 0x1f
 
-const IFT_SLIP = 0x1c
+pub const IFT_SLIP = 0x1c
 
-const IFT_SMDSDXI = 0x2b
+pub const IFT_SMDSDXI = 0x2b
 
-const IFT_SMDSICIP = 0x34
+pub const IFT_SMDSICIP = 0x34
 
-const IFT_SONET = 0x27
+pub const IFT_SONET = 0x27
 
-const IFT_SONETPATH = 0x32
+pub const IFT_SONETPATH = 0x32
 
-const IFT_SONETVT = 0x33
+pub const IFT_SONETVT = 0x33
 
-const IFT_STARLAN = 0xb
+pub const IFT_STARLAN = 0xb
 
-const IFT_STF = 0x39
+pub const IFT_STF = 0x39
 
-const IFT_T1 = 0x12
+pub const IFT_T1 = 0x12
 
-const IFT_ULTRA = 0x1d
+pub const IFT_ULTRA = 0x1d
 
-const IFT_V35 = 0x2d
+pub const IFT_V35 = 0x2d
 
-const IFT_X25 = 0x5
+pub const IFT_X25 = 0x5
 
-const IFT_X25DDN = 0x4
+pub const IFT_X25DDN = 0x4
 
-const IFT_X25PLE = 0x28
+pub const IFT_X25PLE = 0x28
 
-const IFT_XETHER = 0x1a
+pub const IFT_XETHER = 0x1a
 
-const IGNBRK = 0x1
+pub const IGNBRK = 0x1
 
-const IGNCR = 0x80
+pub const IGNCR = 0x80
 
-const IGNPAR = 0x4
+pub const IGNPAR = 0x4
 
-const IMAXBEL = 0x2000
+pub const IMAXBEL = 0x2000
 
-const INLCR = 0x40
+pub const INLCR = 0x40
 
-const INPCK = 0x10
+pub const INPCK = 0x10
 
-const IN_CLASSA_HOST = 0xffffff
+pub const IN_CLASSA_HOST = 0xffffff
 
-const IN_CLASSA_MAX = 0x80
+pub const IN_CLASSA_MAX = 0x80
 
-const IN_CLASSA_NET = 0xff000000
+pub const IN_CLASSA_NET = 0xff000000
 
-const IN_CLASSA_NSHIFT = 0x18
+pub const IN_CLASSA_NSHIFT = 0x18
 
-const IN_CLASSB_HOST = 0xffff
+pub const IN_CLASSB_HOST = 0xffff
 
-const IN_CLASSB_MAX = 0x10000
+pub const IN_CLASSB_MAX = 0x10000
 
-const IN_CLASSB_NET = 0xffff0000
+pub const IN_CLASSB_NET = 0xffff0000
 
-const IN_CLASSB_NSHIFT = 0x10
+pub const IN_CLASSB_NSHIFT = 0x10
 
-const IN_CLASSC_HOST = 0xff
+pub const IN_CLASSC_HOST = 0xff
 
-const IN_CLASSC_NET = 0xffffff00
+pub const IN_CLASSC_NET = 0xffffff00
 
-const IN_CLASSC_NSHIFT = 0x8
+pub const IN_CLASSC_NSHIFT = 0x8
 
-const IN_CLASSD_HOST = 0xfffffff
+pub const IN_CLASSD_HOST = 0xfffffff
 
-const IN_CLASSD_NET = 0xf0000000
+pub const IN_CLASSD_NET = 0xf0000000
 
-const IN_CLASSD_NSHIFT = 0x1c
+pub const IN_CLASSD_NSHIFT = 0x1c
 
-const IN_LINKLOCALNETNUM = 0xa9fe0000
+pub const IN_LINKLOCALNETNUM = 0xa9fe0000
 
-const IN_LOOPBACKNET = 0x7f
+pub const IN_LOOPBACKNET = 0x7f
 
-const IPPROTO_3PC = 0x22
+pub const IPPROTO_3PC = 0x22
 
-const IPPROTO_ADFS = 0x44
+pub const IPPROTO_ADFS = 0x44
 
-const IPPROTO_AH = 0x33
+pub const IPPROTO_AH = 0x33
 
-const IPPROTO_AHIP = 0x3d
+pub const IPPROTO_AHIP = 0x3d
 
-const IPPROTO_APES = 0x63
+pub const IPPROTO_APES = 0x63
 
-const IPPROTO_ARGUS = 0xd
+pub const IPPROTO_ARGUS = 0xd
 
-const IPPROTO_AX25 = 0x5d
+pub const IPPROTO_AX25 = 0x5d
 
-const IPPROTO_BHA = 0x31
+pub const IPPROTO_BHA = 0x31
 
-const IPPROTO_BLT = 0x1e
+pub const IPPROTO_BLT = 0x1e
 
-const IPPROTO_BRSATMON = 0x4c
+pub const IPPROTO_BRSATMON = 0x4c
 
-const IPPROTO_CFTP = 0x3e
+pub const IPPROTO_CFTP = 0x3e
 
-const IPPROTO_CHAOS = 0x10
+pub const IPPROTO_CHAOS = 0x10
 
-const IPPROTO_CMTP = 0x26
+pub const IPPROTO_CMTP = 0x26
 
-const IPPROTO_CPHB = 0x49
+pub const IPPROTO_CPHB = 0x49
 
-const IPPROTO_CPNX = 0x48
+pub const IPPROTO_CPNX = 0x48
 
-const IPPROTO_DDP = 0x25
+pub const IPPROTO_DDP = 0x25
 
-const IPPROTO_DGP = 0x56
+pub const IPPROTO_DGP = 0x56
 
-const IPPROTO_DIVERT = 0xfe
+pub const IPPROTO_DIVERT = 0xfe
 
-const IPPROTO_DONE = 0x101
+pub const IPPROTO_DONE = 0x101
 
-const IPPROTO_DSTOPTS = 0x3c
+pub const IPPROTO_DSTOPTS = 0x3c
 
-const IPPROTO_EGP = 0x8
+pub const IPPROTO_EGP = 0x8
 
-const IPPROTO_EMCON = 0xe
+pub const IPPROTO_EMCON = 0xe
 
-const IPPROTO_ENCAP = 0x62
+pub const IPPROTO_ENCAP = 0x62
 
-const IPPROTO_EON = 0x50
+pub const IPPROTO_EON = 0x50
 
-const IPPROTO_ESP = 0x32
+pub const IPPROTO_ESP = 0x32
 
-const IPPROTO_ETHERIP = 0x61
+pub const IPPROTO_ETHERIP = 0x61
 
-const IPPROTO_FRAGMENT = 0x2c
+pub const IPPROTO_FRAGMENT = 0x2c
 
-const IPPROTO_GGP = 0x3
+pub const IPPROTO_GGP = 0x3
 
-const IPPROTO_GMTP = 0x64
+pub const IPPROTO_GMTP = 0x64
 
-const IPPROTO_GRE = 0x2f
+pub const IPPROTO_GRE = 0x2f
 
-const IPPROTO_HELLO = 0x3f
+pub const IPPROTO_HELLO = 0x3f
 
-const IPPROTO_HMP = 0x14
+pub const IPPROTO_HMP = 0x14
 
-const IPPROTO_HOPOPTS = 0x0
+pub const IPPROTO_HOPOPTS = 0x0
 
-const IPPROTO_ICMP = 0x1
+pub const IPPROTO_ICMP = 0x1
 
-const IPPROTO_ICMPV6 = 0x3a
+pub const IPPROTO_ICMPV6 = 0x3a
 
-const IPPROTO_IDP = 0x16
+pub const IPPROTO_IDP = 0x16
 
-const IPPROTO_IDPR = 0x23
+pub const IPPROTO_IDPR = 0x23
 
-const IPPROTO_IDRP = 0x2d
+pub const IPPROTO_IDRP = 0x2d
 
-const IPPROTO_IGMP = 0x2
+pub const IPPROTO_IGMP = 0x2
 
-const IPPROTO_IGP = 0x55
+pub const IPPROTO_IGP = 0x55
 
-const IPPROTO_IGRP = 0x58
+pub const IPPROTO_IGRP = 0x58
 
-const IPPROTO_IL = 0x28
+pub const IPPROTO_IL = 0x28
 
-const IPPROTO_INLSP = 0x34
+pub const IPPROTO_INLSP = 0x34
 
-const IPPROTO_INP = 0x20
+pub const IPPROTO_INP = 0x20
 
-const IPPROTO_IP = 0x0
+pub const IPPROTO_IP = 0x0
 
-const IPPROTO_IPCOMP = 0x6c
+pub const IPPROTO_IPCOMP = 0x6c
 
-const IPPROTO_IPCV = 0x47
+pub const IPPROTO_IPCV = 0x47
 
-const IPPROTO_IPEIP = 0x5e
+pub const IPPROTO_IPEIP = 0x5e
 
-const IPPROTO_IPIP = 0x4
+pub const IPPROTO_IPIP = 0x4
 
-const IPPROTO_IPPC = 0x43
+pub const IPPROTO_IPPC = 0x43
 
-const IPPROTO_IPV4 = 0x4
+pub const IPPROTO_IPV4 = 0x4
 
-const IPPROTO_IPV6 = 0x29
+pub const IPPROTO_IPV6 = 0x29
 
-const IPPROTO_IRTP = 0x1c
+pub const IPPROTO_IRTP = 0x1c
 
-const IPPROTO_KRYPTOLAN = 0x41
+pub const IPPROTO_KRYPTOLAN = 0x41
 
-const IPPROTO_LARP = 0x5b
+pub const IPPROTO_LARP = 0x5b
 
-const IPPROTO_LEAF1 = 0x19
+pub const IPPROTO_LEAF1 = 0x19
 
-const IPPROTO_LEAF2 = 0x1a
+pub const IPPROTO_LEAF2 = 0x1a
 
-const IPPROTO_MAX = 0x100
+pub const IPPROTO_MAX = 0x100
 
-const IPPROTO_MAXID = 0x34
+pub const IPPROTO_MAXID = 0x34
 
-const IPPROTO_MEAS = 0x13
+pub const IPPROTO_MEAS = 0x13
 
-const IPPROTO_MHRP = 0x30
+pub const IPPROTO_MHRP = 0x30
 
-const IPPROTO_MICP = 0x5f
+pub const IPPROTO_MICP = 0x5f
 
-const IPPROTO_MTP = 0x5c
+pub const IPPROTO_MTP = 0x5c
 
-const IPPROTO_MUX = 0x12
+pub const IPPROTO_MUX = 0x12
 
-const IPPROTO_ND = 0x4d
+pub const IPPROTO_ND = 0x4d
 
-const IPPROTO_NHRP = 0x36
+pub const IPPROTO_NHRP = 0x36
 
-const IPPROTO_NONE = 0x3b
+pub const IPPROTO_NONE = 0x3b
 
-const IPPROTO_NSP = 0x1f
+pub const IPPROTO_NSP = 0x1f
 
-const IPPROTO_NVPII = 0xb
+pub const IPPROTO_NVPII = 0xb
 
-const IPPROTO_OSPFIGP = 0x59
+pub const IPPROTO_OSPFIGP = 0x59
 
-const IPPROTO_PGM = 0x71
+pub const IPPROTO_PGM = 0x71
 
-const IPPROTO_PIGP = 0x9
+pub const IPPROTO_PIGP = 0x9
 
-const IPPROTO_PIM = 0x67
+pub const IPPROTO_PIM = 0x67
 
-const IPPROTO_PRM = 0x15
+pub const IPPROTO_PRM = 0x15
 
-const IPPROTO_PUP = 0xc
+pub const IPPROTO_PUP = 0xc
 
-const IPPROTO_PVP = 0x4b
+pub const IPPROTO_PVP = 0x4b
 
-const IPPROTO_RAW = 0xff
+pub const IPPROTO_RAW = 0xff
 
-const IPPROTO_RCCMON = 0xa
+pub const IPPROTO_RCCMON = 0xa
 
-const IPPROTO_RDP = 0x1b
+pub const IPPROTO_RDP = 0x1b
 
-const IPPROTO_ROUTING = 0x2b
+pub const IPPROTO_ROUTING = 0x2b
 
-const IPPROTO_RSVP = 0x2e
+pub const IPPROTO_RSVP = 0x2e
 
-const IPPROTO_RVD = 0x42
+pub const IPPROTO_RVD = 0x42
 
-const IPPROTO_SATEXPAK = 0x40
+pub const IPPROTO_SATEXPAK = 0x40
 
-const IPPROTO_SATMON = 0x45
+pub const IPPROTO_SATMON = 0x45
 
-const IPPROTO_SCCSP = 0x60
+pub const IPPROTO_SCCSP = 0x60
 
-const IPPROTO_SCTP = 0x84
+pub const IPPROTO_SCTP = 0x84
 
-const IPPROTO_SDRP = 0x2a
+pub const IPPROTO_SDRP = 0x2a
 
-const IPPROTO_SEP = 0x21
+pub const IPPROTO_SEP = 0x21
 
-const IPPROTO_SRPC = 0x5a
+pub const IPPROTO_SRPC = 0x5a
 
-const IPPROTO_ST = 0x7
+pub const IPPROTO_ST = 0x7
 
-const IPPROTO_SVMTP = 0x52
+pub const IPPROTO_SVMTP = 0x52
 
-const IPPROTO_SWIPE = 0x35
+pub const IPPROTO_SWIPE = 0x35
 
-const IPPROTO_TCF = 0x57
+pub const IPPROTO_TCF = 0x57
 
-const IPPROTO_TCP = 0x6
+pub const IPPROTO_TCP = 0x6
 
-const IPPROTO_TP = 0x1d
+pub const IPPROTO_TP = 0x1d
 
-const IPPROTO_TPXX = 0x27
+pub const IPPROTO_TPXX = 0x27
 
-const IPPROTO_TRUNK1 = 0x17
+pub const IPPROTO_TRUNK1 = 0x17
 
-const IPPROTO_TRUNK2 = 0x18
+pub const IPPROTO_TRUNK2 = 0x18
 
-const IPPROTO_TTP = 0x54
+pub const IPPROTO_TTP = 0x54
 
-const IPPROTO_UDP = 0x11
+pub const IPPROTO_UDP = 0x11
 
-const IPPROTO_VINES = 0x53
+pub const IPPROTO_VINES = 0x53
 
-const IPPROTO_VISA = 0x46
+pub const IPPROTO_VISA = 0x46
 
-const IPPROTO_VMTP = 0x51
+pub const IPPROTO_VMTP = 0x51
 
-const IPPROTO_WBEXPAK = 0x4f
+pub const IPPROTO_WBEXPAK = 0x4f
 
-const IPPROTO_WBMON = 0x4e
+pub const IPPROTO_WBMON = 0x4e
 
-const IPPROTO_WSN = 0x4a
+pub const IPPROTO_WSN = 0x4a
 
-const IPPROTO_XNET = 0xf
+pub const IPPROTO_XNET = 0xf
 
-const IPPROTO_XTP = 0x24
+pub const IPPROTO_XTP = 0x24
 
-const IPV6_2292DSTOPTS = 0x17
+pub const IPV6_2292DSTOPTS = 0x17
 
-const IPV6_2292HOPLIMIT = 0x14
+pub const IPV6_2292HOPLIMIT = 0x14
 
-const IPV6_2292HOPOPTS = 0x16
+pub const IPV6_2292HOPOPTS = 0x16
 
-const IPV6_2292NEXTHOP = 0x15
+pub const IPV6_2292NEXTHOP = 0x15
 
-const IPV6_2292PKTINFO = 0x13
+pub const IPV6_2292PKTINFO = 0x13
 
-const IPV6_2292PKTOPTIONS = 0x19
+pub const IPV6_2292PKTOPTIONS = 0x19
 
-const IPV6_2292RTHDR = 0x18
+pub const IPV6_2292RTHDR = 0x18
 
-const IPV6_BINDV6ONLY = 0x1b
+pub const IPV6_BINDV6ONLY = 0x1b
 
-const IPV6_BOUND_IF = 0x7d
+pub const IPV6_BOUND_IF = 0x7d
 
-const IPV6_CHECKSUM = 0x1a
+pub const IPV6_CHECKSUM = 0x1a
 
-const IPV6_DEFAULT_MULTICAST_HOPS = 0x1
+pub const IPV6_DEFAULT_MULTICAST_HOPS = 0x1
 
-const IPV6_DEFAULT_MULTICAST_LOOP = 0x1
+pub const IPV6_DEFAULT_MULTICAST_LOOP = 0x1
 
-const IPV6_DEFHLIM = 0x40
+pub const IPV6_DEFHLIM = 0x40
 
-const IPV6_FAITH = 0x1d
+pub const IPV6_FAITH = 0x1d
 
-const IPV6_FLOWINFO_MASK = 0xffffff0f
+pub const IPV6_FLOWINFO_MASK = 0xffffff0f
 
-const IPV6_FLOWLABEL_MASK = 0xffff0f00
+pub const IPV6_FLOWLABEL_MASK = 0xffff0f00
 
-const IPV6_FRAGTTL = 0x78
+pub const IPV6_FRAGTTL = 0x78
 
-const IPV6_FW_ADD = 0x1e
+pub const IPV6_FW_ADD = 0x1e
 
-const IPV6_FW_DEL = 0x1f
+pub const IPV6_FW_DEL = 0x1f
 
-const IPV6_FW_FLUSH = 0x20
+pub const IPV6_FW_FLUSH = 0x20
 
-const IPV6_FW_GET = 0x22
+pub const IPV6_FW_GET = 0x22
 
-const IPV6_FW_ZERO = 0x21
+pub const IPV6_FW_ZERO = 0x21
 
-const IPV6_HLIMDEC = 0x1
+pub const IPV6_HLIMDEC = 0x1
 
-const IPV6_IPSEC_POLICY = 0x1c
+pub const IPV6_IPSEC_POLICY = 0x1c
 
-const IPV6_JOIN_GROUP = 0xc
+pub const IPV6_JOIN_GROUP = 0xc
 
-const IPV6_LEAVE_GROUP = 0xd
+pub const IPV6_LEAVE_GROUP = 0xd
 
-const IPV6_MAXHLIM = 0xff
+pub const IPV6_MAXHLIM = 0xff
 
-const IPV6_MAXOPTHDR = 0x800
+pub const IPV6_MAXOPTHDR = 0x800
 
-const IPV6_MAXPACKET = 0xffff
+pub const IPV6_MAXPACKET = 0xffff
 
-const IPV6_MAX_GROUP_SRC_FILTER = 0x200
+pub const IPV6_MAX_GROUP_SRC_FILTER = 0x200
 
-const IPV6_MAX_MEMBERSHIPS = 0xfff
+pub const IPV6_MAX_MEMBERSHIPS = 0xfff
 
-const IPV6_MAX_SOCK_SRC_FILTER = 0x80
+pub const IPV6_MAX_SOCK_SRC_FILTER = 0x80
 
-const IPV6_MIN_MEMBERSHIPS = 0x1f
+pub const IPV6_MIN_MEMBERSHIPS = 0x1f
 
-const IPV6_MMTU = 0x500
+pub const IPV6_MMTU = 0x500
 
-const IPV6_MULTICAST_HOPS = 0xa
+pub const IPV6_MULTICAST_HOPS = 0xa
 
-const IPV6_MULTICAST_IF = 0x9
+pub const IPV6_MULTICAST_IF = 0x9
 
-const IPV6_MULTICAST_LOOP = 0xb
+pub const IPV6_MULTICAST_LOOP = 0xb
 
-const IPV6_PORTRANGE = 0xe
+pub const IPV6_PORTRANGE = 0xe
 
-const IPV6_PORTRANGE_DEFAULT = 0x0
+pub const IPV6_PORTRANGE_DEFAULT = 0x0
 
-const IPV6_PORTRANGE_HIGH = 0x1
+pub const IPV6_PORTRANGE_HIGH = 0x1
 
-const IPV6_PORTRANGE_LOW = 0x2
+pub const IPV6_PORTRANGE_LOW = 0x2
 
-const IPV6_RECVTCLASS = 0x23
+pub const IPV6_RECVTCLASS = 0x23
 
-const IPV6_RTHDR_LOOSE = 0x0
+pub const IPV6_RTHDR_LOOSE = 0x0
 
-const IPV6_RTHDR_STRICT = 0x1
+pub const IPV6_RTHDR_STRICT = 0x1
 
-const IPV6_RTHDR_TYPE_0 = 0x0
+pub const IPV6_RTHDR_TYPE_0 = 0x0
 
-const IPV6_SOCKOPT_RESERVED1 = 0x3
+pub const IPV6_SOCKOPT_RESERVED1 = 0x3
 
-const IPV6_TCLASS = 0x24
+pub const IPV6_TCLASS = 0x24
 
-const IPV6_UNICAST_HOPS = 0x4
+pub const IPV6_UNICAST_HOPS = 0x4
 
-const IPV6_V6ONLY = 0x1b
+pub const IPV6_V6ONLY = 0x1b
 
-const IPV6_VERSION = 0x60
+pub const IPV6_VERSION = 0x60
 
-const IPV6_VERSION_MASK = 0xf0
+pub const IPV6_VERSION_MASK = 0xf0
 
-const IP_ADD_MEMBERSHIP = 0xc
+pub const IP_ADD_MEMBERSHIP = 0xc
 
-const IP_ADD_SOURCE_MEMBERSHIP = 0x46
+pub const IP_ADD_SOURCE_MEMBERSHIP = 0x46
 
-const IP_BLOCK_SOURCE = 0x48
+pub const IP_BLOCK_SOURCE = 0x48
 
-const IP_BOUND_IF = 0x19
+pub const IP_BOUND_IF = 0x19
 
-const IP_DEFAULT_MULTICAST_LOOP = 0x1
+pub const IP_DEFAULT_MULTICAST_LOOP = 0x1
 
-const IP_DEFAULT_MULTICAST_TTL = 0x1
+pub const IP_DEFAULT_MULTICAST_TTL = 0x1
 
-const IP_DF = 0x4000
+pub const IP_DF = 0x4000
 
-const IP_DROP_MEMBERSHIP = 0xd
+pub const IP_DROP_MEMBERSHIP = 0xd
 
-const IP_DROP_SOURCE_MEMBERSHIP = 0x47
+pub const IP_DROP_SOURCE_MEMBERSHIP = 0x47
 
-const IP_DUMMYNET_CONFIGURE = 0x3c
+pub const IP_DUMMYNET_CONFIGURE = 0x3c
 
-const IP_DUMMYNET_DEL = 0x3d
+pub const IP_DUMMYNET_DEL = 0x3d
 
-const IP_DUMMYNET_FLUSH = 0x3e
+pub const IP_DUMMYNET_FLUSH = 0x3e
 
-const IP_DUMMYNET_GET = 0x40
+pub const IP_DUMMYNET_GET = 0x40
 
-const IP_FAITH = 0x16
+pub const IP_FAITH = 0x16
 
-const IP_FW_ADD = 0x28
+pub const IP_FW_ADD = 0x28
 
-const IP_FW_DEL = 0x29
+pub const IP_FW_DEL = 0x29
 
-const IP_FW_FLUSH = 0x2a
+pub const IP_FW_FLUSH = 0x2a
 
-const IP_FW_GET = 0x2c
+pub const IP_FW_GET = 0x2c
 
-const IP_FW_RESETLOG = 0x2d
+pub const IP_FW_RESETLOG = 0x2d
 
-const IP_FW_ZERO = 0x2b
+pub const IP_FW_ZERO = 0x2b
 
-const IP_HDRINCL = 0x2
+pub const IP_HDRINCL = 0x2
 
-const IP_IPSEC_POLICY = 0x15
+pub const IP_IPSEC_POLICY = 0x15
 
-const IP_MAXPACKET = 0xffff
+pub const IP_MAXPACKET = 0xffff
 
-const IP_MAX_GROUP_SRC_FILTER = 0x200
+pub const IP_MAX_GROUP_SRC_FILTER = 0x200
 
-const IP_MAX_MEMBERSHIPS = 0xfff
+pub const IP_MAX_MEMBERSHIPS = 0xfff
 
-const IP_MAX_SOCK_MUTE_FILTER = 0x80
+pub const IP_MAX_SOCK_MUTE_FILTER = 0x80
 
-const IP_MAX_SOCK_SRC_FILTER = 0x80
+pub const IP_MAX_SOCK_SRC_FILTER = 0x80
 
-const IP_MF = 0x2000
+pub const IP_MF = 0x2000
 
-const IP_MIN_MEMBERSHIPS = 0x1f
+pub const IP_MIN_MEMBERSHIPS = 0x1f
 
-const IP_MSFILTER = 0x4a
+pub const IP_MSFILTER = 0x4a
 
-const IP_MSS = 0x240
+pub const IP_MSS = 0x240
 
-const IP_MULTICAST_IF = 0x9
+pub const IP_MULTICAST_IF = 0x9
 
-const IP_MULTICAST_IFINDEX = 0x42
+pub const IP_MULTICAST_IFINDEX = 0x42
 
-const IP_MULTICAST_LOOP = 0xb
+pub const IP_MULTICAST_LOOP = 0xb
 
-const IP_MULTICAST_TTL = 0xa
+pub const IP_MULTICAST_TTL = 0xa
 
-const IP_MULTICAST_VIF = 0xe
+pub const IP_MULTICAST_VIF = 0xe
 
-const IP_NAT__XXX = 0x37
+pub const IP_NAT__XXX = 0x37
 
-const IP_OFFMASK = 0x1fff
+pub const IP_OFFMASK = 0x1fff
 
-const IP_OLD_FW_ADD = 0x32
+pub const IP_OLD_FW_ADD = 0x32
 
-const IP_OLD_FW_DEL = 0x33
+pub const IP_OLD_FW_DEL = 0x33
 
-const IP_OLD_FW_FLUSH = 0x34
+pub const IP_OLD_FW_FLUSH = 0x34
 
-const IP_OLD_FW_GET = 0x36
+pub const IP_OLD_FW_GET = 0x36
 
-const IP_OLD_FW_RESETLOG = 0x38
+pub const IP_OLD_FW_RESETLOG = 0x38
 
-const IP_OLD_FW_ZERO = 0x35
+pub const IP_OLD_FW_ZERO = 0x35
 
-const IP_OPTIONS = 0x1
+pub const IP_OPTIONS = 0x1
 
-const IP_PKTINFO = 0x1a
+pub const IP_PKTINFO = 0x1a
 
-const IP_PORTRANGE = 0x13
+pub const IP_PORTRANGE = 0x13
 
-const IP_PORTRANGE_DEFAULT = 0x0
+pub const IP_PORTRANGE_DEFAULT = 0x0
 
-const IP_PORTRANGE_HIGH = 0x1
+pub const IP_PORTRANGE_HIGH = 0x1
 
-const IP_PORTRANGE_LOW = 0x2
+pub const IP_PORTRANGE_LOW = 0x2
 
-const IP_RECVDSTADDR = 0x7
+pub const IP_RECVDSTADDR = 0x7
 
-const IP_RECVIF = 0x14
+pub const IP_RECVIF = 0x14
 
-const IP_RECVOPTS = 0x5
+pub const IP_RECVOPTS = 0x5
 
-const IP_RECVPKTINFO = 0x1a
+pub const IP_RECVPKTINFO = 0x1a
 
-const IP_RECVRETOPTS = 0x6
+pub const IP_RECVRETOPTS = 0x6
 
-const IP_RECVTTL = 0x18
+pub const IP_RECVTTL = 0x18
 
-const IP_RETOPTS = 0x8
+pub const IP_RETOPTS = 0x8
 
-const IP_RF = 0x8000
+pub const IP_RF = 0x8000
 
-const IP_RSVP_OFF = 0x10
+pub const IP_RSVP_OFF = 0x10
 
-const IP_RSVP_ON = 0xf
+pub const IP_RSVP_ON = 0xf
 
-const IP_RSVP_VIF_OFF = 0x12
+pub const IP_RSVP_VIF_OFF = 0x12
 
-const IP_RSVP_VIF_ON = 0x11
+pub const IP_RSVP_VIF_ON = 0x11
 
-const IP_STRIPHDR = 0x17
+pub const IP_STRIPHDR = 0x17
 
-const IP_TOS = 0x3
+pub const IP_TOS = 0x3
 
-const IP_TRAFFIC_MGT_BACKGROUND = 0x41
+pub const IP_TRAFFIC_MGT_BACKGROUND = 0x41
 
-const IP_TTL = 0x4
+pub const IP_TTL = 0x4
 
-const IP_UNBLOCK_SOURCE = 0x49
+pub const IP_UNBLOCK_SOURCE = 0x49
 
-const ISIG = 0x80
+pub const ISIG = 0x80
 
-const ISTRIP = 0x20
+pub const ISTRIP = 0x20
 
-const IUTF8 = 0x4000
+pub const IUTF8 = 0x4000
 
-const IXANY = 0x800
+pub const IXANY = 0x800
 
-const IXOFF = 0x400
+pub const IXOFF = 0x400
 
-const IXON = 0x200
+pub const IXON = 0x200
 
-const ImplementsGetwd = true
+pub const ImplementsGetwd = true
 
-const LOCK_EX = 0x2
+pub const LOCK_EX = 0x2
 
-const LOCK_NB = 0x4
+pub const LOCK_NB = 0x4
 
-const LOCK_SH = 0x1
+pub const LOCK_SH = 0x1
 
-const LOCK_UN = 0x8
+pub const LOCK_UN = 0x8
 
-const MADV_CAN_REUSE = 0x9
+pub const MADV_CAN_REUSE = 0x9
 
-const MADV_DONTNEED = 0x4
+pub const MADV_DONTNEED = 0x4
 
-const MADV_FREE = 0x5
+pub const MADV_FREE = 0x5
 
-const MADV_FREE_REUSABLE = 0x7
+pub const MADV_FREE_REUSABLE = 0x7
 
-const MADV_FREE_REUSE = 0x8
+pub const MADV_FREE_REUSE = 0x8
 
-const MADV_NORMAL = 0x0
+pub const MADV_NORMAL = 0x0
 
-const MADV_RANDOM = 0x1
+pub const MADV_RANDOM = 0x1
 
-const MADV_SEQUENTIAL = 0x2
+pub const MADV_SEQUENTIAL = 0x2
 
-const MADV_WILLNEED = 0x3
+pub const MADV_WILLNEED = 0x3
 
-const MADV_ZERO_WIRED_PAGES = 0x6
+pub const MADV_ZERO_WIRED_PAGES = 0x6
 
-const MAP_ANON = 0x1000
+pub const MAP_ANON = 0x1000
 
-const MAP_COPY = 0x2
+pub const MAP_COPY = 0x2
 
-const MAP_FILE = 0x0
+pub const MAP_FILE = 0x0
 
-const MAP_FIXED = 0x10
+pub const MAP_FIXED = 0x10
 
-const MAP_HASSEMAPHORE = 0x200
+pub const MAP_HASSEMAPHORE = 0x200
 
-const MAP_JIT = 0x800
+pub const MAP_JIT = 0x800
 
-const MAP_NOCACHE = 0x400
+pub const MAP_NOCACHE = 0x400
 
-const MAP_NOEXTEND = 0x100
+pub const MAP_NOEXTEND = 0x100
 
-const MAP_NORESERVE = 0x40
+pub const MAP_NORESERVE = 0x40
 
-const MAP_PRIVATE = 0x2
+pub const MAP_PRIVATE = 0x2
 
-const MAP_RENAME = 0x20
+pub const MAP_RENAME = 0x20
 
-const MAP_RESERVED0080 = 0x80
+pub const MAP_RESERVED0080 = 0x80
 
-const MAP_SHARED = 0x1
+pub const MAP_SHARED = 0x1
 
-const MCL_CURRENT = 0x1
+pub const MCL_CURRENT = 0x1
 
-const MCL_FUTURE = 0x2
+pub const MCL_FUTURE = 0x2
 
-const MSG_CTRUNC = 0x20
+pub const MSG_CTRUNC = 0x20
 
-const MSG_DONTROUTE = 0x4
+pub const MSG_DONTROUTE = 0x4
 
-const MSG_DONTWAIT = 0x80
+pub const MSG_DONTWAIT = 0x80
 
-const MSG_EOF = 0x100
+pub const MSG_EOF = 0x100
 
-const MSG_EOR = 0x8
+pub const MSG_EOR = 0x8
 
-const MSG_FLUSH = 0x400
+pub const MSG_FLUSH = 0x400
 
-const MSG_HAVEMORE = 0x2000
+pub const MSG_HAVEMORE = 0x2000
 
-const MSG_HOLD = 0x800
+pub const MSG_HOLD = 0x800
 
-const MSG_NEEDSA = 0x10000
+pub const MSG_NEEDSA = 0x10000
 
-const MSG_OOB = 0x1
+pub const MSG_OOB = 0x1
 
-const MSG_PEEK = 0x2
+pub const MSG_PEEK = 0x2
 
-const MSG_RCVMORE = 0x4000
+pub const MSG_RCVMORE = 0x4000
 
-const MSG_SEND = 0x1000
+pub const MSG_SEND = 0x1000
 
-const MSG_TRUNC = 0x10
+pub const MSG_TRUNC = 0x10
 
-const MSG_WAITALL = 0x40
+pub const MSG_WAITALL = 0x40
 
-const MSG_WAITSTREAM = 0x200
+pub const MSG_WAITSTREAM = 0x200
 
-const MS_ASYNC = 0x1
+pub const MS_ASYNC = 0x1
 
-const MS_DEACTIVATE = 0x8
+pub const MS_DEACTIVATE = 0x8
 
-const MS_INVALIDATE = 0x2
+pub const MS_INVALIDATE = 0x2
 
-const MS_KILLPAGES = 0x4
+pub const MS_KILLPAGES = 0x4
 
-const MS_SYNC = 0x10
+pub const MS_SYNC = 0x10
 
-const NAME_MAX = 0xff
+pub const NAME_MAX = 0xff
 
-const NET_RT_DUMP = 0x1
+pub const NET_RT_DUMP = 0x1
 
-const NET_RT_DUMP2 = 0x7
+pub const NET_RT_DUMP2 = 0x7
 
-const NET_RT_FLAGS = 0x2
+pub const NET_RT_FLAGS = 0x2
 
-const NET_RT_IFLIST = 0x3
+pub const NET_RT_IFLIST = 0x3
 
-const NET_RT_IFLIST2 = 0x6
+pub const NET_RT_IFLIST2 = 0x6
 
-const NET_RT_MAXID = 0xa
+pub const NET_RT_MAXID = 0xa
 
-const NET_RT_STAT = 0x4
+pub const NET_RT_STAT = 0x4
 
-const NET_RT_TRASH = 0x5
+pub const NET_RT_TRASH = 0x5
 
-const NOFLSH = 0x80000000
+pub const NOFLSH = 0x80000000
 
-const NOTE_ABSOLUTE = 0x8
+pub const NOTE_ABSOLUTE = 0x8
 
-const NOTE_ATTRIB = 0x8
+pub const NOTE_ATTRIB = 0x8
 
-const NOTE_BACKGROUND = 0x40
+pub const NOTE_BACKGROUND = 0x40
 
-const NOTE_CHILD = 0x4
+pub const NOTE_CHILD = 0x4
 
-const NOTE_CRITICAL = 0x20
+pub const NOTE_CRITICAL = 0x20
 
-const NOTE_DELETE = 0x1
+pub const NOTE_DELETE = 0x1
 
-const NOTE_EXEC = 0x20000000
+pub const NOTE_EXEC = 0x20000000
 
-const NOTE_EXIT = 0x80000000
+pub const NOTE_EXIT = 0x80000000
 
-const NOTE_EXITSTATUS = 0x4000000
+pub const NOTE_EXITSTATUS = 0x4000000
 
-const NOTE_EXIT_CSERROR = 0x40000
+pub const NOTE_EXIT_CSERROR = 0x40000
 
-const NOTE_EXIT_DECRYPTFAIL = 0x10000
+pub const NOTE_EXIT_DECRYPTFAIL = 0x10000
 
-const NOTE_EXIT_DETAIL = 0x2000000
+pub const NOTE_EXIT_DETAIL = 0x2000000
 
-const NOTE_EXIT_DETAIL_MASK = 0x70000
+pub const NOTE_EXIT_DETAIL_MASK = 0x70000
 
-const NOTE_EXIT_MEMORY = 0x20000
+pub const NOTE_EXIT_MEMORY = 0x20000
 
-const NOTE_EXIT_REPARENTED = 0x80000
+pub const NOTE_EXIT_REPARENTED = 0x80000
 
-const NOTE_EXTEND = 0x4
+pub const NOTE_EXTEND = 0x4
 
-const NOTE_FFAND = 0x40000000
+pub const NOTE_FFAND = 0x40000000
 
-const NOTE_FFCOPY = 0xc0000000
+pub const NOTE_FFCOPY = 0xc0000000
 
-const NOTE_FFCTRLMASK = 0xc0000000
+pub const NOTE_FFCTRLMASK = 0xc0000000
 
-const NOTE_FFLAGSMASK = 0xffffff
+pub const NOTE_FFLAGSMASK = 0xffffff
 
-const NOTE_FFNOP = 0x0
+pub const NOTE_FFNOP = 0x0
 
-const NOTE_FFOR = 0x80000000
+pub const NOTE_FFOR = 0x80000000
 
-const NOTE_FORK = 0x40000000
+pub const NOTE_FORK = 0x40000000
 
-const NOTE_LEEWAY = 0x10
+pub const NOTE_LEEWAY = 0x10
 
-const NOTE_LINK = 0x10
+pub const NOTE_LINK = 0x10
 
-const NOTE_LOWAT = 0x1
+pub const NOTE_LOWAT = 0x1
 
-const NOTE_NONE = 0x80
+pub const NOTE_NONE = 0x80
 
-const NOTE_NSECONDS = 0x4
+pub const NOTE_NSECONDS = 0x4
 
-const NOTE_PCTRLMASK = -0x100000
+pub const NOTE_PCTRLMASK = -0x100000
 
-const NOTE_PDATAMASK = 0xfffff
+pub const NOTE_PDATAMASK = 0xfffff
 
-const NOTE_REAP = 0x10000000
+pub const NOTE_REAP = 0x10000000
 
-const NOTE_RENAME = 0x20
+pub const NOTE_RENAME = 0x20
 
-const NOTE_REVOKE = 0x40
+pub const NOTE_REVOKE = 0x40
 
-const NOTE_SECONDS = 0x1
+pub const NOTE_SECONDS = 0x1
 
-const NOTE_SIGNAL = 0x8000000
+pub const NOTE_SIGNAL = 0x8000000
 
-const NOTE_TRACK = 0x1
+pub const NOTE_TRACK = 0x1
 
-const NOTE_TRACKERR = 0x2
+pub const NOTE_TRACKERR = 0x2
 
-const NOTE_TRIGGER = 0x1000000
+pub const NOTE_TRIGGER = 0x1000000
 
-const NOTE_USECONDS = 0x2
+pub const NOTE_USECONDS = 0x2
 
-const NOTE_VM_ERROR = 0x10000000
+pub const NOTE_VM_ERROR = 0x10000000
 
-const NOTE_VM_PRESSURE = 0x80000000
+pub const NOTE_VM_PRESSURE = 0x80000000
 
-const NOTE_VM_PRESSURE_SUDDEN_TERMINATE = 0x20000000
+pub const NOTE_VM_PRESSURE_SUDDEN_TERMINATE = 0x20000000
 
-const NOTE_VM_PRESSURE_TERMINATE = 0x40000000
+pub const NOTE_VM_PRESSURE_TERMINATE = 0x40000000
 
-const NOTE_WRITE = 0x2
+pub const NOTE_WRITE = 0x2
 
-const OCRNL = 0x10
+pub const OCRNL = 0x10
 
-const OFDEL = 0x20000
+pub const OFDEL = 0x20000
 
-const OFILL = 0x80
+pub const OFILL = 0x80
 
-const ONLCR = 0x2
+pub const ONLCR = 0x2
 
-const ONLRET = 0x40
+pub const ONLRET = 0x40
 
-const ONOCR = 0x20
+pub const ONOCR = 0x20
 
-const ONOEOT = 0x8
+pub const ONOEOT = 0x8
 
-const OPOST = 0x1
+pub const OPOST = 0x1
 
-const O_ACCMODE = 0x3
+pub const O_ACCMODE = 0x3
 
-const O_ALERT = 0x20000000
+pub const O_ALERT = 0x20000000
 
-const O_APPEND = 0x8
+pub const O_APPEND = 0x8
 
-const O_ASYNC = 0x40
+pub const O_ASYNC = 0x40
 
-const O_CLOEXEC = 0x1000000
+pub const O_CLOEXEC = 0x1000000
 
-const O_CREAT = 0x200
+pub const O_CREAT = 0x200
 
-const O_DIRECTORY = 0x100000
+pub const O_DIRECTORY = 0x100000
 
-const O_DP_GETRAWENCRYPTED = 0x1
+pub const O_DP_GETRAWENCRYPTED = 0x1
 
-const O_DSYNC = 0x400000
+pub const O_DSYNC = 0x400000
 
-const O_EVTONLY = 0x8000
+pub const O_EVTONLY = 0x8000
 
-const O_EXCL = 0x800
+pub const O_EXCL = 0x800
 
-const O_EXLOCK = 0x20
+pub const O_EXLOCK = 0x20
 
-const O_FSYNC = 0x80
+pub const O_FSYNC = 0x80
 
-const O_NDELAY = 0x4
+pub const O_NDELAY = 0x4
 
-const O_NOCTTY = 0x20000
+pub const O_NOCTTY = 0x20000
 
-const O_NOFOLLOW = 0x100
+pub const O_NOFOLLOW = 0x100
 
-const O_NONBLOCK = 0x4
+pub const O_NONBLOCK = 0x4
 
-const O_POPUP = 0x80000000
+pub const O_POPUP = 0x80000000
 
-const O_RDONLY = 0x0
+pub const O_RDONLY = 0x0
 
-const O_RDWR = 0x2
+pub const O_RDWR = 0x2
 
-const O_SHLOCK = 0x10
+pub const O_SHLOCK = 0x10
 
-const O_SYMLINK = 0x200000
+pub const O_SYMLINK = 0x200000
 
-const O_SYNC = 0x80
+pub const O_SYNC = 0x80
 
-const O_TRUNC = 0x400
+pub const O_TRUNC = 0x400
 
-const O_WRONLY = 0x1
+pub const O_WRONLY = 0x1
 
-const PARENB = 0x1000
+pub const PARENB = 0x1000
 
-const PARMRK = 0x8
+pub const PARMRK = 0x8
 
-const PARODD = 0x2000
+pub const PARODD = 0x2000
 
-const PENDIN = 0x20000000
+pub const PENDIN = 0x20000000
 
-const PRIO_PGRP = 0x1
+pub const PRIO_PGRP = 0x1
 
-const PRIO_PROCESS = 0x0
+pub const PRIO_PROCESS = 0x0
 
-const PRIO_USER = 0x2
+pub const PRIO_USER = 0x2
 
-const PROT_EXEC = 0x4
+pub const PROT_EXEC = 0x4
 
-const PROT_NONE = 0x0
+pub const PROT_NONE = 0x0
 
-const PROT_READ = 0x1
+pub const PROT_READ = 0x1
 
-const PROT_WRITE = 0x2
+pub const PROT_WRITE = 0x2
 
-const PTRACE_CONT = 0x7
+pub const PTRACE_CONT = 0x7
 
-const PTRACE_KILL = 0x8
+pub const PTRACE_KILL = 0x8
 
-const PTRACE_TRACEME = 0x0
+pub const PTRACE_TRACEME = 0x0
 
-const PT_ATTACH = 0xa
+pub const PT_ATTACH = 0xa
 
-const PT_ATTACHEXC = 0xe
+pub const PT_ATTACHEXC = 0xe
 
-const PT_CONTINUE = 0x7
+pub const PT_CONTINUE = 0x7
 
-const PT_DENY_ATTACH = 0x1f
+pub const PT_DENY_ATTACH = 0x1f
 
-const PT_DETACH = 0xb
+pub const PT_DETACH = 0xb
 
-const PT_FIRSTMACH = 0x20
+pub const PT_FIRSTMACH = 0x20
 
-const PT_FORCEQUOTA = 0x1e
+pub const PT_FORCEQUOTA = 0x1e
 
-const PT_KILL = 0x8
+pub const PT_KILL = 0x8
 
-const PT_READ_D = 0x2
+pub const PT_READ_D = 0x2
 
-const PT_READ_I = 0x1
+pub const PT_READ_I = 0x1
 
-const PT_READ_U = 0x3
+pub const PT_READ_U = 0x3
 
-const PT_SIGEXC = 0xc
+pub const PT_SIGEXC = 0xc
 
-const PT_STEP = 0x9
+pub const PT_STEP = 0x9
 
-const PT_THUPDATE = 0xd
+pub const PT_THUPDATE = 0xd
 
-const PT_TRACE_ME = 0x0
+pub const PT_TRACE_ME = 0x0
 
-const PT_WRITE_D = 0x5
+pub const PT_WRITE_D = 0x5
 
-const PT_WRITE_I = 0x4
+pub const PT_WRITE_I = 0x4
 
-const PT_WRITE_U = 0x6
+pub const PT_WRITE_U = 0x6
 
-const RLIMIT_AS = 0x5
+pub const RLIMIT_AS = 0x5
 
-const RLIMIT_CORE = 0x4
+pub const RLIMIT_CORE = 0x4
 
-const RLIMIT_CPU = 0x0
+pub const RLIMIT_CPU = 0x0
 
-const RLIMIT_CPU_USAGE_MONITOR = 0x2
+pub const RLIMIT_CPU_USAGE_MONITOR = 0x2
 
-const RLIMIT_DATA = 0x2
+pub const RLIMIT_DATA = 0x2
 
-const RLIMIT_FSIZE = 0x1
+pub const RLIMIT_FSIZE = 0x1
 
-const RLIMIT_NOFILE = 0x8
+pub const RLIMIT_NOFILE = 0x8
 
-const RLIMIT_STACK = 0x3
+pub const RLIMIT_STACK = 0x3
 
-const RLIM_INFINITY = 0x7fffffffffffffff
+pub const RLIM_INFINITY = 0x7fffffffffffffff
 
-const RTAX_AUTHOR = 0x6
+pub const RTAX_AUTHOR = 0x6
 
-const RTAX_BRD = 0x7
+pub const RTAX_BRD = 0x7
 
-const RTAX_DST = 0x0
+pub const RTAX_DST = 0x0
 
-const RTAX_GATEWAY = 0x1
+pub const RTAX_GATEWAY = 0x1
 
-const RTAX_GENMASK = 0x3
+pub const RTAX_GENMASK = 0x3
 
-const RTAX_IFA = 0x5
+pub const RTAX_IFA = 0x5
 
-const RTAX_IFP = 0x4
+pub const RTAX_IFP = 0x4
 
-const RTAX_MAX = 0x8
+pub const RTAX_MAX = 0x8
 
-const RTAX_NETMASK = 0x2
+pub const RTAX_NETMASK = 0x2
 
-const RTA_AUTHOR = 0x40
+pub const RTA_AUTHOR = 0x40
 
-const RTA_BRD = 0x80
+pub const RTA_BRD = 0x80
 
-const RTA_DST = 0x1
+pub const RTA_DST = 0x1
 
-const RTA_GATEWAY = 0x2
+pub const RTA_GATEWAY = 0x2
 
-const RTA_GENMASK = 0x8
+pub const RTA_GENMASK = 0x8
 
-const RTA_IFA = 0x20
+pub const RTA_IFA = 0x20
 
-const RTA_IFP = 0x10
+pub const RTA_IFP = 0x10
 
-const RTA_NETMASK = 0x4
+pub const RTA_NETMASK = 0x4
 
-const RTF_BLACKHOLE = 0x1000
+pub const RTF_BLACKHOLE = 0x1000
 
-const RTF_BROADCAST = 0x400000
+pub const RTF_BROADCAST = 0x400000
 
-const RTF_CLONING = 0x100
+pub const RTF_CLONING = 0x100
 
-const RTF_CONDEMNED = 0x2000000
+pub const RTF_CONDEMNED = 0x2000000
 
-const RTF_DELCLONE = 0x80
+pub const RTF_DELCLONE = 0x80
 
-const RTF_DONE = 0x40
+pub const RTF_DONE = 0x40
 
-const RTF_DYNAMIC = 0x10
+pub const RTF_DYNAMIC = 0x10
 
-const RTF_GATEWAY = 0x2
+pub const RTF_GATEWAY = 0x2
 
-const RTF_HOST = 0x4
+pub const RTF_HOST = 0x4
 
-const RTF_IFREF = 0x4000000
+pub const RTF_IFREF = 0x4000000
 
-const RTF_IFSCOPE = 0x1000000
+pub const RTF_IFSCOPE = 0x1000000
 
-const RTF_LLINFO = 0x400
+pub const RTF_LLINFO = 0x400
 
-const RTF_LOCAL = 0x200000
+pub const RTF_LOCAL = 0x200000
 
-const RTF_MODIFIED = 0x20
+pub const RTF_MODIFIED = 0x20
 
-const RTF_MULTICAST = 0x800000
+pub const RTF_MULTICAST = 0x800000
 
-const RTF_PINNED = 0x100000
+pub const RTF_PINNED = 0x100000
 
-const RTF_PRCLONING = 0x10000
+pub const RTF_PRCLONING = 0x10000
 
-const RTF_PROTO1 = 0x8000
+pub const RTF_PROTO1 = 0x8000
 
-const RTF_PROTO2 = 0x4000
+pub const RTF_PROTO2 = 0x4000
 
-const RTF_PROTO3 = 0x40000
+pub const RTF_PROTO3 = 0x40000
 
-const RTF_PROXY = 0x8000000
+pub const RTF_PROXY = 0x8000000
 
-const RTF_REJECT = 0x8
+pub const RTF_REJECT = 0x8
 
-const RTF_ROUTER = 0x10000000
+pub const RTF_ROUTER = 0x10000000
 
-const RTF_STATIC = 0x800
+pub const RTF_STATIC = 0x800
 
-const RTF_UP = 0x1
+pub const RTF_UP = 0x1
 
-const RTF_WASCLONED = 0x20000
+pub const RTF_WASCLONED = 0x20000
 
-const RTF_XRESOLVE = 0x200
+pub const RTF_XRESOLVE = 0x200
 
-const RTM_ADD = 0x1
+pub const RTM_ADD = 0x1
 
-const RTM_CHANGE = 0x3
+pub const RTM_CHANGE = 0x3
 
-const RTM_DELADDR = 0xd
+pub const RTM_DELADDR = 0xd
 
-const RTM_DELETE = 0x2
+pub const RTM_DELETE = 0x2
 
-const RTM_DELMADDR = 0x10
+pub const RTM_DELMADDR = 0x10
 
-const RTM_GET = 0x4
+pub const RTM_GET = 0x4
 
-const RTM_GET2 = 0x14
+pub const RTM_GET2 = 0x14
 
-const RTM_IFINFO = 0xe
+pub const RTM_IFINFO = 0xe
 
-const RTM_IFINFO2 = 0x12
+pub const RTM_IFINFO2 = 0x12
 
-const RTM_LOCK = 0x8
+pub const RTM_LOCK = 0x8
 
-const RTM_LOSING = 0x5
+pub const RTM_LOSING = 0x5
 
-const RTM_MISS = 0x7
+pub const RTM_MISS = 0x7
 
-const RTM_NEWADDR = 0xc
+pub const RTM_NEWADDR = 0xc
 
-const RTM_NEWMADDR = 0xf
+pub const RTM_NEWMADDR = 0xf
 
-const RTM_NEWMADDR2 = 0x13
+pub const RTM_NEWMADDR2 = 0x13
 
-const RTM_OLDADD = 0x9
+pub const RTM_OLDADD = 0x9
 
-const RTM_OLDDEL = 0xa
+pub const RTM_OLDDEL = 0xa
 
-const RTM_REDIRECT = 0x6
+pub const RTM_REDIRECT = 0x6
 
-const RTM_RESOLVE = 0xb
+pub const RTM_RESOLVE = 0xb
 
-const RTM_RTTUNIT = 0xf4240
+pub const RTM_RTTUNIT = 0xf4240
 
-const RTM_VERSION = 0x5
+pub const RTM_VERSION = 0x5
 
-const RTV_EXPIRE = 0x4
+pub const RTV_EXPIRE = 0x4
 
-const RTV_HOPCOUNT = 0x2
+pub const RTV_HOPCOUNT = 0x2
 
-const RTV_MTU = 0x1
+pub const RTV_MTU = 0x1
 
-const RTV_RPIPE = 0x8
+pub const RTV_RPIPE = 0x8
 
-const RTV_RTT = 0x40
+pub const RTV_RTT = 0x40
 
-const RTV_RTTVAR = 0x80
+pub const RTV_RTTVAR = 0x80
 
-const RTV_SPIPE = 0x10
+pub const RTV_SPIPE = 0x10
 
-const RTV_SSTHRESH = 0x20
+pub const RTV_SSTHRESH = 0x20
 
-const RUSAGE_CHILDREN = -0x1
+pub const RUSAGE_CHILDREN = -0x1
 
-const RUSAGE_SELF = 0x0
+pub const RUSAGE_SELF = 0x0
 
-const SCM_CREDS = 0x3
+pub const SCM_CREDS = 0x3
 
-const SCM_RIGHTS = 0x1
+pub const SCM_RIGHTS = 0x1
 
-const SCM_TIMESTAMP = 0x2
+pub const SCM_TIMESTAMP = 0x2
 
-const SCM_TIMESTAMP_MONOTONIC = 0x4
+pub const SCM_TIMESTAMP_MONOTONIC = 0x4
 
-const SHUT_RD = 0x0
+pub const SHUT_RD = 0x0
 
-const SHUT_RDWR = 0x2
+pub const SHUT_RDWR = 0x2
 
-const SHUT_WR = 0x1
+pub const SHUT_WR = 0x1
 
-const SIOCADDMULTI = 0x80206931
+pub const SIOCADDMULTI = 0x80206931
 
-const SIOCAIFADDR = 0x8040691a
+pub const SIOCAIFADDR = 0x8040691a
 
-const SIOCARPIPLL = 0xc0206928
+pub const SIOCARPIPLL = 0xc0206928
 
-const SIOCATMARK = 0x40047307
+pub const SIOCATMARK = 0x40047307
 
-const SIOCAUTOADDR = 0xc0206926
+pub const SIOCAUTOADDR = 0xc0206926
 
-const SIOCAUTONETMASK = 0x80206927
+pub const SIOCAUTONETMASK = 0x80206927
 
-const SIOCDELMULTI = 0x80206932
+pub const SIOCDELMULTI = 0x80206932
 
-const SIOCDIFADDR = 0x80206919
+pub const SIOCDIFADDR = 0x80206919
 
-const SIOCDIFPHYADDR = 0x80206941
+pub const SIOCDIFPHYADDR = 0x80206941
 
-const SIOCGDRVSPEC = 0xc028697b
+pub const SIOCGDRVSPEC = 0xc028697b
 
-const SIOCGETVLAN = 0xc020697f
+pub const SIOCGETVLAN = 0xc020697f
 
-const SIOCGHIWAT = 0x40047301
+pub const SIOCGHIWAT = 0x40047301
 
-const SIOCGIFADDR = 0xc0206921
+pub const SIOCGIFADDR = 0xc0206921
 
-const SIOCGIFALTMTU = 0xc0206948
+pub const SIOCGIFALTMTU = 0xc0206948
 
-const SIOCGIFASYNCMAP = 0xc020697c
+pub const SIOCGIFASYNCMAP = 0xc020697c
 
-const SIOCGIFBOND = 0xc0206947
+pub const SIOCGIFBOND = 0xc0206947
 
-const SIOCGIFBRDADDR = 0xc0206923
+pub const SIOCGIFBRDADDR = 0xc0206923
 
-const SIOCGIFCAP = 0xc020695b
+pub const SIOCGIFCAP = 0xc020695b
 
-const SIOCGIFCONF = 0xc00c6924
+pub const SIOCGIFCONF = 0xc00c6924
 
-const SIOCGIFDEVMTU = 0xc0206944
+pub const SIOCGIFDEVMTU = 0xc0206944
 
-const SIOCGIFDSTADDR = 0xc0206922
+pub const SIOCGIFDSTADDR = 0xc0206922
 
-const SIOCGIFFLAGS = 0xc0206911
+pub const SIOCGIFFLAGS = 0xc0206911
 
-const SIOCGIFGENERIC = 0xc020693a
+pub const SIOCGIFGENERIC = 0xc020693a
 
-const SIOCGIFKPI = 0xc0206987
+pub const SIOCGIFKPI = 0xc0206987
 
-const SIOCGIFMAC = 0xc0206982
+pub const SIOCGIFMAC = 0xc0206982
 
-const SIOCGIFMEDIA = 0xc02c6938
+pub const SIOCGIFMEDIA = 0xc02c6938
 
-const SIOCGIFMETRIC = 0xc0206917
+pub const SIOCGIFMETRIC = 0xc0206917
 
-const SIOCGIFMTU = 0xc0206933
+pub const SIOCGIFMTU = 0xc0206933
 
-const SIOCGIFNETMASK = 0xc0206925
+pub const SIOCGIFNETMASK = 0xc0206925
 
-const SIOCGIFPDSTADDR = 0xc0206940
+pub const SIOCGIFPDSTADDR = 0xc0206940
 
-const SIOCGIFPHYS = 0xc0206935
+pub const SIOCGIFPHYS = 0xc0206935
 
-const SIOCGIFPSRCADDR = 0xc020693f
+pub const SIOCGIFPSRCADDR = 0xc020693f
 
-const SIOCGIFSTATUS = 0xc331693d
+pub const SIOCGIFSTATUS = 0xc331693d
 
-const SIOCGIFVLAN = 0xc020697f
+pub const SIOCGIFVLAN = 0xc020697f
 
-const SIOCGIFWAKEFLAGS = 0xc0206988
+pub const SIOCGIFWAKEFLAGS = 0xc0206988
 
-const SIOCGLOWAT = 0x40047303
+pub const SIOCGLOWAT = 0x40047303
 
-const SIOCGPGRP = 0x40047309
+pub const SIOCGPGRP = 0x40047309
 
-const SIOCIFCREATE = 0xc0206978
+pub const SIOCIFCREATE = 0xc0206978
 
-const SIOCIFCREATE2 = 0xc020697a
+pub const SIOCIFCREATE2 = 0xc020697a
 
-const SIOCIFDESTROY = 0x80206979
+pub const SIOCIFDESTROY = 0x80206979
 
-const SIOCIFGCLONERS = 0xc0106981
+pub const SIOCIFGCLONERS = 0xc0106981
 
-const SIOCRSLVMULTI = 0xc010693b
+pub const SIOCRSLVMULTI = 0xc010693b
 
-const SIOCSDRVSPEC = 0x8028697b
+pub const SIOCSDRVSPEC = 0x8028697b
 
-const SIOCSETVLAN = 0x8020697e
+pub const SIOCSETVLAN = 0x8020697e
 
-const SIOCSHIWAT = 0x80047300
+pub const SIOCSHIWAT = 0x80047300
 
-const SIOCSIFADDR = 0x8020690c
+pub const SIOCSIFADDR = 0x8020690c
 
-const SIOCSIFALTMTU = 0x80206945
+pub const SIOCSIFALTMTU = 0x80206945
 
-const SIOCSIFASYNCMAP = 0x8020697d
+pub const SIOCSIFASYNCMAP = 0x8020697d
 
-const SIOCSIFBOND = 0x80206946
+pub const SIOCSIFBOND = 0x80206946
 
-const SIOCSIFBRDADDR = 0x80206913
+pub const SIOCSIFBRDADDR = 0x80206913
 
-const SIOCSIFCAP = 0x8020695a
+pub const SIOCSIFCAP = 0x8020695a
 
-const SIOCSIFDSTADDR = 0x8020690e
+pub const SIOCSIFDSTADDR = 0x8020690e
 
-const SIOCSIFFLAGS = 0x80206910
+pub const SIOCSIFFLAGS = 0x80206910
 
-const SIOCSIFGENERIC = 0x80206939
+pub const SIOCSIFGENERIC = 0x80206939
 
-const SIOCSIFKPI = 0x80206986
+pub const SIOCSIFKPI = 0x80206986
 
-const SIOCSIFLLADDR = 0x8020693c
+pub const SIOCSIFLLADDR = 0x8020693c
 
-const SIOCSIFMAC = 0x80206983
+pub const SIOCSIFMAC = 0x80206983
 
-const SIOCSIFMEDIA = 0xc0206937
+pub const SIOCSIFMEDIA = 0xc0206937
 
-const SIOCSIFMETRIC = 0x80206918
+pub const SIOCSIFMETRIC = 0x80206918
 
-const SIOCSIFMTU = 0x80206934
+pub const SIOCSIFMTU = 0x80206934
 
-const SIOCSIFNETMASK = 0x80206916
+pub const SIOCSIFNETMASK = 0x80206916
 
-const SIOCSIFPHYADDR = 0x8040693e
+pub const SIOCSIFPHYADDR = 0x8040693e
 
-const SIOCSIFPHYS = 0x80206936
+pub const SIOCSIFPHYS = 0x80206936
 
-const SIOCSIFVLAN = 0x8020697e
+pub const SIOCSIFVLAN = 0x8020697e
 
-const SIOCSLOWAT = 0x80047302
+pub const SIOCSLOWAT = 0x80047302
 
-const SIOCSPGRP = 0x80047308
+pub const SIOCSPGRP = 0x80047308
 
-const SOCK_DGRAM = 0x2
+pub const SOCK_DGRAM = 0x2
 
-const SOCK_MAXADDRLEN = 0xff
+pub const SOCK_MAXADDRLEN = 0xff
 
-const SOCK_RAW = 0x3
+pub const SOCK_RAW = 0x3
 
-const SOCK_RDM = 0x4
+pub const SOCK_RDM = 0x4
 
-const SOCK_SEQPACKET = 0x5
+pub const SOCK_SEQPACKET = 0x5
 
-const SOCK_STREAM = 0x1
+pub const SOCK_STREAM = 0x1
 
-const SOL_SOCKET = 0xffff
+pub const SOL_SOCKET = 0xffff
 
-const SOMAXCONN = 0x80
+pub const SOMAXCONN = 0x80
 
-const SO_ACCEPTCONN = 0x2
+pub const SO_ACCEPTCONN = 0x2
 
-const SO_BROADCAST = 0x20
+pub const SO_BROADCAST = 0x20
 
-const SO_DEBUG = 0x1
+pub const SO_DEBUG = 0x1
 
-const SO_DONTROUTE = 0x10
+pub const SO_DONTROUTE = 0x10
 
-const SO_DONTTRUNC = 0x2000
+pub const SO_DONTTRUNC = 0x2000
 
-const SO_ERROR = 0x1007
+pub const SO_ERROR = 0x1007
 
-const SO_KEEPALIVE = 0x8
+pub const SO_KEEPALIVE = 0x8
 
-const SO_LABEL = 0x1010
+pub const SO_LABEL = 0x1010
 
-const SO_LINGER = 0x80
+pub const SO_LINGER = 0x80
 
-const SO_LINGER_SEC = 0x1080
+pub const SO_LINGER_SEC = 0x1080
 
-const SO_NKE = 0x1021
+pub const SO_NKE = 0x1021
 
-const SO_NOADDRERR = 0x1023
+pub const SO_NOADDRERR = 0x1023
 
-const SO_NOSIGPIPE = 0x1022
+pub const SO_NOSIGPIPE = 0x1022
 
-const SO_NOTIFYCONFLICT = 0x1026
+pub const SO_NOTIFYCONFLICT = 0x1026
 
-const SO_NP_EXTENSIONS = 0x1083
+pub const SO_NP_EXTENSIONS = 0x1083
 
-const SO_NREAD = 0x1020
+pub const SO_NREAD = 0x1020
 
-const SO_NUMRCVPKT = 0x1112
+pub const SO_NUMRCVPKT = 0x1112
 
-const SO_NWRITE = 0x1024
+pub const SO_NWRITE = 0x1024
 
-const SO_OOBINLINE = 0x100
+pub const SO_OOBINLINE = 0x100
 
-const SO_PEERLABEL = 0x1011
+pub const SO_PEERLABEL = 0x1011
 
-const SO_RANDOMPORT = 0x1082
+pub const SO_RANDOMPORT = 0x1082
 
-const SO_RCVBUF = 0x1002
+pub const SO_RCVBUF = 0x1002
 
-const SO_RCVLOWAT = 0x1004
+pub const SO_RCVLOWAT = 0x1004
 
-const SO_RCVTIMEO = 0x1006
+pub const SO_RCVTIMEO = 0x1006
 
-const SO_REUSEADDR = 0x4
+pub const SO_REUSEADDR = 0x4
 
-const SO_REUSEPORT = 0x200
+pub const SO_REUSEPORT = 0x200
 
-const SO_REUSESHAREUID = 0x1025
+pub const SO_REUSESHAREUID = 0x1025
 
-const SO_SNDBUF = 0x1001
+pub const SO_SNDBUF = 0x1001
 
-const SO_SNDLOWAT = 0x1003
+pub const SO_SNDLOWAT = 0x1003
 
-const SO_SNDTIMEO = 0x1005
+pub const SO_SNDTIMEO = 0x1005
 
-const SO_TIMESTAMP = 0x400
+pub const SO_TIMESTAMP = 0x400
 
-const SO_TIMESTAMP_MONOTONIC = 0x800
+pub const SO_TIMESTAMP_MONOTONIC = 0x800
 
-const SO_TYPE = 0x1008
+pub const SO_TYPE = 0x1008
 
-const SO_UPCALLCLOSEWAIT = 0x1027
+pub const SO_UPCALLCLOSEWAIT = 0x1027
 
-const SO_USELOOPBACK = 0x40
+pub const SO_USELOOPBACK = 0x40
 
-const SO_WANTMORE = 0x4000
+pub const SO_WANTMORE = 0x4000
 
-const SO_WANTOOBFLAG = 0x8000
+pub const SO_WANTOOBFLAG = 0x8000
 
-const SYS_ACCEPT = 30
+pub const SYS_ACCEPT = 30
 
-const SYS_ACCEPT_NOCANCEL = 404
+pub const SYS_ACCEPT_NOCANCEL = 404
 
-const SYS_ACCESS = 33
+pub const SYS_ACCESS = 33
 
-const SYS_ACCESS_EXTENDED = 284
+pub const SYS_ACCESS_EXTENDED = 284
 
-const SYS_ACCT = 51
+pub const SYS_ACCT = 51
 
-const SYS_ADJTIME = 140
+pub const SYS_ADJTIME = 140
 
-const SYS_AIO_CANCEL = 316
+pub const SYS_AIO_CANCEL = 316
 
-const SYS_AIO_ERROR = 317
+pub const SYS_AIO_ERROR = 317
 
-const SYS_AIO_FSYNC = 313
+pub const SYS_AIO_FSYNC = 313
 
-const SYS_AIO_READ = 318
+pub const SYS_AIO_READ = 318
 
-const SYS_AIO_RETURN = 314
+pub const SYS_AIO_RETURN = 314
 
-const SYS_AIO_SUSPEND = 315
+pub const SYS_AIO_SUSPEND = 315
 
-const SYS_AIO_SUSPEND_NOCANCEL = 421
+pub const SYS_AIO_SUSPEND_NOCANCEL = 421
 
-const SYS_AIO_WRITE = 319
+pub const SYS_AIO_WRITE = 319
 
-const SYS_ATGETMSG = 207
+pub const SYS_ATGETMSG = 207
 
-const SYS_ATPGETREQ = 211
+pub const SYS_ATPGETREQ = 211
 
-const SYS_ATPGETRSP = 212
+pub const SYS_ATPGETRSP = 212
 
-const SYS_ATPSNDREQ = 209
+pub const SYS_ATPSNDREQ = 209
 
-const SYS_ATPSNDRSP = 210
+pub const SYS_ATPSNDRSP = 210
 
-const SYS_ATPUTMSG = 208
+pub const SYS_ATPUTMSG = 208
 
-const SYS_ATSOCKET = 206
+pub const SYS_ATSOCKET = 206
 
-const SYS_AUDIT = 350
+pub const SYS_AUDIT = 350
 
-const SYS_AUDITCTL = 359
+pub const SYS_AUDITCTL = 359
 
-const SYS_AUDITON = 351
+pub const SYS_AUDITON = 351
 
-const SYS_AUDIT_SESSION_JOIN = 429
+pub const SYS_AUDIT_SESSION_JOIN = 429
 
-const SYS_AUDIT_SESSION_PORT = 432
+pub const SYS_AUDIT_SESSION_PORT = 432
 
-const SYS_AUDIT_SESSION_SELF = 428
+pub const SYS_AUDIT_SESSION_SELF = 428
 
-const SYS_BIND = 104
+pub const SYS_BIND = 104
 
-const SYS_BSDTHREAD_CREATE = 360
+pub const SYS_BSDTHREAD_CREATE = 360
 
-const SYS_BSDTHREAD_REGISTER = 366
+pub const SYS_BSDTHREAD_REGISTER = 366
 
-const SYS_BSDTHREAD_TERMINATE = 361
+pub const SYS_BSDTHREAD_TERMINATE = 361
 
-const SYS_CHDIR = 12
+pub const SYS_CHDIR = 12
 
-const SYS_CHFLAGS = 34
+pub const SYS_CHFLAGS = 34
 
-const SYS_CHMOD = 15
+pub const SYS_CHMOD = 15
 
-const SYS_CHMOD_EXTENDED = 282
+pub const SYS_CHMOD_EXTENDED = 282
 
-const SYS_CHOWN = 16
+pub const SYS_CHOWN = 16
 
-const SYS_CHROOT = 61
+pub const SYS_CHROOT = 61
 
-const SYS_CHUD = 185
+pub const SYS_CHUD = 185
 
-const SYS_CLOSE = 6
+pub const SYS_CLOSE = 6
 
-const SYS_CLOSE_NOCANCEL = 399
+pub const SYS_CLOSE_NOCANCEL = 399
 
-const SYS_CONNECT = 98
+pub const SYS_CONNECT = 98
 
-const SYS_CONNECT_NOCANCEL = 409
+pub const SYS_CONNECT_NOCANCEL = 409
 
-const SYS_COPYFILE = 227
+pub const SYS_COPYFILE = 227
 
-const SYS_CSOPS = 169
+pub const SYS_CSOPS = 169
 
-const SYS_CSOPS_AUDITTOKEN = 170
+pub const SYS_CSOPS_AUDITTOKEN = 170
 
-const SYS_DELETE = 226
+pub const SYS_DELETE = 226
 
-const SYS_DUP = 41
+pub const SYS_DUP = 41
 
-const SYS_DUP2 = 90
+pub const SYS_DUP2 = 90
 
-const SYS_EXCHANGEDATA = 223
+pub const SYS_EXCHANGEDATA = 223
 
-const SYS_EXECVE = 59
+pub const SYS_EXECVE = 59
 
-const SYS_EXIT = 1
+pub const SYS_EXIT = 1
 
-const SYS_FCHDIR = 13
+pub const SYS_FCHDIR = 13
 
-const SYS_FCHFLAGS = 35
+pub const SYS_FCHFLAGS = 35
 
-const SYS_FCHMOD = 124
+pub const SYS_FCHMOD = 124
 
-const SYS_FCHMOD_EXTENDED = 283
+pub const SYS_FCHMOD_EXTENDED = 283
 
-const SYS_FCHOWN = 123
+pub const SYS_FCHOWN = 123
 
-const SYS_FCNTL = 92
+pub const SYS_FCNTL = 92
 
-const SYS_FCNTL_NOCANCEL = 406
+pub const SYS_FCNTL_NOCANCEL = 406
 
-const SYS_FDATASYNC = 187
+pub const SYS_FDATASYNC = 187
 
-const SYS_FFSCTL = 245
+pub const SYS_FFSCTL = 245
 
-const SYS_FGETATTRLIST = 228
+pub const SYS_FGETATTRLIST = 228
 
-const SYS_FGETXATTR = 235
+pub const SYS_FGETXATTR = 235
 
-const SYS_FHOPEN = 248
+pub const SYS_FHOPEN = 248
 
-const SYS_FILEPORT_MAKEFD = 431
+pub const SYS_FILEPORT_MAKEFD = 431
 
-const SYS_FILEPORT_MAKEPORT = 430
+pub const SYS_FILEPORT_MAKEPORT = 430
 
-const SYS_FLISTXATTR = 241
+pub const SYS_FLISTXATTR = 241
 
-const SYS_FLOCK = 131
+pub const SYS_FLOCK = 131
 
-const SYS_FORK = 2
+pub const SYS_FORK = 2
 
-const SYS_FPATHCONF = 192
+pub const SYS_FPATHCONF = 192
 
-const SYS_FREMOVEXATTR = 239
+pub const SYS_FREMOVEXATTR = 239
 
-const SYS_FSCTL = 242
+pub const SYS_FSCTL = 242
 
-const SYS_FSETATTRLIST = 229
+pub const SYS_FSETATTRLIST = 229
 
-const SYS_FSETXATTR = 237
+pub const SYS_FSETXATTR = 237
 
-const SYS_FSGETPATH = 427
+pub const SYS_FSGETPATH = 427
 
-const SYS_FSTAT = 189
+pub const SYS_FSTAT = 189
 
-const SYS_FSTAT64 = 339
+pub const SYS_FSTAT64 = 339
 
-const SYS_FSTAT64_EXTENDED = 343
+pub const SYS_FSTAT64_EXTENDED = 343
 
-const SYS_FSTATFS = 158
+pub const SYS_FSTATFS = 158
 
-const SYS_FSTATFS64 = 346
+pub const SYS_FSTATFS64 = 346
 
-const SYS_FSTAT_EXTENDED = 281
+pub const SYS_FSTAT_EXTENDED = 281
 
-const SYS_FSYNC = 95
+pub const SYS_FSYNC = 95
 
-const SYS_FSYNC_NOCANCEL = 408
+pub const SYS_FSYNC_NOCANCEL = 408
 
-const SYS_FTRUNCATE = 201
+pub const SYS_FTRUNCATE = 201
 
-const SYS_FUTIMES = 139
+pub const SYS_FUTIMES = 139
 
-const SYS_GETATTRLIST = 220
+pub const SYS_GETATTRLIST = 220
 
-const SYS_GETAUDIT_ADDR = 357
+pub const SYS_GETAUDIT_ADDR = 357
 
-const SYS_GETAUID = 353
+pub const SYS_GETAUID = 353
 
-const SYS_GETDIRENTRIES = 196
+pub const SYS_GETDIRENTRIES = 196
 
-const SYS_GETDIRENTRIES64 = 344
+pub const SYS_GETDIRENTRIES64 = 344
 
-const SYS_GETDIRENTRIESATTR = 222
+pub const SYS_GETDIRENTRIESATTR = 222
 
-const SYS_GETDTABLESIZE = 89
+pub const SYS_GETDTABLESIZE = 89
 
-const SYS_GETEGID = 43
+pub const SYS_GETEGID = 43
 
-const SYS_GETEUID = 25
+pub const SYS_GETEUID = 25
 
-const SYS_GETFH = 161
+pub const SYS_GETFH = 161
 
-const SYS_GETFSSTAT = 18
+pub const SYS_GETFSSTAT = 18
 
-const SYS_GETFSSTAT64 = 347
+pub const SYS_GETFSSTAT64 = 347
 
-const SYS_GETGID = 47
+pub const SYS_GETGID = 47
 
-const SYS_GETGROUPS = 79
+pub const SYS_GETGROUPS = 79
 
-const SYS_GETHOSTUUID = 142
+pub const SYS_GETHOSTUUID = 142
 
-const SYS_GETITIMER = 86
+pub const SYS_GETITIMER = 86
 
-const SYS_GETLCID = 395
+pub const SYS_GETLCID = 395
 
-const SYS_GETLOGIN = 49
+pub const SYS_GETLOGIN = 49
 
-const SYS_GETPEERNAME = 31
+pub const SYS_GETPEERNAME = 31
 
-const SYS_GETPGID = 151
+pub const SYS_GETPGID = 151
 
-const SYS_GETPGRP = 81
+pub const SYS_GETPGRP = 81
 
-const SYS_GETPID = 20
+pub const SYS_GETPID = 20
 
-const SYS_GETPPID = 39
+pub const SYS_GETPPID = 39
 
-const SYS_GETPRIORITY = 100
+pub const SYS_GETPRIORITY = 100
 
-const SYS_GETRLIMIT = 194
+pub const SYS_GETRLIMIT = 194
 
-const SYS_GETRUSAGE = 117
+pub const SYS_GETRUSAGE = 117
 
-const SYS_GETSGROUPS = 288
+pub const SYS_GETSGROUPS = 288
 
-const SYS_GETSID = 310
+pub const SYS_GETSID = 310
 
-const SYS_GETSOCKNAME = 32
+pub const SYS_GETSOCKNAME = 32
 
-const SYS_GETSOCKOPT = 118
+pub const SYS_GETSOCKOPT = 118
 
-const SYS_GETTID = 286
+pub const SYS_GETTID = 286
 
-const SYS_GETTIMEOFDAY = 116
+pub const SYS_GETTIMEOFDAY = 116
 
-const SYS_GETUID = 24
+pub const SYS_GETUID = 24
 
-const SYS_GETWGROUPS = 290
+pub const SYS_GETWGROUPS = 290
 
-const SYS_GETXATTR = 234
+pub const SYS_GETXATTR = 234
 
-const SYS_IDENTITYSVC = 293
+pub const SYS_IDENTITYSVC = 293
 
-const SYS_INITGROUPS = 243
+pub const SYS_INITGROUPS = 243
 
-const SYS_IOCTL = 54
+pub const SYS_IOCTL = 54
 
-const SYS_IOPOLICYSYS = 322
+pub const SYS_IOPOLICYSYS = 322
 
-const SYS_ISSETUGID = 327
+pub const SYS_ISSETUGID = 327
 
-const SYS_KAS_INFO = 439
+pub const SYS_KAS_INFO = 439
 
-const SYS_KDEBUG_TRACE = 180
+pub const SYS_KDEBUG_TRACE = 180
 
-const SYS_KEVENT = 363
+pub const SYS_KEVENT = 363
 
-const SYS_KEVENT64 = 369
+pub const SYS_KEVENT64 = 369
 
-const SYS_KILL = 37
+pub const SYS_KILL = 37
 
-const SYS_KQUEUE = 362
+pub const SYS_KQUEUE = 362
 
-const SYS_LCHOWN = 364
+pub const SYS_LCHOWN = 364
 
-const SYS_LEDGER = 373
+pub const SYS_LEDGER = 373
 
-const SYS_LINK = 9
+pub const SYS_LINK = 9
 
-const SYS_LIO_LISTIO = 320
+pub const SYS_LIO_LISTIO = 320
 
-const SYS_LISTEN = 106
+pub const SYS_LISTEN = 106
 
-const SYS_LISTXATTR = 240
+pub const SYS_LISTXATTR = 240
 
-const SYS_LSEEK = 199
+pub const SYS_LSEEK = 199
 
-const SYS_LSTAT = 190
+pub const SYS_LSTAT = 190
 
-const SYS_LSTAT64 = 340
+pub const SYS_LSTAT64 = 340
 
-const SYS_LSTAT64_EXTENDED = 342
+pub const SYS_LSTAT64_EXTENDED = 342
 
-const SYS_LSTAT_EXTENDED = 280
+pub const SYS_LSTAT_EXTENDED = 280
 
-const SYS_MADVISE = 75
+pub const SYS_MADVISE = 75
 
-const SYS_MAXSYSCALL = 440
+pub const SYS_MAXSYSCALL = 440
 
-const SYS_MINCORE = 78
+pub const SYS_MINCORE = 78
 
-const SYS_MINHERIT = 250
+pub const SYS_MINHERIT = 250
 
-const SYS_MKDIR = 136
+pub const SYS_MKDIR = 136
 
-const SYS_MKDIR_EXTENDED = 292
+pub const SYS_MKDIR_EXTENDED = 292
 
-const SYS_MKFIFO = 132
+pub const SYS_MKFIFO = 132
 
-const SYS_MKFIFO_EXTENDED = 291
+pub const SYS_MKFIFO_EXTENDED = 291
 
-const SYS_MKNOD = 14
+pub const SYS_MKNOD = 14
 
-const SYS_MLOCK = 203
+pub const SYS_MLOCK = 203
 
-const SYS_MLOCKALL = 324
+pub const SYS_MLOCKALL = 324
 
-const SYS_MMAP = 197
+pub const SYS_MMAP = 197
 
-const SYS_MODWATCH = 233
+pub const SYS_MODWATCH = 233
 
-const SYS_MOUNT = 167
+pub const SYS_MOUNT = 167
 
-const SYS_MPROTECT = 74
+pub const SYS_MPROTECT = 74
 
-const SYS_MSGCTL = 258
+pub const SYS_MSGCTL = 258
 
-const SYS_MSGGET = 259
+pub const SYS_MSGGET = 259
 
-const SYS_MSGRCV = 261
+pub const SYS_MSGRCV = 261
 
-const SYS_MSGRCV_NOCANCEL = 419
+pub const SYS_MSGRCV_NOCANCEL = 419
 
-const SYS_MSGSND = 260
+pub const SYS_MSGSND = 260
 
-const SYS_MSGSND_NOCANCEL = 418
+pub const SYS_MSGSND_NOCANCEL = 418
 
-const SYS_MSGSYS = 252
+pub const SYS_MSGSYS = 252
 
-const SYS_MSYNC = 65
+pub const SYS_MSYNC = 65
 
-const SYS_MSYNC_NOCANCEL = 405
+pub const SYS_MSYNC_NOCANCEL = 405
 
-const SYS_MUNLOCK = 204
+pub const SYS_MUNLOCK = 204
 
-const SYS_MUNLOCKALL = 325
+pub const SYS_MUNLOCKALL = 325
 
-const SYS_MUNMAP = 73
+pub const SYS_MUNMAP = 73
 
-const SYS_NFSCLNT = 247
+pub const SYS_NFSCLNT = 247
 
-const SYS_NFSSVC = 155
+pub const SYS_NFSSVC = 155
 
-const SYS_OPEN = 5
+pub const SYS_OPEN = 5
 
-const SYS_OPEN_DPROTECTED_NP = 216
+pub const SYS_OPEN_DPROTECTED_NP = 216
 
-const SYS_OPEN_EXTENDED = 277
+pub const SYS_OPEN_EXTENDED = 277
 
-const SYS_OPEN_NOCANCEL = 398
+pub const SYS_OPEN_NOCANCEL = 398
 
-const SYS_PATHCONF = 191
+pub const SYS_PATHCONF = 191
 
-const SYS_PID_HIBERNATE = 435
+pub const SYS_PID_HIBERNATE = 435
 
-const SYS_PID_RESUME = 434
+pub const SYS_PID_RESUME = 434
 
-const SYS_PID_SHUTDOWN_SOCKETS = 436
+pub const SYS_PID_SHUTDOWN_SOCKETS = 436
 
-const SYS_PID_SUSPEND = 433
+pub const SYS_PID_SUSPEND = 433
 
-const SYS_PIPE = 42
+pub const SYS_PIPE = 42
 
-const SYS_POLL = 230
+pub const SYS_POLL = 230
 
-const SYS_POLL_NOCANCEL = 417
+pub const SYS_POLL_NOCANCEL = 417
 
-const SYS_POSIX_SPAWN = 244
+pub const SYS_POSIX_SPAWN = 244
 
-const SYS_PREAD = 153
+pub const SYS_PREAD = 153
 
-const SYS_PREAD_NOCANCEL = 414
+pub const SYS_PREAD_NOCANCEL = 414
 
-const SYS_PROCESS_POLICY = 323
+pub const SYS_PROCESS_POLICY = 323
 
-const SYS_PROC_INFO = 336
+pub const SYS_PROC_INFO = 336
 
-const SYS_PSYNCH_CVBROAD = 303
+pub const SYS_PSYNCH_CVBROAD = 303
 
-const SYS_PSYNCH_CVCLRPREPOST = 312
+pub const SYS_PSYNCH_CVCLRPREPOST = 312
 
-const SYS_PSYNCH_CVSIGNAL = 304
+pub const SYS_PSYNCH_CVSIGNAL = 304
 
-const SYS_PSYNCH_CVWAIT = 305
+pub const SYS_PSYNCH_CVWAIT = 305
 
-const SYS_PSYNCH_MUTEXDROP = 302
+pub const SYS_PSYNCH_MUTEXDROP = 302
 
-const SYS_PSYNCH_MUTEXWAIT = 301
+pub const SYS_PSYNCH_MUTEXWAIT = 301
 
-const SYS_PSYNCH_RW_DOWNGRADE = 299
+pub const SYS_PSYNCH_RW_DOWNGRADE = 299
 
-const SYS_PSYNCH_RW_LONGRDLOCK = 297
+pub const SYS_PSYNCH_RW_LONGRDLOCK = 297
 
-const SYS_PSYNCH_RW_RDLOCK = 306
+pub const SYS_PSYNCH_RW_RDLOCK = 306
 
-const SYS_PSYNCH_RW_UNLOCK = 308
+pub const SYS_PSYNCH_RW_UNLOCK = 308
 
-const SYS_PSYNCH_RW_UNLOCK2 = 309
+pub const SYS_PSYNCH_RW_UNLOCK2 = 309
 
-const SYS_PSYNCH_RW_UPGRADE = 300
+pub const SYS_PSYNCH_RW_UPGRADE = 300
 
-const SYS_PSYNCH_RW_WRLOCK = 307
+pub const SYS_PSYNCH_RW_WRLOCK = 307
 
-const SYS_PSYNCH_RW_YIELDWRLOCK = 298
+pub const SYS_PSYNCH_RW_YIELDWRLOCK = 298
 
-const SYS_PTRACE = 26
+pub const SYS_PTRACE = 26
 
-const SYS_PWRITE = 154
+pub const SYS_PWRITE = 154
 
-const SYS_PWRITE_NOCANCEL = 415
+pub const SYS_PWRITE_NOCANCEL = 415
 
-const SYS_QUOTACTL = 165
+pub const SYS_QUOTACTL = 165
 
-const SYS_READ = 3
+pub const SYS_READ = 3
 
-const SYS_READLINK = 58
+pub const SYS_READLINK = 58
 
-const SYS_READV = 120
+pub const SYS_READV = 120
 
-const SYS_READV_NOCANCEL = 411
+pub const SYS_READV_NOCANCEL = 411
 
-const SYS_READ_NOCANCEL = 396
+pub const SYS_READ_NOCANCEL = 396
 
-const SYS_REBOOT = 55
+pub const SYS_REBOOT = 55
 
-const SYS_RECVFROM = 29
+pub const SYS_RECVFROM = 29
 
-const SYS_RECVFROM_NOCANCEL = 403
+pub const SYS_RECVFROM_NOCANCEL = 403
 
-const SYS_RECVMSG = 27
+pub const SYS_RECVMSG = 27
 
-const SYS_RECVMSG_NOCANCEL = 401
+pub const SYS_RECVMSG_NOCANCEL = 401
 
-const SYS_REMOVEXATTR = 238
+pub const SYS_REMOVEXATTR = 238
 
-const SYS_RENAME = 128
+pub const SYS_RENAME = 128
 
-const SYS_REVOKE = 56
+pub const SYS_REVOKE = 56
 
-const SYS_RMDIR = 137
+pub const SYS_RMDIR = 137
 
-const SYS_SEARCHFS = 225
+pub const SYS_SEARCHFS = 225
 
-const SYS_SELECT = 93
+pub const SYS_SELECT = 93
 
-const SYS_SELECT_NOCANCEL = 407
+pub const SYS_SELECT_NOCANCEL = 407
 
-const SYS_SEMCTL = 254
+pub const SYS_SEMCTL = 254
 
-const SYS_SEMGET = 255
+pub const SYS_SEMGET = 255
 
-const SYS_SEMOP = 256
+pub const SYS_SEMOP = 256
 
-const SYS_SEMSYS = 251
+pub const SYS_SEMSYS = 251
 
-const SYS_SEM_CLOSE = 269
+pub const SYS_SEM_CLOSE = 269
 
-const SYS_SEM_DESTROY = 276
+pub const SYS_SEM_DESTROY = 276
 
-const SYS_SEM_GETVALUE = 274
+pub const SYS_SEM_GETVALUE = 274
 
-const SYS_SEM_INIT = 275
+pub const SYS_SEM_INIT = 275
 
-const SYS_SEM_OPEN = 268
+pub const SYS_SEM_OPEN = 268
 
-const SYS_SEM_POST = 273
+pub const SYS_SEM_POST = 273
 
-const SYS_SEM_TRYWAIT = 272
+pub const SYS_SEM_TRYWAIT = 272
 
-const SYS_SEM_UNLINK = 270
+pub const SYS_SEM_UNLINK = 270
 
-const SYS_SEM_WAIT = 271
+pub const SYS_SEM_WAIT = 271
 
-const SYS_SEM_WAIT_NOCANCEL = 420
+pub const SYS_SEM_WAIT_NOCANCEL = 420
 
-const SYS_SENDFILE = 337
+pub const SYS_SENDFILE = 337
 
-const SYS_SENDMSG = 28
+pub const SYS_SENDMSG = 28
 
-const SYS_SENDMSG_NOCANCEL = 402
+pub const SYS_SENDMSG_NOCANCEL = 402
 
-const SYS_SENDTO = 133
+pub const SYS_SENDTO = 133
 
-const SYS_SENDTO_NOCANCEL = 413
+pub const SYS_SENDTO_NOCANCEL = 413
 
-const SYS_SETATTRLIST = 221
+pub const SYS_SETATTRLIST = 221
 
-const SYS_SETAUDIT_ADDR = 358
+pub const SYS_SETAUDIT_ADDR = 358
 
-const SYS_SETAUID = 354
+pub const SYS_SETAUID = 354
 
-const SYS_SETEGID = 182
+pub const SYS_SETEGID = 182
 
-const SYS_SETEUID = 183
+pub const SYS_SETEUID = 183
 
-const SYS_SETGID = 181
+pub const SYS_SETGID = 181
 
-const SYS_SETGROUPS = 80
+pub const SYS_SETGROUPS = 80
 
-const SYS_SETITIMER = 83
+pub const SYS_SETITIMER = 83
 
-const SYS_SETLCID = 394
+pub const SYS_SETLCID = 394
 
-const SYS_SETLOGIN = 50
+pub const SYS_SETLOGIN = 50
 
-const SYS_SETPGID = 82
+pub const SYS_SETPGID = 82
 
-const SYS_SETPRIORITY = 96
+pub const SYS_SETPRIORITY = 96
 
-const SYS_SETPRIVEXEC = 152
+pub const SYS_SETPRIVEXEC = 152
 
-const SYS_SETREGID = 127
+pub const SYS_SETREGID = 127
 
-const SYS_SETREUID = 126
+pub const SYS_SETREUID = 126
 
-const SYS_SETRLIMIT = 195
+pub const SYS_SETRLIMIT = 195
 
-const SYS_SETSGROUPS = 287
+pub const SYS_SETSGROUPS = 287
 
-const SYS_SETSID = 147
+pub const SYS_SETSID = 147
 
-const SYS_SETSOCKOPT = 105
+pub const SYS_SETSOCKOPT = 105
 
-const SYS_SETTID = 285
+pub const SYS_SETTID = 285
 
-const SYS_SETTID_WITH_PID = 311
+pub const SYS_SETTID_WITH_PID = 311
 
-const SYS_SETTIMEOFDAY = 122
+pub const SYS_SETTIMEOFDAY = 122
 
-const SYS_SETUID = 23
+pub const SYS_SETUID = 23
 
-const SYS_SETWGROUPS = 289
+pub const SYS_SETWGROUPS = 289
 
-const SYS_SETXATTR = 236
+pub const SYS_SETXATTR = 236
 
-const SYS_SHARED_REGION_CHECK_NP = 294
+pub const SYS_SHARED_REGION_CHECK_NP = 294
 
-const SYS_SHARED_REGION_MAP_AND_SLIDE_NP = 438
+pub const SYS_SHARED_REGION_MAP_AND_SLIDE_NP = 438
 
-const SYS_SHMAT = 262
+pub const SYS_SHMAT = 262
 
-const SYS_SHMCTL = 263
+pub const SYS_SHMCTL = 263
 
-const SYS_SHMDT = 264
+pub const SYS_SHMDT = 264
 
-const SYS_SHMGET = 265
+pub const SYS_SHMGET = 265
 
-const SYS_SHMSYS = 253
+pub const SYS_SHMSYS = 253
 
-const SYS_SHM_OPEN = 266
+pub const SYS_SHM_OPEN = 266
 
-const SYS_SHM_UNLINK = 267
+pub const SYS_SHM_UNLINK = 267
 
-const SYS_SHUTDOWN = 134
+pub const SYS_SHUTDOWN = 134
 
-const SYS_SIGACTION = 46
+pub const SYS_SIGACTION = 46
 
-const SYS_SIGALTSTACK = 53
+pub const SYS_SIGALTSTACK = 53
 
-const SYS_SIGPENDING = 52
+pub const SYS_SIGPENDING = 52
 
-const SYS_SIGPROCMASK = 48
+pub const SYS_SIGPROCMASK = 48
 
-const SYS_SIGRETURN = 184
+pub const SYS_SIGRETURN = 184
 
-const SYS_SIGSUSPEND = 111
+pub const SYS_SIGSUSPEND = 111
 
-const SYS_SIGSUSPEND_NOCANCEL = 410
+pub const SYS_SIGSUSPEND_NOCANCEL = 410
 
-const SYS_SOCKET = 97
+pub const SYS_SOCKET = 97
 
-const SYS_SOCKETPAIR = 135
+pub const SYS_SOCKETPAIR = 135
 
-const SYS_STACK_SNAPSHOT = 365
+pub const SYS_STACK_SNAPSHOT = 365
 
-const SYS_STAT = 188
+pub const SYS_STAT = 188
 
-const SYS_STAT64 = 338
+pub const SYS_STAT64 = 338
 
-const SYS_STAT64_EXTENDED = 341
+pub const SYS_STAT64_EXTENDED = 341
 
-const SYS_STATFS = 157
+pub const SYS_STATFS = 157
 
-const SYS_STATFS64 = 345
+pub const SYS_STATFS64 = 345
 
-const SYS_STAT_EXTENDED = 279
+pub const SYS_STAT_EXTENDED = 279
 
-const SYS_SWAPON = 85
+pub const SYS_SWAPON = 85
 
-const SYS_SYMLINK = 57
+pub const SYS_SYMLINK = 57
 
-const SYS_SYNC = 36
+pub const SYS_SYNC = 36
 
-const SYS_SYSCALL = 0
+pub const SYS_SYSCALL = 0
 
-const SYS_THREAD_SELFID = 372
+pub const SYS_THREAD_SELFID = 372
 
-const SYS_TRUNCATE = 200
+pub const SYS_TRUNCATE = 200
 
-const SYS_UMASK = 60
+pub const SYS_UMASK = 60
 
-const SYS_UMASK_EXTENDED = 278
+pub const SYS_UMASK_EXTENDED = 278
 
-const SYS_UNDELETE = 205
+pub const SYS_UNDELETE = 205
 
-const SYS_UNLINK = 10
+pub const SYS_UNLINK = 10
 
-const SYS_UNMOUNT = 159
+pub const SYS_UNMOUNT = 159
 
-const SYS_UTIMES = 138
+pub const SYS_UTIMES = 138
 
-const SYS_VFORK = 66
+pub const SYS_VFORK = 66
 
-const SYS_VM_PRESSURE_MONITOR = 296
+pub const SYS_VM_PRESSURE_MONITOR = 296
 
-const SYS_WAIT4 = 7
+pub const SYS_WAIT4 = 7
 
-const SYS_WAIT4_NOCANCEL = 400
+pub const SYS_WAIT4_NOCANCEL = 400
 
-const SYS_WAITEVENT = 232
+pub const SYS_WAITEVENT = 232
 
-const SYS_WAITID = 173
+pub const SYS_WAITID = 173
 
-const SYS_WAITID_NOCANCEL = 416
+pub const SYS_WAITID_NOCANCEL = 416
 
-const SYS_WATCHEVENT = 231
+pub const SYS_WATCHEVENT = 231
 
-const SYS_WORKQ_KERNRETURN = 368
+pub const SYS_WORKQ_KERNRETURN = 368
 
-const SYS_WORKQ_OPEN = 367
+pub const SYS_WORKQ_OPEN = 367
 
-const SYS_WRITE = 4
+pub const SYS_WRITE = 4
 
-const SYS_WRITEV = 121
+pub const SYS_WRITEV = 121
 
-const SYS_WRITEV_NOCANCEL = 412
+pub const SYS_WRITEV_NOCANCEL = 412
 
-const SYS_WRITE_NOCANCEL = 397
+pub const SYS_WRITE_NOCANCEL = 397
 
-const SYS___DISABLE_THREADSIGNAL = 331
+pub const SYS___DISABLE_THREADSIGNAL = 331
 
-const SYS___MAC_EXECVE = 380
+pub const SYS___MAC_EXECVE = 380
 
-const SYS___MAC_GETFSSTAT = 426
+pub const SYS___MAC_GETFSSTAT = 426
 
-const SYS___MAC_GET_FD = 388
+pub const SYS___MAC_GET_FD = 388
 
-const SYS___MAC_GET_FILE = 382
+pub const SYS___MAC_GET_FILE = 382
 
-const SYS___MAC_GET_LCID = 391
+pub const SYS___MAC_GET_LCID = 391
 
-const SYS___MAC_GET_LCTX = 392
+pub const SYS___MAC_GET_LCTX = 392
 
-const SYS___MAC_GET_LINK = 384
+pub const SYS___MAC_GET_LINK = 384
 
-const SYS___MAC_GET_MOUNT = 425
+pub const SYS___MAC_GET_MOUNT = 425
 
-const SYS___MAC_GET_PID = 390
+pub const SYS___MAC_GET_PID = 390
 
-const SYS___MAC_GET_PROC = 386
+pub const SYS___MAC_GET_PROC = 386
 
-const SYS___MAC_MOUNT = 424
+pub const SYS___MAC_MOUNT = 424
 
-const SYS___MAC_SET_FD = 389
+pub const SYS___MAC_SET_FD = 389
 
-const SYS___MAC_SET_FILE = 383
+pub const SYS___MAC_SET_FILE = 383
 
-const SYS___MAC_SET_LCTX = 393
+pub const SYS___MAC_SET_LCTX = 393
 
-const SYS___MAC_SET_LINK = 385
+pub const SYS___MAC_SET_LINK = 385
 
-const SYS___MAC_SET_PROC = 387
+pub const SYS___MAC_SET_PROC = 387
 
-const SYS___MAC_SYSCALL = 381
+pub const SYS___MAC_SYSCALL = 381
 
-const SYS___OLD_SEMWAIT_SIGNAL = 370
+pub const SYS___OLD_SEMWAIT_SIGNAL = 370
 
-const SYS___OLD_SEMWAIT_SIGNAL_NOCANCEL = 371
+pub const SYS___OLD_SEMWAIT_SIGNAL_NOCANCEL = 371
 
-const SYS___PTHREAD_CANCELED = 333
+pub const SYS___PTHREAD_CANCELED = 333
 
-const SYS___PTHREAD_CHDIR = 348
+pub const SYS___PTHREAD_CHDIR = 348
 
-const SYS___PTHREAD_FCHDIR = 349
+pub const SYS___PTHREAD_FCHDIR = 349
 
-const SYS___PTHREAD_KILL = 328
+pub const SYS___PTHREAD_KILL = 328
 
-const SYS___PTHREAD_MARKCANCEL = 332
+pub const SYS___PTHREAD_MARKCANCEL = 332
 
-const SYS___PTHREAD_SIGMASK = 329
+pub const SYS___PTHREAD_SIGMASK = 329
 
-const SYS___SEMWAIT_SIGNAL = 334
+pub const SYS___SEMWAIT_SIGNAL = 334
 
-const SYS___SEMWAIT_SIGNAL_NOCANCEL = 423
+pub const SYS___SEMWAIT_SIGNAL_NOCANCEL = 423
 
-const SYS___SIGWAIT = 330
+pub const SYS___SIGWAIT = 330
 
-const SYS___SIGWAIT_NOCANCEL = 422
+pub const SYS___SIGWAIT_NOCANCEL = 422
 
-const SYS___SYSCTL = 202
+pub const SYS___SYSCTL = 202
 
-const S_IEXEC = 0x40
+pub const S_IEXEC = 0x40
 
-const S_IFBLK = 0x6000
+pub const S_IFBLK = 0x6000
 
-const S_IFCHR = 0x2000
+pub const S_IFCHR = 0x2000
 
-const S_IFDIR = 0x4000
+pub const S_IFDIR = 0x4000
 
-const S_IFIFO = 0x1000
+pub const S_IFIFO = 0x1000
 
-const S_IFLNK = 0xa000
+pub const S_IFLNK = 0xa000
 
-const S_IFMT = 0xf000
+pub const S_IFMT = 0xf000
 
-const S_IFREG = 0x8000
+pub const S_IFREG = 0x8000
 
-const S_IFSOCK = 0xc000
+pub const S_IFSOCK = 0xc000
 
-const S_IFWHT = 0xe000
+pub const S_IFWHT = 0xe000
 
-const S_IREAD = 0x100
+pub const S_IREAD = 0x100
 
-const S_IRGRP = 0x20
+pub const S_IRGRP = 0x20
 
-const S_IROTH = 0x4
+pub const S_IROTH = 0x4
 
-const S_IRUSR = 0x100
+pub const S_IRUSR = 0x100
 
-const S_IRWXG = 0x38
+pub const S_IRWXG = 0x38
 
-const S_IRWXO = 0x7
+pub const S_IRWXO = 0x7
 
-const S_IRWXU = 0x1c0
+pub const S_IRWXU = 0x1c0
 
-const S_ISGID = 0x400
+pub const S_ISGID = 0x400
 
-const S_ISTXT = 0x200
+pub const S_ISTXT = 0x200
 
-const S_ISUID = 0x800
+pub const S_ISUID = 0x800
 
-const S_ISVTX = 0x200
+pub const S_ISVTX = 0x200
 
-const S_IWGRP = 0x10
+pub const S_IWGRP = 0x10
 
-const S_IWOTH = 0x2
+pub const S_IWOTH = 0x2
 
-const S_IWRITE = 0x80
+pub const S_IWRITE = 0x80
 
-const S_IWUSR = 0x80
+pub const S_IWUSR = 0x80
 
-const S_IXGRP = 0x8
+pub const S_IXGRP = 0x8
 
-const S_IXOTH = 0x1
+pub const S_IXOTH = 0x1
 
-const S_IXUSR = 0x40
+pub const S_IXUSR = 0x40
 
-const SizeofBpfHdr = 0x14
+pub const SizeofBpfHdr = 0x14
 
-const SizeofBpfInsn = 0x8
+pub const SizeofBpfInsn = 0x8
 
-const SizeofBpfProgram = 0x10
+pub const SizeofBpfProgram = 0x10
 
-const SizeofBpfStat = 0x8
+pub const SizeofBpfStat = 0x8
 
-const SizeofBpfVersion = 0x4
+pub const SizeofBpfVersion = 0x4
 
-const SizeofCmsghdr = 0xc
+pub const SizeofCmsghdr = 0xc
 
-const SizeofICMPv6Filter = 0x20
+pub const SizeofICMPv6Filter = 0x20
 
-const SizeofIPMreq = 0x8
+pub const SizeofIPMreq = 0x8
 
-const SizeofIPv6MTUInfo = 0x20
+pub const SizeofIPv6MTUInfo = 0x20
 
-const SizeofIPv6Mreq = 0x14
+pub const SizeofIPv6Mreq = 0x14
 
-const SizeofIfData = 0x60
+pub const SizeofIfData = 0x60
 
-const SizeofIfMsghdr = 0x70
+pub const SizeofIfMsghdr = 0x70
 
-const SizeofIfaMsghdr = 0x14
+pub const SizeofIfaMsghdr = 0x14
 
-const SizeofIfmaMsghdr = 0x10
+pub const SizeofIfmaMsghdr = 0x10
 
-const SizeofIfmaMsghdr2 = 0x14
+pub const SizeofIfmaMsghdr2 = 0x14
 
-const SizeofInet4Pktinfo = 0xc
+pub const SizeofInet4Pktinfo = 0xc
 
-const SizeofInet6Pktinfo = 0x14
+pub const SizeofInet6Pktinfo = 0x14
 
-const SizeofLinger = 0x8
+pub const SizeofLinger = 0x8
 
-const SizeofMsghdr = 0x30
+pub const SizeofMsghdr = 0x30
 
-const SizeofRtMetrics = 0x38
+pub const SizeofRtMetrics = 0x38
 
-const SizeofRtMsghdr = 0x5c
+pub const SizeofRtMsghdr = 0x5c
 
-const SizeofSockaddrAny = 0x6c
+pub const SizeofSockaddrAny = 0x6c
 
-const SizeofSockaddrDatalink = 0x14
+pub const SizeofSockaddrDatalink = 0x14
 
-const SizeofSockaddrInet4 = 0x10
+pub const SizeofSockaddrInet4 = 0x10
 
-const SizeofSockaddrInet6 = 0x1c
+pub const SizeofSockaddrInet6 = 0x1c
 
-const SizeofSockaddrUnix = 0x6a
+pub const SizeofSockaddrUnix = 0x6a
 
-const TCIFLUSH = 0x1
+pub const TCIFLUSH = 0x1
 
-const TCIOFLUSH = 0x3
+pub const TCIOFLUSH = 0x3
 
-const TCOFLUSH = 0x2
+pub const TCOFLUSH = 0x2
 
-const TCP_CONNECTIONTIMEOUT = 0x20
+pub const TCP_CONNECTIONTIMEOUT = 0x20
 
-const TCP_ENABLE_ECN = 0x104
+pub const TCP_ENABLE_ECN = 0x104
 
-const TCP_KEEPALIVE = 0x10
+pub const TCP_KEEPALIVE = 0x10
 
-const TCP_KEEPCNT = 0x102
+pub const TCP_KEEPCNT = 0x102
 
-const TCP_KEEPINTVL = 0x101
+pub const TCP_KEEPINTVL = 0x101
 
-const TCP_MAXHLEN = 0x3c
+pub const TCP_MAXHLEN = 0x3c
 
-const TCP_MAXOLEN = 0x28
+pub const TCP_MAXOLEN = 0x28
 
-const TCP_MAXSEG = 0x2
+pub const TCP_MAXSEG = 0x2
 
-const TCP_MAXWIN = 0xffff
+pub const TCP_MAXWIN = 0xffff
 
-const TCP_MAX_SACK = 0x4
+pub const TCP_MAX_SACK = 0x4
 
-const TCP_MAX_WINSHIFT = 0xe
+pub const TCP_MAX_WINSHIFT = 0xe
 
-const TCP_MINMSS = 0xd8
+pub const TCP_MINMSS = 0xd8
 
-const TCP_MSS = 0x200
+pub const TCP_MSS = 0x200
 
-const TCP_NODELAY = 0x1
+pub const TCP_NODELAY = 0x1
 
-const TCP_NOOPT = 0x8
+pub const TCP_NOOPT = 0x8
 
-const TCP_NOPUSH = 0x4
+pub const TCP_NOPUSH = 0x4
 
-const TCP_NOTSENT_LOWAT = 0x201
+pub const TCP_NOTSENT_LOWAT = 0x201
 
-const TCP_RXT_CONNDROPTIME = 0x80
+pub const TCP_RXT_CONNDROPTIME = 0x80
 
-const TCP_RXT_FINDROP = 0x100
+pub const TCP_RXT_FINDROP = 0x100
 
-const TCP_SENDMOREACKS = 0x103
+pub const TCP_SENDMOREACKS = 0x103
 
-const TCSAFLUSH = 0x2
+pub const TCSAFLUSH = 0x2
 
-const TIOCCBRK = 0x2000747a
+pub const TIOCCBRK = 0x2000747a
 
-const TIOCCDTR = 0x20007478
+pub const TIOCCDTR = 0x20007478
 
-const TIOCCONS = 0x80047462
+pub const TIOCCONS = 0x80047462
 
-const TIOCDCDTIMESTAMP = 0x40107458
+pub const TIOCDCDTIMESTAMP = 0x40107458
 
-const TIOCDRAIN = 0x2000745e
+pub const TIOCDRAIN = 0x2000745e
 
-const TIOCDSIMICROCODE = 0x20007455
+pub const TIOCDSIMICROCODE = 0x20007455
 
-const TIOCEXCL = 0x2000740d
+pub const TIOCEXCL = 0x2000740d
 
-const TIOCEXT = 0x80047460
+pub const TIOCEXT = 0x80047460
 
-const TIOCFLUSH = 0x80047410
+pub const TIOCFLUSH = 0x80047410
 
-const TIOCGDRAINWAIT = 0x40047456
+pub const TIOCGDRAINWAIT = 0x40047456
 
-const TIOCGETA = 0x40487413
+pub const TIOCGETA = 0x40487413
 
-const TIOCGETD = 0x4004741a
+pub const TIOCGETD = 0x4004741a
 
-const TIOCGPGRP = 0x40047477
+pub const TIOCGPGRP = 0x40047477
 
-const TIOCGWINSZ = 0x40087468
+pub const TIOCGWINSZ = 0x40087468
 
-const TIOCIXOFF = 0x20007480
+pub const TIOCIXOFF = 0x20007480
 
-const TIOCIXON = 0x20007481
+pub const TIOCIXON = 0x20007481
 
-const TIOCMBIC = 0x8004746b
+pub const TIOCMBIC = 0x8004746b
 
-const TIOCMBIS = 0x8004746c
+pub const TIOCMBIS = 0x8004746c
 
-const TIOCMGDTRWAIT = 0x4004745a
+pub const TIOCMGDTRWAIT = 0x4004745a
 
-const TIOCMGET = 0x4004746a
+pub const TIOCMGET = 0x4004746a
 
-const TIOCMODG = 0x40047403
+pub const TIOCMODG = 0x40047403
 
-const TIOCMODS = 0x80047404
+pub const TIOCMODS = 0x80047404
 
-const TIOCMSDTRWAIT = 0x8004745b
+pub const TIOCMSDTRWAIT = 0x8004745b
 
-const TIOCMSET = 0x8004746d
+pub const TIOCMSET = 0x8004746d
 
-const TIOCM_CAR = 0x40
+pub const TIOCM_CAR = 0x40
 
-const TIOCM_CD = 0x40
+pub const TIOCM_CD = 0x40
 
-const TIOCM_CTS = 0x20
+pub const TIOCM_CTS = 0x20
 
-const TIOCM_DSR = 0x100
+pub const TIOCM_DSR = 0x100
 
-const TIOCM_DTR = 0x2
+pub const TIOCM_DTR = 0x2
 
-const TIOCM_LE = 0x1
+pub const TIOCM_LE = 0x1
 
-const TIOCM_RI = 0x80
+pub const TIOCM_RI = 0x80
 
-const TIOCM_RNG = 0x80
+pub const TIOCM_RNG = 0x80
 
-const TIOCM_RTS = 0x4
+pub const TIOCM_RTS = 0x4
 
-const TIOCM_SR = 0x10
+pub const TIOCM_SR = 0x10
 
-const TIOCM_ST = 0x8
+pub const TIOCM_ST = 0x8
 
-const TIOCNOTTY = 0x20007471
+pub const TIOCNOTTY = 0x20007471
 
-const TIOCNXCL = 0x2000740e
+pub const TIOCNXCL = 0x2000740e
 
-const TIOCOUTQ = 0x40047473
+pub const TIOCOUTQ = 0x40047473
 
-const TIOCPKT = 0x80047470
+pub const TIOCPKT = 0x80047470
 
-const TIOCPKT_DATA = 0x0
+pub const TIOCPKT_DATA = 0x0
 
-const TIOCPKT_DOSTOP = 0x20
+pub const TIOCPKT_DOSTOP = 0x20
 
-const TIOCPKT_FLUSHREAD = 0x1
+pub const TIOCPKT_FLUSHREAD = 0x1
 
-const TIOCPKT_FLUSHWRITE = 0x2
+pub const TIOCPKT_FLUSHWRITE = 0x2
 
-const TIOCPKT_IOCTL = 0x40
+pub const TIOCPKT_IOCTL = 0x40
 
-const TIOCPKT_NOSTOP = 0x10
+pub const TIOCPKT_NOSTOP = 0x10
 
-const TIOCPKT_START = 0x8
+pub const TIOCPKT_START = 0x8
 
-const TIOCPKT_STOP = 0x4
+pub const TIOCPKT_STOP = 0x4
 
-const TIOCPTYGNAME = 0x40807453
+pub const TIOCPTYGNAME = 0x40807453
 
-const TIOCPTYGRANT = 0x20007454
+pub const TIOCPTYGRANT = 0x20007454
 
-const TIOCPTYUNLK = 0x20007452
+pub const TIOCPTYUNLK = 0x20007452
 
-const TIOCREMOTE = 0x80047469
+pub const TIOCREMOTE = 0x80047469
 
-const TIOCSBRK = 0x2000747b
+pub const TIOCSBRK = 0x2000747b
 
-const TIOCSCONS = 0x20007463
+pub const TIOCSCONS = 0x20007463
 
-const TIOCSCTTY = 0x20007461
+pub const TIOCSCTTY = 0x20007461
 
-const TIOCSDRAINWAIT = 0x80047457
+pub const TIOCSDRAINWAIT = 0x80047457
 
-const TIOCSDTR = 0x20007479
+pub const TIOCSDTR = 0x20007479
 
-const TIOCSETA = 0x80487414
+pub const TIOCSETA = 0x80487414
 
-const TIOCSETAF = 0x80487416
+pub const TIOCSETAF = 0x80487416
 
-const TIOCSETAW = 0x80487415
+pub const TIOCSETAW = 0x80487415
 
-const TIOCSETD = 0x8004741b
+pub const TIOCSETD = 0x8004741b
 
-const TIOCSIG = 0x2000745f
+pub const TIOCSIG = 0x2000745f
 
-const TIOCSPGRP = 0x80047476
+pub const TIOCSPGRP = 0x80047476
 
-const TIOCSTART = 0x2000746e
+pub const TIOCSTART = 0x2000746e
 
-const TIOCSTAT = 0x20007465
+pub const TIOCSTAT = 0x20007465
 
-const TIOCSTI = 0x80017472
+pub const TIOCSTI = 0x80017472
 
-const TIOCSTOP = 0x2000746f
+pub const TIOCSTOP = 0x2000746f
 
-const TIOCSWINSZ = 0x80087467
+pub const TIOCSWINSZ = 0x80087467
 
-const TIOCTIMESTAMP = 0x40107459
+pub const TIOCTIMESTAMP = 0x40107459
 
-const TIOCUCNTL = 0x80047466
+pub const TIOCUCNTL = 0x80047466
 
-const TOSTOP = 0x400000
+pub const TOSTOP = 0x400000
 
-const VDISCARD = 0xf
+pub const VDISCARD = 0xf
 
-const VDSUSP = 0xb
+pub const VDSUSP = 0xb
 
-const VEOF = 0x0
+pub const VEOF = 0x0
 
-const VEOL = 0x1
+pub const VEOL = 0x1
 
-const VEOL2 = 0x2
+pub const VEOL2 = 0x2
 
-const VERASE = 0x3
+pub const VERASE = 0x3
 
-const VINTR = 0x8
+pub const VINTR = 0x8
 
-const VKILL = 0x5
+pub const VKILL = 0x5
 
-const VLNEXT = 0xe
+pub const VLNEXT = 0xe
 
-const VMIN = 0x10
+pub const VMIN = 0x10
 
-const VQUIT = 0x9
+pub const VQUIT = 0x9
 
-const VREPRINT = 0x6
+pub const VREPRINT = 0x6
 
-const VSTART = 0xc
+pub const VSTART = 0xc
 
-const VSTATUS = 0x12
+pub const VSTATUS = 0x12
 
-const VSTOP = 0xd
+pub const VSTOP = 0xd
 
-const VSUSP = 0xa
+pub const VSUSP = 0xa
 
-const VT0 = 0x0
+pub const VT0 = 0x0
 
-const VT1 = 0x10000
+pub const VT1 = 0x10000
 
-const VTDLY = 0x10000
+pub const VTDLY = 0x10000
 
-const VTIME = 0x11
+pub const VTIME = 0x11
 
-const VWERASE = 0x4
+pub const VWERASE = 0x4
 
-const WCONTINUED = 0x10
+pub const WCONTINUED = 0x10
 
-const WCOREFLAG = 0x80
+pub const WCOREFLAG = 0x80
 
-const WEXITED = 0x4
+pub const WEXITED = 0x4
 
-const WNOHANG = 0x1
+pub const WNOHANG = 0x1
 
-const WNOWAIT = 0x20
+pub const WNOWAIT = 0x20
 
-const WORDSIZE = 0x40
+pub const WORDSIZE = 0x40
 
-const WSTOPPED = 0x8
+pub const WSTOPPED = 0x8
 
-const WUNTRACED = 0x2
+pub const WUNTRACED = 0x2
 
 /// ForkLock is used to synchronize creation of new file descriptors
 /// with fork.

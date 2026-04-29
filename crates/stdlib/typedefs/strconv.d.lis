@@ -282,7 +282,7 @@ pub struct NumError {
 }
 
 /// IntSize is the size in bits of an int or uint value.
-const IntSize = 64
+pub const IntSize = 64
 
 /// ErrRange indicates that a value is out of range for the target type.
 pub var ErrRange: error

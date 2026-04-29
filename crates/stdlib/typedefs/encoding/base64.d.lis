@@ -26,9 +26,9 @@ pub struct CorruptInputError(int64)
 /// the standard encoding with - and _ substituted for + and /.
 pub type Encoding
 
-const NoPadding = -1
+pub const NoPadding = -1
 
-const StdPadding = 61
+pub const StdPadding = 61
 
 /// RawStdEncoding is the standard raw, unpadded base64 encoding,
 /// as defined in RFC 4648 section 3.2.

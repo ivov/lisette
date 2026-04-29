@@ -41,7 +41,7 @@ pub struct Scanner {
   pub ErrorCount: int,
 }
 
-const ScanComments: Mode = 1
+pub const ScanComments: Mode = 1
 
 impl Error {
   /// Error implements the error interface.

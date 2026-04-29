@@ -394,17 +394,17 @@ pub struct ValueError {
   pub Kind: Kind,
 }
 
-const BothDir: ChanDir = 3
+pub const BothDir: ChanDir = 3
 
-const RecvDir: ChanDir = 1
+pub const RecvDir: ChanDir = 1
 
-const SelectDefault: SelectDir = 3
+pub const SelectDefault: SelectDir = 3
 
-const SelectRecv: SelectDir = 2
+pub const SelectRecv: SelectDir = 2
 
-const SelectSend: SelectDir = 1
+pub const SelectSend: SelectDir = 1
 
-const SendDir: ChanDir = 2
+pub const SendDir: ChanDir = 2
 
 impl ChanDir {
   fn String(self) -> string

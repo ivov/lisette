@@ -203,43 +203,43 @@ pub struct Regexp {
   pub Name: string,
 }
 
-const ClassNL: Flags = 4
+pub const ClassNL: Flags = 4
 
-const DotNL: Flags = 8
+pub const DotNL: Flags = 8
 
-const EmptyBeginLine: EmptyOp = 1
+pub const EmptyBeginLine: EmptyOp = 1
 
-const EmptyBeginText: EmptyOp = 4
+pub const EmptyBeginText: EmptyOp = 4
 
-const EmptyEndLine: EmptyOp = 2
+pub const EmptyEndLine: EmptyOp = 2
 
-const EmptyEndText: EmptyOp = 8
+pub const EmptyEndText: EmptyOp = 8
 
-const EmptyNoWordBoundary: EmptyOp = 32
+pub const EmptyNoWordBoundary: EmptyOp = 32
 
-const EmptyWordBoundary: EmptyOp = 16
+pub const EmptyWordBoundary: EmptyOp = 16
 
-const FoldCase: Flags = 1
+pub const FoldCase: Flags = 1
 
-const Literal: Flags = 2
+pub const Literal: Flags = 2
 
-const MatchNL: Flags = 12
+pub const MatchNL: Flags = 12
 
-const NonGreedy: Flags = 32
+pub const NonGreedy: Flags = 32
 
-const OneLine: Flags = 16
+pub const OneLine: Flags = 16
 
-const POSIX: Flags = 0
+pub const POSIX: Flags = 0
 
-const Perl: Flags = 212
+pub const Perl: Flags = 212
 
-const PerlX: Flags = 64
+pub const PerlX: Flags = 64
 
-const Simple: Flags = 512
+pub const Simple: Flags = 512
 
-const UnicodeGroups: Flags = 128
+pub const UnicodeGroups: Flags = 128
 
-const WasDollar: Flags = 256
+pub const WasDollar: Flags = 256
 
 impl Error {
   fn Error(self: Ref<Error>) -> string

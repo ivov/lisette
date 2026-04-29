@@ -401,7 +401,7 @@ pub struct Timer {
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const ANSIC = "Mon Jan _2 15:04:05 2006"
+pub const ANSIC = "Mon Jan _2 15:04:05 2006"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -499,7 +499,7 @@ const ANSIC = "Mon Jan _2 15:04:05 2006"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const DateOnly = "2006-01-02"
+pub const DateOnly = "2006-01-02"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -597,7 +597,7 @@ const DateOnly = "2006-01-02"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const DateTime = "2006-01-02 15:04:05"
+pub const DateTime = "2006-01-02 15:04:05"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -695,7 +695,7 @@ const DateTime = "2006-01-02 15:04:05"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const Kitchen = "3:04PM"
+pub const Kitchen = "3:04PM"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -793,7 +793,7 @@ const Kitchen = "3:04PM"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const Layout = "01/02 03:04:05PM '06 -0700"
+pub const Layout = "01/02 03:04:05PM '06 -0700"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -891,7 +891,7 @@ const Layout = "01/02 03:04:05PM '06 -0700"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const RFC1123 = "Mon, 02 Jan 2006 15:04:05 MST"
+pub const RFC1123 = "Mon, 02 Jan 2006 15:04:05 MST"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -989,7 +989,7 @@ const RFC1123 = "Mon, 02 Jan 2006 15:04:05 MST"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const RFC1123Z = "Mon, 02 Jan 2006 15:04:05 -0700"
+pub const RFC1123Z = "Mon, 02 Jan 2006 15:04:05 -0700"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1087,7 +1087,7 @@ const RFC1123Z = "Mon, 02 Jan 2006 15:04:05 -0700"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const RFC3339 = "2006-01-02T15:04:05Z07:00"
+pub const RFC3339 = "2006-01-02T15:04:05Z07:00"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1185,7 +1185,7 @@ const RFC3339 = "2006-01-02T15:04:05Z07:00"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const RFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
+pub const RFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1283,7 +1283,7 @@ const RFC3339Nano = "2006-01-02T15:04:05.999999999Z07:00"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const RFC822 = "02 Jan 06 15:04 MST"
+pub const RFC822 = "02 Jan 06 15:04 MST"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1381,7 +1381,7 @@ const RFC822 = "02 Jan 06 15:04 MST"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const RFC822Z = "02 Jan 06 15:04 -0700"
+pub const RFC822Z = "02 Jan 06 15:04 -0700"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1479,7 +1479,7 @@ const RFC822Z = "02 Jan 06 15:04 -0700"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const RFC850 = "Monday, 02-Jan-06 15:04:05 MST"
+pub const RFC850 = "Monday, 02-Jan-06 15:04:05 MST"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1577,7 +1577,7 @@ const RFC850 = "Monday, 02-Jan-06 15:04:05 MST"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const RubyDate = "Mon Jan 02 15:04:05 -0700 2006"
+pub const RubyDate = "Mon Jan 02 15:04:05 -0700 2006"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1675,7 +1675,7 @@ const RubyDate = "Mon Jan 02 15:04:05 -0700 2006"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const Stamp = "Jan _2 15:04:05"
+pub const Stamp = "Jan _2 15:04:05"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1773,7 +1773,7 @@ const Stamp = "Jan _2 15:04:05"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const StampMicro = "Jan _2 15:04:05.000000"
+pub const StampMicro = "Jan _2 15:04:05.000000"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1871,7 +1871,7 @@ const StampMicro = "Jan _2 15:04:05.000000"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const StampMilli = "Jan _2 15:04:05.000"
+pub const StampMilli = "Jan _2 15:04:05.000"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -1969,7 +1969,7 @@ const StampMilli = "Jan _2 15:04:05.000"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const StampNano = "Jan _2 15:04:05.000000000"
+pub const StampNano = "Jan _2 15:04:05.000000000"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -2067,7 +2067,7 @@ const StampNano = "Jan _2 15:04:05.000000000"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const TimeOnly = "15:04:05"
+pub const TimeOnly = "15:04:05"
 
 /// These are predefined layouts for use in [Time.Format] and [time.Parse].
 /// The reference time used in these layouts is the specific time stamp:
@@ -2165,7 +2165,7 @@ const TimeOnly = "15:04:05"
 /// 
 /// Some valid layouts are invalid time values for time.Parse, due to formats
 /// such as _ for space padding and Z for zone information.
-const UnixDate = "Mon Jan _2 15:04:05 MST 2006"
+pub const UnixDate = "Mon Jan _2 15:04:05 MST 2006"
 
 pub var Local: Ref<Location>
 

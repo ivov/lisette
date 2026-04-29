@@ -26,10 +26,10 @@ pub fn Sum224(data: Slice<uint8>) -> Slice<uint8>
 pub fn Sum256(data: Slice<uint8>) -> Slice<uint8>
 
 /// The blocksize of SHA256 and SHA224 in bytes.
-const BlockSize = 64
+pub const BlockSize = 64
 
 /// The size of a SHA256 checksum in bytes.
-const Size = 32
+pub const Size = 32
 
 /// The size of a SHA224 checksum in bytes.
-const Size224 = 28
+pub const Size224 = 28

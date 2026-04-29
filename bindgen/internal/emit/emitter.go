@@ -500,12 +500,12 @@ func (e *Emitter) emitConst(result convert.ConvertResult) {
 
 	if result.ConstValue != "" {
 		if e.isInferredNamedType(result.LisetteType) {
-			fmt.Fprintf(&e.buf, "const %s: %s = %s\n\n", result.Name, result.LisetteType, result.ConstValue)
+			fmt.Fprintf(&e.buf, "pub const %s: %s = %s\n\n", result.Name, result.LisetteType, result.ConstValue)
 		} else {
-			fmt.Fprintf(&e.buf, "const %s = %s\n\n", result.Name, result.ConstValue)
+			fmt.Fprintf(&e.buf, "pub const %s = %s\n\n", result.Name, result.ConstValue)
 		}
 	} else {
-		fmt.Fprintf(&e.buf, "const %s: %s\n\n", result.Name, result.LisetteType)
+		fmt.Fprintf(&e.buf, "pub const %s: %s\n\n", result.Name, result.LisetteType)
 	}
 }
 

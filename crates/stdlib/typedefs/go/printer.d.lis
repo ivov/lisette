@@ -30,13 +30,13 @@ pub struct Config {
 /// A Mode value is a set of flags (or 0). They control printing.
 pub struct Mode(uint)
 
-const RawFormat: Mode = 1
+pub const RawFormat: Mode = 1
 
-const SourcePos: Mode = 8
+pub const SourcePos: Mode = 8
 
-const TabIndent: Mode = 2
+pub const TabIndent: Mode = 2
 
-const UseSpaces: Mode = 4
+pub const UseSpaces: Mode = 4
 
 impl Config {
   /// Fprint "pretty-prints" an AST node to output for a given configuration cfg.

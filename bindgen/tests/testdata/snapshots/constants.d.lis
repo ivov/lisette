@@ -33,80 +33,80 @@ pub struct Buffer(Slice<uint8>)
 pub struct Matrix(Slice<Slice<float64>>)
 
 /// Numeric notation (hex, octal, binary)
-const BinaryConst = 0b1010
+pub const BinaryConst = 0b1010
 
 /// Numeric notation (hex, octal, binary)
-const BinaryLong = 0b11110000
+pub const BinaryLong = 0b11110000
 
 /// Complex numbers
-const ComplexVal = 1 + 2i
+pub const ComplexVal = 1 + 2i
 
-const DebugMode = true
-
-/// More typed constants
-const DefaultTTL = 3600
-
-/// Various typed constants
-const GB = 1073741824
-
-/// String constants
-const Hello = "hello"
-
-/// Numeric notation (hex, octal, binary)
-const HexConst = 0xFF
-
-/// Numeric notation (hex, octal, binary)
-const HexLarge = 0xDEADBEEF
-
-const IntConst = 42
-
-/// Various typed constants
-const KB = 1024
-
-/// Various typed constants
-const MB = 1048576
-
-/// Various typed constants
-const MaxInt8 = 127
+pub const DebugMode = true
 
 /// More typed constants
-const MaxSize = 1048576
+pub const DefaultTTL = 3600
+
+/// Various typed constants
+pub const GB = 1073741824
 
 /// String constants
-const Message = "hello world"
-
-/// Various typed constants
-const MinInt16 = -32768
-
-const MinValue = -100
-
-const Monday = 3
+pub const Hello = "hello"
 
 /// Numeric notation (hex, octal, binary)
-const OctalConst = 0o755
+pub const HexConst = 0xFF
 
 /// Numeric notation (hex, octal, binary)
-const OctalLegacy = 0644
+pub const HexLarge = 0xDEADBEEF
+
+pub const IntConst = 42
 
 /// Various typed constants
-const Pi = 3.14159265358979
-
-const StringConst = "hello"
-
-const Sunday = 2
-
-const Tuesday = 4
-
-const TypedConst = 100
+pub const KB = 1024
 
 /// Various typed constants
-const UntypedBool = true
+pub const MB = 1048576
 
 /// Various typed constants
-const UntypedFloat = 3.14
+pub const MaxInt8 = 127
 
-/// Various typed constants
-const UntypedInt = 42
+/// More typed constants
+pub const MaxSize = 1048576
 
 /// String constants
-const World = "world"
+pub const Message = "hello world"
+
+/// Various typed constants
+pub const MinInt16 = -32768
+
+pub const MinValue = -100
+
+pub const Monday = 3
+
+/// Numeric notation (hex, octal, binary)
+pub const OctalConst = 0o755
+
+/// Numeric notation (hex, octal, binary)
+pub const OctalLegacy = 0644
+
+/// Various typed constants
+pub const Pi = 3.14159265358979
+
+pub const StringConst = "hello"
+
+pub const Sunday = 2
+
+pub const Tuesday = 4
+
+pub const TypedConst = 100
+
+/// Various typed constants
+pub const UntypedBool = true
+
+/// Various typed constants
+pub const UntypedFloat = 3.14
+
+/// Various typed constants
+pub const UntypedInt = 42
+
+/// String constants
+pub const World = "world"

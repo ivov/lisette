@@ -14,7 +14,7 @@ pub fn NewCipher(key: Slice<uint8>) -> Result<cipher.Block, error>
 pub struct KeySizeError(int)
 
 /// The AES block size in bytes.
-const BlockSize = 16
+pub const BlockSize = 16
 
 impl KeySizeError {
   fn Error(self) -> string

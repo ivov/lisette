@@ -87,13 +87,13 @@ pub fn ValidRune(r: int32) -> bool
 pub fn ValidString(s: string) -> bool
 
 /// Numbers fundamental to the encoding.
-const MaxRune = 1114111
+pub const MaxRune = 1114111
 
 /// Numbers fundamental to the encoding.
-const RuneError = 65533
+pub const RuneError = 65533
 
 /// Numbers fundamental to the encoding.
-const RuneSelf = 0x80
+pub const RuneSelf = 0x80
 
 /// Numbers fundamental to the encoding.
-const UTFMax = 4
+pub const UTFMax = 4

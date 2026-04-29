@@ -42,10 +42,10 @@ pub struct Options {
 }
 
 /// Disposal Methods.
-const DisposalBackground = 0x02
+pub const DisposalBackground = 0x02
 
 /// Disposal Methods.
-const DisposalNone = 0x01
+pub const DisposalNone = 0x01
 
 /// Disposal Methods.
-const DisposalPrevious = 0x03
+pub const DisposalPrevious = 0x03

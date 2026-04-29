@@ -608,99 +608,99 @@ pub fn Y1(x: float64) -> float64
 pub fn Yn(n: int, x: float64) -> float64
 
 /// Mathematical constants.
-const E = 2.718281828459045
+pub const E = 2.718281828459045
 
 /// Mathematical constants.
-const Ln10 = 2.302585092994046
+pub const Ln10 = 2.302585092994046
 
 /// Mathematical constants.
-const Ln2 = 0.6931471805599453
+pub const Ln2 = 0.6931471805599453
 
 /// Mathematical constants.
-const Log10E = 0.4342944819032518
+pub const Log10E = 0.4342944819032518
 
 /// Mathematical constants.
-const Log2E = 1.4426950408889634
+pub const Log2E = 1.4426950408889634
 
 /// Floating-point limit values.
 /// Max is the largest finite value representable by the type.
 /// SmallestNonzero is the smallest positive, non-zero value representable by the type.
-const MaxFloat32 = 3.4028234663852886e+38
+pub const MaxFloat32 = 3.4028234663852886e+38
 
 /// Floating-point limit values.
 /// Max is the largest finite value representable by the type.
 /// SmallestNonzero is the smallest positive, non-zero value representable by the type.
-const MaxFloat64 = 1.7976931348623157e+308
+pub const MaxFloat64 = 1.7976931348623157e+308
 
 /// Integer limit values.
-const MaxInt = 9223372036854775807
+pub const MaxInt = 9223372036854775807
 
 /// Integer limit values.
-const MaxInt16 = 32767
+pub const MaxInt16 = 32767
 
 /// Integer limit values.
-const MaxInt32 = 2147483647
+pub const MaxInt32 = 2147483647
 
 /// Integer limit values.
-const MaxInt64 = 9223372036854775807
+pub const MaxInt64 = 9223372036854775807
 
 /// Integer limit values.
-const MaxInt8 = 127
+pub const MaxInt8 = 127
 
 /// Integer limit values.
-const MaxUint = 18446744073709551615
+pub const MaxUint = 18446744073709551615
 
 /// Integer limit values.
-const MaxUint16 = 65535
+pub const MaxUint16 = 65535
 
 /// Integer limit values.
-const MaxUint32 = 4294967295
+pub const MaxUint32 = 4294967295
 
 /// Integer limit values.
-const MaxUint64 = 18446744073709551615
+pub const MaxUint64 = 18446744073709551615
 
 /// Integer limit values.
-const MaxUint8 = 255
+pub const MaxUint8 = 255
 
 /// Integer limit values.
-const MinInt = -9223372036854775808
+pub const MinInt = -9223372036854775808
 
 /// Integer limit values.
-const MinInt16 = -32768
+pub const MinInt16 = -32768
 
 /// Integer limit values.
-const MinInt32 = -2147483648
+pub const MinInt32 = -2147483648
 
 /// Integer limit values.
-const MinInt64 = -9223372036854775808
+pub const MinInt64 = -9223372036854775808
 
 /// Integer limit values.
-const MinInt8 = -128
+pub const MinInt8 = -128
 
 /// Mathematical constants.
-const Phi = 1.618033988749895
+pub const Phi = 1.618033988749895
 
 /// Mathematical constants.
-const Pi = 3.141592653589793
+pub const Pi = 3.141592653589793
 
 /// Floating-point limit values.
 /// Max is the largest finite value representable by the type.
 /// SmallestNonzero is the smallest positive, non-zero value representable by the type.
-const SmallestNonzeroFloat32 = 1.401298464324817e-45
+pub const SmallestNonzeroFloat32 = 1.401298464324817e-45
 
 /// Floating-point limit values.
 /// Max is the largest finite value representable by the type.
 /// SmallestNonzero is the smallest positive, non-zero value representable by the type.
-const SmallestNonzeroFloat64 = 5e-324
+pub const SmallestNonzeroFloat64 = 5e-324
 
 /// Mathematical constants.
-const Sqrt2 = 1.4142135623730951
+pub const Sqrt2 = 1.4142135623730951
 
 /// Mathematical constants.
-const SqrtE = 1.6487212707001282
+pub const SqrtE = 1.6487212707001282
 
 /// Mathematical constants.
-const SqrtPhi = 1.272019649514069
+pub const SqrtPhi = 1.272019649514069
 
 /// Mathematical constants.
-const SqrtPi = 1.772453850905516
+pub const SqrtPi = 1.772453850905516

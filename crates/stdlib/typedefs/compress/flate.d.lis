@@ -69,15 +69,15 @@ pub struct WriteError {
 /// form of that data to an underlying writer (see [NewWriter]).
 pub type Writer
 
-const BestCompression = 9
+pub const BestCompression = 9
 
-const BestSpeed = 1
+pub const BestSpeed = 1
 
-const DefaultCompression = -1
+pub const DefaultCompression = -1
 
-const HuffmanOnly = -2
+pub const HuffmanOnly = -2
 
-const NoCompression = 0
+pub const NoCompression = 0
 
 impl CorruptInputError {
   fn Error(self) -> string

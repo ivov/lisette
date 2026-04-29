@@ -265,16 +265,16 @@ pub type TextHandler
 pub type Value
 
 /// Keys for "built-in" attributes.
-const LevelKey = "level"
+pub const LevelKey = "level"
 
 /// Keys for "built-in" attributes.
-const MessageKey = "msg"
+pub const MessageKey = "msg"
 
 /// Keys for "built-in" attributes.
-const SourceKey = "source"
+pub const SourceKey = "source"
 
 /// Keys for "built-in" attributes.
-const TimeKey = "time"
+pub const TimeKey = "time"
 
 pub var DiscardHandler: Handler
 

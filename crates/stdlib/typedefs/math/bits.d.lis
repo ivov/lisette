@@ -225,4 +225,4 @@ pub fn TrailingZeros64(x: uint64) -> int
 pub fn TrailingZeros8(x: uint8) -> int
 
 /// UintSize is the size of a uint in bits.
-const UintSize = 64
+pub const UintSize = 64

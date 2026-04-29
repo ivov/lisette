@@ -386,199 +386,199 @@ pub struct SessionState {
   pub EarlyData: bool,
 }
 
-const NoClientCert: ClientAuthType = 0
+pub const NoClientCert: ClientAuthType = 0
 
-const RenegotiateFreelyAsClient: RenegotiationSupport = 2
+pub const RenegotiateFreelyAsClient: RenegotiationSupport = 2
 
-const RenegotiateNever: RenegotiationSupport = 0
+pub const RenegotiateNever: RenegotiationSupport = 0
 
-const RenegotiateOnceAsClient: RenegotiationSupport = 1
+pub const RenegotiateOnceAsClient: RenegotiationSupport = 1
 
-const RequestClientCert: ClientAuthType = 1
+pub const RequestClientCert: ClientAuthType = 1
 
-const RequireAndVerifyClientCert: ClientAuthType = 4
+pub const RequireAndVerifyClientCert: ClientAuthType = 4
 
-const RequireAnyClientCert: ClientAuthType = 2
-
-/// A list of cipher suite IDs that are, or have been, implemented by this
-/// package.
-/// 
-/// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_AES_128_GCM_SHA256 = 0x1301
+pub const RequireAnyClientCert: ClientAuthType = 2
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_AES_256_GCM_SHA384 = 0x1302
+pub const TLS_AES_128_GCM_SHA256 = 0x1301
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_CHACHA20_POLY1305_SHA256 = 0x1303
+pub const TLS_AES_256_GCM_SHA384 = 0x1302
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA = 0xc009
+pub const TLS_CHACHA20_POLY1305_SHA256 = 0x1303
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 = 0xc023
+pub const TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA = 0xc009
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 = 0xc02b
+pub const TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 = 0xc023
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA = 0xc00a
+pub const TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 = 0xc02b
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 = 0xc02c
+pub const TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA = 0xc00a
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305 = 52393
+pub const TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 = 0xc02c
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 = 0xcca9
+pub const TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305 = 52393
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_ECDSA_WITH_RC4_128_SHA = 0xc007
+pub const TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 = 0xcca9
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA = 0xc012
+pub const TLS_ECDHE_ECDSA_WITH_RC4_128_SHA = 0xc007
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA = 0xc013
+pub const TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA = 0xc012
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 = 0xc027
+pub const TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA = 0xc013
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 = 0xc02f
+pub const TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 = 0xc027
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA = 0xc014
+pub const TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 = 0xc02f
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 = 0xc030
+pub const TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA = 0xc014
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305 = 52392
+pub const TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 = 0xc030
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 = 0xcca8
+pub const TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305 = 52392
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_ECDHE_RSA_WITH_RC4_128_SHA = 0xc011
+pub const TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 = 0xcca8
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_FALLBACK_SCSV = 0x5600
+pub const TLS_ECDHE_RSA_WITH_RC4_128_SHA = 0xc011
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_RSA_WITH_3DES_EDE_CBC_SHA = 0x000a
+pub const TLS_FALLBACK_SCSV = 0x5600
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_RSA_WITH_AES_128_CBC_SHA = 0x002f
+pub const TLS_RSA_WITH_3DES_EDE_CBC_SHA = 0x000a
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_RSA_WITH_AES_128_CBC_SHA256 = 0x003c
+pub const TLS_RSA_WITH_AES_128_CBC_SHA = 0x002f
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_RSA_WITH_AES_128_GCM_SHA256 = 0x009c
+pub const TLS_RSA_WITH_AES_128_CBC_SHA256 = 0x003c
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_RSA_WITH_AES_256_CBC_SHA = 0x0035
+pub const TLS_RSA_WITH_AES_128_GCM_SHA256 = 0x009c
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_RSA_WITH_AES_256_GCM_SHA384 = 0x009d
+pub const TLS_RSA_WITH_AES_256_CBC_SHA = 0x0035
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
-const TLS_RSA_WITH_RC4_128_SHA = 0x0005
+pub const TLS_RSA_WITH_AES_256_GCM_SHA384 = 0x009d
 
-const VerifyClientCertIfGiven: ClientAuthType = 3
+/// A list of cipher suite IDs that are, or have been, implemented by this
+/// package.
+/// 
+/// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
+pub const TLS_RSA_WITH_RC4_128_SHA = 0x0005
 
-const VersionSSL30 = 0x0300
+pub const VerifyClientCertIfGiven: ClientAuthType = 3
 
-const VersionTLS10 = 0x0301
+pub const VersionSSL30 = 0x0300
 
-const VersionTLS11 = 0x0302
+pub const VersionTLS10 = 0x0301
 
-const VersionTLS12 = 0x0303
+pub const VersionTLS11 = 0x0302
 
-const VersionTLS13 = 0x0304
+pub const VersionTLS12 = 0x0303
+
+pub const VersionTLS13 = 0x0304
 
 impl AlertError {
   fn Error(self) -> string

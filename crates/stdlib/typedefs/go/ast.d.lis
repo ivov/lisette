@@ -802,15 +802,15 @@ pub interface Visitor {
   fn Visit(node: Node) -> Visitor
 }
 
-const FilterFuncDuplicates: MergeMode = 1
+pub const FilterFuncDuplicates: MergeMode = 1
 
-const FilterImportDuplicates: MergeMode = 4
+pub const FilterImportDuplicates: MergeMode = 4
 
-const FilterUnassociatedComments: MergeMode = 2
+pub const FilterUnassociatedComments: MergeMode = 2
 
-const RECV: ChanDir = 2
+pub const RECV: ChanDir = 2
 
-const SEND: ChanDir = 1
+pub const SEND: ChanDir = 1
 
 impl ArrayType {
   fn End(self: Ref<ArrayType>) -> token.Pos

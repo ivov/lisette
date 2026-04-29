@@ -331,7 +331,7 @@ pub type Reader
 /// [Buffer.ReadFrom]. As long as the [Buffer] has at least MinRead bytes beyond
 /// what is required to hold the contents of r, [Buffer.ReadFrom] will not grow the
 /// underlying buffer.
-const MinRead = 512
+pub const MinRead = 512
 
 /// ErrTooLarge is passed to panic if memory cannot be allocated to store data in a buffer.
 pub var ErrTooLarge: error

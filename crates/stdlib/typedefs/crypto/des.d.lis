@@ -14,7 +14,7 @@ pub fn NewTripleDESCipher(key: Slice<uint8>) -> Result<cipher.Block, error>
 pub struct KeySizeError(int)
 
 /// The DES block size in bytes.
-const BlockSize = 8
+pub const BlockSize = 8
 
 impl KeySizeError {
   fn Error(self) -> string
