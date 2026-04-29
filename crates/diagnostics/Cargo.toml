@@ -13,7 +13,7 @@ doctest = false
 test = false
 
 [dependencies]
-syntax = { package = "lisette-syntax", version = "0.1.22", path = "../syntax" }
+syntax = { package = "lisette-syntax", version = "0.1.23", path = "../syntax" }
 miette.workspace = true
 owo-colors.workspace = true
 rustc-hash.workspace = true
