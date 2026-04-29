@@ -53,16 +53,16 @@ jobs:
           NEW_VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
           TAG="lisette-v${NEW_VERSION}"
           git-cliff --config cliff.toml --tag "$TAG" -o CHANGELOG.md
+          git-cliff --config cliff.toml --tag "$TAG" --unreleased --strip all > /tmp/pr-body.md
+          sed -i "1c## ${NEW_VERSION} (upcoming)" /tmp/pr-body.md
 
           if git diff --quiet CHANGELOG.md; then
             echo "CHANGELOG.md unchanged after regeneration"
           else
-            AUTHOR_NAME=$(git log -1 --format='%an' HEAD)
-            AUTHOR_EMAIL=$(git log -1 --format='%ae' HEAD)
-            git -c "user.name=${AUTHOR_NAME}" -c "user.email=${AUTHOR_EMAIL}" commit \
-              -m "chore: regenerate changelog with full-repo scope" CHANGELOG.md
+            git -c "user.name=github-actions[bot]" \
+                -c "user.email=41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "chore: regenerate changelog with full-repo scope" CHANGELOG.md
             git push origin "HEAD:${BRANCH}"
           fi
 
-          git-cliff --config cliff.toml --tag "$TAG" --unreleased --strip all > /tmp/pr-body.md
           gh pr edit "$PR_NUM" --body-file /tmp/pr-body.md
