@@ -4223,3 +4223,51 @@ fn main() {
     )
     .assert_infer_code("invalid_cast");
 }
+
+#[test]
+fn assign_to_imported_pub_var_succeeds() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "config",
+        "lib.d.lis",
+        r#"
+pub var Threshold: int
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "config"
+
+fn main() {
+  config.Threshold = 42
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn assign_to_aliased_imported_pub_var_succeeds() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "config",
+        "lib.d.lis",
+        r#"
+pub var Threshold: int
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import c "config"
+
+fn main() {
+  c.Threshold = 99
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}

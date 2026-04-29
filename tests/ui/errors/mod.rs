@@ -5646,6 +5646,44 @@ fn main() {
 }
 
 #[test]
+fn infer_assign_to_imported_pub_var_wrong_type() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "config",
+        "lib.d.lis",
+        r#"
+pub var Threshold: int
+"#,
+    );
+    let source = r#"
+import "config"
+
+fn main() {
+  config.Threshold = "not an int"
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+
+    assert!(
+        result
+            .errors
+            .iter()
+            .all(|e| e.code_str() != Some("infer.immutable")),
+        "import-alias receivers must not trigger infer.immutable; got: {:?}",
+        result
+            .errors
+            .iter()
+            .map(|e| e.code_str())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        !result.errors.is_empty(),
+        "expected a type-mismatch error for wrong-typed RHS"
+    );
+}
+
+#[test]
 fn infer_mutate_const_shows_const_hint() {
     let input = r#"
 const N = 5

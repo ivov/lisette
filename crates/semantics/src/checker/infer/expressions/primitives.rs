@@ -341,7 +341,7 @@ impl TaskState<'_> {
 
             let can_mutate = is_mutable || is_deref || binding_is_ref;
 
-            if !can_mutate {
+            if !can_mutate && !self.imports.imported_modules.contains_key(&var_name) {
                 let self_type_name = if var_name == "self" {
                     self.lookup_type(store, "self")
                         .and_then(|t| t.get_name().map(str::to_owned))
