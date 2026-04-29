@@ -26,7 +26,43 @@ jobs:
         run: rustup show
 
       - uses: release-plz/action@1528104d2ca23787631a1c1f022abb64b34c1e11 # ratchet:release-plz/action@v0.5
+        id: release-plz
         with:
           command: release-pr
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+
+      - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
+        if: ${{ steps.release-plz.outputs.pr != '' }}
+        with:
+          tool: git-cliff@2.13.1
+
+      - name: Regenerate changelog with full-repo scope
+        if: ${{ steps.release-plz.outputs.pr != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          PR_JSON: ${{ steps.release-plz.outputs.pr }}
+        run: |
+          set -euo pipefail
+          BRANCH=$(echo "$PR_JSON" | jq -er '.head_branch')
+          PR_NUM=$(echo "$PR_JSON" | jq -er '.number')
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+
+          NEW_VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          TAG="lisette-v${NEW_VERSION}"
+          git-cliff --config cliff.toml --tag "$TAG" -o CHANGELOG.md
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "CHANGELOG.md unchanged after regeneration"
+          else
+            AUTHOR_NAME=$(git log -1 --format='%an' HEAD)
+            AUTHOR_EMAIL=$(git log -1 --format='%ae' HEAD)
+            git -c "user.name=${AUTHOR_NAME}" -c "user.email=${AUTHOR_EMAIL}" commit \
+              -m "chore: regenerate changelog with full-repo scope" CHANGELOG.md
+            git push origin "HEAD:${BRANCH}"
+          fi
+
+          git-cliff --config cliff.toml --tag "$TAG" --unreleased --strip all > /tmp/pr-body.md
+          gh pr edit "$PR_NUM" --body-file /tmp/pr-body.md

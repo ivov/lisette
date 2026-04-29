@@ -35,6 +35,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+      - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
+        if: steps.release.outputs.releases_created == 'true'
+        with:
+          tool: git-cliff@2.13.1
+
+      - name: Populate GitHub release notes from CHANGELOG.md
+        if: steps.release.outputs.releases_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASES: ${{ steps.release.outputs.releases }}
+        run: |
+          set -euo pipefail
+          for release in $(echo "$RELEASES" | jq -r -c '.[]'); do
+            TAG=$(echo "$release" | jq -er '.tag')
+            git-cliff --config cliff.toml --tag "$TAG" --unreleased --strip all > /tmp/notes.md
+            gh release edit "$TAG" --notes-file /tmp/notes.md
+            { grep -oE 'pull/[0-9]+' /tmp/notes.md || true; } | cut -d/ -f2 | sort -u > "/tmp/prs-${TAG}.txt"
+          done
+
       # Tags are created via the GitHub REST API with GITHUB_TOKEN (not git push with the PAT)
       # so they do not trigger the cargo-dist release workflow.
       - name: Tag and publish Go modules
@@ -64,7 +83,8 @@ jobs:
             TAG=$(echo "$release" | jq -r '.tag')
             RELEASE_LINK="[\`${TAG}\`](https://github.com/ivov/lisette/releases/tag/${TAG})"
             declare -A COMMENTED_ISSUES
-            for pr in $(echo "$release" | jq -r '.prs[].number'); do
+            while IFS= read -r pr; do
+              [ -z "$pr" ] && continue
               gh pr comment "$pr" --body "Released in ${RELEASE_LINK}" || true
               for issue in $(gh pr view "$pr" --json closingIssuesReferences --jq '.closingIssuesReferences[].number' || true); do
                 if [[ -z "${COMMENTED_ISSUES[$issue]:-}" ]]; then
@@ -72,5 +92,5 @@ jobs:
                   COMMENTED_ISSUES[$issue]=1
                 fi
               done
-            done
+            done < "/tmp/prs-${TAG}.txt"
           done
