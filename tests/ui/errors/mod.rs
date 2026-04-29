@@ -1608,6 +1608,27 @@ fn test() {
 }
 
 #[test]
+fn infer_unknown_map_invariant() {
+    let input = r#"
+fn test() {
+  takes_unknown_map(Map.from([("k", "v")]))
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unknown_slice_invariant() {
+    let input = r#"
+fn test() {
+  let xs: Slice<int> = [1, 2, 3]
+  takes_unknown_slice(xs)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_match_on_unconstrained_type() {
     let input = r#"
 fn get_something<T>() -> T {

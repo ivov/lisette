@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:3:21]
+ 2 │ fn test() {
+ 3 │   takes_unknown_map(Map.from([("k", "v")]))
+   ·                     ───────────┬──────────
+   ·                                ╰── expected `Map<string, Unknown>`, found `Map<string, string>`
+ 4 │ }
+   ╰────
+  help: Change the type annotation to `Map<string, string>` or convert the value to `Map<string, Unknown>` · code: [infer.type_mismatch]

@@ -78,6 +78,8 @@ impl TaskState<'_> {
     ) -> Result<(), UnifyError> {
         let r1 = self.env.shallow_resolve(t1);
         let r2 = self.env.shallow_resolve(t2);
+        let r1_unk = r1.is_unknown();
+        let r2_unk = r2.is_unknown();
 
         match (&r1, &r2) {
             _ if r1.is_ignored() || r2.is_ignored() => Ok(()),
@@ -88,8 +90,12 @@ impl TaskState<'_> {
 
             (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => Ok(()),
 
-            _ if r1.is_unknown() => Ok(()),
-            _ if r2.is_unknown() && !r1.is_variable() => Err(UnifyError::TypeMismatch),
+            _ if r1_unk && r2_unk => Ok(()),
+            _ if r1_unk && !r2.is_variable() && self.scopes.is_inside_type_param() => {
+                Err(UnifyError::TypeMismatch)
+            }
+            _ if r1_unk => Ok(()),
+            _ if r2_unk && !r1.is_variable() => Err(UnifyError::TypeMismatch),
 
             _ if matches!(r2, Type::Never) => Ok(()),
             _ if matches!(r1, Type::Never) => Err(UnifyError::TypeMismatch),
@@ -420,14 +426,19 @@ impl TaskState<'_> {
         for (t1, t2) in pairs {
             let r1 = self.env.shallow_resolve(&t1);
             let r2 = self.env.shallow_resolve(&t2);
+            let r1_unk = r1.is_unknown();
+            let r2_unk = r2.is_unknown();
 
             match (&r1, &r2) {
                 _ if r1.is_ignored() || r2.is_ignored() => {}
                 _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => {}
                 (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => {}
 
-                _ if r1.is_unknown() => {}
-                _ if r2.is_unknown() && !r1.is_variable() => {
+                _ if r1_unk && r2_unk => {}
+                _ if r1_unk && !r2.is_variable() => {
+                    return Err(UnifyError::TypeMismatch);
+                }
+                _ if r2_unk && !r1.is_variable() => {
                     return Err(UnifyError::TypeMismatch);
                 }
 

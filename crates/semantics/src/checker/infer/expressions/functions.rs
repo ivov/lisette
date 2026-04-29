@@ -369,10 +369,14 @@ impl TaskState<'_> {
 
         let new_spread = (*spread).map(|spread_expr| match variadic_elem_ty {
             Some(elem_ty) => {
-                let expected_slice = self.type_slice(elem_ty);
-                let inferred = self.with_value_context(|s| {
-                    s.infer_expression(store, spread_expr, &expected_slice)
-                });
+                let expected = if elem_ty.is_unknown() {
+                    let var = self.new_type_var();
+                    self.type_slice(var)
+                } else {
+                    self.type_slice(elem_ty)
+                };
+                let inferred =
+                    self.with_value_context(|s| s.infer_expression(store, spread_expr, &expected));
                 if param_mutability.last().copied().unwrap_or(false) {
                     let is_external = self.is_external_callee(&callee_expression);
                     self.check_arg_against_mut_param(&inferred, is_external);

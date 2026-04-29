@@ -1430,6 +1430,44 @@ fn unknown_rejects_downcast_to_concrete() {
 }
 
 #[test]
+fn unknown_map_accepts_matching_unknown_map() {
+    infer(
+        r#"
+    fn test() {
+      let m = get_unknown_map();
+      takes_unknown_map(m)
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_map_rejects_concrete_value_type() {
+    infer(
+        r#"
+    fn test() {
+      takes_unknown_map(Map.from([("k", "v")]))
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
+fn unknown_slice_rejects_concrete_element_type() {
+    infer(
+        r#"
+    fn test() {
+      let xs: Slice<int> = [1, 2, 3]
+      takes_unknown_slice(xs)
+    }
+        "#,
+    )
+    .assert_type_mismatch();
+}
+
+#[test]
 fn explicit_type_arg() {
     infer(
         r#"
