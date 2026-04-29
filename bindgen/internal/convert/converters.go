@@ -795,16 +795,7 @@ func collectTypeParams(
 			continue
 		}
 
-		var currentPkg string
-		if conv != nil {
-			currentPkg = conv.currentPkgPath
-		}
-		if boundExpr, ok, imports := recognizeBound(constraint, currentPkg); ok {
-			for _, path := range imports {
-				if conv != nil {
-					conv.trackExternalPkg(path, path)
-				}
-			}
+		if boundExpr, ok := recognizeBound(constraint, conv); ok {
 			specs = append(specs, TypeParamSpec{Name: name, Bound: boundExpr})
 			continue
 		}
@@ -854,12 +845,12 @@ func describeConstraint(constraint *types.Interface) string {
 		return "any"
 	}
 
-	if constraint.IsComparable() {
-		return "comparable"
-	}
-
 	if constraint.NumMethods() > 0 {
 		return "interface-method"
+	}
+
+	if constraint.IsComparable() {
+		return "comparable"
 	}
 
 	if constraint.NumEmbeddeds() > 0 {

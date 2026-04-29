@@ -58,31 +58,53 @@ func (ps TypeParamSpecs) UseBlock() string {
 
 // Named-type identity is checked before .Underlying(), which discards the
 // wrapper — afterwards cmp.Ordered's structural shape would short-circuit
-// as plain `comparable`. When the constraint lives in currentPkgPath, the
-// bound is rendered unqualified to avoid a self-import.
-func recognizeBound(constraint types.Type, currentPkgPath string) (boundExpr string, ok bool, requiresImports []string) {
+// as plain `comparable`.
+func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, ok bool) {
 	if named, isNamed := constraint.(*types.Named); isNamed {
 		obj := named.Obj()
 		if obj.Pkg() != nil && obj.Pkg().Path() == "cmp" && obj.Name() == "Ordered" {
-			if currentPkgPath == "cmp" {
-				return "Ordered", true, nil
-			}
-			return "cmp.Ordered", true, []string{"cmp"}
+			return qualifyNamedBound(named, conv)
 		}
 	}
 
 	iface, isIface := constraint.Underlying().(*types.Interface)
 	if !isIface {
-		return "", false, nil
+		return "", false
 	}
 
 	// Type-set unions (e.g. `~int | ~string`) also report IsComparable, so
 	// the no-embeddeds check is essential to isolate the bare `comparable`.
 	if iface.IsComparable() && iface.NumEmbeddeds() == 0 && iface.NumMethods() == 0 {
-		return "Comparable", true, nil
+		return "Comparable", true
 	}
 
-	return "", false, nil
+	// Single named method-only interface (e.g. `T fmt.Stringer`). Excludes
+	// inline interface literals (which are *types.Interface, not *types.Named)
+	// and type-set unions (which embed a *types.Union — NumEmbeddeds > 0).
+	if named, isNamed := constraint.(*types.Named); isNamed &&
+		iface.NumMethods() > 0 && iface.NumEmbeddeds() == 0 {
+		return qualifyNamedBound(named, conv)
+	}
+
+	return "", false
+}
+
+// Renders a Named bound, qualifying with the package alias when external and
+// tracking the external package on conv. Bounds in the current package render
+// unqualified to avoid a self-import.
+func qualifyNamedBound(named *types.Named, conv *Converter) (string, bool) {
+	obj := named.Obj()
+	pkg := obj.Pkg()
+	if pkg == nil || isInternalPackagePath(pkg.Path()) {
+		return "", false
+	}
+	if conv != nil && pkg.Path() == conv.currentPkgPath {
+		return obj.Name(), true
+	}
+	if conv != nil {
+		conv.trackExternalPkg(pkg.Path(), pkg.Name())
+	}
+	return PkgRef(pkg.Path()) + "." + obj.Name(), true
 }
 
 // Unwraps `interface { ~T }` to its inner T, the shared shape of every

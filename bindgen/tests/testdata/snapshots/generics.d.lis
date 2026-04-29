@@ -4,12 +4,16 @@
 // Lisette: 0.0.0
 
 import "go:cmp"
+import "go:fmt"
 
 /// Empty constraint (any)
 pub fn Clone<T>(v: T) -> T
 
 // SKIPPED: Either - constraint:union
 // type constraint T cannot be represented
+
+/// Bound by a method-only interface declared in this package.
+pub fn GreetAll<T: Greeter>(xs: Slice<T>) -> string
 
 pub fn Identity<T>(x: T) -> T
 
@@ -34,6 +38,9 @@ pub fn Max<T: Comparable>(a: T, b: T) -> T
 /// cmp.Ordered constraint (named-identity recognizer)
 pub fn MinOrdered<T: cmp.Ordered>(a: T, b: T) -> T
 
+/// Bound by an external method-only interface (fmt.Stringer).
+pub fn Shout<T: fmt.Stringer>(x: T) -> string
+
 /// Slice-shape rewrite: S ~[]E with E: cmp.Ordered
 pub fn SortInts<E: cmp.Ordered>(x: Slice<E>) -> Slice<E>
 
@@ -51,6 +58,11 @@ pub struct ConstrainedPair<K: Comparable, V> {
 }
 
 pub type Container<T>
+
+/// Local method-only interface for cross-package and self-package bound tests.
+pub interface Greeter {
+  fn Greet() -> string
+}
 
 /// Ordered constraint (type union)
 pub type Ordered

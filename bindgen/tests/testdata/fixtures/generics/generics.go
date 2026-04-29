@@ -1,6 +1,28 @@
 package generics
 
-import "cmp"
+import (
+	"cmp"
+	"fmt"
+)
+
+// Local method-only interface for cross-package and self-package bound tests.
+type Greeter interface {
+	Greet() string
+}
+
+// Bound by an external method-only interface (fmt.Stringer).
+func Shout[T fmt.Stringer](x T) string {
+	return "!" + x.String() + "!"
+}
+
+// Bound by a method-only interface declared in this package.
+func GreetAll[T Greeter](xs []T) string {
+	out := ""
+	for _, x := range xs {
+		out += x.Greet()
+	}
+	return out
+}
 
 // Basic generic types
 
