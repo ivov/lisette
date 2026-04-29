@@ -268,6 +268,9 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 	}
 
 	if !isExternal && !obj.Exported() {
+		if conv != nil && !conv.hasReachableUnexportedType(t) {
+			return TypeResult{LisetteType: "Unknown"}
+		}
 		return toLisetteRecursive(t.Underlying(), seen, conv)
 	}
 

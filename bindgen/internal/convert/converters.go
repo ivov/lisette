@@ -1188,6 +1188,86 @@ func (c *Converter) analyzeMajorityPointerTypes() {
 	}
 }
 
+// hasReachableUnexportedType reports whether any exported declaration in the
+// current package surfaces a value of the given unexported named type.
+func (c *Converter) hasReachableUnexportedType(named *types.Named) bool {
+	if c.reachableUnexportedTypes == nil {
+		c.computeReachableUnexportedTypes()
+	}
+	return c.reachableUnexportedTypes[named.Obj().Name()]
+}
+
+func (c *Converter) computeReachableUnexportedTypes() {
+	c.reachableUnexportedTypes = make(map[string]bool)
+	if c.pkg == nil || c.pkg.Types == nil {
+		return
+	}
+	seen := make(map[types.Type]bool)
+	scope := c.pkg.Types.Scope()
+	for _, name := range scope.Names() {
+		obj := scope.Lookup(name)
+		if !obj.Exported() {
+			continue
+		}
+		switch o := obj.(type) {
+		case *types.Const, *types.Var, *types.Func:
+			c.markUnexportedNamesIn(o.Type(), seen)
+		case *types.TypeName:
+			named, ok := o.Type().(*types.Named)
+			if !ok {
+				continue
+			}
+			for method := range types.NewMethodSet(types.NewPointer(named)).Methods() {
+				if method.Obj().Exported() {
+					c.markUnexportedNamesIn(method.Type(), seen)
+				}
+			}
+			if s, ok := named.Underlying().(*types.Struct); ok {
+				for i := 0; i < s.NumFields(); i++ {
+					if f := s.Field(i); f.Exported() {
+						c.markUnexportedNamesIn(f.Type(), seen)
+					}
+				}
+			}
+		}
+	}
+}
+
+// markUnexportedNamesIn walks `t` and marks any unexported named types from
+// the current package as reachable. Recurses through wrapper types
+// (Pointer/Slice/Array/Map/Chan) and through Signature results — the latter
+// so that `func() level` counts as evidence that `level` is reachable.
+func (c *Converter) markUnexportedNamesIn(t types.Type, seen map[types.Type]bool) {
+	if t == nil || seen[t] {
+		return
+	}
+	seen[t] = true
+
+	switch t := t.(type) {
+	case *types.Named:
+		obj := t.Obj()
+		if obj.Pkg() != nil && obj.Pkg().Path() == c.currentPkgPath && !obj.Exported() {
+			c.reachableUnexportedTypes[obj.Name()] = true
+		}
+	case *types.Pointer:
+		c.markUnexportedNamesIn(t.Elem(), seen)
+	case *types.Slice:
+		c.markUnexportedNamesIn(t.Elem(), seen)
+	case *types.Array:
+		c.markUnexportedNamesIn(t.Elem(), seen)
+	case *types.Map:
+		c.markUnexportedNamesIn(t.Key(), seen)
+		c.markUnexportedNamesIn(t.Elem(), seen)
+	case *types.Chan:
+		c.markUnexportedNamesIn(t.Elem(), seen)
+	case *types.Signature:
+		results := t.Results()
+		for i := 0; i < results.Len(); i++ {
+			c.markUnexportedNamesIn(results.At(i).Type(), seen)
+		}
+	}
+}
+
 // extractInterfaceMethods walks a Go interface's exported methods and converts
 // each to a Lisette InterfaceMethod. The second return value reports whether
 // the interface is representable at all: false when an embedded union or an
