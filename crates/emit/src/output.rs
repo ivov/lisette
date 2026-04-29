@@ -2,6 +2,8 @@ use rustc_hash::FxHashMap as HashMap;
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 
+use diagnostics::LisetteDiagnostic;
+
 use super::imports::format_import;
 
 #[derive(Clone, Debug)]
@@ -10,6 +12,7 @@ pub struct OutputFile {
     pub source: String,
     pub imports: HashMap<String, String>,
     pub package_name: String,
+    pub diagnostics: Vec<LisetteDiagnostic>,
 }
 
 impl OutputFile {

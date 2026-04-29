@@ -535,6 +535,7 @@ name = "lisette-emit"
 version = "0.1.22"
 dependencies = [
  "ecow",
+ "lisette-diagnostics",
  "lisette-syntax",
  "rustc-hash",
 ]
@@ -998,6 +999,7 @@ name = "tests"
 version = "0.1.22"
 dependencies = [
  "bytes",
+ "ecow",
  "futures",
  "insta",
  "lisette-deps",

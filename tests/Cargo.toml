@@ -15,6 +15,7 @@ stdlib = { package = "lisette-stdlib", path = "../crates/stdlib" }
 deps = { package = "lisette-deps", path = "../crates/deps" }
 lsp = { package = "lisette-lsp", path = "../crates/lsp" }
 rustc-hash.workspace = true
+ecow.workspace = true
 insta.workspace = true
 miette.workspace = true
 tower-lsp = "0.20"

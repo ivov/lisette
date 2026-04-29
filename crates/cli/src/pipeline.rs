@@ -103,7 +103,7 @@ pub fn compile(
     }
 
     let failed = semantic_result.failed();
-    let errors = semantic_result.errors.clone();
+    let mut errors = semantic_result.errors.clone();
     let lints = semantic_result.lints.clone();
 
     if failed || config.target_phase == CompilePhase::Check {
@@ -116,13 +116,27 @@ pub fn compile(
         };
     }
 
-    let output = Emitter::emit(
+    let mut output = Emitter::emit(
         &semantic_result.into_emit_input(),
         &config.go_module,
         EmitOptions {
             debug: config.debug,
         },
     );
+
+    for file in &mut output {
+        errors.append(&mut file.diagnostics);
+    }
+
+    if errors.iter().any(|d| d.is_error()) {
+        return CompileResult {
+            output: vec![],
+            errors,
+            lints,
+            sources,
+            user_file_count,
+        };
+    }
 
     CompileResult {
         output,

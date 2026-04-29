@@ -402,6 +402,11 @@ impl LisetteDiagnostic {
         self
     }
 
+    pub fn with_emit_code(mut self, code: &str) -> Self {
+        self.code = Some(format!("emit.{}", code));
+        self
+    }
+
     pub fn with_code(mut self, code: impl Into<String>) -> Self {
         self.code = Some(code.into());
         self

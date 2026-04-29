@@ -4851,3 +4851,57 @@ fn main() {
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
+
+#[test]
+fn go_import_collision_flags_shared_last_segment() {
+    use ecow::EcoString;
+    use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+
+    let unused: HashSet<EcoString> = HashSet::default();
+    let go_package_names: HashMap<String, String> = HashMap::default();
+    let mut builder = emit::imports::ImportBuilder::new("project", &unused, &go_package_names);
+    builder.extend_with_modules(
+        &["database/sql", "entgo.io/ent/dialect/sql"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    );
+
+    let (_imports, diagnostics) = builder.build();
+    assert_eq!(diagnostics.len(), 1, "expected one collision diagnostic");
+    assert_eq!(diagnostics[0].code_str(), Some("emit.go_import_collision"));
+    let help = diagnostics[0].plain_help().unwrap_or_default();
+    assert!(
+        help.contains("database/sql") && help.contains("entgo.io/ent/dialect/sql"),
+        "help should name both colliding paths, got: {}",
+        help
+    );
+}
+
+#[test]
+fn go_import_collision_silent_when_aliases_differ() {
+    use ecow::EcoString;
+    use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+
+    let unused: HashSet<EcoString> = HashSet::default();
+    let mut go_package_names: HashMap<String, String> = HashMap::default();
+    go_package_names.insert(
+        "go:entgo.io/ent/dialect/sql".to_string(),
+        "entsql".to_string(),
+    );
+
+    let mut builder = emit::imports::ImportBuilder::new("project", &unused, &go_package_names);
+    builder.extend_with_modules(
+        &["database/sql", "entgo.io/ent/dialect/sql"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    );
+
+    let (_imports, diagnostics) = builder.build();
+    assert!(
+        diagnostics.is_empty(),
+        "expected no diagnostics when aliases differ, got: {:?}",
+        diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
+    );
+}

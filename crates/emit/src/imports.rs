@@ -1,6 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::go_name;
+use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use ecow::EcoString;
 use syntax::ast::ImportAlias;
 use syntax::program::{File, FileImport, ModuleId};
@@ -101,22 +102,47 @@ impl<'a> ImportBuilder<'a> {
             if alias == "_" {
                 return true;
             }
-
-            let pkg_name = if alias.is_empty() {
-                // No alias — use last path component
-                path.rsplit('/').next().unwrap_or(path)
-            } else {
-                alias.as_str()
-            };
-
-            let escaped = go_name::escape_reserved(pkg_name);
+            let escaped = go_name::escape_reserved(effective_package_name(path, alias));
             let pattern = format!("{escaped}.");
             source.contains(&pattern)
         });
     }
 
-    pub fn build(self) -> HashMap<String, String> {
-        self.imports
+    pub fn build(self) -> (HashMap<String, String>, Vec<LisetteDiagnostic>) {
+        let diagnostics = self.detect_collisions();
+        (self.imports, diagnostics)
+    }
+
+    fn detect_collisions(&self) -> Vec<LisetteDiagnostic> {
+        if self.imports.len() < 2 {
+            return Vec::new();
+        }
+        let mut groups: HashMap<String, Vec<&str>> = HashMap::default();
+        for (path, alias) in &self.imports {
+            if alias == "_" {
+                continue;
+            }
+            let effective = effective_package_name(path, alias);
+            let sanitized = go_name::sanitize_package_name(effective).into_owned();
+            groups.entry(sanitized).or_default().push(path.as_str());
+        }
+        let mut groups: Vec<_> = groups.into_iter().filter(|(_, p)| p.len() > 1).collect();
+        groups.sort_by(|a, b| a.0.cmp(&b.0));
+        groups
+            .into_iter()
+            .map(|(alias, paths)| {
+                let owned: Vec<String> = paths.into_iter().map(str::to_string).collect();
+                emit_diag::go_import_collision(&alias, &owned)
+            })
+            .collect()
+    }
+}
+
+fn effective_package_name<'a>(path: &'a str, alias: &'a str) -> &'a str {
+    if alias.is_empty() {
+        path.rsplit('/').next().unwrap_or(path)
+    } else {
+        alias
     }
 }
 

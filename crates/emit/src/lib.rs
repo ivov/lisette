@@ -4,7 +4,7 @@ mod collectors;
 pub(crate) mod control_flow;
 pub(crate) mod definitions;
 pub(crate) mod expressions;
-mod imports;
+pub mod imports;
 pub(crate) mod names;
 mod output;
 pub(crate) mod patterns;
@@ -568,11 +568,13 @@ impl<'a> Emitter<'a> {
             let rendered_source = source.render();
             import_builder.filter_unreferenced(&rendered_source);
 
+            let (imports, diagnostics) = import_builder.build();
             output_files.push(OutputFile {
                 name: file.go_filename(),
-                imports: import_builder.build(),
+                imports,
                 source: rendered_source,
                 package_name: package_name.clone(),
+                diagnostics,
             });
         }
 

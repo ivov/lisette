@@ -2,6 +2,7 @@ mod diagnostic;
 mod result;
 mod sink;
 
+pub mod emit;
 pub mod infer;
 pub mod lint;
 pub mod module_graph;
