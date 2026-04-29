@@ -134,7 +134,7 @@ impl EnumLayout {
         enum_name: &str,
     ) -> String {
         if is_struct {
-            let base = go_name::capitalize_first(field_name);
+            let base = go_name::snake_to_camel(field_name);
             if base == ENUM_TAG_FIELD
                 || base == ENUM_STRINGER_METHOD
                 || base == ENUM_GO_STRINGER_METHOD

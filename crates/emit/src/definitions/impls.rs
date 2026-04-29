@@ -67,7 +67,7 @@ impl Emitter<'_> {
         let code = if is_free_function {
             let mut free_function = function.clone();
             let method_name = if should_export {
-                go_name::capitalize_first(&function.name)
+                go_name::snake_to_camel(&function.name)
             } else {
                 function.name.to_string()
             };
@@ -75,7 +75,7 @@ impl Emitter<'_> {
             let mut combined_generics = ctx.generics.to_vec();
             combined_generics.extend(free_function.generics.iter().cloned());
             free_function.generics = combined_generics;
-            self.emit_function(&free_function, None, should_export)
+            self.emit_function(&free_function, None, false)
         } else {
             self.emit_function(
                 &function,

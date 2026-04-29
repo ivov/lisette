@@ -7,7 +7,7 @@ package main
 import "github.com/user/myproject/math_utils"
 
 func main() {
-	_ = math_utils.Double_square(3.0)
+	_ = math_utils.DoubleSquare(3.0)
 }
 
 
@@ -18,6 +18,6 @@ func Square(x float64) float64 {
 	return x * x
 }
 
-func Double_square(x float64) float64 {
+func DoubleSquare(x float64) float64 {
 	return Square(x) * 2.0
 }

@@ -128,6 +128,6 @@ package types
 
 import "github.com/user/myproject/foo"
 
-func Make_something() foo.Foo {
+func MakeSomething() foo.Foo {
 	return foo.Foo_New(99)
 }

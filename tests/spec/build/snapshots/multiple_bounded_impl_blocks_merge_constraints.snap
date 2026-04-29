@@ -7,11 +7,11 @@ package main
 import "fmt"
 
 type Printable interface {
-	Print_val() string
+	PrintVal() string
 }
 
 type Summable interface {
-	Sum_val() int
+	SumVal() int
 }
 
 type Container[T any] struct {
@@ -24,11 +24,11 @@ func (c Container[T]) String() string {
 }
 
 func Container_display[T Printable](self Container[T]) string {
-	return fmt.Sprintf("[%v] %v", self.label, self.value.Print_val())
+	return fmt.Sprintf("[%v] %v", self.label, self.value.PrintVal())
 }
 
 func Container_total[T Summable](self Container[T]) int {
-	return self.value.Sum_val()
+	return self.value.SumVal()
 }
 
 type Item struct {
@@ -40,11 +40,11 @@ func (i Item) String() string {
 	return fmt.Sprintf("Item { name: %v, count: %v }", i.name, i.count)
 }
 
-func (i Item) Print_val() string {
+func (i Item) PrintVal() string {
 	return i.name
 }
 
-func (i Item) Sum_val() int {
+func (i Item) SumVal() int {
 	return i.count
 }
 

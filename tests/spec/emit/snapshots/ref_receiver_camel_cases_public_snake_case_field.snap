@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/types.rs
-assertion_line: 1538
 description: "input: \nstruct Foo {\n  pub bar_baz: string,\n}\n\nimpl Foo {\n  fn show(self: Ref<Foo>) -> string {\n    self.bar_baz\n  }\n}\n\nfn test() {\n  let mut foo = Foo { bar_baz: \"quux\" }\n  let _ = foo.show()\n}\n"
 ---
 package main
@@ -8,18 +7,18 @@ package main
 import "fmt"
 
 type Foo struct {
-	Bar_baz string
+	BarBaz string
 }
 
 func (f Foo) String() string {
-	return fmt.Sprintf("Foo { bar_baz: %v }", f.Bar_baz)
+	return fmt.Sprintf("Foo { bar_baz: %v }", f.BarBaz)
 }
 
 func (f *Foo) show() string {
-	return f.Bar_baz
+	return f.BarBaz
 }
 
 func test() {
-	foo := Foo{Bar_baz: "quux"}
+	foo := Foo{BarBaz: "quux"}
 	_ = foo.show()
 }

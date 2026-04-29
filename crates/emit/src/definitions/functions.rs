@@ -270,7 +270,7 @@ impl Emitter<'_> {
         }
 
         let function_name = if is_public {
-            go_name::capitalize_first(&function_definition.name)
+            go_name::snake_to_camel(&function_definition.name)
         } else if receiver.is_some() {
             go_name::escape_keyword(&function_definition.name).into_owned()
         } else {

@@ -1600,7 +1600,7 @@ fn test() {
 }
 
 #[test]
-fn ref_receiver_preserves_snake_case_in_public_field() {
+fn ref_receiver_camel_cases_public_snake_case_field() {
     let input = r#"
 struct Foo {
   pub bar_baz: string,

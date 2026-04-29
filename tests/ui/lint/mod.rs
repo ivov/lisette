@@ -2475,6 +2475,34 @@ fn main() {
 }
 
 #[test]
+fn non_snake_case_struct_field_initialism() {
+    assert_lint_snapshot!(
+        r#"
+struct Resource { ID: uint }
+
+fn main() {
+  let r = Resource { ID: 1 };
+  let _ = r.ID;
+}
+"#
+    );
+}
+
+#[test]
+fn non_snake_case_struct_field_trailing_initialism() {
+    assert_lint_snapshot!(
+        r#"
+struct User { UserID: int }
+
+fn main() {
+  let u = User { UserID: 1 };
+  let _ = u.UserID;
+}
+"#
+    );
+}
+
+#[test]
 fn non_screaming_snake_case_constant() {
     assert_lint_snapshot!(
         r#"

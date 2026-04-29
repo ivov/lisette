@@ -33,7 +33,7 @@ func main() {
 		Value: inner_pair,
 		Label: "coords",
 	}
-	fmt.Println(ops.Describe_tagged_pair(tagged_pair))
+	fmt.Println(ops.DescribeTaggedPair(tagged_pair))
 }
 
 
@@ -46,7 +46,7 @@ import (
 	"github.com/user/myproject/types"
 )
 
-func Describe_tagged_pair[A traits.Showable, B traits.Showable](tp types.Tagged[types.Pair[A, B]]) string {
+func DescribeTaggedPair[A traits.Showable, B traits.Showable](tp types.Tagged[types.Pair[A, B]]) string {
 	return fmt.Sprintf("tagged_pair: %v", tp.Display())
 }
 

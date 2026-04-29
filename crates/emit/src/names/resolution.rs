@@ -71,7 +71,7 @@ impl Emitter<'_> {
         };
 
         if is_public {
-            format!("{}.{}", type_part, go_name::capitalize_first(method_part))
+            format!("{}.{}", type_part, go_name::snake_to_camel(method_part))
         } else {
             name.to_string()
         }

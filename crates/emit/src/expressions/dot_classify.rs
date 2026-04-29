@@ -236,7 +236,7 @@ impl Emitter<'_> {
         let literal = format!(
             "{}.{}{}{{ Tag: {} }}",
             alias_pkg,
-            go_name::capitalize_first(type_alias_name),
+            go_name::snake_to_camel(type_alias_name),
             type_args,
             tag_value
         );
@@ -302,35 +302,25 @@ impl Emitter<'_> {
 
         let inner_ty = inner_expression.get_type();
 
-        let (module_name, id_for_prelude_check) =
-            if let Some(synthetic_module) = inner_ty.as_import_namespace() {
-                (synthetic_module.to_string(), synthetic_module.to_string())
-            } else if let Type::Nominal { id, .. } = &inner_ty {
-                let module_name =
-                    if let Expression::Identifier { value, .. } = inner_expression.as_ref() {
-                        value.to_string()
-                    } else {
-                        return None;
-                    };
-                (module_name, id.to_string())
-            } else {
-                return None;
-            };
+        let module_name = if let Some(synthetic_module) = inner_ty.as_import_namespace() {
+            synthetic_module.to_string()
+        } else if matches!(&inner_ty, Type::Nominal { .. })
+            && let Expression::Identifier { value, .. } = inner_expression.as_ref()
+        {
+            value.to_string()
+        } else {
+            return None;
+        };
         let module_name = module_name.as_str();
 
-        let is_prelude = id_for_prelude_check.starts_with(go_name::PRELUDE_PREFIX);
         let go_method = if is_exported {
-            if is_prelude {
-                go_name::snake_to_camel(member)
-            } else {
-                go_name::capitalize_first(member)
-            }
+            go_name::snake_to_camel(member)
         } else {
             go_name::escape_keyword(member).into_owned()
         };
 
         let pkg = self.go_pkg_qualifier(module_name);
-        let go_type_name = go_name::capitalize_first(type_name);
+        let go_type_name = go_name::snake_to_camel(type_name);
 
         // Extract type args from the receiver parameter
         let type_args = if let Type::Function { params, .. } = result_ty.unwrap_forall()

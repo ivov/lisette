@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Miscased name
+   ╭─[test.lis:2:15]
+ 1 │ 
+ 2 │ struct User { UserID: int }
+   ·               ───┬──
+   ·                  ╰── expected snake_case
+ 3 │ 
+   ╰────
+  help: Rename to `user_id` · code: [lint.non_snake_case_struct_field]

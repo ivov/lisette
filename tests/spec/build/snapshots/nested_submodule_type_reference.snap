@@ -17,7 +17,7 @@ func (c Container) String() string {
 	return fmt.Sprintf("Container { items: %v }", c.Items)
 }
 
-func First_item(c Container) sub.Item {
+func FirstItem(c Container) sub.Item {
 	return c.Items[0]
 }
 
@@ -52,5 +52,5 @@ func main() {
 		Score: 42,
 	}
 	c := lib.Container{Items: []sub.Item{item}}
-	fmt.Println(lib.First_item(c).Name)
+	fmt.Println(lib.FirstItem(c).Name)
 }

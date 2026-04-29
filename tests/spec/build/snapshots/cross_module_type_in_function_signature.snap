@@ -13,7 +13,7 @@ func Process(item models.Item) string {
 	return fmt.Sprintf("%v: %v", item.Name, item.Value)
 }
 
-func Create_item(name string, value int) models.Item {
+func CreateItem(name string, value int) models.Item {
 	return models.Item{
 		Name:  name,
 		Value: value,
@@ -36,7 +36,7 @@ func main() {
 		Value: 42,
 	}
 	fmt.Println(logic.Process(item))
-	created := logic.Create_item("created", 100)
+	created := logic.CreateItem("created", 100)
 	fmt.Printf("%v: %v\n", created.Name, created.Value)
 }
 

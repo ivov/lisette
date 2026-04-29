@@ -7,10 +7,10 @@ package main
 import "fmt"
 
 type User struct {
-	First_name string `json:"first_name"`
-	Last_name  string `json:"last_name"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
 func (u User) String() string {
-	return fmt.Sprintf("User { first_name: %v, last_name: %v }", u.First_name, u.Last_name)
+	return fmt.Sprintf("User { first_name: %v, last_name: %v }", u.FirstName, u.LastName)
 }

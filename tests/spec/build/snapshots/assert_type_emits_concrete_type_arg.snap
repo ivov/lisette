@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	raw := store.Get_value("count")
+	raw := store.GetValue("count")
 	subject_1 := lisette.AssertType[int](raw)
 	if subject_1.Tag == lisette.OptionSome {
 		n := subject_1.SomeVal

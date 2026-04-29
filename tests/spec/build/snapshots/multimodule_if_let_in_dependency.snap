@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	_ = utils.Unwrap_or_default(lisette.MakeOptionSome(42))
+	_ = utils.UnwrapOrDefault(lisette.MakeOptionSome(42))
 }
 
 
@@ -19,7 +19,7 @@ package utils
 
 import lisette "github.com/ivov/lisette/prelude"
 
-func Unwrap_or_default(opt lisette.Option[int]) int {
+func UnwrapOrDefault(opt lisette.Option[int]) int {
 	if opt.Tag == lisette.OptionSome {
 		return opt.SomeVal
 	}

@@ -8,7 +8,7 @@ import "github.com/user/myproject/shapes"
 
 func main() {
 	p := shapes.Point_New(3, 4)
-	_ = p.Squared_distance()
+	_ = p.SquaredDistance()
 }
 
 
@@ -33,6 +33,6 @@ func Point_New(x, y int) Point {
 	}
 }
 
-func (p Point) Squared_distance() int {
+func (p Point) SquaredDistance() int {
 	return p.X*p.X + p.Y*p.Y
 }

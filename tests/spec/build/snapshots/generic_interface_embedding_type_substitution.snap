@@ -7,7 +7,7 @@ package main
 import "fmt"
 
 type Mapper[T any] interface {
-	Map_val() T
+	MapVal() T
 }
 
 type Filter interface {
@@ -28,7 +28,7 @@ func (s Score) String() string {
 	return fmt.Sprintf("Score { name: %v, val: %v }", s.name, s.val)
 }
 
-func (s Score) Map_val() string {
+func (s Score) MapVal() string {
 	return s.name
 }
 
@@ -38,7 +38,7 @@ func (s Score) Keep() bool {
 
 func process_score(item Score) string {
 	if item.Keep() {
-		return item.Map_val()
+		return item.MapVal()
 	}
 	return "filtered"
 }

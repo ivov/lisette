@@ -95,7 +95,7 @@ impl Emitter<'_> {
         };
 
         let method_name = if is_public || self.method_needs_export(&func.name) {
-            go_name::capitalize_first(&func.name)
+            go_name::snake_to_camel(&func.name)
         } else {
             go_name::escape_keyword(&func.name).into_owned()
         };

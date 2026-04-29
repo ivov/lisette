@@ -7,7 +7,7 @@ package main
 import "fmt"
 
 type Printable interface {
-	To_string() string
+	ToString() string
 }
 
 type Box[T any] struct {
@@ -19,7 +19,7 @@ func (b Box[T]) String() string {
 }
 
 func Box_print[T Printable](self Box[T]) {
-	fmt.Println(self.value.To_string())
+	fmt.Println(self.value.ToString())
 }
 
 func (b Box[T]) get() T {
@@ -34,7 +34,7 @@ func (n Name) String() string {
 	return fmt.Sprintf("Name { name: %v }", n.name)
 }
 
-func (n Name) To_string() string {
+func (n Name) ToString() string {
 	return n.name
 }
 

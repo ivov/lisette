@@ -27,8 +27,11 @@ pub(crate) fn capitalize_first(s: &str) -> String {
     }
 }
 
+/// Convert a Lisette identifier to its exported Go form: snake_case becomes
+/// PascalCase (`user_id` → `UserId`), already-Pascal names pass through, and
+/// the result is escaped if it collides with a Go keyword.
 pub(crate) fn make_exported(name: &str) -> String {
-    escape_keyword(&capitalize_first(name)).into_owned()
+    escape_keyword(&snake_to_camel(name)).into_owned()
 }
 
 pub(crate) fn snake_to_camel(s: &str) -> String {
@@ -285,7 +288,7 @@ pub(crate) fn qualify_method(
 ) -> ResolvedName {
     let Some((module, type_name)) = type_id.split_once('.') else {
         let method_name = if is_public {
-            capitalize_first(method)
+            snake_to_camel(method)
         } else {
             method.to_string()
         };
@@ -301,18 +304,13 @@ pub(crate) fn qualify_method(
         ))
     } else if module == current_module {
         let method_name = if is_public {
-            capitalize_first(method)
+            snake_to_camel(method)
         } else {
             method.to_string()
         };
         ResolvedName::local(format!("{}_{}", type_name, method_name))
     } else {
         let pkg = module_alias.unwrap_or_else(|| go_package_name(module));
-        ResolvedName::local(format!(
-            "{}.{}_{}",
-            pkg,
-            type_name,
-            capitalize_first(method)
-        ))
+        ResolvedName::local(format!("{}.{}_{}", pkg, type_name, snake_to_camel(method)))
     }
 }

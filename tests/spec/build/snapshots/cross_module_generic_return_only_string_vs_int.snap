@@ -39,27 +39,27 @@ func (v Validated[T]) String() string {
 }
 
 type ValidationResult[T any] struct {
-	Value      Validated[T]
-	Field_name string
+	Value     Validated[T]
+	FieldName string
 }
 
 func (v ValidationResult[T]) String() string {
-	return fmt.Sprintf("ValidationResult { value: %v, field_name: %v }", v.Value, v.Field_name)
+	return fmt.Sprintf("ValidationResult { value: %v, field_name: %v }", v.Value, v.FieldName)
 }
 
-func ValidationResult_New_invalid[T any](field, msg string) ValidationResult[T] {
+func ValidationResult_NewInvalid[T any](field, msg string) ValidationResult[T] {
 	return ValidationResult[T]{
-		Value:      MakeValidatedInvalid[T](msg),
-		Field_name: field,
+		Value:     MakeValidatedInvalid[T](msg),
+		FieldName: field,
 	}
 }
 
-func Validate_positive(field string, _ int) ValidationResult[int] {
-	return ValidationResult_New_invalid[int](field, "must be positive")
+func ValidatePositive(field string, _ int) ValidationResult[int] {
+	return ValidationResult_NewInvalid[int](field, "must be positive")
 }
 
-func Validate_non_empty(field, _ string) ValidationResult[string] {
-	return ValidationResult_New_invalid[string](field, "must not be empty")
+func ValidateNonEmpty(field, _ string) ValidationResult[string] {
+	return ValidationResult_NewInvalid[string](field, "must not be empty")
 }
 
 
@@ -72,8 +72,8 @@ import (
 )
 
 func main() {
-	r1 := lib.Validate_positive("age", -1)
-	r2 := lib.Validate_non_empty("name", "")
-	fmt.Println(r1.Field_name)
-	fmt.Println(r2.Field_name)
+	r1 := lib.ValidatePositive("age", -1)
+	r2 := lib.ValidateNonEmpty("name", "")
+	fmt.Println(r1.FieldName)
+	fmt.Println(r2.FieldName)
 }

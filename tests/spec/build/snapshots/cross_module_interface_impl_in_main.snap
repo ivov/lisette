@@ -8,7 +8,7 @@ type Printable interface {
 	Display() string
 }
 
-func Print_all[T Printable](items []T) string {
+func PrintAll[T Printable](items []T) string {
 	return items[0].Display()
 }
 
@@ -35,5 +35,5 @@ func (n Name) Display() string {
 
 func main() {
 	names := []Name{Name{value: "alice"}}
-	fmt.Println(lib.Print_all(names))
+	fmt.Println(lib.PrintAll(names))
 }

@@ -342,20 +342,10 @@ impl Emitter<'_> {
             if is_enum && parts.len() == 3 {
                 // Enum variant via type alias: "module.TypeAlias.Variant"
                 // Emit as "module.TypeAlias" (the variant fields are handled separately)
-                return format!(
-                    "{}.{}{}",
-                    pkg,
-                    go_name::capitalize_first(parts[1]),
-                    type_args
-                );
+                return format!("{}.{}{}", pkg, go_name::snake_to_camel(parts[1]), type_args);
             } else if !is_enum && parts.len() == 2 {
                 // Cross-module struct reference
-                return format!(
-                    "{}.{}{}",
-                    pkg,
-                    go_name::capitalize_first(parts[1]),
-                    type_args
-                );
+                return format!("{}.{}{}", pkg, go_name::snake_to_camel(parts[1]), type_args);
             }
         }
 

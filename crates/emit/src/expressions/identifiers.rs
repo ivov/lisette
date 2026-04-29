@@ -273,7 +273,7 @@ impl Emitter<'_> {
             .unwrap_or(false)
             || self.method_needs_export(method_part);
         let go_method = if should_export {
-            go_name::capitalize_first(method_part)
+            go_name::snake_to_camel(method_part)
         } else {
             go_name::escape_keyword(method_part).into_owned()
         };
@@ -385,6 +385,6 @@ impl Emitter<'_> {
             return None;
         }
 
-        Some(go_name::capitalize_first(name))
+        Some(go_name::snake_to_camel(name))
     }
 }

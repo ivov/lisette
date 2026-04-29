@@ -7,7 +7,7 @@ package main
 import "github.com/user/myproject/shapes"
 
 func main() {
-	_ = shapes.Test_local_static()
+	_ = shapes.TestLocalStatic()
 }
 
 
@@ -48,7 +48,7 @@ func Builder_New() Builder {
 	}
 }
 
-func (b Builder) With_x(x float64) Builder {
+func (b Builder) WithX(x float64) Builder {
 	return Builder{
 		X: x,
 		Y: b.Y,
@@ -59,8 +59,8 @@ func (b Builder) With_x(x float64) Builder {
 // === shapes/use_types.go ===
 package shapes
 
-func Test_local_static() float64 {
+func TestLocalStatic() float64 {
 	p := Point_New(1.0, 2.0)
-	b := Builder_New().With_x(5.0)
+	b := Builder_New().WithX(5.0)
 	return p.X + b.X
 }

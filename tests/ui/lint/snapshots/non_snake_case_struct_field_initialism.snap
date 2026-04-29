@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Miscased name
+   ╭─[test.lis:2:19]
+ 1 │ 
+ 2 │ struct Resource { ID: uint }
+   ·                   ─┬
+   ·                    ╰── expected snake_case
+ 3 │ 
+   ╰────
+  help: Rename to `id` · code: [lint.non_snake_case_struct_field]

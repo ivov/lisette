@@ -7,7 +7,7 @@ package main
 import "fmt"
 
 type Printable interface {
-	To_string() string
+	ToString() string
 }
 
 type Box struct {
@@ -18,7 +18,7 @@ func (b Box) String() string {
 	return fmt.Sprintf("Box { label: %v }", b.label)
 }
 
-func (b Box) To_string() string {
+func (b Box) ToString() string {
 	return b.label
 }
 
@@ -30,7 +30,7 @@ func (c Circle) String() string {
 	return fmt.Sprintf("Circle { radius: %v }", c.radius)
 }
 
-func (c Circle) To_string() string {
+func (c Circle) ToString() string {
 	return "circle"
 }
 

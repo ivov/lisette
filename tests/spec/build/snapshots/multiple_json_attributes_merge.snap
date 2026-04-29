@@ -10,18 +10,18 @@ import (
 )
 
 type User struct {
-	First_name  string `json:"firstName,omitempty"`
-	Middle_name string `json:"middleName,omitempty"`
+	FirstName  string `json:"firstName,omitempty"`
+	MiddleName string `json:"middleName,omitempty"`
 }
 
 func (u User) String() string {
-	return fmt.Sprintf("User { first_name: %v, middle_name: %v }", u.First_name, u.Middle_name)
+	return fmt.Sprintf("User { first_name: %v, middle_name: %v }", u.FirstName, u.MiddleName)
 }
 
 func main() {
 	u := User{
-		First_name:  "Alice",
-		Middle_name: "",
+		FirstName:  "Alice",
+		MiddleName: "",
 	}
 	json.Marshal(u)
 }
