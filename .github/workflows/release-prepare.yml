@@ -33,12 +33,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
 
       - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
-        if: ${{ steps.release-plz.outputs.pr != '' }}
+        if: ${{ steps.release-plz.outputs.pr != '' && steps.release-plz.outputs.pr != '{}' }}
         with:
           tool: git-cliff@2.13.1
 
       - name: Regenerate changelog with full-repo scope
-        if: ${{ steps.release-plz.outputs.pr != '' }}
+        if: ${{ steps.release-plz.outputs.pr != '' && steps.release-plz.outputs.pr != '{}' }}
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
