@@ -344,6 +344,21 @@ pub interface Event {}
 }
 
 #[test]
+fn go_imported_const_underscore_preserved() {
+    let input = r#"
+import "go:example.com/grpc_health_v1"
+
+fn main() {
+  let _ = grpc_health_v1.HealthCheckResponse_SERVING
+}
+"#;
+    let typedef = r#"
+pub const HealthCheckResponse_SERVING: int = 1
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/grpc_health_v1", typedef)]);
+}
+
+#[test]
 fn package_local_option_alias_does_not_collide_with_prelude_option() {
     // Regression: a Go module that declares its own `type Option = ...`
     // (e.g. the functional-options pattern) would trip `Type::is_option`

@@ -359,6 +359,13 @@ impl Emitter<'_> {
 /// convention); exported members elsewhere get first-letter capitalization;
 /// non-exported members are escaped to avoid Go keywords.
 fn go_field_name(expression_ty: &Type, member: &str, is_exported: bool) -> String {
+    if expression_ty
+        .as_import_namespace()
+        .is_some_and(go_name::is_go_import)
+    {
+        return member.to_string();
+    }
+
     let is_prelude_type = expression_ty
         .strip_refs()
         .get_qualified_id()
