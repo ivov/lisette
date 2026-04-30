@@ -67,14 +67,10 @@ func toLisetteRecursive(t types.Type, seen map[types.Type]bool, conv *Converter)
 		return TypeResult{LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType)}
 
 	case *types.Array:
-		element := toLisetteRecursive(t.Elem(), seen, conv)
-		if element.SkipReason != nil {
-			return element
+		if elem := toLisetteRecursive(t.Elem(), seen, conv); elem.SkipReason != nil {
+			return elem
 		}
-		return TypeResult{
-			LisetteType: fmt.Sprintf("Slice<%s>", element.LisetteType),
-			ArrayReturn: true,
-		}
+		return TypeResult{SkipReason: arrayUnrepresentable()}
 
 	case *types.Map:
 		key := toLisetteRecursive(t.Key(), seen, conv)
@@ -351,14 +347,10 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 		return TypeResult{LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType)}
 
 	case *types.Array:
-		elem := toLisetteNilableRecursive(t.Elem(), seen, conv)
-		if elem.SkipReason != nil {
+		if elem := toLisetteNilableRecursive(t.Elem(), seen, conv); elem.SkipReason != nil {
 			return elem
 		}
-		return TypeResult{
-			LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType),
-			ArrayReturn: true,
-		}
+		return TypeResult{SkipReason: arrayUnrepresentable()}
 
 	case *types.Map:
 		key := toLisetteRecursive(t.Key(), seen, conv)
@@ -377,6 +369,52 @@ func toLisetteNilableRecursive(t types.Type, seen map[types.Type]bool, conv *Con
 	default:
 		return toLisetteRecursive(t, seen, conv)
 	}
+}
+
+func arrayUnrepresentable() *SkipReason {
+	return &SkipReason{
+		Code:    "array-currently-not-representable",
+		Message: "fixed-size array cannot currently be represented in Lisette",
+	}
+}
+
+func unwrapArray(t types.Type) *types.Array {
+	for {
+		switch v := t.(type) {
+		case *types.Array:
+			return v
+		case *types.Alias:
+			t = v.Rhs()
+		default:
+			return nil
+		}
+	}
+}
+
+func arrayReturnTypeResult(arr *types.Array, seen map[types.Type]bool, conv *Converter) TypeResult {
+	elem := arrayElementToLisette(arr.Elem(), seen, conv)
+	if elem.SkipReason != nil {
+		return elem
+	}
+	return TypeResult{
+		LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType),
+		ArrayReturn: true,
+	}
+}
+
+func arraySliceTypeResult(arr *types.Array, seen map[types.Type]bool, conv *Converter) TypeResult {
+	elem := arrayElementToLisette(arr.Elem(), seen, conv)
+	if elem.SkipReason != nil {
+		return elem
+	}
+	return TypeResult{LisetteType: fmt.Sprintf("Slice<%s>", elem.LisetteType)}
+}
+
+func arrayElementToLisette(t types.Type, seen map[types.Type]bool, conv *Converter) TypeResult {
+	if inner := unwrapArray(t); inner != nil {
+		return arraySliceTypeResult(inner, seen, conv)
+	}
+	return toLisetteRecursive(t, seen, conv)
 }
 
 func isInternalPackagePath(path string) bool {

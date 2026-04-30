@@ -265,7 +265,7 @@ pub struct Config {
   pub CipherSuites: Slice<uint16>,
   pub PreferServerCipherSuites: bool,
   pub SessionTicketsDisabled: bool,
-  pub SessionTicketKey: Slice<uint8>,
+  // SKIPPED field "SessionTicketKey": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   pub ClientSessionCache: Option<ClientSessionCache>,
   pub UnwrapSession: Option<fn(Slice<uint8>, ConnectionState) -> Result<Ref<SessionState>, error>>,
   pub WrapSession: Option<fn(ConnectionState, Ref<SessionState>) -> Result<Slice<uint8>, error>>,
@@ -360,7 +360,7 @@ pub struct QUICSessionTicketOptions {
 /// RecordHeaderError is returned when a TLS record header is invalid.
 pub struct RecordHeaderError {
   pub Msg: string,
-  pub RecordHeader: Slice<uint8>,
+  // SKIPPED field "RecordHeader": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   pub Conn: Option<net.Conn>,
 }
 
@@ -667,20 +667,7 @@ impl Config {
     ss: Ref<SessionState>,
   ) -> Result<Slice<uint8>, error>
 
-  /// SetSessionTicketKeys updates the session ticket keys for a server.
-  /// 
-  /// The first key will be used when creating new tickets, while all keys can be
-  /// used for decrypting tickets. It is safe to call this function while the
-  /// server is running in order to rotate the session ticket keys. The function
-  /// will panic if keys is empty.
-  /// 
-  /// Calling this function will turn off automatic session ticket key rotation.
-  /// 
-  /// If multiple servers are terminating connections for the same host they should
-  /// all have the same session ticket keys. If the session ticket keys leaks,
-  /// previously recorded and future TLS connections using those keys might be
-  /// compromised.
-  fn SetSessionTicketKeys(self: Ref<Config>, keys: Slice<Slice<uint8>>)
+  // SKIPPED method "SetSessionTicketKeys": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 
 impl Conn {

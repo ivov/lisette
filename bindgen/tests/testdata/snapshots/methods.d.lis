@@ -10,6 +10,7 @@ pub type A
 pub type B
 
 /// Type with anonymous struct field - methods should skip due to receiver type
+// SKIPPED field "Data": anonymous-struct — anonymous struct types are not supported
 pub type BadReceiver
 
 pub struct Counter {

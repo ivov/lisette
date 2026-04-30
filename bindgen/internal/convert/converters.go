@@ -514,6 +514,10 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 
 			fieldType := ToLisetteNilable(field.Type(), c)
 			if fieldType.SkipReason != nil {
+				result.Fields = append(result.Fields, StructField{
+					Name:       field.Name(),
+					SkipReason: fieldType.SkipReason,
+				})
 				continue
 			}
 
@@ -537,6 +541,17 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		result.LisetteType = basicToLisette(u)
 
 	default:
+		// `type UUID [16]byte` keeps its slice-shaped newtype body; this is
+		// the one position where an array lowers to a slice rather than skipping.
+		if arr := unwrapArray(underlying); arr != nil {
+			t := arraySliceTypeResult(arr, make(map[types.Type]bool), c)
+			if t.SkipReason != nil {
+				result.SkipReason = withOpaqueType(t.SkipReason)
+				return
+			}
+			result.LisetteType = t.LisetteType
+			return
+		}
 		t := ToLisette(underlying, c)
 		if t.SkipReason != nil {
 			result.SkipReason = withOpaqueType(t.SkipReason)

@@ -52,7 +52,8 @@ pub fn IntN(n: int) -> int
 
 pub fn New(src: Source) -> Ref<Rand>
 
-pub fn NewChaCha8(seed: Slice<uint8>) -> Ref<ChaCha8>
+// SKIPPED: NewChaCha8 - array-currently-not-representable
+// fixed-size array cannot currently be represented in Lisette
 
 pub fn NewPCG(seed1: uint64, seed2: uint64) -> Ref<PCG>
 
@@ -140,9 +141,7 @@ impl ChaCha8 {
   /// the last call to Uint64.
   fn Read(self: Ref<ChaCha8>, mut p: Slice<uint8>) -> Partial<int, error>
 
-  /// Seed resets the ChaCha8 to behave the same way as NewChaCha8(seed).
-  fn Seed(self: Ref<ChaCha8>, seed: Slice<uint8>)
-
+  // SKIPPED method "Seed": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   /// Uint64 returns a uniformly distributed random uint64 value.
   fn Uint64(self: Ref<ChaCha8>) -> uint64
 

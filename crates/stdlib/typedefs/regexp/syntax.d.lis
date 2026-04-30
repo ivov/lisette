@@ -194,9 +194,9 @@ pub struct Regexp {
   pub Op: Op,
   pub Flags: Flags,
   pub Sub: Slice<Option<Ref<Regexp>>>,
-  pub Sub0: Slice<Option<Ref<Regexp>>>,
+  // SKIPPED field "Sub0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   pub Rune: Slice<int32>,
-  pub Rune0: Slice<int32>,
+  // SKIPPED field "Rune0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   pub Min: int,
   pub Max: int,
   pub Cap: int,

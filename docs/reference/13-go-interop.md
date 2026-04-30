@@ -58,6 +58,8 @@ Compound types are different:
 | `VarArgs<T>`    | `...T` (call-site only)      |
 | `Unknown`       | `any` or `interface{}`       |
 
+Fixed-size arrays `[N]T` are not yet representable in Lisette. In return position they lower to `Slice<T>`. In any other position (e.g. parameters, struct fields, map keys, slice or map elements), bindgen currently skips the declaration. This may change in future.
+
 ### Named numeric types
 
 Go defines types like `time.Duration` as aliases for numeric primitives: `type Duration int64`. Go's nominal type system requires explicit casts for arithmetic between these types and their underlying type.

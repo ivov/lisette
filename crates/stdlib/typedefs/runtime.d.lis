@@ -649,7 +649,7 @@ pub struct MemProfileRecord {
   pub FreeBytes: int64,
   pub AllocObjects: int64,
   pub FreeObjects: int64,
-  pub Stack0: Slice<uint>,
+  // SKIPPED field "Stack0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 
 /// A MemStats records statistics about the memory allocator.
@@ -678,13 +678,14 @@ pub struct MemStats {
   pub NextGC: uint64,
   pub LastGC: uint64,
   pub PauseTotalNs: uint64,
-  pub PauseNs: Slice<uint64>,
-  pub PauseEnd: Slice<uint64>,
+  // SKIPPED field "PauseNs": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
+  // SKIPPED field "PauseEnd": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   pub NumGC: uint32,
   pub NumForcedGC: uint32,
   pub GCCPUFraction: float64,
   pub EnableGC: bool,
   pub DebugGC: bool,
+  // SKIPPED field "BySize": anonymous-struct — anonymous struct types are not supported
 }
 
 /// A PanicNilError happens when code calls panic(nil).
@@ -699,10 +700,9 @@ pub type PanicNilError
 /// objects. See their comments for more information.
 pub type Pinner
 
+// SKIPPED field "Stack0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 /// A StackRecord describes a single execution stack.
-pub struct StackRecord {
-  pub Stack0: Slice<uint>,
-}
+pub type StackRecord
 
 /// A TypeAssertionError explains a failed type assertion.
 pub type TypeAssertionError

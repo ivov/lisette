@@ -115,7 +115,7 @@ pub fn ToUpper(r: int32) -> int32
 pub struct CaseRange {
   pub Lo: uint32,
   pub Hi: uint32,
-  pub Delta: Slice<int32>,
+  // SKIPPED field "Delta": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 
 /// Range16 represents of a range of 16-bit Unicode code points. The range runs from Lo to Hi

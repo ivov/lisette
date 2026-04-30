@@ -2,6 +2,7 @@ package emit
 
 import (
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -9,6 +10,10 @@ import (
 	"github.com/ivov/lisette/bindgen/internal/convert"
 	"github.com/ivov/lisette/bindgen/internal/extract"
 )
+
+func writeSkippedFieldComment(w io.Writer, indent string, f convert.StructField) {
+	fmt.Fprintf(w, "%s// SKIPPED field %q: %s — %s\n", indent, f.Name, f.SkipReason.Code, f.SkipReason.Message)
+}
 
 type stats struct {
 	functions int
@@ -181,6 +186,19 @@ func (e *Emitter) collectMethod(result convert.ConvertResult) bool {
 	return true
 }
 
+// CollectSkippedMethod buckets a skipped method under its receiver type so
+// the impl block renders a `// SKIPPED method` comment in place of the
+// unrepresentable signature. Returns false when the receiver could not be
+// established (in which case the caller falls back to a top-level skip).
+func (e *Emitter) CollectSkippedMethod(result convert.ConvertResult) bool {
+	if result.Receiver == nil || result.Receiver.BaseTypeName == "" {
+		return false
+	}
+	e.methods[result.Receiver.BaseTypeName] = append(e.methods[result.Receiver.BaseTypeName], result)
+	e.skipped++
+	return true
+}
+
 func (e *Emitter) EmitUnloadableNote(firstError string) {
 	e.buf.WriteString("// Status: UNLOADABLE — package could not be type-checked on this host\n")
 	fmt.Fprintf(&e.buf, "// First error: %s\n", firstError)
@@ -329,6 +347,11 @@ func (e *Emitter) shouldAllowUnusedResult(qualifiedName, methodName string, resu
 }
 
 func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
+	if result.SkipReason != nil {
+		fmt.Fprintf(&e.buf, "  // SKIPPED method %q: %s — %s\n", result.Name, result.SkipReason.Code, result.SkipReason.Message)
+		return
+	}
+
 	e.emitDocWithIndent(result.Doc, "  ")
 
 	if result.CommaOk {
@@ -436,6 +459,22 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 	}
 
 	if len(result.Fields) > 0 {
+		allSkipped := true
+		for _, f := range result.Fields {
+			if f.SkipReason == nil {
+				allSkipped = false
+				break
+			}
+		}
+
+		if allSkipped {
+			for _, f := range result.Fields {
+				writeSkippedFieldComment(&e.buf, "", f)
+			}
+			fmt.Fprintf(&e.buf, "pub type %s%s\n\n", typeName, result.TypeParams.DeclBlock())
+			return
+		}
+
 		var sig strings.Builder
 		sig.WriteString("pub struct ")
 		sig.WriteString(typeName)
@@ -443,6 +482,10 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 
 		sig.WriteString(" {\n")
 		for _, f := range result.Fields {
+			if f.SkipReason != nil {
+				writeSkippedFieldComment(&sig, "  ", f)
+				continue
+			}
 			if f.Doc != "" {
 				for line := range strings.SplitSeq(f.Doc, "\n") {
 					sig.WriteString("  /// ")

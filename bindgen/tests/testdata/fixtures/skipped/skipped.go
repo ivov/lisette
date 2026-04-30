@@ -74,3 +74,42 @@ func MakeOpaqueFunc() OpaqueFunc  { return nil }
 func UseOpaqueFunc(fn OpaqueFunc) {}
 
 var DefaultOpaqueFunc OpaqueFunc
+
+// Should skip: bare fixed-size array param has no inverse-conversion machinery
+// in emit, so generated Go would receive []T where [N]T is required.
+func TakesArray(addr [4]byte) {}
+
+// Should skip: array param on the receiver method, same reason.
+type ArrayParamHolder struct{}
+
+func (a ArrayParamHolder) Set(addr [4]byte) {}
+
+// Should skip: array as map key produces an uncomparable Lisette type.
+type ArrayKeyHolder struct {
+	Pairs map[[2]uint16]int
+	Name  string
+}
+
+// Should skip: array used as map key in a parameter.
+func TakesArrayKeyMap(m map[[2]uint16]int) {}
+
+// Aliases collapse to bare arrays via *types.Alias RHS recursion. Both
+// the param and the map-key positions through an alias must skip.
+type AliasToArray = [4]byte
+
+func TakesAliasArray(addr AliasToArray) {}
+
+type AliasArrayKeyHolder struct {
+	Pairs map[AliasToArray]int
+	Name  string
+}
+
+// Arrays inside other structural positions: slice element, map value, and
+// pointer must all propagate the skip rather than leaking a slice-shaped
+// Lisette type.
+type ArrayInStructPositions struct {
+	SliceOfArr  [][3]int
+	MapValArr   map[string][3]int
+	PtrToArr    *[3]int
+	DirectField [3]int
+}

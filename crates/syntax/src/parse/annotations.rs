@@ -53,10 +53,7 @@ impl<'source> Parser<'source> {
                     };
                 }
                 let span = self.span_from_tokens(start);
-                self.track_error(
-                    "unexpected `[` in type",
-                    "Use `Slice<T>` for slice types or `Array<T, N>` for fixed-size arrays.",
-                );
+                self.track_error("unexpected `[` in type", "Use `Slice<T>` for slice types.");
                 Annotation::Constructor {
                     name: "".into(),
                     params: vec![],

@@ -54,6 +54,7 @@ type StructField struct {
 	Name string
 	Type string
 	Doc  string
+	SkipReason *SkipReason
 }
 
 type InterfaceMethod struct {

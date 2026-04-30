@@ -3,6 +3,9 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+#[go(array_return)]
+pub fn ComputeDigest() -> Slice<uint8>
+
 pub fn GetMap() -> Map<string, int>
 
 pub fn TakeAlias(s: string) -> Slice<int>
@@ -15,6 +18,10 @@ pub type AliasStringMap = Map<string, int>
 
 /// Callback is a simple callback function.
 pub type Callback = fn() -> ()
+
+// SKIPPED: Digest - array-currently-not-representable
+// fixed-size array cannot currently be represented in Lisette
+pub type Digest
 
 /// Handler is a function that handles requests.
 pub type Handler = fn(string) -> Result<string, error>

@@ -12,7 +12,7 @@ pub fn Open(name: string) -> Result<Ref<File>, error>
 
 /// COFFSymbol represents single COFF symbol table record.
 pub struct COFFSymbol {
-  pub Name: Slice<uint8>,
+  // SKIPPED field "Name": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   pub Value: uint32,
   pub SectionNumber: int16,
   pub Type: uint16,
@@ -105,7 +105,7 @@ pub struct OptionalHeader32 {
   pub SizeOfHeapCommit: uint32,
   pub LoaderFlags: uint32,
   pub NumberOfRvaAndSizes: uint32,
-  pub DataDirectory: Slice<DataDirectory>,
+  // SKIPPED field "DataDirectory": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 
 pub struct OptionalHeader64 {
@@ -138,7 +138,7 @@ pub struct OptionalHeader64 {
   pub SizeOfHeapCommit: uint64,
   pub LoaderFlags: uint32,
   pub NumberOfRvaAndSizes: uint32,
-  pub DataDirectory: Slice<DataDirectory>,
+  // SKIPPED field "DataDirectory": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 
 /// Reloc represents a PE COFF relocation.
@@ -173,7 +173,7 @@ pub struct SectionHeader {
 
 /// SectionHeader32 represents real PE COFF section header.
 pub struct SectionHeader32 {
-  pub Name: Slice<uint8>,
+  // SKIPPED field "Name": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   pub VirtualSize: uint32,
   pub VirtualAddress: uint32,
   pub SizeOfRawData: uint32,

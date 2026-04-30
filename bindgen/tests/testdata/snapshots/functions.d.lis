@@ -23,9 +23,11 @@ pub struct BadHandler {
 }
 
 /// Function type returning skipped type with ok - tests analyzeReturns skip in Option path
+// SKIPPED field "Check": anonymous-struct — anonymous struct types are not supported
 pub type BadOptionFn
 
 /// Function type returning skipped type with error - tests analyzeReturns skip in Result path
+// SKIPPED field "Run": anonymous-struct — anonymous struct types are not supported
 pub type BadResultFn
 
 /// Function type with just error return - tests single error path
@@ -57,6 +59,7 @@ pub struct Node {
 pub type SimpleCallback = fn() -> ()
 
 /// Function type returning multiple skipped types - tests collectReturnTypes skip in tuple path
+// SKIPPED field "GetPair": anonymous-struct — anonymous struct types are not supported
 pub type TupleSkip
 
 pub type Variadic = fn(string, VarArgs<int>) -> Result<(), error>

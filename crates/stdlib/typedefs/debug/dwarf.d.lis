@@ -1078,7 +1078,7 @@ impl Data {
   /// Ranges returns the PC ranges covered by e, a slice of [low,high) pairs.
   /// Only some entry types, such as [TagCompileUnit] or [TagSubprogram], have PC
   /// ranges; for others, this will return nil with no error.
-  fn Ranges(self: Ref<Data>, e: Ref<Entry>) -> Result<Slice<Slice<uint64>>, error>
+  fn Ranges(self: Ref<Data>, e: Ref<Entry>) -> Result<Unknown, error>
 
   /// Reader returns a new Reader for [Data].
   /// The reader is positioned at byte offset 0 in the DWARF “info” section.

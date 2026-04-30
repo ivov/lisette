@@ -3,9 +3,11 @@
 // Go: 1.25.5
 // Lisette: 0.1.20
 
-pub fn AddrFrom16(addr: Slice<uint8>) -> Addr
+// SKIPPED: AddrFrom16 - array-currently-not-representable
+// fixed-size array cannot currently be represented in Lisette
 
-pub fn AddrFrom4(addr: Slice<uint8>) -> Addr
+// SKIPPED: AddrFrom4 - array-currently-not-representable
+// fixed-size array cannot currently be represented in Lisette
 
 pub fn AddrFromSlice(slice: Slice<uint8>) -> Option<Addr>
 

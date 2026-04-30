@@ -13,6 +13,7 @@ pub fn GetInner() -> Option<Unknown>
 /// that still emits its remaining exported fields.
 pub struct Holder {
   pub Name: string,
+  // SKIPPED field "Inner": internal-package-ref — references type from internal package "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/internalref/internal/inner"
 }
 
 /// Should be unaffected by the internal-package check.
