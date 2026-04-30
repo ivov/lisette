@@ -1,14 +1,36 @@
 use std::collections::HashSet;
 use std::fs;
+use std::io::Write;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use deps::{GoModule, GoPackage};
+use serde::Deserialize;
 use syntax::ast::Expression;
 use syntax::parse::Parser;
 
 const BINDGEN_GO_MODULE: &str = "github.com/ivov/lisette/bindgen";
 const BINDGEN_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct BatchManifest {
+    ok: Vec<OkEntry>,
+    errors: Vec<ErrorEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OkEntry {
+    package: String,
+    content: String,
+    stubbed: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct ErrorEntry {
+    package: String,
+    kind: String,
+    message: String,
+}
 
 /// Information about a Go module from `go list -m -json`.
 pub struct GoModuleInfo {
@@ -156,24 +178,31 @@ impl<'a> GoWorkspace<'a> {
         ))
     }
 
-    /// Run bindgen on a Go package and return the generated typedef content.
-    ///
-    /// - For local dev, runs: `bindgen/bin/bindgen pkg {package}`
-    /// - For end users, runs: `go run github.com/ivov/lisette/bindgen@v{version} pkg {package}`
-    pub fn run_bindgen(&self, package: &str) -> Result<String, String> {
+    /// Build a `Command` invoking the bindgen binary with the given subcommand.
+    /// Dev builds use the local `bindgen/bin/bindgen`; release builds shell out to
+    /// `go run` against the version-pinned module.
+    fn bindgen_command(&self, sub: &str) -> Command {
         let mut cmd = if let Some(bin) = dev_bindgen_path() {
             let mut c = Command::new(bin);
-            c.args(["pkg", package]);
+            c.arg(sub);
             c
         } else {
             let bindgen_at_version = format!("{}@v{}", BINDGEN_GO_MODULE, BINDGEN_VERSION);
             let mut c = crate::go_cli::go_command();
-            c.args(["run", &bindgen_at_version, "pkg", package]);
+            c.args(["run", &bindgen_at_version, sub]);
             c
         };
+        cmd.current_dir(self.root);
+        cmd
+    }
+
+    /// Used by `lis bindgen <pkg>`, which supports local inputs like `./foo`
+    /// that the batch path's `pkg.PkgPath` index would not match.
+    pub fn run_bindgen(&self, package: &str) -> Result<String, String> {
+        let mut cmd = self.bindgen_command("pkg");
+        cmd.arg(package);
 
         let result = cmd
-            .current_dir(self.root)
             .output()
             .map_err(|e| format!("Failed to run bindgen for `{}`: {}", package, e))?;
 
@@ -190,6 +219,49 @@ impl<'a> GoWorkspace<'a> {
             .map_err(|e| format!("Bindgen produced invalid UTF-8 for `{}`: {}", package, e))
     }
 
+    pub(crate) fn run_bindgen_batch(
+        &self,
+        package_paths: &[String],
+    ) -> Result<BatchManifest, String> {
+        if package_paths.is_empty() {
+            return Ok(BatchManifest {
+                ok: Vec::new(),
+                errors: Vec::new(),
+            });
+        }
+
+        let mut child = self
+            .bindgen_command("pkgs")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Failed to spawn bindgen: {}", e))?;
+
+        {
+            let stdin = child
+                .stdin
+                .as_mut()
+                .ok_or_else(|| "Failed to open bindgen stdin".to_string())?;
+            for pkg in package_paths {
+                writeln!(stdin, "{}", pkg)
+                    .map_err(|e| format!("Failed to write package list to bindgen: {}", e))?;
+            }
+        }
+
+        let output = child
+            .wait_with_output()
+            .map_err(|e| format!("Failed to wait for bindgen: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Bindgen failed: {}", stderr.trim()));
+        }
+
+        serde_json::from_slice(&output.stdout)
+            .map_err(|e| format!("Bindgen produced unparseable manifest: {}", e))
+    }
+
     /// Ensure typedefs exist in cache for every public package in a Go module.
     ///
     /// Returns the list of packages in the module.
@@ -198,28 +270,35 @@ impl<'a> GoWorkspace<'a> {
 
         let packages = self.list_packages(module.path)?;
 
-        for pkg_path in &packages {
-            let pkg = GoPackage {
-                module,
-                package: pkg_path,
-            };
-            let pkg_typedef_path = pkg.typedef_path(self.typedef_cache_dir);
+        let uncached: Vec<String> = packages
+            .iter()
+            .filter(|pkg_path| {
+                let pkg = GoPackage {
+                    module,
+                    package: pkg_path,
+                };
+                !pkg.typedef_path(self.typedef_cache_dir).exists()
+            })
+            .cloned()
+            .collect();
 
-            if pkg_typedef_path.exists() {
-                continue;
-            }
+        if uncached.is_empty() {
+            return Ok(packages);
+        }
 
-            let typedef = self.run_bindgen(pkg_path)?;
+        let manifest = self.run_bindgen_batch(&uncached)?;
 
-            validate_typedef_parses(pkg_path, &typedef)?;
+        let outcome = apply_batch_manifest_to_cache(&manifest, module, self.typedef_cache_dir);
 
-            if let Some(parent_dir) = pkg_typedef_path.parent() {
-                fs::create_dir_all(parent_dir)
-                    .map_err(|e| format!("Failed to create cache directory: {}", e))?;
-            }
+        for stubbed in &outcome.stubbed {
+            crate::output::print_warning(&format!(
+                "{}: type-check failed; emitted as unloadable stub",
+                stubbed
+            ));
+        }
 
-            fs::write(&pkg_typedef_path, &typedef)
-                .map_err(|e| format!("Failed to cache typedef for `{}`: {}", pkg_path, e))?;
+        if !outcome.failures.is_empty() {
+            return Err(outcome.failures.join("\n"));
         }
 
         Ok(packages)
@@ -478,6 +557,65 @@ fn extract_missing_subpackage(stderr: &str) -> Option<(String, String)> {
     Some((found, missing))
 }
 
+/// Per-package atomic: each `ok` entry is independently validated and written;
+/// a failure on one entry does not roll back successes on the others.
+#[derive(Debug, Default)]
+pub(crate) struct BatchOutcome {
+    pub(crate) stubbed: Vec<String>,
+    pub(crate) failures: Vec<String>,
+}
+
+pub(crate) fn apply_batch_manifest_to_cache(
+    manifest: &BatchManifest,
+    module: GoModule,
+    typedef_cache_dir: &Path,
+) -> BatchOutcome {
+    let mut outcome = BatchOutcome::default();
+
+    for e in &manifest.errors {
+        outcome
+            .failures
+            .push(format!("{}: {} ({})", e.package, e.message, e.kind));
+    }
+
+    for entry in &manifest.ok {
+        if let Err(msg) = validate_typedef_parses(&entry.package, &entry.content) {
+            outcome.failures.push(msg);
+            continue;
+        }
+
+        let pkg = GoPackage {
+            module,
+            package: &entry.package,
+        };
+        let pkg_typedef_path = pkg.typedef_path(typedef_cache_dir);
+
+        if let Some(parent_dir) = pkg_typedef_path.parent()
+            && let Err(e) = fs::create_dir_all(parent_dir)
+        {
+            outcome.failures.push(format!(
+                "Failed to create cache directory for `{}`: {}",
+                entry.package, e
+            ));
+            continue;
+        }
+
+        if let Err(e) = fs::write(&pkg_typedef_path, &entry.content) {
+            outcome.failures.push(format!(
+                "Failed to cache typedef for `{}`: {}",
+                entry.package, e
+            ));
+            continue;
+        }
+
+        if entry.stubbed {
+            outcome.stubbed.push(entry.package.clone());
+        }
+    }
+
+    outcome
+}
+
 fn validate_typedef_parses(pkg_path: &str, typedef: &str) -> Result<(), String> {
     let parse = Parser::lex_and_parse_file(typedef, 0);
     if !parse.failed() {
@@ -523,4 +661,156 @@ fn dev_bindgen_path() -> Option<std::path::PathBuf> {
 #[cfg(not(debug_assertions))]
 fn dev_bindgen_path() -> Option<std::path::PathBuf> {
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deps::GoModule;
+    use std::fs as stdfs;
+
+    const MODULE_PATH: &str = "github.com/example/mod";
+    const MODULE_VERSION: &str = "v1.0.0";
+
+    fn module() -> GoModule<'static> {
+        GoModule {
+            path: MODULE_PATH,
+            version: MODULE_VERSION,
+        }
+    }
+
+    fn valid_typedef() -> String {
+        "// Generated\nimport \"go:fmt\"\n".to_string()
+    }
+
+    fn invalid_typedef() -> String {
+        "this is not a valid Lisette file ::: !!!".to_string()
+    }
+
+    fn ok(pkg: &str, content: String, stubbed: bool) -> OkEntry {
+        OkEntry {
+            package: pkg.to_string(),
+            content,
+            stubbed,
+        }
+    }
+
+    fn err(pkg: &str, kind: &str, msg: &str) -> ErrorEntry {
+        ErrorEntry {
+            package: pkg.to_string(),
+            kind: kind.to_string(),
+            message: msg.to_string(),
+        }
+    }
+
+    fn cache_path_for(cache_dir: &Path, pkg: &str) -> std::path::PathBuf {
+        let go_pkg = GoPackage {
+            module: module(),
+            package: pkg,
+        };
+        go_pkg.typedef_path(cache_dir)
+    }
+
+    #[test]
+    fn all_ok_writes_every_package() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pkgs = vec![
+            MODULE_PATH.to_string(),
+            format!("{}/sub1", MODULE_PATH),
+            format!("{}/sub2", MODULE_PATH),
+        ];
+        let manifest = BatchManifest {
+            ok: pkgs.iter().map(|p| ok(p, valid_typedef(), false)).collect(),
+            errors: vec![],
+        };
+
+        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+
+        assert!(outcome.failures.is_empty());
+        assert!(outcome.stubbed.is_empty());
+        for pkg in &pkgs {
+            assert!(
+                cache_path_for(tmp.path(), pkg).exists(),
+                "{} not written",
+                pkg
+            );
+        }
+    }
+
+    #[test]
+    fn manifest_errors_do_not_block_ok_writes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = BatchManifest {
+            ok: vec![ok(&format!("{}/sub1", MODULE_PATH), valid_typedef(), false)],
+            errors: vec![err(
+                &format!("{}/broken", MODULE_PATH),
+                "list_error",
+                "build constraints exclude all Go files",
+            )],
+        };
+
+        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+
+        assert_eq!(outcome.failures.len(), 1);
+        assert!(outcome.failures[0].contains("broken"));
+        assert!(outcome.failures[0].contains("list_error"));
+        assert!(cache_path_for(tmp.path(), &format!("{}/sub1", MODULE_PATH)).exists());
+        assert!(!cache_path_for(tmp.path(), &format!("{}/broken", MODULE_PATH)).exists());
+    }
+
+    #[test]
+    fn validation_failure_skips_only_the_bad_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = BatchManifest {
+            ok: vec![
+                ok(&format!("{}/good1", MODULE_PATH), valid_typedef(), false),
+                ok(&format!("{}/bad", MODULE_PATH), invalid_typedef(), false),
+                ok(&format!("{}/good2", MODULE_PATH), valid_typedef(), false),
+            ],
+            errors: vec![],
+        };
+
+        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+
+        assert_eq!(outcome.failures.len(), 1);
+        assert!(outcome.failures[0].contains("bad"));
+        assert!(cache_path_for(tmp.path(), &format!("{}/good1", MODULE_PATH)).exists());
+        assert!(cache_path_for(tmp.path(), &format!("{}/good2", MODULE_PATH)).exists());
+        assert!(!cache_path_for(tmp.path(), &format!("{}/bad", MODULE_PATH)).exists());
+    }
+
+    #[test]
+    fn stubbed_entries_are_written_and_listed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = BatchManifest {
+            ok: vec![
+                ok(&format!("{}/normal", MODULE_PATH), valid_typedef(), false),
+                ok(&format!("{}/stub", MODULE_PATH), valid_typedef(), true),
+            ],
+            errors: vec![],
+        };
+
+        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+
+        assert!(outcome.failures.is_empty());
+        assert_eq!(outcome.stubbed, vec![format!("{}/stub", MODULE_PATH)]);
+        assert!(cache_path_for(tmp.path(), &format!("{}/normal", MODULE_PATH)).exists());
+        assert!(cache_path_for(tmp.path(), &format!("{}/stub", MODULE_PATH)).exists());
+    }
+
+    #[test]
+    fn empty_manifest_is_a_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = BatchManifest {
+            ok: vec![],
+            errors: vec![],
+        };
+
+        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+
+        assert!(outcome.stubbed.is_empty());
+        assert!(outcome.failures.is_empty());
+        let entries: Vec<_> = stdfs::read_dir(tmp.path()).unwrap().collect();
+        assert!(entries.is_empty());
+    }
 }

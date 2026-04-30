@@ -19,6 +19,8 @@ func main() {
 	switch os.Args[1] {
 	case "pkg":
 		cli.RunPkg(os.Args[2:], defaultCfgJSON)
+	case "pkgs":
+		cli.RunPkgs(os.Args[2:], defaultCfgJSON)
 	case "stdlib":
 		cli.RunStd(os.Args[2:], defaultCfgJSON)
 	default:

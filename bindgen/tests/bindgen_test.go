@@ -144,6 +144,72 @@ func diffOutput(expected, actual []byte) string {
 	return diff.String()
 }
 
+func TestGeneratePkgs_FullEmit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	manifest := cli.GeneratePkgs([]string{"fmt", "os"}, "0.0.0", "0.0.0", nil)
+
+	if len(manifest.Errors) != 0 {
+		t.Fatalf("expected no errors, got %v", manifest.Errors)
+	}
+	if len(manifest.Ok) != 2 {
+		t.Fatalf("expected 2 ok entries, got %d", len(manifest.Ok))
+	}
+	for _, ok := range manifest.Ok {
+		if ok.Stubbed {
+			t.Errorf("expected no stubs, package %q was stubbed", ok.Package)
+		}
+		if ok.Content == "" {
+			t.Errorf("expected content for %q, got empty", ok.Package)
+		}
+	}
+}
+
+func TestGeneratePkgs_HardFail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	manifest := cli.GeneratePkgs([]string{"definitely/nonexistent/foo"}, "0.0.0", "0.0.0", nil)
+
+	if len(manifest.Ok) != 0 {
+		t.Errorf("expected no ok entries, got %d", len(manifest.Ok))
+	}
+	if len(manifest.Errors) != 1 {
+		t.Fatalf("expected 1 error, got %d: %v", len(manifest.Errors), manifest.Errors)
+	}
+	if manifest.Errors[0].Package != "definitely/nonexistent/foo" {
+		t.Errorf("expected error package match, got %q", manifest.Errors[0].Package)
+	}
+}
+
+func TestGeneratePkgs_MixedBatch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	manifest := cli.GeneratePkgs(
+		[]string{"fmt", "definitely/nonexistent/foo"},
+		"0.0.0", "0.0.0", nil,
+	)
+
+	if len(manifest.Ok) != 1 {
+		t.Errorf("expected 1 ok entry, got %d (entries: %v)", len(manifest.Ok), manifest.Ok)
+	}
+	if len(manifest.Errors) != 1 {
+		t.Errorf("expected 1 error, got %d (entries: %v)", len(manifest.Errors), manifest.Errors)
+	}
+}
+
+func TestGeneratePkgs_Empty(t *testing.T) {
+	manifest := cli.GeneratePkgs(nil, "0.0.0", "0.0.0", nil)
+	if len(manifest.Ok) != 0 || len(manifest.Errors) != 0 {
+		t.Errorf("expected empty manifest, got %v", manifest)
+	}
+}
+
 func TestGenerateStd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping stdlib generation test in short mode")

@@ -86,6 +86,11 @@ func LoadPackages(paths []string) ([]*packages.Package, error) {
 	return result, nil
 }
 
+// Like LoadPackages but keeps errored packages so the caller can classify them.
+func LoadPackagesAll(paths []string) ([]*packages.Package, error) {
+	return packages.Load(loadConfig, paths...)
+}
+
 func ExtractExports(pkg *packages.Package) []SymbolExport {
 	if pkg == nil || pkg.Types == nil {
 		return nil

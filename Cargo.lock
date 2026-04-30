@@ -505,7 +505,9 @@ dependencies = [
  "lisette-syntax",
  "owo-colors",
  "rustc-hash",
+ "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tower-lsp",
 ]

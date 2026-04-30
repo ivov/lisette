@@ -41,7 +41,8 @@ func PrintUsage() {
 	fmt.Fprintf(os.Stderr, "Usage: bindgen <command> [arguments]\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  pkg <package>  Generate bindings for a single package\n")
-	fmt.Fprintf(os.Stderr, "  std -outdir <dir>  Generate bindings for all Go stdlib packages\n")
+	fmt.Fprintf(os.Stderr, "  pkgs           Generate bindings for many packages (paths on stdin)\n")
+	fmt.Fprintf(os.Stderr, "  stdlib -outdir <dir>  Generate bindings for all Go stdlib packages\n")
 }
 
 func RunPkg(args []string, defaultCfgJSON []byte) {
