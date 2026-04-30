@@ -16,6 +16,8 @@ pub struct Comments<'a> {
 
     empty_lines: &'a [u32],
     empty_cursor: usize,
+
+    source: &'a str,
 }
 
 impl<'a> Comments<'a> {
@@ -47,7 +49,59 @@ impl<'a> Comments<'a> {
             doc_comments_cursor: 0,
             empty_lines: &trivia.blank_lines,
             empty_cursor: 0,
+            source,
         }
+    }
+
+    pub fn newline_between(&self, start: u32, end: u32) -> bool {
+        if start >= end {
+            return false;
+        }
+        let s = start as usize;
+        let e = (end as usize).min(self.source.len());
+        self.source.as_bytes()[s..e].contains(&b'\n')
+    }
+
+    pub fn take_split_by_newline_after(
+        &mut self,
+        anchor: u32,
+        before: u32,
+    ) -> (Option<Document<'a>>, Option<Document<'a>>) {
+        let comment_end = self.comments[self.comments_cursor..]
+            .iter()
+            .position(|c| c.start >= before)
+            .map(|i| self.comments_cursor + i)
+            .unwrap_or(self.comments.len());
+
+        let popped = &self.comments[self.comments_cursor..comment_end];
+        self.comments_cursor = comment_end;
+
+        let mut same_line: Vec<Option<&'a str>> = Vec::new();
+        let mut new_line: Vec<Option<&'a str>> = Vec::new();
+        let mut split_seen = false;
+
+        for c in popped {
+            if !split_seen && self.newline_between(anchor, c.start) {
+                split_seen = true;
+            }
+            if split_seen {
+                new_line.push(Some(c.content));
+            } else {
+                same_line.push(Some(c.content));
+            }
+        }
+
+        let empty_end = self.empty_lines[self.empty_cursor..]
+            .iter()
+            .position(|&l| l >= before)
+            .map(|i| self.empty_cursor + i)
+            .unwrap_or(self.empty_lines.len());
+        self.empty_cursor = empty_end;
+
+        (
+            comments_to_document(same_line),
+            comments_to_document(new_line),
+        )
     }
 
     pub fn take_comments_before(&mut self, position: u32) -> Option<Document<'a>> {

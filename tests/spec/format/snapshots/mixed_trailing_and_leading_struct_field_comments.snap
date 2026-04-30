@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Mix {\n  a: int, // trailing on a\n  // leading for b\n  b: string,\n}"
+---
+struct Mix {
+  a: int, // trailing on a
+  // leading for b
+  b: string,
+}
