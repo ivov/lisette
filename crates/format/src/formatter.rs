@@ -12,6 +12,8 @@ pub struct Formatter<'a> {
     comments: Comments<'a>,
 }
 
+type StructFieldEntry<'a> = (Option<Document<'a>>, Document<'a>, Option<Document<'a>>);
+
 impl<'a> Formatter<'a> {
     pub fn new(comments: Comments<'a>) -> Self {
         Self { comments }
@@ -1358,20 +1360,34 @@ impl<'a> Formatter<'a> {
             return self.empty_struct_body(header, struct_end);
         }
 
-        let (field_entries, with_comments) = self.struct_fields_with_comments(fields, struct_end);
+        let (field_entries, trailing, with_comments) =
+            self.struct_fields_with_comments(fields, struct_end);
 
         if with_comments || with_field_attrs || with_pub_fields {
-            let fields_docs: Vec<_> = field_entries
+            let mut fields_docs: Vec<Document<'a>> = field_entries
                 .into_iter()
-                .map(|(field, comment)| match comment {
-                    Some(c) => field.append(",").append(" ").append(c),
-                    None => field.append(","),
+                .map(|(leading, field, same_line_trailing)| {
+                    let mut doc = match leading {
+                        Some(c) => c.append(Document::Newline).append(field),
+                        None => field,
+                    };
+                    doc = doc.append(",");
+                    if let Some(t) = same_line_trailing {
+                        doc = doc.append(" ").append(t);
+                    }
+                    doc
                 })
                 .collect();
+            if let Some(t) = trailing {
+                fields_docs.push(t);
+            }
             return Self::braced_body(header, join(fields_docs, Document::Newline));
         }
 
-        let fields_docs: Vec<_> = field_entries.into_iter().map(|(field, _)| field).collect();
+        let fields_docs: Vec<_> = field_entries
+            .into_iter()
+            .map(|(_, field, _)| field)
+            .collect();
         Self::flexible_struct_body(header, fields_docs)
     }
 
@@ -1391,16 +1407,28 @@ impl<'a> Formatter<'a> {
         &mut self,
         fields: &'a [StructFieldDefinition],
         struct_end: u32,
-    ) -> (Vec<(Document<'a>, Option<Document<'a>>)>, bool) {
+    ) -> (Vec<StructFieldEntry<'a>>, Option<Document<'a>>, bool) {
         let mut entries = Vec::new();
         let mut with_comments = false;
+        let mut prev_anchor: Option<u32> = None;
 
-        for (i, field) in fields.iter().enumerate() {
-            let comment_limit = if i + 1 < fields.len() {
-                fields[i + 1].name_span.byte_offset
-            } else {
-                struct_end
+        for field in fields {
+            let field_start = field.name_span.byte_offset;
+            let (trailing_for_prev, leading) = match prev_anchor {
+                Some(anchor) => self
+                    .comments
+                    .take_split_by_newline_after(anchor, field_start),
+                None => (None, self.comments.take_comments_before(field_start)),
             };
+
+            with_comments = with_comments || trailing_for_prev.is_some() || leading.is_some();
+
+            if let Some(t) = trailing_for_prev
+                && let Some(last) = entries.last_mut()
+            {
+                let (_, _, slot): &mut (_, _, Option<Document<'a>>) = last;
+                *slot = Some(t);
+            }
 
             let field_attrs = Self::field_attributes(&field.attributes);
 
@@ -1415,15 +1443,26 @@ impl<'a> Formatter<'a> {
                     .append(Self::annotation(&field.annotation))
             };
 
-            let field_doc = field_attrs.append(field_definition);
+            entries.push((leading, field_attrs.append(field_definition), None));
 
-            let comment_doc = self.comments.take_comments_before(comment_limit);
-            with_comments = with_comments || comment_doc.is_some();
-
-            entries.push((field_doc, comment_doc));
+            let ann_span = field.annotation.get_span();
+            prev_anchor = Some(ann_span.byte_offset + ann_span.byte_length);
         }
 
-        (entries, with_comments)
+        let (last_trailing, struct_trailing) = match prev_anchor {
+            Some(anchor) => self
+                .comments
+                .take_split_by_newline_after(anchor, struct_end),
+            None => (None, self.comments.take_comments_before(struct_end)),
+        };
+        if let Some(t) = last_trailing
+            && let Some(last) = entries.last_mut()
+        {
+            last.2 = Some(t);
+        }
+        with_comments = with_comments || struct_trailing.is_some();
+
+        (entries, struct_trailing, with_comments)
     }
 
     fn field_attributes(attrs: &'a [Attribute]) -> Document<'a> {

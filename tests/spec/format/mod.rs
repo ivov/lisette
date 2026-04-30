@@ -213,6 +213,27 @@ fn comment_on_struct_field() {
 }
 
 #[test]
+fn leading_comment_on_struct_field() {
+    assert_format_snapshot!(
+        "struct Point {\n  // documentation for x\n  x: int,\n  // documentation for y\n  y: int,\n}"
+    );
+}
+
+#[test]
+fn standalone_comment_between_struct_fields() {
+    assert_format_snapshot!(
+        "struct Foo {\n  a: int,\n  // a standalone note about the missing field\n  c: string,\n}"
+    );
+}
+
+#[test]
+fn mixed_trailing_and_leading_struct_field_comments() {
+    assert_format_snapshot!(
+        "struct Mix {\n  a: int, // trailing on a\n  // leading for b\n  b: string,\n}"
+    );
+}
+
+#[test]
 fn comment_trailing() {
     assert_format_snapshot!(
         r#"fn test() {

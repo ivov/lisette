@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Foo {\n  a: int,\n  // a standalone note about the missing field\n  c: string,\n}"
+---
+struct Foo {
+  a: int,
+  // a standalone note about the missing field
+  c: string,
+}
