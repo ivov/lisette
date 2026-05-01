@@ -226,12 +226,11 @@ fn collect_unused_expressions(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
 
 fn collect_discarded_tail_expressions(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
     for fact in &facts.discarded_tail_expressions {
-        out.push(diagnostics::lint::mismatched_tail_value(
+        out.push(diagnostics::infer::mismatched_tail_value(
             &fact.span,
             &fact.return_type,
             &fact.expected_span,
             &fact.expected_type,
-            fact.kind,
         ));
     }
 }

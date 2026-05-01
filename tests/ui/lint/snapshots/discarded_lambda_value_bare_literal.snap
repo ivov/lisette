@@ -10,4 +10,4 @@ source: tests/ui/lint/mod.rs
    ·        ╰── has `()` as implicit return type
  5 │ }
    ╰────
-  help: If the `()` return type is intended, discard the return value with `let _ = ...`. If the `int` return value is intended, add `-> int` to the function signature · code: [lint.mismatched_return_value]
+  help: If the `()` return type is intended, discard the return value with `let _ = ...`. If the `int` return value is intended, add `-> int` to the function signature · code: [infer.mismatched_return_value]

@@ -398,7 +398,18 @@ impl LisetteDiagnostic {
     }
 
     pub fn with_lint_code(mut self, code: &str) -> Self {
+        debug_assert!(
+            matches!(self.severity, Severity::Warning),
+            "with_lint_code requires Warning severity (got {:?}); \
+             use a phase-specific code constructor for errors",
+            self.severity,
+        );
         self.code = Some(format!("lint.{}", code));
+        self
+    }
+
+    pub fn with_attribute_code(mut self, code: &str) -> Self {
+        self.code = Some(format!("attribute.{}", code));
         self
     }
 

@@ -12,4 +12,4 @@ source: tests/ui/lint/mod.rs
    ·                ╰── duplicate
  6 │   name: string,
    ╰────
-  help: Remove one of the `validate` attributes - each tag key may appear only once per field · code: [lint.duplicate_tag]
+  help: Remove one of the `validate` attributes - each tag key may appear only once per field · code: [attribute.duplicate_tag]

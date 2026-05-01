@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·            ╰── field has attribute but struct does not
  4 │   name: string,
    ╰────
-  help: Add `#[json]` atop the struct definition to enable field-level attributes · code: [lint.orphan_field_attribute]
+  help: Add `#[json]` atop the struct definition to enable field-level attributes · code: [attribute.orphan_field_attribute]

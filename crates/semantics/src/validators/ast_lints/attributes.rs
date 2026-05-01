@@ -76,15 +76,17 @@ fn check_field_attributes(
             && is_serialization_key(key)
             && !struct_keys.contains(key)
         {
-            diagnostics.push(diagnostics::lint::field_attribute_without_struct_attribute(
-                &attribute.span,
-                key,
-            ));
+            diagnostics.push(
+                diagnostics::attribute::field_attribute_without_struct_attribute(
+                    &attribute.span,
+                    key,
+                ),
+            );
         }
 
         if let Some(key) = attribute_key {
             if let Some((_, first_attribute)) = seen_keys.iter().find(|(k, _)| *k == key) {
-                diagnostics.push(diagnostics::lint::duplicate_tag_key(
+                diagnostics.push(diagnostics::attribute::duplicate_tag_key(
                     &attribute.span,
                     key,
                     &first_attribute.span,
@@ -190,7 +192,7 @@ fn check_conflicting_case_transforms(
     }
 
     if has_snake_case && has_camel_case {
-        diagnostics.push(diagnostics::lint::conflicting_case_transforms(
+        diagnostics.push(diagnostics::attribute::conflicting_case_transforms(
             &attribute.span,
         ));
     }

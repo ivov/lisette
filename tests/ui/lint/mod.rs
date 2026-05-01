@@ -3830,7 +3830,7 @@ fn main() {
     );
     let count = warnings
         .iter()
-        .filter(|w| w.code_str() == Some("lint.mismatched_return_value"))
+        .filter(|w| w.code_str() == Some("infer.mismatched_return_value"))
         .count();
     assert_eq!(count, 2, "expected one diagnostic per break value");
 }

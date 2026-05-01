@@ -139,49 +139,6 @@ pub fn pattern_issue(span: &Span, kind: IssueKind) -> LisetteDiagnostic {
         .with_help(help)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MismatchedTailKind {
-    Result,
-    Option,
-    Partial,
-    Value,
-}
-
-impl MismatchedTailKind {
-    pub fn lint_code(&self) -> &'static str {
-        "mismatched_return_value"
-    }
-
-    pub fn allow_alias(&self) -> &'static str {
-        match self {
-            Self::Result => "unused_result",
-            Self::Option => "unused_option",
-            Self::Partial => "unused_partial",
-            Self::Value => "unused_value",
-        }
-    }
-}
-
-pub fn mismatched_tail_value(
-    actual_span: &Span,
-    actual_ty: &str,
-    expected_span: &Span,
-    expected_ty: &str,
-    kind: MismatchedTailKind,
-) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Mismatch between return type and return value")
-        .with_lint_code(kind.lint_code())
-        .with_span_primary_label(actual_span, format!("returns `{}`", actual_ty))
-        .with_span_label(
-            expected_span,
-            format!("has `{}` as implicit return type", expected_ty),
-        )
-        .with_help(format!(
-            "If the `{}` return type is intended, discard the return value with `let _ = ...`. If the `{}` return value is intended, add `-> {}` to the function signature.",
-            expected_ty, actual_ty, actual_ty
-        ))
-}
-
 pub fn unused_expression(span: &Span, kind: UnusedExpressionKind) -> LisetteDiagnostic {
     let (code, msg, label, help) = match kind {
         UnusedExpressionKind::Literal => (
@@ -487,37 +444,6 @@ pub fn unknown_attribute(span: &Span, name: &str) -> LisetteDiagnostic {
             "`{}` is not a recognized attribute. Known attributes: `#[json]`, `#[xml]`, `#[yaml]`, `#[toml]`, `#[db]`, `#[bson]`, `#[msgpack]`, `#[mapstructure]`, `#[tag]`",
             name
         ))
-}
-
-pub fn field_attribute_without_struct_attribute(
-    field_span: &Span,
-    attribute_name: &str,
-) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Orphan field attribute")
-        .with_lint_code("orphan_field_attribute")
-        .with_span_label(field_span, "field has attribute but struct does not")
-        .with_help(format!(
-            "Add `#[{}]` atop the struct definition to enable field-level attributes",
-            attribute_name
-        ))
-}
-
-pub fn duplicate_tag_key(span: &Span, key: &str, first_span: &Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Duplicate tag")
-        .with_lint_code("duplicate_tag")
-        .with_span_label(span, "duplicate")
-        .with_span_label(first_span, "first occurrence")
-        .with_help(format!(
-            "Remove one of the `{}` attributes - each tag key may appear only once per field",
-            key
-        ))
-}
-
-pub fn conflicting_case_transforms(span: &Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Conflicting case transforms")
-        .with_lint_code("conflicting_case_transforms")
-        .with_span_label(span, "conflicting")
-        .with_help("Choose either `snake_case` or `camel_case`, not both")
 }
 
 pub fn tag_has_alias(span: &Span, key: &str) -> LisetteDiagnostic {

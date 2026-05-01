@@ -179,6 +179,8 @@ impl TaskState<'_> {
             return_type: return_ty.clone().into(),
         };
 
+        // `Type::ignored()` defers the tail-position check to
+        // `validators/unused_expressions.rs`, which honors `#[allow(unused_*)]`.
         let has_implicit_unit_return = return_annotation == Annotation::Unknown;
         let body_ty = if has_implicit_unit_return {
             Type::ignored()
@@ -259,6 +261,8 @@ impl TaskState<'_> {
         // `defer` inside a closure body should not be flagged as "defer in loop"
         // even when the closure is lexically inside a loop.
         let saved_loop_depth = self.scopes.reset_loop_depth();
+        // `Type::ignored()` defers the tail-position check to
+        // `validators/unused_expressions.rs`, which honors `#[allow(unused_*)]`.
         let relax_body_to_unit = return_annotation == Annotation::Unknown && return_ty.is_unit();
         let body_ty = if relax_body_to_unit {
             Type::ignored()

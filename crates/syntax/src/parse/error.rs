@@ -44,9 +44,4 @@ impl ParseError {
         self.code = format!("parse.{}", code);
         self
     }
-
-    pub fn with_lint_code(mut self, code: &str) -> Self {
-        self.code = format!("lint.{}", code);
-        self
-    }
 }

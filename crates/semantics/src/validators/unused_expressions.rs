@@ -4,7 +4,7 @@ use syntax::types::{Symbol, Type};
 
 use crate::facts::Facts;
 use crate::store::Store;
-use diagnostics::lint::MismatchedTailKind;
+use diagnostics::infer::MismatchedTailKind;
 
 struct TailContext<'a> {
     expected_span: Span,
@@ -284,7 +284,6 @@ fn check_discarded_tail(
 
     facts.add_discarded_tail(
         item.get_span(),
-        kind,
         reported_ty.to_string(),
         expected_span,
         expected_ty,

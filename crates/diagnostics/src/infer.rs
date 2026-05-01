@@ -2,6 +2,44 @@ use crate::LisetteDiagnostic;
 use syntax::ast::{Annotation, BinaryOperator, Span};
 use syntax::types::{SimpleKind, Type};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MismatchedTailKind {
+    Result,
+    Option,
+    Partial,
+    Value,
+}
+
+impl MismatchedTailKind {
+    pub fn allow_alias(&self) -> &'static str {
+        match self {
+            Self::Result => "unused_result",
+            Self::Option => "unused_option",
+            Self::Partial => "unused_partial",
+            Self::Value => "unused_value",
+        }
+    }
+}
+
+pub fn mismatched_tail_value(
+    actual_span: &Span,
+    actual_ty: &str,
+    expected_span: &Span,
+    expected_ty: &str,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Mismatch between return type and return value")
+        .with_infer_code("mismatched_return_value")
+        .with_span_primary_label(actual_span, format!("returns `{}`", actual_ty))
+        .with_span_label(
+            expected_span,
+            format!("has `{}` as implicit return type", expected_ty),
+        )
+        .with_help(format!(
+            "If the `{}` return type is intended, discard the return value with `let _ = ...`. If the `{}` return value is intended, add `-> {}` to the function signature.",
+            expected_ty, actual_ty, actual_ty
+        ))
+}
+
 pub fn blank_import_non_go(blank_span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid import")
         .with_resolve_code("blank_import_non_go")

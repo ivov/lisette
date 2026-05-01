@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                ╰── conflicting
  3 │ pub struct User {
    ╰────
-  help: Choose either `snake_case` or `camel_case`, not both · code: [lint.conflicting_case_transforms]
+  help: Choose either `snake_case` or `camel_case`, not both · code: [attribute.conflicting_case_transforms]
