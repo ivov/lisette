@@ -66,6 +66,8 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
+        with:
+          go: 'true'
       - run: cargo test -p tests --test suite -- --format terse
 
   build:
@@ -96,6 +98,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           just: 'true'
+          go: 'true'
       - run: just test-e2e-smoke
 
   e2e-suite:
