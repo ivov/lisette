@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f(x: int) -> int {\n  match x {\n    1 |\n    // standalone comment\n    2 |\n    3 => 1,\n    _ => 0,\n  }\n}"
+---
+fn f(x: int) -> int {
+  match x {
+    1 |
+    // standalone comment
+    2 |
+    3 => 1,
+    _ => 0,
+  }
+}

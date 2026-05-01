@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: pub enum E: int {\n  A = 1,\n  B = 2,\n  // trailing\n}"
+---
+pub enum E: int {
+  A = 1,
+  B = 2,
+
+  // trailing
+}

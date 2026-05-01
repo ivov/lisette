@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f() {\n  let x = 1\n  x\n  // trailing in fn body\n}"
+---
+fn f() {
+  let x = 1
+  x
+  // trailing in fn body
+}

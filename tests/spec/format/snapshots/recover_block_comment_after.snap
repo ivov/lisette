@@ -3,5 +3,6 @@ source: tests/spec/format/mod.rs
 description: "input: fn foo() {\n  recover {}\n  // comment\n}"
 ---
 fn foo() {
-  recover {} // comment
+  recover {}
+  // comment
 }

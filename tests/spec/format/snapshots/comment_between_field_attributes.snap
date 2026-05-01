@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct S {\n  #[a]\n  // between attributes\n  #[b]\n  pub name: string,\n}"
+---
+struct S {
+  #[a]
+  // between attributes
+  #[b]
+  pub name: string,
+}

@@ -1427,3 +1427,127 @@ fn format_multiline_string_in_call_forces_arg_wrap() {
         "fn test() { foo(\"a\nb\", very_long_argument_name_that_should_force_wrapping_because_it_is_extremely_long, another_argument_name_that_is_also_long) }"
     );
 }
+
+#[test]
+fn comment_inside_or_pattern() {
+    assert_format_snapshot!(
+        "fn f(x: int) -> int {\n  match x {\n    1 |\n    // standalone comment\n    2 |\n    3 => 1,\n    _ => 0,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_between_select_arms() {
+    assert_format_snapshot!(
+        "fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v,\n      None => 0,\n    },\n    // between select arms\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_between_fn_params() {
+    assert_format_snapshot!("fn f(\n  a: int,\n  // between params\n  b: int,\n) -> int { a + b }");
+}
+
+#[test]
+fn comment_before_first_fn_param() {
+    assert_format_snapshot!(
+        "fn f(\n  // before first param\n  a: int,\n  b: int,\n) -> int { a + b }"
+    );
+}
+
+#[test]
+fn comment_between_lambda_params() {
+    assert_format_snapshot!(
+        "fn f() -> int {\n  let g = |\n    a: int,\n    // between lambda params\n    b: int,\n  | a + b\n  g(1, 2)\n}"
+    );
+}
+
+#[test]
+fn comment_between_enum_variants() {
+    assert_format_snapshot!("enum E {\n  A,\n  // between variants\n  B,\n  C,\n}");
+}
+
+#[test]
+fn comment_trailing_in_enum_body() {
+    assert_format_snapshot!("enum E {\n  A,\n  B,\n  // trailing\n}");
+}
+
+#[test]
+fn comment_before_first_enum_variant() {
+    assert_format_snapshot!("enum E {\n  // before A\n  A,\n  B,\n}");
+}
+
+#[test]
+fn comment_between_value_enum_variants() {
+    assert_format_snapshot!("pub enum E: int {\n  A = 1,\n  // between\n  B = 2,\n}");
+}
+
+#[test]
+fn comment_trailing_in_value_enum_body() {
+    assert_format_snapshot!("pub enum E: int {\n  A = 1,\n  B = 2,\n  // trailing\n}");
+}
+
+#[test]
+fn comment_between_interface_methods() {
+    assert_format_snapshot!("interface I {\n  fn first()\n  // between methods\n  fn second()\n}");
+}
+
+#[test]
+fn comment_trailing_in_interface_body() {
+    assert_format_snapshot!("interface I {\n  fn first()\n  fn second()\n  // trailing\n}");
+}
+
+#[test]
+fn comment_before_first_interface_method() {
+    assert_format_snapshot!("interface I {\n  // before first method\n  fn first()\n}");
+}
+
+#[test]
+fn comment_between_field_attributes() {
+    assert_format_snapshot!(
+        "struct S {\n  #[a]\n  // between attributes\n  #[b]\n  pub name: string,\n}"
+    );
+}
+
+#[test]
+fn comment_between_attr_and_struct_definition() {
+    assert_format_snapshot!("struct A {}\n\n#[attr]\n// between attr and struct decl\nstruct B {}");
+}
+
+#[test]
+fn comment_between_attr_and_fn_definition() {
+    assert_format_snapshot!("#[attr]\n// between attr and fn\nfn f() {}");
+}
+
+#[test]
+fn comment_trailing_in_fn_body() {
+    assert_format_snapshot!("fn f() {\n  let x = 1\n  x\n  // trailing in fn body\n}");
+}
+
+#[test]
+fn comment_trailing_in_match_block() {
+    assert_format_snapshot!(
+        "fn f(x: int) -> int {\n  match x {\n    1 => 1,\n    _ => 0,\n    // trailing in match block\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_trailing_in_block_body() {
+    assert_format_snapshot!("fn f() -> int {\n  let x = 1\n  // trailing in block\n}");
+}
+
+#[test]
+fn comment_trailing_in_loop_body() {
+    assert_format_snapshot!("fn f() {\n  loop {\n    break\n    // trailing in loop body\n  }\n}");
+}
+
+#[test]
+fn comment_trailing_in_select_block() {
+    assert_format_snapshot!(
+        "fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v,\n      None => 0,\n    },\n    _ => 1,\n    // trailing\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_trailing_same_line_on_top_level_item() {
+    assert_format_snapshot!("fn h() {} // trailing\nfn i() {}");
+}

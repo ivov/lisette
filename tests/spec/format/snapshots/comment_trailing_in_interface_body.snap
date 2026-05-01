@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: interface I {\n  fn first()\n  fn second()\n  // trailing\n}"
+---
+interface I {
+  fn first()
+  fn second()
+
+  // trailing
+}

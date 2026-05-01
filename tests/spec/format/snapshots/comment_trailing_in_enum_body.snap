@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: enum E {\n  A,\n  B,\n  // trailing\n}"
+---
+enum E {
+  A,
+  B,
+
+  // trailing
+}

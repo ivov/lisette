@@ -53,26 +53,44 @@ impl<'a> Comments<'a> {
         }
     }
 
-    pub fn newline_between(&self, start: u32, end: u32) -> bool {
+    fn newline_between(source: &str, start: u32, end: u32) -> bool {
         if start >= end {
             return false;
         }
         let s = start as usize;
-        let e = (end as usize).min(self.source.len());
-        self.source.as_bytes()[s..e].contains(&b'\n')
+        let e = (end as usize).min(source.len());
+        source.as_bytes()[s..e].contains(&b'\n')
     }
 
-    pub fn take_split_by_newline_after(
+    fn at_line_start(source: &str, at: u32) -> bool {
+        let mut i = (at as usize).min(source.len());
+        let bytes = source.as_bytes();
+        while i > 0 {
+            let b = bytes[i - 1];
+            if b == b'\n' {
+                return true;
+            }
+            if b != b' ' && b != b'\t' {
+                return false;
+            }
+            i -= 1;
+        }
+        true
+    }
+
+    /// Drain comments before `before`, splitting same-line trailing from
+    /// standalone leading. `is_split_point` returns true once a comment
+    /// belongs in the standalone slot; subsequent comments stay there.
+    fn take_split_before(
         &mut self,
-        anchor: u32,
         before: u32,
+        mut is_split_point: impl FnMut(u32) -> bool,
     ) -> (Option<Document<'a>>, Option<Document<'a>>) {
         let comment_end = self.comments[self.comments_cursor..]
             .iter()
             .position(|c| c.start >= before)
             .map(|i| self.comments_cursor + i)
             .unwrap_or(self.comments.len());
-
         let popped = &self.comments[self.comments_cursor..comment_end];
         self.comments_cursor = comment_end;
 
@@ -81,7 +99,7 @@ impl<'a> Comments<'a> {
         let mut split_seen = false;
 
         for c in popped {
-            if !split_seen && self.newline_between(anchor, c.start) {
+            if !split_seen && is_split_point(c.start) {
                 split_seen = true;
             }
             if split_seen {
@@ -102,6 +120,23 @@ impl<'a> Comments<'a> {
             comments_to_document(same_line),
             comments_to_document(new_line),
         )
+    }
+
+    pub fn take_split_at_line_start(
+        &mut self,
+        before: u32,
+    ) -> (Option<Document<'a>>, Option<Document<'a>>) {
+        let source = self.source;
+        self.take_split_before(before, |start| Self::at_line_start(source, start))
+    }
+
+    pub fn take_split_by_newline_after(
+        &mut self,
+        anchor: u32,
+        before: u32,
+    ) -> (Option<Document<'a>>, Option<Document<'a>>) {
+        let source = self.source;
+        self.take_split_before(before, |start| Self::newline_between(source, anchor, start))
     }
 
     pub fn take_comments_before(&mut self, position: u32) -> Option<Document<'a>> {

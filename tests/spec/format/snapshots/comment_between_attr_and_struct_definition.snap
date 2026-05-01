@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct A {}\n\n#[attr]\n// between attr and struct decl\nstruct B {}"
+---
+struct A {}
+
+#[attr]
+// between attr and struct decl
+struct B {}

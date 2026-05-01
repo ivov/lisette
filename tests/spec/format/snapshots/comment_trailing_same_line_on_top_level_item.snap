@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn h() {} // trailing\nfn i() {}"
+---
+fn h() {} // trailing
+
+fn i() {}

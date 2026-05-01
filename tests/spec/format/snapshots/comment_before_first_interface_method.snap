@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: interface I {\n  // before first method\n  fn first()\n}"
+---
+interface I {
+  // before first method
+  fn first()
+}

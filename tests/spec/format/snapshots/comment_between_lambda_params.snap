@@ -1,0 +1,12 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f() -> int {\n  let g = |\n    a: int,\n    // between lambda params\n    b: int,\n  | a + b\n  g(1, 2)\n}"
+---
+fn f() -> int {
+  let g = |
+    a: int,
+    // between lambda params
+    b: int,
+  | a + b
+  g(1, 2)
+}

@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f() {\n  loop {\n    break\n    // trailing in loop body\n  }\n}"
+---
+fn f() {
+  loop {
+    break
+    // trailing in loop body
+  }
+}

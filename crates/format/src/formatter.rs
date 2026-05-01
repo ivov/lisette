@@ -30,10 +30,21 @@ impl<'a> Formatter<'a> {
             docs.push(self.sort_imports(&imports));
         }
 
+        let mut prev_end: Option<u32> = None;
         for (i, item) in rest.iter().enumerate() {
-            let start = item.get_span().byte_offset;
+            let start = Self::item_leading_edge(item);
 
-            if let Some(comment_doc) = self.comments.take_comments_before(start) {
+            let (same_line_trailing, leading) = match prev_end {
+                Some(anchor) => self.comments.take_split_by_newline_after(anchor, start),
+                None => (None, self.comments.take_comments_before(start)),
+            };
+
+            if let Some(t) = same_line_trailing {
+                docs.push(Document::str(" "));
+                docs.push(t);
+            }
+
+            if let Some(comment_doc) = leading {
                 if !docs.is_empty() {
                     docs.push(Document::Newline);
                     docs.push(Document::Newline);
@@ -46,6 +57,8 @@ impl<'a> Formatter<'a> {
             }
 
             docs.push(self.definition(item));
+            let span = item.get_span();
+            prev_end = Some(span.byte_offset + span.byte_length);
         }
 
         if let Some(comment_doc) = self.comments.take_trailing_comments() {
@@ -145,7 +158,15 @@ impl<'a> Formatter<'a> {
         let start = expression.get_span().byte_offset;
         let doc_comments_doc = self.comments.take_doc_comments_before(start);
 
-        let (attrs, vis, inner) = match expression {
+        let attrs = match expression {
+            Expression::Function { attributes, .. } | Expression::Struct { attributes, .. } => {
+                self.attributes(attributes)
+            }
+            _ => Document::Sequence(vec![]),
+        };
+        let between_attrs_and_keyword = self.comments.take_comments_before(start);
+
+        let (vis, inner) = match expression {
             Expression::Function {
                 name,
                 generics,
@@ -153,10 +174,8 @@ impl<'a> Formatter<'a> {
                 return_annotation,
                 body,
                 visibility,
-                attributes,
                 ..
             } => (
-                Self::attributes(attributes),
                 *visibility,
                 self.function(name, generics, params, return_annotation, body),
             ),
@@ -167,11 +186,9 @@ impl<'a> Formatter<'a> {
                 fields,
                 kind,
                 visibility,
-                attributes,
                 span,
                 ..
             } => (
-                Self::attributes(attributes),
                 *visibility,
                 self.struct_definition(name, generics, fields, span, *kind),
             ),
@@ -181,11 +198,11 @@ impl<'a> Formatter<'a> {
                 generics,
                 variants,
                 visibility,
+                span,
                 ..
             } => (
-                Document::Sequence(vec![]),
                 *visibility,
-                self.enum_definition(name, generics, variants),
+                self.enum_definition(name, generics, variants, span),
             ),
 
             Expression::ValueEnum {
@@ -193,11 +210,11 @@ impl<'a> Formatter<'a> {
                 underlying_ty,
                 variants,
                 visibility,
+                span,
                 ..
             } => (
-                Document::Sequence(vec![]),
                 *visibility,
-                self.value_enum_definition(name, underlying_ty.as_ref(), variants),
+                self.value_enum_definition(name, underlying_ty.as_ref(), variants, span),
             ),
 
             Expression::TypeAlias {
@@ -206,11 +223,7 @@ impl<'a> Formatter<'a> {
                 annotation,
                 visibility,
                 ..
-            } => (
-                Document::Sequence(vec![]),
-                *visibility,
-                Self::type_alias(name, generics, annotation),
-            ),
+            } => (*visibility, Self::type_alias(name, generics, annotation)),
 
             Expression::Interface {
                 name,
@@ -218,11 +231,11 @@ impl<'a> Formatter<'a> {
                 parents,
                 method_signatures,
                 visibility,
+                span,
                 ..
             } => (
-                Document::Sequence(vec![]),
                 *visibility,
-                self.interface(name, generics, parents, method_signatures),
+                self.interface(name, generics, parents, method_signatures, span),
             ),
 
             Expression::ImplBlock {
@@ -232,7 +245,6 @@ impl<'a> Formatter<'a> {
                 span,
                 ..
             } => (
-                Document::Sequence(vec![]),
                 Visibility::Private,
                 self.impl_block(annotation, generics, methods, span.end()),
             ),
@@ -244,7 +256,6 @@ impl<'a> Formatter<'a> {
                 visibility,
                 ..
             } => (
-                Document::Sequence(vec![]),
                 *visibility,
                 self.const_definition(identifier, annotation.as_ref(), expression),
             ),
@@ -255,7 +266,6 @@ impl<'a> Formatter<'a> {
                 visibility,
                 ..
             } => (
-                Document::Sequence(vec![]),
                 *visibility,
                 Document::str("var ")
                     .append(Document::string(name.to_string()))
@@ -271,7 +281,6 @@ impl<'a> Formatter<'a> {
                 };
 
                 (
-                    Document::Sequence(vec![]),
                     Visibility::Private,
                     Document::str("import ")
                         .append(alias_doc)
@@ -281,18 +290,20 @@ impl<'a> Formatter<'a> {
                 )
             }
 
-            _ => (
-                Document::Sequence(vec![]),
-                Visibility::Private,
-                self.expression(expression),
-            ),
+            _ => (Visibility::Private, self.expression(expression)),
         };
 
         let vis_inner = match Self::visibility(vis) {
             Some(pub_doc) => pub_doc.append(inner),
             None => inner,
         };
-        let definition_doc = attrs.append(vis_inner);
+        let definition_doc = match between_attrs_and_keyword {
+            Some(c) => attrs
+                .append(c.force_break())
+                .append(Document::Newline)
+                .append(vis_inner),
+            None => attrs.append(vis_inner),
+        };
 
         match doc_comments_doc {
             Some(doc) => doc.append(Document::Newline).append(definition_doc),
@@ -406,7 +417,12 @@ impl<'a> Formatter<'a> {
                 ..
             } => self.if_let(pattern, scrutinee, consequence, alternative),
 
-            Expression::Match { subject, arms, .. } => self.match_(subject, arms),
+            Expression::Match {
+                subject,
+                arms,
+                span,
+                ..
+            } => self.match_(subject, arms, span),
 
             Expression::Binary {
                 operator,
@@ -475,7 +491,7 @@ impl<'a> Formatter<'a> {
 
             Expression::Task { expression, .. } => self.task(expression),
             Expression::Defer { expression, .. } => self.defer_(expression),
-            Expression::Select { arms, .. } => self.select(arms),
+            Expression::Select { arms, span, .. } => self.select(arms, span),
             Expression::Propagate { expression, .. } => self.propagate_(expression),
             Expression::Reference { expression, .. } => self.ref_(expression),
             Expression::RawGo { text } => Self::raw_go(text),
@@ -603,12 +619,11 @@ impl<'a> Formatter<'a> {
         }
 
         let mut docs = Vec::new();
-        let mut previous_end: Option<u32> = None;
 
-        for item in items.iter() {
+        for (i, item) in items.iter().enumerate() {
             let start = item.get_span().byte_offset;
 
-            if previous_end.is_some() {
+            if i > 0 {
                 if self.comments.take_empty_lines_before(start) {
                     docs.push(Document::Newline);
                     docs.push(Document::Newline);
@@ -617,14 +632,17 @@ impl<'a> Formatter<'a> {
                 }
             }
 
-            let item_doc = self.expression(item);
-            docs.push(item_doc);
-            previous_end = Some(item.get_span().byte_offset + item.get_span().byte_length);
+            docs.push(self.expression(item));
         }
 
-        if let Some(trailing_comments_doc) = self.comments.take_comments_before(block_end) {
+        let (same_line, standalone) = self.comments.take_split_at_line_start(block_end);
+        if let Some(t) = same_line {
             docs.push(Document::str(" "));
-            docs.push(trailing_comments_doc);
+            docs.push(t);
+        }
+        if let Some(t) = standalone {
+            docs.push(Document::Newline);
+            docs.push(t.force_break());
         }
 
         let body = concat(docs);
@@ -750,7 +768,12 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    fn match_(&mut self, subject: &'a Expression, arms: &'a [MatchArm]) -> Document<'a> {
+    fn match_(
+        &mut self,
+        subject: &'a Expression,
+        arms: &'a [MatchArm],
+        span: &Span,
+    ) -> Document<'a> {
         let arms_docs: Vec<_> = arms
             .iter()
             .map(|arm| {
@@ -774,7 +797,8 @@ impl<'a> Formatter<'a> {
             .collect();
 
         let header = Document::str("match ").append(self.expression(subject));
-        Self::braced_body(header, join(arms_docs, Document::Newline))
+        let body = self.with_trailing_comments(join(arms_docs, Document::Newline), span.end());
+        Self::braced_body(header, body)
     }
 
     fn loop_(&mut self, body: &'a Expression) -> Document<'a> {
@@ -1204,8 +1228,12 @@ impl<'a> Formatter<'a> {
             Document::str("||")
         } else {
             Document::str("|")
-                .append(join(params_docs, Document::str(", ")))
+                .append(strict_break("", ""))
+                .append(join(params_docs, strict_break(",", ", ")))
+                .nest(INDENT_WIDTH)
+                .append(strict_break(",", ""))
                 .append("|")
+                .group()
         };
 
         let return_doc = if return_annotation.is_unknown() {
@@ -1259,32 +1287,43 @@ impl<'a> Formatter<'a> {
             .append(Self::annotation(target_type))
     }
 
-    fn select(&mut self, arms: &'a [SelectArm]) -> Document<'a> {
+    fn select(&mut self, arms: &'a [SelectArm], span: &Span) -> Document<'a> {
         let arms_docs: Vec<_> = arms.iter().map(|arm| self.select_arm(arm)).collect();
-        Self::braced_body(Document::str("select"), join(arms_docs, Document::Newline))
+        let body = self.with_trailing_comments(join(arms_docs, Document::Newline), span.end());
+        Self::braced_body(Document::str("select"), body)
     }
 
     fn select_arm(&mut self, arm: &'a SelectArm) -> Document<'a> {
-        match &arm.pattern {
+        let start = match &arm.pattern {
+            SelectArmPattern::Receive { binding, .. } => binding.get_span().byte_offset,
+            SelectArmPattern::Send {
+                send_expression, ..
+            } => send_expression.get_span().byte_offset,
+            SelectArmPattern::MatchReceive {
+                receive_expression, ..
+            } => receive_expression.get_span().byte_offset,
+            SelectArmPattern::WildCard { body } => body.get_span().byte_offset,
+        };
+        self.with_leading_comments(start, |s| match &arm.pattern {
             SelectArmPattern::Receive {
                 binding,
                 receive_expression,
                 body,
                 ..
             } => Document::str("let ")
-                .append(self.pattern(binding))
+                .append(s.pattern(binding))
                 .append(" = ")
-                .append(self.expression(receive_expression))
+                .append(s.expression(receive_expression))
                 .append(" => ")
-                .append(self.expression(body))
+                .append(s.expression(body))
                 .append(","),
             SelectArmPattern::Send {
                 send_expression,
                 body,
-            } => self
+            } => s
                 .expression(send_expression)
                 .append(" => ")
-                .append(self.expression(body))
+                .append(s.expression(body))
                 .append(","),
             SelectArmPattern::MatchReceive {
                 receive_expression,
@@ -1293,10 +1332,10 @@ impl<'a> Formatter<'a> {
                 let arms_docs: Vec<_> = arms
                     .iter()
                     .map(|a| {
-                        let pattern = self.pattern(&a.pattern);
-                        let expression = self.expression(&a.expression);
+                        let pattern = s.pattern(&a.pattern);
+                        let expression = s.expression(&a.expression);
                         let pattern_with_guard = if let Some(guard) = &a.guard {
-                            pattern.append(" if ").append(self.expression(guard))
+                            pattern.append(" if ").append(s.expression(guard))
                         } else {
                             pattern
                         };
@@ -1306,14 +1345,14 @@ impl<'a> Formatter<'a> {
                             .append(",")
                     })
                     .collect();
-                let header = Document::str("match ").append(self.expression(receive_expression));
+                let header = Document::str("match ").append(s.expression(receive_expression));
                 Self::braced_body(header, join(arms_docs, Document::Newline)).append(",")
             }
             SelectArmPattern::WildCard { body } => Document::str("_")
                 .append(" => ")
-                .append(self.expression(body))
+                .append(s.expression(body))
                 .append(","),
-        }
+        })
     }
 
     fn propagate_(&mut self, expression: &'a Expression) -> Document<'a> {
@@ -1413,12 +1452,16 @@ impl<'a> Formatter<'a> {
         let mut prev_anchor: Option<u32> = None;
 
         for field in fields {
-            let field_start = field.name_span.byte_offset;
+            let leading_edge = field
+                .attributes
+                .first()
+                .map(|a| a.span.byte_offset)
+                .unwrap_or(field.name_span.byte_offset);
             let (trailing_for_prev, leading) = match prev_anchor {
                 Some(anchor) => self
                     .comments
-                    .take_split_by_newline_after(anchor, field_start),
-                None => (None, self.comments.take_comments_before(field_start)),
+                    .take_split_by_newline_after(anchor, leading_edge),
+                None => (None, self.comments.take_comments_before(leading_edge)),
             };
 
             with_comments = with_comments || trailing_for_prev.is_some() || leading.is_some();
@@ -1430,7 +1473,7 @@ impl<'a> Formatter<'a> {
                 *slot = Some(t);
             }
 
-            let field_attrs = Self::field_attributes(&field.attributes);
+            let field_attrs = self.field_attributes(&field.attributes);
 
             let field_definition = if field.visibility.is_public() {
                 Document::str("pub ")
@@ -1465,12 +1508,12 @@ impl<'a> Formatter<'a> {
         (entries, struct_trailing, with_comments)
     }
 
-    fn field_attributes(attrs: &'a [Attribute]) -> Document<'a> {
+    fn field_attributes(&mut self, attrs: &'a [Attribute]) -> Document<'a> {
         if attrs.is_empty() {
             return Document::Sequence(vec![]);
         }
 
-        let attribute_docs: Vec<_> = attrs.iter().map(Self::attribute).collect();
+        let attribute_docs: Vec<_> = attrs.iter().map(|a| self.attribute(a)).collect();
         join(attribute_docs, Document::Newline).append(Document::Newline)
     }
 
@@ -1481,6 +1524,46 @@ impl<'a> Formatter<'a> {
             .append(Document::Newline)
             .append("}")
             .force_break()
+    }
+
+    /// Drains comments before `end` and appends them as standalone trailing
+    /// content inside a container body, separated from the preceding items by
+    /// a blank line.
+    fn with_trailing_comments(&mut self, body: Document<'a>, end: u32) -> Document<'a> {
+        match self.comments.take_comments_before(end) {
+            Some(trailing) => body
+                .append(Document::Newline)
+                .append(Document::Newline)
+                .append(trailing.force_break()),
+            None => body,
+        }
+    }
+
+    /// Drains comments before `start` and prepends them to the document built
+    /// by `build`. Use at the entry of any first-class child node emitter
+    /// (pattern, binding, enum_variant, etc.) so that leading comments stay
+    /// with the node the user wrote them on.
+    fn with_leading_comments(
+        &mut self,
+        start: u32,
+        build: impl FnOnce(&mut Self) -> Document<'a>,
+    ) -> Document<'a> {
+        let comments = self.comments.take_comments_before(start);
+        let doc = build(self);
+        prepend_comments(doc, comments)
+    }
+
+    fn item_leading_edge(item: &'a Expression) -> u32 {
+        let attrs: &[Attribute] = match item {
+            Expression::Function { attributes, .. } | Expression::Struct { attributes, .. } => {
+                attributes
+            }
+            _ => &[],
+        };
+        attrs
+            .first()
+            .map(|a| a.span.byte_offset)
+            .unwrap_or_else(|| item.get_span().byte_offset)
     }
 
     fn flexible_struct_body(header: Document<'a>, items: Vec<Document<'a>>) -> Document<'a> {
@@ -1500,6 +1583,7 @@ impl<'a> Formatter<'a> {
         name: &'a str,
         generics: &'a [Generic],
         variants: &'a [EnumVariant],
+        span: &Span,
     ) -> Document<'a> {
         let generics_doc = Self::generics(generics);
         let header = Document::str("enum ").append(name).append(generics_doc);
@@ -1509,7 +1593,8 @@ impl<'a> Formatter<'a> {
         }
 
         let variants_docs: Vec<_> = variants.iter().map(|v| self.enum_variant(v)).collect();
-        Self::braced_body(header, join(variants_docs, Document::Newline))
+        let body = self.with_trailing_comments(join(variants_docs, Document::Newline), span.end());
+        Self::braced_body(header, body)
     }
 
     fn value_enum_definition(
@@ -1517,6 +1602,7 @@ impl<'a> Formatter<'a> {
         name: &'a str,
         underlying_ty: Option<&'a syntax::ast::Annotation>,
         variants: &'a [syntax::ast::ValueEnumVariant],
+        span: &Span,
     ) -> Document<'a> {
         let header = if let Some(ty) = underlying_ty {
             Document::str("enum ")
@@ -1536,43 +1622,47 @@ impl<'a> Formatter<'a> {
             .map(|v| self.value_enum_variant(v))
             .collect();
 
-        Self::braced_body(header, join(variants_docs, Document::Newline))
+        let body = self.with_trailing_comments(join(variants_docs, Document::Newline), span.end());
+        Self::braced_body(header, body)
     }
 
     fn enum_variant(&mut self, variant: &'a EnumVariant) -> Document<'a> {
-        let name = Document::string(variant.name.to_string());
-
-        match &variant.fields {
-            VariantFields::Unit => name.append(","),
-            VariantFields::Tuple(fields) => {
-                let field_docs: Vec<_> = fields
-                    .iter()
-                    .map(|f| Self::annotation(&f.annotation))
-                    .collect();
-                name.append("(")
-                    .append(join(field_docs, Document::str(", ")))
-                    .append("),")
+        self.with_leading_comments(variant.name_span.byte_offset, |_| {
+            let name = Document::string(variant.name.to_string());
+            match &variant.fields {
+                VariantFields::Unit => name.append(","),
+                VariantFields::Tuple(fields) => {
+                    let field_docs: Vec<_> = fields
+                        .iter()
+                        .map(|f| Self::annotation(&f.annotation))
+                        .collect();
+                    name.append("(")
+                        .append(join(field_docs, Document::str(", ")))
+                        .append("),")
+                }
+                VariantFields::Struct(fields) => {
+                    let field_docs: Vec<_> = fields
+                        .iter()
+                        .map(|f| {
+                            Document::string(f.name.to_string())
+                                .append(": ")
+                                .append(Self::annotation(&f.annotation))
+                        })
+                        .collect();
+                    name.append(" { ")
+                        .append(join(field_docs, Document::str(", ")))
+                        .append(" },")
+                }
             }
-            VariantFields::Struct(fields) => {
-                let field_docs: Vec<_> = fields
-                    .iter()
-                    .map(|f| {
-                        Document::string(f.name.to_string())
-                            .append(": ")
-                            .append(Self::annotation(&f.annotation))
-                    })
-                    .collect();
-                name.append(" { ")
-                    .append(join(field_docs, Document::str(", ")))
-                    .append(" },")
-            }
-        }
+        })
     }
 
     fn value_enum_variant(&mut self, variant: &'a syntax::ast::ValueEnumVariant) -> Document<'a> {
-        let name = Document::string(variant.name.to_string());
-        let value_doc = self.literal(&variant.value);
-        name.append(" = ").append(value_doc).append(",")
+        self.with_leading_comments(variant.name_span.byte_offset, |s| {
+            let name = Document::string(variant.name.to_string());
+            let value_doc = s.literal(&variant.value);
+            name.append(" = ").append(value_doc).append(",")
+        })
     }
 
     fn type_alias(
@@ -1597,6 +1687,7 @@ impl<'a> Formatter<'a> {
         generics: &'a [Generic],
         parents: &'a [ParentInterface],
         methods: &'a [Expression],
+        span: &Span,
     ) -> Document<'a> {
         let generics_doc = Self::generics(generics);
 
@@ -1618,11 +1709,12 @@ impl<'a> Formatter<'a> {
             return header.append(" {}");
         }
 
-        Self::braced_body(header, join(body_docs, Document::Newline))
+        let body = self.with_trailing_comments(join(body_docs, Document::Newline), span.end());
+        Self::braced_body(header, body)
     }
 
     fn interface_method(&mut self, method: &'a Expression) -> Document<'a> {
-        match method {
+        self.with_leading_comments(method.get_span().byte_offset, |s| match method {
             Expression::Function {
                 name,
                 generics,
@@ -1631,10 +1723,10 @@ impl<'a> Formatter<'a> {
                 attributes,
                 ..
             } => {
-                let attrs_doc = Self::attributes(attributes);
+                let attrs_doc = s.attributes(attributes);
                 let generics_doc = Self::generics(generics);
 
-                let params_docs: Vec<_> = params.iter().map(|p| self.binding(p)).collect();
+                let params_docs: Vec<_> = params.iter().map(|p| s.binding(p)).collect();
                 let params_doc = Self::wrap_params(params_docs);
 
                 let return_doc = if return_annotation.is_unknown() {
@@ -1651,7 +1743,7 @@ impl<'a> Formatter<'a> {
                     .append(return_doc)
             }
             _ => Document::Sequence(vec![]),
-        }
+        })
     }
 
     fn impl_block(
@@ -1717,7 +1809,9 @@ impl<'a> Formatter<'a> {
     }
 
     fn pattern(&mut self, pat: &'a Pattern) -> Document<'a> {
-        match pat {
+        let start = pat.get_span().byte_offset;
+        let comments = self.comments.take_comments_before(start);
+        let doc = match pat {
             Pattern::Literal { literal, .. } => self.literal(literal),
             Pattern::Unit { .. } => Document::str("()"),
             Pattern::WildCard { .. } => Document::str("_"),
@@ -1834,14 +1928,15 @@ impl<'a> Formatter<'a> {
 
             Pattern::Or { patterns, .. } => {
                 let pattern_docs: Vec<_> = patterns.iter().map(|p| self.pattern(p)).collect();
-                join(pattern_docs, Document::str(" | "))
+                join(pattern_docs, strict_break(" |", " | ")).group()
             }
 
             Pattern::AsBinding { pattern, name, .. } => self
                 .pattern(pattern)
                 .append(" as ")
                 .append(Document::string(name.to_string())),
-        }
+        };
+        prepend_comments(doc, comments)
     }
 
     fn struct_field_pattern(&mut self, field: &'a StructFieldPattern) -> Document<'a> {
@@ -1857,18 +1952,19 @@ impl<'a> Formatter<'a> {
     }
 
     fn binding(&mut self, binding: &'a Binding) -> Document<'a> {
-        let pattern_doc = if binding.mutable {
-            Document::str("mut ").append(self.pattern(&binding.pattern))
-        } else {
-            self.pattern(&binding.pattern)
-        };
-
-        match &binding.annotation {
-            Some(annotation) => pattern_doc
-                .append(": ")
-                .append(Self::annotation(annotation)),
-            None => pattern_doc,
-        }
+        self.with_leading_comments(binding.pattern.get_span().byte_offset, |s| {
+            let pattern_doc = if binding.mutable {
+                Document::str("mut ").append(s.pattern(&binding.pattern))
+            } else {
+                s.pattern(&binding.pattern)
+            };
+            match &binding.annotation {
+                Some(annotation) => pattern_doc
+                    .append(": ")
+                    .append(Self::annotation(annotation)),
+                None => pattern_doc,
+            }
+        })
     }
 
     fn annotation(annotation: &'a Annotation) -> Document<'a> {
@@ -1934,19 +2030,20 @@ impl<'a> Formatter<'a> {
             .append(">")
     }
 
-    fn attribute(attribute: &'a Attribute) -> Document<'a> {
-        let name = Document::string(attribute.name.clone());
-
-        if attribute.args.is_empty() {
-            Document::str("#[").append(name).append("]")
-        } else {
-            let args_docs: Vec<_> = attribute.args.iter().map(Self::attribute_arg).collect();
-            Document::str("#[")
-                .append(name)
-                .append("(")
-                .append(join(args_docs, Document::str(", ")))
-                .append(")]")
-        }
+    fn attribute(&mut self, attribute: &'a Attribute) -> Document<'a> {
+        self.with_leading_comments(attribute.span.byte_offset, |_| {
+            let name = Document::string(attribute.name.clone());
+            if attribute.args.is_empty() {
+                Document::str("#[").append(name).append("]")
+            } else {
+                let args_docs: Vec<_> = attribute.args.iter().map(Self::attribute_arg).collect();
+                Document::str("#[")
+                    .append(name)
+                    .append("(")
+                    .append(join(args_docs, Document::str(", ")))
+                    .append(")]")
+            }
+        })
     }
 
     fn attribute_arg(arg: &'a AttributeArg) -> Document<'a> {
@@ -1960,12 +2057,12 @@ impl<'a> Formatter<'a> {
         }
     }
 
-    fn attributes(attrs: &'a [Attribute]) -> Document<'a> {
+    fn attributes(&mut self, attrs: &'a [Attribute]) -> Document<'a> {
         if attrs.is_empty() {
             return Document::Sequence(vec![]);
         }
 
-        let attribute_docs: Vec<_> = attrs.iter().map(Self::attribute).collect();
+        let attribute_docs: Vec<_> = attrs.iter().map(|a| self.attribute(a)).collect();
         join(attribute_docs, Document::Newline).append(Document::Newline)
     }
 }

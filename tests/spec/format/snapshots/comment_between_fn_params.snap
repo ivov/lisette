@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f(\n  a: int,\n  // between params\n  b: int,\n) -> int { a + b }"
+---
+fn f(
+  a: int,
+  // between params
+  b: int,
+) -> int {
+  a + b
+}

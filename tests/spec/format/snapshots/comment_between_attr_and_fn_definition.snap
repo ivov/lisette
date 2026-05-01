@@ -1,0 +1,7 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: #[attr]\n// between attr and fn\nfn f() {}"
+---
+#[attr]
+// between attr and fn
+fn f() {}
