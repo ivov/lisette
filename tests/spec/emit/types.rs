@@ -1228,6 +1228,18 @@ struct User {
 }
 
 #[test]
+fn generic_alias_of_option_in_return_position() {
+    let input = r#"
+type Maybe<T> = Option<T>
+
+fn test() -> Maybe<int> {
+  Some(42)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn prelude_type_shadowing_struct_and_methods() {
     let input = r#"
 struct Span {

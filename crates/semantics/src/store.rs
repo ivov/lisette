@@ -246,22 +246,10 @@ impl Store {
     }
 
     pub fn peel_alias(&self, ty: &Type) -> Type {
-        let mut current = ty.clone();
-        while let Type::Nominal {
-            id,
-            underlying_ty: Some(u),
-            ..
-        } = &current
-        {
-            if !self
-                .get_definition(id)
-                .is_some_and(|d| matches!(d, Definition::TypeAlias { .. }))
-            {
-                break;
-            }
-            current = *u.clone();
-        }
-        current
+        syntax::types::peel_alias(ty, |id| {
+            self.get_definition(id)
+                .is_some_and(Definition::is_type_alias)
+        })
     }
 
     pub fn peel_alias_deep(&self, ty: &Type) -> Type {

@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ntype Maybe<T> = Option<T>\n\nfn test() -> Maybe<int> {\n  Some(42)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Maybe[T any] = lisette.Option[T]
+
+func test() (int, bool) {
+	return 42, true
+}

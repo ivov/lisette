@@ -149,6 +149,10 @@ impl Definition {
         )
     }
 
+    pub fn is_type_alias(&self) -> bool {
+        matches!(self, Definition::TypeAlias { .. })
+    }
+
     pub fn name_span(&self) -> Option<Span> {
         match self {
             Definition::TypeAlias { name_span, .. } => Some(*name_span),

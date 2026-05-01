@@ -1144,6 +1144,52 @@ impl Type {
     }
 }
 
+/// Walk an alias chain via `underlying_ty` (preserves substitution); cycle
+/// guard defends against chains that slip past `circular_type_alias`.
+pub fn peel_alias<F>(ty: &Type, is_alias: F) -> Type
+where
+    F: Fn(&str) -> bool,
+{
+    let mut current = ty.unwrap_forall().clone();
+    let mut seen: Vec<String> = Vec::new();
+    while let Type::Nominal {
+        id,
+        underlying_ty: Some(u),
+        ..
+    } = &current
+    {
+        if !is_alias(id.as_str()) {
+            break;
+        }
+        if seen.iter().any(|s| s == id.as_str()) {
+            break;
+        }
+        seen.push(id.to_string());
+        current = u.unwrap_forall().clone();
+    }
+    current
+}
+
+/// Walk an alias chain by id alone; used when no `Type` with
+/// `underlying_ty` is available (e.g. Go-name resolution).
+pub fn peel_alias_id<F>(id: &str, next_alias: F) -> String
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let mut current = id.to_string();
+    let mut seen: Vec<String> = Vec::new();
+    loop {
+        if seen.iter().any(|s| s == &current) {
+            return current;
+        }
+        let Some(next) = next_alias(&current) else {
+            return current;
+        };
+        seen.push(current);
+        current = next;
+    }
+}
+
 impl Type {
     pub fn unwrap_forall(&self) -> &Type {
         match self {

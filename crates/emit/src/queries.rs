@@ -155,43 +155,26 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
-        let mut current = ty.unwrap_forall().clone();
-        let mut seen: Vec<String> = Vec::new();
-        loop {
-            let Type::Nominal { id, .. } = &current else {
-                return current;
-            };
-            if seen.iter().any(|s| s == id.as_str()) {
-                return current;
-            }
-            let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
-                self.ctx.definitions.get(id.as_str())
-            else {
-                return current;
-            };
-            seen.push(id.to_string());
-            current = alias_ty.unwrap_forall().clone();
-        }
+        syntax::types::peel_alias(ty, |id| {
+            self.ctx
+                .definitions
+                .get(id)
+                .is_some_and(Definition::is_type_alias)
+        })
     }
 
     pub(crate) fn peel_alias_id(&self, id: &str) -> String {
-        let mut current = id.to_string();
-        let mut seen: Vec<String> = Vec::new();
-        loop {
-            if seen.iter().any(|s| s == &current) {
-                return current;
-            }
+        syntax::types::peel_alias_id(id, |current| {
             let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
-                self.ctx.definitions.get(current.as_str())
+                self.ctx.definitions.get(current)
             else {
-                return current;
+                return None;
             };
             let Type::Nominal { id: next, .. } = alias_ty.unwrap_forall() else {
-                return current;
+                return None;
             };
-            seen.push(current);
-            current = next.to_string();
-        }
+            Some(next.to_string())
+        })
     }
 
     pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
