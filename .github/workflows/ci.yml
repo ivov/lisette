@@ -43,6 +43,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
           just: 'true'
@@ -53,6 +54,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
           just: 'true'
@@ -62,6 +64,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
       - run: cargo test -p tests --test suite -- --format terse
 
@@ -69,6 +72,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
           just: 'true'
@@ -78,6 +82,7 @@ jobs:
     name: Stdlib check
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
           just: 'true'
@@ -87,6 +92,7 @@ jobs:
     name: E2E smoke
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
           just: 'true'
@@ -96,6 +102,7 @@ jobs:
     name: E2E suite
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
           just: 'true'
@@ -117,6 +124,7 @@ jobs:
     name: Shear
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
           cache: 'false'
@@ -129,6 +137,7 @@ jobs:
     name: Deny
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: ./.github/actions/setup-rust
         with:
           cache: 'false'

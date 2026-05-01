@@ -1,5 +1,5 @@
 name: Setup Rust
-description: Checkout, install the pinned Rust toolchain, and optionally set up just, Go, and the Rust cache
+description: Install the pinned Rust toolchain, and optionally set up just, Go, and the Rust cache
 
 inputs:
   just:
@@ -22,7 +22,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
     - name: Install Rust toolchain
       shell: bash
       run: rustup show
