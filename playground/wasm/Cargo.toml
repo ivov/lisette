@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 description = "WebAssembly bindings for the Lisette compiler"
 
+[workspace]
+
 [lib]
 crate-type = ["cdylib"]
 

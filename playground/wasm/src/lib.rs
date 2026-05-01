@@ -6,10 +6,12 @@
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
+use std::sync::Arc;
+
 use lisette_semantics::loader::{Files, Loader};
 use lisette_semantics::analyze::{analyze, AnalyzeInput, CompilePhase, SemanticConfig};
-use lisette_semantics::facts::Facts;
-use lisette_syntax::ast::{Expression, Span};
+use lisette_semantics::facts::{BindingIdAllocator, Facts};
+use lisette_syntax::ast::{Expression, Span, StructSpread};
 use lisette_syntax::program::Definition;
 use lisette_syntax::types::Type;
 use rustc_hash::FxHashMap;
@@ -195,7 +197,7 @@ fn run_analysis(code: &str) -> AnalysisResult {
                 ast_result.errors,
                 "_entry_",
             ),
-            facts: Facts::new(),
+            facts: Facts::new(Arc::new(BindingIdAllocator::new())),
             diagnostics,
             has_parse_errors: true,
         };
@@ -217,7 +219,7 @@ fn run_analysis(code: &str) -> AnalysisResult {
         filename: PLAYGROUND_FILE.to_string(),
         ast: ast_result.ast,
         project_root: None,
-        locator: lisette_deps::GoDepResolver::default(),
+        locator: lisette_deps::TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
     };
 
@@ -271,6 +273,7 @@ fn run_pipeline(
         ast: ast_result.ast,
         project_root: None,
         compile_phase: phase.clone(),
+        locator: lisette_deps::TypedefLocator::default(),
     };
 
     let (sem_result, _facts) = analyze(input);
@@ -353,7 +356,10 @@ fn child_containing_offset<'a>(expression: &'a Expression, offset: u32) -> Optio
 
         Expression::StructCall { field_assignments, spread, .. } =>
             field_assignments.iter().find_map(|fa| c(&fa.value))
-                .or_else(|| spread.as_ref().as_ref().and_then(c)),
+                .or_else(|| match spread {
+                    StructSpread::From(e) => c(e),
+                    StructSpread::None | StructSpread::ZeroFill { .. } => None,
+                }),
 
         Expression::DotAccess { expression, .. }
         | Expression::Return { expression, .. }
@@ -628,7 +634,7 @@ fn build_dot_completions(
     // Not a module — try to resolve as a variable/expression type
     // Find the expression before the dot and get its type
     if let Some(expr) = find_expression_at(file_items, offset.saturating_sub(2)) {
-        let ty = expr.get_type().resolve();
+        let ty = expr.get_type();
         if let Some(tid) = type_name(&ty) {
             // Find struct fields
             if let Some(def) = sem_result.definitions.get(tid.as_str()) {
@@ -787,15 +793,14 @@ pub fn hover(code: &str, offset: u32) -> String {
     };
 
     let (ty, span) = get_hover_type_and_span(expression, offset);
-    let ty_resolved = ty.resolve();
 
     // Skip hover for ignored/unit types on non-definition expressions
-    let type_str = format!("{}", ty_resolved);
+    let type_str = format!("{}", ty);
     if type_str == "_" {
         return String::new();
     }
 
-    let markdown = format_hover_markdown(expression, &ty_resolved, code, &span);
+    let markdown = format_hover_markdown(expression, &ty, code, &span);
 
     // Add doc comment if available
     let mut full_markdown = markdown;
@@ -884,8 +889,12 @@ pub fn signature_help(code: &str, offset: u32) -> String {
     };
 
     if let Expression::Call { expression: callee, args, .. } = call_expr {
-        let callee_ty = callee.get_type().resolve();
-        if let Type::Function { params, return_type, .. } = &callee_ty {
+        let callee_ty = callee.get_type();
+        let callee_ty_inner = match &callee_ty {
+            Type::Forall { body, .. } => body.as_ref(),
+            other => other,
+        };
+        if let Type::Function { params, return_type, .. } = callee_ty_inner {
             // Build the signature label
             let callee_name = callee.callee_name().unwrap_or_else(|| "fn".to_string());
             let param_strs: Vec<String> = params.iter().map(|p| format!("{}", p)).collect();

@@ -21,7 +21,7 @@ npm run dev
 
 Open http://localhost:5173.
 
-The pre-built WASM compiler is committed to `public/wasm/`. If you modify the Rust wrapper in `wasm/` you can rebuild it:
+The WASM compiler must be built before `npm run dev` will work — `public/wasm/` is not committed:
 
 ```sh
 npm run build:wasm   # requires Rust + wasm-pack
@@ -29,15 +29,7 @@ npm run build:wasm   # requires Rust + wasm-pack
 
 ### Production build
 
-```sh
-npm run build
-```
-
-For GitHub Pages, set the base path env var before building:
-
-```sh
-VITE_BASE_PATH=/lisette-playground/ npm run build
-```
+From the repo root, the `just rebuild-playground` recipe runs `npm install`, `npm run build:wasm`, and `npm run build`. The output is written to `docs/play/` (configured in `vite.config.ts`), which is committed and served by GitHub Pages at `lisette.run/play`.
 
 ## Project structure
 
@@ -56,12 +48,11 @@ VITE_BASE_PATH=/lisette-playground/ npm run build
 ├── wasm/
 │   ├── Cargo.toml               # wasm-bindgen crate; git deps on lisette-* crates
 │   └── src/lib.rs               # format / check / compile / complete / hover
-├── public/
-│   ├── wasm/                    # Pre-built WASM module (lisette_wasm_bg.wasm + JS glue)
-│   ├── lisette.tmLanguage.json  # Official TextMate grammar (from editors/vscode/syntaxes/)
-│   └── onigasm.wasm             # Oniguruma regex engine for TM grammar
-└── .github/workflows/
-    └── deploy.yml               # GitHub Pages deployment
+└── public/
+    ├── wasm/                    # WASM module — built by `npm run build:wasm`, not committed
+    ├── lisette.tmLanguage.json  # Official TextMate grammar (from editors/vscode/syntaxes/)
+    ├── onig.wasm                # Oniguruma regex engine for TM grammar
+    └── onigasm.wasm
 ```
 
 ## Execution pipeline
@@ -76,16 +67,13 @@ Lisette source
   stdout / stderr
 ```
 
-## Deploying to GitHub Pages
+## Deploying
 
-The workflow in `.github/workflows/deploy.yml` triggers on every push to `main`.
+Deployment is content-based: GitHub Pages serves whatever is in `docs/play/` on `main`. To deploy a new version:
 
-One-time setup in the repository settings:
-
-1. **Settings → Pages → Source** — set to **GitHub Actions**
-2. Merge to `main`
-
-The playground will be live at `https://<owner>.github.io/lisette-playground/`.
+1. Run `just rebuild-playground` from the repo root
+2. Commit the regenerated `docs/play/` tree
+3. Merge to `main`
 
 ## Rebuilding the WASM compiler
 

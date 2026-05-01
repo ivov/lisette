@@ -172,7 +172,7 @@ export async function setupEditors(
     },
     renderLineHighlight: "line",
     bracketPairColorization: { enabled: true },
-    guides: { bracketPairs: true, indentation: true },
+    guides: { bracketPairs: false, indentation: true },
     smoothScrolling: true,
     cursorBlinking: "smooth",
     cursorSmoothCaretAnimation: "on",
