@@ -783,30 +783,18 @@ impl<'a> Formatter<'a> {
         let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(arms.len());
         for arm in arms {
             let start = arm.pattern.get_span().byte_offset;
-            let (last_trailing, leading, has_blank) =
-                self.sibling_lead_split(!entries.is_empty(), start);
-            if let Some(t) = last_trailing
-                && let Some(last) = entries.last_mut()
-            {
-                last.trailing = Some(t);
-            }
-
-            let pattern = self.pattern(&arm.pattern);
-            let expression = self.expression(&arm.expression);
-            let pattern_with_guard = if let Some(guard) = &arm.guard {
-                pattern.append(" if ").append(self.expression(guard))
-            } else {
-                pattern
-            };
-            let arm_doc = pattern_with_guard
-                .append(" => ")
-                .append(expression)
-                .append(",");
-            entries.push(SiblingEntry {
-                leading,
-                doc: arm_doc,
-                trailing: None,
-                has_blank_above: has_blank,
+            self.push_sibling_entry(&mut entries, start, |s| {
+                let pattern = s.pattern(&arm.pattern);
+                let expression = s.expression(&arm.expression);
+                let pattern_with_guard = if let Some(guard) = &arm.guard {
+                    pattern.append(" if ").append(s.expression(guard))
+                } else {
+                    pattern
+                };
+                pattern_with_guard
+                    .append(" => ")
+                    .append(expression)
+                    .append(",")
             });
         }
         entries
@@ -1333,20 +1321,7 @@ impl<'a> Formatter<'a> {
                 .get(i + 1)
                 .map(Self::select_arm_start)
                 .unwrap_or_else(|| span.end());
-            let (last_trailing, leading, has_blank) =
-                self.sibling_lead_split(!entries.is_empty(), start);
-            if let Some(t) = last_trailing
-                && let Some(last) = entries.last_mut()
-            {
-                last.trailing = Some(t);
-            }
-            let arm_doc = self.select_arm_body(arm, upper_bound);
-            entries.push(SiblingEntry {
-                leading,
-                doc: arm_doc,
-                trailing: None,
-                has_blank_above: has_blank,
-            });
+            self.push_sibling_entry(&mut entries, start, |s| s.select_arm_body(arm, upper_bound));
         }
         let body = self.join_sibling_body(entries, span.end());
         Self::braced_body(Document::str("select"), body)
@@ -1694,6 +1669,28 @@ impl<'a> Formatter<'a> {
         });
     }
 
+    fn push_sibling_entry(
+        &mut self,
+        entries: &mut Vec<SiblingEntry<'a>>,
+        start: u32,
+        build: impl FnOnce(&mut Self) -> Document<'a>,
+    ) {
+        let (last_trailing, leading, has_blank) =
+            self.sibling_lead_split(!entries.is_empty(), start);
+        if let Some(t) = last_trailing
+            && let Some(last) = entries.last_mut()
+        {
+            last.trailing = Some(t);
+        }
+        let doc = build(self);
+        entries.push(SiblingEntry {
+            leading,
+            doc,
+            trailing: None,
+            has_blank_above: has_blank,
+        });
+    }
+
     /// Sibling split before a rest token; returns the rest's leading.
     fn split_for_rest(
         &mut self,
@@ -1805,19 +1802,8 @@ impl<'a> Formatter<'a> {
 
         let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(variants.len());
         for variant in variants {
-            let (last_trailing, leading, has_blank) =
-                self.sibling_lead_split(!entries.is_empty(), variant.name_span.byte_offset);
-            if let Some(t) = last_trailing
-                && let Some(last) = entries.last_mut()
-            {
-                last.trailing = Some(t);
-            }
-            let variant_doc = self.enum_variant_body(variant);
-            entries.push(SiblingEntry {
-                leading,
-                doc: variant_doc,
-                trailing: None,
-                has_blank_above: has_blank,
+            self.push_sibling_entry(&mut entries, variant.name_span.byte_offset, |s| {
+                s.enum_variant_body(variant)
             });
         }
         let body = self.join_sibling_body(entries, span.end());
@@ -1846,23 +1832,12 @@ impl<'a> Formatter<'a> {
 
         let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(variants.len());
         for variant in variants {
-            let (last_trailing, leading, has_blank) =
-                self.sibling_lead_split(!entries.is_empty(), variant.name_span.byte_offset);
-            if let Some(t) = last_trailing
-                && let Some(last) = entries.last_mut()
-            {
-                last.trailing = Some(t);
-            }
-            let value_doc = self.literal(&variant.value);
-            let variant_doc = Document::string(variant.name.to_string())
-                .append(" = ")
-                .append(value_doc)
-                .append(",");
-            entries.push(SiblingEntry {
-                leading,
-                doc: variant_doc,
-                trailing: None,
-                has_blank_above: has_blank,
+            self.push_sibling_entry(&mut entries, variant.name_span.byte_offset, |s| {
+                let value_doc = s.literal(&variant.value);
+                Document::string(variant.name.to_string())
+                    .append(" = ")
+                    .append(value_doc)
+                    .append(",")
             });
         }
         let body = self.join_sibling_body(entries, span.end());
@@ -1934,19 +1909,8 @@ impl<'a> Formatter<'a> {
         let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(parents.len() + methods.len());
 
         for parent in parents {
-            let (last_trailing, leading, has_blank) =
-                self.sibling_lead_split(!entries.is_empty(), parent.span.byte_offset);
-            if let Some(t) = last_trailing
-                && let Some(last) = entries.last_mut()
-            {
-                last.trailing = Some(t);
-            }
-            let parent_doc = Document::str("impl ").append(Self::annotation(&parent.annotation));
-            entries.push(SiblingEntry {
-                leading,
-                doc: parent_doc,
-                trailing: None,
-                has_blank_above: has_blank,
+            self.push_sibling_entry(&mut entries, parent.span.byte_offset, |_| {
+                Document::str("impl ").append(Self::annotation(&parent.annotation))
             });
         }
 
@@ -1959,19 +1923,8 @@ impl<'a> Formatter<'a> {
                     .unwrap_or(keyword_start),
                 _ => keyword_start,
             };
-            let (last_trailing, leading, has_blank) =
-                self.sibling_lead_split(!entries.is_empty(), leading_edge);
-            if let Some(t) = last_trailing
-                && let Some(last) = entries.last_mut()
-            {
-                last.trailing = Some(t);
-            }
-            let method_doc = self.interface_method_body(method, keyword_start);
-            entries.push(SiblingEntry {
-                leading,
-                doc: method_doc,
-                trailing: None,
-                has_blank_above: has_blank,
+            self.push_sibling_entry(&mut entries, leading_edge, |s| {
+                s.interface_method_body(method, keyword_start)
             });
         }
 
@@ -2043,19 +1996,7 @@ impl<'a> Formatter<'a> {
         let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(methods.len());
         for method in methods {
             let start = method.get_span().byte_offset;
-            let (last_trailing, leading, has_blank) =
-                self.sibling_lead_split(!entries.is_empty(), start);
-            if let Some(t) = last_trailing
-                && let Some(last) = entries.last_mut()
-            {
-                last.trailing = Some(t);
-            }
-            entries.push(SiblingEntry {
-                leading,
-                doc: self.definition(method),
-                trailing: None,
-                has_blank_above: has_blank,
-            });
+            self.push_sibling_entry(&mut entries, start, |s| s.definition(method));
         }
         // Impl methods always get a blank line between them, regardless of source.
         for entry in entries.iter_mut().skip(1) {
