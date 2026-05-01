@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/literals.rs
-assertion_line: 609
 description: "input: \nfn test(name: string) -> string {\n  f\"hello\n{name}\nworld\"\n}\n"
 ---
 package main

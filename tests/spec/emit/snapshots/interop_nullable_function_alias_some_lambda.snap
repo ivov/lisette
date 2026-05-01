@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-assertion_line: 1077
 description: "input: \nimport \"go:example.com/scheduler\"\n\nfn main() {\n  let n = 42\n  let cmd: Option<scheduler.Cmd> = Some(|| n)\n  let _ = cmd\n}\n"
 ---
 package main

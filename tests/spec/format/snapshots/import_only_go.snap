@@ -1,6 +1,5 @@
 ---
 source: tests/spec/format/mod.rs
-assertion_line: 480
 description: "input: import \"go:strings\"\nimport \"go:fmt\"\nimport \"go:os\""
 ---
 import "go:fmt"

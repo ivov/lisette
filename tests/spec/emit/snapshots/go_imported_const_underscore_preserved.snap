@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/imports.rs
-assertion_line: 358
 description: "input: \nimport \"go:example.com/grpc_health_v1\"\n\nfn main() {\n  let _ = grpc_health_v1.HealthCheckResponse_SERVING\n}\n"
 ---
 package main

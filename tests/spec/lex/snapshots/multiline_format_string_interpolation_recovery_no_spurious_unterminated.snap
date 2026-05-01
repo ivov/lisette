@@ -1,6 +1,5 @@
 ---
 source: tests/spec/lex/mod.rs
-assertion_line: 1000
 description: "input: let s = f\"result: {\n  match n {\n    0 => \"zero\",\n  }\n}\""
 ---
 LexResult {

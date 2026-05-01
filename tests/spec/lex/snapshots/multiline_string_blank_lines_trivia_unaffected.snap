@@ -1,6 +1,5 @@
 ---
 source: tests/spec/lex/mod.rs
-assertion_line: 1006
 description: "input: let a = 1\n\nlet s = \"x\ny\"\n\nlet b = 2"
 ---
 LexResult {

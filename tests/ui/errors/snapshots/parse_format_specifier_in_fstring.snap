@@ -1,6 +1,5 @@
 ---
 source: tests/ui/errors/mod.rs
-assertion_line: 4989
 ---
   [error] Format specifiers not supported
    ╭─[test.lis:4:20]

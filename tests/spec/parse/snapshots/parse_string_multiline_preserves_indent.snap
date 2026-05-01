@@ -1,6 +1,5 @@
 ---
 source: tests/spec/parse/mod.rs
-assertion_line: 3629
 description: "input: fn test() { let s = \"a\n    b\" }"
 ---
 [

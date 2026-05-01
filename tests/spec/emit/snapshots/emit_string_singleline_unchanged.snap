@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/literals.rs
-assertion_line: 615
 description: "input: \nfn test() -> string {\n  let s = \"x\"\n  s\n}\n"
 ---
 package main

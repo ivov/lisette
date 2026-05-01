@@ -1,6 +1,5 @@
 ---
 source: tests/spec/parse/mod.rs
-assertion_line: 3677
 description: "input: fn test() { match s { \"a\nb\" => 1, _ => 0 } }"
 ---
 [

@@ -1,6 +1,5 @@
 ---
 source: tests/spec/lex/mod.rs
-assertion_line: 988
 description: "input: f\"hello\n{name}\nworld\""
 ---
 LexResult {

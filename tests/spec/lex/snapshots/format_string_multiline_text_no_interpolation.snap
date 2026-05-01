@@ -1,6 +1,5 @@
 ---
 source: tests/spec/lex/mod.rs
-assertion_line: 994
 description: "input: f\"a\nb\""
 ---
 LexResult {
