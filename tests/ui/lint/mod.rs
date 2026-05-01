@@ -75,7 +75,7 @@ fn used_variable_no_warning() {
         r#"
 fn main() {
   let x = 5;
-  x
+  let _ = x
 }
 "#
     );
@@ -115,7 +115,7 @@ fn used_mut_no_warning() {
 fn main() {
   let mut x = 5;
   x = 10;
-  x
+  let _ = x
 }
 "#
     );
@@ -149,7 +149,7 @@ fn mutate(r: Ref<int>) {
 fn main() {
   let mut x = 5;
   mutate(&x);
-  x
+  let _ = x
 }
 "#
     );
@@ -176,7 +176,7 @@ impl Counter {
 fn main() {
   let mut c = Counter { value: 0 };
   c.increment();
-  c.get()
+  let _ = c.get()
 }
 "#
     );
@@ -245,7 +245,7 @@ fn written_and_read_no_warning() {
 fn main() {
   let mut x = 0
   x = 42
-  x
+  let _ = x
 }
 "#
     );
@@ -488,7 +488,7 @@ fn self_assignment() {
 fn main() {
   let mut x = 5;
   x = x;
-  x
+  let _ = x
 }
 "#
     );
@@ -501,7 +501,7 @@ fn self_assignment_with_parens() {
 fn main() {
   let mut x = 5;
   x = (x);
-  x
+  let _ = x
 }
 "#
     );
@@ -513,7 +513,7 @@ fn self_comparison_equal() {
         r#"
 fn main() {
   let x = 5;
-  x == x
+  let _ = x == x
 }
 "#
     );
@@ -525,7 +525,7 @@ fn self_comparison_less_than() {
         r#"
 fn main() {
   let x = 5;
-  x < x
+  let _ = x < x
 }
 "#
     );
@@ -537,7 +537,7 @@ fn self_comparison_with_parens() {
         r#"
 fn main() {
   let x = 5;
-  (x) == x
+  let _ = (x) == x
 }
 "#
     );
@@ -549,7 +549,7 @@ fn self_comparison_float_no_warning() {
         r#"
 fn main() {
   let x: float64 = 0.0;
-  x == x
+  let _ = x == x
 }
 "#
     );
@@ -561,7 +561,7 @@ fn double_bool_negation() {
         r#"
 fn main() {
   let x = true;
-  !!x
+  let _ = !!x
 }
 "#
     );
@@ -573,7 +573,7 @@ fn double_int_negation() {
         r#"
 fn main() {
   let x = 5;
-  --x
+  let _ = --x
 }
 "#
     );
@@ -585,7 +585,7 @@ fn double_bool_negation_with_parens() {
         r#"
 fn main() {
   let x = true;
-  !(!x)
+  let _ = !(!x)
 }
 "#
     );
@@ -598,7 +598,7 @@ fn duplicate_logical_operand_and() {
 fn main() {
   let a = 5;
   let b = 10;
-  a > b && a > b
+  let _ = a > b && a > b
 }
 "#
     );
@@ -611,7 +611,7 @@ fn duplicate_logical_operand_or() {
 fn main() {
   let a = 5;
   let b = 10;
-  a == b || a == b
+  let _ = a == b || a == b
 }
 "#
     );
@@ -624,7 +624,7 @@ fn duplicate_logical_operand_with_side_effects_no_warning() {
 fn side_effect() -> bool { true }
 
 fn main() {
-  side_effect() && side_effect()
+  let _ = side_effect() && side_effect()
 }
 "#
     );
@@ -636,7 +636,7 @@ fn bool_literal_comparison_eq_true() {
         r#"
 fn main() {
   let x = true;
-  x == true
+  let _ = x == true
 }
 "#
     );
@@ -648,7 +648,7 @@ fn bool_literal_comparison_eq_false() {
         r#"
 fn main() {
   let x = true;
-  x == false
+  let _ = x == false
 }
 "#
     );
@@ -660,7 +660,7 @@ fn bool_literal_comparison_ne_true() {
         r#"
 fn main() {
   let x = true;
-  x != true
+  let _ = x != true
 }
 "#
     );
@@ -718,7 +718,7 @@ fn helper() -> int {
 }
 
 fn main() {
-  helper()
+  let _ = helper()
 }
 "#
     );
@@ -751,7 +751,7 @@ struct Point {
 
 fn main() {
   let p = Point { x: 1, y: 2 };
-  p.x + p.y
+  let _ = p.x + p.y
 }
 "#
     );
@@ -766,7 +766,7 @@ type Alias = Inner
 
 fn main() {
   let a = Alias { .. }
-  a.x + a.y
+  let _ = a.x + a.y
 }
 "#
     );
@@ -800,7 +800,7 @@ enum Color {
 
 fn main() {
   let c = Color.Red;
-  match c {
+  let _ = match c {
     Color.Red => 1,
     Color.Green => 2,
   }
@@ -829,7 +829,7 @@ fn used_constant_no_warning() {
 const VALUE = 42
 
 fn main() {
-  VALUE
+  let _ = VALUE
 }
 "#
     );
@@ -879,7 +879,7 @@ fn helper2() -> int {
 }
 
 fn main() {
-  helper2()
+  let _ = helper2()
 }
 "#
     );
@@ -899,7 +899,7 @@ fn create_point() -> Point {
 }
 
 fn main() {
-  create_point()
+  let _ = create_point()
 }
 "#
     );
@@ -919,7 +919,7 @@ fn get_x(p: Point) -> int {
 }
 
 fn main() {
-  get_x(Point { x: 1, y: 2 })
+  let _ = get_x(Point { x: 1, y: 2 })
 }
 "#
     );
@@ -1052,7 +1052,7 @@ fn make_data() -> Data {
 
 fn main() {
   let d = make_data();
-  d.used_field
+  let _ = d.used_field
 }
 "#
     );
@@ -1069,7 +1069,7 @@ struct Point {
 
 fn main() {
   let p = Point { x: 1, y: 2 };
-  p.x + p.y
+  let _ = p.x + p.y
 }
 "#
     );
@@ -1119,7 +1119,7 @@ struct Point {
 
 fn main() {
   let p = Point { x: 1, y: 2 };
-  match p {
+  let _ = match p {
     Point { x, y } => x + y,
   }
 }
@@ -1137,7 +1137,7 @@ struct Container {
 
 fn main() {
   let c = Container { value: 42 };
-  match c.value {
+  let _ = match c.value {
     _ => 0,
   }
 }
@@ -1155,7 +1155,7 @@ struct Container {
 
 fn main() {
   let c = Container { value: Some(42) };
-  match c.value {
+  let _ = match c.value {
     Some(n) => n,
     None => 0,
   }
@@ -1175,7 +1175,7 @@ struct Data {
 
 fn main() {
   let d = Data { used: 1, _unused: 2 };
-  d.used
+  let _ = d.used
 }
 "#
     );
@@ -1194,7 +1194,7 @@ struct Config {
 fn main() {
   let base = Config { debug: true, verbose: true, port: 8080 };
   let dev = Config { debug: true, ..base };
-  if dev.debug { dev.port } else { 0 }
+  let _ = if dev.debug { dev.port } else { 0 }
 }
 "#
     );
@@ -1216,7 +1216,7 @@ fn read(p: MyPoint) -> int {
 }
 
 fn main() {
-  read(Point { x: 1, y: 2 })
+  let _ = read(Point { x: 1, y: 2 })
 }
 "#
     );
@@ -1232,7 +1232,7 @@ enum Color {
 }
 
 fn main() {
-  Color.Red
+  let _ = Color.Red
 }
 "#
     );
@@ -1249,7 +1249,7 @@ enum Color {
 
 fn main() {
   let c = Color.Red;
-  match c {
+  let _ = match c {
     Color.Red => 1,
     Color.Green => 2,
   }
@@ -1286,7 +1286,7 @@ enum Status {
 
 fn main() {
   let s = Status.Active(42);
-  match s {
+  let _ = match s {
     Status.Active(x) => x,
     Status.Inactive => 0,
   }
@@ -1307,7 +1307,7 @@ enum Color {
 
 fn main() {
   let c = Color.Blue;
-  match c {
+  let _ = match c {
     Red => 1,
     Green => 2,
     Blue => 3,
@@ -1377,7 +1377,7 @@ fn match_on_tuple_of_variables_no_warning() {
 fn main() {
   let a = Some(1);
   let b = Some(2);
-  match (a, b) {
+  let _ = match (a, b) {
     (Some(x), Some(y)) => x + y,
     _ => 0,
   }
@@ -1787,7 +1787,7 @@ pub struct Data {
 
 fn main() {
   let ch = Channel.new<Data>();
-  select {
+  let _ = select {
     let Some(d) = ch.receive() => d.value,
     _ => 0,
   }
@@ -1809,7 +1809,7 @@ pub type Location = Point
 
 fn main() {
   let loc: Location = Point { x: 1, y: 2 };
-  loc.x
+  let _ = loc.x
 }
 "#
     );
@@ -1843,7 +1843,7 @@ fn sum(nums: Ints) -> int {
 }
 
 fn main() {
-  sum([1, 2, 3])
+  let _ = sum([1, 2, 3])
 }
 "#
     );
@@ -1857,7 +1857,7 @@ type Ints = Slice<int>
 
 fn main() {
   let nums: Ints = [1, 2, 3];
-  nums[0]
+  let _ = nums[0]
 }
 "#
     );
@@ -1880,7 +1880,7 @@ fn unwrap_nested(o: Outer) -> int {
 
 fn main() {
   let x: Outer = Some(Some(42));
-  unwrap_nested(x)
+  let _ = unwrap_nested(x)
 }
 "#
     );
@@ -1914,7 +1914,7 @@ type Limit = int
 const MAX: Limit = 100
 
 fn main() {
-  MAX + 1
+  let _ = MAX + 1
 }
 "#
     );
@@ -1928,7 +1928,7 @@ type Score = float64
 
 fn main() {
   let x = 42 as Score
-  x + 1.0
+  let _ = x + 1.0
 }
 "#
     );
@@ -1952,7 +1952,7 @@ impl Vec2 {
 
 fn main() {
   let v1 = Vec2.new(3, 4);
-  v1.length_squared()
+  let _ = v1.length_squared()
 }
 "#
     );
@@ -1965,7 +1965,7 @@ fn format_string_uses_variable() {
 fn main() {
   let name = "world";
   let msg = f"Hello, {name}!";
-  msg
+  let _ = msg
 }
 "#
     );
@@ -1977,7 +1977,7 @@ fn uninterpolated_fstring() {
         r#"
 fn main() {
   let msg = f"hello world";
-  msg
+  let _ = msg
 }
 "#
     );
@@ -2003,7 +2003,7 @@ fn fstring_with_text_and_interpolation_no_warning() {
 fn main() {
   let name = "world";
   let msg = f"hello {name}";
-  msg
+  let _ = msg
 }
 "#
     );
@@ -2016,7 +2016,7 @@ fn fstring_with_non_string_expression_no_warning() {
 fn main() {
   let num = 42;
   let msg = f"{num}";
-  msg
+  let _ = msg
 }
 "#
     );
@@ -2031,7 +2031,7 @@ fn two() -> int { 2 }
 
 fn main() {
   let xs = [one(), two(), 3];
-  xs[0]
+  let _ = xs[0]
 }
 "#
     );
@@ -2069,7 +2069,7 @@ pub struct Second { b: string }
 fn main() {
   let pair = (First { a: 1 }, Second { b: "x" });
   let (first, _second) = pair;
-  first.a + 1
+  let _ = first.a + 1
 }
 "#
     );
@@ -2083,7 +2083,7 @@ fn compute() -> int { 42 }
 
 fn main() {
   let result = (compute()) + 1;
-  result
+  let _ = result
 }
 "#
     );
@@ -2098,7 +2098,7 @@ pub struct Data { value: int }
 fn main() {
   let d = Data { value: 42 };
   let ptr = &d;
-  ptr.value
+  let _ = ptr.value
 }
 "#
     );
@@ -2110,7 +2110,7 @@ fn division_by_non_zero_no_warning() {
         r#"
 pub fn test() {
   let x = 10 / 2;
-  x
+  let _ = x
 }
 "#
     );
@@ -2320,7 +2320,7 @@ fn rest_only_slice_pattern_bind() {
         r#"
 pub fn test(slice: Slice<int>) {
   let [..rest] = slice;
-  rest
+  let _ = rest
 }
 "#
     );
@@ -3110,7 +3110,7 @@ impl Dog {
 
 fn main() {
   let d = Dog { name: "Rex" }
-  print_desc(d)
+  let _ = print_desc(d)
 }
 "#
     );
@@ -3423,7 +3423,7 @@ fn unnecessary_raw_string() {
         r#"
 fn main() {
   let msg = r"hello";
-  msg
+  let _ = msg
 }
 "#
     );
@@ -3435,7 +3435,7 @@ fn unnecessary_raw_string_empty() {
         r#"
 fn main() {
   let msg = r"";
-  msg
+  let _ = msg
 }
 "#
     );

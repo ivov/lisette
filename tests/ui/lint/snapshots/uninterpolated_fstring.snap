@@ -7,6 +7,6 @@ source: tests/ui/lint/mod.rs
  3 │   let msg = f"hello world";
    ·             ───────┬──────
    ·                    ╰── zero interpolations
- 4 │   msg
+ 4 │   let _ = msg
    ╰────
   help: Remove the `f` prefix. A string without interpolations does not need to be a format string · code: [lint.uninterpolated_fstring]

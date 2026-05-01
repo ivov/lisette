@@ -7,6 +7,6 @@ source: tests/ui/lint/mod.rs
  4 │   x = x;
    ·   ──┬──
    ·     ╰── assigning to itself
- 5 │   x
+ 5 │   let _ = x
    ╰────
   help: Correct this assignment · code: [lint.self_assignment]

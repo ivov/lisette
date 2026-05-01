@@ -2,11 +2,11 @@
 source: tests/ui/lint/mod.rs
 ---
   [warning] Double numeric negation
-   ╭─[test.lis:4:3]
+   ╭─[test.lis:4:11]
  3 │   let x = 5;
- 4 │   --x
-   ·   ─┬
-   ·    ╰── accidental double negation
+ 4 │   let _ = --x
+   ·           ─┬
+   ·            ╰── accidental double negation
  5 │ }
    ╰────
   help: Remove one of the negation operators · code: [lint.double_int_negation]

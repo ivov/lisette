@@ -7,6 +7,6 @@ source: tests/ui/lint/mod.rs
  3 │   let msg = r"hello";
    ·             ────┬───
    ·                 ╰── no backslashes
- 4 │   msg
+ 4 │   let _ = msg
    ╰────
   help: Remove the `r` prefix. A string without backslashes does not need to be raw · code: [lint.unnecessary_raw_string]
