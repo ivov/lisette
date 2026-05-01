@@ -110,11 +110,12 @@ impl<'a> Formatter<'a> {
                 }
                 body = body.append(doc);
             }
-            if let Some(t) = trailing {
-                body = body
-                    .append(Document::Newline)
-                    .append(Document::Newline)
-                    .append(t);
+            if let Some((t, has_blank)) = trailing {
+                body = body.append(Document::Newline);
+                if has_blank {
+                    body = body.append(Document::Newline);
+                }
+                body = body.append(t);
             }
             return Self::braced_body(header, body);
         }
@@ -139,7 +140,7 @@ impl<'a> Formatter<'a> {
         &mut self,
         fields: &'a [StructFieldDefinition],
         struct_end: u32,
-    ) -> (Vec<SiblingEntry<'a>>, Option<Document<'a>>, bool) {
+    ) -> (Vec<SiblingEntry<'a>>, Option<(Document<'a>, bool)>, bool) {
         let mut entries: Vec<SiblingEntry<'a>> = Vec::new();
         let mut with_comments = false;
         let mut prev_anchor: Option<u32> = None;
@@ -203,7 +204,7 @@ impl<'a> Formatter<'a> {
             prev_anchor = Some(ann_span.byte_offset + ann_span.byte_length);
         }
 
-        let (last_trailing, struct_trailing, _) = match prev_anchor {
+        let (last_trailing, struct_trailing, trailing_has_blank) = match prev_anchor {
             Some(anchor) => self
                 .comments
                 .take_split_by_newline_after(anchor, struct_end),
@@ -217,6 +218,7 @@ impl<'a> Formatter<'a> {
         }
         with_comments = with_comments || struct_trailing.is_some();
 
+        let struct_trailing = struct_trailing.map(|t| (t, trailing_has_blank));
         (entries, struct_trailing, with_comments)
     }
 

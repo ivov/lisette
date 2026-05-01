@@ -1650,6 +1650,16 @@ fn comment_blank_line_below_leading_in_struct() {
 }
 
 #[test]
+fn comment_trailing_inside_struct_no_blank() {
+    assert_format_snapshot!("struct S {\n  a: int,\n  // trailing\n}");
+}
+
+#[test]
+fn comment_trailing_inside_struct_with_blank() {
+    assert_format_snapshot!("struct S {\n  a: int,\n\n  // trailing\n}");
+}
+
+#[test]
 fn comment_trailing_inside_nested_match_in_select() {
     assert_format_snapshot!(
         "fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v,\n      None => 0,\n      // trailing nested block\n    },\n    _ => 1,\n  }\n}"
