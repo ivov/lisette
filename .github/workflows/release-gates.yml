@@ -2,7 +2,9 @@ name: Release gates
 
 on:
   push:
-    branches: ['release-plz-*']
+    branches:
+      - 'release-plz-*'
+      - '!release-plz-*-tmp-*'
 
 concurrency:
   group: release-gates-${{ github.ref }}
