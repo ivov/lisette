@@ -2,7 +2,6 @@ package emit
 
 import (
 	"fmt"
-	"io"
 	"slices"
 	"strings"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
-func writeSkippedFieldComment(w io.Writer, indent string, f convert.StructField) {
+func writeSkippedFieldComment(w *strings.Builder, indent string, f convert.StructField) {
 	fmt.Fprintf(w, "%s// SKIPPED field %q: %s — %s\n", indent, f.Name, f.SkipReason.Code, f.SkipReason.Message)
 }
 

@@ -51,9 +51,9 @@ type Receiver struct {
 }
 
 type StructField struct {
-	Name string
-	Type string
-	Doc  string
+	Name       string
+	Type       string
+	Doc        string
 	SkipReason *SkipReason
 }
 

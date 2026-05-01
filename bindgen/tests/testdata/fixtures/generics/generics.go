@@ -10,6 +10,9 @@ type Greeter interface {
 	Greet() string
 }
 
+// Type alias to a method-only interface — exercises *types.Alias path.
+type Salutation = Greeter
+
 // Bound by an external method-only interface (fmt.Stringer).
 func Shout[T fmt.Stringer](x T) string {
 	return "!" + x.String() + "!"
@@ -23,6 +26,9 @@ func GreetAll[T Greeter](xs []T) string {
 	}
 	return out
 }
+
+// Bound by an alias of a method-only interface.
+func SalutationsAll[T Salutation](xs []T) {}
 
 // Basic generic types
 

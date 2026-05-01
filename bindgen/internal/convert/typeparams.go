@@ -63,7 +63,7 @@ func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, o
 	if named, isNamed := constraint.(*types.Named); isNamed {
 		obj := named.Obj()
 		if obj.Pkg() != nil && obj.Pkg().Path() == "cmp" && obj.Name() == "Ordered" {
-			return qualifyNamedBound(named, conv)
+			return qualifyTypeNameBound(obj, conv)
 		}
 	}
 
@@ -78,22 +78,24 @@ func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, o
 		return "Comparable", true
 	}
 
-	// Single named method-only interface (e.g. `T fmt.Stringer`). Excludes
-	// inline interface literals (which are *types.Interface, not *types.Named)
-	// and type-set unions (which embed a *types.Union — NumEmbeddeds > 0).
-	if named, isNamed := constraint.(*types.Named); isNamed &&
-		iface.NumMethods() > 0 && iface.NumEmbeddeds() == 0 {
-		return qualifyNamedBound(named, conv)
+	// Excludes inline interface literals (bare *types.Interface, never Named
+	// or Alias) and type-set unions (NumEmbeddeds > 0 from embedded *types.Union).
+	if iface.NumMethods() > 0 && iface.NumEmbeddeds() == 0 {
+		switch t := constraint.(type) {
+		case *types.Named:
+			return qualifyTypeNameBound(t.Obj(), conv)
+		case *types.Alias:
+			return qualifyTypeNameBound(t.Obj(), conv)
+		}
 	}
 
 	return "", false
 }
 
-// Renders a Named bound, qualifying with the package alias when external and
-// tracking the external package on conv. Bounds in the current package render
-// unqualified to avoid a self-import.
-func qualifyNamedBound(named *types.Named, conv *Converter) (string, bool) {
-	obj := named.Obj()
+// Renders a Named or Alias bound by its TypeName, qualifying with the package
+// alias when external and tracking the external package on conv. Bounds in the
+// current package render unqualified to avoid a self-import.
+func qualifyTypeNameBound(obj *types.TypeName, conv *Converter) (string, bool) {
 	pkg := obj.Pkg()
 	if pkg == nil || isInternalPackagePath(pkg.Path()) {
 		return "", false
