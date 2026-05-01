@@ -312,32 +312,23 @@ impl Emitter<'_> {
         arg: &Expression,
         effective_param_ty: Option<&Type>,
     ) -> Option<String> {
-        let param_fn_ty = effective_param_ty.and_then(|param_ty| {
-            let unwrapped = param_ty.unwrap_forall();
-            let fn_ty = match unwrapped {
-                Type::Function { .. } => unwrapped.clone(),
-                Type::Nominal {
-                    underlying_ty: Some(inner),
-                    ..
-                } => inner.unwrap_forall().clone(),
-                _ => return None,
-            };
-            if let Type::Function { return_type, .. } = &fn_ty
-                && (return_type.is_result()
+        let param_fn_ty = effective_param_ty
+            .and_then(|param_ty| self.resolve_to_function_type(param_ty.unwrap_forall()))
+            .filter(|fn_ty| {
+                let Type::Function { return_type, .. } = fn_ty else {
+                    return false;
+                };
+                return_type.is_result()
                     || return_type.is_option()
-                    || return_type.tuple_arity().is_some_and(|a| a >= 2))
-            {
-                return Some(fn_ty);
-            }
-            None
-        })?;
+                    || return_type.tuple_arity().is_some_and(|a| a >= 2)
+            })?;
 
-        // Identity wrapper when both ends already lower.
         let arg_ty = arg.get_type();
-        if let Type::Function {
+        let arg_fn_ty = self.resolve_to_function_type(arg_ty.unwrap_forall());
+        if let Some(Type::Function {
             return_type: arg_ret,
             ..
-        } = arg_ty.unwrap_forall()
+        }) = arg_fn_ty.as_ref()
             && let Type::Function {
                 return_type: param_ret,
                 ..

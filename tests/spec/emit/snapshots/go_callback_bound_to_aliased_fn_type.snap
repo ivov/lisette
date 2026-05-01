@@ -1,0 +1,18 @@
+---
+source: tests/spec/emit/functions.rs
+assertion_line: 1373
+description: "input: \nimport \"go:path/filepath\"\nimport \"go:io/fs\"\n\nfn main() {\n  let walker: filepath.WalkFunc = |_path: string, _info: fs.FileInfo, _err: error| -> Result<(), error> {\n    Ok(())\n  }\n  let _ = filepath.Walk(\"/tmp\", walker)\n}\n"
+---
+package main
+
+import (
+	"io/fs"
+	"path/filepath"
+)
+
+func main() {
+	var walker filepath.WalkFunc = func(_ string, _ fs.FileInfo, _ error) error {
+		return nil
+	}
+	filepath.Walk("/tmp", walker)
+}
