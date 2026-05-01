@@ -1,6 +1,6 @@
 /target
 .DS_Store
-tests/e2e/target/
+tests/e2e_smoke_project/target/
 bindgen/bin/*
 !bindgen/bin/.gitkeep
 bindgen/tests/coverage*

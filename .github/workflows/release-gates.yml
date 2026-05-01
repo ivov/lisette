@@ -1,72 +1,35 @@
-name: Release PR gates
+name: Release gates
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: ['release-plz-*']
 
 concurrency:
-  group: release-gates-${{ github.head_ref }}
+  group: release-gates-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  emit-runtime-gate:
-    name: Emit runtime suite
-    if: ${{ startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
-
-      - name: Install Rust toolchain
-        run: rustup show
-
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
-        with:
-          go-version: "1.25"
-          cache: false
-
-      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # ratchet:extractions/setup-just@v3
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
-
-      - name: Run emit runtime suite
-        run: just test-emit-runtime
-
   windows-build-gate:
     name: Windows build
-    if: ${{ startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
-
-      - name: Install Rust toolchain
-        run: rustup show
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
-
-      - name: Build lisette
-        run: cargo build -p lisette
+      - uses: ./.github/actions/setup-rust
+      - run: cargo build -p lisette
 
   packaging-gate:
     name: Packaging dry-run
-    if: ${{ startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
-
-      - name: Install Rust toolchain
-        run: rustup show
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
-
-      - name: Cargo publish dry-run
-        run: cargo publish --workspace --dry-run
+      - uses: ./.github/actions/setup-rust
+      - run: cargo publish --workspace --dry-run
 
   changelog-tripwire:
     name: Changelog completeness
-    if: ${{ startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6

@@ -1,0 +1,36 @@
+name: Setup Rust
+description: Install the pinned Rust toolchain, and optionally set up just, Go, and the Rust cache
+
+inputs:
+  just:
+    description: Install the just task runner
+    required: false
+    default: 'false'
+  go:
+    description: Install Go.
+    required: false
+    default: 'false'
+  go-version:
+    description: Go version to install when go=true
+    required: false
+    default: '1.25'
+  cache:
+    description: Restore the Swatinem/rust-cache
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust toolchain
+      shell: bash
+      run: rustup show
+    - if: inputs.just == 'true'
+      uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # ratchet:extractions/setup-just@v3
+    - if: inputs.go == 'true'
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache: false
+    - if: inputs.cache == 'true'
+      uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2

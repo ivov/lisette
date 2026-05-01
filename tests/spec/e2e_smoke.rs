@@ -1,16 +1,16 @@
 use std::process::Command;
 
 #[test]
-fn e2e_suite() {
+fn e2e_smoke() {
     if Command::new("go").arg("version").output().is_err() {
-        eprintln!("skipping e2e: `go` not found");
+        eprintln!("skipping e2e_smoke: `go` not found");
         return;
     }
 
     let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap();
-    let e2e_dir = repo.join("tests/e2e");
+    let e2e_dir = repo.join("tests/e2e_smoke_project");
     let target_dir = e2e_dir.join("target");
 
     if target_dir.exists() {
@@ -58,6 +58,6 @@ fn e2e_suite() {
         snapshot_suffix => "",
         prepend_module_to_snapshot => false,
     }, {
-        insta::assert_snapshot!("e2e", stdout);
+        insta::assert_snapshot!("e2e_smoke", stdout);
     });
 }

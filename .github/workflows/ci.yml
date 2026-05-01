@@ -18,8 +18,7 @@ env:
 
 jobs:
   pr-title:
-    name: Conventional commit PR title
-    if: ${{ !startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
+    name: PR title
     runs-on: ubuntu-latest
     steps:
       - name: Check PR title
@@ -40,56 +39,112 @@ jobs:
             exit 1
           fi
 
-  check:
-    name: Check
-    if: ${{ !startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
+  format:
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          just: 'true'
+          cache: 'false'
+      - run: just format-check
 
-      - name: Install Rust toolchain
-        run: rustup show
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          just: 'true'
+      - run: just lint
 
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          go: 'true'
+      - run: cargo test -p tests --test suite -- --format terse
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          just: 'true'
+      - run: just build
+
+  stdlib-check:
+    name: Stdlib check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          just: 'true'
+      - run: just check-stdlib-typedefs
+
+  e2e-smoke:
+    name: E2E smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          just: 'true'
+          go: 'true'
+      - run: just test-e2e-smoke
+
+  e2e-suite:
+    name: E2E suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          just: 'true'
+          go: 'true'
+      - run: just test-e2e-suite
+
+  prelude-go:
+    name: Prelude tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
         with:
           go-version: "1.25"
           cache: false
+      - run: cd prelude && go test ./...
 
-      - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # ratchet:extractions/setup-just@v3
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
-
-      - name: Check formatting
-        run: just format-check
-
-      - name: Lint
-        run: just lint
-
-      - name: Test
-        run: cargo test -p tests --test suite -- --format terse
-
-      - name: Build
-        run: just build
-
-      - name: Check stdlib
-        run: just check-stdlib-typedefs
-
-      - name: E2E tests
-        run: just test-e2e
-
-      - name: Test prelude Go module
-        run: cd prelude && go test ./...
-
+  shear:
+    name: Shear
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: 'false'
       - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
         with:
           tool: cargo-shear@1.6.0
+      - run: cargo shear
 
-      - name: Check unused dependencies
-        run: cargo shear
-
+  deny:
+    name: Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: 'false'
       - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
         with:
           tool: cargo-deny@0.19.0
-
-      - name: Check dependency advisories, licenses, and sources
-        run: cargo deny check
+      - run: cargo deny check
