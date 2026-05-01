@@ -2419,3 +2419,266 @@ fn is_inlinable_arg(expression: &Expression, arity: usize) -> bool {
             }
     ) || matches!(expression, Expression::Call { .. } if arity == 1)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::comments::Comments;
+    use syntax::lex::Trivia;
+
+    fn entry<'a>(
+        leading: Option<&'a str>,
+        doc: &'a str,
+        trailing: Option<&'a str>,
+    ) -> PatternEntry<'a> {
+        PatternEntry {
+            leading: leading.map(Document::str),
+            doc: Document::str(doc),
+            trailing: trailing.map(Document::str),
+        }
+    }
+
+    fn render_inline<'a>(body: Document<'a>, close_sep: Document<'a>) -> String {
+        Document::str("(")
+            .append(strict_break("", ""))
+            .append(body)
+            .nest(2)
+            .append(close_sep)
+            .append(")")
+            .group()
+            .to_pretty_string(80)
+    }
+
+    fn render_inline_broken<'a>(body: Document<'a>, close_sep: Document<'a>) -> String {
+        Document::str("(")
+            .append(strict_break("", ""))
+            .append(body)
+            .nest(2)
+            .append(close_sep)
+            .append(")")
+            .group()
+            .force_break()
+            .to_pretty_string(80)
+    }
+
+    fn trivia(comments: Vec<(u32, u32)>, blank_lines: Vec<u32>) -> Trivia {
+        Trivia {
+            comments,
+            doc_comments: Vec::new(),
+            blank_lines,
+        }
+    }
+
+    fn render_opt(doc: Option<Document<'_>>) -> Option<String> {
+        doc.map(|d| d.to_pretty_string(80))
+    }
+
+    fn render_doc(doc: Document<'_>) -> String {
+        doc.to_pretty_string(80)
+    }
+
+    #[test]
+    fn join_pattern_entries_single_entry_unbroken() {
+        let entries = vec![entry(None, "a", None)];
+        let (body, close_sep) = Formatter::join_pattern_entries(entries, None, "");
+        assert_eq!(render_inline(body, close_sep), "(a)");
+    }
+
+    #[test]
+    fn join_pattern_entries_two_entries_unbroken() {
+        let entries = vec![entry(None, "a", None), entry(None, "b", None)];
+        let (body, close_sep) = Formatter::join_pattern_entries(entries, None, "");
+        assert_eq!(render_inline(body, close_sep), "(a, b)");
+    }
+
+    #[test]
+    fn join_pattern_entries_trailing_forces_no_double_comma() {
+        let entries = vec![entry(None, "a", Some("// c1")), entry(None, "b", None)];
+        let (body, close_sep) = Formatter::join_pattern_entries(entries, None, "");
+        let out = render_inline(body, close_sep);
+        assert!(out.contains("a, // c1"), "got: {out}");
+        assert!(!out.contains(",,"), "got: {out}");
+    }
+
+    #[test]
+    fn join_pattern_entries_last_trailing_close_sep_omits_comma() {
+        let entries = vec![entry(None, "a", Some("// c"))];
+        let (body, close_sep) = Formatter::join_pattern_entries(entries, None, "");
+        let out = render_inline(body, close_sep);
+        assert!(out.contains("a, // c"), "got: {out}");
+        assert!(!out.contains(",)"), "got: {out}");
+    }
+
+    #[test]
+    fn join_pattern_entries_leading_forces_break() {
+        let entries = vec![
+            entry(Some("// before a"), "a", None),
+            entry(None, "b", None),
+        ];
+        let (body, close_sep) = Formatter::join_pattern_entries(entries, None, "");
+        let out = render_inline(body, close_sep);
+        assert!(out.contains("// before a\n  a"), "got: {out}");
+    }
+
+    #[test]
+    fn join_pattern_entries_rest_only() {
+        let (body, close_sep) =
+            Formatter::join_pattern_entries(Vec::new(), Some((None, Document::str("..rest"))), "");
+        assert_eq!(render_inline(body, close_sep), "(..rest)");
+    }
+
+    #[test]
+    fn join_pattern_entries_entries_then_rest_unbroken() {
+        let entries = vec![entry(None, "a", None), entry(None, "b", None)];
+        let (body, close_sep) =
+            Formatter::join_pattern_entries(entries, Some((None, Document::str("..rest"))), "");
+        assert_eq!(render_inline(body, close_sep), "(a, b, ..rest)");
+    }
+
+    #[test]
+    fn join_pattern_entries_rest_with_leading_renders_above_dots() {
+        let entries = vec![entry(None, "a", None)];
+        let (body, close_sep) = Formatter::join_pattern_entries(
+            entries,
+            Some((Some(Document::str("// before rest")), Document::str(".."))),
+            "",
+        );
+        let out = render_inline_broken(body, close_sep);
+        assert!(out.contains("// before rest\n  .."), "got: {out}");
+    }
+
+    #[test]
+    fn join_pattern_entries_trailing_unbroken_for_struct_brace() {
+        let entries = vec![entry(None, "a", None)];
+        let (body, close_sep) = Formatter::join_pattern_entries(entries, None, " ");
+        let out = Document::str("{")
+            .append(strict_break(" ", " "))
+            .append(body)
+            .nest(2)
+            .append(close_sep)
+            .append("}")
+            .group()
+            .to_pretty_string(80);
+        assert_eq!(out, "{ a }");
+    }
+
+    #[test]
+    fn sibling_lead_split_no_prev_returns_all_as_leading() {
+        let source = "// c\nfn f() {}";
+        let t = trivia(vec![(0, 4)], Vec::new());
+        let comments = Comments::from_trivia(&t, source);
+        let mut f = Formatter::new(comments);
+        let (same, leading, has_blank) = f.sibling_lead_split(false, source.len() as u32);
+        assert_eq!(render_opt(same), None);
+        assert_eq!(render_opt(leading).as_deref(), Some("// c"));
+        assert!(!has_blank);
+    }
+
+    #[test]
+    fn sibling_lead_split_with_prev_routes_at_line_start() {
+        let source = "x // a\n  // b\n";
+        let t = trivia(vec![(2, 6), (9, 13)], Vec::new());
+        let comments = Comments::from_trivia(&t, source);
+        let mut f = Formatter::new(comments);
+        let (same, leading, _) = f.sibling_lead_split(true, source.len() as u32);
+        assert_eq!(render_opt(same).as_deref(), Some("// a"));
+        assert_eq!(render_opt(leading).as_deref(), Some("// b"));
+    }
+
+    #[test]
+    fn push_pattern_entry_attaches_trailing_to_previous() {
+        let source = "x // tail\n  y";
+        let t = trivia(vec![(2, 9)], Vec::new());
+        let comments = Comments::from_trivia(&t, source);
+        let mut f = Formatter::new(comments);
+        let mut entries: Vec<PatternEntry<'_>> = Vec::new();
+        f.push_pattern_entry(&mut entries, 0, |_| Document::str("a"));
+        f.push_pattern_entry(&mut entries, source.len() as u32, |_| Document::str("b"));
+        assert_eq!(entries.len(), 2);
+        assert_eq!(
+            render_opt(entries[0].trailing.clone()).as_deref(),
+            Some("// tail")
+        );
+        assert!(entries[1].leading.is_none());
+    }
+
+    #[test]
+    fn push_pattern_entry_split_runs_before_build() {
+        let source = "// pre\nx";
+        let t = trivia(vec![(0, 6)], Vec::new());
+        let comments = Comments::from_trivia(&t, source);
+        let mut f = Formatter::new(comments);
+        let mut entries: Vec<PatternEntry<'_>> = Vec::new();
+        let mut build_called = false;
+        f.push_pattern_entry(&mut entries, source.len() as u32, |_| {
+            build_called = true;
+            Document::str("x")
+        });
+        assert!(build_called);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            render_opt(entries[0].leading.clone()).as_deref(),
+            Some("// pre")
+        );
+    }
+
+    #[test]
+    fn split_for_rest_attaches_trailing_and_returns_leading() {
+        let source = "x // tail\n// pre\n..rest";
+        let t = trivia(vec![(2, 9), (10, 16)], Vec::new());
+        let comments = Comments::from_trivia(&t, source);
+        let mut f = Formatter::new(comments);
+        let mut entries: Vec<PatternEntry<'_>> = vec![entry(None, "a", None)];
+        let leading = f.split_for_rest(&mut entries, 17);
+        assert_eq!(
+            render_opt(entries[0].trailing.clone()).as_deref(),
+            Some("// tail")
+        );
+        assert_eq!(render_opt(leading).as_deref(), Some("// pre"));
+    }
+
+    #[test]
+    fn join_sibling_body_attaches_same_line_to_last_entry() {
+        let source = "x // tail\n}";
+        let t = trivia(vec![(2, 9)], Vec::new());
+        let comments = Comments::from_trivia(&t, source);
+        let mut f = Formatter::new(comments);
+        let entries = vec![SiblingEntry {
+            leading: None,
+            doc: Document::str("a"),
+            trailing: None,
+            has_blank_above: false,
+        }];
+        let body = f.join_sibling_body(entries, 10);
+        let out = render_doc(body);
+        assert!(out.contains("a // tail"), "got: {out}");
+    }
+
+    #[test]
+    fn join_sibling_body_standalone_renders_as_separated_block() {
+        let source = "x\n  // tail\n}";
+        let t = trivia(vec![(4, 11)], Vec::new());
+        let comments = Comments::from_trivia(&t, source);
+        let mut f = Formatter::new(comments);
+        let entries = vec![SiblingEntry {
+            leading: None,
+            doc: Document::str("a"),
+            trailing: None,
+            has_blank_above: false,
+        }];
+        let body = f.join_sibling_body(entries, 12);
+        let out = render_doc(body);
+        assert!(out.contains("a\n\n// tail"), "got: {out}");
+    }
+
+    #[test]
+    fn join_sibling_body_empty_entries_drains_as_standalone() {
+        let source = "// only\n";
+        let t = trivia(vec![(0, 7)], Vec::new());
+        let comments = Comments::from_trivia(&t, source);
+        let mut f = Formatter::new(comments);
+        let body = f.join_sibling_body(Vec::new(), source.len() as u32);
+        let out = render_doc(body);
+        assert!(out.contains("// only"), "got: {out}");
+    }
+}
