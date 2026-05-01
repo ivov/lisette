@@ -360,3 +360,135 @@ pub fn prepend_comments<'a>(doc: Document<'a>, comments: Option<Document<'a>>) -
         None => doc,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn trivia(comments: Vec<(u32, u32)>, blank_lines: Vec<u32>) -> Trivia {
+        Trivia {
+            comments,
+            doc_comments: Vec::new(),
+            blank_lines,
+        }
+    }
+
+    fn render(doc: Option<Document<'_>>) -> Option<String> {
+        doc.map(|d| d.to_pretty_string(80))
+    }
+
+    #[test]
+    fn take_split_at_line_start_no_comments_returns_none() {
+        let source = "fn f() {}";
+        let t = trivia(Vec::new(), Vec::new());
+        let mut c = Comments::from_trivia(&t, source);
+        let (same, new, has_blank) = c.take_split_at_line_start(100);
+        assert_eq!(render(same), None);
+        assert_eq!(render(new), None);
+        assert!(!has_blank);
+    }
+
+    #[test]
+    fn take_split_at_line_start_routes_same_line_vs_standalone() {
+        // "x // a\n  // b\n y"
+        //  012345 67890123 456
+        let source = "x // a\n  // b\n y";
+        let comment_a = (2, 6); // "// a"
+        let comment_b = (9, 13); // "// b"
+        let t = trivia(vec![comment_a, comment_b], Vec::new());
+        let mut c = Comments::from_trivia(&t, source);
+        let (same, new, has_blank) = c.take_split_at_line_start(source.len() as u32);
+        assert_eq!(render(same).as_deref(), Some("// a"));
+        assert_eq!(render(new).as_deref(), Some("// b"));
+        assert!(!has_blank);
+    }
+
+    #[test]
+    fn take_split_at_line_start_blank_before_new_line_sets_has_blank_above() {
+        // "x // a\n\n  // b\n"
+        let source = "x // a\n\n  // b\n";
+        let comment_a = (2, 6);
+        let comment_b = (10, 14);
+        // Blank line is at position 7 (the empty line between).
+        let t = trivia(vec![comment_a, comment_b], vec![7]);
+        let mut c = Comments::from_trivia(&t, source);
+        let (same, new, has_blank) = c.take_split_at_line_start(source.len() as u32);
+        assert_eq!(render(same).as_deref(), Some("// a"));
+        assert_eq!(render(new).as_deref(), Some("// b"));
+        assert!(has_blank);
+    }
+
+    #[test]
+    fn take_split_at_line_start_blank_between_new_line_entries_preserves_separator() {
+        // "  // a\n\n  // b\n"
+        let source = "  // a\n\n  // b\n";
+        let comment_a = (2, 6);
+        let comment_b = (10, 14);
+        let t = trivia(vec![comment_a, comment_b], vec![7]);
+        let mut c = Comments::from_trivia(&t, source);
+        let (same, new, has_blank) = c.take_split_at_line_start(source.len() as u32);
+        // Both comments are at line start; both end up in new_line.
+        assert_eq!(render(same), None);
+        let new_str = render(new).expect("new_line should have content");
+        assert!(new_str.contains("// a"));
+        assert!(new_str.contains("// b"));
+        // Blank between them is preserved as a separator inside new_line.
+        assert!(new_str.contains("\n\n"));
+        // No blank precedes the first new_line entry.
+        assert!(!has_blank);
+    }
+
+    #[test]
+    fn take_split_at_line_start_all_same_line() {
+        // "a // 1 // 2"
+        let source = "a // 1 // 2";
+        let c1 = (2, 6); // "// 1"
+        let c2 = (7, 11); // "// 2"
+        let t = trivia(vec![c1, c2], Vec::new());
+        let mut c = Comments::from_trivia(&t, source);
+        let (same, new, has_blank) = c.take_split_at_line_start(source.len() as u32);
+        let same_str = render(same).expect("same_line should have content");
+        assert!(same_str.contains("// 1"));
+        assert!(same_str.contains("// 2"));
+        assert_eq!(render(new), None);
+        assert!(!has_blank);
+    }
+
+    #[test]
+    fn take_split_at_line_start_advances_cursor() {
+        // Two calls should not double-emit.
+        let source = "x // a\n  // b\n";
+        let t = trivia(vec![(2, 6), (9, 13)], Vec::new());
+        let mut c = Comments::from_trivia(&t, source);
+        let (same1, new1, _) = c.take_split_at_line_start(7);
+        assert_eq!(render(same1).as_deref(), Some("// a"));
+        assert_eq!(render(new1), None);
+        let (same2, new2, _) = c.take_split_at_line_start(source.len() as u32);
+        assert_eq!(render(same2), None);
+        assert_eq!(render(new2).as_deref(), Some("// b"));
+    }
+
+    #[test]
+    fn take_split_at_line_start_respects_before_bound() {
+        // Comment past `before` is left for a later call.
+        let source = "// a\n// b\n";
+        let t = trivia(vec![(0, 4), (5, 9)], Vec::new());
+        let mut c = Comments::from_trivia(&t, source);
+        let (_, new, _) = c.take_split_at_line_start(5);
+        assert_eq!(render(new).as_deref(), Some("// a"));
+        // Second call picks up the second comment.
+        let (_, new2, _) = c.take_split_at_line_start(source.len() as u32);
+        assert_eq!(render(new2).as_deref(), Some("// b"));
+    }
+
+    #[test]
+    fn take_split_by_newline_after_classifier_uses_anchor() {
+        // anchor=2 (after "x"), comment_a at 2..6 on same line, comment_b at 9..13 on next line.
+        let source = "x // a\n  // b\n";
+        let t = trivia(vec![(2, 6), (9, 13)], Vec::new());
+        let mut c = Comments::from_trivia(&t, source);
+        let (same, new, _) = c.take_split_by_newline_after(2, source.len() as u32);
+        assert_eq!(render(same).as_deref(), Some("// a"));
+        assert_eq!(render(new).as_deref(), Some("// b"));
+    }
+}
