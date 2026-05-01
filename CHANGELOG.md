@@ -1,6 +1,21 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.1.24](https://github.com/ivov/lisette/compare/lisette-v0.1.23...lisette-v0.1.24) - 2026-05-01
+
+- refactor: clean up diagnostics taxonomy [#260](https://github.com/ivov/lisette/pull/260) [`608b213`](https://github.com/ivov/lisette/commit/608b2136b2ad799405c86fb3267b13b85b56f2f7)
+- ci: skip release gates on release-plz tmp branches [#259](https://github.com/ivov/lisette/pull/259) [`23678d4`](https://github.com/ivov/lisette/commit/23678d47a306c957c225fba745f3b513485cf8c5)
+- test: refresh snapshots [#258](https://github.com/ivov/lisette/pull/258) [`57060a4`](https://github.com/ivov/lisette/commit/57060a413d59994c0a58e32a32d1dc1fa2df1fcb)
+- fix: recognize alias of interface constraints in bindgen [#256](https://github.com/ivov/lisette/pull/256) [`4b897b2`](https://github.com/ivov/lisette/commit/4b897b2965d9e73001708108130d3429c3b36f33)
+- fix: skip generated Go files when pruning orphans [#255](https://github.com/ivov/lisette/pull/255) [`fee93e5`](https://github.com/ivov/lisette/commit/fee93e53c7f20a75c2a6113699715cac9d92403e)
+- fix: report tail-position return-value mismatches [#254](https://github.com/ivov/lisette/pull/254) [`47ada42`](https://github.com/ivov/lisette/commit/47ada42712c709f30d1021184c541e486afbdf99)
+- test: make discarded value tails explicit in lint fixtures [#253](https://github.com/ivov/lisette/pull/253) [`d6cec38`](https://github.com/ivov/lisette/commit/d6cec38ca318c23778ee5e055debf504bd847127)
+- fix: preserve substitution through generic alias peeling [#250](https://github.com/ivov/lisette/pull/250) [`3ad1ed2`](https://github.com/ivov/lisette/commit/3ad1ed23cb02d8459e58416aca162dbf422fd5ca)
+- fix: preserve comment placement in formatter [#247](https://github.com/ivov/lisette/pull/247) [`d2b4ca2`](https://github.com/ivov/lisette/commit/d2b4ca2ee109ac71a2f07fb467594236d07ced44)
+- chore: rebuild playground against ab8933d [#249](https://github.com/ivov/lisette/pull/249) [`c28b2a2`](https://github.com/ivov/lisette/commit/c28b2a24e7781c142d19a7225fd698f8c90e7ee2)
+- ci: parallelize checks and reorganize e2e tests [#248](https://github.com/ivov/lisette/pull/248) [`ab8933d`](https://github.com/ivov/lisette/commit/ab8933d6431c391bda59dcfeb4539130eaa73180)
+- ci: skip regen step when release-plz returns no PR [#246](https://github.com/ivov/lisette/pull/246) [`a11466e`](https://github.com/ivov/lisette/commit/a11466ebe80507608852c5cd225e79a97dc7655f)
+- ci: fix release-publish iteration on workspace crates [#245](https://github.com/ivov/lisette/pull/245) [`3a3ab02`](https://github.com/ivov/lisette/commit/3a3ab0215942b344a7bfc4882c74db74dd4f8d1a)
 ## [0.1.23](https://github.com/ivov/lisette/compare/lisette-v0.1.22...lisette-v0.1.23) - 2026-04-30
 
 - fix: lsp completion for built-in prelude types [#240](https://github.com/ivov/lisette/pull/240) [`abe54cb`](https://github.com/ivov/lisette/commit/abe54cbd76151c65776cb86bb5e6601a7114cf0c)
