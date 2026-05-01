@@ -17,10 +17,20 @@ impl<'source> Parser<'source> {
 
         while self.is_not(RightCurlyBrace) {
             let start_position = self.stream.position;
-            if let Some(arm) = self.parse_match_arm() {
+            let arm = self.parse_match_arm();
+            let block_bodied = arm.as_ref().is_some_and(|a| a.expression.is_block());
+            if let Some(arm) = arm {
                 arms.push(arm);
             }
-            self.expect_comma_or(RightCurlyBrace);
+
+            if block_bodied && !self.at_match_arm_terminator() {
+                let span = self.span_from_token(self.previous_token);
+                self.error_match_arm_missing_comma(span);
+                self.recover_to_comma_or(RightCurlyBrace);
+            } else {
+                self.expect_comma_or(RightCurlyBrace);
+            }
+
             self.ensure_progress(start_position, RightCurlyBrace);
         }
 

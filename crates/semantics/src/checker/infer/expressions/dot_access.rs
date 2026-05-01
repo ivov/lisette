@@ -174,7 +174,7 @@ impl TaskState<'_> {
         self.scopes.set_dot_access_base(prior_dot_access_base);
         let resolved_expression_ty = expression_ty.resolve_in(&self.env);
 
-        if resolved_expression_ty.is_error() {
+        if resolved_expression_ty.is_error() || resolved_expression_ty.is_variable() {
             self.unify(store, expected_ty, &Type::Error, &span);
             return Expression::DotAccess {
                 expression: new_expression.into(),

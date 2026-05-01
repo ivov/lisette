@@ -858,6 +858,10 @@ impl Expression {
         matches!(self, Expression::NoOp)
     }
 
+    pub fn is_block(&self) -> bool {
+        matches!(self, Expression::Block { .. })
+    }
+
     pub fn is_range(&self) -> bool {
         matches!(self, Expression::Range { .. })
     }

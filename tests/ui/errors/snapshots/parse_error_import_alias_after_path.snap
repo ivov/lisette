@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:2:17]
+ 1 │ 
+ 2 │ import "go:fmt" as f
+   ·                 ──┬─
+   ·                   ╰── import alias goes before the path
+   ╰────
+  help: Use Go-style alias syntax: `import f "go:fmt"` · code: [parse.import_alias_position]

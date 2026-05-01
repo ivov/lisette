@@ -2294,6 +2294,14 @@ import foo.bar;
 }
 
 #[test]
+fn parse_error_import_alias_after_path() {
+    let input = r#"
+import "go:fmt" as f
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_error_recovery_unclosed_type_args() {
     let input = r#"
 fn test() {

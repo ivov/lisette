@@ -944,16 +944,30 @@ impl<'source> Parser<'source> {
         self.next();
 
         let raw = name_token.text;
-        let name: EcoString = if raw.len() >= 2 && raw.starts_with('"') && raw.ends_with('"') {
-            raw[1..raw.len() - 1].into()
+        let unquoted: &str = if raw.len() >= 2 && raw.starts_with('"') && raw.ends_with('"') {
+            &raw[1..raw.len() - 1]
         } else {
             debug_assert!(
                 false,
                 "lexer produced String token without quotes: {:?}",
                 raw
             );
-            raw.into()
+            raw
         };
+
+        if alias.is_none() && self.is(As) && self.stream.peek_ahead(1).kind == Identifier {
+            let as_token = self.current_token();
+            let alias_identifier = self.stream.peek_ahead(1);
+            self.next();
+            self.next();
+            self.error_import_alias_after_path(
+                self.span_from_tokens(as_token),
+                alias_identifier.text,
+                unquoted,
+            );
+        }
+
+        let name: EcoString = unquoted.into();
         let name_span = Span::new(self.file_id, name_token.byte_offset, name_token.byte_length);
 
         Expression::ModuleImport {

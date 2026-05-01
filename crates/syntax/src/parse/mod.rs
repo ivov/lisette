@@ -292,10 +292,11 @@ impl<'source> Parser<'source> {
             "Add a comma between elements.",
         );
 
-        loop {
-            if self.at_eof() || self.is(Comma) || self.is(closing) || self.at_item_boundary() {
-                break;
-            }
+        self.recover_to_comma_or(closing);
+    }
+
+    pub(super) fn recover_to_comma_or(&mut self, closing: TokenKind) {
+        while !self.at_eof() && !self.is(Comma) && !self.is(closing) && !self.at_item_boundary() {
             self.next();
         }
 
@@ -540,6 +541,10 @@ impl<'source> Parser<'source> {
         )
     }
 
+    fn at_match_arm_terminator(&self) -> bool {
+        self.at_eof() || self.is(Comma) || self.is(RightCurlyBrace) || self.at_item_boundary()
+    }
+
     fn resync_on_error(&mut self) {
         if !self.at_eof() {
             self.next();
@@ -572,6 +577,30 @@ impl<'source> Parser<'source> {
         let error = ParseError::new("Syntax error", span, label.into())
             .with_parse_code("syntax_error")
             .with_help(help.into());
+
+        self.errors.push(error);
+    }
+
+    fn error_import_alias_after_path(&mut self, span: ast::Span, alias: &str, path: &str) {
+        if self.too_many_errors() {
+            return;
+        }
+        let error = ParseError::new("Syntax error", span, "import alias goes before the path")
+            .with_parse_code("import_alias_position")
+            .with_help(format!(
+                "Use Go-style alias syntax: `import {alias} \"{path}\"`"
+            ));
+
+        self.errors.push(error);
+    }
+
+    fn error_match_arm_missing_comma(&mut self, span: ast::Span) {
+        if self.too_many_errors() {
+            return;
+        }
+        let error = ParseError::new("Syntax error", span, "missing comma after match arm")
+            .with_parse_code("match_arm_missing_comma")
+            .with_help("Match arms must be separated by commas, even when the body is a block.");
 
         self.errors.push(error);
     }

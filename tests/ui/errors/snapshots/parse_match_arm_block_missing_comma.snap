@@ -2,11 +2,11 @@
 source: tests/ui/errors/mod.rs
 ---
   [error] Syntax error
-   ╭─[test.lis:6:6]
+   ╭─[test.lis:6:5]
  5 │       let _ = 10
  6 │     }
-   ·      ▲
-   ·      ╰── expected `,` or `}`
+   ·     ┬
+   ·     ╰── missing comma after match arm
  7 │     2 => {
    ╰────
-  help: Add a comma between elements · code: [parse.syntax_error]
+  help: Match arms must be separated by commas, even when the body is a block · code: [parse.match_arm_missing_comma]
