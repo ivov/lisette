@@ -149,6 +149,10 @@ pub enum MismatchedTailKind {
 
 impl MismatchedTailKind {
     pub fn lint_code(&self) -> &'static str {
+        "mismatched_return_value"
+    }
+
+    pub fn allow_alias(&self) -> &'static str {
         match self {
             Self::Result => "unused_result",
             Self::Option => "unused_option",

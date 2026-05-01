@@ -272,7 +272,8 @@ fn check_discarded_tail(
     };
 
     let allowed_lints = callee_allowed_lints(unwrapped, module_id, store);
-    if allowed_lints.iter().any(|s| s == kind.lint_code()) {
+    let alias = kind.allow_alias();
+    if allowed_lints.iter().any(|s| s == alias) {
         return;
     }
 
