@@ -7,7 +7,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func mark(log chan int, tag int) int {
-	lisette.ChannelSend(log, tag)
+	_ = lisette.ChannelSend(log, tag)
 	return tag
 }
 

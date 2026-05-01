@@ -2,11 +2,11 @@
 source: tests/ui/lint/mod.rs
 ---
   [error] Mismatch between return type and return value
-   ╭─[test.lis:4:13]
+   ╭─[test.lis:4:11]
  3 │ fn main() {
- 4 │   take(|| { 42 })
-   ·        ┬    ─┬
-   ·        │     ╰── returns `int`
+ 4 │   take(|| 42)
+   ·        ┬  ─┬
+   ·        │   ╰── returns `int`
    ·        ╰── has `()` as implicit return type
  5 │ }
    ╰────

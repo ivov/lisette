@@ -10,5 +10,5 @@ func test() {
 	ch := make(chan int)
 	tmp_1 := lisette.ChannelSplit(ch)
 	tx := tmp_1.First
-	lisette.SenderSend(tx, 42)
+	_ = lisette.SenderSend(tx, 42)
 }

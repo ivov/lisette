@@ -14,7 +14,7 @@ func main() {
 	fmt.Println(x)
 	x_1 := 200
 	ch := make(chan int, 1)
-	lisette.ChannelSend(ch, 99)
+	_ = lisette.ChannelSend(ch, 99)
 	ch_2 := ch
 	for {
 		select {

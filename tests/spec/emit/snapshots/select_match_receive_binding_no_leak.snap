@@ -15,7 +15,7 @@ func main() {
 	x_1 := 2
 	ch := make(chan int)
 	go func() {
-		lisette.ChannelSend(ch, 1)
+		_ = lisette.ChannelSend(ch, 1)
 	}()
 	select {
 	case recv_2, ok := <-ch:

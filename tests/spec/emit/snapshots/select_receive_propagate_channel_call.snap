@@ -12,7 +12,7 @@ func g() lisette.Result[chan int, string] {
 
 func f() lisette.Result[int, string] {
 	ch := make(chan int, 1)
-	lisette.ChannelSend(ch, 7)
+	_ = lisette.ChannelSend(ch, 7)
 	var x int
 	check_1 := g()
 	if check_1.Tag != lisette.ResultOk {

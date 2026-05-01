@@ -28,5 +28,5 @@ func greet_ref[T Greetable](item T) string {
 
 func test() {
 	p := Person{name: "Alice"}
-	greet_ref(&p)
+	_ = greet_ref(&p)
 }

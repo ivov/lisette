@@ -1569,3 +1569,13 @@ fn run() -> Result<int, error> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn discarded_tail_call_to_go_builtin_uses_underscore() {
+    let input = r#"
+fn test() {
+  "test".length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

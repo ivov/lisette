@@ -13,8 +13,8 @@ func choose(_ int, ch chan int) chan int {
 func main() {
 	ch1 := make(chan int, 1)
 	ch2 := make(chan int, 1)
-	lisette.ChannelSend(ch1, 10)
-	lisette.ChannelSend(ch2, 20)
+	_ = lisette.ChannelSend(ch1, 10)
+	_ = lisette.ChannelSend(ch2, 20)
 	var tmp_1 int
 	ch_2 := choose(1, ch1)
 	ch_3 := choose(2, ch2)

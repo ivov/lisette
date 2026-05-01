@@ -8,7 +8,7 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
 	ch := make(chan int, 1)
-	lisette.ChannelSend(ch, 42)
+	_ = lisette.ChannelSend(ch, 42)
 	r := &ch
 	var tmp_1 int
 	ch_2 := *r
