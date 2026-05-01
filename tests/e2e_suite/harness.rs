@@ -8,7 +8,7 @@ use syntax::program::File;
 use crate::_harness::pipeline::TestPipeline;
 
 const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
-const GO_MODULE: &str = "lisette/emit_runtime_tests";
+const GO_MODULE: &str = "lisette/e2e_suite_tests";
 
 pub struct EmittedTest {
     pub go_code: String,
@@ -32,8 +32,8 @@ impl EntryPoint {
     }
 }
 
-pub fn compile_emit_runtime_test(input: &str, package_name: &str) -> Result<EmittedTest, String> {
-    let pipeline = TestPipeline::new(input).wrapped().emit_runtime_mode();
+pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<EmittedTest, String> {
+    let pipeline = TestPipeline::new(input).wrapped().e2e_suite_mode();
     let compiled = pipeline.compile();
     let result = compiled.run_inference();
 
@@ -290,11 +290,11 @@ pub fn prelude_dir() -> PathBuf {
 }
 
 pub fn target_dir() -> PathBuf {
-    repo_root().join("target/emit_runtime")
+    repo_root().join("target/e2e_suite")
 }
 
 pub fn read_skip_list() -> std::collections::HashSet<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("emit_runtime_skip.txt");
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("e2e_suite/skip.txt");
     let Ok(content) = fs::read_to_string(&path) else {
         return std::collections::HashSet::new();
     };

@@ -23,7 +23,7 @@ pub struct TestPipeline {
     source: String,
     raw_source: String,
     wrapped: bool,
-    emit_runtime_mode: bool,
+    e2e_suite_mode: bool,
     extra_go_typedefs: Vec<(String, String)>,
 }
 
@@ -33,7 +33,7 @@ impl TestPipeline {
             source: source.to_string(),
             raw_source: source.to_string(),
             wrapped: false,
-            emit_runtime_mode: false,
+            e2e_suite_mode: false,
             extra_go_typedefs: Vec::new(),
         }
     }
@@ -45,10 +45,9 @@ impl TestPipeline {
     }
 
     /// Keep the `__test__` wrapper in the typed AST so it is emitted as a callable Go fn.
-    /// Used only by the emit-runtime test suite (see `tests/emit_runtime.rs`).
     #[allow(dead_code)]
-    pub fn emit_runtime_mode(mut self) -> Self {
-        self.emit_runtime_mode = true;
+    pub fn e2e_suite_mode(mut self) -> Self {
+        self.e2e_suite_mode = true;
         self
     }
 
@@ -77,7 +76,7 @@ impl TestPipeline {
         CompiledTest {
             ast: desugar_result.ast,
             wrapped: self.wrapped,
-            emit_runtime_mode: self.emit_runtime_mode,
+            e2e_suite_mode: self.e2e_suite_mode,
             extra_go_typedefs: self.extra_go_typedefs,
         }
     }
@@ -86,7 +85,7 @@ impl TestPipeline {
 pub struct CompiledTest {
     ast: Vec<Expression>,
     wrapped: bool,
-    emit_runtime_mode: bool,
+    e2e_suite_mode: bool,
     extra_go_typedefs: Vec<(String, String)>,
 }
 
@@ -213,7 +212,7 @@ impl CompiledTest {
                 );
             }
 
-            if self.wrapped && !self.emit_runtime_mode {
+            if self.wrapped && !self.e2e_suite_mode {
                 let has_hoisted = typed_ast.len() > 1
                     && typed_ast.iter().any(|expr| {
                         matches!(expr, Expression::Function { name, .. } if name == TEST_WRAPPER_NAME)

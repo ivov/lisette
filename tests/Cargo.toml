@@ -36,5 +36,5 @@ name = "lsp"
 path = "lsp.rs"
 
 [[test]]
-name = "emit_runtime"
-path = "emit_runtime.rs"
+name = "e2e_suite"
+path = "e2e_suite.rs"

@@ -1,5 +1,5 @@
 ---
-source: tests/spec/e2e.rs
+source: tests/spec/e2e_smoke.rs
 expression: stdout
 ---
 // pattern matching - tuples
