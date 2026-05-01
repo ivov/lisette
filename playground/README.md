@@ -50,7 +50,7 @@ From the repo root, the `just rebuild-playground` recipe runs `npm install`, `np
 │   └── src/lib.rs               # format / check / compile / complete / hover
 └── public/
     ├── wasm/                    # WASM module — built by `npm run build:wasm`, not committed
-    ├── lisette.tmLanguage.json  # Official TextMate grammar (from editors/vscode/syntaxes/)
+    ├── lisette.tmLanguage.json  # symlink → ../../editors/vscode/syntaxes/lisette.tmLanguage.json
     ├── onig.wasm                # Oniguruma regex engine for TM grammar
     └── onigasm.wasm
 ```
