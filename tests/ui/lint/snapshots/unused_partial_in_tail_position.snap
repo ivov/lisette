@@ -1,12 +1,15 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] `Partial` is silently discarded
+  [error] Mismatch between return type and return value
    ╭─[test.lis:7:3]
+ 5 │ 
  6 │ fn main() {
+   ·           ┬
+   ·           ╰── has `()` as implicit return type
  7 │   get_partial()
    ·   ──────┬──────
-   ·         ╰── partial result will go unnoticed
+   ·         ╰── returns `Partial<int, string>`
  8 │ }
    ╰────
-  help: Handle this `Partial` with `match`, explicitly discard it with `let _ = ...`, or return it by adding `-> Partial<int, string>` to the function signature · code: [lint.unused_partial]
+  help: If the `()` return type is intended, discard the return value with `let _ = ...`. If the `Partial<int, string>` return value is intended, add `-> Partial<int, string>` to the function signature · code: [lint.mismatched_return_value]

@@ -12,7 +12,7 @@ import (
 func test() {
 	ok := "everything is fine"
 	ch := make(chan int, 1)
-	lisette.ChannelSend(ch, 42)
+	_ = lisette.ChannelSend(ch, 42)
 	select {
 	case val, ok_1 := <-ch:
 		if ok_1 {

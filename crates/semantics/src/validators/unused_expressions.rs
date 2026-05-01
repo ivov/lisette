@@ -1,9 +1,15 @@
 use diagnostics::UnusedExpressionKind;
-use syntax::ast::{Expression, Span, UnaryOperator};
+use syntax::ast::{Annotation, Expression, SelectArmPattern, Span, UnaryOperator};
 use syntax::types::{Symbol, Type};
 
-use crate::facts::{DiscardedTailKind, Facts};
+use crate::facts::Facts;
 use crate::store::Store;
+use diagnostics::lint::MismatchedTailKind;
+
+struct TailContext<'a> {
+    expected_span: Span,
+    expected_ty: &'a Type,
+}
 
 pub(super) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, facts: &mut Facts) {
     for item in typed_ast {
@@ -13,12 +19,7 @@ pub(super) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, fact
 
 fn visit_expression(
     expression: &Expression,
-    // `Some(ty)` when `expression` is a block whose last-item result is
-    // passed through as the block's value and subsequently discarded —
-    // e.g. a function body whose return type is ignored/unit/never, or a
-    // block in statement position. `None` means the block's result is
-    // consumed as a value, so the tail is not a discarded-tail candidate.
-    discarded_block_ty: Option<&syntax::types::Type>,
+    tail_ctx: Option<&TailContext<'_>>,
     module_id: &str,
     store: &Store,
     facts: &mut Facts,
@@ -28,33 +29,62 @@ fn visit_expression(
         | Expression::TryBlock { items, ty, .. }
         | Expression::RecoverBlock { items, ty, .. } => {
             let tail_is_discarded =
-                discarded_block_ty.is_some() || ty.is_unit() || ty.is_ignored() || ty.is_never();
-            visit_block_items(items, tail_is_discarded, module_id, store, facts);
+                tail_ctx.is_some() || ty.is_unit() || ty.is_ignored() || ty.is_never();
+            visit_block_items(items, tail_is_discarded, tail_ctx, module_id, store, facts);
         }
         Expression::Function {
-            body, return_type, ..
+            body,
+            return_type,
+            return_annotation,
+            ..
         } => {
+            let is_implicit_return = matches!(return_annotation, Annotation::Unknown);
             let body_ty = body.get_type();
-            let tail_is_discarded =
-                return_type.is_unit() || body_ty.is_ignored() || body_ty.is_never();
-            let discard = if tail_is_discarded {
-                Some(return_type)
-            } else {
-                None
-            };
-            visit_expression(body, discard, module_id, store, facts);
+            let tail_is_discarded = is_implicit_return
+                && (return_type.is_unit() || body_ty.is_ignored() || body_ty.is_never());
+            let ctx = tail_is_discarded.then(|| TailContext {
+                expected_span: signature_marker_span(body.get_span()),
+                expected_ty: return_type,
+            });
+            visit_expression(body, ctx.as_ref(), module_id, store, facts);
             return;
         }
-        Expression::Lambda { body, .. } => {
+        Expression::Lambda {
+            body,
+            ty,
+            span,
+            return_annotation,
+            ..
+        } => {
+            let is_implicit_return = matches!(return_annotation, Annotation::Unknown);
+            let lambda_returns_unit =
+                matches!(ty, Type::Function { return_type, .. } if return_type.is_unit());
             let body_ty = body.get_type();
-            let tail_is_discarded = body_ty.is_unit() || body_ty.is_ignored() || body_ty.is_never();
-            let discard_anchor = body.get_type();
-            let discard = if tail_is_discarded {
-                Some(&discard_anchor)
-            } else {
-                None
+            let tail_is_discarded = is_implicit_return
+                && (lambda_returns_unit
+                    || body_ty.is_unit()
+                    || body_ty.is_ignored()
+                    || body_ty.is_never());
+            let lambda_return_ty: &Type = match ty {
+                Type::Function { return_type, .. } => return_type,
+                _ => &body_ty,
             };
-            visit_expression(body, discard, module_id, store, facts);
+            let ctx = tail_is_discarded.then(|| TailContext {
+                expected_span: signature_marker_span(*span),
+                expected_ty: lambda_return_ty,
+            });
+
+            if tail_is_discarded && !matches!(body.as_ref(), Expression::Block { .. }) {
+                descend_discarded(
+                    body,
+                    &DiscardMode::Tail(ctx.as_ref()),
+                    module_id,
+                    store,
+                    facts,
+                );
+            }
+
+            visit_expression(body, ctx.as_ref(), module_id, store, facts);
             return;
         }
         _ => {}
@@ -65,9 +95,17 @@ fn visit_expression(
     }
 }
 
+/// 1-byte span at the start of `span`. Anchors the "expected" label when
+/// there is no explicit return-type annotation. Lands on the body's `{` for
+/// functions and the leading `|` for lambdas.
+fn signature_marker_span(span: Span) -> Span {
+    Span::new(span.file_id, span.byte_offset, 1)
+}
+
 fn visit_block_items(
     items: &[Expression],
     tail_is_discarded: bool,
+    tail_ctx: Option<&TailContext<'_>>,
     module_id: &str,
     store: &Store,
     facts: &mut Facts,
@@ -76,45 +114,181 @@ fn visit_block_items(
     for (i, item) in items.iter().enumerate() {
         let is_last = i == len - 1;
         let is_statement_only = is_statement_only(item);
-        let suppress_unused_check = item.is_control_flow();
 
-        if !is_statement_only && !suppress_unused_check && !is_last {
-            let item_span = item.get_span();
-            let is_literal = is_literal_or_negated_literal(item);
-            let ty = item.get_type();
-
-            let mut allowed_lints = callee_allowed_lints(item, module_id, store);
-            if is_channel_send(item) {
-                allowed_lints.push("unused_value".to_string());
-            }
-
-            emit_unused_expression(item_span, &ty, is_literal, &allowed_lints, facts);
+        if !is_statement_only && !is_last {
+            descend_discarded(item, &DiscardMode::NonTail, module_id, store, facts);
         }
 
-        if is_last
-            && !is_statement_only
-            && !suppress_unused_check
-            && tail_is_discarded
-            && let Some(call_return) = get_call_return_type(item)
-        {
-            let classification = if call_return.is_result() {
-                Some(("unused_result", DiscardedTailKind::Result))
-            } else if call_return.is_option() {
-                Some(("unused_option", DiscardedTailKind::Option))
-            } else if call_return.is_partial() {
-                Some(("unused_partial", DiscardedTailKind::Partial))
-            } else {
-                None
-            };
+        if is_last && !is_statement_only && tail_is_discarded {
+            descend_discarded(item, &DiscardMode::Tail(tail_ctx), module_id, store, facts);
+        }
+    }
+}
 
-            if let Some((lint_name, kind)) = classification {
-                let allowed_lints = callee_allowed_lints(item, module_id, store);
-                if !allowed_lints.contains(&lint_name.to_string()) {
-                    facts.add_discarded_tail(item.get_span(), kind, call_return.to_string());
+/// Whether the descent is checking a tail-position discard (function/lambda
+/// return value type-mismatch, hard error) or a non-tail discard (statement-
+/// position unused expression, warning). Same structural walk; different
+/// fact emitted at value leaves.
+enum DiscardMode<'a> {
+    Tail(Option<&'a TailContext<'a>>),
+    NonTail,
+}
+
+fn descend_discarded(
+    expression: &Expression,
+    mode: &DiscardMode<'_>,
+    module_id: &str,
+    store: &Store,
+    facts: &mut Facts,
+) {
+    match expression.unwrap_parens() {
+        Expression::Block { items, .. }
+        | Expression::TryBlock { items, .. }
+        | Expression::RecoverBlock { items, .. } => {
+            if let Some(last) = items.last()
+                && !is_statement_only(last)
+            {
+                descend_discarded(last, mode, module_id, store, facts);
+            }
+        }
+        Expression::If {
+            consequence,
+            alternative,
+            ..
+        } => {
+            descend_discarded(consequence, mode, module_id, store, facts);
+            descend_discarded(alternative, mode, module_id, store, facts);
+        }
+        Expression::Match { arms, .. } => {
+            for arm in arms {
+                descend_discarded(&arm.expression, mode, module_id, store, facts);
+            }
+        }
+        Expression::Select { arms, .. } => {
+            for arm in arms {
+                match &arm.pattern {
+                    SelectArmPattern::Receive { body, .. }
+                    | SelectArmPattern::Send { body, .. }
+                    | SelectArmPattern::WildCard { body } => {
+                        descend_discarded(body, mode, module_id, store, facts);
+                    }
+                    SelectArmPattern::MatchReceive {
+                        arms: match_arms, ..
+                    } => {
+                        for match_arm in match_arms {
+                            descend_discarded(&match_arm.expression, mode, module_id, store, facts);
+                        }
+                    }
                 }
             }
         }
+        Expression::Loop { body, .. } => {
+            descend_loop_break_values(body, mode, module_id, store, facts);
+        }
+        Expression::Let { .. }
+        | Expression::Const { .. }
+        | Expression::Assignment { .. }
+        | Expression::Return { .. }
+        | Expression::Break { .. }
+        | Expression::Continue { .. }
+        | Expression::Defer { .. }
+        | Expression::Task { .. }
+        | Expression::While { .. }
+        | Expression::WhileLet { .. }
+        | Expression::For { .. } => {}
+        unwrapped => match mode {
+            DiscardMode::Tail(tail_ctx) => {
+                check_discarded_tail(expression, *tail_ctx, module_id, store, facts)
+            }
+            DiscardMode::NonTail => emit_unused_at_leaf(unwrapped, module_id, store, facts),
+        },
     }
+}
+
+fn descend_loop_break_values(
+    expression: &Expression,
+    mode: &DiscardMode<'_>,
+    module_id: &str,
+    store: &Store,
+    facts: &mut Facts,
+) {
+    match expression {
+        Expression::Break {
+            value: Some(value), ..
+        } => {
+            descend_discarded(value, mode, module_id, store, facts);
+        }
+        Expression::Loop { .. }
+        | Expression::While { .. }
+        | Expression::WhileLet { .. }
+        | Expression::For { .. }
+        | Expression::Function { .. }
+        | Expression::Lambda { .. }
+        | Expression::Task { .. }
+        | Expression::Defer { .. } => {}
+        _ => {
+            for child in expression.children() {
+                descend_loop_break_values(child, mode, module_id, store, facts);
+            }
+        }
+    }
+}
+
+fn emit_unused_at_leaf(leaf: &Expression, module_id: &str, store: &Store, facts: &mut Facts) {
+    let span = leaf.get_span();
+    let is_literal = is_literal_or_negated_literal(leaf);
+    let ty = leaf.get_type();
+    let mut allowed_lints = callee_allowed_lints(leaf, module_id, store);
+    if is_channel_send(leaf) {
+        allowed_lints.push("unused_value".to_string());
+    }
+    emit_unused_expression(span, &ty, is_literal, &allowed_lints, facts);
+}
+
+fn check_discarded_tail(
+    item: &Expression,
+    tail_ctx: Option<&TailContext<'_>>,
+    module_id: &str,
+    store: &Store,
+    facts: &mut Facts,
+) {
+    let unwrapped = item.unwrap_parens();
+    let reported_ty = get_call_return_type(unwrapped).unwrap_or_else(|| unwrapped.get_type());
+
+    let kind = if reported_ty.is_result() {
+        MismatchedTailKind::Result
+    } else if reported_ty.is_option() {
+        MismatchedTailKind::Option
+    } else if reported_ty.is_partial() {
+        MismatchedTailKind::Partial
+    } else if reported_ty.is_unit()
+        || reported_ty.is_ignored()
+        || reported_ty.is_never()
+        || reported_ty.is_variable()
+    {
+        return;
+    } else {
+        MismatchedTailKind::Value
+    };
+
+    let allowed_lints = callee_allowed_lints(unwrapped, module_id, store);
+    let alias = kind.allow_alias();
+    if allowed_lints.iter().any(|s| s == alias) {
+        return;
+    }
+
+    let (expected_span, expected_ty) = match tail_ctx {
+        Some(ctx) => (ctx.expected_span, ctx.expected_ty.to_string()),
+        None => (item.get_span(), reported_ty.to_string()),
+    };
+
+    facts.add_discarded_tail(
+        item.get_span(),
+        kind,
+        reported_ty.to_string(),
+        expected_span,
+        expected_ty,
+    );
 }
 
 fn emit_unused_expression(
@@ -139,7 +313,7 @@ fn emit_unused_expression(
     };
 
     if let Some(kind) = kind
-        && !allowed_lints.contains(&kind.lint_name().to_string())
+        && !allowed_lints.iter().any(|s| s == kind.lint_name())
     {
         facts.add_unused_expression(span, kind);
     }
@@ -264,12 +438,9 @@ fn get_call_return_type(expression: &Expression) -> Option<Type> {
     else {
         return None;
     };
-    match callee.get_type() {
-        Type::Function { return_type, .. } => Some((*return_type).clone()),
-        Type::Forall { body, .. } => match body.as_ref() {
-            Type::Function { return_type, .. } => Some((**return_type).clone()),
-            _ => None,
-        },
-        _ => None,
-    }
+    callee
+        .get_type()
+        .unwrap_forall()
+        .get_function_ret()
+        .cloned()
 }

@@ -1,12 +1,15 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unused Option
+  [error] Mismatch between return type and return value
    ╭─[test.lis:7:3]
+ 5 │ 
  6 │ fn do_search() {
+   ·                ┬
+   ·                ╰── has `()` as implicit return type
  7 │   find_item()
    ·   ─────┬─────
-   ·        ╰── this `Option` is discarded
+   ·        ╰── returns `Option<int>`
  8 │ }
    ╰────
-  help: Handle this `Option`, explicitly discard it with `let _ = ...`, or return it by adding `-> Option<int>` to the function signature · code: [lint.unused_option]
+  help: If the `()` return type is intended, discard the return value with `let _ = ...`. If the `Option<int>` return value is intended, add `-> Option<int>` to the function signature · code: [lint.mismatched_return_value]

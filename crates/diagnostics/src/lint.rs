@@ -139,33 +139,46 @@ pub fn pattern_issue(span: &Span, kind: IssueKind) -> LisetteDiagnostic {
         .with_help(help)
 }
 
-pub fn discarded_result_in_tail(span: &Span, return_type: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("`Result` is silently discarded")
-        .with_lint_code("unused_result")
-        .with_span_label(span, "failure will go unnoticed")
-        .with_help(format!(
-            "Handle this `Result` with `?` or `match`, explicitly discard it with `let _ = ...`, or return it by adding `-> {}` to the function signature",
-            return_type
-        ))
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MismatchedTailKind {
+    Result,
+    Option,
+    Partial,
+    Value,
 }
 
-pub fn discarded_option_in_tail(span: &Span, return_type: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Unused Option")
-        .with_lint_code("unused_option")
-        .with_span_label(span, "this `Option` is discarded")
-        .with_help(format!(
-            "Handle this `Option`, explicitly discard it with `let _ = ...`, or return it by adding `-> {}` to the function signature",
-            return_type
-        ))
+impl MismatchedTailKind {
+    pub fn lint_code(&self) -> &'static str {
+        "mismatched_return_value"
+    }
+
+    pub fn allow_alias(&self) -> &'static str {
+        match self {
+            Self::Result => "unused_result",
+            Self::Option => "unused_option",
+            Self::Partial => "unused_partial",
+            Self::Value => "unused_value",
+        }
+    }
 }
 
-pub fn discarded_partial_in_tail(span: &Span, return_type: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("`Partial` is silently discarded")
-        .with_lint_code("unused_partial")
-        .with_span_label(span, "partial result will go unnoticed")
+pub fn mismatched_tail_value(
+    actual_span: &Span,
+    actual_ty: &str,
+    expected_span: &Span,
+    expected_ty: &str,
+    kind: MismatchedTailKind,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Mismatch between return type and return value")
+        .with_lint_code(kind.lint_code())
+        .with_span_primary_label(actual_span, format!("returns `{}`", actual_ty))
+        .with_span_label(
+            expected_span,
+            format!("has `{}` as implicit return type", expected_ty),
+        )
         .with_help(format!(
-            "Handle this `Partial` with `match`, explicitly discard it with `let _ = ...`, or return it by adding `-> {}` to the function signature",
-            return_type
+            "If the `{}` return type is intended, discard the return value with `let _ = ...`. If the `{}` return value is intended, add `-> {}` to the function signature.",
+            expected_ty, actual_ty, actual_ty
         ))
 }
 
@@ -322,15 +335,6 @@ pub fn empty_match_arm(span: &Span) -> LisetteDiagnostic {
         .with_lint_code("empty_match_arm")
         .with_span_label(span, "forgotten stub?")
         .with_help("Return `()` to indicate an intentional no-op in a match arm")
-}
-
-pub fn discarded_lambda_value(span: &Span, body_ty: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Discarded lambda value")
-        .with_lint_code("discarded_lambda_value")
-        .with_span_label(span, format!("value of type `{}` is discarded", body_ty))
-        .with_help(
-            "The lambda signature requires `()`, which does not match the value it is returning. End the lambda body with `()` or bind the value with `let _ = expr`.",
-        )
 }
 
 pub fn unnecessary_parens(span: &Span, keyword: &str) -> LisetteDiagnostic {

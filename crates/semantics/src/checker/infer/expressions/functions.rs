@@ -267,9 +267,6 @@ impl TaskState<'_> {
         };
         let new_body =
             self.infer_function_body(store, body, &body_ty, &return_annotation, &return_ty);
-        if relax_body_to_unit {
-            self.warn_discarded_lambda_tail(&new_body);
-        }
         self.scopes.restore_loop_depth(saved_loop_depth);
 
         self.scopes.pop();
@@ -907,26 +904,6 @@ impl TaskState<'_> {
 
             let _ = self.satisfies_interface(store, &resolved_ty, &interface, &params, &span);
         }
-    }
-
-    /// Warn when a `()` lambda's trailing expression is a non-call value the user likely meant to return.
-    fn warn_discarded_lambda_tail(&mut self, body: &Expression) {
-        let trailing = match body {
-            Expression::Block { items, .. } => items.last(),
-            other => Some(other),
-        };
-        let Some(expr) = trailing else { return };
-        if matches!(expr, Expression::Call { .. }) {
-            return;
-        }
-        let ty = expr.get_type().resolve_in(&self.env);
-        if ty.is_unit() || ty.is_ignored() || ty.is_never() || ty.is_variable() {
-            return;
-        }
-        self.sink.push(diagnostics::lint::discarded_lambda_value(
-            &expr.get_span(),
-            &ty.to_string(),
-        ));
     }
 
     fn infer_function_body(

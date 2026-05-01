@@ -1,0 +1,17 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Mismatch between return type and return value
+   ╭─[test.lis:6:10]
+ 2 │ fn get_option() -> Option<int> { Some(1) }
+ 3 │ fn test(c: bool) {
+   ·                  ┬
+   ·                  ╰── has `()` as implicit return type
+ 4 │   let a = get_option()
+ 5 │   let b = get_option()
+ 6 │   if c { a } else { b }
+   ·          ┬
+   ·          ╰── returns `Option<int>`
+ 7 │ }
+   ╰────
+  help: If the `()` return type is intended, discard the return value with `let _ = ...`. If the `Option<int>` return value is intended, add `-> Option<int>` to the function signature · code: [lint.mismatched_return_value]

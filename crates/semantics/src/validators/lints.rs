@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::context::AnalysisContext;
-use crate::facts::{DiscardedTailKind, Facts};
+use crate::facts::Facts;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use syntax::ast::Expression;
@@ -226,26 +226,13 @@ fn collect_unused_expressions(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
 
 fn collect_discarded_tail_expressions(facts: &Facts, out: &mut Vec<LisetteDiagnostic>) {
     for fact in &facts.discarded_tail_expressions {
-        match fact.kind {
-            DiscardedTailKind::Partial => {
-                out.push(diagnostics::lint::discarded_partial_in_tail(
-                    &fact.span,
-                    &fact.return_type,
-                ));
-            }
-            DiscardedTailKind::Result => {
-                out.push(diagnostics::lint::discarded_result_in_tail(
-                    &fact.span,
-                    &fact.return_type,
-                ));
-            }
-            DiscardedTailKind::Option => {
-                out.push(diagnostics::lint::discarded_option_in_tail(
-                    &fact.span,
-                    &fact.return_type,
-                ));
-            }
-        }
+        out.push(diagnostics::lint::mismatched_tail_value(
+            &fact.span,
+            &fact.return_type,
+            &fact.expected_span,
+            &fact.expected_type,
+            fact.kind,
+        ));
     }
 }
 

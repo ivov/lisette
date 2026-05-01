@@ -2,14 +2,15 @@
 source: tests/ui/lint/mod.rs
 ---
   [error] Mismatch between return type and return value
-   ╭─[test.lis:7:3]
- 5 │ 
- 6 │ fn do_work() {
-   ·              ┬
-   ·              ╰── has `()` as implicit return type
- 7 │   get_result()
-   ·   ──────┬─────
-   ·         ╰── returns `Result<int, string>`
- 8 │ }
+   ╭─[test.lis:5:3]
+ 2 │ fn get_result() -> Result<int, string> { Ok(1) }
+ 3 │ fn test() {
+   ·           ┬
+   ·           ╰── has `()` as implicit return type
+ 4 │   let r = get_result()
+ 5 │   r
+   ·   ┬
+   ·   ╰── returns `Result<int, string>`
+ 6 │ }
    ╰────
   help: If the `()` return type is intended, discard the return value with `let _ = ...`. If the `Result<int, string>` return value is intended, add `-> Result<int, string>` to the function signature · code: [lint.mismatched_return_value]

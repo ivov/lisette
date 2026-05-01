@@ -1928,7 +1928,7 @@ struct User {
 
 fn main() {
   let u = User { first_name: "Alice", middle_name: "" }
-  json.Marshal(u)
+  let _ = json.Marshal(u)
 }
 "#,
     );

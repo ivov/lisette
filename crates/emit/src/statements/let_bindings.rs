@@ -781,17 +781,19 @@ impl Emitter<'_> {
         LetEmitter::new(self, binding, value, else_block, mutable).emit(output);
     }
 
-    /// Handles Go multi-value returns correctly.
     pub(crate) fn emit_discard(&mut self, output: &mut String, value: &Expression) {
-        if let Expression::Propagate { expression, .. } = value.unwrap_parens() {
+        let unwrapped = value.unwrap_parens();
+
+        if let Expression::Propagate { expression, .. } = unwrapped {
             self.emit_propagate(output, expression, Some("_"));
             return;
         }
+
         let value_ty = value.get_type();
-        if value_ty.is_unit() || value_ty.is_variable() {
+        if value_ty.is_unit() || value_ty.is_variable() || value_ty.is_never() {
             let value_expression = self.emit_operand(output, value);
             if !value_expression.is_empty() {
-                if matches!(value.unwrap_parens(), Expression::Call { .. }) {
+                if matches!(unwrapped, Expression::Call { .. }) {
                     write_line!(output, "{}", value_expression);
                 } else {
                     write_line!(output, "_ = {}", value_expression);
@@ -800,23 +802,28 @@ impl Emitter<'_> {
             return;
         }
 
-        let is_go_multi_return = self
-            .resolve_go_call_strategy(value)
-            .is_some_and(|s| s.is_multi_return());
+        if let Expression::Call { .. } = unwrapped
+            && let Some(raw) = self.emit_go_call_discarded(output, unwrapped)
+        {
+            write_line!(output, "{}", raw);
+            return;
+        }
+
         let is_lowered_lisette_call = if let Expression::Call {
             expression: callee, ..
-        } = value
+        } = unwrapped
         {
             self.classify_callee_abi(callee).is_some()
         } else {
             false
         };
-        if is_go_multi_return || is_lowered_lisette_call {
+        if is_lowered_lisette_call {
             let call_str = self.emit_call(output, value, None);
             write_line!(output, "{}", call_str);
-        } else {
-            let value_expression = self.emit_operand(output, value);
-            write_line!(output, "_ = {}", value_expression);
+            return;
         }
+
+        let value_expression = self.emit_operand(output, value);
+        write_line!(output, "_ = {}", value_expression);
     }
 }

@@ -139,25 +139,22 @@ impl Emitter<'_> {
                 output.push('\n');
             }
             _ => {
-                let is_call = matches!(
-                    expression.unwrap_parens(),
-                    Expression::Call { .. } | Expression::Task { .. } | Expression::Defer { .. }
-                );
                 let unwrapped = expression.unwrap_parens();
-                let emitted = if let Expression::Call { .. } = unwrapped
-                    && let Some(raw) = self.emit_go_call_discarded(output, unwrapped)
-                {
-                    raw
-                } else if is_call {
-                    self.emit_operand(output, unwrapped)
-                } else {
-                    self.emit_operand(output, expression)
-                };
-                if !emitted.is_empty() {
-                    if is_call && !emitted.starts_with("append(") {
-                        write_line!(output, "{}", emitted);
-                    } else if emitted != "struct{}{}" {
-                        write_line!(output, "_ = {}", emitted);
+                match unwrapped {
+                    Expression::Task { .. } | Expression::Defer { .. } => {
+                        let emitted = self.emit_operand(output, unwrapped);
+                        if !emitted.is_empty() {
+                            write_line!(output, "{}", emitted);
+                        }
+                    }
+                    Expression::Call { .. } => {
+                        self.emit_discard(output, unwrapped);
+                    }
+                    _ => {
+                        let emitted = self.emit_operand(output, expression);
+                        if !emitted.is_empty() && emitted != "struct{}{}" {
+                            write_line!(output, "_ = {}", emitted);
+                        }
                     }
                 }
             }

@@ -2,6 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use diagnostics::lint::MismatchedTailKind;
 use diagnostics::{PatternIssue, UnusedExpressionKind};
 use syntax::ast::{BindingId, BindingKind, DeadCodeCause, Span};
 use syntax::types::Type;
@@ -149,11 +150,20 @@ impl Facts {
             .push(UnusedExpressionFact { span, kind });
     }
 
-    pub fn add_discarded_tail(&mut self, span: Span, kind: DiscardedTailKind, return_type: String) {
+    pub fn add_discarded_tail(
+        &mut self,
+        span: Span,
+        kind: MismatchedTailKind,
+        return_type: String,
+        expected_span: Span,
+        expected_type: String,
+    ) {
         self.discarded_tail_expressions.push(DiscardedTailFact {
             span,
             kind,
             return_type,
+            expected_span,
+            expected_type,
         });
     }
 
@@ -292,18 +302,13 @@ pub struct UnusedExpressionFact {
     pub kind: UnusedExpressionKind,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiscardedTailKind {
-    Result,
-    Option,
-    Partial,
-}
-
 #[derive(Debug, Clone)]
 pub struct DiscardedTailFact {
     pub span: Span,
-    pub kind: DiscardedTailKind,
+    pub kind: MismatchedTailKind,
     pub return_type: String,
+    pub expected_span: Span,
+    pub expected_type: String,
 }
 
 #[derive(Debug, Clone)]

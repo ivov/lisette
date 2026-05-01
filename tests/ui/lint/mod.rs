@@ -396,9 +396,10 @@ fn main() {
 }
 
 #[test]
-fn match_in_statement_position_no_unused_result_warning() {
+fn match_in_statement_position_with_unit_arms_no_warning() {
     assert_no_lint_warnings!(
         r#"
+import "go:fmt"
 fn get_result() -> Result<int, string> {
   Ok(42)
 }
@@ -406,8 +407,8 @@ fn get_result() -> Result<int, string> {
 fn main() {
   let r = get_result();
   match r {
-    Ok(_) => "ok",
-    Err(_) => "err",
+    Ok(_) => fmt.Println("ok"),
+    Err(_) => fmt.Println("err"),
   }
   ()
 }
@@ -416,14 +417,15 @@ fn main() {
 }
 
 #[test]
-fn match_in_statement_position_no_unused_value_warning() {
+fn match_in_statement_position_with_unit_arms_no_value_warning() {
     assert_no_lint_warnings!(
         r#"
+import "go:fmt"
 fn main() {
   let x = 1;
   match x {
-    1 => "one",
-    _ => "other",
+    1 => fmt.Println("one"),
+    _ => fmt.Println("other"),
   }
   ()
 }
@@ -432,15 +434,16 @@ fn main() {
 }
 
 #[test]
-fn if_in_statement_position_no_unused_value_warning() {
+fn if_in_statement_position_with_unit_branches_no_warning() {
     assert_no_lint_warnings!(
         r#"
+import "go:fmt"
 fn main() {
   let x = 1;
   if x > 0 {
-    "positive"
+    fmt.Println("positive")
   } else {
-    "negative"
+    fmt.Println("negative")
   }
   ()
 }
@@ -3630,6 +3633,220 @@ import "go:fmt"
 fn take(f: fn() -> ()) { f() }
 fn main() {
   take(|| { fmt.Println("hi") })
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_function_value_bare_literal() {
+    assert_lint_snapshot!(
+        r#"
+fn test() {
+  42
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_function_value_native_call_errors() {
+    assert_lint_snapshot!(
+        r#"
+fn test() {
+  "test".length()
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_function_value_user_call_errors() {
+    assert_lint_snapshot!(
+        r#"
+fn make_int() -> int { 42 }
+fn test() {
+  make_int()
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_function_value_silent_on_result_tail() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+fn test(cond: bool) {
+  if cond { fmt.Print("yes") } else { fmt.Print("no") }
+}
+fn main() {
+  test(true)
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_function_value_silent_with_allow_attr() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(unused_value)]
+fn advance_rng() -> int { 42 }
+fn test() {
+  advance_rng()
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_lambda_value_expression_body_errors() {
+    assert_lint_snapshot!(
+        r#"
+fn take(f: fn() -> ()) { f() }
+fn main() {
+  take(|| 42)
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_paren_call_returning_result_errors_as_unused_result() {
+    assert_lint_snapshot!(
+        r#"
+fn might_fail() -> Result<int, string> { Ok(1) }
+fn test() {
+  (might_fail())
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_paren_call_silent_with_allow_attr() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+fn test() {
+  (fmt.Println("hi"))
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_loop_with_break_value_errors() {
+    assert_lint_snapshot!(
+        r#"
+fn test() {
+  loop { break 1 }
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_infinite_loop_silent() {
+    assert_no_lint_warnings!(
+        r#"
+fn test() {
+  loop { let _ = 1 }
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_non_call_result_tail_errors() {
+    assert_lint_snapshot!(
+        r#"
+fn get_result() -> Result<int, string> { Ok(1) }
+fn test() {
+  let r = get_result()
+  r
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_loop_break_value_silent_with_allow_attr() {
+    assert_no_lint_warnings!(
+        r#"
+#[allow(unused_value)]
+fn allowed() -> int { 42 }
+fn test() {
+  loop { break allowed() }
+}
+fn main() {
+  test()
+}
+"#
+    );
+}
+
+#[test]
+fn discarded_loop_two_branches_two_diagnostics() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+fn test() {
+  loop {
+    if true { break 1 } else { break 2 }
+  }
+}
+fn main() {
+  test()
+}
+"#,
+    );
+    let count = warnings
+        .iter()
+        .filter(|w| w.code_str() == Some("lint.mismatched_return_value"))
+        .count();
+    assert_eq!(count, 2, "expected one diagnostic per break value");
+}
+
+#[test]
+fn discarded_non_call_option_in_if_branches_errors() {
+    assert_lint_snapshot!(
+        r#"
+fn get_option() -> Option<int> { Some(1) }
+fn test(c: bool) {
+  let a = get_option()
+  let b = get_option()
+  if c { a } else { b }
+}
+fn main() {
+  test(true)
 }
 "#
     );

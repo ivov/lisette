@@ -2,12 +2,14 @@
 source: tests/ui/lint/mod.rs
 ---
   [error] Mismatch between return type and return value
-   ╭─[test.lis:4:13]
- 3 │ fn main() {
- 4 │   take(|| { 42 })
-   ·        ┬    ─┬
-   ·        │     ╰── returns `int`
-   ·        ╰── has `()` as implicit return type
+   ╭─[test.lis:4:3]
+ 2 │ fn make_int() -> int { 42 }
+ 3 │ fn test() {
+   ·           ┬
+   ·           ╰── has `()` as implicit return type
+ 4 │   make_int()
+   ·   ─────┬────
+   ·        ╰── returns `int`
  5 │ }
    ╰────
   help: If the `()` return type is intended, discard the return value with `let _ = ...`. If the `int` return value is intended, add `-> int` to the function signature · code: [lint.mismatched_return_value]
