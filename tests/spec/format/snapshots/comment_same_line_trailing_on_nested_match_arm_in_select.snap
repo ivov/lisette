@@ -1,0 +1,12 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v, // trailing nested arm\n      None => 0,\n    },\n  }\n}"
+---
+fn f(c: Channel<int>) -> int {
+  select {
+    match c.receive() {
+      Some(v) => v, // trailing nested arm
+      None => 0,
+    },
+  }
+}

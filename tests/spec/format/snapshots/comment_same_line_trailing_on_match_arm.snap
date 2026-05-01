@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f(x: int) -> int {\n  match x {\n    1 => 1, // trailing arm\n    2 => 2,\n    _ => 0,\n  }\n}"
+---
+fn f(x: int) -> int {
+  match x {
+    1 => 1, // trailing arm
+    2 => 2,
+    _ => 0,
+  }
+}

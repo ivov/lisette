@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct S {\n  a: int,\n  // about b\n\n  b: int,\n}"
+---
+struct S {
+  a: int,
+  // about b
+
+  b: int,
+}

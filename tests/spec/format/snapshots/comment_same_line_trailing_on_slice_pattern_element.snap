@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f() -> int {\n  match [1, 2] {\n    [a, // trailing slice elem\n    b] => a + b,\n    _ => 0,\n  }\n}"
+---
+fn f() -> int {
+  match [1, 2] {
+    [
+      a, // trailing slice elem
+      b,
+    ] => a + b,
+    _ => 0,
+  }
+}

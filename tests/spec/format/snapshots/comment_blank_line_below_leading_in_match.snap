@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f(x: int) -> int {\n  match x {\n    1 => 1,\n    // about 2\n\n    2 => 2,\n    _ => 0,\n  }\n}"
+---
+fn f(x: int) -> int {
+  match x {
+    1 => 1,
+    // about 2
+
+    2 => 2,
+    _ => 0,
+  }
+}

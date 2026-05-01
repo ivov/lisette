@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: enum E {\n  A, // trailing variant\n  B,\n  C,\n}"
+---
+enum E {
+  A, // trailing variant
+  B,
+  C,
+}

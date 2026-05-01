@@ -1551,3 +1551,221 @@ fn comment_trailing_in_select_block() {
 fn comment_trailing_same_line_on_top_level_item() {
     assert_format_snapshot!("fn h() {} // trailing\nfn i() {}");
 }
+
+#[test]
+fn comment_between_attr_and_struct_field() {
+    assert_format_snapshot!("struct S {\n  #[a]\n  // between attr and field\n  x: int,\n}");
+}
+
+#[test]
+fn comment_between_attr_and_interface_method() {
+    assert_format_snapshot!("interface I {\n  #[a]\n  // between attr and method\n  fn first()\n}");
+}
+
+#[test]
+fn comment_blank_line_preserved_between_top_level_comments() {
+    assert_format_snapshot!("fn a() {}\n// first\n\n// second\nfn b() {}");
+}
+
+#[test]
+fn comment_before_interface_parent() {
+    assert_format_snapshot!("interface I {\n  // before parent\n  impl A\n  fn first()\n}");
+}
+
+#[test]
+fn comment_between_interface_parents() {
+    assert_format_snapshot!(
+        "interface I {\n  impl A\n  // between parents\n  impl B\n  fn first()\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_match_arm() {
+    assert_format_snapshot!(
+        "fn f(x: int) -> int {\n  match x {\n    1 => 1, // trailing arm\n    2 => 2,\n    _ => 0,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_select_arm() {
+    assert_format_snapshot!(
+        "fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v,\n      None => 0,\n    }, // trailing arm\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_enum_variant() {
+    assert_format_snapshot!("enum E {\n  A, // trailing variant\n  B,\n  C,\n}");
+}
+
+#[test]
+fn comment_same_line_trailing_on_value_enum_variant() {
+    assert_format_snapshot!("pub enum E: int {\n  A = 1, // trailing\n  B = 2,\n}");
+}
+
+#[test]
+fn comment_same_line_trailing_on_interface_parent() {
+    assert_format_snapshot!(
+        "interface I {\n  impl A // trailing parent\n  impl B\n  fn first()\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_interface_method() {
+    assert_format_snapshot!("interface I {\n  fn first() // trailing method\n  fn second()\n}");
+}
+
+#[test]
+fn comment_blank_line_preserved_between_struct_field_groups() {
+    assert_format_snapshot!("struct S {\n  x: int, // trailing\n\n  // second\n  y: int,\n}");
+}
+
+#[test]
+fn comment_same_line_trailing_on_nested_match_arm_in_select() {
+    assert_format_snapshot!(
+        "fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v, // trailing nested arm\n      None => 0,\n    },\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_blank_line_below_leading_in_enum() {
+    assert_format_snapshot!("enum E {\n  A,\n  // about B\n\n  B,\n}");
+}
+
+#[test]
+fn comment_blank_line_below_leading_in_match() {
+    assert_format_snapshot!(
+        "fn f(x: int) -> int {\n  match x {\n    1 => 1,\n    // about 2\n\n    2 => 2,\n    _ => 0,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_blank_line_below_leading_in_interface() {
+    assert_format_snapshot!("interface I {\n  fn first()\n  // about second\n\n  fn second()\n}");
+}
+
+#[test]
+fn comment_blank_line_below_leading_in_struct() {
+    assert_format_snapshot!("struct S {\n  a: int,\n  // about b\n\n  b: int,\n}");
+}
+
+#[test]
+fn comment_trailing_inside_nested_match_in_select() {
+    assert_format_snapshot!(
+        "fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v,\n      None => 0,\n      // trailing nested block\n    },\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_last_nested_match_arm_in_select() {
+    assert_format_snapshot!(
+        "fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v,\n      None => 0, // trailing last nested arm\n    },\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_with_close_brace_inside_nested_match_in_select() {
+    assert_format_snapshot!(
+        "fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v,\n      None => 0,\n      // contains } early\n      // still nested\n    },\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_with_close_brace_on_last_nested_match_arm() {
+    assert_format_snapshot!(
+        "fn f(c: Channel<int>) -> int {\n  select {\n    match c.receive() {\n      Some(v) => v,\n      None => 0, // contains } early\n    },\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_impl_method() {
+    assert_format_snapshot!("struct Foo {}\n\nimpl Foo {\n  fn a() {} // trailing\n  fn b() {}\n}");
+}
+
+#[test]
+fn comment_same_line_trailing_on_tuple_pattern_element() {
+    assert_format_snapshot!(
+        "fn f(x: (int, int)) -> int {\n  match x {\n    (1, // trailing tuple elem\n    2) => 0,\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_struct_pattern_field() {
+    assert_format_snapshot!(
+        "struct Point { x: int, y: int }\n\nfn f(p: Point) -> int {\n  match p {\n    Point { x: 1, // trailing struct field\n    y: 2 } => 0,\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_slice_pattern_element() {
+    assert_format_snapshot!(
+        "fn f() -> int {\n  match [1, 2] {\n    [a, // trailing slice elem\n    b] => a + b,\n    _ => 0,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_enum_variant_pattern_element() {
+    assert_format_snapshot!(
+        "enum E { Pair(int, int), Other }\n\nfn f(e: E) -> int {\n  match e {\n    Pair(a, // trailing variant payload\n    b) => a + b,\n    Other => 0,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_before_slice_rest_bind() {
+    assert_format_snapshot!(
+        "fn test() {\n  match items {\n    [first, // trailing\n    ..rest] => first,\n    [] => 0,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_before_slice_rest_discard() {
+    assert_format_snapshot!(
+        "fn test() {\n  match items {\n    [first, // trailing\n    ..] => first,\n    [] => 0,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_before_struct_pattern_rest() {
+    assert_format_snapshot!(
+        "struct Point { x: int, y: int, z: int }\n\nfn f(p: Point) -> int {\n  match p {\n    Point { x: 1, // trailing\n    .. } => 0,\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_before_enum_variant_pattern_rest() {
+    assert_format_snapshot!(
+        "enum E { Triple(int, int, int), Other }\n\nfn f(e: E) -> int {\n  match e {\n    Triple(1, // trailing\n    ..) => 0,\n    _ => 1,\n  }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_on_only_struct_field() {
+    assert_format_snapshot!("struct S {\n  x: int, // trailing\n}");
+}
+
+#[test]
+fn comment_same_line_trailing_on_last_struct_field() {
+    assert_format_snapshot!("struct S {\n  a: int,\n  b: int, // trailing\n}");
+}
+
+#[test]
+fn comment_same_line_trailing_before_call_spread_arg() {
+    assert_format_snapshot!("fn f(args: Slice<int>) {\n  foo(1, // trailing\n  ..args)\n}");
+}
+
+#[test]
+fn comment_same_line_trailing_before_struct_spread() {
+    assert_format_snapshot!(
+        "struct Point { x: int, y: int }\n\nfn f(other: Point) -> Point {\n  Point { x: 1, // trailing\n  ..other }\n}"
+    );
+}
+
+#[test]
+fn comment_same_line_trailing_between_call_args() {
+    assert_format_snapshot!("fn f() {\n  foo(a, // trailing\n  b, c)\n}");
+}
+
+#[test]
+fn comment_same_line_trailing_before_inlinable_last_arg() {
+    assert_format_snapshot!("fn f() {\n  foo(a, b, // trailing\n  |x| { x + 1 })\n}");
+}

@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn test() {\n  match items {\n    [first, // trailing\n    ..rest] => first,\n    [] => 0,\n  }\n}"
+---
+fn test() {
+  match items {
+    [
+      first, // trailing
+      ..rest,
+    ] => first,
+    [] => 0,
+  }
+}

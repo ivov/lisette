@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Foo {}\n\nimpl Foo {\n  fn a() {} // trailing\n  fn b() {}\n}"
+---
+struct Foo {}
+
+impl Foo {
+  fn a() {} // trailing
+
+  fn b() {}
+}

@@ -1,0 +1,8 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: interface I {\n  fn first() // trailing method\n  fn second()\n}"
+---
+interface I {
+  fn first() // trailing method
+  fn second()
+}

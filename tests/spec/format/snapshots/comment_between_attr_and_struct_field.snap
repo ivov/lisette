@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct S {\n  #[a]\n  // between attr and field\n  x: int,\n}"
+---
+struct S {
+  #[a]
+  // between attr and field
+  x: int,
+}

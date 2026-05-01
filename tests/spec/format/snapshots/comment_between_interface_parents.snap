@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: interface I {\n  impl A\n  // between parents\n  impl B\n  fn first()\n}"
+---
+interface I {
+  impl A
+  // between parents
+  impl B
+  fn first()
+}

@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn a() {}\n// first\n\n// second\nfn b() {}"
+---
+fn a() {}
+
+// first
+
+// second
+fn b() {}

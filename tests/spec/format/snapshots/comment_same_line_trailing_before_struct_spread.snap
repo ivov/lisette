@@ -1,0 +1,12 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Point { x: int, y: int }\n\nfn f(other: Point) -> Point {\n  Point { x: 1, // trailing\n  ..other }\n}"
+---
+struct Point { x: int, y: int }
+
+fn f(other: Point) -> Point {
+  Point { 
+    x: 1, // trailing
+    ..other,
+  }
+}

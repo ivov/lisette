@@ -1,0 +1,10 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: enum E {\n  A,\n  // about B\n\n  B,\n}"
+---
+enum E {
+  A,
+  // about B
+
+  B,
+}

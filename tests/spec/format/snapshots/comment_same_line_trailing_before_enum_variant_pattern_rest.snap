@@ -1,0 +1,18 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: enum E { Triple(int, int, int), Other }\n\nfn f(e: E) -> int {\n  match e {\n    Triple(1, // trailing\n    ..) => 0,\n    _ => 1,\n  }\n}"
+---
+enum E {
+  Triple(int, int, int),
+  Other,
+}
+
+fn f(e: E) -> int {
+  match e {
+    Triple(
+      1, // trailing
+      ..,
+    ) => 0,
+    _ => 1,
+  }
+}

@@ -12,7 +12,18 @@ pub struct Formatter<'a> {
     comments: Comments<'a>,
 }
 
-type StructFieldEntry<'a> = (Option<Document<'a>>, Document<'a>, Option<Document<'a>>);
+struct SiblingEntry<'a> {
+    leading: Option<Document<'a>>,
+    doc: Document<'a>,
+    trailing: Option<Document<'a>>,
+    has_blank_above: bool,
+}
+
+struct PatternEntry<'a> {
+    leading: Option<Document<'a>>,
+    doc: Document<'a>,
+    trailing: Option<Document<'a>>,
+}
 
 impl<'a> Formatter<'a> {
     pub fn new(comments: Comments<'a>) -> Self {
@@ -34,9 +45,9 @@ impl<'a> Formatter<'a> {
         for (i, item) in rest.iter().enumerate() {
             let start = Self::item_leading_edge(item);
 
-            let (same_line_trailing, leading) = match prev_end {
+            let (same_line_trailing, leading, _) = match prev_end {
                 Some(anchor) => self.comments.take_split_by_newline_after(anchor, start),
-                None => (None, self.comments.take_comments_before(start)),
+                None => (None, self.comments.take_comments_before(start), false),
             };
 
             if let Some(t) = same_line_trailing {
@@ -635,7 +646,7 @@ impl<'a> Formatter<'a> {
             docs.push(self.expression(item));
         }
 
-        let (same_line, standalone) = self.comments.take_split_at_line_start(block_end);
+        let (same_line, standalone, _) = self.comments.take_split_at_line_start(block_end);
         if let Some(t) = same_line {
             docs.push(Document::str(" "));
             docs.push(t);
@@ -768,36 +779,49 @@ impl<'a> Formatter<'a> {
         }
     }
 
+    fn match_arm_entries(&mut self, arms: &'a [MatchArm]) -> Vec<SiblingEntry<'a>> {
+        let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(arms.len());
+        for arm in arms {
+            let start = arm.pattern.get_span().byte_offset;
+            let (last_trailing, leading, has_blank) =
+                self.sibling_lead_split(!entries.is_empty(), start);
+            if let Some(t) = last_trailing
+                && let Some(last) = entries.last_mut()
+            {
+                last.trailing = Some(t);
+            }
+
+            let pattern = self.pattern(&arm.pattern);
+            let expression = self.expression(&arm.expression);
+            let pattern_with_guard = if let Some(guard) = &arm.guard {
+                pattern.append(" if ").append(self.expression(guard))
+            } else {
+                pattern
+            };
+            let arm_doc = pattern_with_guard
+                .append(" => ")
+                .append(expression)
+                .append(",");
+            entries.push(SiblingEntry {
+                leading,
+                doc: arm_doc,
+                trailing: None,
+                has_blank_above: has_blank,
+            });
+        }
+        entries
+    }
+
     fn match_(
         &mut self,
         subject: &'a Expression,
         arms: &'a [MatchArm],
         span: &Span,
     ) -> Document<'a> {
-        let arms_docs: Vec<_> = arms
-            .iter()
-            .map(|arm| {
-                let start = arm.pattern.get_span().byte_offset;
-                let comments = self.comments.take_comments_before(start);
-                let pattern = self.pattern(&arm.pattern);
-                let expression = self.expression(&arm.expression);
-
-                let pattern_with_guard = if let Some(guard) = &arm.guard {
-                    pattern.append(" if ").append(self.expression(guard))
-                } else {
-                    pattern
-                };
-
-                let arm_doc = pattern_with_guard
-                    .append(" => ")
-                    .append(expression)
-                    .append(",");
-                prepend_comments(arm_doc, comments)
-            })
-            .collect();
+        let entries = self.match_arm_entries(arms);
 
         let header = Document::str("match ").append(self.expression(subject));
-        let body = self.with_trailing_comments(join(arms_docs, Document::Newline), span.end());
+        let body = self.join_sibling_body(entries, span.end());
         Self::braced_body(header, body)
     }
 
@@ -999,8 +1023,8 @@ impl<'a> Formatter<'a> {
         }
 
         if let Some(spread_expr) = spread {
-            let spread_doc = Document::str("..").append(self.expression(spread_expr));
             if args.is_empty() {
+                let spread_doc = Document::str("..").append(self.expression(spread_expr));
                 return head
                     .append("(")
                     .append(spread_doc.group().next_break_fits(true))
@@ -1008,16 +1032,18 @@ impl<'a> Formatter<'a> {
                     .next_break_fits(false)
                     .group();
             }
-            let init_docs: Vec<_> = args.iter().map(|a| self.expression(a)).collect();
-            let init_doc = join(init_docs, strict_break(",", ", "));
+            let mut entries = self.call_arg_entries(args);
+            let dots_pos = spread_expr.get_span().byte_offset.saturating_sub(2);
+            let spread_leading = self.split_for_rest(&mut entries, dots_pos);
+            let spread_doc = Document::str("..").append(self.expression(spread_expr));
+            let (body, close_sep) =
+                Self::join_pattern_entries(entries, Some((spread_leading, spread_doc)), "");
             return head
                 .append("(")
                 .append(strict_break("", ""))
-                .append(init_doc)
-                .append(strict_break(",", ", "))
-                .append(spread_doc.group().next_break_fits(true))
+                .append(body)
                 .nest(INDENT_WIDTH)
-                .append(strict_break(",", ""))
+                .append(close_sep)
                 .append(")")
                 .next_break_fits(false)
                 .group();
@@ -1027,42 +1053,51 @@ impl<'a> Formatter<'a> {
             .split_last()
             .filter(|(last, _)| is_inlinable_arg(last, args.len()))
         else {
-            let arg_docs: Vec<_> = args.iter().map(|a| self.expression(a)).collect();
-            let args_doc = join(arg_docs, strict_break(",", ", "));
-
+            let entries = self.call_arg_entries(args);
+            let (body, close_sep) = Self::join_pattern_entries(entries, None, "");
             return head
                 .append("(")
                 .append(strict_break("", ""))
-                .append(args_doc)
+                .append(body)
                 .nest(INDENT_WIDTH)
-                .append(strict_break(",", ""))
+                .append(close_sep)
                 .append(")")
                 .group();
         };
 
-        let last_doc = self.expression(last).group().next_break_fits(true);
-
         if init.is_empty() {
+            let last_doc = self.expression(last).group().next_break_fits(true);
             head.append("(")
                 .append(last_doc)
                 .append(")")
                 .next_break_fits(false)
                 .group()
         } else {
-            let init_docs: Vec<_> = init.iter().map(|a| self.expression(a)).collect();
-            let init_doc = join(init_docs, strict_break(",", ", "));
-
+            let mut entries = self.call_arg_entries(init);
+            let last_start = last.get_span().byte_offset;
+            let last_leading = self.split_for_rest(&mut entries, last_start);
+            let last_doc = self.expression(last).group().next_break_fits(true);
+            let (body, close_sep) =
+                Self::join_pattern_entries(entries, Some((last_leading, last_doc)), "");
             head.append("(")
                 .append(strict_break("", ""))
-                .append(init_doc)
-                .append(strict_break(",", ", "))
-                .append(last_doc)
+                .append(body)
                 .nest(INDENT_WIDTH)
-                .append(strict_break(",", ""))
+                .append(close_sep)
                 .append(")")
                 .next_break_fits(false)
                 .group()
         }
+    }
+
+    fn call_arg_entries(&mut self, args: &'a [Expression]) -> Vec<PatternEntry<'a>> {
+        let mut entries: Vec<PatternEntry<'a>> = Vec::with_capacity(args.len());
+        for arg in args {
+            self.push_pattern_entry(&mut entries, arg.get_span().byte_offset, |s| {
+                s.expression(arg)
+            });
+        }
+        entries
     }
 
     fn format_method_chain(
@@ -1141,46 +1176,49 @@ impl<'a> Formatter<'a> {
         fields: &'a [StructFieldAssignment],
         spread: &'a StructSpread,
     ) -> Document<'a> {
-        let mut field_docs: Vec<_> = fields
-            .iter()
-            .map(|f| {
+        let mut entries: Vec<PatternEntry<'a>> = Vec::with_capacity(fields.len());
+        for f in fields {
+            self.push_pattern_entry(&mut entries, f.name_span.byte_offset, |s| {
                 if let Expression::Identifier { value, .. } = &*f.value
                     && value == &f.name
                 {
-                    return Document::string(f.name.to_string());
+                    Document::string(f.name.to_string())
+                } else {
+                    Document::string(f.name.to_string())
+                        .append(": ")
+                        .append(s.expression(&f.value))
                 }
-                Document::string(f.name.to_string())
-                    .append(": ")
-                    .append(self.expression(&f.value))
-            })
-            .collect();
-
-        match spread {
-            StructSpread::None => {}
-            StructSpread::From(spread_expression) => {
-                let start = spread_expression.get_span().byte_offset;
-                let comments = self.comments.take_comments_before(start);
-                let spread_doc = Document::str("..").append(self.expression(spread_expression));
-                field_docs.push(prepend_comments(spread_doc, comments));
-            }
-            StructSpread::ZeroFill { span } => {
-                let comments = self.comments.take_comments_before(span.byte_offset);
-                field_docs.push(prepend_comments(Document::str(".."), comments));
-            }
+            });
         }
 
-        if field_docs.is_empty() {
+        let rest_info = match spread {
+            StructSpread::None => None,
+            StructSpread::From(spread_expression) => {
+                let dots_pos = spread_expression.get_span().byte_offset.saturating_sub(2);
+                let leading = self.split_for_rest(&mut entries, dots_pos);
+                Some((
+                    leading,
+                    Document::str("..").append(self.expression(spread_expression)),
+                ))
+            }
+            StructSpread::ZeroFill { span } => {
+                let leading = self.split_for_rest(&mut entries, span.byte_offset);
+                Some((leading, Document::str("..")))
+            }
+        };
+
+        if entries.is_empty() && rest_info.is_none() {
             return Document::str(name).append(" {}");
         }
 
-        let fields_doc = join(field_docs, strict_break(",", ", "));
+        let (body, close_sep) = Self::join_pattern_entries(entries, rest_info, " ");
 
         Document::str(name)
             .append(" {")
             .append(strict_break(" ", " "))
-            .append(fields_doc)
+            .append(body)
             .nest(INDENT_WIDTH)
-            .append(strict_break(",", " "))
+            .append(close_sep)
             .append("}")
             .group()
     }
@@ -1288,13 +1326,34 @@ impl<'a> Formatter<'a> {
     }
 
     fn select(&mut self, arms: &'a [SelectArm], span: &Span) -> Document<'a> {
-        let arms_docs: Vec<_> = arms.iter().map(|arm| self.select_arm(arm)).collect();
-        let body = self.with_trailing_comments(join(arms_docs, Document::Newline), span.end());
+        let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(arms.len());
+        for (i, arm) in arms.iter().enumerate() {
+            let start = Self::select_arm_start(arm);
+            let upper_bound = arms
+                .get(i + 1)
+                .map(Self::select_arm_start)
+                .unwrap_or_else(|| span.end());
+            let (last_trailing, leading, has_blank) =
+                self.sibling_lead_split(!entries.is_empty(), start);
+            if let Some(t) = last_trailing
+                && let Some(last) = entries.last_mut()
+            {
+                last.trailing = Some(t);
+            }
+            let arm_doc = self.select_arm_body(arm, upper_bound);
+            entries.push(SiblingEntry {
+                leading,
+                doc: arm_doc,
+                trailing: None,
+                has_blank_above: has_blank,
+            });
+        }
+        let body = self.join_sibling_body(entries, span.end());
         Self::braced_body(Document::str("select"), body)
     }
 
-    fn select_arm(&mut self, arm: &'a SelectArm) -> Document<'a> {
-        let start = match &arm.pattern {
+    fn select_arm_start(arm: &'a SelectArm) -> u32 {
+        match &arm.pattern {
             SelectArmPattern::Receive { binding, .. } => binding.get_span().byte_offset,
             SelectArmPattern::Send {
                 send_expression, ..
@@ -1303,56 +1362,54 @@ impl<'a> Formatter<'a> {
                 receive_expression, ..
             } => receive_expression.get_span().byte_offset,
             SelectArmPattern::WildCard { body } => body.get_span().byte_offset,
-        };
-        self.with_leading_comments(start, |s| match &arm.pattern {
+        }
+    }
+
+    fn select_arm_body(&mut self, arm: &'a SelectArm, upper_bound: u32) -> Document<'a> {
+        match &arm.pattern {
             SelectArmPattern::Receive {
                 binding,
                 receive_expression,
                 body,
                 ..
             } => Document::str("let ")
-                .append(s.pattern(binding))
+                .append(self.pattern(binding))
                 .append(" = ")
-                .append(s.expression(receive_expression))
+                .append(self.expression(receive_expression))
                 .append(" => ")
-                .append(s.expression(body))
+                .append(self.expression(body))
                 .append(","),
             SelectArmPattern::Send {
                 send_expression,
                 body,
-            } => s
+            } => self
                 .expression(send_expression)
                 .append(" => ")
-                .append(s.expression(body))
+                .append(self.expression(body))
                 .append(","),
             SelectArmPattern::MatchReceive {
                 receive_expression,
                 arms,
             } => {
-                let arms_docs: Vec<_> = arms
-                    .iter()
-                    .map(|a| {
-                        let pattern = s.pattern(&a.pattern);
-                        let expression = s.expression(&a.expression);
-                        let pattern_with_guard = if let Some(guard) = &a.guard {
-                            pattern.append(" if ").append(s.expression(guard))
-                        } else {
-                            pattern
-                        };
-                        pattern_with_guard
-                            .append(" => ")
-                            .append(expression)
-                            .append(",")
-                    })
-                    .collect();
-                let header = Document::str("match ").append(s.expression(receive_expression));
-                Self::braced_body(header, join(arms_docs, Document::Newline)).append(",")
+                let header = Document::str("match ").append(self.expression(receive_expression));
+                let last_arm_end = arms
+                    .last()
+                    .map(|a| a.expression.get_span().end())
+                    .unwrap_or(0);
+                // MatchReceive lacks a body span; find the inner `}` in source.
+                let body_end = self
+                    .comments
+                    .next_byte_at(b'}', last_arm_end, upper_bound)
+                    .unwrap_or(last_arm_end);
+                let entries = self.match_arm_entries(arms);
+                let body = self.join_sibling_body(entries, body_end);
+                Self::braced_body(header, body).append(",")
             }
             SelectArmPattern::WildCard { body } => Document::str("_")
                 .append(" => ")
-                .append(s.expression(body))
+                .append(self.expression(body))
                 .append(","),
-        })
+        }
     }
 
     fn propagate_(&mut self, expression: &'a Expression) -> Document<'a> {
@@ -1403,30 +1460,34 @@ impl<'a> Formatter<'a> {
             self.struct_fields_with_comments(fields, struct_end);
 
         if with_comments || with_field_attrs || with_pub_fields {
-            let mut fields_docs: Vec<Document<'a>> = field_entries
-                .into_iter()
-                .map(|(leading, field, same_line_trailing)| {
-                    let mut doc = match leading {
-                        Some(c) => c.append(Document::Newline).append(field),
-                        None => field,
-                    };
-                    doc = doc.append(",");
-                    if let Some(t) = same_line_trailing {
-                        doc = doc.append(" ").append(t);
+            let mut body = Document::Sequence(vec![]);
+            for (i, entry) in field_entries.into_iter().enumerate() {
+                if i > 0 {
+                    body = body.append(Document::Newline);
+                    if entry.has_blank_above {
+                        body = body.append(Document::Newline);
                     }
-                    doc
-                })
-                .collect();
-            if let Some(t) = trailing {
-                fields_docs.push(t);
+                }
+                let mut doc = match entry.leading {
+                    Some(c) => c.append(Document::Newline).append(entry.doc),
+                    None => entry.doc,
+                };
+                doc = doc.append(",");
+                if let Some(t) = entry.trailing {
+                    doc = doc.append(" ").append(t);
+                }
+                body = body.append(doc);
             }
-            return Self::braced_body(header, join(fields_docs, Document::Newline));
+            if let Some(t) = trailing {
+                body = body
+                    .append(Document::Newline)
+                    .append(Document::Newline)
+                    .append(t);
+            }
+            return Self::braced_body(header, body);
         }
 
-        let fields_docs: Vec<_> = field_entries
-            .into_iter()
-            .map(|(_, field, _)| field)
-            .collect();
+        let fields_docs: Vec<_> = field_entries.into_iter().map(|entry| entry.doc).collect();
         Self::flexible_struct_body(header, fields_docs)
     }
 
@@ -1446,8 +1507,8 @@ impl<'a> Formatter<'a> {
         &mut self,
         fields: &'a [StructFieldDefinition],
         struct_end: u32,
-    ) -> (Vec<StructFieldEntry<'a>>, Option<Document<'a>>, bool) {
-        let mut entries = Vec::new();
+    ) -> (Vec<SiblingEntry<'a>>, Option<Document<'a>>, bool) {
+        let mut entries: Vec<SiblingEntry<'a>> = Vec::new();
         let mut with_comments = false;
         let mut prev_anchor: Option<u32> = None;
 
@@ -1457,11 +1518,15 @@ impl<'a> Formatter<'a> {
                 .first()
                 .map(|a| a.span.byte_offset)
                 .unwrap_or(field.name_span.byte_offset);
-            let (trailing_for_prev, leading) = match prev_anchor {
+            let (trailing_for_prev, leading, has_blank) = match prev_anchor {
                 Some(anchor) => self
                     .comments
                     .take_split_by_newline_after(anchor, leading_edge),
-                None => (None, self.comments.take_comments_before(leading_edge)),
+                None => (
+                    None,
+                    self.comments.take_comments_before(leading_edge),
+                    false,
+                ),
             };
 
             with_comments = with_comments || trailing_for_prev.is_some() || leading.is_some();
@@ -1469,11 +1534,13 @@ impl<'a> Formatter<'a> {
             if let Some(t) = trailing_for_prev
                 && let Some(last) = entries.last_mut()
             {
-                let (_, _, slot): &mut (_, _, Option<Document<'a>>) = last;
-                *slot = Some(t);
+                last.trailing = Some(t);
             }
 
             let field_attrs = self.field_attributes(&field.attributes);
+            let between_attrs_and_name = self
+                .comments
+                .take_comments_before(field.name_span.byte_offset);
 
             let field_definition = if field.visibility.is_public() {
                 Document::str("pub ")
@@ -1486,22 +1553,35 @@ impl<'a> Formatter<'a> {
                     .append(Self::annotation(&field.annotation))
             };
 
-            entries.push((leading, field_attrs.append(field_definition), None));
+            let attrs_with_field = match between_attrs_and_name {
+                Some(c) => field_attrs
+                    .append(c.force_break())
+                    .append(Document::Newline)
+                    .append(field_definition),
+                None => field_attrs.append(field_definition),
+            };
+            entries.push(SiblingEntry {
+                leading,
+                doc: attrs_with_field,
+                trailing: None,
+                has_blank_above: has_blank,
+            });
 
             let ann_span = field.annotation.get_span();
             prev_anchor = Some(ann_span.byte_offset + ann_span.byte_length);
         }
 
-        let (last_trailing, struct_trailing) = match prev_anchor {
+        let (last_trailing, struct_trailing, _) = match prev_anchor {
             Some(anchor) => self
                 .comments
                 .take_split_by_newline_after(anchor, struct_end),
-            None => (None, self.comments.take_comments_before(struct_end)),
+            None => (None, self.comments.take_comments_before(struct_end), false),
         };
         if let Some(t) = last_trailing
             && let Some(last) = entries.last_mut()
         {
-            last.2 = Some(t);
+            last.trailing = Some(t);
+            with_comments = true;
         }
         with_comments = with_comments || struct_trailing.is_some();
 
@@ -1526,23 +1606,154 @@ impl<'a> Formatter<'a> {
             .force_break()
     }
 
-    /// Drains comments before `end` and appends them as standalone trailing
-    /// content inside a container body, separated from the preceding items by
-    /// a blank line.
-    fn with_trailing_comments(&mut self, body: Document<'a>, end: u32) -> Document<'a> {
-        match self.comments.take_comments_before(end) {
-            Some(trailing) => body
-                .append(Document::Newline)
-                .append(Document::Newline)
-                .append(trailing.force_break()),
-            None => body,
+    /// Splits comments before `next_start` into `(prev_same_line, this_leading, has_blank)`.
+    fn sibling_lead_split(
+        &mut self,
+        has_prev: bool,
+        next_start: u32,
+    ) -> (Option<Document<'a>>, Option<Document<'a>>, bool) {
+        if has_prev {
+            self.comments.take_split_at_line_start(next_start)
+        } else {
+            (None, self.comments.take_comments_before(next_start), false)
         }
     }
 
-    /// Drains comments before `start` and prepends them to the document built
-    /// by `build`. Use at the entry of any first-class child node emitter
-    /// (pattern, binding, enum_variant, etc.) so that leading comments stay
-    /// with the node the user wrote them on.
+    /// Joins entries into a comma-separated body; returns `(body, close_sep)`.
+    fn join_pattern_entries(
+        entries: Vec<PatternEntry<'a>>,
+        rest: Option<(Option<Document<'a>>, Document<'a>)>,
+        trailing_unbroken: &'static str,
+    ) -> (Document<'a>, Document<'a>) {
+        let mut body = Document::Sequence(vec![]);
+        let mut prev_had_trailing = false;
+        let entry_count = entries.len();
+        let separator = |prev_had_trailing: bool| {
+            if prev_had_trailing {
+                Document::Newline
+            } else {
+                strict_break(",", ", ")
+            }
+        };
+        for (i, entry) in entries.into_iter().enumerate() {
+            if i > 0 {
+                body = body.append(separator(prev_had_trailing));
+            }
+            let mut elem = entry.doc;
+            if let Some(c) = entry.leading {
+                elem = c.append(Document::Newline).force_break().append(elem);
+            }
+            body = body.append(elem);
+            if let Some(t) = entry.trailing {
+                body = body
+                    .append(Document::str(","))
+                    .append(Document::str(" "))
+                    .append(t.force_break());
+                prev_had_trailing = true;
+            } else {
+                prev_had_trailing = false;
+            }
+        }
+        if let Some((rest_leading, rest_doc)) = rest {
+            if entry_count > 0 {
+                body = body.append(separator(prev_had_trailing));
+            }
+            let mut rest_block = rest_doc;
+            if let Some(c) = rest_leading {
+                rest_block = c.append(Document::Newline).force_break().append(rest_block);
+            }
+            body = body.append(rest_block);
+            prev_had_trailing = false;
+        }
+        let close_sep = if prev_had_trailing {
+            strict_break("", trailing_unbroken)
+        } else {
+            strict_break(",", trailing_unbroken)
+        };
+        (body, close_sep)
+    }
+
+    /// Split-then-build: `build` runs after the split so its auto-drain sees the post-leading cursor.
+    fn push_pattern_entry(
+        &mut self,
+        entries: &mut Vec<PatternEntry<'a>>,
+        start: u32,
+        build: impl FnOnce(&mut Self) -> Document<'a>,
+    ) {
+        let (last_trailing, leading, _) = self.sibling_lead_split(!entries.is_empty(), start);
+        if let Some(t) = last_trailing
+            && let Some(last) = entries.last_mut()
+        {
+            last.trailing = Some(t);
+        }
+        let doc = build(self);
+        entries.push(PatternEntry {
+            leading,
+            doc,
+            trailing: None,
+        });
+    }
+
+    /// Sibling split before a rest token; returns the rest's leading.
+    fn split_for_rest(
+        &mut self,
+        entries: &mut Vec<PatternEntry<'a>>,
+        rest_pos: u32,
+    ) -> Option<Document<'a>> {
+        let (last_trailing, rest_leading, _) =
+            self.sibling_lead_split(!entries.is_empty(), rest_pos);
+        if let Some(t) = last_trailing
+            && let Some(last) = entries.last_mut()
+        {
+            last.trailing = Some(t);
+        }
+        rest_leading
+    }
+
+    /// Joins sibling entries and drains body-trailing comments before `body_end`.
+    fn join_sibling_body(
+        &mut self,
+        mut entries: Vec<SiblingEntry<'a>>,
+        body_end: u32,
+    ) -> Document<'a> {
+        let standalone = if entries.is_empty() {
+            self.comments.take_comments_before(body_end)
+        } else {
+            let (same_line, standalone, _) = self.comments.take_split_at_line_start(body_end);
+            if let Some(t) = same_line
+                && let Some(last) = entries.last_mut()
+            {
+                last.trailing = Some(t);
+            }
+            standalone
+        };
+
+        let mut body = Document::Sequence(vec![]);
+        for (i, entry) in entries.into_iter().enumerate() {
+            if i > 0 {
+                body = body.append(Document::Newline);
+                if entry.has_blank_above {
+                    body = body.append(Document::Newline);
+                }
+            }
+            if let Some(c) = entry.leading {
+                body = body.append(c.force_break()).append(Document::Newline);
+            }
+            body = body.append(entry.doc);
+            if let Some(t) = entry.trailing {
+                body = body.append(Document::str(" ")).append(t);
+            }
+        }
+        if let Some(s) = standalone {
+            body = body
+                .append(Document::Newline)
+                .append(Document::Newline)
+                .append(s.force_break());
+        }
+        body
+    }
+
+    /// Drains comments before `start` and prepends them to `build`'s output.
     fn with_leading_comments(
         &mut self,
         start: u32,
@@ -1592,8 +1803,24 @@ impl<'a> Formatter<'a> {
             return header.append(" {}");
         }
 
-        let variants_docs: Vec<_> = variants.iter().map(|v| self.enum_variant(v)).collect();
-        let body = self.with_trailing_comments(join(variants_docs, Document::Newline), span.end());
+        let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(variants.len());
+        for variant in variants {
+            let (last_trailing, leading, has_blank) =
+                self.sibling_lead_split(!entries.is_empty(), variant.name_span.byte_offset);
+            if let Some(t) = last_trailing
+                && let Some(last) = entries.last_mut()
+            {
+                last.trailing = Some(t);
+            }
+            let variant_doc = self.enum_variant_body(variant);
+            entries.push(SiblingEntry {
+                leading,
+                doc: variant_doc,
+                trailing: None,
+                has_blank_above: has_blank,
+            });
+        }
+        let body = self.join_sibling_body(entries, span.end());
         Self::braced_body(header, body)
     }
 
@@ -1617,52 +1844,58 @@ impl<'a> Formatter<'a> {
             return header.append(" {}");
         }
 
-        let variants_docs: Vec<_> = variants
-            .iter()
-            .map(|v| self.value_enum_variant(v))
-            .collect();
-
-        let body = self.with_trailing_comments(join(variants_docs, Document::Newline), span.end());
+        let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(variants.len());
+        for variant in variants {
+            let (last_trailing, leading, has_blank) =
+                self.sibling_lead_split(!entries.is_empty(), variant.name_span.byte_offset);
+            if let Some(t) = last_trailing
+                && let Some(last) = entries.last_mut()
+            {
+                last.trailing = Some(t);
+            }
+            let value_doc = self.literal(&variant.value);
+            let variant_doc = Document::string(variant.name.to_string())
+                .append(" = ")
+                .append(value_doc)
+                .append(",");
+            entries.push(SiblingEntry {
+                leading,
+                doc: variant_doc,
+                trailing: None,
+                has_blank_above: has_blank,
+            });
+        }
+        let body = self.join_sibling_body(entries, span.end());
         Self::braced_body(header, body)
     }
 
-    fn enum_variant(&mut self, variant: &'a EnumVariant) -> Document<'a> {
-        self.with_leading_comments(variant.name_span.byte_offset, |_| {
-            let name = Document::string(variant.name.to_string());
-            match &variant.fields {
-                VariantFields::Unit => name.append(","),
-                VariantFields::Tuple(fields) => {
-                    let field_docs: Vec<_> = fields
-                        .iter()
-                        .map(|f| Self::annotation(&f.annotation))
-                        .collect();
-                    name.append("(")
-                        .append(join(field_docs, Document::str(", ")))
-                        .append("),")
-                }
-                VariantFields::Struct(fields) => {
-                    let field_docs: Vec<_> = fields
-                        .iter()
-                        .map(|f| {
-                            Document::string(f.name.to_string())
-                                .append(": ")
-                                .append(Self::annotation(&f.annotation))
-                        })
-                        .collect();
-                    name.append(" { ")
-                        .append(join(field_docs, Document::str(", ")))
-                        .append(" },")
-                }
+    fn enum_variant_body(&mut self, variant: &'a EnumVariant) -> Document<'a> {
+        let name = Document::string(variant.name.to_string());
+        match &variant.fields {
+            VariantFields::Unit => name.append(","),
+            VariantFields::Tuple(fields) => {
+                let field_docs: Vec<_> = fields
+                    .iter()
+                    .map(|f| Self::annotation(&f.annotation))
+                    .collect();
+                name.append("(")
+                    .append(join(field_docs, Document::str(", ")))
+                    .append("),")
             }
-        })
-    }
-
-    fn value_enum_variant(&mut self, variant: &'a syntax::ast::ValueEnumVariant) -> Document<'a> {
-        self.with_leading_comments(variant.name_span.byte_offset, |s| {
-            let name = Document::string(variant.name.to_string());
-            let value_doc = s.literal(&variant.value);
-            name.append(" = ").append(value_doc).append(",")
-        })
+            VariantFields::Struct(fields) => {
+                let field_docs: Vec<_> = fields
+                    .iter()
+                    .map(|f| {
+                        Document::string(f.name.to_string())
+                            .append(": ")
+                            .append(Self::annotation(&f.annotation))
+                    })
+                    .collect();
+                name.append(" { ")
+                    .append(join(field_docs, Document::str(", ")))
+                    .append(" },")
+            }
+        }
     }
 
     fn type_alias(
@@ -1690,31 +1923,68 @@ impl<'a> Formatter<'a> {
         span: &Span,
     ) -> Document<'a> {
         let generics_doc = Self::generics(generics);
-
-        let mut body_docs = Vec::new();
-
-        for parent in parents {
-            body_docs.push(Document::str("impl ").append(Self::annotation(&parent.annotation)));
-        }
-
-        for method in methods {
-            body_docs.push(self.interface_method(method));
-        }
-
         let header = Document::str("interface ")
             .append(name)
             .append(generics_doc);
 
-        if body_docs.is_empty() {
+        if parents.is_empty() && methods.is_empty() {
             return header.append(" {}");
         }
 
-        let body = self.with_trailing_comments(join(body_docs, Document::Newline), span.end());
+        let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(parents.len() + methods.len());
+
+        for parent in parents {
+            let (last_trailing, leading, has_blank) =
+                self.sibling_lead_split(!entries.is_empty(), parent.span.byte_offset);
+            if let Some(t) = last_trailing
+                && let Some(last) = entries.last_mut()
+            {
+                last.trailing = Some(t);
+            }
+            let parent_doc = Document::str("impl ").append(Self::annotation(&parent.annotation));
+            entries.push(SiblingEntry {
+                leading,
+                doc: parent_doc,
+                trailing: None,
+                has_blank_above: has_blank,
+            });
+        }
+
+        for method in methods {
+            let keyword_start = method.get_span().byte_offset;
+            let leading_edge = match method {
+                Expression::Function { attributes, .. } => attributes
+                    .first()
+                    .map(|a| a.span.byte_offset)
+                    .unwrap_or(keyword_start),
+                _ => keyword_start,
+            };
+            let (last_trailing, leading, has_blank) =
+                self.sibling_lead_split(!entries.is_empty(), leading_edge);
+            if let Some(t) = last_trailing
+                && let Some(last) = entries.last_mut()
+            {
+                last.trailing = Some(t);
+            }
+            let method_doc = self.interface_method_body(method, keyword_start);
+            entries.push(SiblingEntry {
+                leading,
+                doc: method_doc,
+                trailing: None,
+                has_blank_above: has_blank,
+            });
+        }
+
+        let body = self.join_sibling_body(entries, span.end());
         Self::braced_body(header, body)
     }
 
-    fn interface_method(&mut self, method: &'a Expression) -> Document<'a> {
-        self.with_leading_comments(method.get_span().byte_offset, |s| match method {
+    fn interface_method_body(
+        &mut self,
+        method: &'a Expression,
+        keyword_start: u32,
+    ) -> Document<'a> {
+        match method {
             Expression::Function {
                 name,
                 generics,
@@ -1723,10 +1993,11 @@ impl<'a> Formatter<'a> {
                 attributes,
                 ..
             } => {
-                let attrs_doc = s.attributes(attributes);
+                let attrs_doc = self.attributes(attributes);
+                let between_attrs_and_keyword = self.comments.take_comments_before(keyword_start);
                 let generics_doc = Self::generics(generics);
 
-                let params_docs: Vec<_> = params.iter().map(|p| s.binding(p)).collect();
+                let params_docs: Vec<_> = params.iter().map(|p| self.binding(p)).collect();
                 let params_doc = Self::wrap_params(params_docs);
 
                 let return_doc = if return_annotation.is_unknown() {
@@ -1735,15 +2006,21 @@ impl<'a> Formatter<'a> {
                     Document::str(" -> ").append(Self::annotation(return_annotation))
                 };
 
-                attrs_doc
-                    .append(Document::str("fn "))
+                let signature = Document::str("fn ")
                     .append(Document::string(name.to_string()))
                     .append(generics_doc)
                     .append(params_doc)
-                    .append(return_doc)
+                    .append(return_doc);
+                match between_attrs_and_keyword {
+                    Some(c) => attrs_doc
+                        .append(c.force_break())
+                        .append(Document::Newline)
+                        .append(signature),
+                    None => attrs_doc.append(signature),
+                }
             }
             _ => Document::Sequence(vec![]),
-        })
+        }
     }
 
     fn impl_block(
@@ -1763,31 +2040,29 @@ impl<'a> Formatter<'a> {
             return header.append(" {}");
         }
 
-        let mut docs = Vec::with_capacity(methods.len() * 5);
-
-        for (i, m) in methods.iter().enumerate() {
-            let start = m.get_span().byte_offset;
-
-            if i > 0 {
-                docs.push(Document::Newline);
-                docs.push(Document::Newline);
+        let mut entries: Vec<SiblingEntry<'a>> = Vec::with_capacity(methods.len());
+        for method in methods {
+            let start = method.get_span().byte_offset;
+            let (last_trailing, leading, has_blank) =
+                self.sibling_lead_split(!entries.is_empty(), start);
+            if let Some(t) = last_trailing
+                && let Some(last) = entries.last_mut()
+            {
+                last.trailing = Some(t);
             }
-
-            if let Some(comment_doc) = self.comments.take_comments_before(start) {
-                docs.push(comment_doc.force_break());
-                docs.push(Document::Newline);
-            }
-
-            docs.push(self.definition(m));
+            entries.push(SiblingEntry {
+                leading,
+                doc: self.definition(method),
+                trailing: None,
+                has_blank_above: has_blank,
+            });
         }
-
-        if let Some(trailing) = self.comments.take_comments_before(impl_end) {
-            docs.push(Document::Newline);
-            docs.push(Document::Newline);
-            docs.push(trailing.force_break());
+        // Impl methods always get a blank line between them, regardless of source.
+        for entry in entries.iter_mut().skip(1) {
+            entry.has_blank_above = true;
         }
-
-        Self::braced_body(header, concat(docs))
+        let body = self.join_sibling_body(entries, impl_end);
+        Self::braced_body(header, body)
     }
 
     fn const_definition(
@@ -1821,28 +2096,35 @@ impl<'a> Formatter<'a> {
                 identifier,
                 fields,
                 rest,
+                span,
                 ..
             } => {
                 if fields.is_empty() && !rest {
                     Document::string(identifier.to_string())
                 } else {
-                    let mut field_docs: Vec<_> = fields
-                        .iter()
-                        .map(|f| {
-                            let start = f.get_span().byte_offset;
-                            let comments = self.comments.take_comments_before(start);
-                            prepend_comments(self.pattern(f), comments)
-                        })
-                        .collect();
-                    if *rest {
-                        field_docs.push(Document::str(".."));
+                    let mut entries: Vec<PatternEntry<'a>> = Vec::with_capacity(fields.len());
+                    for f in fields {
+                        self.push_pattern_entry(&mut entries, f.get_span().byte_offset, |s| {
+                            s.pattern(f)
+                        });
                     }
+                    let rest_info = if *rest {
+                        let rest_pos = self
+                            .comments
+                            .next_pair_at(b'.', span.byte_offset, span.end())
+                            .unwrap_or(span.end());
+                        let leading = self.split_for_rest(&mut entries, rest_pos);
+                        Some((leading, Document::str("..")))
+                    } else {
+                        None
+                    };
+                    let (body, close_sep) = Self::join_pattern_entries(entries, rest_info, "");
                     Document::string(identifier.to_string())
                         .append("(")
                         .append(strict_break("", ""))
-                        .append(join(field_docs, strict_break(",", ", ")))
+                        .append(body)
                         .nest(INDENT_WIDTH)
-                        .append(strict_break(",", ""))
+                        .append(close_sep)
                         .append(")")
                         .group()
                 }
@@ -1852,76 +2134,89 @@ impl<'a> Formatter<'a> {
                 identifier,
                 fields,
                 rest,
+                span,
                 ..
             } => {
                 if fields.is_empty() && !rest {
                     Document::string(identifier.to_string()).append(" {}")
                 } else {
-                    let mut field_docs: Vec<_> = fields
-                        .iter()
-                        .map(|f| {
-                            let start = f.value.get_span().byte_offset;
-                            let comments = self.comments.take_comments_before(start);
-                            prepend_comments(self.struct_field_pattern(f), comments)
-                        })
-                        .collect();
-                    if *rest {
-                        field_docs.push(Document::str(".."));
+                    let mut entries: Vec<PatternEntry<'a>> = Vec::with_capacity(fields.len());
+                    for f in fields {
+                        self.push_pattern_entry(
+                            &mut entries,
+                            f.value.get_span().byte_offset,
+                            |s| s.struct_field_pattern(f),
+                        );
                     }
+                    let rest_info = if *rest {
+                        let rest_pos = self
+                            .comments
+                            .next_pair_at(b'.', span.byte_offset, span.end())
+                            .unwrap_or(span.end());
+                        let leading = self.split_for_rest(&mut entries, rest_pos);
+                        Some((leading, Document::str("..")))
+                    } else {
+                        None
+                    };
+                    let (body, close_sep) = Self::join_pattern_entries(entries, rest_info, " ");
                     Document::string(identifier.to_string())
                         .append(" {")
                         .append(strict_break(" ", " "))
-                        .append(join(field_docs, strict_break(",", ", ")))
+                        .append(body)
                         .nest(INDENT_WIDTH)
-                        .append(strict_break(",", " "))
+                        .append(close_sep)
                         .append("}")
                         .group()
                 }
             }
 
             Pattern::Tuple { elements, .. } => {
-                let elements_docs: Vec<_> = elements
-                    .iter()
-                    .map(|e| {
-                        let start = e.get_span().byte_offset;
-                        let comments = self.comments.take_comments_before(start);
-                        prepend_comments(self.pattern(e), comments)
-                    })
-                    .collect();
+                let mut entries: Vec<PatternEntry<'a>> = Vec::with_capacity(elements.len());
+                for element in elements {
+                    self.push_pattern_entry(&mut entries, element.get_span().byte_offset, |s| {
+                        s.pattern(element)
+                    });
+                }
+                let (body, close_sep) = Self::join_pattern_entries(entries, None, "");
                 Document::str("(")
                     .append(strict_break("", ""))
-                    .append(join(elements_docs, strict_break(",", ", ")))
+                    .append(body)
                     .nest(INDENT_WIDTH)
-                    .append(strict_break(",", ""))
+                    .append(close_sep)
                     .append(")")
                     .group()
             }
 
             Pattern::Slice { prefix, rest, .. } => {
-                let mut all_docs: Vec<Document<'a>> = Vec::new();
-
+                let mut entries: Vec<PatternEntry<'a>> = Vec::with_capacity(prefix.len());
                 for pattern in prefix {
-                    let start = pattern.get_span().byte_offset;
-                    let comments = self.comments.take_comments_before(start);
-                    all_docs.push(prepend_comments(self.pattern(pattern), comments));
+                    self.push_pattern_entry(&mut entries, pattern.get_span().byte_offset, |s| {
+                        s.pattern(pattern)
+                    });
                 }
-
-                match rest {
-                    RestPattern::Absent => {}
-                    RestPattern::Discard(_) => {
-                        all_docs.push(Document::str(".."));
+                let rest_info = match rest {
+                    RestPattern::Absent => None,
+                    RestPattern::Discard(rest_span) => {
+                        let leading = self.split_for_rest(&mut entries, rest_span.byte_offset);
+                        Some((leading, Document::str("..")))
                     }
-                    RestPattern::Bind { name, .. } => {
-                        all_docs
-                            .push(Document::str("..").append(Document::string(name.to_string())));
+                    RestPattern::Bind {
+                        name,
+                        span: rest_span,
+                    } => {
+                        let leading = self.split_for_rest(&mut entries, rest_span.byte_offset);
+                        Some((
+                            leading,
+                            Document::str("..").append(Document::string(name.to_string())),
+                        ))
                     }
-                }
-
+                };
+                let (body, close_sep) = Self::join_pattern_entries(entries, rest_info, "");
                 Document::str("[")
                     .append(strict_break("", ""))
-                    .append(join(all_docs, strict_break(",", ", ")))
+                    .append(body)
                     .nest(INDENT_WIDTH)
-                    .append(strict_break(",", ""))
+                    .append(close_sep)
                     .append("]")
                     .group()
             }

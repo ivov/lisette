@@ -1,0 +1,11 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f() {\n  foo(a, // trailing\n  b, c)\n}"
+---
+fn f() {
+  foo(
+    a, // trailing
+    b,
+    c,
+  )
+}

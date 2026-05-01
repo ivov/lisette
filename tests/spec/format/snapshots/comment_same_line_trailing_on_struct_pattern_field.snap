@@ -1,0 +1,15 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: struct Point { x: int, y: int }\n\nfn f(p: Point) -> int {\n  match p {\n    Point { x: 1, // trailing struct field\n    y: 2 } => 0,\n    _ => 1,\n  }\n}"
+---
+struct Point { x: int, y: int }
+
+fn f(p: Point) -> int {
+  match p {
+    Point { 
+      x: 1, // trailing struct field
+      y: 2,
+    } => 0,
+    _ => 1,
+  }
+}

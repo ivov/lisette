@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: interface I {\n  impl A // trailing parent\n  impl B\n  fn first()\n}"
+---
+interface I {
+  impl A // trailing parent
+  impl B
+  fn first()
+}

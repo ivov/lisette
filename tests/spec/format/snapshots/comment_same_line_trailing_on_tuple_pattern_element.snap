@@ -1,0 +1,13 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: fn f(x: (int, int)) -> int {\n  match x {\n    (1, // trailing tuple elem\n    2) => 0,\n    _ => 1,\n  }\n}"
+---
+fn f(x: (int, int)) -> int {
+  match x {
+    (
+      1, // trailing tuple elem
+      2,
+    ) => 0,
+    _ => 1,
+  }
+}

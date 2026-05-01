@@ -78,54 +78,69 @@ impl<'a> Comments<'a> {
         true
     }
 
-    /// Drain comments before `before`, splitting same-line trailing from
-    /// standalone leading. `is_split_point` returns true once a comment
-    /// belongs in the standalone slot; subsequent comments stay there.
+    /// Drains comments before `before`; returns `(same_line, new_line, has_blank_above)`.
     fn take_split_before(
         &mut self,
         before: u32,
         mut is_split_point: impl FnMut(u32) -> bool,
-    ) -> (Option<Document<'a>>, Option<Document<'a>>) {
+    ) -> (Option<Document<'a>>, Option<Document<'a>>, bool) {
         let comment_end = self.comments[self.comments_cursor..]
             .iter()
             .position(|c| c.start >= before)
             .map(|i| self.comments_cursor + i)
             .unwrap_or(self.comments.len());
-        let popped = &self.comments[self.comments_cursor..comment_end];
+        let popped_comments = &self.comments[self.comments_cursor..comment_end];
         self.comments_cursor = comment_end;
-
-        let mut same_line: Vec<Option<&'a str>> = Vec::new();
-        let mut new_line: Vec<Option<&'a str>> = Vec::new();
-        let mut split_seen = false;
-
-        for c in popped {
-            if !split_seen && is_split_point(c.start) {
-                split_seen = true;
-            }
-            if split_seen {
-                new_line.push(Some(c.content));
-            } else {
-                same_line.push(Some(c.content));
-            }
-        }
 
         let empty_end = self.empty_lines[self.empty_cursor..]
             .iter()
             .position(|&l| l >= before)
             .map(|i| self.empty_cursor + i)
             .unwrap_or(self.empty_lines.len());
+        let popped_empty = &self.empty_lines[self.empty_cursor..empty_end];
         self.empty_cursor = empty_end;
+
+        let comments_iter = popped_comments.iter().map(|c| (c.start, Some(c.content)));
+        let empty_iter = popped_empty.iter().map(|&pos| (pos, None));
+        let mut events: Vec<_> = comments_iter.chain(empty_iter).collect();
+        events.sort_by_key(|(pos, _)| *pos);
+
+        let mut same_line: Vec<Option<&'a str>> = Vec::new();
+        let mut new_line: Vec<Option<&'a str>> = Vec::new();
+        let mut split_seen = false;
+        let mut new_line_has_some = false;
+        let mut has_blank_above = false;
+
+        for (pos, content) in events {
+            if !split_seen && content.is_some() && is_split_point(pos) {
+                split_seen = true;
+            }
+            if content.is_none() {
+                split_seen = true;
+                if new_line_has_some {
+                    new_line.push(None);
+                } else {
+                    has_blank_above = true;
+                }
+            } else if split_seen {
+                new_line.push(content);
+                new_line_has_some = true;
+            } else {
+                same_line.push(content);
+            }
+        }
 
         (
             comments_to_document(same_line),
             comments_to_document(new_line),
+            has_blank_above,
         )
     }
 
     pub fn take_split_at_line_start(
         &mut self,
         before: u32,
-    ) -> (Option<Document<'a>>, Option<Document<'a>>) {
+    ) -> (Option<Document<'a>>, Option<Document<'a>>, bool) {
         let source = self.source;
         self.take_split_before(before, |start| Self::at_line_start(source, start))
     }
@@ -134,7 +149,7 @@ impl<'a> Comments<'a> {
         &mut self,
         anchor: u32,
         before: u32,
-    ) -> (Option<Document<'a>>, Option<Document<'a>>) {
+    ) -> (Option<Document<'a>>, Option<Document<'a>>, bool) {
         let source = self.source;
         self.take_split_before(before, |start| Self::newline_between(source, anchor, start))
     }
@@ -222,6 +237,63 @@ impl<'a> Comments<'a> {
             .is_some_and(|c| c.start < position)
     }
 
+    /// Source-scans for `needle needle` (e.g. `..`) in `[start, before)`, skipping comment text.
+    pub(crate) fn next_pair_at(&self, needle: u8, start: u32, before: u32) -> Option<u32> {
+        let bytes = self.source.as_bytes();
+        let mut i = (start as usize).min(self.source.len());
+        let e = (before as usize).min(self.source.len());
+        let mut comment_idx = self.first_comment_overlapping(i);
+        while let Some(pos) = self.scan_byte(bytes, &mut i, e, &mut comment_idx, needle) {
+            let p = pos as usize;
+            if p + 1 < e && bytes[p + 1] == needle {
+                return Some(pos);
+            }
+            i = p + 1;
+        }
+        None
+    }
+
+    /// Source-scans for `needle` in `[start, before)`, skipping comment text.
+    pub(crate) fn next_byte_at(&self, needle: u8, start: u32, before: u32) -> Option<u32> {
+        let bytes = self.source.as_bytes();
+        let mut i = (start as usize).min(self.source.len());
+        let e = (before as usize).min(self.source.len());
+        let mut comment_idx = self.first_comment_overlapping(i);
+        self.scan_byte(bytes, &mut i, e, &mut comment_idx, needle)
+    }
+
+    fn first_comment_overlapping(&self, pos: usize) -> usize {
+        // Use partition_point on sorted comments rather than linear scan.
+        self.comments
+            .partition_point(|c| (c.start as usize) + 2 + c.content.len() <= pos)
+    }
+
+    fn scan_byte(
+        &self,
+        bytes: &[u8],
+        i: &mut usize,
+        e: usize,
+        comment_idx: &mut usize,
+        needle: u8,
+    ) -> Option<u32> {
+        while *i < e {
+            if *comment_idx < self.comments.len() {
+                let c = &self.comments[*comment_idx];
+                let cs = c.start as usize;
+                if cs <= *i {
+                    *i = (cs + 2 + c.content.len()).min(e);
+                    *comment_idx += 1;
+                    continue;
+                }
+            }
+            if bytes[*i] == needle {
+                return Some(*i as u32);
+            }
+            *i += 1;
+        }
+        None
+    }
+
     pub fn has_comments_in_range(&self, span: syntax::ast::Span) -> bool {
         let start = span.byte_offset;
         let end = span.byte_offset + span.byte_length;
@@ -259,6 +331,9 @@ fn comments_to_document<'a>(comments: Vec<Option<&'a str>>) -> Option<Document<'
         }
     }
 
+    if docs.is_empty() {
+        return None;
+    }
     Some(concat(docs))
 }
 
