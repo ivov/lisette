@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::project_manifest::{
-    GoDependency, Manifest, check_toolchain_version, find_module_for_pkg, parse_manifest,
+    GoDependency, Manifest, check_no_subpackage_deps, check_toolchain_version, find_module_for_pkg,
+    parse_manifest,
 };
 use crate::{GoModule, GoPackage, typedef_cache_dir};
 
@@ -58,6 +59,7 @@ impl TypedefLocator {
         let manifest = parse_manifest(project_root)?;
 
         check_toolchain_version(&manifest)?;
+        check_no_subpackage_deps(&manifest)?;
 
         let locator = Self::new(
             manifest.go_deps(),

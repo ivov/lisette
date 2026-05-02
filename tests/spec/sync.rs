@@ -222,3 +222,36 @@ version = "0.1.0"
         stderr
     );
 }
+
+#[test]
+fn sync_aborts_with_clear_message_on_subpackage_dep() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifest = r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"github.com/gorilla/mux" = "v1.8.0"
+"github.com/gorilla/mux/middleware" = "v1.8.0"
+"#;
+    write_project(tmp.path(), manifest, &[("main.lis", "fn main() {}\n")]);
+
+    let output = run_sync(tmp.path());
+    assert!(
+        !output.status.success(),
+        "lis sync must fail when a subpackage is declared as a dep"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("`github.com/gorilla/mux/middleware`")
+            && stderr.contains("subpackage of `github.com/gorilla/mux`"),
+        "expected targeted subpackage diagnostic, got stderr:\n{}",
+        stderr
+    );
+    assert!(
+        !stderr.contains("invalid Go version"),
+        "subpackage error must not be misframed as a version problem, got stderr:\n{}",
+        stderr
+    );
+}

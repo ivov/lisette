@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use crate::go_cli;
 use crate::lock::acquire_mutation_lock;
-use crate::output::{print_add_success, print_preview_notice, print_progress};
+use crate::output::{print_add_success, print_preview_notice, print_progress, print_warning};
 use crate::workspace::GoWorkspace;
 use crate::{cli_error, error};
 use deps::{GoModule, remove_go_dep, resolve_empty_via, trim_dead_via_parents, upsert_go_dep};
@@ -358,6 +358,15 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         return Err(1);
     }
 
+    if let Err(msg) = deps::check_no_subpackage_deps(&manifest) {
+        cli_error!(
+            "Invalid `lisette.toml`",
+            msg,
+            "Fix `lisette.toml` and retry"
+        );
+        return Err(1);
+    }
+
     if let Err(msg) = deps::validate_project_name(&manifest.project.name) {
         cli_error!(
             "Invalid project name",
@@ -467,14 +476,26 @@ fn reconcile_module_graph(
 ) -> Result<GraphResult, i32> {
     let mut module_versions: HashMap<String, String> = HashMap::new();
     let mut edges: HashMap<String, Vec<String>> = HashMap::new();
+    let mut failed_transitives: HashSet<String> = HashSet::new();
     let mut queue: Vec<String> = vec![dep.module_path.clone()];
 
     loop {
         while let Some(module_path) = queue.pop() {
-            let module_version = workspace.query_version(&module_path).map_err(|msg| {
-                error!("failed to resolve module version", msg);
-                1
-            })?;
+            let is_explicit = module_path == dep.module_path;
+
+            let module_version = match workspace.query_version(&module_path) {
+                Ok(v) => v,
+                Err(msg) => {
+                    if is_explicit {
+                        error!("failed to resolve module version", msg);
+                        return Err(1);
+                    }
+                    if failed_transitives.insert(module_path.clone()) {
+                        print_warning(&format!("skipping transitive {}: {}", module_path, msg));
+                    }
+                    continue;
+                }
+            };
 
             if module_versions
                 .get(&module_path)
@@ -483,7 +504,7 @@ fn reconcile_module_graph(
                 continue;
             }
 
-            if module_path != dep.module_path && !module_versions.contains_key(&module_path) {
+            if !is_explicit && !module_versions.contains_key(&module_path) {
                 print_progress(&format!("Resolving transitive dep {}", module_path));
             }
 
@@ -495,16 +516,28 @@ fn reconcile_module_graph(
             let packages = match workspace.reconcile(module) {
                 Ok(p) => p,
                 Err(msg) => {
-                    error!("failed to reconcile dependency", msg);
-                    return Err(1);
+                    if is_explicit {
+                        error!("failed to reconcile dependency", msg);
+                        return Err(1);
+                    }
+                    if failed_transitives.insert(module_path.clone()) {
+                        print_warning(&format!("skipping transitive {}: {}", module_path, msg));
+                    }
+                    continue;
                 }
             };
 
             let dep_modules = match workspace.find_third_party_deps(module, &packages) {
                 Ok(t) => t,
                 Err(msg) => {
-                    error!("failed to scan transitive imports", msg);
-                    return Err(1);
+                    if is_explicit {
+                        error!("failed to scan transitive imports", msg);
+                        return Err(1);
+                    }
+                    if failed_transitives.insert(module_path.clone()) {
+                        print_warning(&format!("skipping transitive {}: {}", module_path, msg));
+                    }
+                    continue;
                 }
             };
 
@@ -536,6 +569,13 @@ fn reconcile_module_graph(
         if !more_work {
             break;
         }
+    }
+
+    if !failed_transitives.is_empty() {
+        print_warning(&format!(
+            "{} transitive dep(s) skipped; importing them later will fail until they are bindable",
+            failed_transitives.len()
+        ));
     }
 
     Ok(GraphResult {

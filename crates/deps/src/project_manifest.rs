@@ -132,6 +132,24 @@ pub fn check_toolchain_version(manifest: &Manifest) -> Result<(), String> {
     Ok(())
 }
 
+pub fn check_no_subpackage_deps(manifest: &Manifest) -> Result<(), String> {
+    let deps = manifest.go_deps();
+
+    for key in deps.keys() {
+        if let Some(parent) = deps
+            .keys()
+            .find(|other| other.as_str() != key.as_str() && is_pkg_under(key, other))
+        {
+            return Err(format!(
+                "`{}` in `[dependencies.go]` is a subpackage of `{}`; remove this entry and rely on the parent module pin",
+                key, parent
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 
 fn strip_bom_to_str(bytes: &[u8]) -> Result<&str, std::str::Utf8Error> {
@@ -324,6 +342,14 @@ pub fn resolve_empty_via(
     Ok(ResolveReport { promoted, removed })
 }
 
+/// Whether `pkg_path` equals `module_path` or is a path nested under it
+/// (`module_path` followed by `/`).
+fn is_pkg_under(pkg_path: &str, module_path: &str) -> bool {
+    pkg_path == module_path
+        || (pkg_path.starts_with(module_path)
+            && pkg_path.as_bytes().get(module_path.len()) == Some(&b'/'))
+}
+
 /// Longest declared module path that is a prefix of `pkg_path`, matching the
 /// full key or a key followed by `/`.
 pub(crate) fn find_module_for_pkg<'a>(
@@ -332,10 +358,7 @@ pub(crate) fn find_module_for_pkg<'a>(
 ) -> Option<(&'a str, &'a GoDependency)> {
     let mut best: Option<(&str, &GoDependency)> = None;
     for (module_path, dep) in deps {
-        let is_match = pkg_path == module_path.as_str()
-            || (pkg_path.starts_with(module_path.as_str())
-                && pkg_path.as_bytes().get(module_path.len()) == Some(&b'/'));
-        if is_match
+        if is_pkg_under(pkg_path, module_path)
             && best
                 .as_ref()
                 .is_none_or(|(prev, _)| module_path.len() > prev.len())

@@ -40,6 +40,15 @@ pub fn sync() -> i32 {
         return 1;
     }
 
+    if let Err(msg) = deps::check_no_subpackage_deps(&manifest) {
+        cli_error!(
+            "Invalid `lisette.toml`",
+            msg,
+            "Fix `lisette.toml` and retry"
+        );
+        return 1;
+    }
+
     if let Err(msg) = deps::validate_project_name(&manifest.project.name) {
         cli_error!(
             "Invalid project name",
