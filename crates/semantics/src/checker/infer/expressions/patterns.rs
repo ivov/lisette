@@ -196,7 +196,11 @@ impl TaskState<'_> {
                     .unzip();
 
                 if let RestPattern::Bind { ref name, ref span } = rest {
-                    let rest_ty = self.type_slice(element_ty.clone());
+                    let rest_ty = if element_ty.shallow_resolve_in(&self.env).is_error() {
+                        Type::Error
+                    } else {
+                        self.type_slice(element_ty.clone())
+                    };
                     let is_typedef = self.is_d_lis(store);
                     let binding_id = self.facts.add_binding(
                         name.to_string(),
@@ -522,6 +526,8 @@ impl TaskState<'_> {
 
         self.unify(store, &expected_ty, &struct_ty, &span);
 
+        let scrutinee_is_error = expected_ty.shallow_resolve_in(&self.env).is_error();
+
         let struct_module = qualified_name.split('.').next().unwrap_or(&qualified_name);
         let is_cross_module = struct_module != self.cursor.module_id;
 
@@ -541,7 +547,11 @@ impl TaskState<'_> {
                                 field.value.get_span(),
                             ));
                         }
-                        substitute(&field_definition.ty, &map)
+                        if scrutinee_is_error {
+                            Type::Error
+                        } else {
+                            substitute(&field_definition.ty, &map)
+                        }
                     }
                     None => {
                         self.sink.push(diagnostics::infer::member_not_found(

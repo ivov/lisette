@@ -13,7 +13,7 @@ impl TaskState<'_> {
         index_ty: &Type,
         span: Span,
     ) -> bool {
-        if type_name != "Slice" || index_ty.is_variable() {
+        if type_name != "Slice" || index_ty.is_variable() || index_ty.is_error() {
             return true;
         }
         if index_ty.get_name().is_some_and(|n| n == "int") {

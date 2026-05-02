@@ -132,8 +132,10 @@ impl TaskState<'_> {
                     self.check_negative_literal_overflow(&new_expression, &resolved, span);
                     operand_expected_ty.clone()
                 } else {
-                    self.sink
-                        .push(diagnostics::infer::not_numeric(&resolved, operand_span));
+                    if !resolved.is_error() {
+                        self.sink
+                            .push(diagnostics::infer::not_numeric(&resolved, operand_span));
+                    }
                     operand_expected_ty.clone()
                 }
             }
@@ -763,12 +765,18 @@ impl TaskState<'_> {
                 .push(diagnostics::infer::float_literal_int_cast(span));
         }
 
-        self.unify(store, expected_ty, &target_ty, &span);
+        let result_ty = if source_ty.contains_error() || target_ty.contains_error() {
+            Type::Error
+        } else {
+            target_ty.clone()
+        };
+
+        self.unify(store, expected_ty, &result_ty, &span);
 
         Expression::Cast {
             expression: new_expression.into(),
             target_type,
-            ty: target_ty,
+            ty: result_ty,
             span,
         }
     }

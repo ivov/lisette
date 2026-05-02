@@ -2552,6 +2552,41 @@ pub fn outer_fn() -> string {
 }
 
 #[test]
+fn module_graph_failed_import_suppresses_cascade() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"import "totally_missing"
+
+fn main() {
+  let value = totally_missing.SomeValue
+  match value.method() {
+    Ok((_, data)) => {
+      let _ = data as string
+    },
+    Err(_) => (),
+  }
+}"#,
+    );
+    let result = infer_module("main", fs);
+
+    assert_eq!(
+        result.errors.len(),
+        1,
+        "Expected only the import error, got: {:#?}",
+        result.errors
+    );
+    assert!(
+        result.errors[0]
+            .code_str()
+            .is_some_and(|c| c.contains("module_not_found")),
+        "Expected module_not_found, got: {:?}",
+        result.errors[0].code_str()
+    );
+}
+
+#[test]
 fn module_graph_test_file_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(
@@ -4099,6 +4134,30 @@ fn test() {
     }, {
         insta::assert_snapshot!(output);
     });
+}
+
+#[test]
+fn infer_named_numeric_expected_suggests_as_cast() {
+    let typedef_source = r#"
+pub enum Duration: int64 {
+  Second = 1000000000,
+}
+
+pub fn Sleep(d: Duration)
+"#;
+    let main_source = r#"
+import "time"
+
+fn test() {
+  time.Sleep(0);
+}
+"#;
+    let mut fs = MockFileSystem::new();
+    fs.add_file("time", "time.d.lis", typedef_source);
+    fs.add_file("main", "main.lis", main_source);
+    let result = infer_module("main", fs);
+
+    assert_multimodule_infer_error_snapshot!(result, main_source);
 }
 
 #[test]

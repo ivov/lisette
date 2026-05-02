@@ -27,6 +27,10 @@ impl TaskState<'_> {
         let source_ty = raw_source_ty.resolve_in(&self.env);
         let target_ty = raw_target_ty.resolve_in(&self.env);
 
+        if source_ty.contains_error() || target_ty.contains_error() {
+            return;
+        }
+
         if source_ty.is_complex() || target_ty.is_complex() {
             self.sink.push(diagnostics::infer::invalid_cast(
                 raw_source_ty,

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[main.lis:5:14]
+ 4 │ fn test() {
+ 5 │   time.Sleep(0);
+   ·              ┬
+   ·              ╰── expected `Duration`, found `int`
+ 6 │ }
+   ╰────
+  help: Cast with `as`, e.g. `value as Duration` · code: [infer.type_mismatch]
