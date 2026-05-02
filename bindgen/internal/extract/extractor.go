@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"os"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -41,7 +42,33 @@ var loadConfig = &packages.Config{
 		packages.NeedSyntax |
 		packages.NeedDeps |
 		packages.NeedImports,
-	Env: append(os.Environ(), "CGO_ENABLED=0", "GOFLAGS=-mod=mod"), // cgo types are unexported anyway; -mod=mod resolves indirect deps
+	Env: buildLoaderEnv(),
+}
+
+func buildLoaderEnv() []string {
+	targetGOOS := os.Getenv("BINDGEN_TARGET_GOOS")
+	targetGOARCH := os.Getenv("BINDGEN_TARGET_GOARCH")
+
+	env := os.Environ()
+	if targetGOOS != "" || targetGOARCH != "" {
+		filtered := make([]string, 0, len(env))
+		for _, e := range env {
+			if (targetGOOS != "" && strings.HasPrefix(e, "GOOS=")) ||
+				(targetGOARCH != "" && strings.HasPrefix(e, "GOARCH=")) {
+				continue
+			}
+			filtered = append(filtered, e)
+		}
+		env = filtered
+		if targetGOOS != "" {
+			env = append(env, "GOOS="+targetGOOS)
+		}
+		if targetGOARCH != "" {
+			env = append(env, "GOARCH="+targetGOARCH)
+		}
+	}
+
+	return append(env, "CGO_ENABLED=0", "GOFLAGS=-mod=mod")
 }
 
 func LoadPackage(path string) (*packages.Package, error) {

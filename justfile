@@ -79,7 +79,7 @@ fuzz-infer duration="300":
 generate-stdlib-typedefs version:
     cd bindgen && just build
     just build # make binary to run bindgen
-    ./target/release/lis bindgen stdlib {{version}}
+    BINDGEN_TARGET_GOOS=darwin BINDGEN_TARGET_GOARCH=arm64 ./target/release/lis bindgen stdlib {{version}}
     ./target/release/lis format crates/stdlib/typedefs/
     just build # recompile compiler to embed updated typedefs
     ./target/release/lis check crates/stdlib/typedefs/
