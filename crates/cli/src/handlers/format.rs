@@ -34,7 +34,7 @@ pub fn format(path: Option<String>, check: bool) -> i32 {
     }
 
     let start = Instant::now();
-    let mut changed_count = 0;
+    let mut changed_files: Vec<std::path::PathBuf> = Vec::new();
     let mut error_count = 0;
 
     for file in &filepaths {
@@ -72,10 +72,9 @@ pub fn format(path: Option<String>, check: bool) -> i32 {
             continue;
         }
 
-        changed_count += 1;
+        changed_files.push(file.clone());
 
         if check {
-            eprintln!("Formatting would reformat: {}", file.display());
             continue;
         }
 
@@ -110,20 +109,42 @@ pub fn format(path: Option<String>, check: bool) -> i32 {
     let time_display = crate::output::format_elapsed(start.elapsed());
 
     if check {
-        if changed_count > 0 {
-            eprintln!("  ✖ {} file(s) would be reformatted", changed_count);
-            return 1;
+        let colored = crate::output::use_color();
+        let render_path = |file: &std::path::Path| -> String {
+            let s = file.display().to_string();
+            if colored {
+                use owo_colors::OwoColorize;
+                format!("{}", s.bright_magenta())
+            } else {
+                format!("`{}`", s)
+            }
+        };
+        match changed_files.len() {
+            0 => {
+                eprintln!("  ✓ No changes needed {}", time_display);
+                return 0;
+            }
+            1 => {
+                eprintln!(
+                    "  ✖ 1 file needs formatting: {} {}",
+                    render_path(&changed_files[0]),
+                    time_display
+                );
+            }
+            n => {
+                eprintln!("  ✖ {} files need formatting: {}", n, time_display);
+                for file in &changed_files {
+                    eprintln!("    {}", render_path(file));
+                }
+            }
         }
-        eprintln!("  ✓ All files formatted {}", time_display);
-        return 0;
+        return 1;
     }
 
-    if changed_count == 1 {
-        eprintln!("  ✓ Formatted 1 file {}", time_display);
-    } else if changed_count > 1 {
-        eprintln!("  ✓ Formatted {} files {}", changed_count, time_display);
-    } else {
-        eprintln!("  ✓ All files formatted {}", time_display);
+    match changed_files.len() {
+        0 => eprintln!("  ✓ All files formatted {}", time_display),
+        1 => eprintln!("  ✓ Formatted 1 file {}", time_display),
+        n => eprintln!("  ✓ Formatted {} files {}", n, time_display),
     }
 
     0

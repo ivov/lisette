@@ -380,6 +380,14 @@ pub fn print_help(text: &str) {
     println!("{}", format_help_text(text, use_color()));
 }
 
+pub fn print_dimmed(text: &str) {
+    if use_color() {
+        println!("{}", text.dimmed());
+    } else {
+        println!("{}", text);
+    }
+}
+
 #[macro_export]
 macro_rules! error {
     ($msg:literal, $reason:expr) => {{

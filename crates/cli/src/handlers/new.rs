@@ -141,8 +141,14 @@ go run -C target .
     if crate::output::use_color() {
         use owo_colors::OwoColorize;
         eprintln!("  ✓ Created {} project", project_name.bright_magenta());
+        eprintln!(
+            "    cd {} then {} to test it",
+            project_name.bright_magenta(),
+            "lis run".bright_magenta()
+        );
     } else {
         eprintln!("  ✓ Created `{}` project", project_name);
+        eprintln!("    cd `{}` then `lis run` to test it", project_name);
     }
 
     0

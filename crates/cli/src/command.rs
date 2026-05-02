@@ -21,9 +21,7 @@ pub enum Command {
         errors_only: bool,
         warnings_only: bool,
     },
-    Clean {
-        path: Option<String>,
-    },
+    Overview,
     Help {
         command: Option<String>,
     },
@@ -70,7 +68,9 @@ impl Command {
     pub fn parse(args: Vec<String>) -> Result<Command, ParseError> {
         let mut arguments = args.into_iter().skip(1).peekable();
 
-        let command = arguments.next().unwrap_or_else(|| "help".to_string());
+        let Some(command) = arguments.next() else {
+            return Ok(Command::Overview);
+        };
 
         if arguments.peek().is_some_and(|s| s == "-h" || s == "--help") {
             return Ok(Command::Help {
@@ -169,16 +169,11 @@ impl Command {
                 })
             }
 
-            "clean" | "x" => {
-                let path = arguments.next().filter(|s| !s.starts_with('-'));
-                Ok(Command::Clean { path })
-            }
-
             "help" | "--help" => Ok(Command::Help {
                 command: arguments.next(),
             }),
 
-            "version" => Ok(Command::Version),
+            "version" | "--version" => Ok(Command::Version),
 
             "add" => match arguments.next() {
                 Some(dependency) => {
@@ -212,7 +207,7 @@ impl Command {
 
             "learn" => Ok(Command::Learn),
 
-            "completions" => Ok(Command::Completions {
+            "complete" => Ok(Command::Completions {
                 shell: arguments.next(),
             }),
 
@@ -297,19 +292,8 @@ impl Command {
 
     pub fn suggest(typo: &str) -> Option<String> {
         const COMMANDS: &[&str] = &[
-            "new",
-            "build",
-            "run",
-            "format",
-            "check",
-            "clean",
-            "help",
-            "version",
-            "add",
-            "sync",
-            "learn",
-            "doc",
-            "completions",
+            "new", "build", "run", "format", "check", "help", "version", "add", "sync", "learn",
+            "doc", "complete", "lsp", "bindgen",
         ];
         let candidates: Vec<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
         diagnostics::infer::find_similar_name(typo, &candidates)

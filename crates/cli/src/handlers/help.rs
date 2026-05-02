@@ -1,34 +1,48 @@
 use crate::cli_error;
-use crate::output::print_help;
+use crate::output::{print_dimmed, print_help};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 
 pub fn print_main_help() {
-    print_help(&format!(
-        "lisette {} (go {})
+    print_help(
+        "Lisette compiler and toolchain.
 
-Usage: `lis <command>`
+Usage:
+    `lis` <command>
 
 Commands:
-    `new`      Create a new project
-    `build`    Compile a project
-    `run`      Compile and run a project
-    `format`   Format a file or project
-    `check`    Validate a file or project
-    `clean`    Remove build artifacts
-    `learn`    Generate a sample project
-    `doc`      Explore the prelude and Go stdlib
-    `help`     Print this message
+    `new`        Create a new project
+    `build`, `b`   Compile a project to Go
+    `run`, `r`     Compile and run a project
+    `format`, `f`  Format a project
+    `check`, `c`   Validate a project
+    `doc`        Browse symbols and packages
 
-Integrations:
-    `completions`  Generate shell completion scripts (bash, zsh, fish)
-    `lsp`          Start the language server (used by editor extensions)
+Extras:
+    `version`    Print compiler version
+    `help`       Show help for a command
+    `learn`      Create a new sample project
+    `complete`   Shell completion scripts
+    `lsp`        Start the language server",
+    );
+    println!();
+    print_dimmed("New to Lisette? https://lisette.run/quickstart");
+}
 
-Hint: Run `lis help <command>` to learn more about a command.
-      New to Lisette? See https://lisette.run/quickstart",
-        VERSION, GO_VERSION
-    ));
+pub fn print_help_prompt() {
+    print_help(
+        "Show help for a command.
+
+Usage:
+    `lis help` <command>
+
+Commands:
+    `new`, `build`, `run`, `format`, `check`, `doc`
+
+Extras:
+    `version`, `help`, `learn`, `complete`, `lsp`",
+    );
 }
 
 pub fn print_command_help(command: &str) {
@@ -48,16 +62,14 @@ Arguments:
 Compile a Lisette project.
 
 Arguments:
-    [path]    Path to project directory (default: current directory)
+    [path]    Path to project dir (default: current dir)
 
 Options:
     `--debug`    Include `//line` directives in generated Go code for stack traces
 
-Abbreviation: `b`
-
 Examples:
-    `lis build`                          Build project in current directory
-    `lis build` {path/to/project/dir:g}      Build project in specified directory
+    `lis build`                          Build project in current dir
+    `lis build` {path/to/project/dir:g}      Build project in specific dir
     `lis build` {--debug:g}                  Build with source mapping directives",
         ),
 
@@ -67,17 +79,15 @@ Examples:
 Compile and execute a Lisette file or project.
 
 Arguments:
-    [target:g]         Project directory or `.lis` file (default: current directory)
+    [target:g]         Project dir or `.lis` file (default: current dir)
     [args]           Arguments to pass to the program (after --)
 
 Options:
     `--debug`    Include `//line` directives in generated Go code for stack traces
 
-Abbreviation: `r`
-
 Examples:
-    `lis run`                            Run project in current directory
-    `lis run` {path/to/project/dir:g}        Run project in specified directory
+    `lis run`                            Run project in current dir
+    `lis run` {path/to/project/dir:g}        Run project in specific dir
     `lis run` {script.lis:g}                 Run a standalone script
     `lis run` {script.lis:g} {-- arg}          Pass argument to script",
         ),
@@ -88,44 +98,29 @@ Examples:
 Format Lisette source files.
 
 Arguments:
-    [path]      Path to file or directory (default: current directory)
+    [path]      Path to file or dir (default: current dir)
 
 Options:
     [--check]     Check if files are formatted without modifying them
 
-Abbreviation: `f`
-
 Examples:
-    `lis format`                   Format project in current directory
+    `lis format`                   Format project in current dir
     `lis format` {src/main.lis:g}      Format a single file
-    `lis format` {--check}           Check formatting in current directory",
+    `lis format` {--check}           Check formatting in current dir",
         ),
 
         "check" | "c" => print_help(
             "`lis check` [path]
 
-Type-check and lint Lisette source files, without emitting code.
+Find errors and warnings in Lisette source files.
 
 Arguments:
-    [path]    Path to file or directory (default: current directory)
-
-Abbreviation: `c`
+    [path]    Path to file or dir (default: current dir)
 
 Examples:
-    `lis check`                          Check project in current directory
-    `lis check` {path/to/project/dir:g}      Check project in specified directory
-    `lis check` {script.lis:g}               Check a single file",
-        ),
-
-        "clean" | "x" => print_help(
-            "`lis clean` [path]
-
-Remove build artifacts, i.e. `target` directory.
-
-Arguments:
-    [path]    Project path (default: current directory)
-
-Abbreviation: `x`",
+    `lis check`                          Check project in current dir
+    `lis check` {path/to/project/dir:g}      Check project in specific dir
+    `lis check` {script.lis:g}               Check single file",
         ),
 
         "lsp" => print_help(
@@ -140,7 +135,7 @@ Start the Lisette language server over stdio, for use by editor extensions.",
 Generate `.d.lis` type definition bindings for a Go package.
 
 Arguments:
-    <package>    Go package path to generate bindings for (e.g., `fmt`, `net/http`)
+    <package>    Go package path (e.g., `fmt`, `net/http`)
 
 Options:
     `-o`, `--output` <path>    Output file path (default: <package>`.d.lis`)
@@ -158,18 +153,18 @@ Examples:
 
 Generate a sample project to explore Lisette's features.
 
-Creates a `learn-lisette` directory with a CLI task manager that demonstrates
+Creates a `learn-lisette` dir with a CLI task manager that demonstrates
 enums, structs, pattern matching, error handling, closures, Go interop, and concurrency.",
         ),
 
         "doc" => print_help(
             "`lis doc` [query]
 
-Explore the prelude and Go standard library.
+Browse symbols and packages.
 
 Arguments:
-    [query]              Type or type.method to look up (omit to list all)
-    `-s`, `--search` <term>  Search across prelude and Go stdlib
+    [query]              Symbol or package to look up (omit to list all in stdlib)
+    `-s`, `--search` <term>  Search across symbols and packages
 
 Examples:
     `lis doc`                          List all prelude types and functions
@@ -177,46 +172,56 @@ Examples:
     `lis doc` {Option.map:g}               Show the {map:g} method on {Option:g}
     `lis doc` {Slice:g}                    Show {Slice:g} definition and its methods
     `lis doc` {go:strings:g}               Browse the {strings:g} Go package
-    `lis doc` `-s` {split:g}                 Search for {split:g} across prelude and Go stdlib",
+    `lis doc` `-s` {split:g}                 Look up {split:g}",
         ),
 
-        "completions" => print_help(
-            "`lis completions` <shell>
+        "complete" => print_help(
+            "`lis complete` <shell>
 
 Generate shell completion scripts.
 
 Arguments:
     <shell>    Shell to generate completions for (`bash`, `zsh`, or `fish`)
 
-Usage:
-    `lis completions bash` > ~/.local/share/bash-completion/completions/lis
-    `lis completions fish` > ~/.config/fish/completions/lis.fish
+Examples:
+    `lis complete bash` > ~/.local/share/bash-completion/completions/lis
+    `lis complete fish` > ~/.config/fish/completions/lis.fish
 
     For zsh, add to ~/.zshrc (before compinit):
         fpath=(~/.zfunc $fpath)
     Then generate:
-        mkdir -p ~/.zfunc && `lis completions zsh` > ~/.zfunc/_lis",
+        mkdir -p ~/.zfunc && `lis complete zsh` > ~/.zfunc/_lis",
         ),
 
         "help" => print_help(
             "`lis help` <command>
 
-Print help information.
+Show help for a command.
 
 Arguments:
     <command>    Command to get help for (e.g., `run`, `build`)",
         ),
 
+        "version" => print_help(
+            "`lis version`
+
+Print compiler version (Lisette and Go toolchain).",
+        ),
+
         unknown => {
+            let hint = match crate::command::Command::suggest(unknown) {
+                Some(suggestion) => format!("Did you mean `{}`?", suggestion),
+                None => "Run `lis help` for available commands".to_string(),
+            };
             cli_error!(
                 "Unknown command",
                 format!("`{}` is not a lis command", unknown),
-                "Run `lis help` for available commands"
+                hint
             );
         }
     }
 }
 
 pub fn print_version() {
-    println!("lisette {} (go {})", VERSION, GO_VERSION);
+    println!("lis {} (go {})", VERSION, GO_VERSION);
 }

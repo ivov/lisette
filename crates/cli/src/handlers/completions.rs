@@ -1,4 +1,4 @@
-use crate::output::print_help;
+use crate::cli_error;
 
 pub fn completions(shell: Option<String>) -> i32 {
     match shell.as_deref() {
@@ -15,28 +15,15 @@ pub fn completions(shell: Option<String>) -> i32 {
             0
         }
         Some(other) => {
-            eprintln!("unknown shell: {}", other);
-            eprintln!("supported shells: bash, zsh, fish");
+            cli_error!(
+                "Unknown shell",
+                format!("`{}` is not supported", other),
+                "Supported shells: `bash`, `zsh`, `fish`"
+            );
             1
         }
         None => {
-            print_help(
-                "`lis completions` <shell>
-
-Generate shell completion scripts.
-
-Arguments:
-    <shell>    Shell to generate completions for (`bash`, `zsh`, or `fish`)
-
-Usage:
-    `lis completions bash` > ~/.local/share/bash-completion/completions/lis
-    `lis completions fish` > ~/.config/fish/completions/lis.fish
-
-    For zsh, add to ~/.zshrc (before compinit):
-        fpath=(~/.zfunc $fpath)
-    Then generate:
-        mkdir -p ~/.zfunc && `lis completions zsh` > ~/.zfunc/_lis",
-            );
+            super::help::print_command_help("complete");
             0
         }
     }
@@ -49,7 +36,7 @@ fn bash_completions() -> &'static str {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="new build run format check clean learn doc help completions version"
+    commands="new build run format check learn doc help complete version"
 
     case "$prev" in
         lis)
@@ -76,7 +63,7 @@ fn bash_completions() -> &'static str {
             COMPREPLY=( $(compgen -W "-s --search" -- "$cur") )
             return 0
             ;;
-        completions)
+        complete)
             COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
             return 0
             ;;
@@ -102,11 +89,10 @@ _lis() {
         'run:Compile and run a project'
         'format:Format a file or project'
         'check:Validate a file or project'
-        'clean:Remove build artifacts'
         'learn:Generate a sample project'
         'doc:Explore prelude and Go stdlib'
         'help:Print help message'
-        'completions:Generate shell completions'
+        'complete:Generate shell completions'
         'version:Print version information'
     )
 
@@ -137,7 +123,7 @@ _lis() {
                 doc)
                     _arguments {-s,--search}'[Search across prelude and Go stdlib]'
                     ;;
-                completions)
+                complete)
                     _arguments '1:shell:(bash zsh fish)'
                     ;;
                 help)
@@ -161,11 +147,10 @@ complete -c lis -n __fish_use_subcommand -a build -d 'Compile a project'
 complete -c lis -n __fish_use_subcommand -a run -d 'Compile and run a project'
 complete -c lis -n __fish_use_subcommand -a format -d 'Format a file or project'
 complete -c lis -n __fish_use_subcommand -a check -d 'Validate a file or project'
-complete -c lis -n __fish_use_subcommand -a clean -d 'Remove build artifacts'
 complete -c lis -n __fish_use_subcommand -a learn -d 'Generate a sample project'
 complete -c lis -n __fish_use_subcommand -a doc -d 'Explore prelude and Go stdlib'
 complete -c lis -n __fish_use_subcommand -a help -d 'Print help message'
-complete -c lis -n __fish_use_subcommand -a completions -d 'Generate shell completions'
+complete -c lis -n __fish_use_subcommand -a complete -d 'Generate shell completions'
 complete -c lis -n __fish_use_subcommand -a version -d 'Print version information'
 
 complete -c lis -n '__fish_seen_subcommand_from build' -l debug -d 'Include line directives for stack traces'
@@ -174,7 +159,7 @@ complete -c lis -n '__fish_seen_subcommand_from format' -l check -d 'Check forma
 complete -c lis -n '__fish_seen_subcommand_from check' -l errors-only -d 'Show only errors'
 complete -c lis -n '__fish_seen_subcommand_from check' -l warnings-only -d 'Show only warnings'
 complete -c lis -n '__fish_seen_subcommand_from doc' -s s -l search -d 'Search across prelude and Go stdlib'
-complete -c lis -n '__fish_seen_subcommand_from completions' -a 'bash zsh fish' -d 'Shell type'
-complete -c lis -n '__fish_seen_subcommand_from help' -a 'new build run format check clean learn doc help completions version' -d 'Command'
+complete -c lis -n '__fish_seen_subcommand_from complete' -a 'bash zsh fish' -d 'Shell type'
+complete -c lis -n '__fish_seen_subcommand_from help' -a 'new build run format check learn doc help complete version' -d 'Command'
 "#
 }

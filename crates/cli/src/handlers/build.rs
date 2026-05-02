@@ -174,7 +174,7 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
 fn validate_project(project_path: &Path) -> bool {
     if !project_path.exists() {
         cli_error!(
-            "Failed to compile Lisette project to Go",
+            "Project not found",
             format!("Path `{}` does not exist", project_path.display()),
             "Check the path and try again"
         );
@@ -183,7 +183,7 @@ fn validate_project(project_path: &Path) -> bool {
 
     if project_path.is_file() {
         cli_error!(
-            "Failed to compile Lisette project to Go",
+            "Not a project directory",
             format!(
                 "Path `{}` is a file, not a project directory",
                 project_path.display()

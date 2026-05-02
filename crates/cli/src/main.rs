@@ -69,11 +69,14 @@ fn main() {
             errors_only,
             warnings_only,
         } => handlers::check(path, errors_only, warnings_only),
-        Command::Clean { path } => handlers::clean(path),
+        Command::Overview => {
+            handlers::help::print_main_help();
+            0
+        }
         Command::Help { command } => {
             match command {
                 Some(cmd) => handlers::help::print_command_help(&cmd),
-                None => handlers::help::print_main_help(),
+                None => handlers::help::print_help_prompt(),
             }
             0
         }

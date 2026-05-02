@@ -140,28 +140,29 @@ target/
 ## CLI
 
 ```
-lis help
+lis
 
-lisette 0.1.0 (go 1.25.5)
+Lisette compiler and toolchain.
 
-Usage: `lis <command>`
+Usage:
+    lis <command>
 
 Commands:
     new        Create a new project
-    build      Compile a project
-    run        Compile and run a project
-    format     Format a file or project
-    check      Validate a file or project
-    clean      Remove build artifacts
-    learn      Generate a sample project
-    doc        Explore the prelude and Go stdlib
-    help       Print this message
+    build, b   Compile a project to Go
+    run, r     Compile and run a project
+    format, f  Format a project
+    check, c   Validate a project
+    doc        Browse symbols and packages
 
-Integrations:
-    completions  Generate shell completion scripts (bash, zsh, fish)
-    lsp          Start the language server (for editor extensions)
+Extras:
+    version    Print compiler version
+    help       Show help for a command
+    learn      Create a new sample project
+    complete   Shell completion scripts
+    lsp        Start the language server
 
-Hint: Run `lis help <command>` to learn more about a command.
+New to Lisette? https://lisette.run/quickstart
 ```
 
 ## Next steps
