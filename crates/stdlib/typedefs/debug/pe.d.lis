@@ -105,7 +105,6 @@ pub struct OptionalHeader32 {
   pub SizeOfHeapCommit: uint32,
   pub LoaderFlags: uint32,
   pub NumberOfRvaAndSizes: uint32,
-
   // SKIPPED field "DataDirectory": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 
@@ -139,7 +138,6 @@ pub struct OptionalHeader64 {
   pub SizeOfHeapCommit: uint64,
   pub LoaderFlags: uint32,
   pub NumberOfRvaAndSizes: uint32,
-
   // SKIPPED field "DataDirectory": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 

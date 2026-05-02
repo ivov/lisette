@@ -649,7 +649,6 @@ pub struct MemProfileRecord {
   pub FreeBytes: int64,
   pub AllocObjects: int64,
   pub FreeObjects: int64,
-
   // SKIPPED field "Stack0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
 
@@ -686,7 +685,6 @@ pub struct MemStats {
   pub GCCPUFraction: float64,
   pub EnableGC: bool,
   pub DebugGC: bool,
-
   // SKIPPED field "BySize": anonymous-struct — anonymous struct types are not supported
 }
 
