@@ -4096,6 +4096,30 @@ fn test() {
 }
 
 #[test]
+fn infer_named_numeric_expected_suggests_as_cast() {
+    let typedef_source = r#"
+pub enum Duration: int64 {
+  Second = 1000000000,
+}
+
+pub fn Sleep(d: Duration)
+"#;
+    let main_source = r#"
+import "time"
+
+fn test() {
+  time.Sleep(0);
+}
+"#;
+    let mut fs = MockFileSystem::new();
+    fs.add_file("time", "time.d.lis", typedef_source);
+    fs.add_file("main", "main.lis", main_source);
+    let result = infer_module("main", fs);
+
+    assert_multimodule_infer_error_snapshot!(result, main_source);
+}
+
+#[test]
 fn infer_taking_value_of_ufcs_method() {
     let input = r#"
 fn test() {

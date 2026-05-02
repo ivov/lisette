@@ -869,6 +869,10 @@ impl TaskState<'_> {
             return "Wrap the value in a slice literal".to_string();
         }
 
+        if expected.is_numeric_compatible_with(actual) {
+            return format!("Cast with `as`, e.g. `value as {}`", expected);
+        }
+
         format!(
             "Change the type annotation to `{}` or convert the value to `{}`",
             actual, expected
