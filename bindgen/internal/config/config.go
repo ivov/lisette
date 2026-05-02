@@ -35,6 +35,10 @@ type TypeOverrides struct {
 	NeverReturn      map[string][]string            `json:"never_return"`
 	PartialResult    map[string][]string            `json:"partial_result"`
 	MutatesParam     map[string]map[string][]string `json:"mutates_param"`
+	// NilableParam declares pointer/interface parameters that accept nil in Go
+	// (e.g. `nil` means "use the default"), so they should be `Option<Ref<T>>`
+	// instead of `Ref<T>`.
+	NilableParam map[string]map[string][]string `json:"nilable_param"`
 	// SentinelMinusOne declares int-returning functions that signal
 	// "absent" with `-1`. Bindgen rewrites the return to `Option<int>`
 	// and emits `#[go(sentinel_minus_one)]`.
@@ -152,6 +156,19 @@ func (c *Config) MutatingParams(pkg, name string) []string {
 		return nil
 	}
 	return funcs[name] // nil if not found
+}
+
+// NilableParams returns the list of parameter names that should be wrapped in
+// `Option<>` for the given function or method, or nil if none are configured.
+func (c *Config) NilableParams(pkg, name string) []string {
+	if c == nil {
+		return nil
+	}
+	funcs, ok := lookupWithGlobNested(c.Overrides.Types.NilableParam, pkg)
+	if !ok {
+		return nil
+	}
+	return funcs[name]
 }
 
 // IsPartialResult returns true if the given function or method in the given

@@ -3,6 +3,7 @@ package convert
 import (
 	"fmt"
 	"go/types"
+	"slices"
 	"strings"
 )
 
@@ -30,6 +31,15 @@ func ToLisette(t types.Type, conv *Converter) TypeResult {
 // where Go pointers/interfaces can be nil.
 func ToLisetteNilable(t types.Type, conv *Converter) TypeResult {
 	return toLisetteNilableRecursive(t, make(map[types.Type]bool), conv)
+}
+
+// convertParamType wraps a `*T` parameter in `Option<>` when the param's name
+// appears in `nilable` — used for Go APIs where passing nil means "use default".
+func convertParamType(t types.Type, name string, nilable []string, conv *Converter) TypeResult {
+	if slices.Contains(nilable, name) {
+		return ToLisetteNilable(t, conv)
+	}
+	return ToLisette(t, conv)
 }
 
 // isNilableGoType returns true if the Go type is a pointer or a named

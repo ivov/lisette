@@ -230,6 +230,15 @@ Bindgen accepts a config file with per-package overrides:
           "CopyBuffer": ["buf"],
         },
       },
+
+      // Turn `Ref<T>` parameter into `Option<Ref<T>>` for Go APIs that accept
+      // nil to mean "use the default"
+      // e.g. `rp` in `mongo.Client.Ping(ctx, rp)` accepts nil
+      "nilable_param": {
+        "go.mongodb.org/mongo-driver/v2/mongo": {
+          "Client.Ping": ["rp"],
+        },
+      },
     },
   },
 }

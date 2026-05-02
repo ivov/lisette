@@ -268,6 +268,13 @@ impl Emitter<'_> {
             return result;
         }
 
+        if ctx.is_go_call
+            && let Some(result) =
+                self.try_emit_go_pointer_param_unwrap(output, arg, effective_param_ty)
+        {
+            return result;
+        }
+
         if ctx.pointer_indices.contains(&index) {
             let value = self.emit_value(output, arg);
             if matches!(arg, Expression::Reference { .. }) || arg.get_type().is_ref() {
@@ -343,6 +350,25 @@ impl Emitter<'_> {
         Some(self.emit_lisette_callback_wrapper(output, &value, &param_fn_ty))
     }
 
+    /// Bridge a Lisette `Option<Ref<T>>` argument to Go `*T` when the Go
+    /// parameter accepts nil.
+    fn try_emit_go_pointer_param_unwrap(
+        &mut self,
+        output: &mut String,
+        arg: &Expression,
+        effective_param_ty: Option<&Type>,
+    ) -> Option<String> {
+        let param_ty = effective_param_ty?;
+        if !self.is_nullable_option(param_ty) {
+            return None;
+        }
+        let arg_ty = arg.get_type();
+        if !self.is_nullable_option(&arg_ty) {
+            return None;
+        }
+        Some(self.emit_unwrap_go_nullable_arg(output, arg, &arg_ty))
+    }
+
     fn try_emit_nullable_coercion(
         &mut self,
         output: &mut String,
@@ -372,11 +398,20 @@ impl Emitter<'_> {
             return None;
         }
 
+        Some(self.emit_unwrap_go_nullable_arg(output, arg, &arg_ty))
+    }
+
+    fn emit_unwrap_go_nullable_arg(
+        &mut self,
+        output: &mut String,
+        arg: &Expression,
+        arg_ty: &Type,
+    ) -> String {
         if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
-            return Some("nil".to_string());
+            return "nil".to_string();
         }
         let value = self.emit_value(output, arg);
-        let coercion = Coercion::resolve_unwrap_go_nullable(self, &arg.get_type());
-        Some(coercion.apply(self, output, value))
+        let coercion = Coercion::resolve_unwrap_go_nullable(self, arg_ty);
+        coercion.apply(self, output, value)
     }
 }

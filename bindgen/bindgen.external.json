@@ -62,6 +62,13 @@
           "NewEmptyConfigError"
         ]
       },
+      "nilable_param": {
+        "go.mongodb.org/mongo-driver/v2/mongo": {
+          "Client.Ping": [
+            "rp"
+          ]
+        }
+      },
       "mutates_param": {
         "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob": {
           "Client.DownloadBuffer": [

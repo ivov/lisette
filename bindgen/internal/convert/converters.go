@@ -118,11 +118,18 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	result.TypeParams = liftedSpecs
 
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, result.Name)
+	nilableParams := c.cfg.NilableParams(c.currentPkgPath, result.Name)
 
 	params := signature.Params()
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
-		paramType := ToLisette(param.Type(), c)
+		name := param.Name()
+		if name == "" {
+			name = fmt.Sprintf("arg%d", i)
+		}
+		name = sanitizeParamName(name)
+
+		paramType := convertParamType(param.Type(), name, nilableParams, c)
 		if paramType.SkipReason != nil {
 			result.SkipReason = paramType.SkipReason
 			return
@@ -135,12 +142,6 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 		if override, ok := paramOverrides[i]; ok {
 			typeStr = override
 		}
-
-		name := param.Name()
-		if name == "" {
-			name = fmt.Sprintf("arg%d", i)
-		}
-		name = sanitizeParamName(name)
 
 		result.Params = append(result.Params, FunctionParameter{
 			Name:    name,
@@ -274,11 +275,18 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	liftedSpecs, paramOverrides := c.liftReflectionDecodeParams(signature, qualifiedName, methodSpecs)
 
 	mutParams := c.cfg.MutatingParams(c.currentPkgPath, qualifiedName)
+	nilableParams := c.cfg.NilableParams(c.currentPkgPath, qualifiedName)
 
 	params := signature.Params()
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
-		paramType := ToLisette(param.Type(), c)
+		name := param.Name()
+		if name == "" {
+			name = fmt.Sprintf("arg%d", i)
+		}
+		name = sanitizeParamName(name)
+
+		paramType := convertParamType(param.Type(), name, nilableParams, c)
 		if paramType.SkipReason != nil {
 			result.SkipReason = paramType.SkipReason
 			return
@@ -291,12 +299,6 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		if override, ok := paramOverrides[i]; ok {
 			typeStr = override
 		}
-
-		name := param.Name()
-		if name == "" {
-			name = fmt.Sprintf("arg%d", i)
-		}
-		name = sanitizeParamName(name)
 
 		result.Params = append(result.Params, FunctionParameter{
 			Name:    name,
@@ -1311,12 +1313,20 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 			return nil, false
 		}
 
-		mutParams := c.cfg.MutatingParams(c.currentPkgPath, typeName+"."+method.Name())
+		qualifiedName := typeName + "." + method.Name()
+		mutParams := c.cfg.MutatingParams(c.currentPkgPath, qualifiedName)
+		nilableParams := c.cfg.NilableParams(c.currentPkgPath, qualifiedName)
 
 		var params []FunctionParameter
 		for j := 0; j < signature.Params().Len(); j++ {
 			param := signature.Params().At(j)
-			paramType := ToLisette(param.Type(), c)
+			name := param.Name()
+			if name == "" {
+				name = fmt.Sprintf("arg%d", j)
+			}
+			name = sanitizeParamName(name)
+
+			paramType := convertParamType(param.Type(), name, nilableParams, c)
 			if paramType.SkipReason != nil {
 				return nil, false
 			}
@@ -1325,12 +1335,6 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 			if signature.Variadic() && j == signature.Params().Len()-1 {
 				typeStr = sliceToVarArgs(typeStr)
 			}
-
-			name := param.Name()
-			if name == "" {
-				name = fmt.Sprintf("arg%d", j)
-			}
-			name = sanitizeParamName(name)
 
 			params = append(params, FunctionParameter{
 				Name:    name,
