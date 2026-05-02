@@ -468,12 +468,16 @@ impl TaskState<'_> {
 
         let resolved_iterable_ty = store.peel_alias(&iterable_ty.resolve_in(&self.env));
 
+        let iterable_is_error = resolved_iterable_ty.is_error();
+
         let iterable_ty_name = match resolved_iterable_ty.get_name() {
             Some(name) => name,
             None => {
-                self.sink.push(diagnostics::infer::unknown_iterable_type(
-                    new_iterable.get_span(),
-                ));
+                if !iterable_is_error {
+                    self.sink.push(diagnostics::infer::unknown_iterable_type(
+                        new_iterable.get_span(),
+                    ));
+                }
                 "Slice"
             }
         };
@@ -482,7 +486,12 @@ impl TaskState<'_> {
         let iterable_ty_args = match resolved_iterable_ty.get_type_params() {
             Some(args) => args,
             None => {
-                fallback_args = [self.new_type_var(), self.new_type_var()];
+                let element = if iterable_is_error {
+                    Type::Error
+                } else {
+                    self.new_type_var()
+                };
+                fallback_args = [element.clone(), element];
                 &fallback_args
             }
         };

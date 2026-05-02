@@ -55,7 +55,11 @@ impl TaskState<'_> {
             let ok_ty = ctx.ok_ty.clone();
             let err_ty = ctx.err_ty.clone();
 
-            if !is_result && !is_option && !resolved_tried_ty.is_partial() {
+            if !is_result
+                && !is_option
+                && !resolved_tried_ty.is_partial()
+                && !resolved_tried_ty.is_error()
+            {
                 self.sink
                     .push(diagnostics::infer::try_requires_result_or_option(span));
             }
@@ -90,6 +94,11 @@ impl TaskState<'_> {
         )
     }
 
+    fn propagate_as_error(&mut self, store: &Store, expected_ty: &Type, span: Span) -> Type {
+        self.unify(store, expected_ty, &Type::Error, &span);
+        Type::Error
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn infer_propagate_in_block(
         &mut self,
@@ -101,7 +110,9 @@ impl TaskState<'_> {
         span: Span,
         expected_ty: &Type,
     ) -> Expression {
-        let ty = if tried_ty.is_result() {
+        let ty = if tried_ty.is_error() {
+            self.propagate_as_error(store, expected_ty, span)
+        } else if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
             self.unify(store, try_err_ty, &tried_ty.err_type(), &span);
             if ok_ty.resolve_in(&self.env).is_variable() {
@@ -117,7 +128,7 @@ impl TaskState<'_> {
             self.unify(store, expected_ty, &some_ty, &span);
             some_ty
         } else {
-            Type::Error
+            self.propagate_as_error(store, expected_ty, span)
         };
 
         Expression::Propagate {
@@ -145,7 +156,9 @@ impl TaskState<'_> {
                 Type::Error
             });
 
-        let ty = if tried_ty.is_result() {
+        let ty = if tried_ty.is_error() {
+            self.propagate_as_error(store, expected_ty, span)
+        } else if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
             let err_ty = tried_ty.err_type();
             let new_ok = self.new_type_var();
@@ -179,11 +192,11 @@ impl TaskState<'_> {
             self.unify(store, expected_ty, &some_ty, &span);
             some_ty
         } else if tried_ty.is_partial() {
-            Type::Error
+            self.propagate_as_error(store, expected_ty, span)
         } else {
             self.sink
                 .push(diagnostics::infer::try_requires_result_or_option(span));
-            Type::Error
+            self.propagate_as_error(store, expected_ty, span)
         };
 
         Expression::Propagate {

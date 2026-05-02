@@ -2546,6 +2546,41 @@ pub fn outer_fn() -> string {
 }
 
 #[test]
+fn module_graph_failed_import_suppresses_cascade() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"import "totally_missing"
+
+fn main() {
+  let value = totally_missing.SomeValue
+  match value.method() {
+    Ok((_, data)) => {
+      let _ = data as string
+    },
+    Err(_) => (),
+  }
+}"#,
+    );
+    let result = infer_module("main", fs);
+
+    assert_eq!(
+        result.errors.len(),
+        1,
+        "Expected only the import error, got: {:#?}",
+        result.errors
+    );
+    assert!(
+        result.errors[0]
+            .code_str()
+            .is_some_and(|c| c.contains("module_not_found")),
+        "Expected module_not_found, got: {:?}",
+        result.errors[0].code_str()
+    );
+}
+
+#[test]
 fn module_graph_test_file_rejected() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

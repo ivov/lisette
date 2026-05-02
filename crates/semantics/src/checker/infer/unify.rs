@@ -103,8 +103,14 @@ impl TaskState<'_> {
             (Type::Var { id, .. }, _) => self.unify_type_variable(store, *id, &r2, span, false),
             (_, Type::Var { id, .. }) => self.unify_type_variable(store, *id, &r1, span, true),
 
-            // Non-variable vs Error succeeds silently; variables were handled above.
-            _ if matches!(r1, Type::Error) || matches!(r2, Type::Error) => Ok(()),
+            _ if matches!(r1, Type::Error) => {
+                self.collapse_vars_to_error(store, &r2, span);
+                Ok(())
+            }
+            _ if matches!(r2, Type::Error) => {
+                self.collapse_vars_to_error(store, &r1, span);
+                Ok(())
+            }
 
             (Type::Parameter(name1), Type::Parameter(name2)) if name1 == name2 => Ok(()),
 
@@ -234,8 +240,13 @@ impl TaskState<'_> {
         let both_concrete = !t1.is_variable() && !t2.is_variable();
         let neither_is_interface = !self.is_interface(store, t1) && !self.is_interface(store, t2);
         let neither_is_unknown = !r1.is_unknown() && !r2.is_unknown();
+        let neither_is_error = !r1.is_error() && !r2.is_error();
 
-        either_is_ref && both_concrete && neither_is_interface && neither_is_unknown
+        either_is_ref
+            && both_concrete
+            && neither_is_interface
+            && neither_is_unknown
+            && neither_is_error
     }
 
     fn is_interface(&self, store: &Store, ty: &Type) -> bool {
@@ -257,6 +268,44 @@ impl TaskState<'_> {
             (true, true) => self.try_unify(store, &t1.strip_refs(), &t2.strip_refs(), span),
             (true, false) | (false, true) => Err(UnifyError::TypeMismatch),
             (false, false) => unreachable!("unify_refs called without refs"),
+        }
+    }
+
+    fn collapse_vars_to_error(&mut self, store: &Store, ty: &Type, span: &Span) {
+        let resolved = self.env.shallow_resolve(ty);
+        match resolved {
+            Type::Var { id, .. } if !id.is_reserved() => {
+                let _ = self.unify_type_variable(store, id, &Type::Error, span, false);
+            }
+            Type::Nominal { params, .. } => {
+                for p in params {
+                    self.collapse_vars_to_error(store, &p, span);
+                }
+            }
+            Function {
+                params,
+                return_type,
+                ..
+            } => {
+                for p in params {
+                    self.collapse_vars_to_error(store, &p, span);
+                }
+                self.collapse_vars_to_error(store, &return_type, span);
+            }
+            Type::Tuple(elems) => {
+                for e in elems {
+                    self.collapse_vars_to_error(store, &e, span);
+                }
+            }
+            Type::Compound { args, .. } => {
+                for a in args {
+                    self.collapse_vars_to_error(store, &a, span);
+                }
+            }
+            Type::Forall { body, .. } => {
+                self.collapse_vars_to_error(store, &body, span);
+            }
+            _ => {}
         }
     }
 
@@ -433,6 +482,13 @@ impl TaskState<'_> {
                 _ if r1.is_ignored() || r2.is_ignored() => {}
                 _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => {}
                 (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => {}
+
+                _ if matches!(r1, Type::Error) => {
+                    self.collapse_vars_to_error(store, &r2, span);
+                }
+                _ if matches!(r2, Type::Error) => {
+                    self.collapse_vars_to_error(store, &r1, span);
+                }
 
                 _ if r1_unk && r2_unk => {}
                 _ if r1_unk && !r2.is_variable() => {

@@ -939,6 +939,29 @@ impl Type {
         matches!(self, Type::Error)
     }
 
+    pub fn contains_error(&self) -> bool {
+        match self {
+            Type::Error => true,
+            Type::Nominal {
+                params,
+                underlying_ty,
+                ..
+            } => {
+                params.iter().any(Type::contains_error)
+                    || underlying_ty.as_deref().is_some_and(Type::contains_error)
+            }
+            Type::Compound { args, .. } => args.iter().any(Type::contains_error),
+            Type::Function {
+                params,
+                return_type,
+                ..
+            } => params.iter().any(Type::contains_error) || return_type.contains_error(),
+            Type::Tuple(elements) => elements.iter().any(Type::contains_error),
+            Type::Forall { body, .. } => body.contains_error(),
+            _ => false,
+        }
+    }
+
     pub fn has_unbound_variables(&self) -> bool {
         match self {
             Type::Var { hint, .. } => hint.is_some(),
