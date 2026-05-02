@@ -10,10 +10,6 @@ inputs:
     description: Install Go.
     required: false
     default: 'false'
-  go-version:
-    description: Go version to install when go=true
-    required: false
-    default: '1.25'
   cache:
     description: Restore the Swatinem/rust-cache
     required: false
@@ -30,7 +26,7 @@ runs:
     - if: inputs.go == 'true'
       uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
       with:
-        go-version: ${{ inputs.go-version }}
+        go-version-file: go-version
         cache: false
     - if: inputs.cache == 'true'
       uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # ratchet:Swatinem/rust-cache@v2
