@@ -2,6 +2,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
+#[cfg(not(unix))]
+use std::path::PathBuf;
+#[cfg(not(unix))]
 use std::process::Command;
 
 use crate::cli_error;
@@ -9,6 +12,133 @@ use crate::go_cli;
 use diagnostics::render::{self, Filter};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 use semantics::loader::Loader;
+
+fn run_with_invocation_cwd(build_dir: &Path, args: &[String], heading: &str) -> i32 {
+    #[cfg(unix)]
+    {
+        run_via_exec_wrapper(build_dir, args, heading)
+    }
+    #[cfg(not(unix))]
+    {
+        build_then_exec(build_dir, args, heading)
+    }
+}
+
+#[cfg(unix)]
+fn run_via_exec_wrapper(build_dir: &Path, args: &[String], heading: &str) -> i32 {
+    let cwd = match std::env::current_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            cli_error!(
+                heading,
+                format!("Failed to read current directory: {}", e),
+                "Check directory permissions"
+            );
+            return 1;
+        }
+    };
+    let cwd_str = cwd.to_string_lossy();
+    let quoted_cwd = match quote_for_go_exec(&cwd_str) {
+        Ok(q) => q,
+        Err(e) => {
+            cli_error!(
+                heading,
+                e,
+                "Run from a directory whose path does not contain both `'` and `\"`"
+            );
+            return 1;
+        }
+    };
+
+    let mut cmd = go_cli::go_command();
+    cmd.arg("-C")
+        .arg(build_dir)
+        .arg("run")
+        .arg(format!("-exec=env -C {}", quoted_cwd))
+        .arg(".")
+        .args(args);
+
+    match cmd.status() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            cli_error!(
+                heading,
+                format!("Failed to execute `go run`: {}", e),
+                "Check Go installation with `go version`"
+            );
+            1
+        }
+    }
+}
+
+#[cfg(unix)]
+fn quote_for_go_exec(path: &str) -> Result<String, String> {
+    let has_single = path.contains('\'');
+    let has_double = path.contains('"');
+    match (has_single, has_double) {
+        (true, true) => Err(format!(
+            "Cannot pass cwd `{}` through `go run -exec`: contains both `'` and `\"`",
+            path
+        )),
+        (true, false) => Ok(format!("\"{}\"", path)),
+        _ => Ok(format!("'{}'", path)),
+    }
+}
+
+#[cfg(not(unix))]
+const RUN_BIN_NAME: &str = "lis-run.exe";
+
+#[cfg(not(unix))]
+fn build_then_exec(build_dir: &Path, args: &[String], heading: &str) -> i32 {
+    let abs_build_dir = match build_dir.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            cli_error!(
+                heading,
+                format!("Failed to resolve `{}`: {}", build_dir.display(), e),
+                "Check that the directory exists"
+            );
+            return 1;
+        }
+    };
+    let binary_path: PathBuf = abs_build_dir.join(RUN_BIN_NAME);
+
+    let mut build_cmd = go_cli::go_command();
+    build_cmd
+        .arg("build")
+        .arg("-o")
+        .arg(&binary_path)
+        .arg(".")
+        .current_dir(&abs_build_dir);
+
+    match build_cmd.status() {
+        Ok(s) if s.success() => {}
+        Ok(s) => return s.code().unwrap_or(1),
+        Err(e) => {
+            cli_error!(
+                heading,
+                format!("Failed to execute `go build`: {}", e),
+                "Check Go installation with `go version`"
+            );
+            return 1;
+        }
+    }
+
+    let mut cmd = Command::new(&binary_path);
+    cmd.args(args);
+
+    match cmd.status() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            cli_error!(
+                heading,
+                format!("Failed to execute compiled binary: {}", e),
+                "Check that the binary was produced and is executable"
+            );
+            1
+        }
+    }
+}
 
 pub fn run(target: Option<String>, args: Vec<String>, debug: bool) -> i32 {
     if let Err(code) = crate::go_cli::require_go() {
@@ -30,24 +160,8 @@ fn run_project(path: &str, args: Vec<String>, debug: bool) -> i32 {
         return build_result;
     }
 
-    let project_path = Path::new(path);
-    let target_dir = project_path.join("target");
-
-    let mut cmd = Command::new("go");
-    cmd.arg("run").arg("-C").arg(&target_dir).arg(".");
-    cmd.args(&args);
-
-    match cmd.status() {
-        Ok(status) => status.code().unwrap_or(1),
-        Err(e) => {
-            cli_error!(
-                "Failed to run project",
-                format!("Failed to execute `go run`: {}", e),
-                "Check Go installation with `go version`"
-            );
-            1
-        }
-    }
+    let target_dir = Path::new(path).join("target");
+    run_with_invocation_cwd(&target_dir, &args, "Failed to run project")
 }
 
 fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
@@ -155,19 +269,5 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         return code;
     }
 
-    let mut cmd = Command::new("go");
-    cmd.arg("run").arg("-C").arg(&temp_dir).arg(".");
-    cmd.args(&args);
-
-    match cmd.status() {
-        Ok(status) => status.code().unwrap_or(1),
-        Err(e) => {
-            cli_error!(
-                "Failed to run standalone file",
-                format!("Failed to execute `go run`: {}", e),
-                "Check Go installation with `go version`"
-            );
-            1
-        }
-    }
+    run_with_invocation_cwd(&temp_dir, &args, "Failed to run standalone file")
 }
