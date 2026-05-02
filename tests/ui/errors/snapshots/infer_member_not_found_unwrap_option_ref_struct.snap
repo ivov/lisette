@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Member not found
+   ╭─[test.lis:5:3]
+ 4 │ fn test(u: Option<Ref<Url>>) -> string {
+ 5 │   u.Path
+   ·   ───┬──
+   ·      ╰── no member `Path` on type `Option<Ref<Url>>`
+ 6 │ }
+   ╰────
+  help: Unwrap the `Option` to extract the `Url` value, then call `Path` on it, e.g. `match <expr> { Some(x) => x.Path(...), None => ... }` · code: [infer.member_not_found]

@@ -727,10 +727,35 @@ pub fn member_not_found(
     field: &str,
     span: Span,
     available_fields: Option<&[String]>,
+    unwrap_hint: Option<UnwrapHint>,
 ) -> LisetteDiagnostic {
     let mut diagnostic = LisetteDiagnostic::error("Member not found")
         .with_infer_code("member_not_found")
         .with_span_label(&span, format!("no member `{}` on type `{}`", field, ty));
+
+    if let Some(hint) = unwrap_hint {
+        let (wrapper_name, pattern) = match hint.wrapper {
+            UnwrapWrapper::Option => (
+                "Option",
+                format!(
+                    "match <expr> {{ Some(x) => x.{}(...), None => ... }}",
+                    field
+                ),
+            ),
+            UnwrapWrapper::Result => (
+                "Result",
+                format!(
+                    "match <expr> {{ Ok(x) => x.{}(...), Err(e) => ... }}",
+                    field
+                ),
+            ),
+        };
+        diagnostic = diagnostic.with_help(format!(
+            "Unwrap the `{}` to extract the `{}` value, then call `{}` on it, e.g. `{}`",
+            wrapper_name, hint.inner_ty, field, pattern
+        ));
+        return diagnostic;
+    }
 
     let suggestion = available_fields.and_then(|fields| find_similar_name(field, fields));
 
@@ -741,6 +766,18 @@ pub fn member_not_found(
     }
 
     diagnostic
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum UnwrapWrapper {
+    Option,
+    Result,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnwrapHint {
+    pub wrapper: UnwrapWrapper,
+    pub inner_ty: Type,
 }
 
 pub fn not_numeric(ty: &Type, span: Span) -> LisetteDiagnostic {

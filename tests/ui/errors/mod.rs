@@ -1268,6 +1268,48 @@ fn test(s: Slice<int>) -> int {
 }
 
 #[test]
+fn infer_member_not_found_unwrap_option() {
+    let input = r#"
+fn test(opt: Option<string>) -> int {
+  opt.contains("h")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_member_not_found_unwrap_result() {
+    let input = r#"
+fn test(res: Result<string, error>) -> int {
+  res.contains("h")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_member_not_found_unwrap_option_ref_struct() {
+    let input = r#"
+struct Url { Path: string }
+
+fn test(u: Option<Ref<Url>>) -> string {
+  u.Path
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_member_not_found_unwrap_option_no_inner_match() {
+    let input = r#"
+fn test(opt: Option<string>) {
+  opt.bogus
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_struct_missing_fields() {
     let input = r#"
 struct Person {

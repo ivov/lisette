@@ -559,6 +559,7 @@ impl TaskState<'_> {
                             &field.name,
                             span,
                             Some(&available),
+                            None,
                         ));
                         Type::Error
                     }
@@ -833,6 +834,7 @@ impl TaskState<'_> {
                             &field.name,
                             *span,
                             Some(&available),
+                            None,
                         ));
                         Type::Error
                     }

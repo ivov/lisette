@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Member not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(opt: Option<string>) {
+ 3 │   opt.bogus
+   ·   ────┬────
+   ·       ╰── no member `bogus` on type `Option<string>`
+ 4 │ }
+   ╰────
+  help: Ensure the field or method is defined on this type · code: [infer.member_not_found]

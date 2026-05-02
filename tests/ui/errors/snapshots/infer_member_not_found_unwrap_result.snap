@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Member not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(res: Result<string, error>) -> int {
+ 3 │   res.contains("h")
+   ·   ──────┬─────
+   ·         ╰── no member `contains` on type `Result<string, error>`
+ 4 │ }
+   ╰────
+  help: Unwrap the `Result` to extract the `string` value, then call `contains` on it, e.g. `match <expr> { Ok(x) => x.contains(...), Err(e) => ... }` · code: [infer.member_not_found]

@@ -229,6 +229,7 @@ impl TaskState<'_> {
         }
 
         let available_members = self.get_available_member_names(store, &resolved_expression_ty);
+        let unwrap_hint = self.compute_unwrap_hint(store, &resolved_expression_ty, &member);
         self.sink.push(diagnostics::infer::member_not_found(
             &resolved_expression_ty,
             &member,
@@ -238,6 +239,7 @@ impl TaskState<'_> {
             } else {
                 Some(&available_members)
             },
+            unwrap_hint,
         ));
 
         Expression::DotAccess {
@@ -294,6 +296,44 @@ impl TaskState<'_> {
         names.extend(methods.into_keys().map(|k| k.to_string()));
 
         names
+    }
+
+    fn compute_unwrap_hint(
+        &self,
+        store: &Store,
+        ty: &Type,
+        member: &str,
+    ) -> Option<diagnostics::infer::UnwrapHint> {
+        let wrapper = if ty.is_option() {
+            diagnostics::infer::UnwrapWrapper::Option
+        } else if ty.is_result() {
+            diagnostics::infer::UnwrapWrapper::Result
+        } else {
+            return None;
+        };
+
+        let inner = ty.inner()?.strip_refs();
+        if self.has_member(store, &inner, member) {
+            Some(diagnostics::infer::UnwrapHint {
+                wrapper,
+                inner_ty: inner,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn has_member(&self, store: &Store, ty: &Type, member: &str) -> bool {
+        let deref_ty = ty.strip_refs();
+
+        if let Type::Nominal { .. } = deref_ty
+            && let Some(fields) = store.fields_of(&deref_ty.get_qualified_name())
+            && fields.iter().any(|f| f.name == member)
+        {
+            return true;
+        }
+
+        self.get_all_methods(store, &deref_ty).contains_key(member)
     }
 
     fn as_struct_field(

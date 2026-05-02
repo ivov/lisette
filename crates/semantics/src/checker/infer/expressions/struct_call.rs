@@ -429,6 +429,7 @@ impl TaskState<'_> {
                             &field.name,
                             ctx.span,
                             Some(&available),
+                            None,
                         ));
                         self.new_type_var()
                     }
