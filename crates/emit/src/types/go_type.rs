@@ -287,8 +287,7 @@ impl Emitter<'_> {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let is_void = lowered.is_none()
-            && (return_ty.is_unit() || return_type.code == "struct{}" || return_type.code == "any");
+        let is_void = lowered.is_none() && (return_ty.is_unit() || return_type.code == "struct{}");
 
         let code = if is_void {
             format!("func({})", args)
@@ -431,9 +430,10 @@ impl Emitter<'_> {
                         false,
                     ),
                     None => {
-                        let r = self.go_type_from_annotation(return_type);
-                        let void = r.code == "any" || r.code == "struct{}";
-                        (r, void)
+                        let is_omission = matches!(return_type.as_ref(), Annotation::Unknown);
+                        let return_go_type = self.go_type_from_annotation(return_type);
+                        let is_void = is_omission || return_go_type.code == "struct{}";
+                        (return_go_type, is_void)
                     }
                 };
 

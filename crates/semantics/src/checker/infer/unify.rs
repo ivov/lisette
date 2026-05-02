@@ -78,8 +78,8 @@ impl TaskState<'_> {
     ) -> Result<(), UnifyError> {
         let r1 = self.env.shallow_resolve(t1);
         let r2 = self.env.shallow_resolve(t2);
-        let r1_unk = r1.is_unknown();
-        let r2_unk = r2.is_unknown();
+        let r1_is_unknown = r1.is_unknown();
+        let r2_is_unknown = r2.is_unknown();
 
         match (&r1, &r2) {
             _ if r1.is_ignored() || r2.is_ignored() => Ok(()),
@@ -90,18 +90,19 @@ impl TaskState<'_> {
 
             (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => Ok(()),
 
-            _ if r1_unk && r2_unk => Ok(()),
-            _ if r1_unk && !r2.is_variable() && self.scopes.is_inside_type_param() => {
-                Err(UnifyError::TypeMismatch)
-            }
-            _ if r1_unk => Ok(()),
-            _ if r2_unk && !r1.is_variable() => Err(UnifyError::TypeMismatch),
-
-            _ if matches!(r2, Type::Never) => Ok(()),
-            _ if matches!(r1, Type::Never) => Err(UnifyError::TypeMismatch),
+            _ if r1_is_unknown && r2_is_unknown => Ok(()),
 
             (Type::Var { id, .. }, _) => self.unify_type_variable(store, *id, &r2, span, false),
             (_, Type::Var { id, .. }) => self.unify_type_variable(store, *id, &r1, span, true),
+
+            _ if r1_is_unknown && self.scopes.is_inside_type_param() => {
+                Err(UnifyError::TypeMismatch)
+            }
+            _ if r1_is_unknown => Ok(()),
+            _ if r2_is_unknown => Err(UnifyError::TypeMismatch),
+
+            _ if matches!(r2, Type::Never) => Ok(()),
+            _ if matches!(r1, Type::Never) => Err(UnifyError::TypeMismatch),
 
             // Non-variable vs Error succeeds silently; variables were handled above.
             _ if matches!(r1, Type::Error) || matches!(r2, Type::Error) => Ok(()),
@@ -319,6 +320,7 @@ impl TaskState<'_> {
                 underlying_ty: Some(u),
                 ..
             } = t1
+                && store.get_interface(symbol2).is_none()
                 && self.try_unify(store, u, t2, span).is_ok()
             {
                 return Ok(());
@@ -327,6 +329,7 @@ impl TaskState<'_> {
                 underlying_ty: Some(u),
                 ..
             } = t2
+                && store.get_interface(symbol1).is_none()
                 && self.try_unify(store, t1, u, span).is_ok()
             {
                 return Ok(());
@@ -867,6 +870,22 @@ impl TaskState<'_> {
 
         if expected.wraps("Slice", actual) {
             return "Wrap the value in a slice literal".to_string();
+        }
+
+        if expected.contains_unknown() && !actual.contains_unknown() {
+            use syntax::types::CompoundKind::{Map, Slice};
+            return match expected.as_compound() {
+                Some((Map, args)) if args.get(1).is_some_and(|v| v.resolves_to_unknown()) => {
+                    format!(
+                        "Build the map with `Map.new()` plus indexed assignment: `let mut m: {} = Map.new(); m[k] = v`",
+                        expected
+                    )
+                }
+                Some((Slice, args)) if args.first().is_some_and(|v| v.resolves_to_unknown()) => {
+                    format!("Annotate the slice literal: `let xs: {} = [v1, v2, ...]`", expected)
+                }
+                _ => "The expected type contains `Unknown`. Produce the value in a context where the expected type provides the `Unknown` slot (annotation, parameter type, struct field, or return position).".to_string(),
+            };
         }
 
         format!(

@@ -100,7 +100,7 @@ fmt.Println("prefix:", ..parts)
 
 ### `Unknown`
 
-When you call a Go function that accepts or returns a value of type `any` or `interface{}`, that value will be `Unknown` in Lisette. For example, Go's `context.Context` is declared as:
+When using a value of type `any` or `interface{}` coming from Go, that value will be typed `Unknown` in Lisette. For example, Go's `context.Context` is declared as:
 
 ```rust
 // context.d.lis
@@ -110,7 +110,7 @@ pub interface Context {
 }
 ```
 
-Before you can use an `Unknown` value, call the built-in `assert_type` to narrow it down safely:
+Before using a value typed `Unknown`, call the built-in `assert_type` to narrow it down safely:
 
 ```rust
 import "go:context"
@@ -120,6 +120,17 @@ let id = assert_type<string>(value)?     // `id` is `string` or we propagate `No
 ```
 
 `assert_type` is the safe equivalent of Go's `v, ok := x.(T)`.
+
+Conversely, you can write `Unknown` yourself to fit Go APIs that expect `any` or `interface{}`.
+
+```rust
+import jwt "go:github.com/golang-jwt/jwt/v5"
+
+let mut claims: Map<string, Unknown> = Map.new()
+claims["user"] = "alice"
+claims["iat"] = 1714665600
+let token = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims(claims))
+```
 
 ## Declaration files
 

@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `Unknown` bound
+   ╭─[test.lis:2:9]
+ 1 │ 
+ 2 │ fn f<T: Unknown>(x: T) {}
+   ·         ───┬───
+   ·            ╰── invalid bound
+   ╰────
+  help: `Unknown` cannot constrain a generic · code: [infer.unknown_in_bound_position]

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                        ╰── expected `Slice<Unknown>`, found `Slice<int>`
  5 │ }
    ╰────
-  help: Change the type annotation to `Slice<int>` or convert the value to `Slice<Unknown>` · code: [infer.type_mismatch]
+  help: Annotate the slice literal: `let xs: Slice<Unknown> = [v1, v2, ...]` · code: [infer.type_mismatch]

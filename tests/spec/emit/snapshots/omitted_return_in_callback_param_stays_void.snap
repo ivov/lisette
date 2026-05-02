@@ -1,0 +1,7 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn run(callback: fn(int)) {}\n"
+---
+package main
+
+func run(_ func(int)) {}

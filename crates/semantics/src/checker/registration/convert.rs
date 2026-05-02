@@ -102,12 +102,6 @@ impl TaskState<'_> {
                     type_name.len() as u32,
                 );
 
-                if qualified_name == "prelude.Unknown" && self.is_lis(store) {
-                    self.sink.push(diagnostics::infer::unknown_outside_typedef(
-                        *annotation_span,
-                    ));
-                }
-
                 if self.bound_position_depth == 0
                     && let Some(builtin) =
                         crate::checker::infer::BuiltinBound::from_qualified_id(&qualified_name)
@@ -174,7 +168,7 @@ impl TaskState<'_> {
                         .get_type_params()
                         .and_then(|p| p.first().cloned())
                 {
-                    self.check_map_key_comparable(&key_ty, *annotation_span);
+                    self.check_map_key_comparable(store, &key_ty, *annotation_span);
                 }
 
                 // Preserve alias name in emitter output. Guard against re-wrapping bodies whose
@@ -325,20 +319,26 @@ impl TaskState<'_> {
         }
     }
 
-    fn check_map_key_comparable(&mut self, key_ty: &Type, span: Span) {
+    fn check_map_key_comparable(&mut self, store: &Store, key_ty: &Type, span: Span) {
         let resolved = key_ty.resolve_in(&self.env);
 
-        let reason = match &resolved {
-            Type::Function { .. } => Some("functions"),
-            _ if resolved.has_name("Slice") => Some("slices"),
-            _ if resolved.has_name("Map") => Some("maps"),
-            _ => None,
+        if self.is_lis(store) && resolved.resolves_to_unknown() {
+            self.sink.push(diagnostics::infer::unknown_as_map_key(span));
+            return;
+        }
+
+        let reason = if matches!(&resolved, Type::Function { .. }) {
+            "functions"
+        } else if resolved.has_name("Slice") {
+            "slices"
+        } else if resolved.has_name("Map") {
+            "maps"
+        } else {
+            return;
         };
 
-        if let Some(reason) = reason {
-            self.sink.push(diagnostics::infer::non_comparable_map_key(
-                &resolved, reason, span,
-            ));
-        }
+        self.sink.push(diagnostics::infer::non_comparable_map_key(
+            &resolved, reason, span,
+        ));
     }
 }

@@ -2777,3 +2777,37 @@ impl Calc {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn unknown_return_in_struct_field_emits_any() {
+    let input = r#"
+struct Bag {
+  pub callback: fn() -> Unknown,
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unknown_return_in_callback_param_emits_any() {
+    let input = r#"
+fn run(callback: fn() -> Unknown) {}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unknown_return_in_alias_emits_any() {
+    let input = r#"
+type Cb = fn() -> Unknown;
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn omitted_return_in_callback_param_stays_void() {
+    let input = r#"
+fn run(callback: fn(int)) {}
+"#;
+    assert_emit_snapshot!(input);
+}

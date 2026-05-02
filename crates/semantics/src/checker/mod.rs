@@ -219,9 +219,25 @@ impl<'s> TaskState<'s> {
     ) {
         for g in generics {
             for b in &g.bounds {
-                self.convert_bound_to_type(store, b, span);
+                self.register_bound_annotation(store, b, span);
             }
         }
+    }
+
+    pub(crate) fn register_bound_annotation(
+        &mut self,
+        store: &Store,
+        bound: &Annotation,
+        span: &Span,
+    ) -> Type {
+        let resolved = self.convert_bound_to_type(store, bound, span);
+        if self.is_lis(store) && resolved.contains_unknown() {
+            self.sink
+                .push(diagnostics::infer::unknown_in_bound_position(
+                    bound.get_span(),
+                ));
+        }
+        resolved
     }
 
     /// Resolve a simple name (e.g., "Sunday") to a public definition in an imported module.

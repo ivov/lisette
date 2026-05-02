@@ -785,6 +785,29 @@ impl Type {
         self.has_name("Unknown")
     }
 
+    pub fn resolves_to_unknown(&self) -> bool {
+        peel_alias(self, |_| true).is_unknown()
+    }
+
+    pub fn contains_unknown(&self) -> bool {
+        let peeled = peel_alias(self, |_| true);
+        if peeled.is_unknown() {
+            return true;
+        }
+        match &peeled {
+            Type::Compound { args, .. } => args.iter().any(|a| a.contains_unknown()),
+            Type::Function {
+                params,
+                return_type,
+                ..
+            } => params.iter().any(|p| p.contains_unknown()) || return_type.contains_unknown(),
+            Type::Tuple(elements) => elements.iter().any(|e| e.contains_unknown()),
+            Type::Nominal { params, .. } => params.iter().any(|p| p.contains_unknown()),
+            Type::Forall { body, .. } => body.contains_unknown(),
+            _ => false,
+        }
+    }
+
     pub fn is_receiver(&self) -> bool {
         self.is_native(CompoundKind::Receiver)
     }

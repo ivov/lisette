@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Bag {\n  pub callback: fn() -> Unknown,\n}\n"
+---
+package main
+
+import "fmt"
+
+type Bag struct {
+	Callback func() any
+}
+
+func (b Bag) String() string {
+	return fmt.Sprintf("Bag { callback: %p }", b.Callback)
+}

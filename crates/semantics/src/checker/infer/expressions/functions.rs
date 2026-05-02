@@ -358,7 +358,8 @@ impl TaskState<'_> {
             && self.is_enum_type(store, &return_ty.resolve_in(&self.env))
             && (self.has_interface_type_param(store, expected_ty)
                 || self.has_go_named_type_param(expected_ty)
-                || self.has_fn_type_param(expected_ty))
+                || self.has_fn_type_param(expected_ty)
+                || self.has_unknown_type_param(expected_ty))
         {
             let _ =
                 self.speculatively(|this| this.try_unify(store, expected_ty, &return_ty, &span));

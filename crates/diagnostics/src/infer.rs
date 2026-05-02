@@ -1565,12 +1565,26 @@ pub fn pointer_receiver_interface_mismatch(
         .with_help(format!("{}, so pass a `Ref<{}>`.", takes, type_name))
 }
 
-pub fn unknown_outside_typedef(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Invalid `Unknown` type")
-        .with_infer_code("unknown_outside_typedef")
-        .with_span_label(&span, "not allowed in `.lis` files")
-        .with_help("Remove the `Unknown` annotation.")
-        .with_note("`Unknown` can only be used in `.d.lis` files. This type exists only to represent Go's `any` in typedefs.")
+pub fn unknown_in_bound_position(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid `Unknown` bound")
+        .with_infer_code("unknown_in_bound_position")
+        .with_span_label(&span, "invalid bound")
+        .with_help("`Unknown` cannot constrain a generic")
+}
+
+pub fn unknown_in_const_annotation(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid `Unknown` in `const` annotation")
+        .with_infer_code("unknown_in_const_annotation")
+        .with_span_label(&span, "invalid annotation")
+        .with_help("`Unknown` cannot be used to annotate a constant")
+}
+
+pub fn unknown_as_map_key(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`Unknown` cannot be used as a map key")
+        .with_infer_code("unknown_as_map_key")
+        .with_span_label(&span, "key resolves to `any`")
+        .with_help("Use a concrete comparable key type.")
+        .with_note("Go's `map[any]V` admits non-comparable runtime values that panic on insertion.")
 }
 
 pub fn opaque_type_outside_typedef(span: Span) -> LisetteDiagnostic {

@@ -1353,19 +1353,19 @@ fn occurs_check_in_collection() {
 }
 
 #[test]
-fn unknown_in_var_type_disallowed_in_lis_file() {
+fn unknown_in_var_type_allowed_in_lis_file() {
     infer(
         r#"
     fn main() {
-      let x: Unknown = 42;
+      let x: Unknown = get_unknown();
     }
         "#,
     )
-    .assert_infer_code("unknown_outside_typedef");
+    .assert_no_errors();
 }
 
 #[test]
-fn unknown_in_param_type_disallowed_in_lis_file() {
+fn unknown_in_param_type_allowed_in_lis_file() {
     infer(
         r#"
     fn process(x: Unknown) -> int {
@@ -1373,19 +1373,307 @@ fn unknown_in_param_type_disallowed_in_lis_file() {
     }
         "#,
     )
-    .assert_infer_code("unknown_outside_typedef");
+    .assert_no_errors();
 }
 
 #[test]
-fn unknown_in_return_type_disllowed_in_lis_file() {
+fn unknown_in_return_type_allowed_in_lis_file() {
     infer(
         r#"
     fn get_value() -> Unknown {
-      return 42;
+      return get_unknown();
     }
         "#,
     )
-    .assert_infer_code("unknown_outside_typedef");
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_in_const_annotation_disallowed() {
+    infer(
+        r#"
+    const X: Unknown = 42;
+        "#,
+    )
+    .assert_infer_code("unknown_in_const_annotation");
+}
+
+#[test]
+fn unknown_in_const_annotation_nested_disallowed() {
+    infer(
+        r#"
+    const XS: Slice<Unknown> = [];
+        "#,
+    )
+    .assert_infer_code("unknown_in_const_annotation");
+}
+
+#[test]
+fn unknown_in_const_annotation_via_alias_disallowed() {
+    infer(
+        r#"
+    type Erased = Unknown;
+    const X: Erased = 42;
+        "#,
+    )
+    .assert_infer_code("unknown_in_const_annotation");
+}
+
+#[test]
+fn unknown_in_bound_position_disallowed() {
+    infer(
+        r#"
+    fn f<T: Unknown>(x: T) {}
+        "#,
+    )
+    .assert_infer_code("unknown_in_bound_position");
+}
+
+#[test]
+fn unknown_in_struct_field_allowed_in_lis_file() {
+    infer(
+        r#"
+    struct Bag {
+      pub value: Unknown,
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_in_let_mut_map_allowed() {
+    infer(
+        r#"
+    fn main() {
+      let mut m: Map<string, Unknown> = Map.new();
+      m["k"] = "alice";
+      m["n"] = 42;
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_in_slice_literal_heterogeneous() {
+    infer(
+        r#"
+    fn main() {
+      let xs: Slice<Unknown> = ["alice", 30, true];
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_alias_declares_without_error() {
+    infer(
+        r#"
+    type Claims = Map<string, Unknown>;
+    type Erased = Unknown;
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_as_map_key_surface_disallowed() {
+    infer(
+        r#"
+    fn main() {
+      let m: Map<Unknown, int> = Map.new();
+    }
+        "#,
+    )
+    .assert_infer_code("unknown_as_map_key");
+}
+
+#[test]
+fn unknown_as_map_key_turbofish_compiles() {
+    // Non-surface forms inherit Go's runtime panic semantics; only direct
+    // surface annotations of `Map<Unknown, _>` are statically rejected.
+    infer(
+        r#"
+    fn main() {
+      let m = Map.new<Unknown, int>();
+      let _ = m;
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_as_map_key_via_alias_disallowed() {
+    infer(
+        r#"
+    type K = Unknown;
+    fn main() {
+      let m: Map<K, int> = Map.new();
+    }
+        "#,
+    )
+    .assert_infer_code("unknown_as_map_key");
+}
+
+#[test]
+fn unknown_as_map_key_via_nested_alias_disallowed() {
+    infer(
+        r#"
+    type K1 = Unknown;
+    type K2 = K1;
+    fn main() {
+      let m: Map<K2, int> = Map.new();
+    }
+        "#,
+    )
+    .assert_infer_code("unknown_as_map_key");
+}
+
+#[test]
+fn unknown_as_map_key_turbofish_via_alias_compiles() {
+    infer(
+        r#"
+    type K = Unknown;
+    fn main() {
+      let m = Map.new<K, int>();
+      let _ = m;
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_as_map_key_via_generic_alias_wrapping_map_compiles() {
+    infer(
+        r#"
+    type Claims<K, V> = Map<K, V>;
+    fn make<K, V>() -> Claims<K, V> { Map.new() }
+    fn main() {
+      let m = make<Unknown, int>();
+      let _ = m;
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_as_map_key_method_only_turbofish_compiles() {
+    infer(
+        r#"
+    struct Bag<T> {}
+    impl<T> Bag<T> {
+      pub fn make<K>(self) -> Map<K, T> { Map.new() }
+    }
+    fn main() {
+      let b: Bag<int> = Bag {};
+      let _ = b.make<Unknown>();
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn option_unknown_accepts_concrete_some() {
+    infer(
+        r#"
+    fn opt_unknown() -> Option<Unknown> {
+      Some("x")
+    }
+    fn main() {
+      let _ = opt_unknown();
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn result_unknown_accepts_concrete_ok() {
+    infer(
+        r#"
+    fn ok_unknown() -> Result<Unknown, error> {
+      Ok(42)
+    }
+    fn main() {
+      let _ = ok_unknown();
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_as_map_key_via_alias_at_annotation_site_compiles() {
+    infer(
+        r#"
+    type AnyMap<K, V> = Map<K, V>;
+    fn main() {
+      let m: AnyMap<Unknown, int> = Map.new();
+      let _ = m;
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn unknown_map_return_from_typedef_api_allowed() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "ffi",
+        "bindings.d.lis",
+        r#"
+    pub fn make() -> Map<Unknown, int>
+        "#,
+    );
+    fs.add_file(
+        "ffi",
+        "main.lis",
+        r#"
+    fn main() {
+      let _ = make()
+    }
+        "#,
+    );
+    infer_module("ffi", fs).assert_no_errors();
+}
+
+#[test]
+fn unknown_as_map_key_via_inferred_receiver_compiles() {
+    infer(
+        r#"
+    struct Bag<K> {}
+    impl<K> Bag<K> {
+      fn make(self) -> Map<K, int> { Map.new() }
+    }
+    fn main() {
+      let b: Bag<Unknown> = Bag {};
+      let _ = b.make();
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn tuple_unknown_accepts_concrete_at_unknown_position() {
+    infer(
+        r#"
+    fn pair() -> (int, Unknown) {
+      (1, "two")
+    }
+    fn main() {
+      let _ = pair();
+    }
+        "#,
+    )
+    .assert_no_errors();
 }
 
 #[test]

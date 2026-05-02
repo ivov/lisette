@@ -1,0 +1,7 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ntype Cb = fn() -> Unknown;\n"
+---
+package main
+
+type Cb func() any

@@ -1,0 +1,11 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `Unknown` in `const` annotation
+   ╭─[test.lis:2:10]
+ 1 │ 
+ 2 │ const X: Unknown = 42;
+   ·          ───┬───
+   ·             ╰── invalid annotation
+   ╰────
+  help: `Unknown` cannot be used to annotate a constant · code: [infer.unknown_in_const_annotation]

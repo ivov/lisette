@@ -44,7 +44,14 @@ impl TaskState<'_> {
         span: Span,
     ) -> Expression {
         let ty = if let Some(annotation) = &annotation {
-            self.convert_to_type(store, annotation, &span)
+            let ty = self.convert_to_type(store, annotation, &span);
+            if self.is_lis(store) && ty.contains_unknown() {
+                self.sink
+                    .push(diagnostics::infer::unknown_in_const_annotation(
+                        annotation.get_span(),
+                    ));
+            }
+            ty
         } else {
             // Look up the type variable that was created during registration.
             // This ensures the type variable in the store gets unified.

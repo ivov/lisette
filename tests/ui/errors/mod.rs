@@ -1586,11 +1586,17 @@ impl A {
 }
 
 #[test]
-fn infer_unknown_outside_typedef() {
+fn infer_unknown_in_const_annotation() {
     let input = r#"
-fn test() {
-  let x: Unknown = 42;
+const X: Unknown = 42;
+"#;
+    assert_infer_error_snapshot!(input);
 }
+
+#[test]
+fn infer_unknown_in_bound_position() {
+    let input = r#"
+fn f<T: Unknown>(x: T) {}
 "#;
     assert_infer_error_snapshot!(input);
 }

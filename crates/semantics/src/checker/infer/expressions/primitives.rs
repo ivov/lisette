@@ -411,7 +411,7 @@ impl TaskState<'_> {
 
         let tuple_ty = Type::Tuple(element_types);
 
-        self.unify(store, &tuple_ty, expected_ty, &span);
+        self.unify(store, expected_ty, &tuple_ty, &span);
 
         Expression::Tuple {
             elements: inferred_elements,

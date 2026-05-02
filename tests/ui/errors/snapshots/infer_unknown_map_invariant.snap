@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·                                ╰── expected `Map<string, Unknown>`, found `Map<string, string>`
  4 │ }
    ╰────
-  help: Change the type annotation to `Map<string, string>` or convert the value to `Map<string, Unknown>` · code: [infer.type_mismatch]
+  help: Build the map with `Map.new()` plus indexed assignment: `let mut m: Map<string, Unknown> = Map.new(); m[k] = v` · code: [infer.type_mismatch]
