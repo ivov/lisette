@@ -88,7 +88,15 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           just: 'true'
-      - run: just check-stdlib-typedefs
+          go: 'true'
+      - name: Regenerate typedefs and check for drift
+        run: |
+          VERSION=$(grep '// Lisette:' crates/stdlib/typedefs/fmt.d.lis | awk '{print $3}')
+          just generate-stdlib-typedefs "$VERSION"
+          if ! git diff --exit-code crates/stdlib/; then
+            echo "::error::Committed stdlib typedefs drift from bindgen+format output. Run 'just generate-stdlib-typedefs $VERSION' locally and commit the result."
+            exit 1
+          fi
 
   e2e-smoke:
     name: E2E smoke
