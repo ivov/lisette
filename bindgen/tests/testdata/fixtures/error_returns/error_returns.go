@@ -29,3 +29,9 @@ func ParseAppError() (*AppError, error) { return &AppError{}, nil }
 
 // Single error interface return (not *T) → Result<(), error>
 func Validate() error { return nil }
+
+// Two parallel errors → (Option<error>, Option<error>) — both can be nil for success.
+func ClosePair() (source error, database error) { return nil, nil }
+
+// Three parallel errors → (Option<error>, Option<error>, Option<error>).
+func CloseTriple() (a, b, c error) { return nil, nil, nil }

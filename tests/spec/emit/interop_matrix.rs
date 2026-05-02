@@ -1009,6 +1009,48 @@ fn main() {
 }
 
 #[test]
+fn interop_result_error_ok_skips_nil_guard() {
+    let input = r#"
+import "go:example.com/legacy"
+
+fn main() {
+  match legacy.Close() {
+    Ok(stored) => { let _ = stored },
+    Err(_) => { let _ = 0 },
+  }
+}
+"#;
+    let typedef = r#"
+pub fn Close() -> Result<error, error>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/legacy", typedef)]);
+}
+
+#[test]
+fn interop_parallel_error_tuple_return() {
+    let input = r#"
+import "go:fmt"
+import "go:example.com/migrate"
+
+fn main() {
+  let (src, db) = migrate.Close()
+  match src {
+    Some(e) => fmt.Println("source:", e),
+    None => {},
+  }
+  match db {
+    Some(e) => fmt.Println("db:", e),
+    None => {},
+  }
+}
+"#;
+    let typedef = r#"
+pub fn Close() -> (Option<error>, Option<error>)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/migrate", typedef)]);
+}
+
+#[test]
 fn interop_typed_nil_interface_collection() {
     let input = r#"
 import "go:fmt"

@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:fmt\"\nimport \"go:example.com/migrate\"\n\nfn main() {\n  let (src, db) = migrate.Close()\n  match src {\n    Some(e) => fmt.Println(\"source:\", e),\n    None => {},\n  }\n  match db {\n    Some(e) => fmt.Println(\"db:\", e),\n    None => {},\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/migrate"
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	src, db := migrate.Close()
+	if src.Tag == lisette.OptionSome {
+		e := src.SomeVal
+		fmt.Println("source:", e)
+	}
+	if db.Tag == lisette.OptionSome {
+		e := db.SomeVal
+		fmt.Println("db:", e)
+	}
+}

@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::names::go_name::PRELUDE_ERROR_ID;
 use syntax::ast::{Annotation, Expression};
 use syntax::types::Type;
 
@@ -54,7 +55,7 @@ impl Emitter<'_> {
     /// nilable type, so `nil` typechecks as the no-error sentinel.
     fn err_slot_is_nilable(&self, fallible_ty: &Type) -> bool {
         let err = self.peel_alias(&fallible_ty.err_type());
-        matches!(&err, Type::Nominal { id, .. } if id.as_str() == "prelude.error")
+        matches!(&err, Type::Nominal { id, .. } if id.as_str() == PRELUDE_ERROR_ID)
             || self.is_nilable_go_type(&err)
     }
 

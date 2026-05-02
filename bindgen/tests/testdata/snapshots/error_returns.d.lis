@@ -3,6 +3,12 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+/// Two parallel errors → (Option<error>, Option<error>) — both can be nil for success.
+pub fn ClosePair() -> (Option<error>, Option<error>)
+
+/// Three parallel errors → (Option<error>, Option<error>, Option<error>).
+pub fn CloseTriple() -> (Option<error>, Option<error>, Option<error>)
+
 pub fn GetWidget() -> Option<Ref<Widget>>
 
 pub fn NewAppError() -> error

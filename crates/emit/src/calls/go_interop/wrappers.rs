@@ -118,7 +118,11 @@ impl Emitter<'_> {
         let result_var = fe.emitter.fresh_var(Some("result"));
         fe.emitter.declare(&result_var);
 
-        let needs_nil_guard = ok_ty.is_ref() || self.as_interface(ok_ty).is_some();
+        let interface_id = self.as_interface(ok_ty);
+        let needs_nil_guard = ok_ty.is_ref()
+            || interface_id
+                .as_deref()
+                .is_some_and(|id| id != go_name::PRELUDE_ERROR_ID);
 
         write_line!(output, "var {} {}", result_var, result_ty_str);
         write_line!(output, "if {} != nil {{", err_var);

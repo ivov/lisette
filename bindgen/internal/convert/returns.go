@@ -87,6 +87,14 @@ func returnsToLisetteRecursive(signature *types.Signature, seen map[types.Type]b
 
 	last := results.At(results.Len() - 1)
 
+	if allErrorResults(results) {
+		elems := make([]string, results.Len())
+		for i := range elems {
+			elems[i] = "Option<error>"
+		}
+		return TypeResult{LisetteType: fmt.Sprintf("(%s)", strings.Join(elems, ", "))}
+	}
+
 	if isErrorType(last.Type()) {
 		inner := collectReturnTypes(results, 0, results.Len()-1, seen, conv, qualifiedName)
 		innerType := inner.LisetteType
@@ -196,6 +204,18 @@ func collectReturnTypes(results *types.Tuple, start, end int, seen map[types.Typ
 		LisetteType:          fmt.Sprintf("(%s)", strings.Join(elems, ", ")),
 		NilableReturnApplied: anyApplied,
 	}
+}
+
+func allErrorResults(results *types.Tuple) bool {
+	if results.Len() < 2 {
+		return false
+	}
+	for v := range results.Variables() {
+		if !isErrorType(v.Type()) {
+			return false
+		}
+	}
+	return true
 }
 
 func isErrorType(t types.Type) bool {

@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:example.com/legacy\"\n\nfn main() {\n  match legacy.Close() {\n    Ok(stored) => { let _ = stored },\n    Err(_) => { let _ = 0 },\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/legacy"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	ret_2, ret_3 := legacy.Close()
+	var subject_1 lisette.Result[error, error]
+	if ret_3 != nil {
+		subject_1 = lisette.MakeResultErr[error, error](ret_3)
+	} else {
+		subject_1 = lisette.MakeResultOk[error, error](ret_2)
+	}
+	if subject_1.Tag == lisette.ResultOk {
+		_ = subject_1.OkVal
+	} else {
+		_ = 0
+	}
+}
