@@ -12,14 +12,14 @@ pre-commit:
   commands:
     check:
       glob: "**/*.{rs,lis,toml}"
-      run: just check && just check-stdlib-typedefs
+      run: just check && cargo run -p lisette -- check crates/stdlib/typedefs/
     bindgen:
       glob: "bindgen/**/*.go"
       root: "bindgen"
       run: just check
-    generate-stdlib-typedefs:
+    check-stdlib-drift:
       glob: "bindgen/**/*.go"
-      run: just generate-stdlib-typedefs "$(grep '// Lisette:' crates/stdlib/typedefs/fmt.d.lis | awk '{print $3}')" && git diff --exit-code crates/stdlib/
+      run: just check-stdlib-drift
     go-version-sync:
       glob: "{go-version,prelude/go.mod,bindgen/go.mod,bindgen/internal/cli/metadata/go-version,crates/cli/go-version}"
       run: |

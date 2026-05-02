@@ -76,9 +76,6 @@ fuzz-parse duration="300":
 fuzz-infer duration="300":
     cargo +nightly fuzz run infer --sanitizer address -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
 
-check-stdlib-typedefs:
-    cargo run -p lisette -- check crates/stdlib/typedefs/
-
 generate-stdlib-typedefs version:
     cd bindgen && just build
     just build # make binary to run bindgen
@@ -91,6 +88,13 @@ generate-stdlib-typedefs version:
 commit-stdlib-typedefs version:
     git add crates/stdlib/
     LEFTHOOK=0 git commit -m "chore: bump stdlib typedefs to v{{version}}"
+
+_stdlib-typedef-version:
+    @grep '// Lisette:' crates/stdlib/typedefs/fmt.d.lis | awk '{print $3}'
+
+check-stdlib-drift:
+    just generate-stdlib-typedefs "$(just _stdlib-typedef-version)"
+    git diff --exit-code crates/stdlib/
 
 # Build the playground and write output to docs/play/ (served at lisette.run/play)
 rebuild-playground:
