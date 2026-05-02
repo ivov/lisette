@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Unexpected backtick
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let x = `has "quote" inside`
+   ·           ┬
+   ·           ╰── not allowed here
+ 4 │   let _ = x
+   ╰────
+  help: Use a regular string `"..."` or a raw string `r"..."` for single- or multi-line strings. Backticks in Lisette are reserved for struct-tag attributes · code: [parse.unexpected_backtick]

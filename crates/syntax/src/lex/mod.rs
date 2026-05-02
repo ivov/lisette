@@ -749,8 +749,6 @@ impl<'source> Lexer<'source> {
                 terminated = true;
                 self.next();
                 break;
-            } else if byte == b'\n' {
-                break;
             }
             self.next();
         }

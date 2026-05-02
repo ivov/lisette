@@ -6663,7 +6663,7 @@ fn main() {
 }
 
 #[test]
-fn parse_backtick_in_expression_simple() {
+fn parse_unexpected_backtick_simple() {
     let input = r#"
 fn main() {
   let x = `hello`
@@ -6674,13 +6674,26 @@ fn main() {
 }
 
 #[test]
-fn parse_backtick_in_expression_with_embedded_quote() {
+fn parse_unexpected_backtick_with_embedded_quote() {
     let input = r#"
 fn main() {
   let x = `has "quote" inside`
   let _ = x
 }
 "#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_unexpected_backtick_multiline() {
+    let input = "
+fn main() {
+  let x = `{
+    \"a\": 1
+  }`
+  let _ = x
+}
+";
     assert_parse_error_snapshot!(input);
 }
 

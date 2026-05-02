@@ -73,7 +73,7 @@ impl<'source> Parser<'source> {
                 }
             }
 
-            Backtick => self.recover_backtick_as_raw_string(),
+            Backtick => self.recover_unexpected_backtick(),
 
             _ => self.unexpected_token("expr"),
         }
@@ -1494,39 +1494,24 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn recover_backtick_as_raw_string(&mut self) -> Expression {
+    fn recover_unexpected_backtick(&mut self) -> Expression {
         let token = self.current_token();
-        let span = self.span_from_token(token);
-        let raw = token.text;
-        let inner = if raw.len() >= 2 && raw.starts_with('`') && raw.ends_with('`') {
-            &raw[1..raw.len() - 1]
-        } else {
-            raw
-        };
-        let help = if inner.contains('"') {
-            "Lisette uses `r\"...\"` for raw strings, not backticks like Go".to_string()
-        } else {
-            format!(
-                "Lisette uses `r\"...\"` for raw strings, not backticks like Go, so replace with `r\"{}\"`",
-                inner
-            )
-        };
-        let error = ParseError::new(
-            "Backticks are not raw strings in Lisette",
-            span,
-            "expected `r\"...\"`",
-        )
-        .with_parse_code("backtick_in_expression")
-        .with_help(help);
+        let token_span = self.span_from_token(token);
+        let opening_span = Span::new(self.file_id, token.byte_offset, 1);
+        let error = ParseError::new("Unexpected backtick", opening_span, "not allowed here")
+            .with_parse_code("unexpected_backtick")
+            .with_help(
+                "Use a regular string `\"...\"` or a raw string `r\"...\"` for single- or multi-line strings. Backticks in Lisette are reserved for struct-tag attributes.",
+            );
         self.errors.push(error);
         self.next();
         Expression::Literal {
             literal: Literal::String {
-                value: inner.to_string(),
+                value: std::string::String::new(),
                 raw: true,
             },
             ty: Type::uninferred(),
-            span,
+            span: token_span,
         }
     }
 }
