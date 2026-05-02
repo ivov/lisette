@@ -134,17 +134,24 @@ pub fn check_toolchain_version(manifest: &Manifest) -> Result<(), String> {
 
 pub fn check_no_subpackage_deps(manifest: &Manifest) -> Result<(), String> {
     let deps = manifest.go_deps();
+    let has_via = |d: &GoDependency| d.via.as_ref().is_some_and(|v| !v.is_empty());
 
-    for key in deps.keys() {
-        if let Some(parent) = deps
-            .keys()
-            .find(|other| other.as_str() != key.as_str() && is_pkg_under(key, other))
-        {
-            return Err(format!(
-                "`{}` in `[dependencies.go]` is a subpackage of `{}`; remove this entry and rely on the parent module pin",
-                key, parent
-            ));
+    for (key, dep) in &deps {
+        let Some((parent, parent_dep)) = deps
+            .iter()
+            .find(|(other, _)| other.as_str() != key.as_str() && is_pkg_under(key, other))
+        else {
+            continue;
+        };
+
+        if has_via(dep) || has_via(parent_dep) {
+            continue;
         }
+
+        return Err(format!(
+            "`{}` in `[dependencies.go]` is a subpackage of `{}`; remove this entry and rely on the parent module pin",
+            key, parent
+        ));
     }
 
     Ok(())

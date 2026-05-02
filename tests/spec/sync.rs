@@ -255,3 +255,26 @@ version = "0.1.0"
         stderr
     );
 }
+
+#[test]
+fn sync_accepts_multi_module_monorepo_siblings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifest = r#"[project]
+name = "demo"
+version = "0.1.0"
+
+[dependencies.go]
+"go.opentelemetry.io/otel" = { version = "v1.37.0", via = ["go.opentelemetry.io/contrib"] }
+"go.opentelemetry.io/otel/sdk" = { version = "v1.37.0", via = ["go.opentelemetry.io/contrib"] }
+"go.opentelemetry.io/otel/sdk/metric" = { version = "v1.36.0", via = ["go.opentelemetry.io/otel/sdk"] }
+"#;
+    write_project(tmp.path(), manifest, &[("main.lis", "fn main() {}\n")]);
+
+    let output = run_sync(tmp.path());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("subpackage of"),
+        "multi-module monorepo siblings must not be flagged as subpackages, got stderr:\n{}",
+        stderr
+    );
+}
