@@ -96,8 +96,10 @@ impl TypeEnv {
         }
     }
 
-    /// Deep resolve: chase `Type::Var` chains and recurse into composites.
-    /// Replaces the old `Type::resolve` that walked `Rc<RefCell<_>>` chains.
+    /// Deep resolve: chase `Type::Var` chains, substitute every bound var with
+    /// its chased value, and recurse into composites. Unbound vars (including
+    /// reserved sentinel ids like `IGNORED`/`UNINFERRED`) are preserved as-is.
+    /// Used both during inference and as the post-inference freeze pass.
     pub fn resolve(&self, ty: &Type) -> Type {
         match ty {
             Type::Var { id, .. } if !id.is_reserved() => match &self.entries[Self::slot(*id)] {
@@ -196,62 +198,6 @@ impl TypeEnv {
             }
         } else if let Some(parent_log) = &mut self.undo_log {
             parent_log.extend(log);
-        }
-    }
-
-    /// Freeze: substitute every bound `Type::Var` with its chased value.
-    /// Unbound vars are preserved as-is (downstream crates map them to
-    /// `any` or use `has_unbound_variables` to detect them).
-    pub fn freeze(&self, ty: &Type) -> Type {
-        match ty {
-            Type::Var { id, .. } => {
-                if id.is_reserved() {
-                    // Sentinel: ignored / uninferred. Preserve as-is; the
-                    // downstream behaviour (is_ignored, etc.) depends on it.
-                    return ty.clone();
-                }
-                match &self.entries[Self::slot(*id)] {
-                    VarState::Unbound { .. } => ty.clone(),
-                    VarState::Bound(bound) => self.freeze(bound),
-                }
-            }
-            Type::Nominal {
-                id,
-                params,
-                underlying_ty,
-            } => Type::Nominal {
-                id: id.clone(),
-                params: params.iter().map(|p| self.freeze(p)).collect(),
-                underlying_ty: underlying_ty.as_ref().map(|u| Box::new(self.freeze(u))),
-            },
-            Type::Compound { kind, args } => Type::Compound {
-                kind: *kind,
-                args: args.iter().map(|a| self.freeze(a)).collect(),
-            },
-            Type::Function {
-                params,
-                param_mutability,
-                bounds,
-                return_type,
-            } => Type::Function {
-                params: params.iter().map(|p| self.freeze(p)).collect(),
-                param_mutability: param_mutability.clone(),
-                bounds: bounds
-                    .iter()
-                    .map(|b| Bound {
-                        param_name: b.param_name.clone(),
-                        generic: self.freeze(&b.generic),
-                        ty: self.freeze(&b.ty),
-                    })
-                    .collect(),
-                return_type: Box::new(self.freeze(return_type)),
-            },
-            Type::Forall { vars, body } => Type::Forall {
-                vars: vars.clone(),
-                body: Box::new(self.freeze(body)),
-            },
-            Type::Tuple(elements) => Type::Tuple(elements.iter().map(|e| self.freeze(e)).collect()),
-            _ => ty.clone(),
         }
     }
 }
