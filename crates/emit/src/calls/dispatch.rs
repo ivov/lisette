@@ -8,7 +8,7 @@ use crate::types::native::NativeGoType;
 use crate::utils::Staged;
 use syntax::ast::{Annotation, Expression, StructKind};
 use syntax::program::{CallKind, Definition, DefinitionBody};
-use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
+use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
 impl Emitter<'_> {
     /// True when Go's untyped-literal default (`int`/`float64`/`complex128`)
@@ -370,8 +370,8 @@ impl Emitter<'_> {
         match function {
             Expression::Identifier { value, ty, .. } => {
                 let enum_id = enum_id_from_type(ty)?;
-                let variant = value.split('.').next_back().unwrap_or(value);
-                let enum_name = enum_id.split('.').next_back().unwrap_or(&enum_id);
+                let variant = unqualified_name(value);
+                let enum_name = unqualified_name(&enum_id);
                 let qualified = format!("{}.{}", enum_name, variant);
                 if self.module.make_functions.contains_key(&qualified) {
                     return Some((enum_id, variant.to_string()));

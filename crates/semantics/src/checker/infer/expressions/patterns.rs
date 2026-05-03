@@ -7,7 +7,7 @@ use syntax::ast::{
     TypedPattern,
 };
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{Type, substitute};
+use syntax::types::{Type, module_part, substitute, unqualified_name};
 
 use crate::checker::EnvResolve;
 use crate::store::Store;
@@ -355,7 +355,7 @@ impl TaskState<'_> {
                 return (Pattern::WildCard { span }, TypedPattern::Wildcard);
             }
             let enum_info = self.get_enum_variant_info(store, &expected_ty);
-            let bare_name = identifier.rsplit('.').next().unwrap_or(&identifier);
+            let bare_name = unqualified_name(&identifier);
             self.sink
                 .push(diagnostics::infer::enum_variant_constructor_not_found(
                     span,
@@ -426,7 +426,7 @@ impl TaskState<'_> {
         let resolved_ty = pattern_ty.resolve_in(&self.env);
         let typed = match &resolved_ty {
             Type::Nominal { id, params, .. } => {
-                let variant_name = identifier.rsplit('.').next().unwrap_or(identifier.as_str());
+                let variant_name = unqualified_name(&identifier);
                 let variant_qualified = id.with_segment(variant_name);
                 if let Some(definition_span) =
                     self.get_definition_name_span(store, &variant_qualified)
@@ -532,7 +532,7 @@ impl TaskState<'_> {
 
         let scrutinee_is_error = expected_ty.shallow_resolve_in(&self.env).is_error();
 
-        let struct_module = qualified_name.split('.').next().unwrap_or(&qualified_name);
+        let struct_module = module_part(&qualified_name);
         let is_cross_module = struct_module != self.cursor.module_id;
 
         let available: Vec<String> = struct_fields.iter().map(|f| f.name.to_string()).collect();
@@ -736,7 +736,7 @@ impl TaskState<'_> {
         };
         let variants = store.variants_of(&id)?;
         let variant_names: Vec<String> = variants.iter().map(|v| v.name.to_string()).collect();
-        let simple_name = id.rsplit('.').next().unwrap_or(&id);
+        let simple_name = unqualified_name(&id);
         Some((simple_name.to_string(), variant_names))
     }
 
@@ -793,7 +793,7 @@ impl TaskState<'_> {
         kind: BindingKind,
     ) -> Option<(Pattern, TypedPattern)> {
         let (ty, variant_name) = if let Some(ty) = self.lookup_type(store, identifier) {
-            let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+            let variant_name = unqualified_name(identifier);
             (ty, variant_name.to_string())
         } else if let Some((alias_ty, variant_name)) =
             self.try_resolve_type_alias_variant(store, identifier)

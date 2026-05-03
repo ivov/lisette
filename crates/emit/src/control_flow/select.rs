@@ -4,6 +4,7 @@ use crate::patterns::decision_tree;
 use crate::utils::{DiscardGuard, contains_call};
 use crate::write_line;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, TypedPattern};
+use syntax::types::unqualified_name;
 
 enum SendArmParts {
     Send(String, String),
@@ -635,7 +636,7 @@ impl Emitter<'_> {
         }
 
         if let Expression::Identifier { value, .. } = expression.as_ref() {
-            let method = value.rsplit('.').next()?;
+            let method = unqualified_name(value);
             if (method == "send" || method == "receive") && !args.is_empty() {
                 return Some((&args[0], method, &args[1..]));
             }

@@ -3,7 +3,7 @@ use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::write_line;
 use ecow::EcoString;
 use syntax::program::{Definition, DefinitionBody, Interface};
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 pub(crate) struct AdapterPlan {
     pub(crate) concrete_id: EcoString,
     pub(crate) interface_id: EcoString,
@@ -426,7 +426,7 @@ impl Emitter<'_> {
             .interface_id
             .strip_prefix(GO_IMPORT_PREFIX)
             .unwrap_or(plan.interface_id.as_str());
-        let iface_name = go_path.rsplit('.').next().unwrap_or(go_path);
+        let iface_name = unqualified_name(go_path);
         format!("_lisAdapter_{}_{}_{}", concrete_name, iface_name, index)
     }
 }

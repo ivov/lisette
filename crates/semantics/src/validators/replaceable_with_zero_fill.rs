@@ -2,7 +2,7 @@ use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, Span, StructFieldAssignment, StructSpread};
 use syntax::program::DefinitionBody;
-use syntax::types::{SubstitutionMap, Type, substitute};
+use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use crate::checker::infer::expressions::struct_call::has_zero;
 use crate::store::Store;
@@ -178,7 +178,7 @@ fn fields_filtered(
         DefinitionBody::Enum {
             variants, generics, ..
         } => {
-            let variant_name = name.rsplit('.').next()?;
+            let variant_name = unqualified_name(name);
             let variant = variants.iter().find(|v| v.name == variant_name)?;
             let mut map = SubstitutionMap::default();
             if generics.len() == params.len() {

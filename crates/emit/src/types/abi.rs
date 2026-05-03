@@ -1,7 +1,7 @@
 use crate::Emitter;
 use crate::names::go_name::PRELUDE_ERROR_ID;
 use syntax::ast::{Annotation, Expression};
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 
 /// Go ABI shape that a Lisette type lowers to at function-boundary
 /// positions.
@@ -162,7 +162,7 @@ impl Emitter<'_> {
         let Annotation::Constructor { name, params, .. } = annotation else {
             return None;
         };
-        let leaf = name.rsplit('.').next().unwrap_or(name);
+        let leaf = unqualified_name(name);
         match leaf {
             "Result" if params.len() == 2 && annotation_is_go_error(&params[1]) => {
                 Some(if params[0].is_unit() {
@@ -266,7 +266,7 @@ impl Emitter<'_> {
         match annotation {
             Annotation::Function { .. } => true,
             Annotation::Constructor { name, .. } => {
-                let leaf = name.rsplit('.').next().unwrap_or(name);
+                let leaf = unqualified_name(name);
                 if leaf == "Ref" {
                     return true;
                 }
@@ -380,6 +380,6 @@ fn annotation_is_go_error(annotation: &Annotation) -> bool {
     let Annotation::Constructor { name, .. } = annotation else {
         return false;
     };
-    let leaf = name.rsplit('.').next().unwrap_or(name);
+    let leaf = unqualified_name(name);
     leaf == "error"
 }

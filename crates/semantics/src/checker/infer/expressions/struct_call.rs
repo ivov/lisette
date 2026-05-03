@@ -5,7 +5,10 @@ use crate::store::Store;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructFieldAssignment, StructSpread};
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, substitute};
+use syntax::types::{
+    CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, module_part, substitute,
+    unqualified_name,
+};
 
 use super::super::TaskState;
 
@@ -203,7 +206,7 @@ impl TaskState<'_> {
             };
 
             let resolved_ty = pattern_ty.resolve_in(&self.env);
-            let variant_name = struct_name.split('.').next_back().unwrap_or(&struct_name);
+            let variant_name = unqualified_name(&struct_name);
 
             if let Type::Nominal { id, .. } = &resolved_ty
                 && let Some(variants) = store.variants_of(id)
@@ -261,7 +264,7 @@ impl TaskState<'_> {
 
         let new_spread = self.infer_struct_spread(store, spread, &struct_call_ty);
 
-        let struct_module = qualified_name.split('.').next().unwrap_or(&qualified_name);
+        let struct_module = module_part(&qualified_name);
         let is_cross_module = struct_module != self.cursor.module_id
             || struct_name
                 .split_once('.')

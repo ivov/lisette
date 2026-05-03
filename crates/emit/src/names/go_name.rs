@@ -45,13 +45,7 @@ pub(crate) fn go_package_name(module: &str) -> &str {
 }
 
 pub(crate) fn module_of_type_id(id: &str) -> &str {
-    if let Some(slash_pos) = id.rfind('/') {
-        let after_slash = slash_pos + 1;
-        if let Some(dot_offset) = id[after_slash..].find('.') {
-            return &id[..after_slash + dot_offset];
-        }
-    }
-    id.split('.').next().unwrap_or(id)
+    syntax::types::module_part(id)
 }
 
 pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
@@ -172,8 +166,8 @@ pub(crate) fn variant_by_id(
 ) -> ResolvedName {
     let is_prelude = enum_id.starts_with(PRELUDE_PREFIX);
     let enum_module = module_of_type_id(enum_id);
-    let enum_name = enum_id.split('.').next_back().unwrap_or(enum_id);
-    let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+    let enum_name = unqualified_name(enum_id);
+    let variant_name = unqualified_name(identifier);
 
     let needs_qualifier = !is_prelude && enum_module != current_module;
 

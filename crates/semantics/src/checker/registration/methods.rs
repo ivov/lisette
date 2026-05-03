@@ -4,7 +4,7 @@ use syntax::ast::{
     Visibility as SyntacticVisibility,
 };
 use syntax::program::{Definition, DefinitionBody, Interface, Visibility};
-use syntax::types::{Symbol, Type};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
 use crate::checker::TaskState;
@@ -471,11 +471,11 @@ impl TaskState<'_> {
 
         for parent_ty in &interface.parents {
             if let Some(parent_id) = parent_ty.get_qualified_id() {
-                let parent_simple_name = parent_id.rsplit('.').next().unwrap_or(parent_id);
+                let parent_name = unqualified_name(parent_id);
                 self.collect_interface_methods(
                     store,
                     parent_id,
-                    parent_simple_name,
+                    parent_name,
                     &mut inherited_methods,
                     &mut method_visited,
                 );
@@ -512,7 +512,7 @@ impl TaskState<'_> {
     ) -> Option<Vec<String>> {
         if !visited.insert(current_id.to_string()) {
             // Found a cycle — build the cycle path from where the repeated node appears
-            let simple = |id: &str| -> String { id.rsplit('.').next().unwrap_or(id).to_string() };
+            let simple = |id: &str| -> String { unqualified_name(id).to_string() };
             if let Some(position) = path.iter().position(|p| p == current_id) {
                 let mut cycle: Vec<String> = path[position..].iter().map(|p| simple(p)).collect();
                 cycle.push(simple(current_id));
@@ -563,7 +563,7 @@ impl TaskState<'_> {
 
             for parent_ty in &interface.parents {
                 if let Some(parent_id) = parent_ty.get_qualified_id() {
-                    let parent_simple = parent_id.rsplit('.').next().unwrap_or(parent_id);
+                    let parent_simple = unqualified_name(parent_id);
                     self.collect_interface_methods(
                         store,
                         parent_id,

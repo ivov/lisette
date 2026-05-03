@@ -1,3 +1,5 @@
+use syntax::types::{module_part, unqualified_name};
+
 use crate::Emitter;
 use crate::names::go_name;
 
@@ -42,9 +44,9 @@ impl Emitter<'_> {
         if id == qualified {
             return None;
         }
-        let type_module = id.split('.').next().unwrap_or("");
+        let type_module = module_part(&id);
         if type_module == self.current_module {
-            return Some(id.split('.').next_back()?.to_string());
+            return Some(unqualified_name(&id).to_string());
         }
         Some(id)
     }
@@ -131,7 +133,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn resolve_variant(&mut self, identifier: &str, enum_id: &str) -> String {
-        let enum_module = enum_id.split('.').next().unwrap_or("");
+        let enum_module = module_part(enum_id);
         let computed_alias =
             if enum_module != self.current_module && enum_module != go_name::PRELUDE_MODULE {
                 Some(self.go_pkg_qualifier(enum_module))

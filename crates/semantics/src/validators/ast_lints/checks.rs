@@ -9,6 +9,7 @@ use syntax::ast::{
     RestPattern, Span, UnaryOperator,
 };
 use syntax::program::File;
+use syntax::types::unqualified_name;
 
 pub fn check_double_negation(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
     let Expression::Unary {
@@ -533,7 +534,7 @@ fn pattern_to_suggestion(pattern: &Pattern) -> String {
         Pattern::EnumVariant {
             identifier, fields, ..
         } => {
-            let variant = identifier.split('.').next_back().unwrap_or(identifier);
+            let variant = unqualified_name(identifier);
             if fields.is_empty() {
                 variant.to_string()
             } else if fields.len() == 1 {

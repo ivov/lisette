@@ -146,6 +146,17 @@ pub fn unqualified_name(id: &str) -> &str {
     id.rsplit('.').next().unwrap_or(id)
 }
 
+/// Extract the module part of a dot-qualified identifier — the first
+/// segment, before any dot.
+///
+/// `"main.Point.sum"` → `"main"`, `"prelude.Option"` → `"prelude"`,
+/// `"foo"` → `"foo"`. For `go:net/http.Handler`-style ids, returns
+/// `"go:net/http"`. When the id has no dot at all, returns the id
+/// itself (the caller is responsible for handling the no-module case).
+pub fn module_part(id: &str) -> &str {
+    id.split('.').next().unwrap_or(id)
+}
+
 /// type param name -> type variable
 pub type SubstitutionMap = HashMap<EcoString, Type>;
 

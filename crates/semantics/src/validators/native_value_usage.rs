@@ -1,7 +1,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{Symbol, Type};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 use crate::store::Store;
 
@@ -152,7 +152,7 @@ fn check_one(
     };
     let stripped = first.strip_refs();
     let is_self = matches!(&stripped, Type::Nominal { id, .. }
-        if id.rsplit('.').next() == Some(type_part));
+        if unqualified_name(id) == type_part);
     if !is_self {
         return;
     }

@@ -3,7 +3,7 @@ use syntax::program::DefinitionBody;
 use crate::Emitter;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 
 pub(crate) enum IdentifierKind {
     /// `Unit` used as expression value → `struct{}{}`
@@ -84,7 +84,7 @@ impl Emitter<'_> {
             };
 
             if let Some(id) = enum_id {
-                let enum_name = id.split('.').next_back().unwrap_or(id);
+                let enum_name = unqualified_name(id);
                 let qualified = format!("{}.{}", enum_name, value);
                 make_fn = self.module.make_functions.get(&qualified);
             }

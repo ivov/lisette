@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 
 use super::super::TaskState;
 use crate::validators::temp_producing::is_temp_producing;
@@ -128,7 +128,7 @@ impl TaskState<'_> {
         let inner_binding: &Pattern = match binding.as_ref() {
             Pattern::AsBinding { pattern, span, .. } => {
                 let is_some = matches!(pattern.as_ref(), Pattern::EnumVariant { identifier, .. }
-                    if identifier.rsplit('.').next().unwrap_or(identifier) == "Some");
+                    if unqualified_name(identifier) == "Some");
                 if is_some {
                     self.sink
                         .push(diagnostics::infer::select_some_as_binding_not_supported(
@@ -154,7 +154,7 @@ impl TaskState<'_> {
             identifier, fields, ..
         } = inner_binding
         {
-            let variant_name = identifier.rsplit('.').next().unwrap_or(identifier);
+            let variant_name = unqualified_name(identifier);
             if variant_name == "None" {
                 self.sink
                     .push(diagnostics::infer::none_pattern_in_select_receive(

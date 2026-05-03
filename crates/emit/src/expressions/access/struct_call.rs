@@ -2,7 +2,7 @@ use rustc_hash::FxHashSet as HashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{CompoundKind, SimpleKind, Type};
+use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
 use crate::Emitter;
 use crate::definitions::enum_layout;
@@ -155,7 +155,7 @@ impl Emitter<'_> {
             else {
                 return None;
             };
-            let variant_name = name.rsplit('.').next()?;
+            let variant_name = unqualified_name(name);
             let variant = variants.iter().find(|v| v.name == variant_name)?;
             let map = generics_substitution(generics.iter().map(|g| g.name.clone()), &params);
             return Some(unspecified_pairs(
@@ -357,7 +357,7 @@ impl Emitter<'_> {
 
     /// Compute the enum-specific context for a struct call.
     fn compute_enum_call_context(&mut self, name: &str, enum_id: &str) -> EnumCallContext {
-        let variant_name = name.split('.').next_back().unwrap_or(name).to_string();
+        let variant_name = unqualified_name(name).to_string();
 
         // Use resolve_variant for correct tag constant — handles cross-module
         let tag_constant = self.resolve_variant(name, enum_id);

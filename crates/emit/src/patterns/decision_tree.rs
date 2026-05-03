@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{MatchArm, Pattern, RestPattern, StructFieldPattern, TypedPattern};
 use syntax::parse::TUPLE_FIELDS;
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 
 use crate::Emitter;
 use crate::names::go_name;
@@ -941,7 +941,7 @@ fn detect_enum_info(
         Some(TypedPattern::EnumStructVariant {
             variant_name: vn, ..
         }) => {
-            let variant_name_str = vn.split('.').next_back().unwrap_or(vn);
+            let variant_name_str = unqualified_name(vn);
             let id = emitter.as_enum(ty).unwrap_or_else(|| {
                 vn.rsplit_once('.')
                     .map_or(vn.to_string(), |(e, _)| e.to_string())
@@ -950,7 +950,7 @@ fn detect_enum_info(
         }
         Some(TypedPattern::Struct { .. }) => None,
         _ => emitter.as_enum(ty).map(|id| {
-            let variant_name_str = identifier.split('.').next_back().unwrap_or(identifier);
+            let variant_name_str = unqualified_name(identifier);
             (id, variant_name_str.to_string())
         }),
     }

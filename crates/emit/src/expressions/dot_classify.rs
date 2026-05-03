@@ -2,7 +2,7 @@ use crate::Emitter;
 use crate::names::go_name;
 use syntax::ast::Expression;
 use syntax::program::DefinitionBody;
-use syntax::types::Type;
+use syntax::types::{Type, module_part, unqualified_name};
 
 impl Emitter<'_> {
     /// Emit a value enum variant as a Go constant (e.g., `reflect.String`).
@@ -99,7 +99,7 @@ impl Emitter<'_> {
             return None;
         };
 
-        let enum_name = enum_id.split('.').next_back().unwrap_or(enum_id);
+        let enum_name = unqualified_name(enum_id);
         let constructor_key = format!("{}.{}", enum_name, variant_name);
 
         let make_fn_name = self.module.make_functions.get(&constructor_key)?.clone();
@@ -146,7 +146,7 @@ impl Emitter<'_> {
             return None;
         };
 
-        let enum_module = enum_id.split('.').next()?;
+        let enum_module = module_part(enum_id);
         let is_prelude = enum_module == go_name::PRELUDE_MODULE;
         let is_cross_module = enum_module != self.current_module && !is_prelude;
 
@@ -164,7 +164,7 @@ impl Emitter<'_> {
             return None;
         }
 
-        let enum_name = enum_id.split('.').next_back()?;
+        let enum_name = unqualified_name(enum_id);
         let key = format!("{}.{}", enum_name, variant_name);
         let make_fn = self.module.make_functions.get(&key)?.clone();
         let type_args = self.format_type_args(params);
@@ -225,7 +225,7 @@ impl Emitter<'_> {
         let alias_module = inner_ty.as_import_namespace()?.to_string();
         let alias_module = alias_module.as_str();
 
-        let enum_module = enum_id.split('.').next()?;
+        let enum_module = module_part(enum_id);
 
         self.require_module_import(enum_module);
 
@@ -410,7 +410,7 @@ impl Emitter<'_> {
         let (qualified_type, _type_name) =
             if matches!(definition.body, DefinitionBody::TypeAlias { .. }) {
                 let id = self.peel_alias_id(&qualified_type);
-                let resolved_name = id.rsplit('.').next().unwrap_or(&id).to_string();
+                let resolved_name = unqualified_name(&id).to_string();
                 (id, resolved_name)
             } else {
                 (qualified_type, type_name.to_string())

@@ -734,7 +734,7 @@ impl LanguageServer for Backend {
             } => {
                 validation::check_rename_guards(qname.as_str())?;
                 if snapshot.definitions().contains_key(qname.as_str()) {
-                    let short_name = value.rsplit('.').next().unwrap_or(value.as_str());
+                    let short_name = syntax::types::unqualified_name(value);
                     Ok(Some(PrepareRenameResponse::RangeWithPlaceholder {
                         range: line_index.span_to_range(*span),
                         placeholder: short_name.to_string(),

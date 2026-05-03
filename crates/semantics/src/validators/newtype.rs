@@ -4,7 +4,7 @@
 
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span, UnaryOperator};
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 
 use crate::store::Store;
 
@@ -49,7 +49,7 @@ fn check_newtype_field_assignment(
                 && let Some(def) = store.get_definition(id.as_str())
                 && def.is_newtype()
             {
-                let type_name = id.rsplit('.').next().unwrap_or(id.as_str());
+                let type_name = unqualified_name(&id);
                 sink.push(diagnostics::infer::newtype_field_assignment(
                     type_name, span,
                 ));

@@ -5,7 +5,7 @@ use syntax::ast::{
 };
 use syntax::program::File;
 use syntax::program::{DefinitionBody, Module};
-use syntax::types::{Symbol, Type};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
 
@@ -512,7 +512,7 @@ fn walk_pattern(
             ty,
             ..
         } => {
-            let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+            let variant_name = unqualified_name(identifier);
 
             let enum_name = type_name(ty).or_else(|| {
                 let parts: Vec<&str> = identifier.split('.').collect();
@@ -536,7 +536,7 @@ fn walk_pattern(
         } => {
             add_ref(graph, ctx, alias_map, module, identifier);
             // Mark enum variant as used for struct variant patterns (e.g., Enum.Variant { ... })
-            let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+            let variant_name = unqualified_name(identifier);
             let enum_name = type_name(ty).or_else(|| {
                 let parts: Vec<&str> = identifier.split('.').collect();
                 (parts.len() >= 2).then(|| parts[0].to_string())
@@ -700,7 +700,7 @@ fn type_name(ty: &Type) -> Option<String> {
         current = next;
     }
     match current {
-        Type::Nominal { id, .. } => id.split('.').next_back().map(String::from),
+        Type::Nominal { id, .. } => Some(unqualified_name(&id).to_string()),
         _ => None,
     }
 }

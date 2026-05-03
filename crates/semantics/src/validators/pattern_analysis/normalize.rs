@@ -1,7 +1,7 @@
 use crate::store::Store;
 use syntax::ast::{Literal, MatchArm, TypedPattern};
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 
 use super::NormalizedPattern::Wildcard;
 use super::inhabitance::{InhabitanceCache, is_inhabited, is_variant_inhabited};
@@ -195,7 +195,7 @@ pub fn normalize_typed_pattern(
                 unions.insert(type_name.clone(), alternatives);
             }
 
-            let variant_name = variant_name.rsplit('.').next().unwrap_or(variant_name);
+            let variant_name = unqualified_name(variant_name);
             let tag = format!("{}.{}", enum_name, variant_name);
 
             NormalizedPattern::Constructor {
@@ -250,7 +250,7 @@ pub fn normalize_typed_pattern(
                 unions.insert(type_name.clone(), alternatives);
             }
 
-            let variant_name = variant_name.rsplit('.').next().unwrap_or(variant_name);
+            let variant_name = unqualified_name(variant_name);
             let tag = format!("{}.{}", enum_name, variant_name);
 
             NormalizedPattern::Constructor {

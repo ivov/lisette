@@ -4,7 +4,7 @@ use syntax::ast::{
     StructFieldPattern, StructKind, TypedPattern, VariantFields,
 };
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 
 use crate::Emitter;
 use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
@@ -384,7 +384,7 @@ impl Emitter<'_> {
             Some(DefinitionBody::Enum {
                 variants, generics, ..
             }) => {
-                let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+                let variant_name = unqualified_name(identifier);
                 if let Some(variant) = variants.iter().find(|v| v.name == variant_name) {
                     self.recurse_named_fields(
                         output,
@@ -461,7 +461,7 @@ impl Emitter<'_> {
         else {
             return;
         };
-        let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+        let variant_name = unqualified_name(identifier);
         let Some(variant) = variants.iter().find(|v| v.name == variant_name) else {
             return;
         };

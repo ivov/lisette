@@ -5,7 +5,7 @@ use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::{
     Definition, DefinitionBody, DotAccessKind, NativeTypeKind, ReceiverCoercion,
 };
-use syntax::types::{Symbol, Type, substitute, unqualified_name};
+use syntax::types::{Symbol, Type, module_part, substitute, unqualified_name};
 
 use super::super::TaskState;
 use super::super::addressability::check_is_non_addressable;
@@ -93,9 +93,8 @@ impl TaskState<'_> {
 
             if let Some(resolved_id) = alias_target {
                 let mut paths = Vec::with_capacity(2);
-                if let Some(short_name) = resolved_id.split('.').next_back()
-                    && short_name != resolved_id
-                {
+                let short_name = unqualified_name(&resolved_id);
+                if short_name != resolved_id {
                     paths.push(format!("{}.{}", short_name, member));
                 }
                 paths.push(format!("{}.{}", resolved_id, member));
@@ -129,7 +128,7 @@ impl TaskState<'_> {
                 || matches!(underlying, Type::Nominal { params, .. } if !params.is_empty());
             if is_generic {
                 let type_name = if let Type::Nominal { id, .. } = underlying {
-                    id.split('.').next_back().unwrap_or(id).to_string()
+                    unqualified_name(id).to_string()
                 } else {
                     "the original type".to_string()
                 };
@@ -262,7 +261,7 @@ impl TaskState<'_> {
     /// Whether a type's owning module is foreign (not current, prelude, or Go stdlib).
     /// Used to gate cross-module visibility checks on methods.
     fn is_foreign_type(&self, type_id: &str) -> bool {
-        let type_module = type_id.split('.').next().unwrap_or(type_id);
+        let type_module = module_part(type_id);
         type_module != self.cursor.module_id
             && type_module != "prelude"
             && !type_module.starts_with("go:")
@@ -420,7 +419,7 @@ impl TaskState<'_> {
 
         self.facts.add_usage(*args.span, field.name_span);
 
-        let struct_module = struct_name.split('.').next().unwrap_or(&struct_name);
+        let struct_module = module_part(&struct_name);
         let is_cross_module = struct_module != self.cursor.module_id;
 
         if is_cross_module && !field_is_pub {
@@ -1017,7 +1016,7 @@ impl TaskState<'_> {
 
         self.unify(store, args.expected_ty, &method_ty, args.span);
 
-        let type_module = id.split('.').next().unwrap_or("");
+        let type_module = module_part(&id);
         let is_cross_module = type_module != self.cursor.module_id;
         let is_exported = is_public || is_cross_module;
         let kind = DotAccessKind::StaticMethod { is_exported };
@@ -1031,7 +1030,7 @@ impl TaskState<'_> {
             // fall back to false; the emitter will check method_needs_export.
             return false;
         };
-        let type_module = id.split('.').next().unwrap_or("");
+        let type_module = module_part(&id);
         let is_cross_module = type_module != self.cursor.module_id;
 
         if is_cross_module {

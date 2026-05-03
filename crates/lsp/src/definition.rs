@@ -1,5 +1,6 @@
 use rustc_hash::FxHashMap;
 use syntax::ast::{Expression, MatchArm, Pattern, TypedPattern};
+use syntax::types::unqualified_name;
 
 use crate::analysis::find_module_by_alias;
 use crate::offset_in_span;
@@ -321,7 +322,7 @@ pub(crate) fn resolve_enum_in_pattern(
                         ..
                     },
                 ) => {
-                    let variant_last = variant_name.rsplit('.').next().unwrap_or(variant_name);
+                    let variant_last = unqualified_name(variant_name);
                     let qualified = format!("{}.{}", enum_name, variant_last);
                     snapshot
                         .definitions()
