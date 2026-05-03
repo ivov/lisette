@@ -45,6 +45,16 @@ func OptionFromNilable[T any](val T, isNil bool) Option[T] {
 	return Option[T]{Tag: OptionSome, SomeVal: val}
 }
 
+// OptionFromPointer wraps a Go `*T` into an `Option[T]`, dereferencing the
+// pointer for the Some branch. Used when reading Go-imported struct fields
+// declared `*T` (T value-typed) — the Lisette typedef is `Option<T>`.
+func OptionFromPointer[T any](ptr *T) Option[T] {
+	if ptr == nil {
+		return Option[T]{Tag: OptionNone}
+	}
+	return Option[T]{Tag: OptionSome, SomeVal: *ptr}
+}
+
 func (opt Option[T]) IsSome() bool {
 	return opt.Tag == OptionSome
 }

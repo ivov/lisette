@@ -260,9 +260,14 @@ impl Emitter<'_> {
             return;
         }
 
-        let is_go_nullable = matches!(target, Expression::DotAccess { expression, ty, .. }
-                if Self::is_go_imported_type(&expression.get_type())
-                    && self.is_go_nullable(ty));
+        let go_field_ty: Option<Type> = match target {
+            Expression::DotAccess { expression, ty, .. }
+                if Self::is_go_imported_type(&expression.get_type()) && self.is_go_nullable(ty) =>
+            {
+                Some(ty.clone())
+            }
+            _ => None,
+        };
 
         let rhs_staged = self.stage_composite(value);
         let rhs_has_setup = !rhs_staged.setup.is_empty();
@@ -274,8 +279,9 @@ impl Emitter<'_> {
         };
         output.push_str(&rhs_staged.setup);
 
-        if is_go_nullable {
-            let coercion = Coercion::resolve_unwrap_go_nullable(self, &value.get_type());
+        if let Some(target_ty) = go_field_ty {
+            let coercion =
+                Coercion::resolve_unwrap_go_nullable(self, &value.get_type(), Some(&target_ty));
             let unwrapped = coercion.apply(self, output, rhs_staged.value);
             write_line!(output, "{} = {}", target_str, unwrapped);
         } else {

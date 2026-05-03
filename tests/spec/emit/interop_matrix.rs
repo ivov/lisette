@@ -1249,3 +1249,148 @@ pub struct Options {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cb", typedef)]);
 }
+
+#[test]
+fn interop_struct_field_read_option_string_match() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  let bucket = aws.Bucket { .. }
+  match bucket.Name {
+    Some(name) => { let _ = name },
+    None => {},
+  }
+}
+"#;
+    let typedef = r#"
+pub struct Bucket {
+  pub Name: Option<string>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn interop_struct_field_read_option_int32_let_binding() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  let input = aws.ListInput { .. }
+  let n = input.MaxItems
+  let _ = n
+}
+"#;
+    let typedef = r#"
+pub struct ListInput {
+  pub MaxItems: Option<int32>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn interop_struct_field_read_option_string_in_loop() {
+    let input = r#"
+import "go:example.com/aws"
+import "go:fmt"
+
+fn main() {
+  let buckets: Slice<aws.Bucket> = []
+  for bucket in buckets {
+    match bucket.Name {
+      Some(name) => fmt.Println(name),
+      None => {},
+    }
+  }
+}
+"#;
+    let typedef = r#"
+pub struct Bucket {
+  pub Name: Option<string>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn interop_struct_field_read_slice_option_string_iter() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  let b = aws.Bucket { .. }
+  for tag in b.Tags {
+    match tag {
+      Some(v) => { let _ = v },
+      None => {},
+    }
+  }
+}
+"#;
+    let typedef = r#"
+pub struct Bucket {
+  pub Tags: Slice<Option<string>>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn interop_struct_field_read_map_option_string_index() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  let b = aws.Bucket { .. }
+  match b.Annotations["k"] {
+    Some(v) => { let _ = v },
+    None => {},
+  }
+}
+"#;
+    let typedef = r#"
+pub struct Bucket {
+  pub Annotations: Map<string, Option<string>>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn interop_struct_field_assign_option_string() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  let mut b = aws.Bucket { .. }
+  b.Name = Some("hi")
+}
+"#;
+    let typedef = r#"
+pub struct Bucket {
+  pub Name: Option<string>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}
+
+#[test]
+fn interop_struct_field_assign_option_int32() {
+    let input = r#"
+import "go:example.com/aws"
+
+fn main() {
+  let mut b = aws.ListInput { .. }
+  b.MaxItems = Some(5 as int32)
+  b.MaxItems = None
+}
+"#;
+    let typedef = r#"
+pub struct ListInput {
+  pub MaxItems: Option<int32>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
+}

@@ -70,12 +70,9 @@ impl Emitter<'_> {
             let value_ty = f.value.get_type();
             let field_ty = self.lookup_struct_field_ty(ty, &f.name);
             if is_go_struct {
-                if self.needs_go_pointer_bridge(&value_ty, field_ty.as_ref()) {
-                    value = self.emit_option_unwrap_to_go_pointer(output, &value, &value_ty);
-                } else {
-                    let coercion = Coercion::resolve_unwrap_go_nullable(self, &value_ty);
-                    value = coercion.apply(self, output, value);
-                }
+                let coercion =
+                    Coercion::resolve_unwrap_go_nullable(self, &value_ty, field_ty.as_ref());
+                value = coercion.apply(self, output, value);
             }
             if let Some(field_ty) = field_ty.as_ref() {
                 let coercion = Coercion::resolve(self, &value_ty, field_ty);

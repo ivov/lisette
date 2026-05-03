@@ -535,7 +535,7 @@ impl Emitter<'_> {
             && Self::is_go_imported_type(&receiver.get_type())
             && self.is_go_nullable(ty)
         {
-            let coercion = Coercion::resolve_unwrap_go_nullable(self, &value.get_type());
+            let coercion = Coercion::resolve_unwrap_go_nullable(self, &value.get_type(), Some(ty));
             let unwrapped = coercion.apply(self, output, rhs_staged.value);
             write_line!(output, "{} = {}", target_str, unwrapped);
         } else {

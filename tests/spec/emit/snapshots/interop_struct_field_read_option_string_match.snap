@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+assertion_line: 1271
+description: "input: \nimport \"go:example.com/aws\"\n\nfn main() {\n  let bucket = aws.Bucket { .. }\n  match bucket.Name {\n    Some(name) => { let _ = name },\n    None => {},\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	bucket := aws.Bucket{}
+	raw_2 := bucket.Name
+	option_3 := lisette.OptionFromPointer[string](raw_2)
+	subject_1 := option_3
+	if subject_1.Tag == lisette.OptionSome {
+		_ = subject_1.SomeVal
+	}
+}

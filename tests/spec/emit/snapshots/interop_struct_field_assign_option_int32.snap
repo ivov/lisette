@@ -1,0 +1,27 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+assertion_line: 1395
+description: "input: \nimport \"go:example.com/aws\"\n\nfn main() {\n  let mut b = aws.ListInput { .. }\n  b.MaxItems = Some(5 as int32)\n  b.MaxItems = None\n}\n"
+---
+package main
+
+import (
+	"example.com/aws"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	b := aws.ListInput{}
+	opt_1 := lisette.MakeOptionSome(int32(5))
+	var ptr_2 *int32
+	if opt_1.Tag == lisette.OptionSome {
+		ptr_2 = &opt_1.SomeVal
+	}
+	b.MaxItems = ptr_2
+	opt_3 := lisette.MakeOptionNone[int32]()
+	var ptr_4 *int32
+	if opt_3.Tag == lisette.OptionSome {
+		ptr_4 = &opt_3.SomeVal
+	}
+	b.MaxItems = ptr_4
+}
