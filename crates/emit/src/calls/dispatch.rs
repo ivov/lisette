@@ -7,7 +7,7 @@ use crate::names::go_name;
 use crate::types::native::NativeGoType;
 use crate::utils::Staged;
 use syntax::ast::{Annotation, Expression, StructKind};
-use syntax::program::{CallKind, Definition};
+use syntax::program::{CallKind, Definition, DefinitionBody};
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
 impl Emitter<'_> {
@@ -21,11 +21,13 @@ impl Emitter<'_> {
             if !seen.insert(id.clone()) {
                 break;
             }
-            let Some(Definition::TypeAlias { ty: def_ty, .. }) =
-                self.ctx.definitions.get(id.as_str())
-            else {
+            let Some(def) = self.ctx.definitions.get(id.as_str()) else {
                 break;
             };
+            if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
+                break;
+            }
+            let def_ty = &def.ty;
             let (vars, body) = match def_ty {
                 Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
                 other => (vec![], other.clone()),
@@ -444,10 +446,14 @@ impl Emitter<'_> {
             return None;
         };
 
-        let Some(Definition::Struct {
-            kind,
-            fields,
-            generics,
+        let Some(Definition {
+            body:
+                DefinitionBody::Struct {
+                    kind,
+                    fields,
+                    generics,
+                    ..
+                },
             ..
         }) = self.ctx.definitions.get(id.as_str())
         else {

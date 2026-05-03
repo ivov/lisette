@@ -1,6 +1,6 @@
 use crate::store::Store;
 use syntax::ast::{Literal, MatchArm, TypedPattern};
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::Type;
 
 use super::NormalizedPattern::Wildcard;
@@ -138,8 +138,12 @@ pub fn normalize_typed_pattern(
 
             let enum_def = ctx.store.get_definition(enum_name);
 
-            if let Some(Definition::Struct {
-                fields: struct_fields,
+            if let Some(Definition {
+                body:
+                    DefinitionBody::Struct {
+                        fields: struct_fields,
+                        ..
+                    },
                 ..
             }) = enum_def
             {
@@ -158,8 +162,8 @@ pub fn normalize_typed_pattern(
             let type_name = make_type_key(enum_name, type_args);
 
             if unions.get(&type_name).is_none() {
-                let alternatives = match enum_def {
-                    Some(Definition::Enum {
+                let alternatives = match enum_def.map(|d| &d.body) {
+                    Some(DefinitionBody::Enum {
                         variants, generics, ..
                     }) => variants
                         .iter()
@@ -171,7 +175,7 @@ pub fn normalize_typed_pattern(
                             arity: v.fields.len(),
                         })
                         .collect(),
-                    Some(Definition::ValueEnum { variants, .. }) => {
+                    Some(DefinitionBody::ValueEnum { variants, .. }) => {
                         let mut alts: Vec<Constructor> = variants
                             .iter()
                             .map(|v| Constructor {
@@ -227,8 +231,8 @@ pub fn normalize_typed_pattern(
             let type_name = make_type_key(enum_name, type_args);
 
             if unions.get(&type_name).is_none() {
-                let alternatives = match ctx.store.get_definition(enum_name) {
-                    Some(Definition::Enum {
+                let alternatives = match ctx.store.get_definition(enum_name).map(|d| &d.body) {
+                    Some(DefinitionBody::Enum {
                         variants, generics, ..
                     }) => variants
                         .iter()
@@ -294,8 +298,8 @@ pub fn normalize_typed_pattern(
                 let is_inhabited = ctx
                     .store
                     .get_definition(struct_name)
-                    .map(|definition| match definition {
-                        Definition::Struct {
+                    .map(|definition| match &definition.body {
+                        DefinitionBody::Struct {
                             generics, fields, ..
                         } => super::inhabitance::is_struct_inhabited(
                             fields, type_args, generics, ctx.store, ctx.cache,

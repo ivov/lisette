@@ -1,5 +1,7 @@
 use syntax::ast::{Expression, StructKind, UnaryOperator};
-use syntax::program::{Definition, DotAccessKind as SemanticDotKind, ReceiverCoercion};
+use syntax::program::{
+    Definition, DefinitionBody, DotAccessKind as SemanticDotKind, ReceiverCoercion,
+};
 use syntax::types::Type;
 
 use crate::Emitter;
@@ -206,7 +208,11 @@ impl Emitter<'_> {
         let Type::Nominal { id, .. } = &deref_ty else {
             return None;
         };
-        let Some(Definition::Struct { fields, .. }) = self.ctx.definitions.get(id.as_str()) else {
+        let Some(Definition {
+            body: DefinitionBody::Struct { fields, .. },
+            ..
+        }) = self.ctx.definitions.get(id.as_str())
+        else {
             return None;
         };
         let field_ty = fields.first()?.ty.clone();
@@ -314,10 +320,14 @@ impl Emitter<'_> {
             return None;
         };
 
-        let Some(Definition::Struct {
-            kind,
-            fields,
-            generics,
+        let Some(Definition {
+            body:
+                DefinitionBody::Struct {
+                    kind,
+                    fields,
+                    generics,
+                    ..
+                },
             ..
         }) = self.ctx.definitions.get(id.as_str())
         else {

@@ -2,7 +2,7 @@ use crate::Emitter;
 use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::write_line;
 use ecow::EcoString;
-use syntax::program::{Definition, Interface};
+use syntax::program::{Definition, DefinitionBody, Interface};
 use syntax::types::Type;
 pub(crate) struct AdapterPlan {
     pub(crate) concrete_id: EcoString,
@@ -28,7 +28,11 @@ impl Emitter<'_> {
         let Type::Nominal { id, .. } = struct_ty.strip_refs() else {
             return None;
         };
-        let Some(Definition::Struct { fields, .. }) = self.ctx.definitions.get(id.as_str()) else {
+        let Some(Definition {
+            body: DefinitionBody::Struct { fields, .. },
+            ..
+        }) = self.ctx.definitions.get(id.as_str())
+        else {
             return None;
         };
         fields
@@ -81,8 +85,11 @@ impl Emitter<'_> {
                 let Type::Nominal { id, .. } = &parent else {
                     continue;
                 };
-                if let Some(Definition::Interface {
-                    definition: parent_def,
+                if let Some(Definition {
+                    body:
+                        DefinitionBody::Interface {
+                            definition: parent_def,
+                        },
                     ..
                 }) = self.ctx.definitions.get(id.as_str())
                 {
@@ -101,8 +108,10 @@ impl Emitter<'_> {
         let Type::Nominal { id: target_id, .. } = &target else {
             return None;
         };
-        let Some(Definition::Interface { definition, .. }) =
-            self.ctx.definitions.get(target_id.as_str())
+        let Some(Definition {
+            body: DefinitionBody::Interface { definition },
+            ..
+        }) = self.ctx.definitions.get(target_id.as_str())
         else {
             return None;
         };
@@ -114,8 +123,12 @@ impl Emitter<'_> {
         if source_id.starts_with(GO_IMPORT_PREFIX) {
             return None;
         }
-        let Some(Definition::Struct {
-            methods: struct_methods,
+        let Some(Definition {
+            body:
+                DefinitionBody::Struct {
+                    methods: struct_methods,
+                    ..
+                },
             ..
         }) = self.ctx.definitions.get(source_id.as_str())
         else {

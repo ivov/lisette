@@ -2,7 +2,9 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructKind};
-use syntax::program::{Definition, DotAccessKind, NativeTypeKind, ReceiverCoercion};
+use syntax::program::{
+    Definition, DefinitionBody, DotAccessKind, NativeTypeKind, ReceiverCoercion,
+};
 use syntax::types::{Symbol, Type, substitute, unqualified_name};
 
 use super::super::TaskState;
@@ -69,8 +71,8 @@ impl TaskState<'_> {
             let alias_target = store
                 .get_definition(&qualified_root)
                 .and_then(|definition| {
-                    if let Definition::TypeAlias { ty: alias_ty, .. } = definition {
-                        let underlying = alias_ty.unwrap_forall();
+                    if let DefinitionBody::TypeAlias { .. } = &definition.body {
+                        let underlying = definition.ty.unwrap_forall();
                         match underlying {
                             Type::Nominal { id, params, .. }
                                 if params.is_empty() && id.as_str() != qualified_root.as_str() =>
@@ -118,9 +120,10 @@ impl TaskState<'_> {
 
         if let Some(root) = expression.root_identifier()
             && let Some(qualified_root) = self.lookup_qualified_name(store, root)
-            && let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
-                store.get_definition(&qualified_root)
+            && let Some(def) = store.get_definition(&qualified_root)
+            && matches!(def.body, DefinitionBody::TypeAlias { .. })
         {
+            let alias_ty = &def.ty;
             let underlying = alias_ty.unwrap_forall();
             let is_generic = matches!(alias_ty, Type::Forall { .. })
                 || matches!(underlying, Type::Nominal { params, .. } if !params.is_empty());
@@ -360,7 +363,11 @@ impl TaskState<'_> {
                 }
                 seen.push(name.clone());
                 let new_name = match store.get_definition(&name) {
-                    Some(Definition::TypeAlias { ty, .. }) => {
+                    Some(Definition {
+                        ty,
+                        body: DefinitionBody::TypeAlias { .. },
+                        ..
+                    }) => {
                         if let Type::Nominal { id, .. } = ty.unwrap_forall()
                             && id.as_str() != name.as_str()
                         {
@@ -376,11 +383,15 @@ impl TaskState<'_> {
             name
         };
 
-        let Some(Definition::Struct {
+        let Some(Definition {
             ty: struct_type,
-            fields: struct_fields,
-            kind: struct_kind,
-            generics,
+            body:
+                DefinitionBody::Struct {
+                    fields: struct_fields,
+                    kind: struct_kind,
+                    generics,
+                    ..
+                },
             ..
         }) = store.get_definition(&struct_name)
         else {
@@ -506,8 +517,8 @@ impl TaskState<'_> {
             // Reject cross-module tuple-struct constructors used as values
             if !self.scopes.is_callee_context()
                 && matches!(
-                    store.get_definition(&qualified_name),
-                    Some(Definition::Struct {
+                    store.get_definition(&qualified_name).map(|d| &d.body),
+                    Some(DefinitionBody::Struct {
                         kind: StructKind::Tuple,
                         ..
                     })
@@ -523,8 +534,8 @@ impl TaskState<'_> {
             if !self.scopes.is_callee_context()
                 && !self.scopes.is_dot_access_base()
                 && matches!(
-                    store.get_definition(&qualified_name),
-                    Some(Definition::Struct {
+                    store.get_definition(&qualified_name).map(|d| &d.body),
+                    Some(DefinitionBody::Struct {
                         kind: StructKind::Record,
                         ..
                     })
@@ -631,9 +642,9 @@ impl TaskState<'_> {
             }
 
             if self.is_foreign_type(&qualified_name)
-                && let Some(Definition::Value { visibility, .. }) =
-                    store.get_definition(&method_key)
-                && !visibility.is_public()
+                && let Some(def) = store.get_definition(&method_key)
+                && matches!(def.body, DefinitionBody::Value { .. })
+                && !def.visibility.is_public()
             {
                 self.sink.push(diagnostics::infer::private_method_access(
                     args.member_name,
@@ -816,10 +827,10 @@ impl TaskState<'_> {
             _ => return 0,
         };
 
-        match store.get_definition(&lookup_id) {
-            Some(Definition::Struct { generics, .. }) => generics.len(),
-            Some(Definition::TypeAlias { generics, .. }) => generics.len(),
-            Some(Definition::Enum { generics, .. }) => generics.len(),
+        match store.get_definition(&lookup_id).map(|d| &d.body) {
+            Some(DefinitionBody::Struct { generics, .. }) => generics.len(),
+            Some(DefinitionBody::TypeAlias { generics, .. }) => generics.len(),
+            Some(DefinitionBody::Enum { generics, .. }) => generics.len(),
             _ => 0,
         }
     }
@@ -843,12 +854,12 @@ impl TaskState<'_> {
 
         let definition = store.get_definition(&id)?;
 
-        let (is_enum_variant, kind) = match definition {
-            Definition::Enum { variants, .. } => (
+        let (is_enum_variant, kind) = match &definition.body {
+            DefinitionBody::Enum { variants, .. } => (
                 variants.iter().any(|v| v.name == args.member_name),
                 DotAccessKind::EnumVariant,
             ),
-            Definition::ValueEnum { variants, .. } => (
+            DefinitionBody::ValueEnum { variants, .. } => (
                 variants.iter().any(|v| v.name == args.member_name),
                 DotAccessKind::ValueEnumVariant,
             ),
@@ -859,7 +870,7 @@ impl TaskState<'_> {
             return None;
         }
 
-        if let Definition::ValueEnum { methods, .. } = definition
+        if let DefinitionBody::ValueEnum { methods, .. } = &definition.body
             && methods.contains_key(args.member_name)
         {
             let is_type_access = matches!(
@@ -875,10 +886,11 @@ impl TaskState<'_> {
         let variant_qualified_name = id.with_segment(args.member_name);
         let variant_definition = store.get_definition(&variant_qualified_name)?;
 
-        let Definition::Value {
+        let Definition {
             ty: variant_ty,
             visibility,
             name_span,
+            body: DefinitionBody::Value { .. },
             ..
         } = variant_definition
         else {
@@ -922,8 +934,11 @@ impl TaskState<'_> {
                 //
                 // Type access comes through DotAccess on a module import.
                 // Value access comes through an Identifier or other expression.
-                if let Some(Definition::Enum { .. } | Definition::ValueEnum { .. }) =
-                    store.get_definition(id)
+                if let Some(def) = store.get_definition(id)
+                    && matches!(
+                        def.body,
+                        DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. }
+                    )
                 {
                     // Check if expression is a module member access (type-level access)
                     let is_type_access = matches!(
@@ -952,10 +967,11 @@ impl TaskState<'_> {
         let method_qualified_name = id.with_segment(args.member_name);
         let method_definition = store.get_definition(&method_qualified_name)?;
 
-        let Definition::Value {
+        let Definition {
             ty: method_ty,
             name_span,
             visibility,
+            body: DefinitionBody::Value { .. },
             ..
         } = method_definition
         else {

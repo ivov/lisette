@@ -10,7 +10,7 @@ use syntax::ast::{
     Annotation, Attribute, AttributeArg, EnumVariant, Expression, FunctionDefinition, Generic,
     Span, StructKind, Visibility as SyntacticVisibility,
 };
-use syntax::program::{Definition, File, Visibility};
+use syntax::program::{Definition, DefinitionBody, File, Visibility};
 use syntax::types::{Symbol, Type};
 
 use super::TaskState;
@@ -75,12 +75,12 @@ impl TaskState<'_> {
             .get(qualified_name)
             .is_some_and(|d| {
                 matches!(
-                    d,
-                    Definition::Struct { .. }
-                        | Definition::Enum { .. }
-                        | Definition::ValueEnum { .. }
-                        | Definition::Interface { .. }
-                        | Definition::TypeAlias { .. }
+                    d.body,
+                    DefinitionBody::Struct { .. }
+                        | DefinitionBody::Enum { .. }
+                        | DefinitionBody::ValueEnum { .. }
+                        | DefinitionBody::Interface { .. }
+                        | DefinitionBody::TypeAlias { .. }
                 )
             })
     }
@@ -387,14 +387,17 @@ impl TaskState<'_> {
 
             entries.push((
                 qualified_name,
-                Definition::Value {
+                Definition {
                     visibility: item_visibility,
                     ty,
+                    name: None,
                     name_span: None,
-                    allowed_lints: vec![],
-                    go_hints: vec![],
-                    go_name: None,
                     doc: None,
+                    body: DefinitionBody::Value {
+                        allowed_lints: vec![],
+                        go_hints: vec![],
+                        go_name: None,
+                    },
                 },
             ));
         }
@@ -577,14 +580,17 @@ impl TaskState<'_> {
         let module = self.current_module_mut(store);
         module.definitions.insert(
             qualified_name,
-            Definition::Value {
+            Definition {
                 visibility: item_visibility,
                 ty: fn_ty,
+                name: None,
                 name_span: Some(*name_span),
-                allowed_lints: extract_attribute_flags(attributes, "allow"),
-                go_hints: extract_attribute_flags(attributes, "go"),
-                go_name: extract_go_name(attributes),
                 doc: doc.clone(),
+                body: DefinitionBody::Value {
+                    allowed_lints: extract_attribute_flags(attributes, "allow"),
+                    go_hints: extract_attribute_flags(attributes, "go"),
+                    go_name: extract_go_name(attributes),
+                },
             },
         );
     }
@@ -649,14 +655,17 @@ impl TaskState<'_> {
         module.const_names.insert(qualified_name.clone());
         module.definitions.insert(
             qualified_name,
-            Definition::Value {
+            Definition {
                 visibility: item_visibility,
                 ty: const_ty,
+                name: None,
                 name_span: Some(*identifier_span),
-                allowed_lints: vec![],
-                go_hints: vec![],
-                go_name: None,
                 doc: doc.clone(),
+                body: DefinitionBody::Value {
+                    allowed_lints: vec![],
+                    go_hints: vec![],
+                    go_name: None,
+                },
             },
         );
     }
@@ -696,14 +705,17 @@ impl TaskState<'_> {
         let module = self.current_module_mut(store);
         module.definitions.insert(
             qualified_name,
-            Definition::Value {
+            Definition {
                 visibility: item_visibility,
                 ty: var_ty,
+                name: None,
                 name_span: Some(*name_span),
-                allowed_lints: vec![],
-                go_hints: vec![],
-                go_name: None,
                 doc: doc.clone(),
+                body: DefinitionBody::Value {
+                    allowed_lints: vec![],
+                    go_hints: vec![],
+                    go_name: None,
+                },
             },
         );
     }
@@ -749,8 +761,8 @@ impl TaskState<'_> {
             .insert(name.to_string(), constructor_ty.clone());
 
         let module = self.current_module_mut(store);
-        if let Some(Definition::Struct { constructor, .. }) =
-            module.definitions.get_mut(qualified_name.as_str())
+        if let Some(def) = module.definitions.get_mut(qualified_name.as_str())
+            && let DefinitionBody::Struct { constructor, .. } = &mut def.body
         {
             *constructor = Some(constructor_ty);
         }

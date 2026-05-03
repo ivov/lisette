@@ -4,7 +4,7 @@ use crate::definitions::tags::{format_tag_string, interpret_field_attributes};
 use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
 use syntax::ast::{Attribute, Generic, StructFieldDefinition, StructKind};
-use syntax::program::Definition;
+use syntax::program::DefinitionBody;
 use syntax::types::{SimpleKind, Type};
 
 impl Emitter<'_> {
@@ -243,11 +243,11 @@ impl Emitter<'_> {
             .ctx
             .definitions
             .get(qualified.as_str())
-            .and_then(|def| match def {
-                Definition::Struct { methods, .. }
-                | Definition::Enum { methods, .. }
-                | Definition::ValueEnum { methods, .. }
-                | Definition::TypeAlias { methods, .. } => Some(methods),
+            .and_then(|def| match &def.body {
+                DefinitionBody::Struct { methods, .. }
+                | DefinitionBody::Enum { methods, .. }
+                | DefinitionBody::ValueEnum { methods, .. }
+                | DefinitionBody::TypeAlias { methods, .. } => Some(methods),
                 _ => None,
             });
 

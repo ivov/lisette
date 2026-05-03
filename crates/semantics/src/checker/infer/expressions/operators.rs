@@ -2,7 +2,7 @@ use crate::checker::EnvResolve;
 use crate::checker::TypeEnv;
 use crate::store::Store;
 use syntax::ast::{BinaryOperator, Expression, Literal, Span, UnaryOperator};
-use syntax::program::Definition;
+use syntax::program::DefinitionBody;
 use syntax::types::{Type, substitute};
 
 use BinaryOperator::*;
@@ -43,8 +43,8 @@ pub(crate) fn check_not_comparable(
         && let Some(definition) = store.get_definition(name)
     {
         let type_args = ty.get_type_params().unwrap_or_default();
-        let generics = match &definition {
-            Definition::Struct { generics, .. } | Definition::Enum { generics, .. } => {
+        let generics = match &definition.body {
+            DefinitionBody::Struct { generics, .. } | DefinitionBody::Enum { generics, .. } => {
                 generics.as_slice()
             }
             _ => &[],
@@ -55,8 +55,8 @@ pub(crate) fn check_not_comparable(
             .zip(type_args.iter().cloned())
             .collect();
 
-        match definition {
-            Definition::Struct { fields, .. } => {
+        match &definition.body {
+            DefinitionBody::Struct { fields, .. } => {
                 for f in fields {
                     let field_ty = substitute(&f.ty.resolve_in(env), &sub_map);
                     if check_not_comparable(env, store, &field_ty).is_some() {
@@ -64,7 +64,7 @@ pub(crate) fn check_not_comparable(
                     }
                 }
             }
-            Definition::Enum { variants, .. } => {
+            DefinitionBody::Enum { variants, .. } => {
                 for v in variants {
                     for f in v.fields.iter() {
                         let field_ty = substitute(&f.ty.resolve_in(env), &sub_map);

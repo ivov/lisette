@@ -3,7 +3,7 @@ use syntax::ast::{
     Annotation, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition, StructKind,
     ValueEnumVariant, VariantFields,
 };
-use syntax::program::{Definition, MethodSignatures, Visibility};
+use syntax::program::{Definition, DefinitionBody, MethodSignatures, Visibility};
 use syntax::types::Type;
 
 use super::enum_variant_constructor_type;
@@ -84,14 +84,17 @@ impl TaskState<'_> {
         for (qualified_variant_name, simple_name, variant_ty, variant_name_span, variant_doc) in
             variant_definitions
         {
-            let definition = Definition::Value {
+            let definition = Definition {
                 visibility: visibility.clone(),
                 ty: variant_ty,
+                name: None,
                 name_span: Some(variant_name_span),
-                allowed_lints: vec![],
-                go_hints: vec![],
-                go_name: None,
                 doc: variant_doc,
+                body: DefinitionBody::Value {
+                    allowed_lints: vec![],
+                    go_hints: vec![],
+                    go_name: None,
+                },
             };
             module
                 .definitions
@@ -107,15 +110,17 @@ impl TaskState<'_> {
 
         module.definitions.insert(
             qualified_name.clone(),
-            Definition::Enum {
+            Definition {
                 visibility,
                 ty: enum_ty,
-                name: name.into(),
-                name_span: *name_span,
-                generics: generics.to_vec(),
-                variants: new_variants,
-                methods: MethodSignatures::default(),
+                name: Some(name.into()),
+                name_span: Some(*name_span),
                 doc: doc.clone(),
+                body: DefinitionBody::Enum {
+                    generics: generics.to_vec(),
+                    variants: new_variants,
+                    methods: MethodSignatures::default(),
+                },
             },
         );
 
@@ -174,14 +179,17 @@ impl TaskState<'_> {
             let module = self.current_module_mut(store);
             module.definitions.insert(
                 qualified_variant_name,
-                Definition::Value {
+                Definition {
                     visibility: visibility.clone(),
                     ty: enum_ty.clone(),
+                    name: None,
                     name_span: Some(variant.name_span),
-                    allowed_lints: vec![],
-                    go_hints: vec![],
-                    go_name: None,
                     doc: variant.doc.clone(),
+                    body: DefinitionBody::Value {
+                        allowed_lints: vec![],
+                        go_hints: vec![],
+                        go_name: None,
+                    },
                 },
             );
         }
@@ -199,15 +207,17 @@ impl TaskState<'_> {
 
         module.definitions.insert(
             qualified_name,
-            Definition::ValueEnum {
+            Definition {
                 visibility,
                 ty: enum_ty,
-                name: name.into(),
-                name_span: *name_span,
-                variants: variants.to_vec(),
-                underlying_ty,
-                methods: Default::default(),
+                name: Some(name.into()),
+                name_span: Some(*name_span),
                 doc: doc.clone(),
+                body: DefinitionBody::ValueEnum {
+                    variants: variants.to_vec(),
+                    underlying_ty,
+                    methods: Default::default(),
+                },
             },
         );
     }
@@ -426,17 +436,19 @@ impl TaskState<'_> {
 
         self.current_module_mut(store).definitions.insert(
             qualified_name.clone(),
-            Definition::Struct {
+            Definition {
                 visibility,
                 ty: struct_ty,
-                name: name.into(),
-                name_span: *name_span,
-                generics: generics.to_vec(),
-                fields: new_fields,
-                kind,
-                methods: Default::default(),
-                constructor: None,
+                name: Some(name.into()),
+                name_span: Some(*name_span),
                 doc: doc.clone(),
+                body: DefinitionBody::Struct {
+                    generics: generics.to_vec(),
+                    fields: new_fields,
+                    kind,
+                    methods: Default::default(),
+                    constructor: None,
+                },
             },
         );
 
@@ -628,15 +640,17 @@ impl TaskState<'_> {
 
             self.current_module_mut(store).definitions.insert(
                 qualified_name,
-                Definition::TypeAlias {
+                Definition {
                     visibility,
-                    name: name.into(),
-                    name_span: *name_span,
-                    generics: generics.to_vec(),
-                    annotation: annotation.clone(),
                     ty: alias_ty,
-                    methods: Default::default(),
+                    name: Some(name.into()),
+                    name_span: Some(*name_span),
                     doc: doc.clone(),
+                    body: DefinitionBody::TypeAlias {
+                        generics: generics.to_vec(),
+                        annotation: annotation.clone(),
+                        methods: Default::default(),
+                    },
                 },
             );
 
@@ -697,15 +711,17 @@ impl TaskState<'_> {
 
         self.current_module_mut(store).definitions.insert(
             qualified_name,
-            Definition::TypeAlias {
+            Definition {
                 visibility,
-                name: name.into(),
-                name_span: *name_span,
-                generics: generics.to_vec(),
-                annotation: annotation.clone(),
                 ty: alias_ty,
-                methods: Default::default(),
+                name: Some(name.into()),
+                name_span: Some(*name_span),
                 doc: doc.clone(),
+                body: DefinitionBody::TypeAlias {
+                    generics: generics.to_vec(),
+                    annotation: annotation.clone(),
+                    methods: Default::default(),
+                },
             },
         );
     }
@@ -728,8 +744,10 @@ impl TaskState<'_> {
             }
             seen.push(name.clone());
 
-            if let Some(Definition::TypeAlias { ty, .. }) = store.get_definition(&name) {
-                let body = ty.unwrap_forall().clone();
+            if let Some(def) = store.get_definition(&name)
+                && matches!(def.body, DefinitionBody::TypeAlias { .. })
+            {
+                let body = def.ty.unwrap_forall().clone();
                 if Self::type_contains_name(&body, qualified_name) {
                     return true;
                 }

@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use ecow::EcoString;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface, Span};
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::Type;
 
 use super::super::TaskState;
@@ -55,8 +55,12 @@ impl TaskState<'_> {
         // type name) shadows the constructor function in the parent scope. Re-insert the
         // constructor so it's callable from within impl methods.
         if let Type::Nominal { id, .. } = &impl_ty
-            && let Some(Definition::Struct {
-                constructor: Some(ctor_ty),
+            && let Some(Definition {
+                body:
+                    DefinitionBody::Struct {
+                        constructor: Some(ctor_ty),
+                        ..
+                    },
                 ..
             }) = store.get_definition(id)
         {

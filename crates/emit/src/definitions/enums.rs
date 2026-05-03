@@ -2,7 +2,7 @@ use crate::Emitter;
 use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
 use syntax::ast::{Attribute, EnumVariant, Generic};
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
 impl Emitter<'_> {
@@ -22,8 +22,10 @@ impl Emitter<'_> {
             return None;
         }
 
-        let variant_field_types: Vec<Type> = if let Some(Definition::Enum { variants, .. }) =
-            self.ctx.definitions.get(enum_id.as_str())
+        let variant_field_types: Vec<Type> = if let Some(Definition {
+            body: DefinitionBody::Enum { variants, .. },
+            ..
+        }) = self.ctx.definitions.get(enum_id.as_str())
         {
             variants
                 .iter()

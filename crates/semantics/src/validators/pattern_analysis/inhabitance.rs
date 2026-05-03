@@ -3,7 +3,7 @@ use std::cell::RefCell;
 
 use crate::store::Store;
 use syntax::ast::{EnumVariant, Generic, StructFieldDefinition};
-use syntax::program::Definition;
+use syntax::program::DefinitionBody;
 use syntax::types::Type;
 use syntax::types::{SubstitutionMap, substitute};
 
@@ -113,8 +113,8 @@ fn check_constructor_inhabited(
         return true;
     };
 
-    match definition {
-        Definition::Enum {
+    match &definition.body {
+        DefinitionBody::Enum {
             generics, variants, ..
         } => {
             let map = build_substitution_map(generics, params);
@@ -123,7 +123,7 @@ fn check_constructor_inhabited(
                 .any(|v| is_variant_inhabited_with_map(v, &map, store, cache))
         }
 
-        Definition::Struct {
+        DefinitionBody::Struct {
             generics, fields, ..
         } => {
             let map = build_substitution_map(generics, params);
@@ -133,9 +133,9 @@ fn check_constructor_inhabited(
             })
         }
 
-        Definition::TypeAlias { ty, generics, .. } => {
+        DefinitionBody::TypeAlias { generics, .. } => {
             let map = build_substitution_map(generics, params);
-            let target_ty = substitute(ty, &map);
+            let target_ty = substitute(&definition.ty, &map);
 
             if is_self_referential_alias(id, &target_ty) {
                 return true;
@@ -144,9 +144,9 @@ fn check_constructor_inhabited(
             is_inhabited(&target_ty, store, cache)
         }
 
-        Definition::ValueEnum { .. } | Definition::Interface { .. } | Definition::Value { .. } => {
-            true
-        }
+        DefinitionBody::ValueEnum { .. }
+        | DefinitionBody::Interface { .. }
+        | DefinitionBody::Value { .. } => true,
     }
 }
 

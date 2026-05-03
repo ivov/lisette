@@ -35,15 +35,15 @@ pub(crate) fn get_module_prefix(source: &str, offset: usize) -> Option<&str> {
 pub(crate) fn definition_to_completion_kind(
     definition: &syntax::program::Definition,
 ) -> CompletionItemKind {
-    use syntax::program::Definition;
-    match definition {
-        Definition::Struct { .. } => CompletionItemKind::STRUCT,
-        Definition::Enum { .. } | Definition::ValueEnum { .. } => CompletionItemKind::ENUM,
-        Definition::Interface { .. } => CompletionItemKind::INTERFACE,
-        Definition::TypeAlias { .. } => CompletionItemKind::TYPE_PARAMETER,
-        Definition::Value { ty, .. } => {
+    use syntax::program::DefinitionBody;
+    match &definition.body {
+        DefinitionBody::Struct { .. } => CompletionItemKind::STRUCT,
+        DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. } => CompletionItemKind::ENUM,
+        DefinitionBody::Interface { .. } => CompletionItemKind::INTERFACE,
+        DefinitionBody::TypeAlias { .. } => CompletionItemKind::TYPE_PARAMETER,
+        DefinitionBody::Value { .. } => {
             if matches!(
-                ty,
+                &definition.ty,
                 syntax::types::Type::Function { .. } | syntax::types::Type::Forall { .. }
             ) {
                 CompletionItemKind::FUNCTION
@@ -196,8 +196,10 @@ pub(crate) fn get_instance_completions(
 ) -> Vec<CompletionItem> {
     let mut items = Vec::new();
 
-    if let Some(syntax::program::Definition::Struct { fields, .. }) =
-        snapshot.definitions().get(type_id)
+    if let Some(syntax::program::Definition {
+        body: syntax::program::DefinitionBody::Struct { fields, .. },
+        ..
+    }) = snapshot.definitions().get(type_id)
     {
         for field in fields {
             if same_module || field.visibility.is_public() {
@@ -215,7 +217,10 @@ pub(crate) fn get_instance_completions(
     for (qname, definition) in snapshot.definitions().iter() {
         if let Some(method_name) = qname.strip_prefix(method_prefix.as_str())
             && !method_name.contains('.')
-            && matches!(definition, syntax::program::Definition::Value { .. })
+            && matches!(
+                definition.body,
+                syntax::program::DefinitionBody::Value { .. }
+            )
             && is_instance_method(definition.ty(), type_id)
             && (same_module || definition.visibility().is_public())
         {
@@ -236,12 +241,12 @@ pub(crate) fn get_type_completions(
     snapshot: &AnalysisSnapshot,
     same_module: bool,
 ) -> Vec<CompletionItem> {
-    use syntax::program::Definition;
+    use syntax::program::DefinitionBody;
 
     let mut items = Vec::new();
 
-    match snapshot.definitions().get(type_id) {
-        Some(Definition::Enum { variants, .. }) => {
+    match snapshot.definitions().get(type_id).map(|d| &d.body) {
+        Some(DefinitionBody::Enum { variants, .. }) => {
             for variant in variants {
                 items.push(CompletionItem {
                     label: variant.name.to_string(),
@@ -250,7 +255,7 @@ pub(crate) fn get_type_completions(
                 });
             }
         }
-        Some(Definition::ValueEnum { variants, .. }) => {
+        Some(DefinitionBody::ValueEnum { variants, .. }) => {
             for variant in variants {
                 items.push(CompletionItem {
                     label: variant.name.to_string(),
@@ -266,7 +271,7 @@ pub(crate) fn get_type_completions(
     for (qname, definition) in snapshot.definitions().iter() {
         if let Some(method_name) = qname.strip_prefix(method_prefix.as_str())
             && !method_name.contains('.')
-            && matches!(definition, Definition::Value { .. })
+            && matches!(definition.body, DefinitionBody::Value { .. })
             && !is_instance_method(definition.ty(), type_id)
             && (same_module || definition.visibility().is_public())
             && !items.iter().any(|i| i.label == method_name)

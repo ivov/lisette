@@ -1,5 +1,5 @@
 use syntax::ast::Expression;
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 
 use super::super::super::TaskState;
 use crate::store::Store;
@@ -26,17 +26,24 @@ impl TaskState<'_> {
         };
 
         let qualified_name = self.qualify_name(&name);
-        if let Some(Definition::Struct {
+        if let Some(Definition {
             name: definition_name,
             name_span: definition_name_span,
-            generics: definition_generics,
-            fields: definition_fields,
-            kind: definition_kind,
+            body:
+                DefinitionBody::Struct {
+                    generics: definition_generics,
+                    fields: definition_fields,
+                    kind: definition_kind,
+                    ..
+                },
             ..
         }) = store.get_definition(&qualified_name)
         {
-            let definition_name = definition_name.clone();
-            let definition_name_span = *definition_name_span;
+            let definition_name = definition_name
+                .clone()
+                .expect("struct definition has a name");
+            let definition_name_span =
+                definition_name_span.expect("struct definition has a name span");
             let definition_generics = definition_generics.clone();
             let definition_fields = definition_fields.clone();
             let definition_kind = *definition_kind;
@@ -87,17 +94,23 @@ impl TaskState<'_> {
         };
 
         let qualified_name = self.qualify_name(&name);
-        if let Some(Definition::TypeAlias {
+        if let Some(Definition {
             name: alias_name,
-            generics: definition_generics,
-            annotation: definition_annotation,
             ty: definition_ty,
+            body:
+                DefinitionBody::TypeAlias {
+                    generics: definition_generics,
+                    annotation: definition_annotation,
+                    ..
+                },
             ..
         }) = store.get_definition(&qualified_name)
         {
             Expression::TypeAlias {
                 doc,
-                name: alias_name.clone(),
+                name: alias_name
+                    .clone()
+                    .expect("type alias definition has a name"),
                 name_span,
                 generics: definition_generics.clone(),
                 annotation: definition_annotation.clone(),

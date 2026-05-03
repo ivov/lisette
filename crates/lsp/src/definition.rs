@@ -20,9 +20,13 @@ pub(crate) fn find_struct_field_span(
     field_name: &str,
     snapshot: &AnalysisSnapshot,
 ) -> Option<syntax::ast::Span> {
-    use syntax::program::Definition;
+    use syntax::program::{Definition, DefinitionBody};
 
-    if let Some(Definition::Struct { fields, .. }) = snapshot.definitions().get(type_id) {
+    if let Some(Definition {
+        body: DefinitionBody::Struct { fields, .. },
+        ..
+    }) = snapshot.definitions().get(type_id)
+    {
         fields
             .iter()
             .find(|f| f.name == field_name)

@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{CompoundKind, SimpleKind, Type};
 
 use crate::Emitter;
@@ -145,8 +145,12 @@ impl Emitter<'_> {
         };
 
         if let Some(enum_ctx) = enum_ctx {
-            let Some(Definition::Enum {
-                variants, generics, ..
+            let Some(Definition {
+                body:
+                    DefinitionBody::Enum {
+                        variants, generics, ..
+                    },
+                ..
             }) = self.ctx.definitions.get(enum_ctx.enum_id.as_str())
             else {
                 return None;
@@ -164,8 +168,10 @@ impl Emitter<'_> {
         let Type::Nominal { id, .. } = ty.strip_refs() else {
             return None;
         };
-        let Some(Definition::Struct {
-            fields, ty: def_ty, ..
+        let Some(Definition {
+            ty: def_ty,
+            body: DefinitionBody::Struct { fields, .. },
+            ..
         }) = self.ctx.definitions.get(id.as_str())
         else {
             return None;
@@ -183,11 +189,11 @@ impl Emitter<'_> {
         }
         let go_ty = self.go_type_as_string(ty);
         let is_struct_like = matches!(
-            self.ctx.definitions.get(id),
-            Some(Definition::Struct { .. })
+            self.ctx.definitions.get(id).map(|d| &d.body),
+            Some(DefinitionBody::Struct { .. })
         ) || matches!(
-            self.ctx.definitions.get(id),
-            Some(Definition::TypeAlias { annotation, .. }) if annotation.is_opaque()
+            self.ctx.definitions.get(id).map(|d| &d.body),
+            Some(DefinitionBody::TypeAlias { annotation, .. }) if annotation.is_opaque()
         );
         if is_struct_like {
             format!("{}{{}}", go_ty)

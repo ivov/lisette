@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::checker::EnvResolve;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, StructKind};
-use syntax::program::{CallKind, Definition, NativeTypeKind};
+use syntax::program::{CallKind, Definition, DefinitionBody, NativeTypeKind};
 use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
 use super::super::TaskState;
@@ -722,8 +722,10 @@ impl TaskState<'_> {
         }
 
         if let Type::Nominal { id, params, .. } = ty
-            && let Some(Definition::TypeAlias { ty: alias_ty, .. }) = store.get_definition(id)
+            && let Some(def) = store.get_definition(id)
+            && matches!(def.body, DefinitionBody::TypeAlias { .. })
         {
+            let alias_ty = &def.ty;
             let concrete_alias_ty = match alias_ty {
                 Type::Forall { vars, body } => {
                     let map: SubstitutionMap =
@@ -764,7 +766,10 @@ impl TaskState<'_> {
             return None;
         }
 
-        if !matches!(store.get_definition(id), Some(Definition::TypeAlias { .. })) {
+        if !matches!(
+            store.get_definition(id).map(|d| &d.body),
+            Some(DefinitionBody::TypeAlias { .. })
+        ) {
             return None;
         }
 
@@ -1051,8 +1056,8 @@ impl TaskState<'_> {
                 {
                     let qualified = Symbol::from_parts(module_id, member);
                     if matches!(
-                        store.get_definition(&qualified),
-                        Some(Definition::Struct {
+                        store.get_definition(&qualified).map(|d| &d.body),
+                        Some(DefinitionBody::Struct {
                             kind: StructKind::Tuple,
                             ..
                         })
@@ -1113,14 +1118,11 @@ impl TaskState<'_> {
         // (e.g. `type MyString = string` → look up methods on `prelude.string`).
         let method_ty = store
             .get_definition(&qualified_name)
-            .and_then(|definition| match definition {
-                Definition::Struct { methods, .. } => methods.get(method).cloned(),
-                Definition::Enum { methods, .. } => methods.get(method).cloned(),
-                Definition::TypeAlias {
-                    methods,
-                    ty: alias_ty,
-                    ..
-                } => {
+            .and_then(|definition| match &definition.body {
+                DefinitionBody::Struct { methods, .. } => methods.get(method).cloned(),
+                DefinitionBody::Enum { methods, .. } => methods.get(method).cloned(),
+                DefinitionBody::TypeAlias { methods, .. } => {
+                    let alias_ty = &definition.ty;
                     methods.get(method).cloned().or_else(|| {
                         // Follow the alias to its underlying type.
                         let underlying = match alias_ty {
@@ -1181,8 +1183,8 @@ impl TaskState<'_> {
     ) -> bool {
         // Direct tuple struct
         if matches!(
-            definition,
-            Some(Definition::Struct {
+            definition.map(|d| &d.body),
+            Some(DefinitionBody::Struct {
                 kind: StructKind::Tuple,
                 ..
             })
@@ -1190,7 +1192,10 @@ impl TaskState<'_> {
             return true;
         }
         // Type alias → follow to the underlying struct via the callee's return type
-        if matches!(definition, Some(Definition::TypeAlias { .. })) {
+        if matches!(
+            definition.map(|d| &d.body),
+            Some(DefinitionBody::TypeAlias { .. })
+        ) {
             let ty = callee.get_type().resolve_in(&self.env);
             let return_ty = match ty.unwrap_forall() {
                 Type::Function { return_type, .. } => return_type.as_ref().clone(),
@@ -1198,8 +1203,8 @@ impl TaskState<'_> {
             };
             if let Type::Nominal { id, .. } = return_ty.resolve_in(&self.env) {
                 return matches!(
-                    store.get_definition(&id),
-                    Some(Definition::Struct {
+                    store.get_definition(&id).map(|d| &d.body),
+                    Some(DefinitionBody::Struct {
                         kind: StructKind::Tuple,
                         ..
                     })

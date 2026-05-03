@@ -1,7 +1,7 @@
 use crate::Emitter;
 use crate::names::go_name;
 use syntax::ast::Expression;
-use syntax::program::Definition;
+use syntax::program::DefinitionBody;
 use syntax::types::Type;
 
 impl Emitter<'_> {
@@ -155,7 +155,7 @@ impl Emitter<'_> {
         }
 
         let definition = self.ctx.definitions.get(enum_id.as_str())?;
-        let Definition::Enum { variants, .. } = definition else {
+        let DefinitionBody::Enum { variants, .. } = &definition.body else {
             return None;
         };
 
@@ -203,7 +203,7 @@ impl Emitter<'_> {
         };
 
         let definition = self.ctx.definitions.get(enum_id.as_str())?;
-        let Definition::Enum { variants, .. } = definition else {
+        let DefinitionBody::Enum { variants, .. } = &definition.body else {
             return None;
         };
 
@@ -398,20 +398,23 @@ impl Emitter<'_> {
         let is_go_type = go_name::is_go_import(module_name);
         if !is_go_type
             && !matches!(
-                definition,
-                Definition::Struct { .. } | Definition::Enum { .. } | Definition::TypeAlias { .. }
+                definition.body,
+                DefinitionBody::Struct { .. }
+                    | DefinitionBody::Enum { .. }
+                    | DefinitionBody::TypeAlias { .. }
             )
         {
             return None;
         }
 
-        let (qualified_type, _type_name) = if matches!(definition, Definition::TypeAlias { .. }) {
-            let id = self.peel_alias_id(&qualified_type);
-            let resolved_name = id.rsplit('.').next().unwrap_or(&id).to_string();
-            (id, resolved_name)
-        } else {
-            (qualified_type, type_name.to_string())
-        };
+        let (qualified_type, _type_name) =
+            if matches!(definition.body, DefinitionBody::TypeAlias { .. }) {
+                let id = self.peel_alias_id(&qualified_type);
+                let resolved_name = id.rsplit('.').next().unwrap_or(&id).to_string();
+                (id, resolved_name)
+            } else {
+                (qualified_type, type_name.to_string())
+            };
 
         let qualified_method = format!("{}.{}", qualified_type, member);
 

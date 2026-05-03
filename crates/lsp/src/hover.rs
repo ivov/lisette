@@ -1,5 +1,5 @@
 use syntax::ast::{Expression, Pattern, Span, TypedPattern};
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 
 use crate::analysis::find_module_by_alias;
 use crate::definition::{
@@ -409,8 +409,10 @@ pub(crate) fn get_hover_doc(
                 .iter()
                 .find(|fa| offset_in_span(offset, &fa.name_span))
             {
-                if let Some(Definition::Struct { fields, .. }) =
-                    snapshot.definitions().get(type_id.as_str())
+                if let Some(Definition {
+                    body: DefinitionBody::Struct { fields, .. },
+                    ..
+                }) = snapshot.definitions().get(type_id.as_str())
                 {
                     return fields
                         .iter()

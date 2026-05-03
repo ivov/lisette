@@ -1,4 +1,4 @@
-use syntax::program::Definition;
+use syntax::program::DefinitionBody;
 
 use crate::Emitter;
 use crate::names::generics::extract_type_mapping;
@@ -353,7 +353,7 @@ impl Emitter<'_> {
         };
 
         let definition = self.ctx.definitions.get(enum_id.as_str())?;
-        if !matches!(definition, Definition::ValueEnum { .. }) {
+        if !matches!(definition.body, DefinitionBody::ValueEnum { .. }) {
             return None;
         }
 

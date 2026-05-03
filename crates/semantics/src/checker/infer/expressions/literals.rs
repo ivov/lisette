@@ -2,7 +2,7 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
-use syntax::program::Definition;
+use syntax::program::DefinitionBody;
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 use super::super::TaskState;
@@ -209,10 +209,13 @@ fn numeric_adapt_target(ty: &Type, store: &Store) -> Option<Type> {
         if store.value_variants_of(id).is_some() {
             return None;
         }
-        let Some(Definition::TypeAlias { ty: def_ty, .. }) = store.get_definition(id.as_str())
-        else {
+        let Some(def) = store.get_definition(id.as_str()) else {
             break;
         };
+        if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
+            break;
+        }
+        let def_ty = &def.ty;
         let (vars, body) = match def_ty {
             Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
             other => (vec![], other.clone()),

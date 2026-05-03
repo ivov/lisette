@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::Expression;
-use syntax::program::{Definition, Module};
+use syntax::program::{DefinitionBody, Module};
 use syntax::types::{Symbol, Type};
 
 /// Determines if a method type requires UFCS emission based on its signature.
@@ -47,14 +47,14 @@ pub fn compute_module_ufcs(module: &Module, module_id: &str) -> Vec<(String, Str
 
     // Conditions 1+2: check each method's type signature
     for (key, definition) in &module.definitions {
-        let (methods, base_generics_count) = match definition {
-            Definition::Struct {
+        let (methods, base_generics_count) = match &definition.body {
+            DefinitionBody::Struct {
                 methods, generics, ..
             } => (methods, generics.len()),
-            Definition::Enum {
+            DefinitionBody::Enum {
                 methods, generics, ..
             } => (methods, generics.len()),
-            Definition::TypeAlias {
+            DefinitionBody::TypeAlias {
                 methods, generics, ..
             } => (methods, generics.len()),
             _ => continue,

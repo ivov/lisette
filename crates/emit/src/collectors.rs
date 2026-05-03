@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 
 use super::names::go_name;
 use crate::Emitter;
-use syntax::program::{Definition, File};
+use syntax::program::{DefinitionBody, File};
 use syntax::types::Type;
 
 impl Emitter<'_> {
@@ -39,20 +39,18 @@ impl Emitter<'_> {
         }
 
         for (key, definition) in self.ctx.definitions.iter() {
-            match definition {
-                Definition::Interface {
-                    visibility,
-                    definition: iface,
-                    ..
-                } if visibility.is_public() => {
+            match &definition.body {
+                DefinitionBody::Interface {
+                    definition: iface, ..
+                } if definition.visibility.is_public() => {
                     for method_name in iface.methods.keys() {
                         self.module
                             .exported_method_names
                             .insert(method_name.to_string());
                     }
                 }
-                Definition::Value { visibility, .. }
-                    if visibility.is_public()
+                DefinitionBody::Value { .. }
+                    if definition.visibility.is_public()
                         && !go_name::is_go_import(key)
                         && !key.starts_with(go_name::PRELUDE_PREFIX)
                         && key.chars().filter(|c| *c == '.').count() >= 2 =>
@@ -196,10 +194,10 @@ impl Emitter<'_> {
             .definitions
             .iter()
             .filter_map(|(key, definition)| {
-                if let Definition::Enum {
-                    name,
-                    variants,
-                    name_span,
+                if let syntax::program::Definition {
+                    name: Some(name),
+                    name_span: Some(name_span),
+                    body: DefinitionBody::Enum { variants, .. },
                     ..
                 } = definition
                 {

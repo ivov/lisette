@@ -4,7 +4,7 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructFieldAssignment, StructSpread};
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, substitute};
 
 use super::super::TaskState;
@@ -55,9 +55,13 @@ impl TaskState<'_> {
         expected_ty: &Type,
     ) -> Expression {
         if let Some(qualified_name) = self.lookup_qualified_name(store, &struct_name)
-            && let Some(Definition::Struct {
+            && let Some(Definition {
                 ty: struct_ty,
-                fields: struct_fields,
+                body:
+                    DefinitionBody::Struct {
+                        fields: struct_fields,
+                        ..
+                    },
                 ..
             }) = store.get_definition(&qualified_name)
         {
@@ -79,9 +83,9 @@ impl TaskState<'_> {
         }
 
         if let Some(qualified_name) = self.lookup_qualified_name(store, &struct_name)
-            && let Some(Definition::TypeAlias {
+            && let Some(Definition {
                 ty: alias_ty,
-                annotation,
+                body: DefinitionBody::TypeAlias { annotation, .. },
                 ..
             }) = store.get_definition(&qualified_name)
         {
@@ -93,9 +97,13 @@ impl TaskState<'_> {
                 _ => alias_ty.clone(),
             };
             if let Type::Nominal { id: struct_id, .. } = &underlying
-                && let Some(Definition::Struct {
+                && let Some(Definition {
                     ty: struct_ty,
-                    fields: struct_fields,
+                    body:
+                        DefinitionBody::Struct {
+                            fields: struct_fields,
+                            ..
+                        },
                     ..
                 }) = store.get_definition(struct_id)
             {
@@ -132,8 +140,11 @@ impl TaskState<'_> {
 
         if let Some((type_part, variant_name)) = struct_name.rsplit_once('.')
             && let Some(qualified_name) = self.lookup_qualified_name(store, type_part)
-            && let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
-                store.get_definition(&qualified_name)
+            && let Some(Definition {
+                ty: alias_ty,
+                body: DefinitionBody::TypeAlias { .. },
+                ..
+            }) = store.get_definition(&qualified_name)
         {
             let alias_ty = alias_ty.clone();
 
@@ -629,10 +640,9 @@ fn has_zero_nominal(
         });
     };
 
-    match def {
-        Definition::Struct {
-            fields, ty: def_ty, ..
-        } => {
+    match &def.body {
+        DefinitionBody::Struct { fields, .. } => {
+            let def_ty = &def.ty;
             let map = build_substitution(def_ty, params);
             let struct_module = id
                 .as_str()
@@ -667,11 +677,8 @@ fn has_zero_nominal(
             }
             Ok(())
         }
-        Definition::TypeAlias {
-            ty: alias_ty,
-            annotation,
-            ..
-        } => {
+        DefinitionBody::TypeAlias { annotation, .. } => {
+            let alias_ty = &def.ty;
             if annotation.is_opaque() {
                 return Err(NoZero {
                     chain: vec![],

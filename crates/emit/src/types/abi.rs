@@ -271,14 +271,14 @@ impl Emitter<'_> {
                     return true;
                 }
                 let resolved = self.peel_alias_id(name);
-                if let Some(syntax::program::Definition::TypeAlias { ty, .. }) =
-                    self.ctx.definitions.get(resolved.as_str())
-                    && self.resolve_to_function_type(ty).is_some()
+                if let Some(def) = self.ctx.definitions.get(resolved.as_str())
+                    && matches!(def.body, syntax::program::DefinitionBody::TypeAlias { .. })
+                    && self.resolve_to_function_type(&def.ty).is_some()
                 {
                     return true;
                 }
                 if let Some(def) = self.ctx.definitions.get(resolved.as_str()) {
-                    matches!(def, syntax::program::Definition::Interface { .. })
+                    matches!(def.body, syntax::program::DefinitionBody::Interface { .. })
                 } else {
                     false
                 }

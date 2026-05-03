@@ -15,7 +15,7 @@ use ecow::EcoString;
 use scopes::Scopes;
 use syntax::ast::Visibility as AstVisibility;
 use syntax::ast::{Annotation, Expression, Generic, ImportAlias, Span, StructFieldDefinition};
-use syntax::program::{Definition, File, FileImport, MethodSignatures, Module};
+use syntax::program::{Definition, DefinitionBody, File, FileImport, MethodSignatures, Module};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 pub use type_env::{EnvResolve, Speculation, TypeEnv, VarState};
@@ -370,23 +370,28 @@ impl<'s> TaskState<'s> {
     /// Resolves the value type for a definition. Returns the constructor type for
     /// structs with constructors (tuple structs) and for type aliases pointing to them.
     fn resolve_definition_value_type(&self, store: &Store, definition: &Definition) -> Type {
-        if let Definition::Struct {
+        if let DefinitionBody::Struct {
             constructor: Some(ctor_ty),
             ..
-        } = definition
+        } = &definition.body
         {
             return ctor_ty.clone();
         }
 
         // Type alias to tuple struct should return constructor type.
-        if let Definition::TypeAlias { ty: alias_ty, .. } = definition {
+        if let DefinitionBody::TypeAlias { .. } = &definition.body {
+            let alias_ty = &definition.ty;
             let underlying = match alias_ty {
                 Type::Forall { body, .. } => body.as_ref(),
                 other => other,
             };
             if let Type::Nominal { id, .. } = underlying
-                && let Some(Definition::Struct {
-                    constructor: Some(ctor_ty),
+                && let Some(Definition {
+                    body:
+                        DefinitionBody::Struct {
+                            constructor: Some(ctor_ty),
+                            ..
+                        },
                     ..
                 }) = store.get_definition(id)
             {
@@ -441,8 +446,8 @@ impl<'s> TaskState<'s> {
             return false;
         };
         matches!(
-            definition,
-            Definition::Enum { .. } | Definition::ValueEnum { .. }
+            definition.body,
+            DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. }
         )
     }
 
@@ -618,10 +623,10 @@ impl<'s> TaskState<'s> {
                 let simple_name = qn
                     .strip_prefix(&module_prefix)
                     .expect("qualified_name must start with module prefix");
-                let ty = if let Definition::Struct {
+                let ty = if let DefinitionBody::Struct {
                     constructor: Some(ctor_ty),
                     ..
-                } = definition
+                } = &definition.body
                 {
                     ctor_ty.clone()
                 } else {

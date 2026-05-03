@@ -6,7 +6,7 @@ use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
 use crate::names::go_name;
 use syntax::ast::{Pattern, RestPattern, StructKind};
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute};
 
 impl Emitter<'_> {
@@ -43,7 +43,10 @@ impl Emitter<'_> {
         };
 
         match self.ctx.definitions.get(id.as_str()) {
-            Some(Definition::Struct { fields, .. }) => {
+            Some(Definition {
+                body: DefinitionBody::Struct { fields, .. },
+                ..
+            }) => {
                 if let Some(field) = fields.iter().find(|f| f.name == field_name) {
                     if field.visibility.is_public() {
                         return true;
@@ -59,7 +62,10 @@ impl Emitter<'_> {
                     .map(|d| d.visibility().is_public())
                     .unwrap_or(false)
             }
-            Some(Definition::Enum { .. }) => {
+            Some(Definition {
+                body: DefinitionBody::Enum { .. },
+                ..
+            }) => {
                 let method_key = format!("{}.{}", id, field_name);
                 self.ctx
                     .definitions
@@ -67,9 +73,9 @@ impl Emitter<'_> {
                     .map(|d| d.visibility().is_public())
                     .unwrap_or(false)
             }
-            Some(Definition::Interface {
+            Some(Definition {
                 visibility,
-                definition,
+                body: DefinitionBody::Interface { definition },
                 ..
             }) => {
                 if visibility.is_public() && definition.methods.contains_key(field_name) {
@@ -91,8 +97,8 @@ impl Emitter<'_> {
             return false;
         };
         matches!(
-            self.ctx.definitions.get(id.as_str()),
-            Some(Definition::Struct { fields, .. })
+            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+            Some(DefinitionBody::Struct { fields, .. })
                 if fields.iter().any(|f| f.name == field_name)
         )
     }
@@ -103,8 +109,8 @@ impl Emitter<'_> {
         };
 
         matches!(
-            self.ctx.definitions.get(id.as_str()),
-            Some(Definition::Struct {
+            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+            Some(DefinitionBody::Struct {
                 kind: StructKind::Tuple,
                 ..
             })
@@ -129,8 +135,8 @@ impl Emitter<'_> {
             return false;
         };
         matches!(
-            self.ctx.definitions.get(id.as_str()),
-            Some(Definition::ValueEnum { .. })
+            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+            Some(DefinitionBody::ValueEnum { .. })
         )
     }
 
@@ -139,10 +145,14 @@ impl Emitter<'_> {
             return None;
         };
 
-        if let Some(Definition::Struct {
-            kind: StructKind::Tuple,
-            fields,
-            generics,
+        if let Some(Definition {
+            body:
+                DefinitionBody::Struct {
+                    kind: StructKind::Tuple,
+                    fields,
+                    generics,
+                    ..
+                },
             ..
         }) = self.ctx.definitions.get(id.as_str())
             && fields.len() == 1
@@ -165,12 +175,11 @@ impl Emitter<'_> {
 
     pub(crate) fn peel_alias_id(&self, id: &str) -> String {
         syntax::types::peel_alias_id(id, |current| {
-            let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
-                self.ctx.definitions.get(current)
-            else {
+            let def = self.ctx.definitions.get(current)?;
+            if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
                 return None;
-            };
-            let Type::Nominal { id: next, .. } = alias_ty.unwrap_forall() else {
+            }
+            let Type::Nominal { id: next, .. } = def.ty.unwrap_forall() else {
                 return None;
             };
             Some(next.to_string())
@@ -183,8 +192,8 @@ impl Emitter<'_> {
         };
 
         if matches!(
-            self.ctx.definitions.get(id.as_str()),
-            Some(Definition::Enum { .. })
+            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+            Some(DefinitionBody::Enum { .. })
         ) {
             Some(id.to_string())
         } else {
@@ -198,8 +207,8 @@ impl Emitter<'_> {
         };
 
         if matches!(
-            self.ctx.definitions.get(id.as_str()),
-            Some(Definition::Interface { .. })
+            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+            Some(DefinitionBody::Interface { .. })
         ) {
             Some(id.to_string())
         } else {
@@ -290,10 +299,12 @@ impl Emitter<'_> {
             .definitions
             .iter()
             .filter_map(|(id, definition)| {
-                if let Definition::Enum {
-                    name,
-                    generics,
-                    variants,
+                if let Definition {
+                    name: Some(name),
+                    body:
+                        DefinitionBody::Enum {
+                            generics, variants, ..
+                        },
                     ..
                 } = definition
                 {
@@ -431,7 +442,10 @@ impl Emitter<'_> {
     /// automatically for recursion, the binding should be dereferenced transparently.
     pub(crate) fn is_enum_field_source_ref(&self, ty: &Type, variant: &str, index: usize) -> bool {
         if let Type::Nominal { id, .. } = ty
-            && let Some(Definition::Enum { variants, .. }) = self.ctx.definitions.get(id.as_str())
+            && let Some(Definition {
+                body: DefinitionBody::Enum { variants, .. },
+                ..
+            }) = self.ctx.definitions.get(id.as_str())
         {
             for v in variants {
                 if v.name == variant
@@ -448,8 +462,12 @@ impl Emitter<'_> {
         if let Type::Nominal {
             id, params: args, ..
         } = ty
-            && let Some(Definition::Enum {
-                generics, variants, ..
+            && let Some(Definition {
+                body:
+                    DefinitionBody::Enum {
+                        generics, variants, ..
+                    },
+                ..
             }) = self.ctx.definitions.get(id.as_str())
         {
             let sub_map: HashMap<_, _> = generics
@@ -476,7 +494,10 @@ impl Emitter<'_> {
         field_name: &str,
     ) -> Option<usize> {
         if let Type::Nominal { id, .. } = ty
-            && let Some(Definition::Enum { variants, .. }) = self.ctx.definitions.get(id.as_str())
+            && let Some(Definition {
+                body: DefinitionBody::Enum { variants, .. },
+                ..
+            }) = self.ctx.definitions.get(id.as_str())
         {
             for v in variants {
                 if v.name == variant {

@@ -6,7 +6,7 @@ use syntax::ast::{
     EnumFieldDefinition, Expression, Literal, Pattern, RestPattern, Span, StructFieldPattern,
     TypedPattern,
 };
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute};
 
 use crate::checker::EnvResolve;
@@ -494,9 +494,13 @@ impl TaskState<'_> {
                     (Pattern::WildCard { span }, TypedPattern::Wildcard)
                 });
         };
-        let Some(Definition::Struct {
+        let Some(Definition {
             ty: struct_forall_ty,
-            fields: definition_struct_fields,
+            body:
+                DefinitionBody::Struct {
+                    fields: definition_struct_fields,
+                    ..
+                },
             ..
         }) = store.get_definition(&qualified_name)
         else {
@@ -749,18 +753,19 @@ impl TaskState<'_> {
         let (type_part, variant_name) = identifier.rsplit_once('.')?;
 
         let qualified_name = self.lookup_qualified_name(store, type_part)?;
-        let Definition::TypeAlias { ty: alias_ty, .. } = store.get_definition(&qualified_name)?
-        else {
+        let def = store.get_definition(&qualified_name)?;
+        let DefinitionBody::TypeAlias { .. } = &def.body else {
             return None;
         };
+        let alias_ty = &def.ty;
 
-        let underlying = match &alias_ty {
+        let underlying = match alias_ty {
             Type::Forall { body, .. } => body.as_ref().clone(),
             _ => alias_ty.clone(),
         };
 
         if let Type::Nominal { id: enum_id, .. } = &underlying
-            && let Some(variants) = store.variants_of(enum_id)
+            && let Some(variants) = store.variants_of(enum_id.as_str())
             && let Some(variant) = variants.iter().find(|v| v.name == variant_name)
         {
             let variant_qualified_name = enum_id.with_segment(variant_name);

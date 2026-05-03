@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use crate::Emitter;
 use syntax::EcoString;
 use syntax::ast::{Expression, Generic};
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::Type;
 
 fn build_type_map(generics: &[Generic], type_args: &[Type]) -> HashMap<EcoString, Type> {
@@ -136,8 +136,10 @@ impl Emitter<'_> {
             return HashSet::default();
         }
         let peeled = self.peel_alias_id(id);
-        let Some(Definition::Interface { definition, .. }) =
-            self.ctx.definitions.get(peeled.as_str())
+        let Some(Definition {
+            body: DefinitionBody::Interface { definition },
+            ..
+        }) = self.ctx.definitions.get(peeled.as_str())
         else {
             return HashSet::default();
         };
@@ -176,7 +178,11 @@ impl Emitter<'_> {
         enum_id: &str,
         generic_names: &[&str],
     ) -> HashSet<String> {
-        if let Some(Definition::Enum { variants, .. }) = self.ctx.definitions.get(enum_id) {
+        if let Some(Definition {
+            body: DefinitionBody::Enum { variants, .. },
+            ..
+        }) = self.ctx.definitions.get(enum_id)
+        {
             let types = variants.iter().flat_map(|v| v.fields.iter().map(|f| &f.ty));
             Self::collect_map_key_generics(types, generic_names)
         } else {

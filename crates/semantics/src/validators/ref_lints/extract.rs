@@ -4,7 +4,7 @@ use syntax::ast::{
     Annotation, Expression, ImportAlias, Pattern, SelectArm, SelectArmPattern, StructSpread,
 };
 use syntax::program::File;
-use syntax::program::{Definition, Module};
+use syntax::program::{DefinitionBody, Module};
 use syntax::types::{Symbol, Type};
 
 use super::reference_graph::{EnumVariantId, ModuleItemId, ReferenceGraph, StructFieldId};
@@ -425,8 +425,8 @@ fn walk_struct_call(
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
                 let qname = Symbol::from_parts(&module.id, &ty_name);
-                if let Some(Definition::Struct { fields, .. }) =
-                    module.definitions.get(qname.as_str())
+                if let Some(def) = module.definitions.get(qname.as_str())
+                    && let DefinitionBody::Struct { fields, .. } = &def.body
                 {
                     for field in fields {
                         if !explicit.contains(field.name.as_str()) {
@@ -441,8 +441,8 @@ fn walk_struct_call(
                 let explicit: HashSet<&str> =
                     field_assignments.iter().map(|f| f.name.as_str()).collect();
                 let qname = Symbol::from_parts(&module.id, &ty_name);
-                if let Some(Definition::Struct { fields, .. }) =
-                    module.definitions.get(qname.as_str())
+                if let Some(def) = module.definitions.get(qname.as_str())
+                    && let DefinitionBody::Struct { fields, .. } = &def.body
                 {
                     for field in fields {
                         if !explicit.contains(field.name.as_str()) {
