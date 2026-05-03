@@ -240,6 +240,14 @@ impl TaskState<'_> {
         expected_ty: &Type,
     ) -> Expression {
         let (struct_call_ty, map) = self.instantiate(&struct_ty);
+
+        let peeled_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        if same_nominal(&peeled_expected, &struct_call_ty) && !peeled_expected.contains_unknown() {
+            let _ = self.speculatively(|this| {
+                this.try_unify(store, &peeled_expected, &struct_call_ty, &span)
+            });
+        }
+
         let new_spread = self.infer_struct_spread(store, spread, &struct_call_ty);
 
         let struct_module = qualified_name.split('.').next().unwrap_or(&qualified_name);
@@ -318,7 +326,8 @@ impl TaskState<'_> {
             }
         }
 
-        self.unify(store, expected_ty, &struct_call_ty, &span);
+        let final_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        self.unify(store, &final_expected, &struct_call_ty, &span);
 
         Expression::StructCall {
             name: struct_name,
@@ -702,4 +711,11 @@ fn build_substitution(def_ty: &Type, params: &[Type]) -> SubstitutionMap {
         }
     }
     map
+}
+
+fn same_nominal(a: &Type, b: &Type) -> bool {
+    matches!(
+        (a, b),
+        (Type::Nominal { id: ai, .. }, Type::Nominal { id: bi, .. }) if ai == bi
+    )
 }

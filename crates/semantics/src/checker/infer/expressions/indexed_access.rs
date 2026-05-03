@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
-use syntax::types::Type;
+use syntax::types::{CompoundKind, Type};
 
 use super::super::super::TaskState;
 
@@ -38,17 +38,23 @@ impl TaskState<'_> {
             return self.infer_slice_range_access(store, expression, index, span, expected_ty);
         }
 
-        let index_ty_var = self.new_type_var();
         let collection_ty_var = self.new_type_var();
+        let collection_expression =
+            self.with_value_context(|s| s.infer_expression(store, *expression, &collection_ty_var));
 
-        let (index_expression, collection_expression) = self.with_value_context(|s| {
-            let index_expression = s.infer_expression(store, *index, &index_ty_var);
-            let collection_expression = s.infer_expression(store, *expression, &collection_ty_var);
-            (index_expression, collection_expression)
-        });
-
-        let resolved_index_ty = index_ty_var.resolve_in(&self.env);
         let resolved_collection_ty = store.peel_alias(&collection_ty_var.resolve_in(&self.env));
+
+        let index_expected_ty = match resolved_collection_ty.as_compound() {
+            Some((CompoundKind::Map, args)) => {
+                args.first().cloned().unwrap_or_else(|| self.new_type_var())
+            }
+            _ => self.new_type_var(),
+        };
+
+        let index_expression =
+            self.with_value_context(|s| s.infer_expression(store, *index, &index_expected_ty));
+
+        let resolved_index_ty = index_expected_ty.resolve_in(&self.env);
 
         if resolved_collection_ty.is_error() {
             self.unify(store, expected_ty, &Type::Error, &span);

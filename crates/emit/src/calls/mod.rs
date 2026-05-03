@@ -1,4 +1,4 @@
-mod dispatch;
+pub(crate) mod dispatch;
 pub(crate) mod go_interop;
 mod native;
 mod regular;

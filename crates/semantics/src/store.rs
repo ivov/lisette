@@ -252,6 +252,29 @@ impl Store {
         })
     }
 
+    pub fn deep_resolve_alias(&self, ty: &Type) -> Type {
+        let mut current = ty.clone();
+        let mut seen: HashSet<Symbol> = HashSet::default();
+        loop {
+            let Type::Nominal { id, params, .. } = &current else {
+                return current;
+            };
+            if !seen.insert(id.clone()) {
+                return current;
+            }
+            let Some(Definition::TypeAlias { ty: def_ty, .. }) = self.get_definition(id.as_str())
+            else {
+                return current;
+            };
+            let (vars, body) = match def_ty {
+                Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
+                other => (vec![], other.clone()),
+            };
+            let map: SubstitutionMap = vars.iter().cloned().zip(params.iter().cloned()).collect();
+            current = substitute(&body, &map);
+        }
+    }
+
     pub fn peel_alias_deep(&self, ty: &Type) -> Type {
         match self.peel_alias(ty) {
             Type::Compound { kind, args } => Type::Compound {

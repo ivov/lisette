@@ -8,7 +8,44 @@ use crate::types::native::NativeGoType;
 use crate::utils::Staged;
 use syntax::ast::{Annotation, Expression, StructKind};
 use syntax::program::{CallKind, Definition};
-use syntax::types::Type;
+use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute};
+
+impl Emitter<'_> {
+    /// True when Go's untyped-literal default (`int`/`float64`/`complex128`)
+    /// would mismatch this type, requiring explicit type args at the call site.
+    /// Walks alias chains via the definition map so multi-hop aliases resolve.
+    pub(crate) fn needs_explicit_args_for_go_inference(&self, ty: &Type) -> bool {
+        let mut current = ty.clone();
+        let mut seen: HashSet<Symbol> = HashSet::default();
+        while let Type::Nominal { id, params, .. } = &current {
+            if !seen.insert(id.clone()) {
+                break;
+            }
+            let Some(Definition::TypeAlias { ty: def_ty, .. }) =
+                self.ctx.definitions.get(id.as_str())
+            else {
+                break;
+            };
+            let (vars, body) = match def_ty {
+                Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
+                other => (vec![], other.clone()),
+            };
+            let map: SubstitutionMap = vars.iter().cloned().zip(params.iter().cloned()).collect();
+            current = substitute(&body, &map);
+        }
+        let Some(numeric) = current.underlying_numeric_type() else {
+            return false;
+        };
+        let Some(kind) = numeric.as_simple() else {
+            return false;
+        };
+        kind.is_arithmetic()
+            && !matches!(
+                kind,
+                SimpleKind::Int | SimpleKind::Float64 | SimpleKind::Complex128
+            )
+    }
+}
 
 fn extract_return_type_param(function: &Expression) -> Option<Type> {
     let ty = function.get_type();
@@ -217,17 +254,25 @@ impl Emitter<'_> {
             return None;
         };
 
-        let all_inferable = vars.iter().all(|var| {
+        let all_inferrable = vars.iter().all(|var| {
             let param_ty = Type::Parameter(var.clone());
             generic_params.iter().any(|pt| pt.contains_type(&param_ty))
         });
-        if all_inferable {
-            return None;
-        }
 
         let instantiated_ty = function.get_type();
         let mut mapping: HashMap<String, Type> = HashMap::default();
         extract_type_mapping(&body, &instantiated_ty, &mut mapping);
+
+        if all_inferrable {
+            let any_needs_explicit = vars.iter().any(|v| {
+                mapping
+                    .get(v.as_str())
+                    .is_some_and(|t| self.needs_explicit_args_for_go_inference(t))
+            });
+            if !any_needs_explicit {
+                return None;
+            }
+        }
 
         let resolved: Vec<Type> = vars
             .iter()

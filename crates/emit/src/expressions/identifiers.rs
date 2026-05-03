@@ -133,7 +133,10 @@ impl Emitter<'_> {
             || ret_params.len() > fn_params.len()
             || !ret_params
                 .iter()
-                .all(|rp| fn_params.iter().any(|fp| fp.contains_type(rp)));
+                .all(|rp| fn_params.iter().any(|fp| fp.contains_type(rp)))
+            || fn_params
+                .iter()
+                .any(|t| self.needs_explicit_args_for_go_inference(t));
         if needs_type_args {
             self.format_type_args(ret_params)
         } else {

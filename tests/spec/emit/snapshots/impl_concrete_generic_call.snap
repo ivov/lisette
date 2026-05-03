@@ -52,6 +52,6 @@ func Either_describe(self Either[MyInt, MyString]) MyString {
 }
 
 func test() MyString {
-	e := MakeEitherLeft[int, MyString](42)
+	e := MakeEitherLeft[MyInt, MyString](42)
 	return Either_describe(e)
 }

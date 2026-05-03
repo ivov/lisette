@@ -345,24 +345,14 @@ impl TaskState<'_> {
                 .push(diagnostics::infer::panic_in_expression_position(span));
         }
 
-        // Speculatively unify the expected type with the return type before
-        // checking arguments, so e.g. `Some(Text{})` with expected `Option<Printable>`
-        // constrains T = Printable and the argument coerces via interface satisfaction.
-        // Also fires for Go-imported named types so that `Some(tea.Quit)` in
-        // context `Option<tea.Cmd>` constrains T = tea.Cmd instead of
-        // collapsing to the Cmd alias's underlying function shape. Guarded
-        // to named types to avoid affecting numeric literal inference.
         if self.is_generic_callee(store, &callee_expression)
             && !expected_ty.resolve_in(&self.env).is_variable()
             && !expected_ty.is_ignored()
-            && self.is_enum_type(store, &return_ty.resolve_in(&self.env))
-            && (self.has_interface_type_param(store, expected_ty)
-                || self.has_go_named_type_param(expected_ty)
-                || self.has_fn_type_param(expected_ty)
-                || self.has_unknown_type_param(expected_ty))
+            && (self.is_enum_type(store, &return_ty.resolve_in(&self.env))
+                || !expected_ty.resolve_in(&self.env).contains_unknown())
         {
-            let _ =
-                self.speculatively(|this| this.try_unify(store, expected_ty, &return_ty, &span));
+            let peeled = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+            let _ = self.speculatively(|this| this.try_unify(store, &peeled, &return_ty, &span));
         }
 
         let new_args = self.infer_call_arguments(store, args, &param_types);
@@ -398,7 +388,11 @@ impl TaskState<'_> {
         // caller doesn't consume the result (non-last block item).
         let expected_was_variable = expected_ty.resolve_in(&self.env).is_variable();
 
-        self.unify(store, expected_ty, &return_ty, &span);
+        // Bridge multi-hop aliases by re-resolving the expected type through
+        // the store before the final unify (forward-declared intermediates
+        // leave gaps in the cached `underlying_ty` chain).
+        let resolved_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        self.unify(store, &resolved_expected, &return_ty, &span);
         self.unify_trait_bounds(store, &bounds, &new_args, &span);
 
         // Native mutating methods (append, extend, delete) are rewritten by

@@ -275,7 +275,19 @@ fn numeric_float_literal_not_in_int_context() {
 }
 
 #[test]
-fn numeric_int_literal_flexibility_not_through_generics() {
+fn numeric_int_literal_adapts_through_generic_constructor() {
+    infer(
+        r#"
+    fn main() {
+      let x: Option<int32> = Some(5);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_cross_family_through_generic_constructor() {
     infer(
         r#"
     fn main() {
@@ -283,15 +295,226 @@ fn numeric_int_literal_flexibility_not_through_generics() {
     }
         "#,
     )
-    .assert_type_mismatch();
+    .assert_no_errors();
 }
 
 #[test]
-fn numeric_int_literal_in_generic_requires_explicit_cast() {
+fn numeric_float_literal_in_generic_constructor() {
     infer(
         r#"
     fn main() {
       let x: Option<float64> = Some(42.0);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_result_ok() {
+    infer(
+        r#"
+    fn main() {
+      let x: Result<int32, string> = Ok(5);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_result_err() {
+    infer(
+        r#"
+    fn main() {
+      let x: Result<string, int32> = Err(5);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_nested_generic_constructor() {
+    infer(
+        r#"
+    fn main() {
+      let xs: Slice<Option<int32>> = [Some(1), Some(2)];
+      let opt: Option<Slice<int32>> = Some([1, 2, 3]);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_generic_function() {
+    infer(
+        r#"
+    fn id<T>(x: T) -> T { x }
+    fn main() {
+      let x: int32 = id(1);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_struct_literal() {
+    infer(
+        r#"
+    struct Box<T> { value: T }
+    fn main() {
+      let x: Box<int32> = Box { value: 1 };
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_aliased_struct_literal() {
+    infer(
+        r#"
+    struct Box<T> { value: T }
+    type MyBox<T> = Box<T>
+    fn main() {
+      let _x: MyBox<int32> = Box { value: 1 };
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_multi_hop_numeric_alias() {
+    infer(
+        r#"
+    type A = B
+    type B = int32
+    fn main() {
+      let _x: A = 1;
+      let _y: Option<A> = Some(2);
+      let mut m: Map<A, string> = Map.new();
+      m[3] = "v";
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_multi_hop_alias_constructor() {
+    infer(
+        r#"
+    type A<T> = B<T>
+    type B<T> = Option<T>
+    fn main() {
+      let _a: A<int32> = Some(1);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_multi_hop_alias_struct_literal() {
+    infer(
+        r#"
+    struct Box<T> { value: T }
+    type A<T> = B<T>
+    type B<T> = Box<T>
+    fn main() {
+      let _a: A<int32> = Box { value: 1 };
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_payload_adapts_through_aliased_struct_literal() {
+    infer(
+        r#"
+    interface Printable { fn print(self) -> string }
+    struct Text {}
+    impl Text { fn print(self) -> string { "x" } }
+    struct Box<T> { value: T }
+    type MyBox<T> = Box<T>
+    fn main() {
+      let _a: MyBox<Printable> = Box { value: Text {} };
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn interface_payload_adapts_through_struct_literal() {
+    infer(
+        r#"
+    interface Printable { fn print(self) -> string }
+    struct Text {}
+    impl Text { fn print(self) -> string { "x" } }
+    struct Box<T> { value: T }
+    fn main() {
+      let _a: Box<Printable> = Box { value: Text {} };
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_tuple_struct_constructor() {
+    infer(
+        r#"
+    struct Wrap<T>(T)
+    fn main() {
+      let x: Wrap<int32> = Wrap(1);
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_adapts_through_user_alias() {
+    infer(
+        r#"
+    type MyInt = int32
+    fn main() {
+      let a: MyInt = 1;
+      let b: Option<MyInt> = Some(2);
+      let mut m: Map<MyInt, string> = Map.new();
+      m[3] = "v";
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn numeric_int_literal_overflow_through_user_alias() {
+    infer(
+        r#"
+    type Tiny = int8
+    fn main() {
+      let _x: Tiny = 200;
+    }
+        "#,
+    )
+    .assert_infer_code("integer_literal_overflow");
+}
+
+#[test]
+fn numeric_int_literal_adapts_as_map_key() {
+    infer(
+        r#"
+    fn main() {
+      let mut m: Map<int32, string> = Map.new();
+      m[5] = "v";
     }
         "#,
     )

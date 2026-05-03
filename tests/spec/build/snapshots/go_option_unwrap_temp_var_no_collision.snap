@@ -8,14 +8,15 @@ import (
 	"errors"
 	"fmt"
 	lisette "github.com/ivov/lisette/prelude"
+	"io"
 	"net/http"
 	"strings"
 )
 
 func main() {
 	body := strings.NewReader("hello")
-	opt_1 := lisette.MakeOptionSome(body)
-	var unwrap_2 *strings.Reader
+	opt_1 := lisette.MakeOptionSome[io.Reader](body)
+	var unwrap_2 io.Reader
 	if opt_1.Tag == lisette.OptionSome {
 		unwrap_2 = opt_1.SomeVal
 	}

@@ -2888,7 +2888,8 @@ enum Either<L, R> {
 }
 
 fn main() {
-  let x: Either<int, string> = Left("oops");
+  let x = Left("oops");
+  let _: Either<int, string> = x;
 }
 "#;
     assert_infer_error_snapshot!(input);

@@ -1,7 +1,9 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
+use rustc_hash::FxHashSet;
 use syntax::ast::{Expression, FormatStringPart, Literal, Span};
-use syntax::types::Type;
+use syntax::program::Definition;
+use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 use super::super::TaskState;
 
@@ -27,16 +29,16 @@ impl TaskState<'_> {
 
             Literal::Integer { value, text } => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if resolved.is_numeric() {
+                let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store) {
                     let is_pre_negated = text.as_deref().is_some_and(|t| t.starts_with('-'));
                     if is_pre_negated {
                         self.check_negative_magnitude_overflow(
                             value.wrapping_neg(),
-                            &resolved,
+                            &numeric,
                             span,
                         );
                     } else if !self.scopes.is_inside_negation() {
-                        self.check_integer_literal_overflow(value, &resolved, span);
+                        self.check_integer_literal_overflow(value, &numeric, span);
                     }
                     resolved.clone()
                 } else {
@@ -54,9 +56,7 @@ impl TaskState<'_> {
 
             Literal::Float { value, text } => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if resolved.is_float() {
-                    // Float overflow is symmetric (absolute value matters), so check regardless
-                    // of negation context
+                let ty = if numeric_adapt_target(&resolved, store).is_some_and(|n| n.is_float()) {
                     self.check_float_literal_overflow(value, &resolved, span);
                     resolved.clone()
                 } else {
@@ -96,9 +96,9 @@ impl TaskState<'_> {
 
             Literal::Char(char) => {
                 let resolved = expected_ty.resolve_in(&self.env);
-                let ty = if resolved.is_numeric() {
+                let ty = if let Some(numeric) = numeric_adapt_target(&resolved, store) {
                     if let Some(codepoint) = char_literal_codepoint(&char) {
-                        self.check_integer_literal_overflow(codepoint, &resolved, span);
+                        self.check_integer_literal_overflow(codepoint, &numeric, span);
                     }
                     resolved.clone()
                 } else {
@@ -193,6 +193,34 @@ impl TaskState<'_> {
         self.unify(store, expected_ty, &new_ty, &span);
         Expression::Unit { ty: new_ty, span }
     }
+}
+
+/// Walks the alias chain through the store rather than the cached
+/// `underlying_ty` field so multi-hop aliases (with forward-declared
+/// intermediates) resolve. Rejects when any nominal in the chain is a value
+/// enum — those are a hard boundary requiring an explicit `as` cast.
+fn numeric_adapt_target(ty: &Type, store: &Store) -> Option<Type> {
+    let mut current = ty.clone();
+    let mut seen: FxHashSet<Symbol> = FxHashSet::default();
+    while let Type::Nominal { id, params, .. } = &current {
+        if !seen.insert(id.clone()) {
+            break;
+        }
+        if store.value_variants_of(id).is_some() {
+            return None;
+        }
+        let Some(Definition::TypeAlias { ty: def_ty, .. }) = store.get_definition(id.as_str())
+        else {
+            break;
+        };
+        let (vars, body) = match def_ty {
+            Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
+            other => (vec![], other.clone()),
+        };
+        let map: SubstitutionMap = vars.iter().cloned().zip(params.iter().cloned()).collect();
+        current = substitute(&body, &map);
+    }
+    current.underlying_numeric_type()
 }
 
 fn char_literal_codepoint(s: &str) -> Option<u64> {

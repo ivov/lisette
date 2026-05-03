@@ -1971,7 +1971,7 @@ fn main() {
 }
 
 #[test]
-fn covariant_generics_in_slice_rejected() {
+fn covariant_generics_assignment_rejected() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1994,9 +1994,8 @@ struct Box<T> {
 }
 
 fn main() {
-  let boxes: Slice<Box<Describable>> = [
-    Box { value: Dog { name: "A" }, label: "first" },
-  ]
+  let dog_box: Box<Dog> = Box { value: Dog { name: "A" }, label: "first" }
+  let _: Box<Describable> = dog_box
 }
 "#,
     );
@@ -3145,6 +3144,28 @@ fn main() {
   let unwrap_2 = 7
   let _ = unwrap_2
   fmt.Println(req)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn adapted_numeric_literal_through_generic_constructor_compiles() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+
+fn main() {
+  let xs: Slice<Option<int32>> = [Some(1), None, Some(3)]
+  let mut counts: Map<int32, string> = Map.new()
+  counts[7] = "seven"
+  fmt.Println(xs, counts[7])
 }
 "#,
     );

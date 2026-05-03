@@ -1,0 +1,21 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	xs := []lisette.Option[int32]{
+		lisette.MakeOptionSome[int32](1),
+		lisette.MakeOptionNone[int32](),
+		lisette.MakeOptionSome[int32](3),
+	}
+	counts := make(map[int32]string)
+	counts[7] = "seven"
+	fmt.Println(xs, counts[7])
+}
