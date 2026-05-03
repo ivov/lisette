@@ -3,8 +3,8 @@ use syntax::ast::{
     Annotation, Expression, Generic, ParentInterface, Pattern, Span,
     Visibility as SyntacticVisibility,
 };
-use syntax::program::{Definition, Interface, Visibility};
-use syntax::types::{Symbol, Type};
+use syntax::program::{Definition, DefinitionBody, Interface, Visibility};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 use super::{extract_attribute_flags, has_recursive_instantiation, wrap_with_impl_generics};
 use crate::checker::TaskState;
@@ -35,7 +35,7 @@ impl TaskState<'_> {
             return false;
         };
 
-        if let Definition::Struct { fields, .. } = &*definition
+        if let DefinitionBody::Struct { fields, .. } = &definition.body
             && fields.iter().any(|f| f.name == fn_name)
         {
             self.sink.push(diagnostics::infer::method_shadows_field(
@@ -45,7 +45,7 @@ impl TaskState<'_> {
             ));
         }
 
-        if let Definition::Enum { variants, .. } = &*definition {
+        if let DefinitionBody::Enum { variants, .. } = &definition.body {
             for variant in variants {
                 if variant.fields.is_struct() && variant.fields.iter().any(|f| f.name == fn_name) {
                     self.sink.push(diagnostics::infer::method_shadows_field(
@@ -58,11 +58,13 @@ impl TaskState<'_> {
             }
         }
 
+        let is_value_enum = matches!(definition.body, DefinitionBody::ValueEnum { .. });
+
         if let Some(methods) = definition.methods_mut() {
             methods.insert(fn_name.into(), method_ty.clone());
         }
 
-        !matches!(definition, Definition::ValueEnum { .. })
+        !is_value_enum
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -91,19 +93,22 @@ impl TaskState<'_> {
 
         let is_cross_specialization = impl_generics_empty
             && matches!(
-                module.definitions.get(receiver_qualified_name),
-                Some(Definition::Struct { generics: struct_generics, .. })
+                module.definitions.get(receiver_qualified_name).map(|d| &d.body),
+                Some(DefinitionBody::Struct { generics: struct_generics, .. })
                     if !struct_generics.is_empty()
             );
 
         if is_cross_specialization {
-            let struct_generic_names: Vec<String> =
-                match module.definitions.get(receiver_qualified_name) {
-                    Some(Definition::Struct { generics: g, .. }) => {
-                        g.iter().map(|g| g.name.to_string()).collect()
-                    }
-                    _ => vec![],
-                };
+            let struct_generic_names: Vec<String> = match module
+                .definitions
+                .get(receiver_qualified_name)
+                .map(|d| &d.body)
+            {
+                Some(DefinitionBody::Struct { generics: g, .. }) => {
+                    g.iter().map(|g| g.name.to_string()).collect()
+                }
+                _ => vec![],
+            };
             self.sink.push(
                 diagnostics::infer::duplicate_method_across_specialized_impls(
                     fn_name,
@@ -156,8 +161,11 @@ impl TaskState<'_> {
         if !self.is_d_lis(&*store)
             && let Some(module) = store.get_module(&module_id)
             && matches!(
-                module.definitions.get(&receiver_qualified_name),
-                Some(Definition::TypeAlias { .. })
+                module
+                    .definitions
+                    .get(&receiver_qualified_name)
+                    .map(|d| &d.body),
+                Some(DefinitionBody::TypeAlias { .. })
             )
         {
             self.sink.push(diagnostics::infer::impl_on_type_alias(
@@ -256,14 +264,17 @@ impl TaskState<'_> {
                 .expect("current module must exist in store");
             module.definitions.insert(
                 module_qualified_name,
-                Definition::Value {
+                Definition {
                     visibility: fn_visibility.clone(),
                     ty: method_ty,
+                    name: None,
                     name_span: Some(fn_sig.name_span),
-                    allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
-                    go_hints: extract_attribute_flags(fn_attrs, "go"),
-                    go_name: None,
                     doc: None,
+                    body: DefinitionBody::Value {
+                        allowed_lints: extract_attribute_flags(fn_attrs, "allow"),
+                        go_hints: extract_attribute_flags(fn_attrs, "go"),
+                        go_name: None,
+                    },
                 },
             );
         }
@@ -367,26 +378,26 @@ impl TaskState<'_> {
             methods,
         };
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
             .unwrap_or(Visibility::Private);
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
 
         module.definitions.insert(
             qualified_name.clone(),
-            Definition::Interface {
+            Definition {
                 visibility: visibility.clone(),
                 ty: interface_ty,
-                name_span: *name_span,
-                definition: interface,
+                name: None,
+                name_span: Some(*name_span),
                 doc: doc.clone(),
+                body: DefinitionBody::Interface {
+                    definition: interface,
+                },
             },
         );
 
@@ -398,14 +409,17 @@ impl TaskState<'_> {
             let method_qualified_name = format!("{}.{}.{}", module_id, interface_name, method_name);
             module.definitions.insert(
                 method_qualified_name.into(),
-                Definition::Value {
+                Definition {
                     visibility: visibility.clone(),
                     ty: method_ty,
+                    name: None,
                     name_span: None, // Interface method signatures; span tracked in Interface definition
-                    allowed_lints: vec![],
-                    go_hints,
-                    go_name: None,
                     doc: None,
+                    body: DefinitionBody::Value {
+                        allowed_lints: vec![],
+                        go_hints,
+                        go_name: None,
+                    },
                 },
             );
         }
@@ -457,11 +471,11 @@ impl TaskState<'_> {
 
         for parent_ty in &interface.parents {
             if let Some(parent_id) = parent_ty.get_qualified_id() {
-                let parent_simple_name = parent_id.rsplit('.').next().unwrap_or(parent_id);
+                let parent_name = unqualified_name(parent_id);
                 self.collect_interface_methods(
                     store,
                     parent_id,
-                    parent_simple_name,
+                    parent_name,
                     &mut inherited_methods,
                     &mut method_visited,
                 );
@@ -498,7 +512,7 @@ impl TaskState<'_> {
     ) -> Option<Vec<String>> {
         if !visited.insert(current_id.to_string()) {
             // Found a cycle — build the cycle path from where the repeated node appears
-            let simple = |id: &str| -> String { id.rsplit('.').next().unwrap_or(id).to_string() };
+            let simple = |id: &str| -> String { unqualified_name(id).to_string() };
             if let Some(position) = path.iter().position(|p| p == current_id) {
                 let mut cycle: Vec<String> = path[position..].iter().map(|p| simple(p)).collect();
                 cycle.push(simple(current_id));
@@ -549,7 +563,7 @@ impl TaskState<'_> {
 
             for parent_ty in &interface.parents {
                 if let Some(parent_id) = parent_ty.get_qualified_id() {
-                    let parent_simple = parent_id.rsplit('.').next().unwrap_or(parent_id);
+                    let parent_simple = unqualified_name(parent_id);
                     self.collect_interface_methods(
                         store,
                         parent_id,

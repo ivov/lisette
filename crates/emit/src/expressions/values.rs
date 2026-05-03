@@ -1,6 +1,6 @@
 use rustc_hash::FxHashSet as HashSet;
 
-use syntax::program::Definition;
+use syntax::program::DefinitionBody;
 
 use crate::Emitter;
 use crate::is_order_sensitive;
@@ -453,8 +453,8 @@ impl Emitter<'_> {
 
         if let Type::Nominal { id, .. } = &self.peel_alias(ty)
             && matches!(
-                self.ctx.definitions.get(id.as_str()),
-                Some(Definition::Interface { .. })
+                self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+                Some(DefinitionBody::Interface { .. })
             )
         {
             let source_ty = expression.get_type();
@@ -659,8 +659,8 @@ impl Emitter<'_> {
                 }
                 if let Type::Nominal { id, .. } = ty {
                     matches!(
-                        self.ctx.definitions.get(id.as_str()),
-                        Some(Definition::Enum { .. })
+                        self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+                        Some(DefinitionBody::Enum { .. })
                     )
                 } else {
                     false
@@ -672,8 +672,8 @@ impl Emitter<'_> {
             {
                 if let Type::Nominal { id, .. } = ty {
                     if !matches!(
-                        self.ctx.definitions.get(id.as_str()),
-                        Some(Definition::Enum { .. })
+                        self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+                        Some(DefinitionBody::Enum { .. })
                     ) {
                         return false;
                     }
@@ -683,8 +683,11 @@ impl Emitter<'_> {
                     } = &receiver_ty
                     {
                         matches!(
-                            self.ctx.definitions.get(receiver_id.as_str()),
-                            Some(Definition::Enum { .. } | Definition::TypeAlias { .. })
+                            self.ctx
+                                .definitions
+                                .get(receiver_id.as_str())
+                                .map(|d| &d.body),
+                            Some(DefinitionBody::Enum { .. } | DefinitionBody::TypeAlias { .. })
                         )
                     } else {
                         false

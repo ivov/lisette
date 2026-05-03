@@ -2,7 +2,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
-use syntax::program::{Definition, File, Interface, MethodSignatures, Module, ModuleId};
+use syntax::program::{
+    Definition, DefinitionBody, File, Interface, MethodSignatures, Module, ModuleId,
+};
 use syntax::types::{SubstitutionMap, Symbol, Type, substitute};
 
 pub const ENTRY_MODULE_ID: &str = "_entry_";
@@ -183,8 +185,8 @@ impl Store {
     }
 
     pub fn variants_of(&self, qualified_name: &str) -> Option<&[EnumVariant]> {
-        match self.get_definition(qualified_name)? {
-            Definition::Enum { variants, .. } => Some(variants),
+        match &self.get_definition(qualified_name)?.body {
+            DefinitionBody::Enum { variants, .. } => Some(variants),
             _ => None,
         }
     }
@@ -199,36 +201,36 @@ impl Store {
         &self,
         qualified_name: &str,
     ) -> Option<&[syntax::ast::ValueEnumVariant]> {
-        match self.get_definition(qualified_name)? {
-            Definition::ValueEnum { variants, .. } => Some(variants),
+        match &self.get_definition(qualified_name)?.body {
+            DefinitionBody::ValueEnum { variants, .. } => Some(variants),
             _ => None,
         }
     }
 
     pub fn fields_of(&self, qualified_name: &str) -> Option<&[StructFieldDefinition]> {
-        match self.get_definition(qualified_name)? {
-            Definition::Struct { fields, .. } => Some(fields),
+        match &self.get_definition(qualified_name)?.body {
+            DefinitionBody::Struct { fields, .. } => Some(fields),
             _ => None,
         }
     }
 
     pub fn struct_kind(&self, qualified_name: &str) -> Option<syntax::ast::StructKind> {
-        match self.get_definition(qualified_name)? {
-            Definition::Struct { kind, .. } => Some(*kind),
+        match &self.get_definition(qualified_name)?.body {
+            DefinitionBody::Struct { kind, .. } => Some(*kind),
             _ => None,
         }
     }
 
     pub fn struct_constructor(&self, qualified_name: &str) -> Option<&Type> {
-        match self.get_definition(qualified_name)? {
-            Definition::Struct { constructor, .. } => constructor.as_ref(),
+        match &self.get_definition(qualified_name)?.body {
+            DefinitionBody::Struct { constructor, .. } => constructor.as_ref(),
             _ => None,
         }
     }
 
     pub fn parent_interfaces_of(&self, qualified_name: &str) -> Option<&[Type]> {
-        match self.get_definition(qualified_name)? {
-            Definition::Interface { definition, .. } => Some(&definition.parents),
+        match &self.get_definition(qualified_name)?.body {
+            DefinitionBody::Interface { definition, .. } => Some(&definition.parents),
             _ => None,
         }
     }
@@ -239,8 +241,8 @@ impl Store {
     }
 
     pub fn get_interface(&self, qualified_name: &str) -> Option<&Interface> {
-        match self.get_definition(qualified_name)? {
-            Definition::Interface { definition, .. } => Some(definition),
+        match &self.get_definition(qualified_name)?.body {
+            DefinitionBody::Interface { definition, .. } => Some(definition),
             _ => None,
         }
     }
@@ -262,10 +264,13 @@ impl Store {
             if !seen.insert(id.clone()) {
                 return current;
             }
-            let Some(Definition::TypeAlias { ty: def_ty, .. }) = self.get_definition(id.as_str())
-            else {
+            let Some(def) = self.get_definition(id.as_str()) else {
                 return current;
             };
+            if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
+                return current;
+            }
+            let def_ty = &def.ty;
             let (vars, body) = match def_ty {
                 Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
                 other => (vec![], other.clone()),
@@ -309,11 +314,11 @@ impl Store {
     }
 
     pub fn get_own_methods(&self, qualified_name: &str) -> Option<&MethodSignatures> {
-        match self.get_definition(qualified_name)? {
-            Definition::Struct { methods, .. } => Some(methods),
-            Definition::TypeAlias { methods, .. } => Some(methods),
-            Definition::Enum { methods, .. } => Some(methods),
-            Definition::ValueEnum { methods, .. } => Some(methods),
+        match &self.get_definition(qualified_name)?.body {
+            DefinitionBody::Struct { methods, .. } => Some(methods),
+            DefinitionBody::TypeAlias { methods, .. } => Some(methods),
+            DefinitionBody::Enum { methods, .. } => Some(methods),
+            DefinitionBody::ValueEnum { methods, .. } => Some(methods),
             _ => None,
         }
     }
@@ -366,10 +371,11 @@ impl Store {
             .unwrap_or_default();
 
         // Type aliases inherit methods from the underlying type.
-        if let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
-            self.get_definition(&qualified_name)
+        if let Some(definition) = self.get_definition(&qualified_name)
+            && matches!(definition.body, DefinitionBody::TypeAlias { .. })
         {
-            let underlying = match &alias_ty {
+            let alias_ty = &definition.ty;
+            let underlying = match alias_ty {
                 Type::Forall { body, .. } => body.as_ref(),
                 other => other,
             };

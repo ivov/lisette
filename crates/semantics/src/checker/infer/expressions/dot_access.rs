@@ -2,8 +2,10 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructKind};
-use syntax::program::{Definition, DotAccessKind, NativeTypeKind, ReceiverCoercion};
-use syntax::types::{Symbol, Type, substitute, unqualified_name};
+use syntax::program::{
+    Definition, DefinitionBody, DotAccessKind, NativeTypeKind, ReceiverCoercion,
+};
+use syntax::types::{Symbol, Type, module_part, substitute, unqualified_name};
 
 use super::super::TaskState;
 use super::super::addressability::check_is_non_addressable;
@@ -69,8 +71,8 @@ impl TaskState<'_> {
             let alias_target = store
                 .get_definition(&qualified_root)
                 .and_then(|definition| {
-                    if let Definition::TypeAlias { ty: alias_ty, .. } = definition {
-                        let underlying = alias_ty.unwrap_forall();
+                    if let DefinitionBody::TypeAlias { .. } = &definition.body {
+                        let underlying = definition.ty.unwrap_forall();
                         match underlying {
                             Type::Nominal { id, params, .. }
                                 if params.is_empty() && id.as_str() != qualified_root.as_str() =>
@@ -91,9 +93,8 @@ impl TaskState<'_> {
 
             if let Some(resolved_id) = alias_target {
                 let mut paths = Vec::with_capacity(2);
-                if let Some(short_name) = resolved_id.split('.').next_back()
-                    && short_name != resolved_id
-                {
+                let short_name = unqualified_name(&resolved_id);
+                if short_name != resolved_id {
                     paths.push(format!("{}.{}", short_name, member));
                 }
                 paths.push(format!("{}.{}", resolved_id, member));
@@ -118,15 +119,16 @@ impl TaskState<'_> {
 
         if let Some(root) = expression.root_identifier()
             && let Some(qualified_root) = self.lookup_qualified_name(store, root)
-            && let Some(Definition::TypeAlias { ty: alias_ty, .. }) =
-                store.get_definition(&qualified_root)
+            && let Some(def) = store.get_definition(&qualified_root)
+            && matches!(def.body, DefinitionBody::TypeAlias { .. })
         {
+            let alias_ty = &def.ty;
             let underlying = alias_ty.unwrap_forall();
             let is_generic = matches!(alias_ty, Type::Forall { .. })
                 || matches!(underlying, Type::Nominal { params, .. } if !params.is_empty());
             if is_generic {
                 let type_name = if let Type::Nominal { id, .. } = underlying {
-                    id.split('.').next_back().unwrap_or(id).to_string()
+                    unqualified_name(id).to_string()
                 } else {
                     "the original type".to_string()
                 };
@@ -154,9 +156,30 @@ impl TaskState<'_> {
 struct DotAccessResolutionArgs<'a> {
     expression: &'a Expression,
     expression_ty: &'a Type,
+    /// `expression_ty.strip_refs()`, precomputed once per dot-access
+    /// resolution so each `as_*` resolver doesn't recompute it.
+    deref_ty: Type,
     member_name: &'a str,
     span: &'a Span,
     expected_ty: &'a Type,
+}
+
+impl DotAccessResolutionArgs<'_> {
+    fn build_dot_access(
+        &self,
+        ty: Type,
+        kind: Option<DotAccessKind>,
+        receiver_coercion: Option<ReceiverCoercion>,
+    ) -> Expression {
+        Expression::DotAccess {
+            expression: self.expression.clone().into(),
+            member: self.member_name.into(),
+            ty,
+            span: *self.span,
+            dot_access_kind: kind,
+            receiver_coercion,
+        }
+    }
 }
 
 impl TaskState<'_> {
@@ -174,44 +197,34 @@ impl TaskState<'_> {
         self.scopes.set_dot_access_base(prior_dot_access_base);
         let resolved_expression_ty = expression_ty.resolve_in(&self.env);
 
-        if resolved_expression_ty.is_error() || resolved_expression_ty.is_variable() {
-            self.unify(store, expected_ty, &Type::Error, &span);
-            return Expression::DotAccess {
-                expression: new_expression.into(),
-                member,
-                ty: Type::Error,
-                span,
-                dot_access_kind: None,
-                receiver_coercion: None,
-            };
-        }
+        let deref_ty = resolved_expression_ty.strip_refs();
 
         let args = DotAccessResolutionArgs {
             expression: &new_expression,
             expression_ty: &resolved_expression_ty,
+            deref_ty,
             member_name: &member,
             span: &span,
             expected_ty,
         };
 
-        let resolved = if let Some((expression, kind)) = self.as_struct_field(store, &args) {
-            Some((expression, kind))
-        } else if let Some(expression) = self.as_tuple_element(store, &args) {
-            Some((expression, DotAccessKind::TupleElement))
-        } else if let Some(expression) = self.as_module_member(store, &args) {
-            Some((expression, DotAccessKind::ModuleMember))
-        } else if let Some((expression, kind)) = self.as_enum_variant(store, &args) {
-            Some((expression, kind))
-        } else if let Some((expression, kind)) = self.as_instance_method(store, &args) {
-            Some((expression, kind))
-        } else {
-            self.as_static_method(store, &args)
-        };
+        if resolved_expression_ty.is_error() || resolved_expression_ty.is_variable() {
+            self.unify(store, expected_ty, &Type::Error, &span);
+            return args.build_dot_access(Type::Error, None, None);
+        }
+
+        let resolved = self
+            .as_struct_field(store, &args)
+            .or_else(|| self.as_tuple_element(store, &args))
+            .or_else(|| self.as_module_member(store, &args))
+            .or_else(|| self.as_enum_variant(store, &args))
+            .or_else(|| self.as_instance_method(store, &args))
+            .or_else(|| self.as_static_method(store, &args));
 
         if let Some((expression, _kind)) = resolved {
             if (member.as_str() == "append" || member.as_str() == "extend")
                 && resolved_expression_ty.is_ref()
-                && resolved_expression_ty.strip_refs().has_name("Slice")
+                && args.deref_ty.has_name("Slice")
             {
                 self.sink.push(diagnostics::infer::ref_slice_append(span));
             }
@@ -242,20 +255,13 @@ impl TaskState<'_> {
             unwrap_hint,
         ));
 
-        Expression::DotAccess {
-            expression: new_expression.into(),
-            member,
-            ty: Type::Error,
-            span,
-            dot_access_kind: None,
-            receiver_coercion: None,
-        }
+        args.build_dot_access(Type::Error, None, None)
     }
 
     /// Whether a type's owning module is foreign (not current, prelude, or Go stdlib).
     /// Used to gate cross-module visibility checks on methods.
     fn is_foreign_type(&self, type_id: &str) -> bool {
-        let type_module = type_id.split('.').next().unwrap_or(type_id);
+        let type_module = module_part(type_id);
         type_module != self.cursor.module_id
             && type_module != "prelude"
             && !type_module.starts_with("go:")
@@ -341,13 +347,11 @@ impl TaskState<'_> {
         store: &Store,
         args: &DotAccessResolutionArgs,
     ) -> Option<(Expression, DotAccessKind)> {
-        let deref_ty = args.expression_ty.strip_refs();
-
-        let Type::Nominal { .. } = deref_ty else {
+        let Type::Nominal { .. } = &args.deref_ty else {
             return None;
         };
 
-        let qualified_name = deref_ty.get_qualified_name();
+        let qualified_name = args.deref_ty.get_qualified_name();
 
         let struct_name = {
             let mut name = qualified_name.clone();
@@ -358,7 +362,11 @@ impl TaskState<'_> {
                 }
                 seen.push(name.clone());
                 let new_name = match store.get_definition(&name) {
-                    Some(Definition::TypeAlias { ty, .. }) => {
+                    Some(Definition {
+                        ty,
+                        body: DefinitionBody::TypeAlias { .. },
+                        ..
+                    }) => {
                         if let Type::Nominal { id, .. } = ty.unwrap_forall()
                             && id.as_str() != name.as_str()
                         {
@@ -374,11 +382,15 @@ impl TaskState<'_> {
             name
         };
 
-        let Some(Definition::Struct {
+        let Some(Definition {
             ty: struct_type,
-            fields: struct_fields,
-            kind: struct_kind,
-            generics,
+            body:
+                DefinitionBody::Struct {
+                    fields: struct_fields,
+                    kind: struct_kind,
+                    generics,
+                    ..
+                },
             ..
         }) = store.get_definition(&struct_name)
         else {
@@ -407,7 +419,7 @@ impl TaskState<'_> {
 
         self.facts.add_usage(*args.span, field.name_span);
 
-        let struct_module = struct_name.split('.').next().unwrap_or(&struct_name);
+        let struct_module = module_part(&struct_name);
         let is_cross_module = struct_module != self.cursor.module_id;
 
         if is_cross_module && !field_is_pub {
@@ -421,7 +433,7 @@ impl TaskState<'_> {
         let (struct_ty, map) = self.instantiate(&struct_type);
         let field_ty = substitute(&field_type, &map);
 
-        self.unify(store, &deref_ty, &struct_ty, args.span);
+        self.unify(store, &args.deref_ty, &struct_ty, args.span);
         self.unify(store, args.expected_ty, &field_ty, args.span);
 
         let is_exported = field_is_pub || is_cross_module;
@@ -431,29 +443,17 @@ impl TaskState<'_> {
             DotAccessKind::StructField { is_exported }
         };
 
-        Some((
-            Expression::DotAccess {
-                expression: args.expression.clone().into(),
-                member: args.member_name.into(),
-                ty: field_ty,
-                span: *args.span,
-                dot_access_kind: Some(kind),
-                receiver_coercion: None,
-            },
-            kind,
-        ))
+        Some((args.build_dot_access(field_ty, Some(kind), None), kind))
     }
 
     fn as_tuple_element(
         &mut self,
         store: &Store,
         args: &DotAccessResolutionArgs,
-    ) -> Option<Expression> {
+    ) -> Option<(Expression, DotAccessKind)> {
         let index: usize = args.member_name.parse().ok()?;
 
-        let deref_ty = args.expression_ty.strip_refs();
-
-        let Type::Tuple(elements) = &deref_ty else {
+        let Type::Tuple(elements) = &args.deref_ty else {
             return None;
         };
 
@@ -464,23 +464,16 @@ impl TaskState<'_> {
         let element_ty = elements[index].clone();
         self.unify(store, args.expected_ty, &element_ty, args.span);
 
-        Some(Expression::DotAccess {
-            expression: args.expression.clone().into(),
-            member: args.member_name.into(),
-            ty: element_ty,
-            span: *args.span,
-            dot_access_kind: Some(DotAccessKind::TupleElement),
-            receiver_coercion: None,
-        })
+        let kind = DotAccessKind::TupleElement;
+        Some((args.build_dot_access(element_ty, Some(kind), None), kind))
     }
 
     fn as_module_member(
         &mut self,
         store: &Store,
         args: &DotAccessResolutionArgs,
-    ) -> Option<Expression> {
-        let deref_ty = args.expression_ty.strip_refs();
-        let type_name = deref_ty.get_name()?;
+    ) -> Option<(Expression, DotAccessKind)> {
+        let type_name = args.deref_ty.get_name()?;
 
         // Look up by type-derived name first (works for non-aliased imports).
         // For aliased imports (e.g. `import u "utils"`), the map key is "u" but
@@ -491,13 +484,15 @@ impl TaskState<'_> {
             .get(type_name)
             .cloned()
             .or_else(|| {
-                let module_id = deref_ty.as_import_namespace()?;
+                let module_id = args.deref_ty.as_import_namespace()?;
                 self.imports
                     .imported_modules
                     .values()
                     .find(|(_, ty)| ty.as_import_namespace() == Some(module_id))
                     .cloned()
             })?;
+
+        let kind = DotAccessKind::ModuleMember;
 
         let Some(member_type) = module_fields
             .iter()
@@ -509,14 +504,7 @@ impl TaskState<'_> {
                     args.member_name,
                     *args.span,
                 ));
-            return Some(Expression::DotAccess {
-                expression: args.expression.clone().into(),
-                member: args.member_name.into(),
-                ty: Type::Error,
-                span: *args.span,
-                dot_access_kind: Some(DotAccessKind::ModuleMember),
-                receiver_coercion: None,
-            });
+            return Some((args.build_dot_access(Type::Error, Some(kind), None), kind));
         };
 
         if let Some(module_id) = module_ty.as_import_namespace() {
@@ -528,8 +516,8 @@ impl TaskState<'_> {
             // Reject cross-module tuple-struct constructors used as values
             if !self.scopes.is_callee_context()
                 && matches!(
-                    store.get_definition(&qualified_name),
-                    Some(Definition::Struct {
+                    store.get_definition(&qualified_name).map(|d| &d.body),
+                    Some(DefinitionBody::Struct {
                         kind: StructKind::Tuple,
                         ..
                     })
@@ -545,8 +533,8 @@ impl TaskState<'_> {
             if !self.scopes.is_callee_context()
                 && !self.scopes.is_dot_access_base()
                 && matches!(
-                    store.get_definition(&qualified_name),
-                    Some(Definition::Struct {
+                    store.get_definition(&qualified_name).map(|d| &d.body),
+                    Some(DefinitionBody::Struct {
                         kind: StructKind::Record,
                         ..
                     })
@@ -563,17 +551,10 @@ impl TaskState<'_> {
         let (module_ty, _) = self.instantiate(&module_ty);
         let (member_ty, _) = self.instantiate(&member_type);
 
-        self.unify(store, &deref_ty, &module_ty, args.span);
+        self.unify(store, &args.deref_ty, &module_ty, args.span);
         self.unify(store, args.expected_ty, &member_ty, args.span);
 
-        Some(Expression::DotAccess {
-            expression: args.expression.clone().into(),
-            member: args.member_name.into(),
-            ty: member_ty,
-            span: *args.span,
-            dot_access_kind: Some(DotAccessKind::ModuleMember),
-            receiver_coercion: None,
-        })
+        Some((args.build_dot_access(member_ty, Some(kind), None), kind))
     }
 
     fn as_instance_method(
@@ -581,23 +562,21 @@ impl TaskState<'_> {
         store: &Store,
         args: &DotAccessResolutionArgs,
     ) -> Option<(Expression, DotAccessKind)> {
-        let deref_ty = args.expression_ty.strip_refs();
-
         if !matches!(
-            deref_ty,
+            args.deref_ty,
             Type::Nominal { .. } | Type::Parameter(_) | Type::Compound { .. } | Type::Simple(_)
         ) {
             return None;
         }
 
         let method_ty = self
-            .get_all_methods(store, &deref_ty)
+            .get_all_methods(store, &args.deref_ty)
             .get(args.member_name)
             .cloned()?;
 
-        self.check_instance_method_access(store, &deref_ty, &method_ty, args);
+        self.check_instance_method_access(store, &args.deref_ty, &method_ty, args);
 
-        let is_exported = self.is_dot_access_exported(store, &deref_ty, args.member_name);
+        let is_exported = self.is_dot_access_exported(store, &args.deref_ty, args.member_name);
         let kind = DotAccessKind::InstanceMethod { is_exported };
 
         let (mut method_ty, _) = self.instantiate(&method_ty);
@@ -639,14 +618,7 @@ impl TaskState<'_> {
         self.unify(store, args.expected_ty, &method_ty, args.span);
 
         Some((
-            Expression::DotAccess {
-                expression: args.expression.clone().into(),
-                member: args.member_name.into(),
-                ty: method_ty,
-                span: *args.span,
-                dot_access_kind: Some(kind),
-                receiver_coercion,
-            },
+            args.build_dot_access(method_ty, Some(kind), receiver_coercion),
             kind,
         ))
     }
@@ -669,9 +641,9 @@ impl TaskState<'_> {
             }
 
             if self.is_foreign_type(&qualified_name)
-                && let Some(Definition::Value { visibility, .. }) =
-                    store.get_definition(&method_key)
-                && !visibility.is_public()
+                && let Some(def) = store.get_definition(&method_key)
+                && matches!(def.body, DefinitionBody::Value { .. })
+                && !def.visibility.is_public()
             {
                 self.sink.push(diagnostics::infer::private_method_access(
                     args.member_name,
@@ -730,14 +702,7 @@ impl TaskState<'_> {
         };
 
         Some((
-            Expression::DotAccess {
-                expression: args.expression.clone().into(),
-                member: args.member_name.into(),
-                ty: method_ty.clone(),
-                span: *args.span,
-                dot_access_kind: Some(value_kind),
-                receiver_coercion: None,
-            },
+            args.build_dot_access(method_ty.clone(), Some(value_kind), None),
             value_kind,
         ))
     }
@@ -861,10 +826,10 @@ impl TaskState<'_> {
             _ => return 0,
         };
 
-        match store.get_definition(&lookup_id) {
-            Some(Definition::Struct { generics, .. }) => generics.len(),
-            Some(Definition::TypeAlias { generics, .. }) => generics.len(),
-            Some(Definition::Enum { generics, .. }) => generics.len(),
+        match store.get_definition(&lookup_id).map(|d| &d.body) {
+            Some(DefinitionBody::Struct { generics, .. }) => generics.len(),
+            Some(DefinitionBody::TypeAlias { generics, .. }) => generics.len(),
+            Some(DefinitionBody::Enum { generics, .. }) => generics.len(),
             _ => 0,
         }
     }
@@ -874,9 +839,7 @@ impl TaskState<'_> {
         store: &Store,
         args: &DotAccessResolutionArgs,
     ) -> Option<(Expression, DotAccessKind)> {
-        let deref_ty = args.expression_ty.strip_refs();
-
-        let id = match deref_ty {
+        let id = match &args.deref_ty {
             Type::Nominal { id, .. } => id.clone(),
             Type::Function { return_type, .. } => {
                 if let Type::Nominal { id, .. } = return_type.as_ref() {
@@ -890,12 +853,12 @@ impl TaskState<'_> {
 
         let definition = store.get_definition(&id)?;
 
-        let (is_enum_variant, kind) = match definition {
-            Definition::Enum { variants, .. } => (
+        let (is_enum_variant, kind) = match &definition.body {
+            DefinitionBody::Enum { variants, .. } => (
                 variants.iter().any(|v| v.name == args.member_name),
                 DotAccessKind::EnumVariant,
             ),
-            Definition::ValueEnum { variants, .. } => (
+            DefinitionBody::ValueEnum { variants, .. } => (
                 variants.iter().any(|v| v.name == args.member_name),
                 DotAccessKind::ValueEnumVariant,
             ),
@@ -906,7 +869,7 @@ impl TaskState<'_> {
             return None;
         }
 
-        if let Definition::ValueEnum { methods, .. } = definition
+        if let DefinitionBody::ValueEnum { methods, .. } = &definition.body
             && methods.contains_key(args.member_name)
         {
             let is_type_access = matches!(
@@ -922,10 +885,11 @@ impl TaskState<'_> {
         let variant_qualified_name = id.with_segment(args.member_name);
         let variant_definition = store.get_definition(&variant_qualified_name)?;
 
-        let Definition::Value {
+        let Definition {
             ty: variant_ty,
             visibility,
             name_span,
+            body: DefinitionBody::Value { .. },
             ..
         } = variant_definition
         else {
@@ -946,17 +910,7 @@ impl TaskState<'_> {
         let (variant_ty, _) = self.instantiate(&variant_ty);
         self.unify(store, args.expected_ty, &variant_ty, args.span);
 
-        Some((
-            Expression::DotAccess {
-                expression: args.expression.clone().into(),
-                member: args.member_name.into(),
-                ty: variant_ty,
-                span: *args.span,
-                dot_access_kind: Some(kind),
-                receiver_coercion: None,
-            },
-            kind,
-        ))
+        Some((args.build_dot_access(variant_ty, Some(kind), None), kind))
     }
 
     fn as_static_method(
@@ -964,27 +918,26 @@ impl TaskState<'_> {
         store: &Store,
         args: &DotAccessResolutionArgs,
     ) -> Option<(Expression, DotAccessKind)> {
-        let deref_ty = args.expression_ty.strip_refs();
-
-        let id = match deref_ty {
-            Type::Function {
-                ref return_type, ..
-            } => {
+        let id = match &args.deref_ty {
+            Type::Function { return_type, .. } => {
                 if let Type::Nominal { id, .. } = return_type.as_ref() {
                     id.clone()
                 } else {
                     return None;
                 }
             }
-            Type::Nominal { ref id, .. } => {
+            Type::Nominal { id, .. } => {
                 // For enums with Constructor type, we need to distinguish between:
                 // - Type access (e.g., `module.Color.default()`) - ALLOW
                 // - Value access (e.g., `c.new()` where c is a Color value) - REJECT
                 //
                 // Type access comes through DotAccess on a module import.
                 // Value access comes through an Identifier or other expression.
-                if let Some(Definition::Enum { .. } | Definition::ValueEnum { .. }) =
-                    store.get_definition(id)
+                if let Some(def) = store.get_definition(id)
+                    && matches!(
+                        def.body,
+                        DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. }
+                    )
                 {
                     // Check if expression is a module member access (type-level access)
                     let is_type_access = matches!(
@@ -1004,7 +957,7 @@ impl TaskState<'_> {
         };
 
         if self
-            .get_all_methods(store, &deref_ty)
+            .get_all_methods(store, &args.deref_ty)
             .contains_key(args.member_name)
         {
             return None;
@@ -1013,10 +966,11 @@ impl TaskState<'_> {
         let method_qualified_name = id.with_segment(args.member_name);
         let method_definition = store.get_definition(&method_qualified_name)?;
 
-        let Definition::Value {
+        let Definition {
             ty: method_ty,
             name_span,
             visibility,
+            body: DefinitionBody::Value { .. },
             ..
         } = method_definition
         else {
@@ -1062,21 +1016,12 @@ impl TaskState<'_> {
 
         self.unify(store, args.expected_ty, &method_ty, args.span);
 
-        let type_module = id.split('.').next().unwrap_or("");
+        let type_module = module_part(&id);
         let is_cross_module = type_module != self.cursor.module_id;
         let is_exported = is_public || is_cross_module;
+        let kind = DotAccessKind::StaticMethod { is_exported };
 
-        Some((
-            Expression::DotAccess {
-                expression: args.expression.clone().into(),
-                member: args.member_name.into(),
-                ty: method_ty,
-                span: *args.span,
-                dot_access_kind: Some(DotAccessKind::StaticMethod { is_exported }),
-                receiver_coercion: None,
-            },
-            DotAccessKind::StaticMethod { is_exported },
-        ))
+        Some((args.build_dot_access(method_ty, Some(kind), None), kind))
     }
 
     fn is_dot_access_exported(&self, store: &Store, deref_ty: &Type, member_name: &str) -> bool {
@@ -1085,7 +1030,7 @@ impl TaskState<'_> {
             // fall back to false; the emitter will check method_needs_export.
             return false;
         };
-        let type_module = id.split('.').next().unwrap_or("");
+        let type_module = module_part(&id);
         let is_cross_module = type_module != self.cursor.module_id;
 
         if is_cross_module {

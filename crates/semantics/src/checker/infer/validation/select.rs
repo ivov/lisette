@@ -1,4 +1,5 @@
 use syntax::ast::{Pattern, Span};
+use syntax::types::unqualified_name;
 
 use crate::checker::TaskState;
 
@@ -44,7 +45,7 @@ impl TaskState<'_> {
             } = &arm.pattern
             {
                 if let Pattern::EnumVariant { identifier, .. } = inner.as_ref()
-                    && identifier.rsplit('.').next().unwrap_or(identifier) == "Some"
+                    && unqualified_name(identifier) == "Some"
                 {
                     self.sink
                         .push(diagnostics::infer::select_some_as_binding_not_supported(
@@ -60,7 +61,7 @@ impl TaskState<'_> {
                 identifier, fields, ..
             } = inner_arm_pattern
             {
-                let variant_name = identifier.rsplit('.').next().unwrap_or(identifier);
+                let variant_name = unqualified_name(identifier);
 
                 if variant_name == "Some" && fields.len() == 1 {
                     if some_arm_span.is_some() {
@@ -150,7 +151,7 @@ impl TaskState<'_> {
             else {
                 continue;
             };
-            let variant_name = identifier.rsplit('.').next().unwrap_or(identifier);
+            let variant_name = unqualified_name(identifier);
             if variant_name == "Some" && fields.len() == 1 {
                 if let Some(first_span) = first_receive_span {
                     self.sink.push(diagnostics::infer::multiple_select_receives(

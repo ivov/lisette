@@ -1,6 +1,7 @@
 use tower_lsp::lsp_types::*;
 
 use syntax::ast::Expression;
+use syntax::types::unqualified_name;
 
 use crate::traversal::find_enclosing_call;
 pub(crate) fn handle(items: &[Expression], offset: u32) -> Option<SignatureHelp> {
@@ -28,7 +29,7 @@ pub(crate) fn handle(items: &[Expression], offset: u32) -> Option<SignatureHelp>
     };
 
     let func_name = match expression.as_ref() {
-        Expression::Identifier { value, .. } => value.rsplit('.').next().unwrap_or(value.as_str()),
+        Expression::Identifier { value, .. } => unqualified_name(value),
         Expression::DotAccess { member, .. } => member.as_str(),
         _ => "fn",
     };

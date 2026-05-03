@@ -10,7 +10,7 @@ use syntax::ast::{
     Annotation, Attribute, AttributeArg, EnumVariant, Expression, FunctionDefinition, Generic,
     Span, StructKind, Visibility as SyntacticVisibility,
 };
-use syntax::program::{Definition, File, FileImport, Visibility};
+use syntax::program::{Definition, DefinitionBody, File, FileImport, Visibility};
 use syntax::types::{Symbol, Type};
 
 use super::{FileContextKind, TaskState};
@@ -64,27 +64,23 @@ pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> V
 
 impl TaskState<'_> {
     fn definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
-        store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        self.current_module(store)
             .definitions
             .contains_key(qualified_name)
     }
 
     fn type_definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
-        store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        self.current_module(store)
             .definitions
             .get(qualified_name)
             .is_some_and(|d| {
                 matches!(
-                    d,
-                    Definition::Struct { .. }
-                        | Definition::Enum { .. }
-                        | Definition::ValueEnum { .. }
-                        | Definition::Interface { .. }
-                        | Definition::TypeAlias { .. }
+                    d.body,
+                    DefinitionBody::Struct { .. }
+                        | DefinitionBody::Enum { .. }
+                        | DefinitionBody::ValueEnum { .. }
+                        | DefinitionBody::Interface { .. }
+                        | DefinitionBody::TypeAlias { .. }
                 )
             })
     }
@@ -319,9 +315,7 @@ impl TaskState<'_> {
         visibility: &Visibility,
     ) {
         let entries = self.collect_type_name_entries(items, visibility, self.is_d_lis(&*store));
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
         for (qualified_name, definition) in entries {
             module
                 .definitions
@@ -425,14 +419,17 @@ impl TaskState<'_> {
 
             entries.push((
                 qualified_name,
-                Definition::Value {
+                Definition {
                     visibility: item_visibility,
                     ty,
+                    name: None,
                     name_span: None,
-                    allowed_lints: vec![],
-                    go_hints: vec![],
-                    go_name: None,
                     doc: None,
+                    body: DefinitionBody::Value {
+                        allowed_lints: vec![],
+                        go_hints: vec![],
+                        go_name: None,
+                    },
                 },
             ));
         }
@@ -612,19 +609,20 @@ impl TaskState<'_> {
             ));
         }
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
         module.definitions.insert(
             qualified_name,
-            Definition::Value {
+            Definition {
                 visibility: item_visibility,
                 ty: fn_ty,
+                name: None,
                 name_span: Some(*name_span),
-                allowed_lints: extract_attribute_flags(attributes, "allow"),
-                go_hints: extract_attribute_flags(attributes, "go"),
-                go_name: extract_go_name(attributes),
                 doc: doc.clone(),
+                body: DefinitionBody::Value {
+                    allowed_lints: extract_attribute_flags(attributes, "allow"),
+                    go_hints: extract_attribute_flags(attributes, "go"),
+                    go_name: extract_go_name(attributes),
+                },
             },
         );
     }
@@ -685,20 +683,21 @@ impl TaskState<'_> {
             ));
         }
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
         module.const_names.insert(qualified_name.clone());
         module.definitions.insert(
             qualified_name,
-            Definition::Value {
+            Definition {
                 visibility: item_visibility,
                 ty: const_ty,
+                name: None,
                 name_span: Some(*identifier_span),
-                allowed_lints: vec![],
-                go_hints: vec![],
-                go_name: None,
                 doc: doc.clone(),
+                body: DefinitionBody::Value {
+                    allowed_lints: vec![],
+                    go_hints: vec![],
+                    go_name: None,
+                },
             },
         );
     }
@@ -735,19 +734,20 @@ impl TaskState<'_> {
         let item_visibility =
             self.compute_item_visibility(&*store, syntactic_visibility, visibility);
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
         module.definitions.insert(
             qualified_name,
-            Definition::Value {
+            Definition {
                 visibility: item_visibility,
                 ty: var_ty,
+                name: None,
                 name_span: Some(*name_span),
-                allowed_lints: vec![],
-                go_hints: vec![],
-                go_name: None,
                 doc: doc.clone(),
+                body: DefinitionBody::Value {
+                    allowed_lints: vec![],
+                    go_hints: vec![],
+                    go_name: None,
+                },
             },
         );
     }
@@ -792,11 +792,9 @@ impl TaskState<'_> {
             .values
             .insert(name.to_string(), constructor_ty.clone());
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
-        if let Some(Definition::Struct { constructor, .. }) =
-            module.definitions.get_mut(qualified_name.as_str())
+        let module = self.current_module_mut(store);
+        if let Some(def) = module.definitions.get_mut(qualified_name.as_str())
+            && let DefinitionBody::Struct { constructor, .. } = &mut def.body
         {
             *constructor = Some(constructor_ty);
         }
@@ -1016,17 +1014,10 @@ pub(super) fn has_recursive_instantiation(target_id: &str, ty: &Type) -> bool {
 }
 
 fn walk_type(ty: &Type, predicate: &dyn Fn(&str, &[Type]) -> bool) -> bool {
-    match ty {
-        Type::Nominal { id, params, .. } => {
-            predicate(id, params) || params.iter().any(|p| walk_type(p, predicate))
-        }
-        Type::Function {
-            params,
-            return_type,
-            ..
-        } => params.iter().any(|p| walk_type(p, predicate)) || walk_type(return_type, predicate),
-        Type::Tuple(elems) => elems.iter().any(|e| walk_type(e, predicate)),
-        Type::Forall { body, .. } => walk_type(body, predicate),
-        _ => false,
+    if let Type::Nominal { id, params, .. } = ty
+        && predicate(id, params)
+    {
+        return true;
     }
+    ty.children().iter().any(|c| walk_type(c, predicate))
 }

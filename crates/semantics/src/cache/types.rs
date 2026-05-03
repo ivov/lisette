@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use syntax::ast::{
     Annotation, AttributeArg, Generic, Span, StructKind, Visibility as FieldVisibility,
 };
-use syntax::program::{Definition, Interface, MethodSignatures, Visibility};
+use syntax::program::{Definition, DefinitionBody, Interface, MethodSignatures, Visibility};
 use syntax::types::Type;
 
 /// Span stored as file index + byte offsets.
@@ -349,60 +349,48 @@ impl CachedInterface {
 }
 
 /// Serializable version of Definition. Types are frozen before the cache
-/// writer is reached, so `Var` cannot appear.
+/// writer is reached, so `Var` cannot appear. Mirrors the in-memory
+/// `Definition` shape: common fields up top, variant-specific data in `body`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum CachedDefinition {
+pub struct CachedDefinition {
+    pub ty: Type,
+    pub name: Option<String>,
+    pub name_span: Option<CachedSpan>,
+    pub doc: Option<String>,
+    pub body: CachedDefinitionBody,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CachedDefinitionBody {
     TypeAlias {
-        name: String,
-        name_span: CachedSpan,
         generics: Vec<CachedGeneric>,
-        ty: Type,
         methods: HashMap<String, Type>,
         is_opaque: bool,
-        doc: Option<String>,
     },
     Enum {
-        name: String,
-        name_span: CachedSpan,
-        ty: Type,
         generics: Vec<CachedGeneric>,
         variants: Vec<CachedEnumVariant>,
         methods: HashMap<String, Type>,
-        doc: Option<String>,
     },
     ValueEnum {
-        name: String,
-        name_span: CachedSpan,
-        ty: Type,
         variants: Vec<CachedValueEnumVariant>,
         underlying_ty: Option<Type>,
         methods: HashMap<String, Type>,
-        doc: Option<String>,
     },
     Struct {
-        name: String,
-        name_span: CachedSpan,
-        ty: Type,
         generics: Vec<CachedGeneric>,
         fields: Vec<CachedStructField>,
         kind: StructKind,
         methods: HashMap<String, Type>,
         constructor: Option<Type>,
-        doc: Option<String>,
     },
     Interface {
-        name_span: CachedSpan,
-        ty: Type,
         definition: CachedInterface,
-        doc: Option<String>,
     },
     Value {
-        name_span: Option<CachedSpan>,
-        ty: Type,
         allowed_lints: Vec<String>,
         go_hints: Vec<String>,
         go_name: Option<String>,
-        doc: Option<String>,
     },
 }
 
@@ -410,41 +398,32 @@ impl CachedDefinition {
     /// Create a CachedDefinition from a Definition.
     /// Only call this for public definitions that should be cached.
     pub fn from_definition(definition: &Definition, file_id_to_index: &HashMap<u32, u32>) -> Self {
-        match definition {
-            Definition::TypeAlias {
-                name,
-                name_span,
+        let Definition {
+            ty,
+            name,
+            name_span,
+            doc,
+            body,
+            ..
+        } = definition;
+        let body = match body {
+            DefinitionBody::TypeAlias {
                 generics,
-                ty,
-                methods,
                 annotation,
-                doc,
-                ..
-            } => CachedDefinition::TypeAlias {
-                name: name.to_string(),
-                name_span: CachedSpan::from_span(name_span, file_id_to_index),
+                methods,
+            } => CachedDefinitionBody::TypeAlias {
                 generics: generics
                     .iter()
                     .map(|g| CachedGeneric::from_generic(g, file_id_to_index))
                     .collect(),
-                ty: Clone::clone(ty),
                 methods: Self::convert_methods(methods),
                 is_opaque: annotation.is_opaque(),
-                doc: doc.clone(),
             },
-            Definition::Enum {
-                name,
-                name_span,
-                ty,
+            DefinitionBody::Enum {
                 generics,
                 variants,
                 methods,
-                doc,
-                ..
-            } => CachedDefinition::Enum {
-                name: name.to_string(),
-                name_span: CachedSpan::from_span(name_span, file_id_to_index),
-                ty: Clone::clone(ty),
+            } => CachedDefinitionBody::Enum {
                 generics: generics
                     .iter()
                     .map(|g| CachedGeneric::from_generic(g, file_id_to_index))
@@ -454,44 +433,26 @@ impl CachedDefinition {
                     .map(|v| CachedEnumVariant::from_variant(v, file_id_to_index))
                     .collect(),
                 methods: Self::convert_methods(methods),
-                doc: doc.clone(),
             },
-            Definition::ValueEnum {
-                name,
-                name_span,
-                ty,
+            DefinitionBody::ValueEnum {
                 variants,
                 underlying_ty,
                 methods,
-                doc,
-                ..
-            } => CachedDefinition::ValueEnum {
-                name: name.to_string(),
-                name_span: CachedSpan::from_span(name_span, file_id_to_index),
-                ty: Clone::clone(ty),
+            } => CachedDefinitionBody::ValueEnum {
                 variants: variants
                     .iter()
                     .map(|v| CachedValueEnumVariant::from_variant(v, file_id_to_index))
                     .collect(),
                 underlying_ty: underlying_ty.clone(),
                 methods: Self::convert_methods(methods),
-                doc: doc.clone(),
             },
-            Definition::Struct {
-                name,
-                name_span,
-                ty,
+            DefinitionBody::Struct {
                 generics,
                 fields,
                 kind,
                 methods,
                 constructor,
-                doc,
-                ..
-            } => CachedDefinition::Struct {
-                name: name.to_string(),
-                name_span: CachedSpan::from_span(name_span, file_id_to_index),
-                ty: Clone::clone(ty),
+            } => CachedDefinitionBody::Struct {
                 generics: generics
                     .iter()
                     .map(|g| CachedGeneric::from_generic(g, file_id_to_index))
@@ -503,36 +464,26 @@ impl CachedDefinition {
                 kind: *kind,
                 methods: Self::convert_methods(methods),
                 constructor: constructor.clone(),
-                doc: doc.clone(),
             },
-            Definition::Interface {
-                ty,
-                name_span,
-                definition,
-                doc,
-                ..
-            } => CachedDefinition::Interface {
-                name_span: CachedSpan::from_span(name_span, file_id_to_index),
-                ty: Clone::clone(ty),
+            DefinitionBody::Interface { definition } => CachedDefinitionBody::Interface {
                 definition: CachedInterface::from_interface(definition, file_id_to_index),
-                doc: doc.clone(),
             },
-            Definition::Value {
-                ty,
-                name_span,
+            DefinitionBody::Value {
                 allowed_lints,
                 go_hints,
                 go_name,
-                doc,
-                ..
-            } => CachedDefinition::Value {
-                name_span: name_span.map(|s| CachedSpan::from_span(&s, file_id_to_index)),
-                ty: Clone::clone(ty),
+            } => CachedDefinitionBody::Value {
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),
                 go_name: go_name.clone(),
-                doc: doc.clone(),
             },
+        };
+        CachedDefinition {
+            ty: ty.clone(),
+            name: name.as_ref().map(|n| n.to_string()),
+            name_span: name_span.map(|s| CachedSpan::from_span(&s, file_id_to_index)),
+            doc: doc.clone(),
+            body,
         }
     }
 
@@ -551,19 +502,12 @@ impl CachedDefinition {
     }
 
     pub fn to_definition(&self, file_ids: &[u32]) -> Definition {
-        match self {
-            CachedDefinition::TypeAlias {
-                name,
-                name_span,
+        let body = match &self.body {
+            CachedDefinitionBody::TypeAlias {
                 generics,
-                ty,
                 methods,
                 is_opaque,
-                doc,
-            } => Definition::TypeAlias {
-                visibility: Visibility::Public,
-                name: EcoString::from(name.as_str()),
-                name_span: name_span.to_span(file_ids),
+            } => DefinitionBody::TypeAlias {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 annotation: if *is_opaque {
                     Annotation::Opaque {
@@ -572,96 +516,59 @@ impl CachedDefinition {
                 } else {
                     Annotation::Unknown
                 },
-                ty: ty.clone(),
                 methods: Self::restore_methods(methods),
-                doc: doc.clone(),
             },
-            CachedDefinition::Enum {
-                name,
-                name_span,
-                ty,
+            CachedDefinitionBody::Enum {
                 generics,
                 variants,
                 methods,
-                doc,
-            } => Definition::Enum {
-                visibility: Visibility::Public,
-                name: EcoString::from(name.as_str()),
-                name_span: name_span.to_span(file_ids),
-                ty: ty.clone(),
+            } => DefinitionBody::Enum {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 variants: variants.iter().map(|v| v.to_variant(file_ids)).collect(),
                 methods: Self::restore_methods(methods),
-                doc: doc.clone(),
             },
-            CachedDefinition::ValueEnum {
-                name,
-                name_span,
-                ty,
+            CachedDefinitionBody::ValueEnum {
                 variants,
                 underlying_ty,
                 methods,
-                doc,
-            } => Definition::ValueEnum {
-                visibility: Visibility::Public,
-                name: EcoString::from(name.as_str()),
-                name_span: name_span.to_span(file_ids),
-                ty: ty.clone(),
+            } => DefinitionBody::ValueEnum {
                 variants: variants.iter().map(|v| v.to_variant(file_ids)).collect(),
                 underlying_ty: underlying_ty.clone(),
                 methods: Self::restore_methods(methods),
-                doc: doc.clone(),
             },
-            CachedDefinition::Struct {
-                name,
-                name_span,
-                ty,
+            CachedDefinitionBody::Struct {
                 generics,
                 fields,
                 kind,
                 methods,
                 constructor,
-                doc,
-            } => Definition::Struct {
-                visibility: Visibility::Public,
-                name: EcoString::from(name.as_str()),
-                name_span: name_span.to_span(file_ids),
-                ty: ty.clone(),
+            } => DefinitionBody::Struct {
                 generics: generics.iter().map(|g| g.to_generic(file_ids)).collect(),
                 fields: fields.iter().map(|f| f.to_field(file_ids)).collect(),
                 kind: *kind,
                 methods: Self::restore_methods(methods),
                 constructor: constructor.clone(),
-                doc: doc.clone(),
             },
-            CachedDefinition::Interface {
-                name_span,
-                ty,
-                definition,
-                doc,
-            } => Definition::Interface {
-                visibility: Visibility::Public,
-                ty: ty.clone(),
-                name_span: name_span.to_span(file_ids),
+            CachedDefinitionBody::Interface { definition } => DefinitionBody::Interface {
                 definition: definition.to_interface(file_ids),
-                doc: doc.clone(),
             },
-            CachedDefinition::Value {
-                name_span,
-                ty,
+            CachedDefinitionBody::Value {
                 allowed_lints,
                 go_hints,
                 go_name,
-                doc,
-            } => Definition::Value {
-                visibility: Visibility::Public,
-                ty: ty.clone(),
-                name_span: name_span.as_ref().map(|s| s.to_span(file_ids)),
+            } => DefinitionBody::Value {
                 allowed_lints: allowed_lints.clone(),
                 go_hints: go_hints.clone(),
                 go_name: go_name.clone(),
-                doc: doc.clone(),
             },
+        };
+        Definition {
+            visibility: Visibility::Public,
+            ty: self.ty.clone(),
+            name: self.name.as_ref().map(|n| EcoString::from(n.as_str())),
+            name_span: self.name_span.as_ref().map(|s| s.to_span(file_ids)),
+            doc: self.doc.clone(),
+            body,
         }
     }
 }

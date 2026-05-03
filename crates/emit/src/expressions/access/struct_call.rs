@@ -1,8 +1,8 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use syntax::ast::{Expression, StructFieldAssignment, StructSpread};
-use syntax::program::Definition;
-use syntax::types::{CompoundKind, SimpleKind, Type};
+use syntax::program::{Definition, DefinitionBody};
+use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
 use crate::Emitter;
 use crate::definitions::enum_layout;
@@ -145,13 +145,17 @@ impl Emitter<'_> {
         };
 
         if let Some(enum_ctx) = enum_ctx {
-            let Some(Definition::Enum {
-                variants, generics, ..
+            let Some(Definition {
+                body:
+                    DefinitionBody::Enum {
+                        variants, generics, ..
+                    },
+                ..
             }) = self.ctx.definitions.get(enum_ctx.enum_id.as_str())
             else {
                 return None;
             };
-            let variant_name = name.rsplit('.').next()?;
+            let variant_name = unqualified_name(name);
             let variant = variants.iter().find(|v| v.name == variant_name)?;
             let map = generics_substitution(generics.iter().map(|g| g.name.clone()), &params);
             return Some(unspecified_pairs(
@@ -164,8 +168,10 @@ impl Emitter<'_> {
         let Type::Nominal { id, .. } = ty.strip_refs() else {
             return None;
         };
-        let Some(Definition::Struct {
-            fields, ty: def_ty, ..
+        let Some(Definition {
+            ty: def_ty,
+            body: DefinitionBody::Struct { fields, .. },
+            ..
         }) = self.ctx.definitions.get(id.as_str())
         else {
             return None;
@@ -183,11 +189,11 @@ impl Emitter<'_> {
         }
         let go_ty = self.go_type_as_string(ty);
         let is_struct_like = matches!(
-            self.ctx.definitions.get(id),
-            Some(Definition::Struct { .. })
+            self.ctx.definitions.get(id).map(|d| &d.body),
+            Some(DefinitionBody::Struct { .. })
         ) || matches!(
-            self.ctx.definitions.get(id),
-            Some(Definition::TypeAlias { annotation, .. }) if annotation.is_opaque()
+            self.ctx.definitions.get(id).map(|d| &d.body),
+            Some(DefinitionBody::TypeAlias { annotation, .. }) if annotation.is_opaque()
         );
         if is_struct_like {
             format!("{}{{}}", go_ty)
@@ -351,7 +357,7 @@ impl Emitter<'_> {
 
     /// Compute the enum-specific context for a struct call.
     fn compute_enum_call_context(&mut self, name: &str, enum_id: &str) -> EnumCallContext {
-        let variant_name = name.split('.').next_back().unwrap_or(name).to_string();
+        let variant_name = unqualified_name(name).to_string();
 
         // Use resolve_variant for correct tag constant — handles cross-module
         let tag_constant = self.resolve_variant(name, enum_id);

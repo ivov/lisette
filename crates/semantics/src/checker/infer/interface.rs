@@ -2,7 +2,7 @@ use crate::checker::EnvResolve;
 use crate::store::Store;
 use diagnostics::infer::InterfaceViolation;
 use syntax::ast::Span;
-use syntax::program::{Definition, Interface, MethodSignatures};
+use syntax::program::{DefinitionBody, Interface, MethodSignatures};
 use syntax::types::{SubstitutionMap, Type, substitute};
 
 use super::super::TaskState;
@@ -149,8 +149,8 @@ impl TaskState<'_> {
             if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env) {
                 store
                     .get_definition(&id)
-                    .and_then(|definition| match definition {
-                        Definition::Struct { generics, .. } if !generics.is_empty() => {
+                    .and_then(|definition| match &definition.body {
+                        DefinitionBody::Struct { generics, .. } if !generics.is_empty() => {
                             Some(generics.iter().map(|g| g.name.to_string()).collect())
                         }
                         _ => None,

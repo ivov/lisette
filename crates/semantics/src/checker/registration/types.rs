@@ -3,7 +3,7 @@ use syntax::ast::{
     Annotation, EnumFieldDefinition, EnumVariant, Generic, Span, StructFieldDefinition, StructKind,
     ValueEnumVariant, VariantFields,
 };
-use syntax::program::{Definition, MethodSignatures, Visibility};
+use syntax::program::{Definition, DefinitionBody, MethodSignatures, Visibility};
 use syntax::types::Type;
 
 use super::enum_variant_constructor_type;
@@ -44,9 +44,8 @@ impl TaskState<'_> {
             self.add_enum_variant_to_scope(new_variant, name, &enum_ty, generics);
         }
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
@@ -80,21 +79,22 @@ impl TaskState<'_> {
             ));
         }
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
 
         for (qualified_variant_name, simple_name, variant_ty, variant_name_span, variant_doc) in
             variant_definitions
         {
-            let definition = Definition::Value {
+            let definition = Definition {
                 visibility: visibility.clone(),
                 ty: variant_ty,
+                name: None,
                 name_span: Some(variant_name_span),
-                allowed_lints: vec![],
-                go_hints: vec![],
-                go_name: None,
                 doc: variant_doc,
+                body: DefinitionBody::Value {
+                    allowed_lints: vec![],
+                    go_hints: vec![],
+                    go_name: None,
+                },
             };
             module
                 .definitions
@@ -110,15 +110,17 @@ impl TaskState<'_> {
 
         module.definitions.insert(
             qualified_name.clone(),
-            Definition::Enum {
+            Definition {
                 visibility,
                 ty: enum_ty,
-                name: name.into(),
-                name_span: *name_span,
-                generics: generics.to_vec(),
-                variants: new_variants,
-                methods: MethodSignatures::default(),
+                name: Some(name.into()),
+                name_span: Some(*name_span),
                 doc: doc.clone(),
+                body: DefinitionBody::Enum {
+                    generics: generics.to_vec(),
+                    variants: new_variants,
+                    methods: MethodSignatures::default(),
+                },
             },
         );
 
@@ -150,9 +152,8 @@ impl TaskState<'_> {
             .expect("enum type must exist")
             .clone();
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
@@ -175,19 +176,20 @@ impl TaskState<'_> {
 
         for variant in variants {
             let qualified_variant_name = qualified_name.with_segment(&variant.name);
-            let module = store
-                .get_module_mut(&self.cursor.module_id)
-                .expect("current module must exist in store");
+            let module = self.current_module_mut(store);
             module.definitions.insert(
                 qualified_variant_name,
-                Definition::Value {
+                Definition {
                     visibility: visibility.clone(),
                     ty: enum_ty.clone(),
+                    name: None,
                     name_span: Some(variant.name_span),
-                    allowed_lints: vec![],
-                    go_hints: vec![],
-                    go_name: None,
                     doc: variant.doc.clone(),
+                    body: DefinitionBody::Value {
+                        allowed_lints: vec![],
+                        go_hints: vec![],
+                        go_name: None,
+                    },
                 },
             );
         }
@@ -201,21 +203,21 @@ impl TaskState<'_> {
                 .insert(variant.name.to_string(), enum_ty.clone());
         }
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
 
         module.definitions.insert(
             qualified_name,
-            Definition::ValueEnum {
+            Definition {
                 visibility,
                 ty: enum_ty,
-                name: name.into(),
-                name_span: *name_span,
-                variants: variants.to_vec(),
-                underlying_ty,
-                methods: Default::default(),
+                name: Some(name.into()),
+                name_span: Some(*name_span),
                 doc: doc.clone(),
+                body: DefinitionBody::ValueEnum {
+                    variants: variants.to_vec(),
+                    underlying_ty,
+                    methods: Default::default(),
+                },
             },
         );
     }
@@ -419,9 +421,8 @@ impl TaskState<'_> {
             struct_ty
         };
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
@@ -433,25 +434,23 @@ impl TaskState<'_> {
             ));
         }
 
-        store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store")
-            .definitions
-            .insert(
-                qualified_name.clone(),
-                Definition::Struct {
-                    visibility,
-                    ty: struct_ty,
-                    name: name.into(),
-                    name_span: *name_span,
+        self.current_module_mut(store).definitions.insert(
+            qualified_name.clone(),
+            Definition {
+                visibility,
+                ty: struct_ty,
+                name: Some(name.into()),
+                name_span: Some(*name_span),
+                doc: doc.clone(),
+                body: DefinitionBody::Struct {
                     generics: generics.to_vec(),
                     fields: new_fields,
                     kind,
                     methods: Default::default(),
                     constructor: None,
-                    doc: doc.clone(),
                 },
-            );
+            },
+        );
 
         self.check_recursive_type(&*store, &qualified_name, name, name_span);
     }
@@ -583,9 +582,8 @@ impl TaskState<'_> {
                     .push(diagnostics::infer::opaque_type_outside_typedef(*span));
             }
 
-            let visibility = store
-                .get_module(&self.cursor.module_id)
-                .expect("current module must exist in store")
+            let visibility = self
+                .current_module(&*store)
                 .definitions
                 .get(qualified_name.as_str())
                 .map(|definition| definition.visibility().clone())
@@ -640,23 +638,21 @@ impl TaskState<'_> {
                 ));
             }
 
-            store
-                .get_module_mut(&self.cursor.module_id)
-                .expect("current module must exist in store")
-                .definitions
-                .insert(
-                    qualified_name,
-                    Definition::TypeAlias {
-                        visibility,
-                        name: name.into(),
-                        name_span: *name_span,
+            self.current_module_mut(store).definitions.insert(
+                qualified_name,
+                Definition {
+                    visibility,
+                    ty: alias_ty,
+                    name: Some(name.into()),
+                    name_span: Some(*name_span),
+                    doc: doc.clone(),
+                    body: DefinitionBody::TypeAlias {
                         generics: generics.to_vec(),
                         annotation: annotation.clone(),
-                        ty: alias_ty,
                         methods: Default::default(),
-                        doc: doc.clone(),
                     },
-                );
+                },
+            );
 
             return;
         }
@@ -698,9 +694,8 @@ impl TaskState<'_> {
 
         self.scopes.pop();
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
@@ -714,23 +709,21 @@ impl TaskState<'_> {
             ));
         }
 
-        store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store")
-            .definitions
-            .insert(
-                qualified_name,
-                Definition::TypeAlias {
-                    visibility,
-                    name: name.into(),
-                    name_span: *name_span,
+        self.current_module_mut(store).definitions.insert(
+            qualified_name,
+            Definition {
+                visibility,
+                ty: alias_ty,
+                name: Some(name.into()),
+                name_span: Some(*name_span),
+                doc: doc.clone(),
+                body: DefinitionBody::TypeAlias {
                     generics: generics.to_vec(),
                     annotation: annotation.clone(),
-                    ty: alias_ty,
                     methods: Default::default(),
-                    doc: doc.clone(),
                 },
-            );
+            },
+        );
     }
 
     fn is_alias_body_circular(&self, store: &Store, body_ty: &Type, qualified_name: &str) -> bool {
@@ -751,8 +744,10 @@ impl TaskState<'_> {
             }
             seen.push(name.clone());
 
-            if let Some(Definition::TypeAlias { ty, .. }) = store.get_definition(&name) {
-                let body = ty.unwrap_forall().clone();
+            if let Some(def) = store.get_definition(&name)
+                && matches!(def.body, DefinitionBody::TypeAlias { .. })
+            {
+                let body = def.ty.unwrap_forall().clone();
                 if Self::type_contains_name(&body, qualified_name) {
                     return true;
                 }
@@ -764,64 +759,22 @@ impl TaskState<'_> {
     }
 
     fn type_contains_name(ty: &Type, name: &str) -> bool {
-        match ty {
-            Type::Nominal {
-                id,
-                params,
-                underlying_ty,
-            } => {
-                id.as_str() == name
-                    || params.iter().any(|p| Self::type_contains_name(p, name))
-                    || underlying_ty
-                        .as_deref()
-                        .is_some_and(|u| Self::type_contains_name(u, name))
-            }
-            Type::Compound { args, .. } => args.iter().any(|a| Self::type_contains_name(a, name)),
-            Type::Tuple(elements) => elements.iter().any(|e| Self::type_contains_name(e, name)),
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => {
-                params.iter().any(|p| Self::type_contains_name(p, name))
-                    || Self::type_contains_name(return_type, name)
-            }
-            Type::Forall { body, .. } => Self::type_contains_name(body, name),
-            _ => false,
+        if let Type::Nominal { id, .. } = ty
+            && id.as_str() == name
+        {
+            return true;
         }
+        ty.children()
+            .iter()
+            .any(|c| Self::type_contains_name(c, name))
     }
 
     fn collect_type_refs(ty: &Type, refs: &mut Vec<String>) {
-        match ty {
-            Type::Nominal {
-                id,
-                params,
-                underlying_ty,
-            } => {
-                refs.push(id.to_string());
-                params.iter().for_each(|p| Self::collect_type_refs(p, refs));
-                if let Some(u) = underlying_ty {
-                    Self::collect_type_refs(u, refs);
-                }
-            }
-            Type::Compound { args, .. } => {
-                args.iter().for_each(|a| Self::collect_type_refs(a, refs));
-            }
-            Type::Tuple(elements) => {
-                elements
-                    .iter()
-                    .for_each(|e| Self::collect_type_refs(e, refs));
-            }
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => {
-                params.iter().for_each(|p| Self::collect_type_refs(p, refs));
-                Self::collect_type_refs(return_type, refs);
-            }
-            Type::Forall { body, .. } => Self::collect_type_refs(body, refs),
-            _ => {}
+        if let Type::Nominal { id, .. } = ty {
+            refs.push(id.to_string());
+        }
+        for c in ty.children() {
+            Self::collect_type_refs(c, refs);
         }
     }
 }

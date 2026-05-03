@@ -1,8 +1,8 @@
 use diagnostics::LocalSink;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, Span, StructFieldAssignment, StructSpread};
-use syntax::program::Definition;
-use syntax::types::{SubstitutionMap, Type, substitute};
+use syntax::program::DefinitionBody;
+use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use crate::checker::infer::expressions::struct_call::has_zero;
 use crate::store::Store;
@@ -161,11 +161,9 @@ fn fields_filtered(
     };
 
     let def = store.get_definition(id.as_str())?;
-    match def {
-        Definition::Struct {
-            fields, ty: def_ty, ..
-        } => {
-            let map = build_substitution(def_ty, params);
+    match &def.body {
+        DefinitionBody::Struct { fields, .. } => {
+            let map = build_substitution(&def.ty, params);
             Some(
                 fields
                     .iter()
@@ -177,10 +175,10 @@ fn fields_filtered(
                     .collect(),
             )
         }
-        Definition::Enum {
+        DefinitionBody::Enum {
             variants, generics, ..
         } => {
-            let variant_name = name.rsplit('.').next()?;
+            let variant_name = unqualified_name(name);
             let variant = variants.iter().find(|v| v.name == variant_name)?;
             let mut map = SubstitutionMap::default();
             if generics.len() == params.len() {

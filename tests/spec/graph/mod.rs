@@ -301,21 +301,23 @@ fn store_get_definition_domain_style_go_module() {
     let module = store.get_module_mut("go:github.com/gorilla/mux").unwrap();
     module.definitions.insert(
         "go:github.com/gorilla/mux.Router".into(),
-        syntax::program::Definition::Struct {
+        syntax::program::Definition {
             visibility: syntax::program::Visibility::Public,
             ty: syntax::types::Type::Nominal {
                 id: "go:github.com/gorilla/mux.Router".into(),
                 params: vec![],
                 underlying_ty: None,
             },
-            name: "Router".into(),
-            name_span: syntax::ast::Span::dummy(),
-            generics: vec![],
-            fields: vec![],
-            kind: syntax::ast::StructKind::Record,
-            methods: Default::default(),
-            constructor: None,
+            name: Some("Router".into()),
+            name_span: Some(syntax::ast::Span::dummy()),
             doc: None,
+            body: syntax::program::DefinitionBody::Struct {
+                generics: vec![],
+                fields: vec![],
+                kind: syntax::ast::StructKind::Record,
+                methods: Default::default(),
+                constructor: None,
+            },
         },
     );
 

@@ -3,8 +3,8 @@ use syntax::ast::{
     EnumFieldDefinition, Generic, Literal, Pattern, RestPattern, StructFieldDefinition,
     StructFieldPattern, StructKind, TypedPattern, VariantFields,
 };
-use syntax::program::Definition;
-use syntax::types::Type;
+use syntax::program::{Definition, DefinitionBody};
+use syntax::types::{Type, unqualified_name};
 
 use crate::Emitter;
 use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
@@ -316,8 +316,10 @@ impl Emitter<'_> {
                 let Type::Nominal { params, .. } = resolved else {
                     return;
                 };
-                let Some(Definition::Struct { generics, .. }) =
-                    self.ctx.definitions.get(struct_name.as_str())
+                let Some(Definition {
+                    body: DefinitionBody::Struct { generics, .. },
+                    ..
+                }) = self.ctx.definitions.get(struct_name.as_str())
                 else {
                     return;
                 };
@@ -339,8 +341,10 @@ impl Emitter<'_> {
                 let Type::Nominal { params, .. } = resolved else {
                     return;
                 };
-                let Some(Definition::Enum { generics, .. }) =
-                    self.ctx.definitions.get(enum_name.as_str())
+                let Some(Definition {
+                    body: DefinitionBody::Enum { generics, .. },
+                    ..
+                }) = self.ctx.definitions.get(enum_name.as_str())
                 else {
                     return;
                 };
@@ -369,18 +373,18 @@ impl Emitter<'_> {
         let Type::Nominal { id, params, .. } = resolved else {
             return;
         };
-        match self.ctx.definitions.get(id.as_str()) {
-            Some(Definition::Struct {
+        match self.ctx.definitions.get(id.as_str()).map(|d| &d.body) {
+            Some(DefinitionBody::Struct {
                 fields: field_defs,
                 generics,
                 ..
             }) => {
                 self.recurse_named_fields(output, fields, field_defs, generics, params, None);
             }
-            Some(Definition::Enum {
+            Some(DefinitionBody::Enum {
                 variants, generics, ..
             }) => {
-                let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+                let variant_name = unqualified_name(identifier);
                 if let Some(variant) = variants.iter().find(|v| v.name == variant_name) {
                     self.recurse_named_fields(
                         output,
@@ -427,8 +431,10 @@ impl Emitter<'_> {
             let Type::Nominal { params, .. } = resolved else {
                 return;
             };
-            let Some(Definition::Enum { generics, .. }) =
-                self.ctx.definitions.get(enum_name.as_str())
+            let Some(Definition {
+                body: DefinitionBody::Enum { generics, .. },
+                ..
+            }) = self.ctx.definitions.get(enum_name.as_str())
             else {
                 return;
             };
@@ -446,13 +452,16 @@ impl Emitter<'_> {
         let Type::Nominal { id, params, .. } = resolved else {
             return;
         };
-        let Some(Definition::Enum {
-            variants, generics, ..
+        let Some(Definition {
+            body: DefinitionBody::Enum {
+                variants, generics, ..
+            },
+            ..
         }) = self.ctx.definitions.get(id.as_str())
         else {
             return;
         };
-        let variant_name = identifier.split('.').next_back().unwrap_or(identifier);
+        let variant_name = unqualified_name(identifier);
         let Some(variant) = variants.iter().find(|v| v.name == variant_name) else {
             return;
         };
@@ -478,10 +487,14 @@ impl Emitter<'_> {
         let Type::Nominal { id, params, .. } = resolved else {
             return;
         };
-        let Some(Definition::Struct {
-            fields: field_defs,
-            generics,
-            kind: StructKind::Tuple,
+        let Some(Definition {
+            body:
+                DefinitionBody::Struct {
+                    fields: field_defs,
+                    generics,
+                    kind: StructKind::Tuple,
+                    ..
+                },
             ..
         }) = self.ctx.definitions.get(id.as_str())
         else {

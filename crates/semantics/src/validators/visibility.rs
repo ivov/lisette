@@ -1,6 +1,6 @@
 use diagnostics::LocalSink;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::program::{Definition, Visibility};
+use syntax::program::{Definition, DefinitionBody, Visibility};
 
 use crate::store::Store;
 
@@ -16,9 +16,12 @@ pub(super) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
         .iter()
         .filter(|(key, _)| key.starts_with(&module_prefix))
         .filter_map(|(_, definition)| {
-            if let Definition::Interface {
+            if let Definition {
                 visibility: Visibility::Private,
-                definition: interface_data,
+                body:
+                    DefinitionBody::Interface {
+                        definition: interface_data,
+                    },
                 ..
             } = definition
             {
@@ -43,10 +46,10 @@ pub(super) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
         .iter()
         .filter(|(key, _)| key.starts_with(&module_prefix))
     {
-        if let Definition::Struct {
-            methods,
-            name,
-            name_span,
+        if let Definition {
+            name: Some(name),
+            name_span: Some(name_span),
+            body: DefinitionBody::Struct { methods, .. },
             ..
         } = definition
         {

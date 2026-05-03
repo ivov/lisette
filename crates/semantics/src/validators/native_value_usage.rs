@@ -1,7 +1,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Span, StructKind};
-use syntax::program::Definition;
-use syntax::types::{Symbol, Type};
+use syntax::program::{Definition, DefinitionBody};
+use syntax::types::{Symbol, Type, unqualified_name};
 
 use crate::store::Store;
 
@@ -152,7 +152,7 @@ fn check_one(
     };
     let stripped = first.strip_refs();
     let is_self = matches!(&stripped, Type::Nominal { id, .. }
-        if id.rsplit('.').next() == Some(type_part));
+        if unqualified_name(id) == type_part);
     if !is_self {
         return;
     }
@@ -173,7 +173,11 @@ fn resolves_to_struct_kind(qualified: &str, kind: StructKind, store: &Store) -> 
         return k == kind;
     }
     match store.get_definition(qualified) {
-        Some(Definition::TypeAlias { ty: alias_ty, .. }) => {
+        Some(Definition {
+            ty: alias_ty,
+            body: DefinitionBody::TypeAlias { .. },
+            ..
+        }) => {
             if let Type::Nominal { id, .. } = alias_ty.unwrap_forall() {
                 store.struct_kind(id) == Some(kind)
             } else {

@@ -395,8 +395,18 @@ impl TaskState<'_> {
         // interface coercion inside generic type params. All generic types
         // are treated uniformly, including prelude types (Option, Result,
         // Slice, Map, Ref).
+        //
+        // Bail on the first error rather than collecting via `unify_pairs`:
+        // continuing past a failed pair would bind subsequent type variables
+        // and erase their original names from the diagnostic.
         self.scopes.increment_type_param_depth();
-        let result = self.unify_type_params(store, params1.iter().zip(params2), span);
+        let mut result = Ok(());
+        for (p1, p2) in params1.iter().zip(params2) {
+            if let Err(e) = self.try_unify(store, p1, p2, span) {
+                result = Err(e);
+                break;
+            }
+        }
         self.scopes.decrement_type_param_depth();
         result
     }
@@ -464,159 +474,6 @@ impl TaskState<'_> {
         }
 
         Err(UnifyError::TypeMismatch)
-    }
-
-    fn unify_type_params<'a>(
-        &mut self,
-        store: &Store,
-        pairs: impl Iterator<Item = (&'a Type, &'a Type)>,
-        span: &Span,
-    ) -> Result<(), UnifyError> {
-        // Collect so we can iterate without holding the original borrows
-        // while binding variables in the env.
-        let pairs: Vec<(Type, Type)> = pairs.map(|(a, b)| (a.clone(), b.clone())).collect();
-        for (t1, t2) in pairs {
-            let r1 = self.env.shallow_resolve(&t1);
-            let r2 = self.env.shallow_resolve(&t2);
-            let r1_unk = r1.is_unknown();
-            let r2_unk = r2.is_unknown();
-
-            match (&r1, &r2) {
-                _ if r1.is_ignored() || r2.is_ignored() => {}
-                _ if r1.is_receiver_placeholder() || r2.is_receiver_placeholder() => {}
-                (Type::Var { id: i1, .. }, Type::Var { id: i2, .. }) if i1 == i2 => {}
-
-                _ if matches!(r1, Type::Error) => {
-                    self.collapse_vars_to_error(store, &r2, span);
-                }
-                _ if matches!(r2, Type::Error) => {
-                    self.collapse_vars_to_error(store, &r1, span);
-                }
-
-                _ if r1_unk && r2_unk => {}
-                _ if r1_unk && !r2.is_variable() => {
-                    return Err(UnifyError::TypeMismatch);
-                }
-                _ if r2_unk && !r1.is_variable() => {
-                    return Err(UnifyError::TypeMismatch);
-                }
-
-                _ if matches!(r2, Type::Never) => {
-                    if let Type::Var { id, .. } = &r1
-                        && self.env.is_unbound(*id)
-                    {
-                        self.unify_type_variable(store, *id, &Type::Never, span, false)?;
-                    }
-                }
-                _ if matches!(r1, Type::Never) => {
-                    if let Type::Var { id, .. } = &r2
-                        && self.env.is_unbound(*id)
-                    {
-                        self.unify_type_variable(store, *id, &Type::Never, span, false)?;
-                    } else if !matches!(r2, Type::Never) && !r2.is_variable() {
-                        return Err(UnifyError::TypeMismatch);
-                    }
-                }
-
-                (Type::Var { id, .. }, _) => {
-                    self.unify_type_variable(store, *id, &r2, span, false)?;
-                }
-                (_, Type::Var { id, .. }) => {
-                    self.unify_type_variable(store, *id, &r1, span, false)?;
-                }
-                (Type::Parameter(name1), Type::Parameter(name2)) if name1 == name2 => {}
-                (
-                    Nominal {
-                        id: id1,
-                        params: p1,
-                        ..
-                    },
-                    Nominal {
-                        id: id2,
-                        params: p2,
-                        ..
-                    },
-                ) if (id1 == id2 || are_go_type_aliases(id1, id2)) && p1.len() == p2.len() => {
-                    let is_user_defined = !id1.starts_with("prelude.");
-                    let p1 = p1.clone();
-                    let p2 = p2.clone();
-                    if is_user_defined {
-                        self.scopes.increment_type_param_depth();
-                    }
-                    let r = self.unify_type_params(store, p1.iter().zip(p2.iter()), span);
-                    if is_user_defined {
-                        self.scopes.decrement_type_param_depth();
-                    }
-                    r?;
-                }
-                (Function { .. }, Function { .. }) => {
-                    self.unify_functions(store, &r1, &r2, span)?;
-                }
-                (Type::Tuple(e1), Type::Tuple(e2)) if e1.len() == e2.len() => {
-                    let e1 = e1.clone();
-                    let e2 = e2.clone();
-                    self.unify_type_params(store, e1.iter().zip(e2.iter()), span)?;
-                }
-                (Type::Simple(k1), Type::Simple(k2)) if k1 == k2 => {}
-                // byte ↔ uint8, rune ↔ int32 in invariant generic positions
-                // (e.g. `Slice<byte>` conforming to a `Slice<uint8>` method).
-                (Type::Simple(k1), Type::Simple(k2)) if simple_kinds_are_go_aliases(*k1, *k2) => {}
-                (Type::Simple(kind), Nominal { id, params, .. })
-                | (Nominal { id, params, .. }, Type::Simple(kind))
-                    if params.is_empty()
-                        && syntax::types::unqualified_name(id) == kind.leaf_name() => {}
-                (Type::Compound { kind: k1, args: a1 }, Type::Compound { kind: k2, args: a2 })
-                    if k1 == k2 && a1.len() == a2.len() =>
-                {
-                    let a1 = a1.clone();
-                    let a2 = a2.clone();
-                    self.unify_type_params(store, a1.iter().zip(a2.iter()), span)?;
-                }
-                (Type::Compound { kind, args }, Nominal { id, params, .. })
-                | (Nominal { id, params, .. }, Type::Compound { kind, args })
-                    if syntax::types::unqualified_name(id) == kind.leaf_name()
-                        && args.len() == params.len() =>
-                {
-                    let args = args.clone();
-                    let params = params.clone();
-                    self.unify_type_params(store, args.iter().zip(params.iter()), span)?;
-                }
-                // Unwrap a transparent alias (Nominal with `underlying_ty`)
-                // against the bare body or another Nominal — without this,
-                // aliases of the same type fail to unify in invariant
-                // positions (e.g. `Option<UserId>` vs `Option<int>`).
-                (
-                    Nominal {
-                        underlying_ty: Some(underlying),
-                        ..
-                    },
-                    Type::Simple(_) | Type::Compound { .. } | Function { .. } | Nominal { .. },
-                )
-                | (
-                    Type::Simple(_) | Type::Compound { .. } | Function { .. } | Nominal { .. },
-                    Nominal {
-                        underlying_ty: Some(underlying),
-                        ..
-                    },
-                ) => {
-                    let u = underlying.as_ref().clone();
-                    let other = if matches!(
-                        &r1,
-                        Nominal {
-                            underlying_ty: Some(_),
-                            ..
-                        }
-                    ) {
-                        r2.clone()
-                    } else {
-                        r1.clone()
-                    };
-                    self.try_unify(store, &u, &other, span)?;
-                }
-                _ => return Err(UnifyError::TypeMismatch),
-            }
-        }
-        Ok(())
     }
 
     fn unify_pairs<'a>(

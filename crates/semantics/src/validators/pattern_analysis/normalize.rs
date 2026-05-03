@@ -1,7 +1,7 @@
 use crate::store::Store;
 use syntax::ast::{Literal, MatchArm, TypedPattern};
-use syntax::program::Definition;
-use syntax::types::Type;
+use syntax::program::{Definition, DefinitionBody};
+use syntax::types::{Type, unqualified_name};
 
 use super::NormalizedPattern::Wildcard;
 use super::inhabitance::{InhabitanceCache, is_inhabited, is_variant_inhabited};
@@ -138,8 +138,12 @@ pub fn normalize_typed_pattern(
 
             let enum_def = ctx.store.get_definition(enum_name);
 
-            if let Some(Definition::Struct {
-                fields: struct_fields,
+            if let Some(Definition {
+                body:
+                    DefinitionBody::Struct {
+                        fields: struct_fields,
+                        ..
+                    },
                 ..
             }) = enum_def
             {
@@ -158,8 +162,8 @@ pub fn normalize_typed_pattern(
             let type_name = make_type_key(enum_name, type_args);
 
             if unions.get(&type_name).is_none() {
-                let alternatives = match enum_def {
-                    Some(Definition::Enum {
+                let alternatives = match enum_def.map(|d| &d.body) {
+                    Some(DefinitionBody::Enum {
                         variants, generics, ..
                     }) => variants
                         .iter()
@@ -171,7 +175,7 @@ pub fn normalize_typed_pattern(
                             arity: v.fields.len(),
                         })
                         .collect(),
-                    Some(Definition::ValueEnum { variants, .. }) => {
+                    Some(DefinitionBody::ValueEnum { variants, .. }) => {
                         let mut alts: Vec<Constructor> = variants
                             .iter()
                             .map(|v| Constructor {
@@ -191,7 +195,7 @@ pub fn normalize_typed_pattern(
                 unions.insert(type_name.clone(), alternatives);
             }
 
-            let variant_name = variant_name.rsplit('.').next().unwrap_or(variant_name);
+            let variant_name = unqualified_name(variant_name);
             let tag = format!("{}.{}", enum_name, variant_name);
 
             NormalizedPattern::Constructor {
@@ -227,8 +231,8 @@ pub fn normalize_typed_pattern(
             let type_name = make_type_key(enum_name, type_args);
 
             if unions.get(&type_name).is_none() {
-                let alternatives = match ctx.store.get_definition(enum_name) {
-                    Some(Definition::Enum {
+                let alternatives = match ctx.store.get_definition(enum_name).map(|d| &d.body) {
+                    Some(DefinitionBody::Enum {
                         variants, generics, ..
                     }) => variants
                         .iter()
@@ -246,7 +250,7 @@ pub fn normalize_typed_pattern(
                 unions.insert(type_name.clone(), alternatives);
             }
 
-            let variant_name = variant_name.rsplit('.').next().unwrap_or(variant_name);
+            let variant_name = unqualified_name(variant_name);
             let tag = format!("{}.{}", enum_name, variant_name);
 
             NormalizedPattern::Constructor {
@@ -294,8 +298,8 @@ pub fn normalize_typed_pattern(
                 let is_inhabited = ctx
                     .store
                     .get_definition(struct_name)
-                    .map(|definition| match definition {
-                        Definition::Struct {
+                    .map(|definition| match &definition.body {
+                        DefinitionBody::Struct {
                             generics, fields, ..
                         } => super::inhabitance::is_struct_inhabited(
                             fields, type_args, generics, ctx.store, ctx.cache,

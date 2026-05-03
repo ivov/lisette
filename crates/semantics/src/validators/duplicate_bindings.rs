@@ -6,9 +6,9 @@
 
 use diagnostics::LocalSink;
 use rustc_hash::FxHashMap as HashMap;
-use syntax::ast::{
-    Binding, Expression, MatchArm, Pattern, RestPattern, SelectArm, SelectArmPattern, Span,
-};
+use syntax::ast::{Binding, Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Span};
+
+use crate::checker::infer::expressions::patterns::collect_pattern_bindings;
 
 pub(super) fn run(typed_ast: &[Expression], sink: &LocalSink) {
     for item in typed_ast {
@@ -95,46 +95,5 @@ fn check(pattern: &Pattern, sink: &LocalSink) {
         } else {
             seen.insert(name.as_str(), span);
         }
-    }
-}
-
-/// Flatten a pattern into a list of `(name, definition-span)` pairs, one per
-/// binding introduced by the pattern. Or-patterns contribute their first arm
-/// only (Or arms must bind the same names; duplicates across them are handled
-/// separately in `checker/infer/expressions/patterns.rs`).
-fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)> {
-    match pattern {
-        Pattern::Identifier { identifier, span } => vec![(identifier.to_string(), *span)],
-        Pattern::Tuple { elements, .. } => {
-            elements.iter().flat_map(collect_pattern_bindings).collect()
-        }
-        Pattern::EnumVariant { fields, .. } => {
-            fields.iter().flat_map(collect_pattern_bindings).collect()
-        }
-        Pattern::Struct { fields, .. } => fields
-            .iter()
-            .flat_map(|f| collect_pattern_bindings(&f.value))
-            .collect(),
-        Pattern::Slice { prefix, rest, .. } => {
-            let mut bindings: Vec<_> = prefix.iter().flat_map(collect_pattern_bindings).collect();
-            if let RestPattern::Bind { name, span } = rest {
-                bindings.push((name.to_string(), *span));
-            }
-            bindings
-        }
-        Pattern::Or { patterns, .. } => patterns
-            .first()
-            .map(collect_pattern_bindings)
-            .unwrap_or_default(),
-        Pattern::AsBinding {
-            pattern,
-            name,
-            span,
-        } => {
-            let mut bindings = collect_pattern_bindings(pattern);
-            bindings.push((name.to_string(), *span));
-            bindings
-        }
-        Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => vec![],
     }
 }

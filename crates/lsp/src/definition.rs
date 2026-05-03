@@ -1,5 +1,6 @@
 use rustc_hash::FxHashMap;
 use syntax::ast::{Expression, MatchArm, Pattern, TypedPattern};
+use syntax::types::unqualified_name;
 
 use crate::analysis::find_module_by_alias;
 use crate::offset_in_span;
@@ -20,9 +21,13 @@ pub(crate) fn find_struct_field_span(
     field_name: &str,
     snapshot: &AnalysisSnapshot,
 ) -> Option<syntax::ast::Span> {
-    use syntax::program::Definition;
+    use syntax::program::{Definition, DefinitionBody};
 
-    if let Some(Definition::Struct { fields, .. }) = snapshot.definitions().get(type_id) {
+    if let Some(Definition {
+        body: DefinitionBody::Struct { fields, .. },
+        ..
+    }) = snapshot.definitions().get(type_id)
+    {
         fields
             .iter()
             .find(|f| f.name == field_name)
@@ -317,7 +322,7 @@ pub(crate) fn resolve_enum_in_pattern(
                         ..
                     },
                 ) => {
-                    let variant_last = variant_name.rsplit('.').next().unwrap_or(variant_name);
+                    let variant_last = unqualified_name(variant_name);
                     let qualified = format!("{}.{}", enum_name, variant_last);
                     snapshot
                         .definitions()

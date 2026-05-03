@@ -20,7 +20,7 @@ use diagnostics::LocalSink;
 use semantics::checker::TaskState;
 use semantics::prelude::parse_and_register_prelude;
 use semantics::store::Store;
-use syntax::program::{Definition, Visibility};
+use syntax::program::{Definition, DefinitionBody, Visibility};
 use syntax::types::{CompoundKind, Type};
 
 pub fn init_prelude(store: &mut Store) {
@@ -38,7 +38,7 @@ pub fn register_test_builtins(store: &mut Store, _checker: &mut TaskState) {
         let param_mutability = vec![false; params.len()];
         module.definitions.insert(
             format!("prelude.{name}").into(),
-            Definition::Value {
+            Definition {
                 visibility: Visibility::Public,
                 ty: Type::Function {
                     params,
@@ -46,11 +46,14 @@ pub fn register_test_builtins(store: &mut Store, _checker: &mut TaskState) {
                     bounds: vec![],
                     return_type: Box::new(return_type),
                 },
+                name: None,
                 name_span: None,
-                allowed_lints: vec![],
-                go_hints: vec![],
-                go_name: None,
                 doc: None,
+                body: DefinitionBody::Value {
+                    allowed_lints: vec![],
+                    go_hints: vec![],
+                    go_name: None,
+                },
             },
         );
     };

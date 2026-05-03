@@ -2,7 +2,7 @@ use crate::cli_error;
 use crate::output::{format_backticks, use_color};
 use diagnostics::infer::levenshtein_distance;
 use semantics::cache::go_stdlib::{GoModuleCache, try_load_go_stdlib_cache};
-use semantics::cache::types::CachedDefinition;
+use semantics::cache::types::CachedDefinitionBody;
 use stdlib::{
     Target, format_targets, get_go_stdlib_package_targets, get_go_stdlib_packages,
     get_go_stdlib_typedef,
@@ -1326,16 +1326,16 @@ fn doc_go_package(query: &str) -> i32 {
 
 fn has_go_module_matches(module_cache: &GoModuleCache, query_lower: &str) -> bool {
     for (def_name, def) in &module_cache.definitions {
-        if matches!(def, CachedDefinition::Value { .. })
+        if matches!(def.body, CachedDefinitionBody::Value { .. })
             && def_name.to_lowercase().contains(query_lower)
         {
             return true;
         }
-        match def {
-            CachedDefinition::TypeAlias { methods, .. }
-            | CachedDefinition::Enum { methods, .. }
-            | CachedDefinition::ValueEnum { methods, .. }
-            | CachedDefinition::Struct { methods, .. } => {
+        match &def.body {
+            CachedDefinitionBody::TypeAlias { methods, .. }
+            | CachedDefinitionBody::Enum { methods, .. }
+            | CachedDefinitionBody::ValueEnum { methods, .. }
+            | CachedDefinitionBody::Struct { methods, .. } => {
                 if methods
                     .keys()
                     .any(|m| m.to_lowercase().contains(query_lower))
@@ -1343,7 +1343,7 @@ fn has_go_module_matches(module_cache: &GoModuleCache, query_lower: &str) -> boo
                     return true;
                 }
             }
-            CachedDefinition::Interface { definition, .. } => {
+            CachedDefinitionBody::Interface { definition, .. } => {
                 if definition
                     .methods
                     .keys()

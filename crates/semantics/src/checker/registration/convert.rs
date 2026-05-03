@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::checker::EnvResolve;
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic, Span};
-use syntax::program::Definition;
+use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{SubstitutionMap, Type, substitute};
 
 use crate::checker::TaskState;
@@ -179,8 +179,12 @@ impl TaskState<'_> {
                     _ => false,
                 };
                 if body_differs
-                    && let Some(Definition::TypeAlias {
-                        annotation: alias_ann,
+                    && let Some(Definition {
+                        body:
+                            DefinitionBody::TypeAlias {
+                                annotation: alias_ann,
+                                ..
+                            },
                         ..
                     }) = store.get_definition(&qualified_name)
                     && !alias_ann.is_opaque()

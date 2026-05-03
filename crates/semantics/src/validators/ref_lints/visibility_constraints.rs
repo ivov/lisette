@@ -4,7 +4,7 @@ use diagnostics::LisetteDiagnostic;
 use syntax::ast::{Annotation, Expression};
 use syntax::program::File;
 use syntax::program::{Module, Visibility};
-use syntax::types::Type;
+use syntax::types::{Type, unqualified_name};
 
 pub fn check_visibility_constraints(
     module: &Module,
@@ -64,7 +64,7 @@ fn check_type_for_private_leak(
                 && definition.visibility() == &Visibility::Private
             {
                 let span = annotation.map(|ann| ann.get_span());
-                let type_name = id.rsplit('.').next().unwrap_or(id);
+                let type_name = unqualified_name(id);
                 diagnostics.push(diagnostics::lint::private_type_in_public_api(
                     span.as_ref(),
                     type_name,
