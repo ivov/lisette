@@ -227,12 +227,19 @@ impl Emitter<'_> {
         ty.is_option() && self.is_nilable_go_type(&ty.ok_type())
     }
 
-    /// True when a Go-imported struct field declared `Option<T>` (T non-nilable)
-    /// receives a value of the same shape — the field is `*T` underneath, so
-    /// the value must be bridged with address-of.
-    pub(crate) fn needs_go_pointer_bridge(&self, value_ty: &Type, field_ty: Option<&Type>) -> bool {
-        let is_non_nullable_option = |t: &Type| t.is_option() && !self.is_nullable_option(t);
-        is_non_nullable_option(value_ty) && field_ty.is_some_and(is_non_nullable_option)
+    /// True for `Option<T>` where T is a concrete non-nilable Go value type
+    /// (string, int32, named scalar, named struct). This is the bindgen's
+    /// pointer-bridged shape: the corresponding Go layout is `*T`. Excludes
+    /// `Option<Unknown>` / `Option<any>` (Go layout `interface{}`, not bridged).
+    pub(crate) fn is_non_nilable_option(&self, ty: &Type) -> bool {
+        if !ty.is_option() {
+            return false;
+        }
+        let inner = ty.ok_type();
+        if inner.contains_unknown() || inner.has_name("any") {
+            return false;
+        }
+        !self.is_nilable_go_type(&inner)
     }
 
     /// Returns true if the Option wraps a Go interface type (not a pointer).
@@ -246,19 +253,23 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn is_go_nullable(&self, ty: &Type) -> bool {
-        self.is_nullable_option(ty) || self.nullable_collection_element_ty(ty).is_some()
+        self.is_nullable_option(ty)
+            || self.is_non_nilable_option(ty)
+            || self.nullable_collection_element_ty(ty).is_some()
     }
 
     pub(crate) fn nullable_collection_element_ty(&self, ty: &Type) -> Option<Type> {
+        let is_pointer_bridged_option =
+            |t: &Type| self.is_nullable_option(t) || self.is_non_nilable_option(t);
         if ty.has_name("Slice") {
             let elem_ty = ty.inner()?;
-            if self.is_nullable_option(&elem_ty) {
+            if is_pointer_bridged_option(&elem_ty) {
                 return Some(elem_ty);
             }
         } else if ty.has_name("Map") {
             let params = ty.get_type_params()?;
             let val_ty = params.get(1)?.clone();
-            if self.is_nullable_option(&val_ty) {
+            if is_pointer_bridged_option(&val_ty) {
                 return Some(val_ty);
             }
         }

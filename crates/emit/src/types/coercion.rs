@@ -18,11 +18,17 @@ pub(crate) enum CoercionKind {
     UnwrapNullableOption {
         ty: Type,
     },
+    UnwrapPointerOption {
+        ty: Type,
+    },
     UnwrapNullableCollection {
         ty: Type,
         elem_option_ty: Type,
     },
     WrapNullableOption {
+        ty: Type,
+    },
+    WrapPointerOption {
         ty: Type,
     },
     WrapNullableCollection {
@@ -48,7 +54,23 @@ impl Coercion {
         }
     }
 
-    pub(crate) fn resolve_unwrap_go_nullable(emitter: &Emitter, value_ty: &Type) -> Self {
+    pub(crate) fn resolve_unwrap_go_nullable(
+        emitter: &Emitter,
+        value_ty: &Type,
+        target_ty: Option<&Type>,
+    ) -> Self {
+        if let Some(target_ty) = target_ty
+            && emitter.is_non_nilable_option(value_ty)
+            && emitter.is_non_nilable_option(target_ty)
+        {
+            return Self {
+                from: value_ty.clone(),
+                to: target_ty.clone(),
+                kind: CoercionKind::UnwrapPointerOption {
+                    ty: value_ty.clone(),
+                },
+            };
+        }
         let kind = if emitter.is_nullable_option(value_ty) {
             CoercionKind::UnwrapNullableOption {
                 ty: value_ty.clone(),
@@ -87,6 +109,10 @@ impl Coercion {
             CoercionKind::WrapNullableOption {
                 ty: value_ty.clone(),
             }
+        } else if emitter.is_non_nilable_option(value_ty) {
+            CoercionKind::WrapPointerOption {
+                ty: value_ty.clone(),
+            }
         } else if let Some(elem_option_ty) = emitter.nullable_collection_element_ty(value_ty) {
             CoercionKind::WrapNullableCollection {
                 ty: value_ty.clone(),
@@ -112,11 +138,17 @@ impl Coercion {
             CoercionKind::UnwrapNullableOption { ty } => {
                 emitter.emit_option_unwrap_to_nullable(output, &value, &ty)
             }
+            CoercionKind::UnwrapPointerOption { ty } => {
+                emitter.emit_option_unwrap_to_go_pointer(output, &value, &ty)
+            }
             CoercionKind::UnwrapNullableCollection { ty, elem_option_ty } => {
                 emitter.emit_collection_nullable_unwrap(output, &value, &ty, &elem_option_ty)
             }
             CoercionKind::WrapNullableOption { ty } => {
                 emitter.emit_nil_check_option_wrap(output, &value, &ty)
+            }
+            CoercionKind::WrapPointerOption { ty } => {
+                emitter.emit_pointer_to_option_wrap(output, &value, &ty)
             }
             CoercionKind::WrapNullableCollection { ty, elem_option_ty } => {
                 emitter.emit_collection_nullable_wrap(output, &value, &ty, &elem_option_ty)

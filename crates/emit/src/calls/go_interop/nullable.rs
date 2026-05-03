@@ -193,6 +193,27 @@ impl Emitter<'_> {
         unwrapped_var
     }
 
+    /// Wrap a Go `*T` (T value-typed) into Lisette `Option<T>`.
+    pub(crate) fn emit_pointer_to_option_wrap(
+        &mut self,
+        output: &mut String,
+        ptr_value: &str,
+        option_ty: &Type,
+    ) -> String {
+        self.flags.needs_stdlib = true;
+        let inner_ty_str = self.go_type_as_string(&option_ty.ok_type());
+        let option_var = self.fresh_var(Some("option"));
+        self.declare(&option_var);
+        write_line!(
+            output,
+            "{} := lisette.OptionFromPointer[{}]({})",
+            option_var,
+            inner_ty_str,
+            ptr_value
+        );
+        option_var
+    }
+
     /// Bridge `Option<T>` to Go `*T` when T is not naturally nilable.
     pub(crate) fn emit_option_unwrap_to_go_pointer(
         &mut self,
@@ -256,6 +277,7 @@ impl Emitter<'_> {
         );
 
         let fallible = Fallible::from_type(elem_option_ty).expect("Option type expected");
+        let is_pointer_bridged = self.is_non_nilable_option(elem_option_ty);
 
         let is_interface = self.is_interface_option(elem_option_ty);
         if is_interface {
@@ -263,8 +285,13 @@ impl Emitter<'_> {
         } else {
             write_line!(output, "if {} != nil {{", val_var);
         }
+        let some_input = if is_pointer_bridged {
+            format!("*{}", val_var)
+        } else {
+            val_var.clone()
+        };
         let mut fe = FallibleEmitter::new(self, &fallible);
-        let some_wrapper = fe.emit_success(&val_var);
+        let some_wrapper = fe.emit_success(&some_input);
         write_line!(output, "{}[{}] = {}", wrapped_var, idx_var, some_wrapper);
         output.push_str("} else {\n");
         let mut fe = FallibleEmitter::new(self, &fallible);
@@ -287,17 +314,23 @@ impl Emitter<'_> {
         self.flags.needs_stdlib = true;
 
         let is_map = collection_ty.has_name("Map");
+        let is_pointer_bridged = self.is_non_nilable_option(elem_option_ty);
 
         let inner_ty = elem_option_ty.ok_type();
-        let go_inner_ty = self.go_type_as_string(&inner_ty);
+        let inner_ty_str = self.go_type_as_string(&inner_ty);
+        let raw_elem_ty = if is_pointer_bridged {
+            format!("*{}", inner_ty_str)
+        } else {
+            inner_ty_str
+        };
         let raw_collection_ty = if is_map {
             let params = collection_ty
                 .get_type_params()
                 .expect("Map should have type params");
             let key_ty = self.go_type_as_string(&params[0]);
-            format!("map[{}]{}", key_ty, go_inner_ty)
+            format!("map[{}]{}", key_ty, raw_elem_ty)
         } else {
-            format!("[]{}", go_inner_ty)
+            format!("[]{}", raw_elem_ty)
         };
 
         let src_var = self.fresh_var(Some("src"));
@@ -326,29 +359,25 @@ impl Emitter<'_> {
             src_var
         );
 
-        if is_map {
-            write_line!(output, "if {}.Tag == {} {{", val_var, OPTION_SOME_TAG);
-            write_line!(
-                output,
-                "{}[{}] = {}.SomeVal",
-                unwrapped_var,
-                idx_var,
-                val_var
-            );
+        let some_assignment = if is_pointer_bridged {
+            format!("&{}.SomeVal", val_var)
+        } else {
+            format!("{}.SomeVal", val_var)
+        };
+
+        write_line!(output, "if {}.Tag == {} {{", val_var, OPTION_SOME_TAG);
+        write_line!(
+            output,
+            "{}[{}] = {}",
+            unwrapped_var,
+            idx_var,
+            some_assignment
+        );
+        if is_map || is_pointer_bridged {
             output.push_str("} else {\n");
             write_line!(output, "{}[{}] = nil", unwrapped_var, idx_var);
-            output.push_str("}\n");
-        } else {
-            write_line!(output, "if {}.Tag == {} {{", val_var, OPTION_SOME_TAG);
-            write_line!(
-                output,
-                "{}[{}] = {}.SomeVal",
-                unwrapped_var,
-                idx_var,
-                val_var
-            );
-            output.push_str("}\n");
         }
+        output.push_str("}\n");
 
         output.push_str("}\n");
 

@@ -411,7 +411,7 @@ impl Emitter<'_> {
             return "nil".to_string();
         }
         let value = self.emit_value(output, arg);
-        let coercion = Coercion::resolve_unwrap_go_nullable(self, arg_ty);
+        let coercion = Coercion::resolve_unwrap_go_nullable(self, arg_ty, None);
         coercion.apply(self, output, value)
     }
 }
