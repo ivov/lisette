@@ -3,7 +3,7 @@ use crate::output::{format_backticks, use_color};
 use diagnostics::infer::levenshtein_distance;
 use semantics::cache::go_stdlib::{GoModuleCache, try_load_go_stdlib_cache};
 use semantics::cache::types::CachedDefinition;
-use stdlib::{get_go_stdlib_packages, get_go_stdlib_typedef};
+use stdlib::{Target, get_go_stdlib_packages, get_go_stdlib_typedef};
 use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructKind, VariantFields};
 
 #[derive(Debug, Clone, Copy)]
@@ -1187,7 +1187,7 @@ fn suggest_go_item<'a>(query: &str, index: &'a GoPackageIndex) -> Option<&'a str
 }
 
 fn suggest_go_package(query: &str) -> Option<&'static str> {
-    let packages = get_go_stdlib_packages();
+    let packages = get_go_stdlib_packages(Target::host());
     packages
         .into_iter()
         .filter(|pkg| levenshtein_distance(&query.to_lowercase(), &pkg.to_lowercase()) <= 2)
@@ -1202,7 +1202,7 @@ fn print_go_packages_list() {
     );
     println!();
 
-    let packages = get_go_stdlib_packages();
+    let packages = get_go_stdlib_packages(Target::host());
 
     let max_width = packages.iter().map(|p| p.len()).max().unwrap_or(0);
     let col_width = max_width + 2;
@@ -1235,7 +1235,7 @@ fn doc_go_package(query: &str) -> i32 {
     let package = parts[0];
     let item_name = parts.get(1).copied();
 
-    let Some(source) = get_go_stdlib_typedef(package) else {
+    let Some(source) = get_go_stdlib_typedef(package, Target::host()) else {
         let help = if let Some(s) = suggest_go_package(package) {
             format!("Did you mean `lis doc go:{}`?", s)
         } else {
@@ -1415,9 +1415,10 @@ pub fn doc_search(query: &str) -> i32 {
     }
 
     let mut go_matches: Vec<SearchMatch> = Vec::new();
-    let go_cache = try_load_go_stdlib_cache();
+    let target = Target::host();
+    let go_cache = try_load_go_stdlib_cache(target);
 
-    for pkg in get_go_stdlib_packages() {
+    for pkg in get_go_stdlib_packages(target) {
         if let Some(ref cache) = go_cache {
             let module_id = format!("go:{}", pkg);
             if let Some(module_cache) = cache.modules.get(&module_id)
@@ -1427,7 +1428,7 @@ pub fn doc_search(query: &str) -> i32 {
             }
         }
 
-        let Some(source) = get_go_stdlib_typedef(pkg) else {
+        let Some(source) = get_go_stdlib_typedef(pkg, target) else {
             continue;
         };
         let index = build_go_package_index(source, pkg);
@@ -1493,8 +1494,8 @@ pub fn doc_search(query: &str) -> i32 {
         }
 
         if best_dist > 0 {
-            'outer: for pkg in get_go_stdlib_packages() {
-                let Some(source) = get_go_stdlib_typedef(pkg) else {
+            'outer: for pkg in get_go_stdlib_packages(target) {
+                let Some(source) = get_go_stdlib_typedef(pkg, target) else {
                     continue;
                 };
                 let index = build_go_package_index(source, pkg);

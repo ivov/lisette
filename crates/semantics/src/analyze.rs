@@ -125,7 +125,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         let go_cache = if cache_disabled {
             None
         } else {
-            go_stdlib::try_load_go_stdlib_cache()
+            go_stdlib::try_load_go_stdlib_cache(input.locator.target())
         };
 
         let mut to_infer: Vec<String> = Vec::new();
@@ -135,7 +135,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                 if deps::is_stdlib(go_pkg)
                     && let Some(ref cache) = go_cache
                 {
-                    load_cached_go_module(&mut store, &module_id, cache);
+                    load_cached_go_module(&mut store, &module_id, cache, input.locator.target());
                     if store.is_visited(&module_id) {
                         continue;
                     }
@@ -233,7 +233,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                         || all_go_modules.iter().any(|id| !c.modules.contains_key(id))
                 });
             if needs_save {
-                go_stdlib::save_go_stdlib_cache(&store, &all_go_modules);
+                go_stdlib::save_go_stdlib_cache(&store, &all_go_modules, input.locator.target());
             }
         }
 

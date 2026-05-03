@@ -2,6 +2,8 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use stdlib::Target;
+
 use crate::project_manifest::{
     GoDependency, Manifest, check_no_subpackage_deps, check_toolchain_version, find_module_for_pkg,
     parse_manifest,
@@ -35,6 +37,7 @@ pub struct TypedefLocator {
     deps: BTreeMap<String, GoDependency>,
     project_root: Option<PathBuf>,
     home: Option<String>,
+    target: Target,
 }
 
 impl TypedefLocator {
@@ -42,11 +45,13 @@ impl TypedefLocator {
         deps: BTreeMap<String, GoDependency>,
         project_root: Option<PathBuf>,
         home: Option<String>,
+        target: Target,
     ) -> Self {
         Self {
             deps,
             project_root,
             home,
+            target,
         }
     }
 
@@ -65,6 +70,7 @@ impl TypedefLocator {
             manifest.go_deps(),
             Some(project_root.to_path_buf()),
             std::env::var("HOME").ok(),
+            Target::host(),
         );
 
         Ok((manifest, locator))
@@ -78,6 +84,10 @@ impl TypedefLocator {
         &self.deps
     }
 
+    pub fn target(&self) -> Target {
+        self.target
+    }
+
     pub fn is_declared_go_dep(&self, package_path: &str) -> bool {
         find_module_for_pkg(&self.deps, package_path).is_some()
     }
@@ -86,7 +96,7 @@ impl TypedefLocator {
     /// Checks embedded stdlib typedefs first, then the on-disk cache.
     pub fn find_typedef_content(&self, package_path: &str) -> TypedefLocatorResult {
         if crate::is_stdlib(package_path) {
-            return match stdlib::get_go_stdlib_typedef(package_path) {
+            return match stdlib::get_go_stdlib_typedef(package_path, self.target) {
                 Some(source) => TypedefLocatorResult::Found {
                     content: Cow::Borrowed(source),
                     origin: TypedefOrigin::Stdlib,

@@ -221,7 +221,7 @@ fn graph_declared_dep_missing_typedef() {
             via: None,
         },
     );
-    let resolver = deps::TypedefLocator::new(go_deps, None, None);
+    let resolver = deps::TypedefLocator::new(go_deps, None, None, stdlib::Target::host());
 
     let sink = LocalSink::new();
     let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
@@ -262,7 +262,7 @@ fn graph_subpackage_missing_typedef_points_at_add() {
             via: None,
         },
     );
-    let resolver = deps::TypedefLocator::new(go_deps, None, None);
+    let resolver = deps::TypedefLocator::new(go_deps, None, None, stdlib::Target::host());
 
     let sink = LocalSink::new();
     let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
@@ -430,6 +430,7 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
         go_deps,
         None,
         Some(tmp.path().join("home").to_string_lossy().to_string()),
+        stdlib::Target::host(),
     );
 
     // Root package resolves to root .d.lis
@@ -479,7 +480,7 @@ fn third_party_go_struct_impl_methods_registered() {
             via: None,
         },
     );
-    let resolver = deps::TypedefLocator::new(go_deps, None, Some(home));
+    let resolver = deps::TypedefLocator::new(go_deps, None, Some(home), stdlib::Target::host());
 
     let source = r#"
 import "go:github.com/gorilla/mux"
@@ -564,7 +565,7 @@ fn stdlib_cache_save_load_excludes_third_party() {
             via: None,
         },
     );
-    let resolver = deps::TypedefLocator::new(go_deps, None, Some(home));
+    let resolver = deps::TypedefLocator::new(go_deps, None, Some(home), stdlib::Target::host());
 
     let source = r#"
 import "go:github.com/gorilla/mux"

@@ -57,7 +57,7 @@ impl<'a> GoWorkspace<'a> {
     /// Run a `go` subcommand and return its stdout on success.
     fn run_go(&self, args: &[&str]) -> Result<String, String> {
         let cmd_display = format!("go {}", args.join(" "));
-        let output = crate::go_cli::go_command()
+        let output = crate::go_cli::go_command(stdlib::Target::host())
             .args(args)
             .current_dir(self.root)
             .output()
@@ -188,7 +188,7 @@ impl<'a> GoWorkspace<'a> {
             c
         } else {
             let bindgen_at_version = format!("{}@v{}", BINDGEN_GO_MODULE, BINDGEN_VERSION);
-            let mut c = crate::go_cli::go_command();
+            let mut c = crate::go_cli::go_command(stdlib::Target::host());
             c.args(["run", &bindgen_at_version, sub]);
             c
         };

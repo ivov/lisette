@@ -200,7 +200,7 @@ fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> {
         ));
     }
 
-    if stdlib::get_go_stdlib_typedef(path).is_some() {
+    if stdlib::get_go_stdlib_typedef(path, stdlib::Target::host()).is_some() {
         return Err(format!(
             "`{}` is a Go standard library package; stdlib packages do not need `lis add` (just `import \"go:{}\"`)",
             path, path
@@ -401,6 +401,7 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         manifest.go_deps(),
         Some(project_root.clone()),
         std::env::var("HOME").ok(),
+        stdlib::Target::host(),
     );
 
     if let Err(msg) = go_cli::write_go_mod(&project_target_dir, &manifest.project.name, &locator) {

@@ -13,19 +13,29 @@ use diagnostics::render::{self, Filter};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 use semantics::loader::Loader;
 
-fn run_with_invocation_cwd(build_dir: &Path, args: &[String], heading: &str) -> i32 {
+fn run_with_invocation_cwd(
+    build_dir: &Path,
+    args: &[String],
+    heading: &str,
+    target: stdlib::Target,
+) -> i32 {
     #[cfg(unix)]
     {
-        run_via_exec_wrapper(build_dir, args, heading)
+        run_via_exec_wrapper(build_dir, args, heading, target)
     }
     #[cfg(not(unix))]
     {
-        build_then_exec(build_dir, args, heading)
+        build_then_exec(build_dir, args, heading, target)
     }
 }
 
 #[cfg(unix)]
-fn run_via_exec_wrapper(build_dir: &Path, args: &[String], heading: &str) -> i32 {
+fn run_via_exec_wrapper(
+    build_dir: &Path,
+    args: &[String],
+    heading: &str,
+    target: stdlib::Target,
+) -> i32 {
     let cwd = match std::env::current_dir() {
         Ok(p) => p,
         Err(e) => {
@@ -50,7 +60,7 @@ fn run_via_exec_wrapper(build_dir: &Path, args: &[String], heading: &str) -> i32
         }
     };
 
-    let mut cmd = go_cli::go_command();
+    let mut cmd = go_cli::go_command(target);
     cmd.arg("-C")
         .arg(build_dir)
         .arg("run")
@@ -89,7 +99,12 @@ fn quote_for_go_exec(path: &str) -> Result<String, String> {
 const RUN_BIN_NAME: &str = "lis-run.exe";
 
 #[cfg(not(unix))]
-fn build_then_exec(build_dir: &Path, args: &[String], heading: &str) -> i32 {
+fn build_then_exec(
+    build_dir: &Path,
+    args: &[String],
+    heading: &str,
+    target: stdlib::Target,
+) -> i32 {
     let abs_build_dir = match build_dir.canonicalize() {
         Ok(p) => p,
         Err(e) => {
@@ -103,7 +118,7 @@ fn build_then_exec(build_dir: &Path, args: &[String], heading: &str) -> i32 {
     };
     let binary_path: PathBuf = abs_build_dir.join(RUN_BIN_NAME);
 
-    let mut build_cmd = go_cli::go_command();
+    let mut build_cmd = go_cli::go_command(target);
     build_cmd
         .arg("build")
         .arg("-o")
@@ -161,7 +176,12 @@ fn run_project(path: &str, args: Vec<String>, debug: bool) -> i32 {
     }
 
     let target_dir = Path::new(path).join("target");
-    run_with_invocation_cwd(&target_dir, &args, "Failed to run project")
+    run_with_invocation_cwd(
+        &target_dir,
+        &args,
+        "Failed to run project",
+        stdlib::Target::host(),
+    )
 }
 
 fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
@@ -265,9 +285,11 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         return code;
     }
 
-    if let Err(code) = go_cli::finalize_go_dir(&temp_dir, heading) {
+    let target = compile_config.locator.target();
+
+    if let Err(code) = go_cli::finalize_go_dir(&temp_dir, heading, target) {
         return code;
     }
 
-    run_with_invocation_cwd(&temp_dir, &args, "Failed to run standalone file")
+    run_with_invocation_cwd(&temp_dir, &args, "Failed to run standalone file", target)
 }

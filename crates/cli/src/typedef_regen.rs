@@ -87,6 +87,7 @@ pub fn generate_missing_typedefs(project_root: &Path, manifest: &Manifest) -> Re
         go_deps.clone(),
         Some(project_root.to_path_buf()),
         Some(home),
+        stdlib::Target::host(),
     );
     if let Err(msg) = go_cli::write_go_mod(&project_target_dir, &manifest.project.name, &locator) {
         error!("failed to write target/go.mod", msg);
