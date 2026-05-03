@@ -13,7 +13,7 @@ doctest = false
 test = false
 
 [dependencies]
-syntax = { package = "lisette-syntax", version = "0.1.24", path = "../syntax" }
-diagnostics = { package = "lisette-diagnostics", version = "0.1.24", path = "../diagnostics" }
+syntax = { package = "lisette-syntax", version = "0.1.25", path = "../syntax" }
+diagnostics = { package = "lisette-diagnostics", version = "0.1.25", path = "../diagnostics" }
 ecow.workspace = true
 rustc-hash.workspace = true
