@@ -982,17 +982,10 @@ pub(super) fn has_recursive_instantiation(target_id: &str, ty: &Type) -> bool {
 }
 
 fn walk_type(ty: &Type, predicate: &dyn Fn(&str, &[Type]) -> bool) -> bool {
-    match ty {
-        Type::Nominal { id, params, .. } => {
-            predicate(id, params) || params.iter().any(|p| walk_type(p, predicate))
-        }
-        Type::Function {
-            params,
-            return_type,
-            ..
-        } => params.iter().any(|p| walk_type(p, predicate)) || walk_type(return_type, predicate),
-        Type::Tuple(elems) => elems.iter().any(|e| walk_type(e, predicate)),
-        Type::Forall { body, .. } => walk_type(body, predicate),
-        _ => false,
+    if let Type::Nominal { id, params, .. } = ty
+        && predicate(id, params)
+    {
+        return true;
     }
+    ty.children().iter().any(|c| walk_type(c, predicate))
 }

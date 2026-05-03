@@ -502,6 +502,36 @@ impl Type {
             _ => None,
         }
     }
+
+    /// Direct child types, for read-only walks. Excludes `Function.bounds`.
+    pub fn children(&self) -> Vec<&Type> {
+        match self {
+            Type::Nominal {
+                params,
+                underlying_ty,
+                ..
+            } => {
+                let mut c: Vec<&Type> = params.iter().collect();
+                if let Some(u) = underlying_ty {
+                    c.push(u);
+                }
+                c
+            }
+            Type::Compound { args, .. } => args.iter().collect(),
+            Type::Function {
+                params,
+                return_type,
+                ..
+            } => {
+                let mut c: Vec<&Type> = params.iter().collect();
+                c.push(return_type);
+                c
+            }
+            Type::Tuple(elements) => elements.iter().collect(),
+            Type::Forall { body, .. } => vec![body],
+            _ => vec![],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

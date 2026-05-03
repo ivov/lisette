@@ -759,64 +759,22 @@ impl TaskState<'_> {
     }
 
     fn type_contains_name(ty: &Type, name: &str) -> bool {
-        match ty {
-            Type::Nominal {
-                id,
-                params,
-                underlying_ty,
-            } => {
-                id.as_str() == name
-                    || params.iter().any(|p| Self::type_contains_name(p, name))
-                    || underlying_ty
-                        .as_deref()
-                        .is_some_and(|u| Self::type_contains_name(u, name))
-            }
-            Type::Compound { args, .. } => args.iter().any(|a| Self::type_contains_name(a, name)),
-            Type::Tuple(elements) => elements.iter().any(|e| Self::type_contains_name(e, name)),
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => {
-                params.iter().any(|p| Self::type_contains_name(p, name))
-                    || Self::type_contains_name(return_type, name)
-            }
-            Type::Forall { body, .. } => Self::type_contains_name(body, name),
-            _ => false,
+        if let Type::Nominal { id, .. } = ty
+            && id.as_str() == name
+        {
+            return true;
         }
+        ty.children()
+            .iter()
+            .any(|c| Self::type_contains_name(c, name))
     }
 
     fn collect_type_refs(ty: &Type, refs: &mut Vec<String>) {
-        match ty {
-            Type::Nominal {
-                id,
-                params,
-                underlying_ty,
-            } => {
-                refs.push(id.to_string());
-                params.iter().for_each(|p| Self::collect_type_refs(p, refs));
-                if let Some(u) = underlying_ty {
-                    Self::collect_type_refs(u, refs);
-                }
-            }
-            Type::Compound { args, .. } => {
-                args.iter().for_each(|a| Self::collect_type_refs(a, refs));
-            }
-            Type::Tuple(elements) => {
-                elements
-                    .iter()
-                    .for_each(|e| Self::collect_type_refs(e, refs));
-            }
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => {
-                params.iter().for_each(|p| Self::collect_type_refs(p, refs));
-                Self::collect_type_refs(return_type, refs);
-            }
-            Type::Forall { body, .. } => Self::collect_type_refs(body, refs),
-            _ => {}
+        if let Type::Nominal { id, .. } = ty {
+            refs.push(id.to_string());
+        }
+        for c in ty.children() {
+            Self::collect_type_refs(c, refs);
         }
     }
 }
