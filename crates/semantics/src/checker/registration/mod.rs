@@ -10,10 +10,10 @@ use syntax::ast::{
     Annotation, Attribute, AttributeArg, EnumVariant, Expression, FunctionDefinition, Generic,
     Span, StructKind, Visibility as SyntacticVisibility,
 };
-use syntax::program::{Definition, File, Visibility};
+use syntax::program::{Definition, File, FileImport, Visibility};
 use syntax::types::{Symbol, Type};
 
-use super::TaskState;
+use super::{FileContextKind, TaskState};
 use crate::store::Store;
 
 pub(crate) fn extract_package_directive(source: &str) -> Option<String> {
@@ -90,99 +90,19 @@ impl TaskState<'_> {
     }
 
     pub fn register_module(&mut self, store: &mut Store, id: &str) {
-        self.cursor.module_id = id.to_string();
+        let type_name_entries =
+            self.with_module_cursor(id, |this| this.collect_module_type_name_entries(store, id));
+        self.insert_type_name_entries(store, id, type_name_entries);
 
-        let type_name_entries = {
-            let module = store
-                .get_module(id)
-                .expect("module must exist for declaration");
-            let mut entries = Vec::new();
-            for file in module.files.values() {
-                entries.extend(self.collect_type_name_entries(
-                    &file.items,
-                    &Visibility::Private,
-                    false,
-                ));
-            }
-            for file in module.all_typedefs() {
-                entries.extend(self.collect_type_name_entries(
-                    &file.items,
-                    &Visibility::Private,
-                    true,
-                ));
-            }
-            entries
-        };
-        let module = store
-            .get_module_mut(id)
-            .expect("module must exist for declaration");
-        for (qualified_name, definition) in type_name_entries {
-            module
-                .definitions
-                .entry(qualified_name)
-                .or_insert(definition);
-        }
-
-        let file_data: Vec<_> = {
-            let module = store
-                .get_module(id)
-                .expect("module must exist for declaration");
-            module
-                .files
-                .iter()
-                .chain(module.typedefs.iter())
-                .map(|(file_id, f)| (*file_id, f.imports()))
-                .collect()
-        };
+        let file_data = self.module_file_data(store, id);
 
         for (file_id, imports) in &file_data {
-            self.reset_scopes();
-            self.cursor.file_id = Some(*file_id);
-
-            self.put_prelude_in_scope(&*store);
-            self.put_unprefixed_module_in_scope(&*store, id);
-            self.put_imported_modules_in_scope(&*store, imports);
-
-            let items = std::mem::take(
-                &mut store
-                    .get_file_mut(*file_id)
-                    .expect("file must exist for registration")
-                    .items,
-            );
-
-            self.register_type_definitions(store, &items);
-
-            store
-                .get_file_mut(*file_id)
-                .expect("file must exist after registration")
-                .items = items;
+            self.register_file_type_definitions(store, id, *file_id, imports);
         }
 
         for (file_id, imports) in &file_data {
-            self.reset_scopes();
-            self.cursor.file_id = Some(*file_id);
-
-            self.put_prelude_in_scope(&*store);
-            self.put_unprefixed_module_in_scope(&*store, id);
-            self.put_imported_modules_in_scope(&*store, imports);
-
-            let items = std::mem::take(
-                &mut store
-                    .get_file_mut(*file_id)
-                    .expect("file must exist for registration")
-                    .items,
-            );
-
-            self.register_impl_blocks(store, &items);
-            self.register_values(store, &items, &Visibility::Private);
-
-            store
-                .get_file_mut(*file_id)
-                .expect("file must exist after registration")
-                .items = items;
+            self.register_file_values(store, id, *file_id, imports);
         }
-
-        self.cursor.file_id = None;
 
         let module = store.get_module(id).expect("module must exist");
         let ufcs_entries = crate::call_classification::compute_module_ufcs(module, id);
@@ -248,24 +168,136 @@ impl TaskState<'_> {
 
         store.store_file(module_id, file);
 
-        let prev_module_id = self.cursor.module_id.clone();
-        self.cursor.module_id = module_id.to_string();
-
-        self.reset_scopes();
-        self.cursor.file_id = Some(file_id);
-        self.put_prelude_in_scope(&*store);
-        self.put_imported_modules_in_scope(&*store, &imports);
-
-        let items = std::mem::take(
-            &mut store
-                .get_file_mut(file_id)
-                .expect("file must exist after store_file")
-                .items,
+        self.with_file_context(
+            store,
+            module_id,
+            file_id,
+            &imports,
+            FileContextKind::ImportedTypedef,
+            |this, store| {
+                let items = std::mem::take(
+                    &mut store
+                        .get_file_mut(file_id)
+                        .expect("file must exist after store_file")
+                        .items,
+                );
+                this.register_types_and_values(store, &items, &Visibility::Public);
+            },
         );
-        self.register_types_and_values(store, &items, &Visibility::Public);
+    }
 
-        self.cursor.file_id = None;
-        self.cursor.module_id = prev_module_id;
+    fn collect_module_type_name_entries(
+        &self,
+        store: &Store,
+        module_id: &str,
+    ) -> Vec<(Symbol, Definition)> {
+        let module = store
+            .get_module(module_id)
+            .expect("module must exist for declaration");
+        let mut entries = Vec::new();
+        for file in module.files.values() {
+            entries.extend(self.collect_type_name_entries(
+                &file.items,
+                &Visibility::Private,
+                false,
+            ));
+        }
+        for file in module.all_typedefs() {
+            entries.extend(self.collect_type_name_entries(&file.items, &Visibility::Private, true));
+        }
+        entries
+    }
+
+    fn insert_type_name_entries(
+        &mut self,
+        store: &mut Store,
+        module_id: &str,
+        type_name_entries: Vec<(Symbol, Definition)>,
+    ) {
+        let module = store
+            .get_module_mut(module_id)
+            .expect("module must exist for declaration");
+        for (qualified_name, definition) in type_name_entries {
+            module
+                .definitions
+                .entry(qualified_name)
+                .or_insert(definition);
+        }
+    }
+
+    fn module_file_data(&self, store: &Store, module_id: &str) -> Vec<(u32, Vec<FileImport>)> {
+        let module = store
+            .get_module(module_id)
+            .expect("module must exist for declaration");
+        module
+            .files
+            .iter()
+            .chain(module.typedefs.iter())
+            .map(|(file_id, f)| (*file_id, f.imports()))
+            .collect()
+    }
+
+    fn register_file_type_definitions(
+        &mut self,
+        store: &mut Store,
+        module_id: &str,
+        file_id: u32,
+        imports: &[FileImport],
+    ) {
+        self.with_file_context(
+            store,
+            module_id,
+            file_id,
+            imports,
+            FileContextKind::Standard,
+            |this, store| {
+                let items = std::mem::take(
+                    &mut store
+                        .get_file_mut(file_id)
+                        .expect("file must exist for registration")
+                        .items,
+                );
+
+                this.register_type_definitions(store, &items);
+
+                store
+                    .get_file_mut(file_id)
+                    .expect("file must exist after registration")
+                    .items = items;
+            },
+        );
+    }
+
+    fn register_file_values(
+        &mut self,
+        store: &mut Store,
+        module_id: &str,
+        file_id: u32,
+        imports: &[FileImport],
+    ) {
+        self.with_file_context(
+            store,
+            module_id,
+            file_id,
+            imports,
+            FileContextKind::Standard,
+            |this, store| {
+                let items = std::mem::take(
+                    &mut store
+                        .get_file_mut(file_id)
+                        .expect("file must exist for registration")
+                        .items,
+                );
+
+                this.register_impl_blocks(store, &items);
+                this.register_values(store, &items, &Visibility::Private);
+
+                store
+                    .get_file_mut(file_id)
+                    .expect("file must exist after registration")
+                    .items = items;
+            },
+        );
     }
 
     pub fn register_types_and_values(

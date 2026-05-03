@@ -8,63 +8,71 @@ pub(crate) use unify::BuiltinBound;
 
 use rustc_hash::FxHashMap as HashMap;
 
-use super::TaskState;
 use super::freeze::FreezeFolder;
+use super::{FileContextKind, TaskState};
 use crate::store::Store;
 use syntax::ast::Expression;
 use syntax::program::{File, FileImport};
 
 impl TaskState<'_> {
     pub fn infer_module(&mut self, store: &mut Store, module_id: &str) {
-        self.cursor.module_id = module_id.to_string();
-
-        let files: Vec<File> = {
-            let module = store
-                .get_module_mut(module_id)
-                .expect("module must exist for inference");
-            std::mem::take(&mut module.files).into_values().collect()
-        };
-
+        let files = self.take_module_files(store, module_id);
         let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
         self.check_const_cycles(&*store, &items_per_file);
 
         for file in files {
-            let imports = file.imports();
-
-            self.reset_scopes();
-            self.cursor.file_id = Some(file.id);
-            self.put_prelude_in_scope(&*store);
-            self.put_unprefixed_module_in_scope(&*store, module_id);
-            self.put_imported_modules_in_scope(&*store, &imports);
-            self.check_definition_module_collisions(&*store, &file.items, &imports);
-
-            let inferred_items: Vec<_> = file
-                .items
-                .into_iter()
-                .map(|item| {
-                    let type_var = self.new_type_var();
-                    self.infer_expression(store, item, &type_var)
-                })
-                .collect();
-
-            self.check_reference_sibling_aliasing(&inferred_items);
-
-            let folder = FreezeFolder::new(&self.env);
-            folder.freeze_facts(&mut self.facts);
-            let frozen_items = FreezeFolder::new(&self.env).freeze_items(inferred_items);
-
-            let typed_file = File {
-                id: file.id,
-                module_id: file.module_id,
-                name: file.name,
-                source: file.source,
-                items: frozen_items,
-            };
-
-            self.typed_files.push((module_id.to_string(), typed_file));
+            self.infer_file(store, module_id, file);
         }
+    }
 
-        self.cursor.file_id = None;
+    fn take_module_files(&mut self, store: &mut Store, module_id: &str) -> Vec<File> {
+        self.with_module_cursor(module_id, |_this| {
+            let module = store
+                .get_module_mut(module_id)
+                .expect("module must exist for inference");
+            std::mem::take(&mut module.files).into_values().collect()
+        })
+    }
+
+    fn infer_file(&mut self, store: &mut Store, module_id: &str, file: File) {
+        let file_id = file.id;
+        let imports = file.imports();
+
+        self.with_file_context(
+            store,
+            module_id,
+            file_id,
+            &imports,
+            FileContextKind::Standard,
+            |this, store| {
+                this.check_definition_module_collisions(&*store, &file.items, &imports);
+
+                let inferred_items: Vec<_> = file
+                    .items
+                    .into_iter()
+                    .map(|item| {
+                        let type_var = this.new_type_var();
+                        this.infer_expression(store, item, &type_var)
+                    })
+                    .collect();
+
+                this.check_reference_sibling_aliasing(&inferred_items);
+
+                let folder = FreezeFolder::new(&this.env);
+                folder.freeze_facts(&mut this.facts);
+                let frozen_items = FreezeFolder::new(&this.env).freeze_items(inferred_items);
+
+                let typed_file = File {
+                    id: file_id,
+                    module_id: file.module_id,
+                    name: file.name,
+                    source: file.source,
+                    items: frozen_items,
+                };
+
+                this.typed_files.push((module_id.to_string(), typed_file));
+            },
+        );
     }
 
     fn check_definition_module_collisions(

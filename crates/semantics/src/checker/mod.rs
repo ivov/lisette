@@ -76,6 +76,13 @@ impl ImportState {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum FileContextKind {
+    Standard,
+    ImportedTypedef,
+    Prelude,
+}
+
 /// Cache for builtin types (int, bool, string, etc.) resolved from the prelude.
 /// These never change once populated, so no invalidation needed.
 type BuiltinCache = HashMap<String, Type>;
@@ -501,6 +508,58 @@ impl<'s> TaskState<'s> {
     pub fn reset_scopes(&mut self) {
         self.scopes.reset();
         self.imports.clear();
+    }
+
+    pub(crate) fn with_module_cursor<T>(
+        &mut self,
+        module_id: &str,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        if self.cursor.module_id == module_id {
+            return f(self);
+        }
+
+        let previous_module_id = std::mem::replace(&mut self.cursor.module_id, module_id.into());
+        let result = f(self);
+        self.cursor.module_id = previous_module_id;
+        result
+    }
+
+    pub(crate) fn with_file_context<T>(
+        &mut self,
+        store: &mut Store,
+        module_id: &str,
+        file_id: u32,
+        imports: &[FileImport],
+        kind: FileContextKind,
+        f: impl FnOnce(&mut Self, &mut Store) -> T,
+    ) -> T {
+        self.with_module_cursor(module_id, |this| {
+            let previous_file_id = this.cursor.file_id.replace(file_id);
+            let previous_scopes = std::mem::take(&mut this.scopes);
+            let previous_imports = std::mem::take(&mut this.imports);
+
+            match kind {
+                FileContextKind::Standard => {
+                    this.put_prelude_in_scope(&*store);
+                    this.put_unprefixed_module_in_scope(&*store, module_id);
+                }
+                FileContextKind::ImportedTypedef => {
+                    this.put_prelude_in_scope(&*store);
+                }
+                FileContextKind::Prelude => {
+                    this.put_unprefixed_module_in_scope(&*store, module_id);
+                }
+            }
+            this.put_imported_modules_in_scope(&*store, imports);
+
+            let result = f(this, store);
+
+            this.scopes = previous_scopes;
+            this.imports = previous_imports;
+            this.cursor.file_id = previous_file_id;
+            result
+        })
     }
 
     pub fn failed(&self) -> bool {

@@ -187,13 +187,8 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                 continue;
             }
 
-            let prev_module_id = checker.cursor.module_id.clone();
-            checker.cursor.module_id = module_id.to_string();
-
             store.store_module(&module_id, files);
             checker.register_module(&mut store, &module_id);
-
-            checker.cursor.module_id = prev_module_id;
 
             if cache_enabled && !is_entry {
                 compiled_modules.push(CompiledModule {
@@ -207,12 +202,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         }
 
         for module_id in &to_infer {
-            let prev_module_id = checker.cursor.module_id.clone();
-            checker.cursor.module_id = module_id.clone();
-
             checker.infer_module(&mut store, module_id);
-
-            checker.cursor.module_id = prev_module_id;
         }
 
         for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {
