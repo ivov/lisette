@@ -1,6 +1,31 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.1.25](https://github.com/ivov/lisette/compare/lisette-v0.1.24...lisette-v0.1.25) - 2026-05-03
+
+- fix: propagate expected type through generic positions [#286](https://github.com/ivov/lisette/pull/286) [`9777eec`](https://github.com/ivov/lisette/commit/9777eec86c5fc3d3b636f6820f5b7cadcc561d8c)
+- chore: parameterize stdlib typedef regen target [#285](https://github.com/ivov/lisette/pull/285) [`6eccca3`](https://github.com/ivov/lisette/commit/6eccca3954ce7597618ba7aa715ee1113a11e766)
+- fix: bridge option<T> backed by go *T across reads and writes [#284](https://github.com/ivov/lisette/pull/284) [`cebbe84`](https://github.com/ivov/lisette/commit/cebbe84d52d4096d58061fae5b73b2f22f46867e)
+- refactor: drop stale Nominal type uses in lsp [#283](https://github.com/ivov/lisette/pull/283) [`2dc196c`](https://github.com/ivov/lisette/commit/2dc196cb1baca598173aad871f6ef24d1b0f9f67)
+- fix: show lsp completions through ref types [#282](https://github.com/ivov/lisette/pull/282) [`0b39743`](https://github.com/ivov/lisette/commit/0b39743312f9f4c67aa0345f5659c8fe1fad547b)
+- fix: skip subpackage check for multi-module monorepo siblings [#280](https://github.com/ivov/lisette/pull/280) [`0a270b7`](https://github.com/ivov/lisette/commit/0a270b72c2ecbac4accc1d90d3751fcc8c02aa54)
+- fix: lower paired Go errors as tuple of Option<error> [#279](https://github.com/ivov/lisette/pull/279) [`1393aaa`](https://github.com/ivov/lisette/commit/1393aaabf77b6309b6568c37bf443811530b1994)
+- fix: tolerate transitive bindgen failures in lis add [#278](https://github.com/ivov/lisette/pull/278) [`fcad1a0`](https://github.com/ivov/lisette/commit/fcad1a0fdf8be16efe2a863df0a18ec8734f10b7)
+- ci: pin bindgen target platform [#276](https://github.com/ivov/lisette/pull/276) [`62f22ea`](https://github.com/ivov/lisette/commit/62f22eabc46ea897d785f5ca55ce406cb2f10066)
+- fix: inherit invocation cwd in lis run [#275](https://github.com/ivov/lisette/pull/275) [`fbe12d2`](https://github.com/ivov/lisette/commit/fbe12d25b1e32a175ffa80202ab4323b6d2e4d12)
+- ci: detect stdlib typedef drift [#274](https://github.com/ivov/lisette/pull/274) [`67dbb9b`](https://github.com/ivov/lisette/commit/67dbb9bdafc51b2edd0c1f741ab8ea3979bc773d)
+- feat: add nilable_param bindgen override [#273](https://github.com/ivov/lisette/pull/273) [`b54a42d`](https://github.com/ivov/lisette/commit/b54a42df5e6968e8392639aae9d7da221260a74f)
+- chore: strip blank line above skipped-field comments in typedefs [#272](https://github.com/ivov/lisette/pull/272) [`81b4497`](https://github.com/ivov/lisette/commit/81b4497818d8a4fd1b104ed411446967df20ec0e)
+- fix: hint unwrap for member access on Option/Result [#271](https://github.com/ivov/lisette/pull/271) [`cb8c6c0`](https://github.com/ivov/lisette/commit/cb8c6c0ee68a7c3cd028cd9739afe52a3d3dee51)
+- feat: lift ban on userland unknown [#270](https://github.com/ivov/lisette/pull/270) [`dc69354`](https://github.com/ivov/lisette/commit/dc693542dcfa70ca75a44ff704f935c5862902e6)
+- fix: suppress cascading diagnostics for error type [#269](https://github.com/ivov/lisette/pull/269) [`7824122`](https://github.com/ivov/lisette/commit/7824122e0c7bd86d306618b7dbdc331ccf60fca7)
+- docs: refresh agents.md template [#268](https://github.com/ivov/lisette/pull/268) [`9e20b00`](https://github.com/ivov/lisette/commit/9e20b00f013cc9f5fde105e94402de181171ed75)
+- fix: hint as-cast for numeric type mismatches [#267](https://github.com/ivov/lisette/pull/267) [`db3e352`](https://github.com/ivov/lisette/commit/db3e35225846952de3af0785276c40773306737a)
+- ci: drop changelog tripwire from release gates [#266](https://github.com/ivov/lisette/pull/266) [`51d3ec3`](https://github.com/ivov/lisette/commit/51d3ec3cc430ffa31dbbf60ce16d64b639e2ebf7)
+- feat: revamp CLI surface [#265](https://github.com/ivov/lisette/pull/265) [`100a91b`](https://github.com/ivov/lisette/commit/100a91b5ce81faca24ebb1813155e6b0a5446fe2)
+- fix: improve diagnostic for backticks outside attribute position [#264](https://github.com/ivov/lisette/pull/264) [`569e309`](https://github.com/ivov/lisette/commit/569e309926be460265508e2b881fa5956fcf016d)
+- feat: add beginner-friendly diagnostics [#263](https://github.com/ivov/lisette/pull/263) [`063a155`](https://github.com/ivov/lisette/commit/063a1550301372100814cdc416f74bd40cef26e9)
+- fix: stop double-wrapping callbacks bound to Go fn aliases [#261](https://github.com/ivov/lisette/pull/261) [`6b8894c`](https://github.com/ivov/lisette/commit/6b8894cb0674008e8c9feba41822c56154a22c96)
 ## [0.1.24](https://github.com/ivov/lisette/compare/lisette-v0.1.23...lisette-v0.1.24) - 2026-05-01
 
 - refactor: clean up diagnostics taxonomy [#260](https://github.com/ivov/lisette/pull/260) [`608b213`](https://github.com/ivov/lisette/commit/608b2136b2ad799405c86fb3267b13b85b56f2f7)
