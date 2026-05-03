@@ -89,7 +89,7 @@ pub fn learn() -> i32 {
         .current_dir(project_dir)
         .status();
 
-    crate::go_cli::prewarm_module_cache();
+    crate::go_cli::prewarm_module_cache(stdlib::Target::host());
 
     eprintln!();
     if crate::output::use_color() {

@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use crate::Target;
+
 static GO_STDLIB_TYPEDEFS: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     HashMap::from([
         ("archive/tar", include_str!("../typedefs/archive/tar.d.lis")),
@@ -397,11 +399,11 @@ static GO_STDLIB_TYPEDEFS: LazyLock<HashMap<&str, &str>> = LazyLock::new(|| {
     ])
 });
 
-pub fn get_go_stdlib_typedef(package: &str) -> Option<&'static str> {
+pub fn get_go_stdlib_typedef(package: &str, _target: Target) -> Option<&'static str> {
     GO_STDLIB_TYPEDEFS.get(package).copied()
 }
 
-pub fn get_go_stdlib_packages() -> Vec<&'static str> {
+pub fn get_go_stdlib_packages(_target: Target) -> Vec<&'static str> {
     let mut packages: Vec<&'static str> = GO_STDLIB_TYPEDEFS.keys().copied().collect();
     packages.sort();
     packages

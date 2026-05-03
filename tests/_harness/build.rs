@@ -85,7 +85,7 @@ pub fn locator_with_go_dep(module_path: &str, version: &str) -> deps::TypedefLoc
             via: None,
         },
     );
-    deps::TypedefLocator::new(go_deps, None, None)
+    deps::TypedefLocator::new(go_deps, None, None, stdlib::Target::host())
 }
 
 pub fn compile_project(fs: MockFileSystem, go_module: &str) -> String {

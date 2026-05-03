@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::{checker::TaskState, store::Store};
-use stdlib::get_go_stdlib_typedef;
+use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
     ast::Expression,
     desugar,
@@ -125,7 +125,7 @@ impl CompiledTest {
                     } = item
                     {
                         if let Some(go_pkg) = name.strip_prefix("go:")
-                            && let Some(typedef) = get_go_stdlib_typedef(go_pkg)
+                            && let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host())
                         {
                             checker
                                 .parse_and_register_go_module(&mut store, name, typedef, &locator);

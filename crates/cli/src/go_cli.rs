@@ -6,8 +6,9 @@ include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
 
 use deps::TypedefLocator;
 use emit::{OutputFile, PRELUDE_IMPORT_PATH};
+use stdlib::Target;
 
-pub fn go_command() -> Command {
+pub fn go_command(_target: Target) -> Command {
     let mut c = Command::new("go");
     // Isolate from any user-side env that would change Go's mode against
     // lisette's `target/`: a stray `go.work` (workspace mode) or a stray
@@ -181,7 +182,7 @@ pub fn write_go_outputs(dir: &Path, files: &[OutputFile], heading: &str) -> Resu
     Ok(())
 }
 
-pub fn finalize_go_dir(dir: &Path, heading: &str) -> Result<(), i32> {
+pub fn finalize_go_dir(dir: &Path, heading: &str, target: Target) -> Result<(), i32> {
     if let Err(e) = go_fmt(dir) {
         crate::cli_error!(
             heading,
@@ -191,7 +192,7 @@ pub fn finalize_go_dir(dir: &Path, heading: &str) -> Result<(), i32> {
         return Err(1);
     }
 
-    if let Err(e) = ensure_go_sum(dir) {
+    if let Err(e) = ensure_go_sum(dir, target) {
         crate::cli_error!(
             heading,
             format!("Failed to resolve Go dependencies: {}", e),
@@ -203,7 +204,7 @@ pub fn finalize_go_dir(dir: &Path, heading: &str) -> Result<(), i32> {
     Ok(())
 }
 
-pub fn ensure_go_sum(dir: &Path) -> Result<(), String> {
+pub fn ensure_go_sum(dir: &Path, target: Target) -> Result<(), String> {
     let go_sum_path = dir.join("go.sum");
     if let Ok(content) = fs::read_to_string(&go_sum_path) {
         // go.mod hash + source hash lines
@@ -211,12 +212,12 @@ pub fn ensure_go_sum(dir: &Path) -> Result<(), String> {
             return Ok(());
         }
     }
-    go_mod_tidy(dir)
+    go_mod_tidy(dir, target)
 }
 
-pub fn prewarm_module_cache() {
+pub fn prewarm_module_cache(target: Target) {
     let prelude_version = env!("CARGO_PKG_VERSION");
-    let _ = go_command()
+    let _ = go_command(target)
         .args([
             "mod",
             "download",
@@ -227,8 +228,8 @@ pub fn prewarm_module_cache() {
         .spawn();
 }
 
-fn go_mod_tidy(path: &Path) -> Result<(), String> {
-    let output = go_command()
+fn go_mod_tidy(path: &Path, target: Target) -> Result<(), String> {
+    let output = go_command(target)
         .args(["mod", "tidy"])
         .current_dir(path)
         .output()

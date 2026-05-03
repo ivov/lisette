@@ -157,7 +157,7 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
         return 1;
     }
 
-    if let Err(code) = go_cli::finalize_go_dir(&target_dir, heading) {
+    if let Err(code) = go_cli::finalize_go_dir(&target_dir, heading, locator.target()) {
         return code;
     }
 

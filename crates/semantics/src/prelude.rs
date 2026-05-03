@@ -3,7 +3,7 @@ use stdlib::LIS_PRELUDE_SOURCE;
 use syntax::program::{File, Visibility};
 
 use crate::call_classification::compute_module_ufcs;
-use crate::checker::TaskState;
+use crate::checker::{FileContextKind, TaskState};
 use crate::store::Store;
 
 pub const PRELUDE_MODULE_ID: &str = "prelude";
@@ -27,28 +27,29 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
     );
 
     let mut checker = TaskState::with_fresh_allocator(sink);
-    checker.cursor.module_id = PRELUDE_MODULE_ID.to_string();
-    checker.cursor.file_id = Some(PRELUDE_FILE_ID);
-
     let module = store
         .get_module(PRELUDE_MODULE_ID)
         .cloned()
         .expect("prelude module must exist");
 
-    for file in module.all_typedefs() {
-        checker.register_type_names(store, &file.items, &Visibility::Public);
-    }
+    checker.with_file_context(
+        store,
+        PRELUDE_MODULE_ID,
+        PRELUDE_FILE_ID,
+        &[],
+        FileContextKind::Prelude,
+        |checker, store| {
+            for file in module.all_typedefs() {
+                checker.register_type_names(store, &file.items, &Visibility::Public);
+            }
 
-    checker.reset_scopes();
-    checker.put_unprefixed_module_in_scope(&*store, PRELUDE_MODULE_ID);
-
-    for file in module.all_typedefs() {
-        checker.register_type_definitions(store, &file.items);
-        checker.register_impl_blocks(store, &file.items);
-        checker.register_values(store, &file.items, &Visibility::Public);
-    }
-
-    checker.cursor.file_id = None;
+            for file in module.all_typedefs() {
+                checker.register_type_definitions(store, &file.items);
+                checker.register_impl_blocks(store, &file.items);
+                checker.register_values(store, &file.items, &Visibility::Public);
+            }
+        },
+    );
 }
 
 pub fn compute_prelude_ufcs(store: &Store) -> Vec<(String, String)> {

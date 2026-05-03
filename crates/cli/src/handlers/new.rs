@@ -135,7 +135,7 @@ go run -C target .
         .current_dir(project_dir)
         .status();
 
-    crate::go_cli::prewarm_module_cache();
+    crate::go_cli::prewarm_module_cache(stdlib::Target::host());
 
     eprintln!();
     if crate::output::use_color() {
@@ -155,7 +155,7 @@ go run -C target .
 }
 
 fn is_go_stdlib_package(name: &str) -> bool {
-    stdlib::get_go_stdlib_packages()
+    stdlib::get_go_stdlib_packages(stdlib::Target::host())
         .iter()
         .any(|pkg| pkg.split('/').next() == Some(name))
 }

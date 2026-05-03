@@ -1,6 +1,6 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::{checker::TaskState, module_graph::build_module_graph, store::Store};
-use stdlib::get_go_stdlib_typedef;
+use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{ast::Expression, types::Type};
 
 use super::init_prelude;
@@ -55,7 +55,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         let order = std::mem::take(&mut graph_result.order);
         for module_id in order {
             if let Some(go_pkg) = module_id.strip_prefix("go:") {
-                if let Some(typedef) = get_go_stdlib_typedef(go_pkg) {
+                if let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host()) {
                     checker.parse_and_register_go_module(&mut store, &module_id, typedef, &locator);
                 }
                 continue;

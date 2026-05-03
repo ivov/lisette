@@ -20,14 +20,14 @@ name = "lis"
 path = "src/main.rs"
 
 [dependencies]
-semantics = { package = "lisette-semantics", version = "0.1.24", path = "../semantics" }
-syntax = { package = "lisette-syntax", version = "0.1.24", path = "../syntax" }
-diagnostics = { package = "lisette-diagnostics", version = "0.1.24", path = "../diagnostics" }
-format = { package = "lisette-format", version = "0.1.24", path = "../format" }
-emit = { package = "lisette-emit", version = "0.1.24", path = "../emit" }
-stdlib = { package = "lisette-stdlib", version = "0.1.24", path = "../stdlib" }
-deps = { package = "lisette-deps", version = "0.1.24", path = "../deps" }
-lsp = { package = "lisette-lsp", version = "0.1.24", path = "../lsp" }
+semantics = { package = "lisette-semantics", version = "0.1.25", path = "../semantics" }
+syntax = { package = "lisette-syntax", version = "0.1.25", path = "../syntax" }
+diagnostics = { package = "lisette-diagnostics", version = "0.1.25", path = "../diagnostics" }
+format = { package = "lisette-format", version = "0.1.25", path = "../format" }
+emit = { package = "lisette-emit", version = "0.1.25", path = "../emit" }
+stdlib = { package = "lisette-stdlib", version = "0.1.25", path = "../stdlib" }
+deps = { package = "lisette-deps", version = "0.1.25", path = "../deps" }
+lsp = { package = "lisette-lsp", version = "0.1.25", path = "../lsp" }
 tokio = { version = "1", features = ["rt-multi-thread", "io-std"] }
 tower-lsp = "0.20"
 fs2 = "0.4"

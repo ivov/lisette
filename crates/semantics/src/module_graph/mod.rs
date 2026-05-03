@@ -52,7 +52,8 @@ pub fn build_module_graph(
 
         if !module_exists {
             if let Some(span) = import_spans.get(&module_id) {
-                let is_go_stdlib = stdlib::get_go_stdlib_typedef(&module_id).is_some();
+                let is_go_stdlib =
+                    stdlib::get_go_stdlib_typedef(&module_id, locator.target()).is_some();
 
                 let src_prefix_hint = module_id
                     .strip_prefix("src/")

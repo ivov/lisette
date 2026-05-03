@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use stdlib::get_go_stdlib_typedef;
+use stdlib::{Target, get_go_stdlib_typedef};
 
 use super::types::CachedDefinition;
 use super::{COMPILER_VERSION_HASH, GO_STDLIB_HASH};
@@ -24,22 +24,24 @@ pub struct GoModuleCache {
     pub go_imports: Vec<String>,
 }
 
-fn cache_path() -> Option<PathBuf> {
+fn cache_path(target: Target) -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
     Some(
         PathBuf::from(home)
             .join(".lisette")
             .join("cache")
             .join(format!(
-                "stdlib_defs_{:x}_compiler_{:x}.bin",
+                "stdlib_defs_{:x}_compiler_{:x}_{}_{}.bin",
                 GO_STDLIB_HASH & 0xFFFFFF,
-                COMPILER_VERSION_HASH & 0xFFFFFF
+                COMPILER_VERSION_HASH & 0xFFFFFF,
+                target.goos,
+                target.goarch,
             )),
     )
 }
 
-pub fn try_load_go_stdlib_cache() -> Option<GoStdlibCache> {
-    let path = cache_path()?;
+pub fn try_load_go_stdlib_cache(target: Target) -> Option<GoStdlibCache> {
+    let path = cache_path(target)?;
     let bytes = fs::read(&path).ok()?;
     let cache: GoStdlibCache = bincode::deserialize(&bytes).ok()?;
 
@@ -51,8 +53,10 @@ pub fn try_load_go_stdlib_cache() -> Option<GoStdlibCache> {
     Some(cache)
 }
 
-pub fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String]) {
-    let Some(path) = cache_path() else { return };
+pub fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String], target: Target) {
+    let Some(path) = cache_path(target) else {
+        return;
+    };
 
     let mut modules = HashMap::default();
     // Go definitions don't reference files, so file_id_to_index is always empty.
@@ -72,7 +76,7 @@ pub fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String]) {
             })
             .collect();
 
-        let go_imports = get_go_imports_from_source(module_id);
+        let go_imports = get_go_imports_from_source(module_id, target);
 
         modules.insert(
             module_id.clone(),
@@ -104,7 +108,12 @@ pub fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String]) {
 }
 
 /// Load a Go module and its transitive deps from cache, recursively.
-pub fn load_cached_go_module(store: &mut Store, module_id: &str, cache: &GoStdlibCache) {
+pub fn load_cached_go_module(
+    store: &mut Store,
+    module_id: &str,
+    cache: &GoStdlibCache,
+    target: Target,
+) {
     if store.is_visited(module_id) {
         return;
     }
@@ -116,22 +125,27 @@ pub fn load_cached_go_module(store: &mut Store, module_id: &str, cache: &GoStdli
     // Load transitive deps first
     let imports = cached.go_imports.clone();
     for dep in &imports {
-        load_cached_go_module(store, dep, cache);
+        load_cached_go_module(store, dep, cache, target);
     }
 
     if store.is_visited(module_id) {
         return; // May have been loaded as a transitive dep of a sibling
     }
 
-    register_cached_go_module(store, module_id, cached);
+    register_cached_go_module(store, module_id, cached, target);
 }
 
-fn register_cached_go_module(store: &mut Store, module_id: &str, cached: &GoModuleCache) {
+fn register_cached_go_module(
+    store: &mut Store,
+    module_id: &str,
+    cached: &GoModuleCache,
+    target: Target,
+) {
     store.add_module(module_id);
     store.mark_visited(module_id);
 
     if let Some(go_pkg) = module_id.strip_prefix("go:")
-        && let Some(source) = get_go_stdlib_typedef(go_pkg)
+        && let Some(source) = get_go_stdlib_typedef(go_pkg, target)
         && let Some(pkg_name) = extract_package_directive(source)
         && module_id.rsplit('/').next() != Some(pkg_name.as_str())
     {
@@ -155,11 +169,11 @@ fn register_cached_go_module(store: &mut Store, module_id: &str, cached: &GoModu
 }
 
 /// Extract Go imports from a module's `.d.lis` source without parsing.
-fn get_go_imports_from_source(module_id: &str) -> Vec<String> {
+fn get_go_imports_from_source(module_id: &str, target: Target) -> Vec<String> {
     let Some(go_pkg) = module_id.strip_prefix("go:") else {
         return vec![];
     };
-    let Some(source) = get_go_stdlib_typedef(go_pkg) else {
+    let Some(source) = get_go_stdlib_typedef(go_pkg, target) else {
         return vec![];
     };
     source
