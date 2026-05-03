@@ -196,6 +196,18 @@ impl<'s> TaskState<'s> {
         !self.is_d_lis(store)
     }
 
+    pub(crate) fn current_module<'a>(&self, store: &'a Store) -> &'a Module {
+        store
+            .get_module(&self.cursor.module_id)
+            .expect("current module must exist in store")
+    }
+
+    pub(crate) fn current_module_mut<'a>(&self, store: &'a mut Store) -> &'a mut Module {
+        store
+            .get_module_mut(&self.cursor.module_id)
+            .expect("current module must exist in store")
+    }
+
     pub(crate) fn qualify_name(&self, name: &str) -> Symbol {
         Symbol::from_parts(&self.cursor.module_id, name)
     }

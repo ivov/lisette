@@ -516,9 +516,7 @@ impl TaskState<'_> {
 
         let mut available_names = self.scopes.collect_all_value_names();
 
-        let module = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module(store);
         for qualified_name in module.definitions.keys() {
             let parts: Vec<&str> = qualified_name.rsplitn(2, '.').collect();
             if parts.len() == 2 {

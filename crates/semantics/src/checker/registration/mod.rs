@@ -64,17 +64,13 @@ pub(super) fn extract_attribute_flags(attributes: &[Attribute], name: &str) -> V
 
 impl TaskState<'_> {
     fn definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
-        store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        self.current_module(store)
             .definitions
             .contains_key(qualified_name)
     }
 
     fn type_definition_exists(&self, store: &Store, qualified_name: &str) -> bool {
-        store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        self.current_module(store)
             .definitions
             .get(qualified_name)
             .is_some_and(|d| {
@@ -287,9 +283,7 @@ impl TaskState<'_> {
         visibility: &Visibility,
     ) {
         let entries = self.collect_type_name_entries(items, visibility, self.is_d_lis(&*store));
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
         for (qualified_name, definition) in entries {
             module
                 .definitions
@@ -580,9 +574,7 @@ impl TaskState<'_> {
             ));
         }
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
         module.definitions.insert(
             qualified_name,
             Definition::Value {
@@ -653,9 +645,7 @@ impl TaskState<'_> {
             ));
         }
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
         module.const_names.insert(qualified_name.clone());
         module.definitions.insert(
             qualified_name,
@@ -703,9 +693,7 @@ impl TaskState<'_> {
         let item_visibility =
             self.compute_item_visibility(&*store, syntactic_visibility, visibility);
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
         module.definitions.insert(
             qualified_name,
             Definition::Value {
@@ -760,9 +748,7 @@ impl TaskState<'_> {
             .values
             .insert(name.to_string(), constructor_ty.clone());
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
         if let Some(Definition::Struct { constructor, .. }) =
             module.definitions.get_mut(qualified_name.as_str())
         {

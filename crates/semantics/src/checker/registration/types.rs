@@ -44,9 +44,8 @@ impl TaskState<'_> {
             self.add_enum_variant_to_scope(new_variant, name, &enum_ty, generics);
         }
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
@@ -80,9 +79,7 @@ impl TaskState<'_> {
             ));
         }
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
 
         for (qualified_variant_name, simple_name, variant_ty, variant_name_span, variant_doc) in
             variant_definitions
@@ -150,9 +147,8 @@ impl TaskState<'_> {
             .expect("enum type must exist")
             .clone();
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
@@ -175,9 +171,7 @@ impl TaskState<'_> {
 
         for variant in variants {
             let qualified_variant_name = qualified_name.with_segment(&variant.name);
-            let module = store
-                .get_module_mut(&self.cursor.module_id)
-                .expect("current module must exist in store");
+            let module = self.current_module_mut(store);
             module.definitions.insert(
                 qualified_variant_name,
                 Definition::Value {
@@ -201,9 +195,7 @@ impl TaskState<'_> {
                 .insert(variant.name.to_string(), enum_ty.clone());
         }
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
 
         module.definitions.insert(
             qualified_name,
@@ -419,9 +411,8 @@ impl TaskState<'_> {
             struct_ty
         };
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
@@ -433,25 +424,21 @@ impl TaskState<'_> {
             ));
         }
 
-        store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store")
-            .definitions
-            .insert(
-                qualified_name.clone(),
-                Definition::Struct {
-                    visibility,
-                    ty: struct_ty,
-                    name: name.into(),
-                    name_span: *name_span,
-                    generics: generics.to_vec(),
-                    fields: new_fields,
-                    kind,
-                    methods: Default::default(),
-                    constructor: None,
-                    doc: doc.clone(),
-                },
-            );
+        self.current_module_mut(store).definitions.insert(
+            qualified_name.clone(),
+            Definition::Struct {
+                visibility,
+                ty: struct_ty,
+                name: name.into(),
+                name_span: *name_span,
+                generics: generics.to_vec(),
+                fields: new_fields,
+                kind,
+                methods: Default::default(),
+                constructor: None,
+                doc: doc.clone(),
+            },
+        );
 
         self.check_recursive_type(&*store, &qualified_name, name, name_span);
     }
@@ -583,9 +570,8 @@ impl TaskState<'_> {
                     .push(diagnostics::infer::opaque_type_outside_typedef(*span));
             }
 
-            let visibility = store
-                .get_module(&self.cursor.module_id)
-                .expect("current module must exist in store")
+            let visibility = self
+                .current_module(&*store)
                 .definitions
                 .get(qualified_name.as_str())
                 .map(|definition| definition.visibility().clone())
@@ -640,23 +626,19 @@ impl TaskState<'_> {
                 ));
             }
 
-            store
-                .get_module_mut(&self.cursor.module_id)
-                .expect("current module must exist in store")
-                .definitions
-                .insert(
-                    qualified_name,
-                    Definition::TypeAlias {
-                        visibility,
-                        name: name.into(),
-                        name_span: *name_span,
-                        generics: generics.to_vec(),
-                        annotation: annotation.clone(),
-                        ty: alias_ty,
-                        methods: Default::default(),
-                        doc: doc.clone(),
-                    },
-                );
+            self.current_module_mut(store).definitions.insert(
+                qualified_name,
+                Definition::TypeAlias {
+                    visibility,
+                    name: name.into(),
+                    name_span: *name_span,
+                    generics: generics.to_vec(),
+                    annotation: annotation.clone(),
+                    ty: alias_ty,
+                    methods: Default::default(),
+                    doc: doc.clone(),
+                },
+            );
 
             return;
         }
@@ -698,9 +680,8 @@ impl TaskState<'_> {
 
         self.scopes.pop();
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
@@ -714,23 +695,19 @@ impl TaskState<'_> {
             ));
         }
 
-        store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store")
-            .definitions
-            .insert(
-                qualified_name,
-                Definition::TypeAlias {
-                    visibility,
-                    name: name.into(),
-                    name_span: *name_span,
-                    generics: generics.to_vec(),
-                    annotation: annotation.clone(),
-                    ty: alias_ty,
-                    methods: Default::default(),
-                    doc: doc.clone(),
-                },
-            );
+        self.current_module_mut(store).definitions.insert(
+            qualified_name,
+            Definition::TypeAlias {
+                visibility,
+                name: name.into(),
+                name_span: *name_span,
+                generics: generics.to_vec(),
+                annotation: annotation.clone(),
+                ty: alias_ty,
+                methods: Default::default(),
+                doc: doc.clone(),
+            },
+        );
     }
 
     fn is_alias_body_circular(&self, store: &Store, body_ty: &Type, qualified_name: &str) -> bool {

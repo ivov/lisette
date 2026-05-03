@@ -367,17 +367,14 @@ impl TaskState<'_> {
             methods,
         };
 
-        let visibility = store
-            .get_module(&self.cursor.module_id)
-            .expect("current module must exist in store")
+        let visibility = self
+            .current_module(&*store)
             .definitions
             .get(qualified_name.as_str())
             .map(|definition| definition.visibility().clone())
             .unwrap_or(Visibility::Private);
 
-        let module = store
-            .get_module_mut(&self.cursor.module_id)
-            .expect("current module must exist in store");
+        let module = self.current_module_mut(store);
 
         module.definitions.insert(
             qualified_name.clone(),
