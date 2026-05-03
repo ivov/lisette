@@ -91,11 +91,14 @@ func RunStd(args []string, defaultCfgJSON []byte) {
 	configPath := fs.String("config", "", "path to bindgen config file")
 	outDir := fs.String("outdir", "", "output directory for generated .d.lis files")
 	version := fs.String("version", "", "override Lisette version in generated headers")
+	targetsFlag := fs.String("targets", "", "comma-separated GOOS/GOARCH list (e.g. linux/amd64,darwin/arm64); falls back to BINDGEN_TARGETS env if unset")
+
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: bindgen stdlib -outdir <dir>\n\n")
-		fmt.Fprintf(os.Stderr, "Generates .d.lis type definitions for all Go std packages.\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: bindgen stdlib -outdir <dir> -targets <list>\n\n")
+		fmt.Fprintf(os.Stderr, "Generates .d.lis type definitions for all Go std packages\n")
+		fmt.Fprintf(os.Stderr, "across the given targets, deduplicating shared content.\n\n")
 		fmt.Fprintf(os.Stderr, "Example:\n")
-		fmt.Fprintf(os.Stderr, "  bindgen stdlib -outdir ./outdir\n")
+		fmt.Fprintf(os.Stderr, "  bindgen stdlib -outdir ./outdir -targets linux/amd64,darwin/arm64\n")
 	}
 
 	_ = fs.Parse(args)
@@ -116,16 +119,32 @@ func RunStd(args []string, defaultCfgJSON []byte) {
 		effectiveVersion = *version
 	}
 
-	fmt.Fprintf(os.Stderr, "Generating stdlib bindings to %s...\n", *outDir)
-
-	result, err := GenerateStd(context.Background(), *outDir, effectiveVersion, goVersion, &cfg)
+	targets, err := resolveTargets(*targetsFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bindgen: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stderr, "\nGenerated %d packages (%d skipped) in %.1fs\n",
-		result.Generated, result.Skipped, result.Duration.Seconds())
+	fmt.Fprintf(os.Stderr, "Generating stdlib bindings to %s...\n", *outDir)
+
+	result, err := GenerateStd(context.Background(), *outDir, effectiveVersion, goVersion, &cfg, targets)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bindgen: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Fprintf(os.Stderr, "\nGenerated %d package outputs across %d targets in %.1fs\n",
+		result.Generated, len(targets), result.Duration.Seconds())
+}
+
+func resolveTargets(flagValue string) ([]Target, error) {
+	if flagValue != "" {
+		return ParseTargets(flagValue)
+	}
+	if envList := os.Getenv("BINDGEN_TARGETS"); envList != "" {
+		return ParseTargets(envList)
+	}
+	return nil, fmt.Errorf("no targets specified: pass -targets or set BINDGEN_TARGETS (e.g. linux/amd64,darwin/arm64)")
 }
 
 func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goVersion string, cfg *config.Config) GeneratePkgResult {

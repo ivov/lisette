@@ -63,6 +63,21 @@ pub fn test_file_not_supported(filename: &str) -> LisetteDiagnostic {
         .with_help("Files ending in `_test.lis` are reserved for future testing support. Rename this file to compile it.")
 }
 
+pub fn go_stdlib_unavailable_on_target(
+    go_pkg: &str,
+    target: &str,
+    available: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("`go:{}` is not available on `{}`", go_pkg, target))
+        .with_resolve_code("go_stdlib_unavailable_on_target")
+        .with_span_label(&span, "stdlib package not available on this target")
+        .with_help(format!(
+            "This Go stdlib package exists, but its surface differs across platforms. Available on: {}",
+            available
+        ))
+}
+
 pub fn undeclared_go_import(go_pkg: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Undeclared Go dependency")
         .with_resolve_code("undeclared_go_import")

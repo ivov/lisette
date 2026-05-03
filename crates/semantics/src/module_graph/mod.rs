@@ -167,13 +167,23 @@ fn collect_imports(
                     imports.insert(file_import.name.to_string(), file_import.name_span);
                 }
                 TypedefLocatorResult::UnknownStdlib => {
-                    sink.push(diagnostics::module_graph::module_not_found(
-                        &file_import.name,
-                        file_import.name_span,
-                        false,
-                        standalone_mode,
-                        None,
-                    ));
+                    if let Some(targets) = stdlib::get_go_stdlib_package_targets(go_pkg) {
+                        let target = locator.target();
+                        sink.push(diagnostics::module_graph::go_stdlib_unavailable_on_target(
+                            go_pkg,
+                            &target.to_string(),
+                            &stdlib::format_targets(targets),
+                            file_import.name_span,
+                        ));
+                    } else {
+                        sink.push(diagnostics::module_graph::module_not_found(
+                            &file_import.name,
+                            file_import.name_span,
+                            false,
+                            standalone_mode,
+                            None,
+                        ));
+                    }
                 }
                 TypedefLocatorResult::UndeclaredImport => {
                     if standalone_mode {

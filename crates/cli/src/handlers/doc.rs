@@ -3,7 +3,10 @@ use crate::output::{format_backticks, use_color};
 use diagnostics::infer::levenshtein_distance;
 use semantics::cache::go_stdlib::{GoModuleCache, try_load_go_stdlib_cache};
 use semantics::cache::types::CachedDefinition;
-use stdlib::{Target, get_go_stdlib_packages, get_go_stdlib_typedef};
+use stdlib::{
+    Target, format_targets, get_go_stdlib_package_targets, get_go_stdlib_packages,
+    get_go_stdlib_typedef,
+};
 use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, StructKind, VariantFields};
 
 #[derive(Debug, Clone, Copy)]
@@ -1235,7 +1238,16 @@ fn doc_go_package(query: &str) -> i32 {
     let package = parts[0];
     let item_name = parts.get(1).copied();
 
-    let Some(source) = get_go_stdlib_typedef(package, Target::host()) else {
+    let host = Target::host();
+    let Some(source) = get_go_stdlib_typedef(package, host) else {
+        if let Some(targets) = get_go_stdlib_package_targets(package) {
+            cli_error!(
+                format!("`go:{}` is not available on `{}`", package, host),
+                "This Go stdlib package exists, but its surface differs across platforms and your host is not in the supported set",
+                format!("Available on: {}", format_targets(targets))
+            );
+            return 1;
+        }
         let help = if let Some(s) = suggest_go_package(package) {
             format!("Did you mean `lis doc go:{}`?", s)
         } else {

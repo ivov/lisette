@@ -35,14 +35,16 @@ type SymbolExport struct {
 	OriginalPkgPath      string       // for promoted methods: declaring type's package path
 }
 
-var loadConfig = &packages.Config{
-	Mode: packages.NeedName |
-		packages.NeedTypes |
-		packages.NeedTypesInfo |
-		packages.NeedSyntax |
-		packages.NeedDeps |
-		packages.NeedImports,
-	Env: buildLoaderEnv(),
+func currentLoadConfig() *packages.Config {
+	return &packages.Config{
+		Mode: packages.NeedName |
+			packages.NeedTypes |
+			packages.NeedTypesInfo |
+			packages.NeedSyntax |
+			packages.NeedDeps |
+			packages.NeedImports,
+		Env: buildLoaderEnv(),
+	}
 }
 
 func buildLoaderEnv() []string {
@@ -72,7 +74,7 @@ func buildLoaderEnv() []string {
 }
 
 func LoadPackage(path string) (*packages.Package, error) {
-	pkgs, err := packages.Load(loadConfig, path)
+	pkgs, err := packages.Load(currentLoadConfig(), path)
 	if err != nil {
 		return nil, err
 	}
@@ -97,25 +99,27 @@ func LoadPackage(path string) (*packages.Package, error) {
 }
 
 func LoadPackages(paths []string) ([]*packages.Package, error) {
-	pkgs, err := packages.Load(loadConfig, paths...)
+	pkgs, err := packages.Load(currentLoadConfig(), paths...)
 	if err != nil {
 		return nil, err
 	}
 
-	var result []*packages.Package
+	var failures []string
 	for _, pkg := range pkgs {
 		if len(pkg.Errors) > 0 {
-			continue
+			failures = append(failures, fmt.Sprintf("%s: %v", pkg.PkgPath, pkg.Errors))
 		}
-		result = append(result, pkg)
+	}
+	if len(failures) > 0 {
+		return nil, fmt.Errorf("packages.Load reported errors:\n  %s", strings.Join(failures, "\n  "))
 	}
 
-	return result, nil
+	return pkgs, nil
 }
 
 // Like LoadPackages but keeps errored packages so the caller can classify them.
 func LoadPackagesAll(paths []string) ([]*packages.Package, error) {
-	return packages.Load(loadConfig, paths...)
+	return packages.Load(currentLoadConfig(), paths...)
 }
 
 func ExtractExports(pkg *packages.Package) []SymbolExport {

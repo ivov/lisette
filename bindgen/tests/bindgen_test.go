@@ -221,7 +221,11 @@ func TestGenerateStd(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	result, err := cli.GenerateStd(context.Background(), tmpDir, "0.0.0", "0.0.0", nil)
+	targets := []cli.Target{
+		{GOOS: "darwin", GOARCH: "arm64"},
+		{GOOS: "linux", GOARCH: "amd64"},
+	}
+	result, err := cli.GenerateStd(context.Background(), tmpDir, "0.0.0", "0.0.0", nil, targets)
 	if err != nil {
 		t.Fatalf("GenerateStd failed: %v", err)
 	}
@@ -232,7 +236,6 @@ func TestGenerateStd(t *testing.T) {
 
 	expectedFiles := []string{
 		"fmt.d.lis",
-		"os.d.lis",
 		"net/http.d.lis",
 	}
 	for _, f := range expectedFiles {
@@ -240,5 +243,23 @@ func TestGenerateStd(t *testing.T) {
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Errorf("expected file %s not found", f)
 		}
+	}
+}
+
+func TestGenerateStdRejectsSingleTarget(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping stdlib generation test in short mode")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "bindgen-stdlib-single-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	targets := []cli.Target{{GOOS: "darwin", GOARCH: "arm64"}}
+	_, err = cli.GenerateStd(context.Background(), tmpDir, "0.0.0", "0.0.0", nil, targets)
+	if err == nil {
+		t.Fatal("expected GenerateStd to reject single-target invocation")
 	}
 }

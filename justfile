@@ -76,10 +76,12 @@ fuzz-parse duration="300":
 fuzz-infer duration="300":
     cargo +nightly fuzz run infer --sanitizer address -- -max_total_time={{duration}} -rss_limit_mb=2048 -dict=fuzz/lisette.dict
 
-generate-stdlib-typedefs version goos="darwin" goarch="arm64":
+_supported-targets := "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64"
+
+generate-stdlib-typedefs version targets=_supported-targets:
     cd bindgen && just build
     just build # make binary to run bindgen
-    BINDGEN_TARGET_GOOS={{goos}} BINDGEN_TARGET_GOARCH={{goarch}} ./target/release/lis bindgen stdlib {{version}}
+    BINDGEN_TARGETS={{targets}} ./target/release/lis bindgen stdlib {{version}}
     ./target/release/lis format crates/stdlib/typedefs/
     just build # recompile compiler to embed updated typedefs
     ./target/release/lis check crates/stdlib/typedefs/

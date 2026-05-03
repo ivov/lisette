@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Target {
     pub goos: &'static str,
@@ -28,4 +30,20 @@ impl Default for Target {
     fn default() -> Self {
         Self::host()
     }
+}
+
+impl fmt::Display for Target {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.goos, self.goarch)
+    }
+}
+
+/// Format a `(goos, goarch)` slice as a comma-separated `goos/goarch` list,
+/// for "Available on: ..." diagnostics.
+pub fn format_targets(targets: &[(&str, &str)]) -> String {
+    targets
+        .iter()
+        .map(|(goos, goarch)| format!("{}/{}", goos, goarch))
+        .collect::<Vec<_>>()
+        .join(", ")
 }

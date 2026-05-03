@@ -200,10 +200,19 @@ fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> {
         ));
     }
 
-    if stdlib::get_go_stdlib_typedef(path, stdlib::Target::host()).is_some() {
+    let host = stdlib::Target::host();
+    if stdlib::get_go_stdlib_typedef(path, host).is_some() {
         return Err(format!(
             "`{}` is a Go standard library package; stdlib packages do not need `lis add` (just `import \"go:{}\"`)",
             path, path
+        ));
+    }
+    if let Some(targets) = stdlib::get_go_stdlib_package_targets(path) {
+        return Err(format!(
+            "`{}` is a Go standard library package, but it is not available on `{}`. Available on: {}",
+            path,
+            host,
+            stdlib::format_targets(targets),
         ));
     }
 
