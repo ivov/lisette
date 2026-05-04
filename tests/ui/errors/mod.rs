@@ -1310,6 +1310,56 @@ fn test(opt: Option<string>) {
 }
 
 #[test]
+fn infer_member_not_found_unwrap_method_on_option() {
+    let input = r#"
+fn test(opt: Option<int>) -> int {
+  opt.unwrap()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_member_not_found_unwrap_method_on_result() {
+    let input = r#"
+fn test(res: Result<int, error>) -> int {
+  res.unwrap()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_member_not_found_expect_method_on_option() {
+    let input = r#"
+fn test(opt: Option<int>) -> int {
+  opt.expect("must be set")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_member_not_found_unwrap_method_on_partial() {
+    let input = r#"
+fn test(p: Partial<int, error>) -> int {
+  p.unwrap()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_member_not_found_expect_method_on_partial() {
+    let input = r#"
+fn test(p: Partial<int, error>) -> int {
+  p.expect("must be ok")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_struct_missing_fields() {
     let input = r#"
 struct Person {

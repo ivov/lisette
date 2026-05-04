@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Member not found
+   ╭─[test.lis:3:3]
+ 2 │ fn test(p: Partial<int, error>) -> int {
+ 3 │   p.unwrap()
+   ·   ────┬───
+   ·       ╰── no member `unwrap` on type `Partial<int, error>`
+ 4 │ }
+   ╰────
+  help: Lisette does not provide `unwrap()`. The `?` operator is not supported on `Partial`; use `match` to handle all three cases (e.g. `match <expr> { Ok(x) => ..., Err(e) => ..., Both(x, e) => ... }`) or `unwrap_or(default)` for a fallback · code: [infer.member_not_found]

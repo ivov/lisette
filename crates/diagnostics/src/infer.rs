@@ -733,6 +733,35 @@ pub fn member_not_found(
         .with_infer_code("member_not_found")
         .with_span_label(&span, format!("no member `{}` on type `{}`", field, ty));
 
+    if matches!(field, "unwrap" | "expect") && (ty.is_option() || ty.is_result() || ty.is_partial())
+    {
+        let help = if ty.is_option() {
+            format!(
+                "Lisette does not provide `{}()`. Use `?` to propagate, `match` to handle both \
+                 cases (e.g. `match <expr> {{ Some(x) => x, None => ... }}`), `let else` for \
+                 early exit, or `unwrap_or(default)` for a fallback.",
+                field
+            )
+        } else if ty.is_result() {
+            format!(
+                "Lisette does not provide `{}()`. Use `?` to propagate, `match` to handle both \
+                 cases (e.g. `match <expr> {{ Ok(x) => x, Err(e) => ... }}`), `let else` for \
+                 early exit, or `unwrap_or(default)` for a fallback.",
+                field
+            )
+        } else {
+            format!(
+                "Lisette does not provide `{}()`. The `?` operator is not supported on \
+                 `Partial`; use `match` to handle all three cases (e.g. `match <expr> \
+                 {{ Ok(x) => ..., Err(e) => ..., Both(x, e) => ... }}`) or `unwrap_or(default)` \
+                 for a fallback.",
+                field
+            )
+        };
+        diagnostic = diagnostic.with_help(help);
+        return diagnostic;
+    }
+
     if let Some(hint) = unwrap_hint {
         let (wrapper_name, pattern) = match hint.wrapper {
             UnwrapWrapper::Option => (
