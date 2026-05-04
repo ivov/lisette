@@ -160,35 +160,39 @@ impl TaskState<'_> {
             self.propagate_as_error(store, expected_ty, span)
         } else if tried_ty.is_result() {
             let ok_ty = tried_ty.ok_type();
-            let err_ty = tried_ty.err_type();
-            let new_ok = self.new_type_var();
-            let expected_return = self.type_result(store, new_ok, err_ty);
+            let resolved_fn_return = fn_return_ty.resolve_in(&self.env);
 
-            if !fn_return_ty.resolve_in(&self.env).is_result() {
+            if resolved_fn_return.is_result() {
+                let err_ty = tried_ty.err_type();
+                let new_ok = self.new_type_var();
+                let expected_return = self.type_result(store, new_ok, err_ty);
+                self.unify(store, &expected_return, &fn_return_ty, &span);
+            } else {
                 self.sink.push(diagnostics::infer::try_return_type_mismatch(
                     "Result<T, E>",
-                    &fn_return_ty.resolve_in(&self.env),
+                    &resolved_fn_return,
                     span,
                 ));
             }
 
-            self.unify(store, &expected_return, &fn_return_ty, &span);
             self.unify(store, expected_ty, &ok_ty, &span);
             ok_ty
         } else if tried_ty.is_option() {
             let some_ty = tried_ty.ok_type();
-            let new_some = self.new_type_var();
-            let expected_return = self.type_option(store, new_some);
+            let resolved_fn_return = fn_return_ty.resolve_in(&self.env);
 
-            if !fn_return_ty.resolve_in(&self.env).is_option() {
+            if resolved_fn_return.is_option() {
+                let new_some = self.new_type_var();
+                let expected_return = self.type_option(store, new_some);
+                self.unify(store, &expected_return, &fn_return_ty, &span);
+            } else {
                 self.sink.push(diagnostics::infer::try_return_type_mismatch(
                     "Option<T>",
-                    &fn_return_ty.resolve_in(&self.env),
+                    &resolved_fn_return,
                     span,
                 ));
             }
 
-            self.unify(store, &expected_return, &fn_return_ty, &span);
             self.unify(store, expected_ty, &some_ty, &span);
             some_ty
         } else if tried_ty.is_partial() {
