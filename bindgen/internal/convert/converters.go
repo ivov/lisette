@@ -515,7 +515,8 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		if isErrorInterface(u) {
 			result.LisetteType = "error"
 		} else if u.Empty() {
-			result.IsInterface = true
+			result.LisetteType = "Unknown"
+			result.IsTypeAlias = true
 		} else if methods, ok := c.extractInterfaceMethods(u, result.Name); ok {
 			result.IsInterface = true
 			result.InterfaceMethods = methods

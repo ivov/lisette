@@ -7,7 +7,7 @@
 pub fn Validate(s: string) -> Result<(), error>
 
 /// Empty interface alias
-pub interface Any {}
+pub type Any = Unknown
 
 /// Nilable comma-ok method on interface
 pub interface Cache {
@@ -16,7 +16,13 @@ pub interface Cache {
   fn Set(key: string, value: Ref<Node>)
 }
 
-pub interface Empty {}
+pub type Empty = Unknown
+
+/// Empty named interface used as a struct field — alias must resolve to
+/// Unknown end-to-end so any value can be assigned.
+pub struct Holder {
+  pub Hook: Any,
+}
 
 /// Variadic method on interface
 pub interface Logger {
