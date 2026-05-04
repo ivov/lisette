@@ -1,6 +1,25 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.1.26](https://github.com/ivov/lisette/compare/lisette-v0.1.25...lisette-v0.1.26) - 2026-05-04
+
+- fix: tailor nil and member-not-found help to context [#306](https://github.com/ivov/lisette/pull/306) [`aa12647`](https://github.com/ivov/lisette/commit/aa12647673d779dad69b6142b3b61b681611a205)
+- fix: preserve byte and rune aliases in bindgen output [#305](https://github.com/ivov/lisette/pull/305) [`90601ad`](https://github.com/ivov/lisette/commit/90601ad0f2d472e7177285f3ad024d0198d2354c)
+- fix: fixes to lsp and formatting [#293](https://github.com/ivov/lisette/pull/293) [`d50732f`](https://github.com/ivov/lisette/commit/d50732fd634225042d2f12b9d55aca61d03ab0e2)
+- fix: hint parent module when lis add hits a sub-package [#304](https://github.com/ivov/lisette/pull/304) [`60f3f10`](https://github.com/ivov/lisette/commit/60f3f10c9078db67820781db94711a65e24ee3d6)
+- fix: tailor diagnostics for `Self` in impl and `mut` struct fields [#303](https://github.com/ivov/lisette/pull/303) [`ce0869f`](https://github.com/ivov/lisette/commit/ce0869fe20c4997a8cd452d887ee76e7484161e4)
+- fix: alias empty named interfaces to Unknown [#302](https://github.com/ivov/lisette/pull/302) [`34a48a8`](https://github.com/ivov/lisette/commit/34a48a81f9e657f2296cbdc832773857d6f912db)
+- fix: bind unexported error sentinels as error [#301](https://github.com/ivov/lisette/pull/301) [`b0fb981`](https://github.com/ivov/lisette/commit/b0fb98134364f14b42f04158341204b96f703e40)
+- fix: suppress duplicate type mismatch on `?` in non-carrier function [#300](https://github.com/ivov/lisette/pull/300) [`cb4545d`](https://github.com/ivov/lisette/commit/cb4545dff1816f808e7a7fcede4873315b2edf37)
+- fix: align select arm type inference with match [#297](https://github.com/ivov/lisette/pull/297) [`2603c6f`](https://github.com/ivov/lisette/commit/2603c6f23f38468da6e5b166df34e6355222c110)
+- fix: lead native_method_value help with call-direct form [#296](https://github.com/ivov/lisette/pull/296) [`192cdd6`](https://github.com/ivov/lisette/commit/192cdd6868b7d0adba9c668ed9440c1dbdd35c2d)
+- fix: reach pointer-receiver methods on package-var struct fields [#295](https://github.com/ivov/lisette/pull/295) [`21bc10f`](https://github.com/ivov/lisette/commit/21bc10fa0b2b2195b80738ea1d24dd2ed3ef3ab1)
+- fix: redirect unwrap/expect diagnostic on Option/Result/Partial [#294](https://github.com/ivov/lisette/pull/294) [`9b99b08`](https://github.com/ivov/lisette/commit/9b99b08ae61f666d8437e9eedad6b454dc83f118)
+- fix: ship per-target stdlib typedefs [#291](https://github.com/ivov/lisette/pull/291) [`8f635cc`](https://github.com/ivov/lisette/commit/8f635cceae09fb0bf47100b46c0adfa9b3276b90)
+- ci: fix pr title trigger [#292](https://github.com/ivov/lisette/pull/292) [`40e55b3`](https://github.com/ivov/lisette/commit/40e55b32fa028597a3427b78340b0497153bf40c)
+- refactor: consolidate checker definitions and walkers [#290](https://github.com/ivov/lisette/pull/290) [`c895586`](https://github.com/ivov/lisette/commit/c8955865b2c1cf1330f3229ef85edff045f4a0fa)
+- refactor: thread target argument through stdlib typedef lookups [#289](https://github.com/ivov/lisette/pull/289) [`0b7570c`](https://github.com/ivov/lisette/commit/0b7570c7a767ff1b577adc67dc984277b279d9c5)
+- refactor: consolidate checker cursor and scope setup [#287](https://github.com/ivov/lisette/pull/287) [`ce653c9`](https://github.com/ivov/lisette/commit/ce653c9bf32e618458ba737f3d56bc29e6a6439a)
 ## [0.1.25](https://github.com/ivov/lisette/compare/lisette-v0.1.24...lisette-v0.1.25) - 2026-05-03
 
 - fix: propagate expected type through generic positions [#286](https://github.com/ivov/lisette/pull/286) [`9777eec`](https://github.com/ivov/lisette/commit/9777eec86c5fc3d3b636f6820f5b7cadcc561d8c)
