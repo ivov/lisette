@@ -509,25 +509,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 
 	switch u := underlying.(type) {
 	case *types.Struct:
-		for field := range u.Fields() {
-			if !field.Exported() {
-				continue
-			}
-
-			fieldType := ToLisetteNilable(field.Type(), c)
-			if fieldType.SkipReason != nil {
-				result.Fields = append(result.Fields, StructField{
-					Name:       field.Name(),
-					SkipReason: fieldType.SkipReason,
-				})
-				continue
-			}
-
-			result.Fields = append(result.Fields, StructField{
-				Name: field.Name(),
-				Type: fieldType.LisetteType,
-			})
-		}
+		result.Fields = convertStructFields(u, c)
 
 	case *types.Interface:
 		if isErrorInterface(u) {
@@ -603,6 +585,11 @@ func (c *Converter) convertConstant(result *ConvertResult, exp extract.SymbolExp
 }
 
 func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExport) {
+	if anon, ok := exp.GoType.(*types.Struct); ok {
+		c.synthesizeAnonStructVar(result, anon)
+		return
+	}
+
 	t := ToLisette(exp.GoType, c)
 	if t.SkipReason != nil {
 		result.SkipReason = t.SkipReason
@@ -618,6 +605,40 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 	if isNilable && !forceNonNilable {
 		result.LisetteType = fmt.Sprintf("Option<%s>", result.LisetteType)
 	}
+}
+
+const anonStructSuffix = "_struct"
+
+func (c *Converter) synthesizeAnonStructVar(result *ConvertResult, anon *types.Struct) {
+	typeName := result.Name + anonStructSuffix
+	result.LisetteType = typeName
+	result.SyntheticType = &ConvertResult{
+		Name:   typeName,
+		Kind:   extract.ExportType,
+		Fields: convertStructFields(anon, c),
+	}
+}
+
+func convertStructFields(s *types.Struct, c *Converter) []StructField {
+	var fields []StructField
+	for field := range s.Fields() {
+		if !field.Exported() {
+			continue
+		}
+		fieldType := ToLisetteNilable(field.Type(), c)
+		if fieldType.SkipReason != nil {
+			fields = append(fields, StructField{
+				Name:       field.Name(),
+				SkipReason: fieldType.SkipReason,
+			})
+			continue
+		}
+		fields = append(fields, StructField{
+			Name: field.Name(),
+			Type: fieldType.LisetteType,
+		})
+	}
+	return fields
 }
 
 func (c *Converter) getOriginalLiteral(constObj *types.Const) string {

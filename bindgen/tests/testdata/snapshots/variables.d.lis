@@ -19,6 +19,15 @@ pub var ConfigMap: Map<string, string>
 /// Counter is a simple counter.
 pub var Counter: int
 
+pub struct Counters_struct {
+  pub Hits: int64,
+  pub Misses: int64,
+}
+
+/// Counters has anonymous-struct type. Bindgen synthesizes Counters_struct so
+/// the var (and its field types' methods) stay reachable from Lisette.
+pub var Counters: Counters_struct
+
 /// EOF marks end of file.
 pub var EOF: error
 

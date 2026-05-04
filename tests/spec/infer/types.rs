@@ -4271,3 +4271,39 @@ fn main() {
     );
     infer_module("main", fs).assert_no_errors();
 }
+
+#[test]
+fn ref_self_method_call_through_imported_pub_var_succeeds() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "metrics",
+        "lib.d.lis",
+        r#"
+pub struct Counter {
+  pub n: int64,
+}
+
+impl Counter {
+  fn Value(self: Ref<Counter>) -> int64
+}
+
+pub struct Counters_struct {
+  pub Hits: Counter,
+}
+
+pub var Counters: Counters_struct
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "metrics"
+
+fn main() {
+  let _ = metrics.Counters.Hits.Value()
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}

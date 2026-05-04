@@ -1296,7 +1296,11 @@ impl TaskState<'_> {
             .lookup_value(&var_name)
             .map(|t| t.resolve_in(&self.env).is_ref())
             .unwrap_or(false);
-        if !is_deref && !binding_is_ref && !self.scopes.lookup_mutable(&var_name) {
+        if !is_deref
+            && !binding_is_ref
+            && !self.scopes.lookup_mutable(&var_name)
+            && !self.imports.imported_modules.contains_key(&var_name)
+        {
             let is_match_arm = self
                 .scopes
                 .lookup_binding_id(&var_name)

@@ -151,6 +151,9 @@ func sanitizeIdent(s string) string {
 }
 
 func (e *Emitter) EmitExport(result convert.ConvertResult) {
+	if result.SyntheticType != nil {
+		e.EmitExport(*result.SyntheticType)
+	}
 	switch result.Kind {
 	case extract.ExportFunction:
 		e.emitFunction(result)

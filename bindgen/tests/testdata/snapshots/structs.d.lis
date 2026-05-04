@@ -97,8 +97,10 @@ pub struct Wrapper {
   pub Label: string,
 }
 
-// SKIPPED: AnonField - anonymous-struct
-// anonymous struct types are not supported
+// SKIPPED field "Nested": anonymous-struct — anonymous struct types are not supported
+pub type AnonField_struct
+
+pub var AnonField: AnonField_struct
 
 impl Base {
   /// GetID returns the ID

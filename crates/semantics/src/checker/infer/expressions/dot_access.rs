@@ -796,7 +796,11 @@ impl TaskState<'_> {
             .lookup_value(&var_name)
             .map(|t| t.resolve_in(&self.env).is_ref())
             .unwrap_or(false);
-        if !is_deref && !binding_is_ref && !self.scopes.lookup_mutable(&var_name) {
+        if !is_deref
+            && !binding_is_ref
+            && !self.scopes.lookup_mutable(&var_name)
+            && !self.imports.imported_modules.contains_key(&var_name)
+        {
             let self_type_name = if var_name == "self" {
                 self.lookup_type(store, "self")
                     .and_then(|t| t.get_name().map(str::to_owned))

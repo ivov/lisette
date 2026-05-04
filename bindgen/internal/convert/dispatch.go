@@ -34,6 +34,9 @@ type ConvertResult struct {
 	SentinelInt *int
 	// BuilderMethod suppresses unused_value on fluent-chain returns the caller typically discards.
 	BuilderMethod bool
+	// SyntheticType holds a typedef bindgen mints to give an otherwise-skipped
+	// var a referenceable type.
+	SyntheticType *ConvertResult
 }
 
 type FunctionParameter struct {
