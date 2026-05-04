@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+assertion_line: 5645
+---
+  [error] Use of `Self` type
+   ╭─[test.lis:6:29]
+ 5 │ impl DiffReporter {
+ 6 │   pub fn PushStep(self: Ref<Self>, step: string) {
+   ·                             ──┬─
+   ·                               ╰── invalid type
+ 7 │     let _ = step
+   ╰────
+  help: Replace `Self` with `DiffReporter` · code: [resolve.self_type_not_supported]

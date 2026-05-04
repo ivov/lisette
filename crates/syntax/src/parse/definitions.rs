@@ -664,6 +664,14 @@ impl<'source> Parser<'source> {
             Visibility::Private
         };
 
+        if self.is(Mut) {
+            self.track_error(
+                "fields cannot be marked `mut`",
+                "Fields cannot be marked `mut`; mutability applies to bindings (`let mut x = ...`).",
+            );
+            self.next();
+        }
+
         if self.is_not(Identifier) {
             self.track_error("expected field name", "Field names must be identifiers.");
             return None;

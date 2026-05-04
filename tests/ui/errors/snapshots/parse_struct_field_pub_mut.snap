@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+assertion_line: 579
+---
+  [error] Syntax error
+   ╭─[test.lis:3:7]
+ 2 │ struct Foo {
+ 3 │   pub mut diffs: Slice<string>,
+   ·       ─┬─
+   ·        ╰── fields cannot be marked `mut`
+ 4 │ }
+   ╰────
+  help: Fields cannot be marked `mut`; mutability applies to bindings (`let mut x = ...`) · code: [parse.syntax_error]

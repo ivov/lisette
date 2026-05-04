@@ -128,14 +128,16 @@ pub fn invalid_map_initialization(key: &Type, value: &Type, span: Span) -> Liset
         ))
 }
 
-pub fn self_type_not_supported(span: Span) -> LisetteDiagnostic {
+pub fn self_type_not_supported(span: Span, impl_receiver: Option<&str>) -> LisetteDiagnostic {
     let name_span = Span::new(span.file_id, span.byte_offset, 4); // "Self" is 4 chars
+    let help = match impl_receiver {
+        Some(name) => format!("Replace `Self` with `{}`.", name),
+        None => "Use a type parameter instead, e.g. `interface Comparable<T> { fn compare(self, other: T) -> int }`".to_string(),
+    };
     LisetteDiagnostic::error("Use of `Self` type")
         .with_resolve_code("self_type_not_supported")
         .with_span_label(&name_span, "invalid type")
-        .with_help(
-            "Use a type parameter instead, e.g. `interface Comparable<T> { fn compare(self, other: T) -> int }`",
-        )
+        .with_help(help)
 }
 
 pub fn type_not_found(type_name: &str, annotation_span: Span) -> LisetteDiagnostic {

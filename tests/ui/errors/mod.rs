@@ -570,6 +570,26 @@ struct Foo {
 }
 
 #[test]
+fn parse_struct_field_pub_mut() {
+    let input = r#"
+struct Foo {
+  pub mut diffs: Slice<string>,
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_struct_field_mut() {
+    let input = r#"
+struct Foo {
+  mut diffs: Slice<string>,
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_enum_variant_invalid_token() {
     let input = r#"
 enum Foo {
@@ -5605,6 +5625,36 @@ fn infer_self_type_in_interface() {
     let input = r#"
 interface Comparable {
   fn compare(self, other: Self) -> int
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_self_type_in_impl_block() {
+    let input = r#"
+struct DiffReporter {
+  pub diffs: Slice<string>,
+}
+impl DiffReporter {
+  pub fn PushStep(self: Ref<Self>, step: string) {
+    let _ = step
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_self_type_in_generic_impl_block() {
+    let input = r#"
+struct Stack<T> {
+  pub items: Slice<T>,
+}
+impl<T> Stack<T> {
+  pub fn Peek(self: Ref<Self>) -> T {
+    self.items[0]
+  }
 }
 "#;
     assert_infer_error_snapshot!(input);

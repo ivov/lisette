@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+assertion_line: 5660
+---
+  [error] Use of `Self` type
+   ╭─[test.lis:6:25]
+ 5 │ impl<T> Stack<T> {
+ 6 │   pub fn Peek(self: Ref<Self>) -> T {
+   ·                         ──┬─
+   ·                           ╰── invalid type
+ 7 │     self.items[0]
+   ╰────
+  help: Replace `Self` with `Stack<T>` · code: [resolve.self_type_not_supported]

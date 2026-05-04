@@ -83,8 +83,10 @@ impl TaskState<'_> {
                     self.resolve_type_with_arity(store, type_name, params.len())
                 else {
                     if type_name == "Self" {
+                        let receiver = self.scopes.impl_receiver_type().map(|ty| ty.stringify());
                         self.sink.push(diagnostics::infer::self_type_not_supported(
                             *annotation_span,
+                            receiver.as_deref(),
                         ));
                     } else {
                         self.sink.push(diagnostics::infer::type_not_found(
