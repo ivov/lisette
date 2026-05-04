@@ -28,11 +28,28 @@ impl TaskState<'_> {
         self.check_duplicate_select_defaults(&arms);
 
         let result_ty = self.new_type_var();
+        self.unify(store, expected_ty, &result_ty, &span);
+
+        let needs_reconciliation = result_ty.resolve_in(&self.env).is_variable();
+
+        let mut arm_target_types: Vec<Type> = if needs_reconciliation {
+            Vec::with_capacity(arms.len())
+        } else {
+            Vec::new()
+        };
 
         let new_arms: Vec<SelectArm> = arms
             .into_iter()
             .map(|arm| {
                 self.scopes.push();
+
+                let independent_ty;
+                let arm_target = if needs_reconciliation {
+                    independent_ty = self.new_type_var();
+                    &independent_ty
+                } else {
+                    &result_ty
+                };
 
                 let new_arm_pattern = match arm.pattern {
                     SelectArmPattern::Receive {
@@ -45,13 +62,13 @@ impl TaskState<'_> {
                         binding,
                         receive_expression,
                         body,
-                        &result_ty,
+                        arm_target,
                     ),
 
                     SelectArmPattern::Send {
                         send_expression,
                         body,
-                    } => self.infer_select_send(store, send_expression, body, &result_ty),
+                    } => self.infer_select_send(store, send_expression, body, arm_target),
 
                     SelectArmPattern::MatchReceive {
                         receive_expression,
@@ -60,13 +77,17 @@ impl TaskState<'_> {
                         store,
                         receive_expression,
                         match_arms,
-                        &result_ty,
+                        arm_target,
                     ),
 
                     SelectArmPattern::WildCard { body } => {
-                        self.infer_select_wildcard(store, body, &result_ty)
+                        self.infer_select_wildcard(store, body, arm_target)
                     }
                 };
+
+                if needs_reconciliation {
+                    arm_target_types.push(arm_target.clone());
+                }
 
                 self.scopes.pop();
 
@@ -76,23 +97,26 @@ impl TaskState<'_> {
             })
             .collect();
 
-        self.unify(store, expected_ty, &result_ty, &span);
+        if needs_reconciliation {
+            self.reconcile_and_unify(store, &result_ty, &arm_target_types, &span);
+        }
 
-        // Reject non-exhaustive select expressions in value position:
-        // shorthand receive arms without a default arm can silently return
-        // a zero value when the channel is closed or the pattern doesn't match.
         let resolved_result = result_ty.resolve_in(&self.env);
-        if !resolved_result.is_unit() && !resolved_result.is_variable() {
-            let has_shorthand_receive = new_arms
-                .iter()
-                .any(|arm| matches!(arm.pattern, SelectArmPattern::Receive { .. }));
-            let has_default = new_arms
-                .iter()
-                .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
-            if has_shorthand_receive && !has_default {
-                self.sink
-                    .push(diagnostics::infer::non_exhaustive_select_expression(span));
-            }
+        let shorthand_receive_count = new_arms
+            .iter()
+            .filter(|arm| matches!(arm.pattern, SelectArmPattern::Receive { .. }))
+            .count();
+        let has_default = new_arms
+            .iter()
+            .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
+        if !expected_ty.is_ignored()
+            && !resolved_result.is_unit()
+            && !resolved_result.is_variable()
+            && shorthand_receive_count == 1
+            && !has_default
+        {
+            self.sink
+                .push(diagnostics::infer::non_exhaustive_select_expression(span));
         }
 
         Expression::Select {
@@ -247,7 +271,15 @@ impl TaskState<'_> {
 
         let pattern_ty = receive_ty.resolve_in(&self.env);
 
-        let new_match_arms = match_arms
+        let needs_reconciliation = result_ty.resolve_in(&self.env).is_variable();
+
+        let mut arm_expression_types: Vec<Type> = if needs_reconciliation {
+            Vec::with_capacity(match_arms.len())
+        } else {
+            Vec::new()
+        };
+
+        let new_match_arms: Vec<MatchArm> = match_arms
             .into_iter()
             .map(|match_arm| {
                 self.scopes.push();
@@ -265,9 +297,23 @@ impl TaskState<'_> {
                     Box::new(guard_expression)
                 });
 
+                let independent_ty;
+                let arm_expected = if needs_reconciliation {
+                    independent_ty = self.new_type_var();
+                    &independent_ty
+                } else {
+                    result_ty
+                };
+
                 let saved_in_match_arm = self.scopes.set_in_match_arm(true);
-                let new_expression = self.infer_expression(store, *match_arm.expression, result_ty);
+                self.scopes.set_in_subexpression(false);
+                let new_expression =
+                    self.infer_expression(store, *match_arm.expression, arm_expected);
                 self.scopes.set_in_match_arm(saved_in_match_arm);
+
+                if needs_reconciliation {
+                    arm_expression_types.push(arm_expected.clone());
+                }
 
                 self.scopes.pop();
 
@@ -279,6 +325,11 @@ impl TaskState<'_> {
                 }
             })
             .collect();
+
+        if needs_reconciliation {
+            let span = new_receive_expression.get_span();
+            self.reconcile_and_unify(store, result_ty, &arm_expression_types, &span);
+        }
 
         SelectArmPattern::MatchReceive {
             receive_expression: Box::new(new_receive_expression),

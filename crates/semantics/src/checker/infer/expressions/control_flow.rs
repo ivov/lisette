@@ -6,8 +6,7 @@ use syntax::types::Type;
 
 use super::super::TaskState;
 
-/// Result of reconciling branch types. `Widened` means the common type is a
-/// later branch's type (a supertype of the first), not the first branch's type.
+/// Outcome of unifying branch types: kept first, widened to a supertype, or failed.
 enum BranchReconciliation {
     FirstBranch,
     Widened(Type),
@@ -15,6 +14,31 @@ enum BranchReconciliation {
 }
 
 impl TaskState<'_> {
+    pub(crate) fn reconcile_and_unify(
+        &mut self,
+        store: &mut Store,
+        result_ty: &Type,
+        branch_types: &[Type],
+        span: &Span,
+    ) {
+        if branch_types.is_empty() {
+            return;
+        }
+        match self.reconcile_branch_types(store, branch_types, span) {
+            BranchReconciliation::FirstBranch => {
+                self.unify(store, result_ty, &branch_types[0], span);
+            }
+            BranchReconciliation::Widened(ty) => {
+                self.unify(store, result_ty, &ty, span);
+            }
+            BranchReconciliation::Failed => {
+                debug_assert!(branch_types.len() >= 2);
+                let _ = self.try_unify(store, &branch_types[0], &branch_types[1], span);
+                self.unify(store, result_ty, &branch_types[0], span);
+            }
+        }
+    }
+
     fn reconcile_branch_types(
         &mut self,
         store: &Store,
@@ -287,22 +311,7 @@ impl TaskState<'_> {
 
         if needs_reconciliation {
             let arm_types: Vec<Type> = new_arms.iter().map(|a| a.expression.get_type()).collect();
-
-            match self.reconcile_branch_types(store, &arm_types, &span) {
-                BranchReconciliation::FirstBranch => {
-                    if let Some(first) = arm_types.first() {
-                        self.unify(store, &result_ty, first, &span);
-                    }
-                }
-                BranchReconciliation::Widened(ty) => {
-                    self.unify(store, &result_ty, &ty, &span);
-                }
-                BranchReconciliation::Failed => {
-                    debug_assert!(arm_types.len() >= 2);
-                    let _ = self.try_unify(store, &arm_types[0], &arm_types[1], &span);
-                    self.unify(store, &result_ty, &arm_types[0], &span);
-                }
-            }
+            self.reconcile_and_unify(store, &result_ty, &arm_types, &span);
         } else if is_statement && let Some(first_arm) = new_arms.first() {
             // In statement position, set the match's type from the first arm so the
             // expression still has a well-defined type for inspection, even though

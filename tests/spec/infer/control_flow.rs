@@ -1036,12 +1036,15 @@ fn select_wildcard_only() {
 #[test]
 fn select_arm_type_mismatch() {
     infer(
-        r#"{
-    select {
-      _ => 42,
-      _ => "wrong",
+        r#"
+    fn test() -> int {
+      let ch = Channel.new<int>();
+      select {
+        let Some(x) = ch.receive() => x,
+        _ => "wrong",
+      }
     }
-  }"#,
+  "#,
     )
     .assert_type_mismatch();
 }

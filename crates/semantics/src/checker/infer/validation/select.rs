@@ -129,9 +129,7 @@ impl TaskState<'_> {
         }
     }
 
-    /// Check for multiple shorthand receive arms in select.
-    /// Multiple `let Some(v) = ch.receive()` arms can lead to unexpected behavior
-    /// when one channel is closed - it may be selected over channels with values.
+    /// Reject multiple `let Some(v) = ch.receive()` arms in one select.
     pub(crate) fn check_multiple_select_receives(&mut self, arms: &[syntax::ast::SelectArm]) {
         use syntax::ast::SelectArmPattern;
 
