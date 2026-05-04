@@ -5761,6 +5761,21 @@ fn main() {
 }
 
 #[test]
+fn infer_native_method_value_on_struct_field() {
+    let input = r#"
+import "go:fmt"
+
+struct Box { items: Slice<int> }
+
+fn main() {
+  let b = Box { items: [1, 2] }
+  fmt.Printf("count=%d\n", b.items.length)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_private_method_expression() {
     let input = r#"
 struct Box { value: int }

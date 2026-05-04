@@ -235,8 +235,11 @@ impl TaskState<'_> {
                 )
                 && NativeTypeKind::from_type(&resolved_expression_ty).is_some()
             {
-                self.sink
-                    .push(diagnostics::infer::native_method_value(&member, span));
+                self.sink.push(diagnostics::infer::native_method_value(
+                    &member,
+                    diagnostics::infer::NativeMethodForm::Instance,
+                    span,
+                ));
             }
             return expression;
         }

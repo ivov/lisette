@@ -112,7 +112,11 @@ fn check_one(
         if matches!(method_part, "new" | "buffered") {
             sink.push(diagnostics::infer::native_constructor_value(value, span));
         } else {
-            sink.push(diagnostics::infer::native_method_value(method_part, span));
+            sink.push(diagnostics::infer::native_method_value(
+                method_part,
+                diagnostics::infer::NativeMethodForm::Static,
+                span,
+            ));
         }
         return;
     }

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·               ╰── native methods must be called directly
  5 │   let _ = f
    ╰────
-  help: Use a closure instead: `|args| receiver.length(args)` · code: [infer.native_method_value]
+  help: Call it directly: `receiver.length()`. To use it as a value, wrap in a closure: `|args| receiver.length(args)` · code: [infer.native_method_value]

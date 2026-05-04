@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot use native method as a value
+   ╭─[test.lis:8:28]
+ 7 │   let b = Box { items: [1, 2] }
+ 8 │   fmt.Printf("count=%d\n", b.items.length)
+   ·                            ───────┬──────
+   ·                                   ╰── native methods must be called directly
+ 9 │ }
+   ╰────
+  help: Call it directly: `receiver.length()`. To use it as a value, wrap in a closure: `|args| receiver.length(args)` · code: [infer.native_method_value]

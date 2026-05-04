@@ -2389,14 +2389,24 @@ pub fn specialized_impl_cannot_satisfy_interface(
         ))
 }
 
-pub fn native_method_value(method: &str, span: Span) -> LisetteDiagnostic {
+pub enum NativeMethodForm {
+    Instance,
+    Static,
+}
+
+pub fn native_method_value(method: &str, form: NativeMethodForm, span: Span) -> LisetteDiagnostic {
+    let help = match form {
+        NativeMethodForm::Instance => format!(
+            "Call it directly: `receiver.{method}()`. To use it as a value, wrap in a closure: `|args| receiver.{method}(args)`"
+        ),
+        NativeMethodForm::Static => {
+            format!("Use a closure instead: `|args| receiver.{method}(args)`")
+        }
+    };
     LisetteDiagnostic::error("Cannot use native method as a value")
         .with_infer_code("native_method_value")
         .with_span_label(&span, "native methods must be called directly")
-        .with_help(format!(
-            "Use a closure instead: `|args| receiver.{}(args)`",
-            method
-        ))
+        .with_help(help)
 }
 
 pub fn native_constructor_value(name: &str, span: Span) -> LisetteDiagnostic {
