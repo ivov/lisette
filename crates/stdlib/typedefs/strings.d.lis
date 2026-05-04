@@ -47,7 +47,7 @@ pub fn Count(s: string, substr: string) -> int
 /// returning the text before and after sep.
 /// The found result reports whether sep appears in s.
 /// If sep does not appear in s, cut returns s, "", false.
-pub fn Cut(s: string, sep: string) -> Option<(string, string)>
+pub fn Cut(s: string, sep: string) -> (string, string, bool)
 
 /// CutPrefix returns s without the provided leading prefix string
 /// and reports whether it found the prefix.

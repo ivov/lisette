@@ -234,7 +234,7 @@ pub fn LookupFieldOrMethod(
   addressable: bool,
   pkg: Ref<Package>,
   name: string,
-) -> Option<(Object, Slice<int>)>
+) -> (Object, Slice<int>, bool)
 
 pub fn LookupSelection(
   t: Type,

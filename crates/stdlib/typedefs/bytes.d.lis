@@ -39,7 +39,7 @@ pub fn Count(s: Slice<byte>, sep: Slice<byte>) -> int
 /// If sep does not appear in s, cut returns s, nil, false.
 /// 
 /// Cut returns slices of the original slice s, not copies.
-pub fn Cut(s: Slice<byte>, sep: Slice<byte>) -> Option<(Slice<byte>, Slice<byte>)>
+pub fn Cut(s: Slice<byte>, sep: Slice<byte>) -> (Slice<byte>, Slice<byte>, bool)
 
 /// CutPrefix returns s without the provided leading prefix byte slice
 /// and reports whether it found the prefix.

@@ -4,6 +4,9 @@
       "bool_as_flag": {
         "github.com/charmbracelet/lipgloss": [
           "GetBorder"
+        ],
+        "golang.org/x/sync/singleflight": [
+          "Group.Do"
         ]
       },
       "direct_error": {

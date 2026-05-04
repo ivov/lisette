@@ -13,9 +13,12 @@
     },
     "types": {
       "bool_as_flag": {
+        "bytes": ["Cut"],
         "go/constant": ["Float32Val", "Float64Val", "Int64Val", "Uint64Val"],
+        "go/types": ["LookupFieldOrMethod"],
         "math/big": ["Rat.Float32", "Rat.Float64", "Rat.FloatPrec"],
-        "reflect": ["Select"]
+        "reflect": ["Select"],
+        "strings": ["Cut"]
       },
       "direct_error": {
         "errors": ["New"],

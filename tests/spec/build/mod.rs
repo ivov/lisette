@@ -71,29 +71,6 @@ fn main() {
 }
 
 #[test]
-fn go_tuple_call_wrapped() {
-    let mut fs = MockFileSystem::new();
-
-    fs.add_file(
-        ENTRY_MODULE_ID,
-        "main.lis",
-        r#"
-import "go:strings"
-import "go:fmt"
-
-fn main() {
-  match strings.Cut("hello:world", ":") {
-    Some(result) => fmt.Print(result.0),
-    None => {},
-  }
-}
-"#,
-    );
-
-    assert_build_snapshot!(fs, "github.com/user/myproject");
-}
-
-#[test]
 fn go_option_call_wrapped() {
     let mut fs = MockFileSystem::new();
 
@@ -1776,7 +1753,7 @@ fn main() {
 }
 
 #[test]
-fn go_three_value_return_option_tuple() {
+fn go_three_value_return_tuple() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(

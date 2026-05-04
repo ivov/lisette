@@ -1,0 +1,11 @@
+{
+  "overrides": {
+    "types": {
+      "bool_as_flag": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/multi_return_with_bool": [
+          "Cut3"
+        ]
+      }
+    }
+  }
+}
