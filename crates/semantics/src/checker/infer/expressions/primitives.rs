@@ -263,7 +263,7 @@ impl TaskState<'_> {
                     self.sink
                         .push(diagnostics::infer::self_in_static_method(span));
                 } else {
-                    self.error_name_not_found(store, &value, span);
+                    self.error_name_not_found(store, &value, span, expected_ty);
                 }
                 Type::Error
             }
@@ -509,7 +509,13 @@ impl TaskState<'_> {
         new_items
     }
 
-    pub(super) fn error_name_not_found(&mut self, store: &Store, variable_name: &str, span: Span) {
+    pub(super) fn error_name_not_found(
+        &mut self,
+        store: &Store,
+        variable_name: &str,
+        span: Span,
+        expected_ty: &Type,
+    ) {
         if self.imports.failed_imports.contains(variable_name) {
             return;
         }
@@ -528,10 +534,18 @@ impl TaskState<'_> {
             }
         }
 
+        let hint_ty = if matches!(variable_name, "nil" | "null" | "Nil" | "undefined") {
+            let resolved = expected_ty.resolve_in(&self.env);
+            (!resolved.is_variable() && !resolved.is_error()).then_some(resolved)
+        } else {
+            None
+        };
+
         self.sink.push(diagnostics::infer::name_not_found(
             variable_name,
             span,
             &available_names,
+            hint_ty.as_ref(),
         ));
     }
 }

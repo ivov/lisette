@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·     ╰── no member `len` on type `string`
  4 │ }
    ╰────
-  help: Did you mean `length`? · code: [infer.member_not_found]
+  help: Did you mean `length()`? · code: [infer.member_not_found]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `nil` is not supported
+   ╭─[test.lis:3:3]
+ 2 │ fn test() -> Slice<int> {
+ 3 │   nil
+   ·   ─┬─
+   ·    ╰── does not exist
+ 4 │ }
+   ╰────
+  help: For an empty `Slice<int>`, use `[]` · code: [resolve.nil_not_supported]

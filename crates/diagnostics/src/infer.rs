@@ -252,12 +252,14 @@ pub fn name_not_found(
     variable_name: &str,
     span: Span,
     available_names: &[String],
+    expected_ty: Option<&Type>,
 ) -> LisetteDiagnostic {
     if matches!(variable_name, "nil" | "null" | "Nil" | "undefined") {
+        let help = nil_help_for(expected_ty);
         return LisetteDiagnostic::error(format!("`{}` is not supported", variable_name))
             .with_resolve_code("nil_not_supported")
             .with_span_label(&span, "does not exist")
-            .with_help("Absence is encoded with `Option<T>` in Lisette. Use `None` to represent absent values.");
+            .with_help(help);
     }
 
     if let Some(hint) = go_builtin_hint(variable_name) {
@@ -287,6 +289,18 @@ pub fn name_not_found(
     }
 
     diagnostic
+}
+
+/// Pick a `nil`-replacement hint tailored to the expected type.
+fn nil_help_for(expected_ty: Option<&Type>) -> String {
+    match expected_ty {
+        Some(ty) if ty.is_slice() => format!("For an empty `{}`, use `[]`.", ty),
+        Some(ty) if ty.is_map() => format!("For an empty `{}`, use `Map.new()`.", ty),
+        _ => {
+            "Absence is encoded with `Option<T>` in Lisette. Use `None` to represent absent values."
+                .to_string()
+        }
+    }
 }
 
 pub fn self_in_static_method(span: Span) -> LisetteDiagnostic {
@@ -730,6 +744,7 @@ pub fn member_not_found(
     span: Span,
     available_fields: Option<&[String]>,
     unwrap_hint: Option<UnwrapHint>,
+    is_call_target: bool,
 ) -> LisetteDiagnostic {
     let mut diagnostic = LisetteDiagnostic::error("Member not found")
         .with_infer_code("member_not_found")
@@ -791,7 +806,12 @@ pub fn member_not_found(
     let suggestion = available_fields.and_then(|fields| find_similar_name(field, fields));
 
     if let Some(suggestion) = suggestion {
-        diagnostic = diagnostic.with_help(format!("Did you mean `{}`?", suggestion));
+        let rendered = if is_call_target {
+            format!("{}()", suggestion)
+        } else {
+            suggestion
+        };
+        diagnostic = diagnostic.with_help(format!("Did you mean `{}`?", rendered));
     } else {
         diagnostic = diagnostic.with_help("Ensure the field or method is defined on this type");
     }

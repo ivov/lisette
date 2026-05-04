@@ -256,6 +256,7 @@ impl TaskState<'_> {
                 Some(&available_members)
             },
             unwrap_hint,
+            self.scopes.is_callee_context(),
         ));
 
         args.build_dot_access(Type::Error, None, None)

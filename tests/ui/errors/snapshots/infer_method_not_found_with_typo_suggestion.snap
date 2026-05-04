@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·       ╰── no member `cntains` on type `string`
  4 │ }
    ╰────
-  help: Did you mean `contains`? · code: [infer.member_not_found]
+  help: Did you mean `contains()`? · code: [infer.member_not_found]

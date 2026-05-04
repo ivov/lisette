@@ -21,6 +21,26 @@ fn test() -> Option<int> {
 }
 
 #[test]
+fn infer_nil_not_supported_for_slice() {
+    let input = r#"
+fn test() -> Slice<int> {
+  nil
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_nil_not_supported_for_map() {
+    let input = r#"
+fn test() -> Map<string, int> {
+  nil
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_go_builtin_len() {
     let input = r#"
 fn test(items: Slice<int>) -> int {
