@@ -184,12 +184,18 @@ func basicToLisette(t *types.Basic) string {
 	case types.Int16:
 		return "int16"
 	case types.Int32:
+		if t.Name() == "rune" {
+			return "rune"
+		}
 		return "int32"
 	case types.Int64:
 		return "int64"
 	case types.Uint:
 		return "uint"
 	case types.Uint8:
+		if t.Name() == "byte" {
+			return "byte"
+		}
 		return "uint8"
 	case types.Uint16:
 		return "uint16"

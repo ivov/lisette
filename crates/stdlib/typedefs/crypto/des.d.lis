@@ -6,10 +6,10 @@
 import "go:crypto/cipher"
 
 /// NewCipher creates and returns a new [cipher.Block].
-pub fn NewCipher(key: Slice<uint8>) -> Result<cipher.Block, error>
+pub fn NewCipher(key: Slice<byte>) -> Result<cipher.Block, error>
 
 /// NewTripleDESCipher creates and returns a new [cipher.Block].
-pub fn NewTripleDESCipher(key: Slice<uint8>) -> Result<cipher.Block, error>
+pub fn NewTripleDESCipher(key: Slice<byte>) -> Result<cipher.Block, error>
 
 pub struct KeySizeError(int)
 

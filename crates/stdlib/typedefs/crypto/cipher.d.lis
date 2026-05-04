@@ -5,15 +5,15 @@
 
 import "go:io"
 
-pub fn NewCBCDecrypter(b: Block, iv: Slice<uint8>) -> BlockMode
+pub fn NewCBCDecrypter(b: Block, iv: Slice<byte>) -> BlockMode
 
-pub fn NewCBCEncrypter(b: Block, iv: Slice<uint8>) -> BlockMode
+pub fn NewCBCEncrypter(b: Block, iv: Slice<byte>) -> BlockMode
 
-pub fn NewCFBDecrypter(block: Block, iv: Slice<uint8>) -> Stream
+pub fn NewCFBDecrypter(block: Block, iv: Slice<byte>) -> Stream
 
-pub fn NewCFBEncrypter(block: Block, iv: Slice<uint8>) -> Stream
+pub fn NewCFBEncrypter(block: Block, iv: Slice<byte>) -> Stream
 
-pub fn NewCTR(block: Block, iv: Slice<uint8>) -> Stream
+pub fn NewCTR(block: Block, iv: Slice<byte>) -> Stream
 
 pub fn NewGCM(cipher: Block) -> Result<AEAD, error>
 
@@ -23,7 +23,7 @@ pub fn NewGCMWithRandomNonce(cipher: Block) -> Result<AEAD, error>
 
 pub fn NewGCMWithTagSize(cipher: Block, tagSize: int) -> Result<AEAD, error>
 
-pub fn NewOFB(b: Block, iv: Slice<uint8>) -> Stream
+pub fn NewOFB(b: Block, iv: Slice<byte>) -> Stream
 
 /// AEAD is a cipher mode providing authenticated encryption with associated
 /// data. For a description of the methodology, see
@@ -31,18 +31,18 @@ pub fn NewOFB(b: Block, iv: Slice<uint8>) -> Stream
 pub interface AEAD {
   fn NonceSize() -> int
   fn Open(
-    mut dst: Slice<uint8>,
-    nonce: Slice<uint8>,
-    ciphertext: Slice<uint8>,
-    additionalData: Slice<uint8>,
-  ) -> Result<Slice<uint8>, error>
+    mut dst: Slice<byte>,
+    nonce: Slice<byte>,
+    ciphertext: Slice<byte>,
+    additionalData: Slice<byte>,
+  ) -> Result<Slice<byte>, error>
   fn Overhead() -> int
   fn Seal(
-    mut dst: Slice<uint8>,
-    nonce: Slice<uint8>,
-    plaintext: Slice<uint8>,
-    additionalData: Slice<uint8>,
-  ) -> Slice<uint8>
+    mut dst: Slice<byte>,
+    nonce: Slice<byte>,
+    plaintext: Slice<byte>,
+    additionalData: Slice<byte>,
+  ) -> Slice<byte>
 }
 
 /// A Block represents an implementation of block cipher
@@ -51,20 +51,20 @@ pub interface AEAD {
 /// extend that capability to streams of blocks.
 pub interface Block {
   fn BlockSize() -> int
-  fn Decrypt(mut dst: Slice<uint8>, src: Slice<uint8>)
-  fn Encrypt(mut dst: Slice<uint8>, src: Slice<uint8>)
+  fn Decrypt(mut dst: Slice<byte>, src: Slice<byte>)
+  fn Encrypt(mut dst: Slice<byte>, src: Slice<byte>)
 }
 
 /// A BlockMode represents a block cipher running in a block-based mode (CBC,
 /// ECB etc).
 pub interface BlockMode {
   fn BlockSize() -> int
-  fn CryptBlocks(mut dst: Slice<uint8>, src: Slice<uint8>)
+  fn CryptBlocks(mut dst: Slice<byte>, src: Slice<byte>)
 }
 
 /// A Stream represents a stream cipher.
 pub interface Stream {
-  fn XORKeyStream(mut dst: Slice<uint8>, src: Slice<uint8>)
+  fn XORKeyStream(mut dst: Slice<byte>, src: Slice<byte>)
 }
 
 /// StreamReader wraps a [Stream] into an [io.Reader]. It calls XORKeyStream
@@ -86,7 +86,7 @@ pub struct StreamWriter {
 }
 
 impl StreamReader {
-  fn Read(self, mut dst: Slice<uint8>) -> Partial<int, error>
+  fn Read(self, mut dst: Slice<byte>) -> Partial<int, error>
 }
 
 impl StreamWriter {
@@ -95,5 +95,5 @@ impl StreamWriter {
   #[allow(unused_result)]
   fn Close(self) -> Result<(), error>
 
-  fn Write(self, src: Slice<uint8>) -> Partial<int, error>
+  fn Write(self, src: Slice<byte>) -> Partial<int, error>
 }

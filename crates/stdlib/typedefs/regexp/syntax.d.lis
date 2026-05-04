@@ -152,12 +152,12 @@ pub const OpWordBoundary: Op = 11
 
 pub fn Compile(re: Ref<Regexp>) -> Result<Ref<Prog>, error>
 
-pub fn EmptyOpContext(r1: int32, r2: int32) -> EmptyOp
+pub fn EmptyOpContext(r1: rune, r2: rune) -> EmptyOp
 
 /// IsWordChar reports whether r is considered a “word character”
 /// during the evaluation of the \b and \B zero-width assertions.
 /// These assertions are ASCII-only: the word characters are [A-Za-z0-9_].
-pub fn IsWordChar(r: int32) -> bool
+pub fn IsWordChar(r: rune) -> bool
 
 pub fn Parse(s: string, flags: Flags) -> Result<Ref<Regexp>, error>
 
@@ -179,7 +179,7 @@ pub struct Inst {
   pub Op: InstOp,
   pub Out: uint32,
   pub Arg: uint32,
-  pub Rune: Slice<int32>,
+  pub Rune: Slice<rune>,
 }
 
 /// A Prog is a compiled regular expression program.
@@ -195,7 +195,7 @@ pub struct Regexp {
   pub Flags: Flags,
   pub Sub: Slice<Option<Ref<Regexp>>>,
   // SKIPPED field "Sub0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
-  pub Rune: Slice<int32>,
+  pub Rune: Slice<rune>,
   // SKIPPED field "Rune0": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   pub Min: int,
   pub Max: int,
@@ -253,18 +253,18 @@ impl Inst {
   /// MatchEmptyWidth reports whether the instruction matches
   /// an empty string between the runes before and after.
   /// It should only be called when i.Op == [InstEmptyWidth].
-  fn MatchEmptyWidth(self: Ref<Inst>, before: int32, after: int32) -> bool
+  fn MatchEmptyWidth(self: Ref<Inst>, before: rune, after: rune) -> bool
 
   /// MatchRune reports whether the instruction matches (and consumes) r.
   /// It should only be called when i.Op == [InstRune].
-  fn MatchRune(self: Ref<Inst>, r: int32) -> bool
+  fn MatchRune(self: Ref<Inst>, r: rune) -> bool
 
   /// MatchRunePos checks whether the instruction matches (and consumes) r.
   /// If so, MatchRunePos returns the index of the matching rune pair
   /// (or, when len(i.Rune) == 1, rune singleton).
   /// If not, MatchRunePos returns -1.
   /// MatchRunePos should only be called when i.Op == [InstRune].
-  fn MatchRunePos(self: Ref<Inst>, r: int32) -> int
+  fn MatchRunePos(self: Ref<Inst>, r: rune) -> int
 
   fn String(self: Ref<Inst>) -> string
 }

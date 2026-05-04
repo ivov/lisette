@@ -3,7 +3,7 @@
 // Go: 1.25.5
 // Lisette: 0.1.24
 
-pub fn NewCipher(key: Slice<uint8>) -> Result<Ref<Cipher>, error>
+pub fn NewCipher(key: Slice<byte>) -> Result<Ref<Cipher>, error>
 
 /// A Cipher is an instance of RC4 using a particular key.
 pub type Cipher
@@ -19,7 +19,7 @@ impl Cipher {
 
   /// XORKeyStream sets dst to the result of XORing src with the key stream.
   /// Dst and src must overlap entirely or not at all.
-  fn XORKeyStream(self: Ref<Cipher>, mut dst: Slice<uint8>, src: Slice<uint8>)
+  fn XORKeyStream(self: Ref<Cipher>, mut dst: Slice<byte>, src: Slice<byte>)
 }
 
 impl KeySizeError {

@@ -24,7 +24,7 @@ pub fn Copy(dst: Writer, src: Reader) -> Result<int64, error>
 /// 
 /// If either src implements [WriterTo] or dst implements [ReaderFrom],
 /// buf will not be used to perform the copy.
-pub fn CopyBuffer(dst: Writer, src: Reader, mut buf: Slice<uint8>) -> Result<int64, error>
+pub fn CopyBuffer(dst: Writer, src: Reader, mut buf: Slice<byte>) -> Result<int64, error>
 
 /// CopyN copies n bytes (or until an error) from src to dst.
 /// It returns the number of bytes copied and the earliest
@@ -67,7 +67,7 @@ pub fn Pipe() -> (Ref<PipeReader>, Ref<PipeWriter>)
 /// A successful call returns err == nil, not err == EOF. Because ReadAll is
 /// defined to read from src until EOF, it does not treat an EOF from Read
 /// as an error to be reported.
-pub fn ReadAll(r: Reader) -> Result<Slice<uint8>, error>
+pub fn ReadAll(r: Reader) -> Result<Slice<byte>, error>
 
 /// ReadAtLeast reads from r into buf until it has read at least min bytes.
 /// It returns the number of bytes copied and an error if fewer bytes were read.
@@ -77,7 +77,7 @@ pub fn ReadAll(r: Reader) -> Result<Slice<uint8>, error>
 /// If min is greater than the length of buf, ReadAtLeast returns [ErrShortBuffer].
 /// On return, n >= min if and only if err == nil.
 /// If r returns an error having read at least min bytes, the error is dropped.
-pub fn ReadAtLeast(r: Reader, mut buf: Slice<uint8>, min: int) -> Partial<int, error>
+pub fn ReadAtLeast(r: Reader, mut buf: Slice<byte>, min: int) -> Partial<int, error>
 
 /// ReadFull reads exactly len(buf) bytes from r into buf.
 /// It returns the number of bytes copied and an error if fewer bytes were read.
@@ -86,7 +86,7 @@ pub fn ReadAtLeast(r: Reader, mut buf: Slice<uint8>, min: int) -> Partial<int, e
 /// ReadFull returns [ErrUnexpectedEOF].
 /// On return, n == len(buf) if and only if err == nil.
 /// If r returns an error having read at least len(buf) bytes, the error is dropped.
-pub fn ReadFull(r: Reader, mut buf: Slice<uint8>) -> Partial<int, error>
+pub fn ReadFull(r: Reader, mut buf: Slice<byte>) -> Partial<int, error>
 
 pub fn TeeReader(r: Reader, w: Writer) -> Reader
 
@@ -105,7 +105,7 @@ pub fn WriteString(w: Writer, s: string) -> Result<int, error>
 /// processing. A [Reader] that does not implement  ByteReader
 /// can be wrapped using bufio.NewReader to add this method.
 pub interface ByteReader {
-  fn ReadByte() -> Result<uint8, error>
+  fn ReadByte() -> Result<byte, error>
 }
 
 /// ByteScanner is the interface that adds the UnreadByte method to the
@@ -117,13 +117,13 @@ pub interface ByteReader {
 /// last-unread byte), or (in implementations that support the [Seeker] interface)
 /// seek to one byte before the current offset.
 pub interface ByteScanner {
-  fn ReadByte() -> Result<uint8, error>
+  fn ReadByte() -> Result<byte, error>
   fn UnreadByte() -> Result<(), error>
 }
 
 /// ByteWriter is the interface that wraps the WriteByte method.
 pub interface ByteWriter {
-  fn WriteByte(c: uint8) -> Result<(), error>
+  fn WriteByte(c: byte) -> Result<(), error>
 }
 
 /// Closer is the interface that wraps the basic Close method.
@@ -155,41 +155,41 @@ pub type PipeWriter
 /// ReadCloser is the interface that groups the basic Read and Close methods.
 pub interface ReadCloser {
   fn Close() -> Result<(), error>
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
 }
 
 /// ReadSeekCloser is the interface that groups the basic Read, Seek and Close
 /// methods.
 pub interface ReadSeekCloser {
   fn Close() -> Result<(), error>
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
   fn Seek(offset: int64, whence: int) -> Result<int64, error>
 }
 
 /// ReadSeeker is the interface that groups the basic Read and Seek methods.
 pub interface ReadSeeker {
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
   fn Seek(offset: int64, whence: int) -> Result<int64, error>
 }
 
 /// ReadWriteCloser is the interface that groups the basic Read, Write and Close methods.
 pub interface ReadWriteCloser {
   fn Close() -> Result<(), error>
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// ReadWriteSeeker is the interface that groups the basic Read, Write and Seek methods.
 pub interface ReadWriteSeeker {
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
   fn Seek(offset: int64, whence: int) -> Result<int64, error>
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// ReadWriter is the interface that groups the basic Read and Write methods.
 pub interface ReadWriter {
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// Reader is the interface that wraps the basic Read method.
@@ -224,7 +224,7 @@ pub interface ReadWriter {
 /// 
 /// Implementations must not retain p.
 pub interface Reader {
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
 }
 
 /// ReaderAt is the interface that wraps the basic ReadAt method.
@@ -254,7 +254,7 @@ pub interface Reader {
 /// 
 /// Implementations must not retain p.
 pub interface ReaderAt {
-  fn ReadAt(mut p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(mut p: Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 /// ReaderFrom is the interface that wraps the ReadFrom method.
@@ -274,7 +274,7 @@ pub interface ReaderFrom {
 /// and returns the rune and its size in bytes. If no character is
 /// available, err will be set.
 pub interface RuneReader {
-  fn ReadRune() -> Result<(int32, int), error>
+  fn ReadRune() -> Result<(rune, int), error>
 }
 
 /// RuneScanner is the interface that adds the UnreadRune method to the
@@ -286,7 +286,7 @@ pub interface RuneReader {
 /// last-unread rune), or (in implementations that support the [Seeker] interface)
 /// seek to the start of the rune before the current offset.
 pub interface RuneScanner {
-  fn ReadRune() -> Result<(int32, int), error>
+  fn ReadRune() -> Result<(rune, int), error>
   fn UnreadRune() -> Result<(), error>
 }
 
@@ -321,13 +321,13 @@ pub interface StringWriter {
 /// WriteCloser is the interface that groups the basic Write and Close methods.
 pub interface WriteCloser {
   fn Close() -> Result<(), error>
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// WriteSeeker is the interface that groups the basic Write and Seek methods.
 pub interface WriteSeeker {
   fn Seek(offset: int64, whence: int) -> Result<int64, error>
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// Writer is the interface that wraps the basic Write method.
@@ -340,7 +340,7 @@ pub interface WriteSeeker {
 /// 
 /// Implementations must not retain p.
 pub interface Writer {
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// WriterAt is the interface that wraps the basic WriteAt method.
@@ -359,7 +359,7 @@ pub interface Writer {
 /// 
 /// Implementations must not retain p.
 pub interface WriterAt {
-  fn WriteAt(p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn WriteAt(p: Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 /// WriterTo is the interface that wraps the WriteTo method.
@@ -413,15 +413,15 @@ pub var ErrShortWrite: error
 pub var ErrUnexpectedEOF: error
 
 impl LimitedReader {
-  fn Read(self: Ref<LimitedReader>, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<LimitedReader>, mut p: Slice<byte>) -> Partial<int, error>
 }
 
 impl OffsetWriter {
   fn Seek(self: Ref<OffsetWriter>, offset: int64, whence: int) -> Result<int64, error>
 
-  fn Write(self: Ref<OffsetWriter>, p: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<OffsetWriter>, p: Slice<byte>) -> Partial<int, error>
 
-  fn WriteAt(self: Ref<OffsetWriter>, p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn WriteAt(self: Ref<OffsetWriter>, p: Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl PipeReader {
@@ -442,7 +442,7 @@ impl PipeReader {
   /// arrives or the write end is closed.
   /// If the write end is closed with an error, that error is
   /// returned as err; otherwise err is EOF.
-  fn Read(self: Ref<PipeReader>, mut data: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<PipeReader>, mut data: Slice<byte>) -> Partial<int, error>
 }
 
 impl PipeWriter {
@@ -464,7 +464,7 @@ impl PipeWriter {
   /// have consumed all the data or the read end is closed.
   /// If the read end is closed with an error, that err is
   /// returned as err; otherwise err is [ErrClosedPipe].
-  fn Write(self: Ref<PipeWriter>, data: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<PipeWriter>, data: Slice<byte>) -> Partial<int, error>
 }
 
 impl SectionReader {
@@ -474,9 +474,9 @@ impl SectionReader {
   /// when the [SectionReader] was created.
   fn Outer(self: Ref<SectionReader>) -> (ReaderAt, int64, int64)
 
-  fn Read(self: Ref<SectionReader>, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<SectionReader>, mut p: Slice<byte>) -> Partial<int, error>
 
-  fn ReadAt(self: Ref<SectionReader>, mut p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self: Ref<SectionReader>, mut p: Slice<byte>, off: int64) -> Partial<int, error>
 
   fn Seek(self: Ref<SectionReader>, offset: int64, whence: int) -> Result<int64, error>
 

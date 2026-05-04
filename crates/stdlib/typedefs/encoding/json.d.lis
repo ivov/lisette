@@ -9,14 +9,14 @@ import "go:reflect"
 
 /// Compact appends to dst the JSON-encoded src with
 /// insignificant space characters elided.
-pub fn Compact(dst: Ref<bytes.Buffer>, src: Slice<uint8>) -> Result<(), error>
+pub fn Compact(dst: Ref<bytes.Buffer>, src: Slice<byte>) -> Result<(), error>
 
 /// HTMLEscape appends to dst the JSON-encoded src with <, >, &, U+2028 and U+2029
 /// characters inside string literals changed to \u003c, \u003e, \u0026, \u2028, \u2029
 /// so that the JSON will be safe to embed inside HTML <script> tags.
 /// For historical reasons, web browsers don't honor standard HTML
 /// escaping within <script> tags, so an alternative JSON encoding must be used.
-pub fn HTMLEscape(dst: Ref<bytes.Buffer>, src: Slice<uint8>)
+pub fn HTMLEscape(dst: Ref<bytes.Buffer>, src: Slice<byte>)
 
 /// Indent appends to dst an indented form of the JSON-encoded src.
 /// Each element in a JSON object or array begins on a new,
@@ -31,7 +31,7 @@ pub fn HTMLEscape(dst: Ref<bytes.Buffer>, src: Slice<uint8>)
 /// if src ends in a trailing newline, so will dst.
 pub fn Indent(
   dst: Ref<bytes.Buffer>,
-  src: Slice<uint8>,
+  src: Slice<byte>,
   prefix: string,
   indent: string,
 ) -> Result<(), error>
@@ -177,12 +177,12 @@ pub fn Indent(
 /// JSON cannot represent cyclic data structures and Marshal does not
 /// handle them. Passing cyclic structures to Marshal will result in
 /// an error.
-pub fn Marshal(v: Unknown) -> Result<Slice<uint8>, error>
+pub fn Marshal(v: Unknown) -> Result<Slice<byte>, error>
 
 /// MarshalIndent is like [Marshal] but applies [Indent] to format the output.
 /// Each JSON element in the output will begin on a new line beginning with prefix
 /// followed by one or more copies of indent according to the indentation nesting.
-pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<Slice<uint8>, error>
+pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<Slice<byte>, error>
 
 pub fn NewDecoder(r: io.Reader) -> Ref<Decoder>
 
@@ -265,16 +265,16 @@ pub fn NewEncoder(w: io.Writer) -> Ref<Encoder>
 /// invalid UTF-16 surrogate pairs are not treated as an error.
 /// Instead, they are replaced by the Unicode replacement
 /// character U+FFFD.
-pub fn Unmarshal<T>(data: Slice<uint8>, v: Ref<T>) -> Result<(), error>
+pub fn Unmarshal<T>(data: Slice<byte>, v: Ref<T>) -> Result<(), error>
 
 /// Valid reports whether data is a valid JSON encoding.
-pub fn Valid(data: Slice<uint8>) -> bool
+pub fn Valid(data: Slice<byte>) -> bool
 
 /// A Decoder reads and decodes JSON values from an input stream.
 pub type Decoder
 
 /// A Delim is a JSON array or object delimiter, one of [ ] { or }.
-pub struct Delim(int32)
+pub struct Delim(rune)
 
 /// An Encoder writes JSON values to an output stream.
 pub type Encoder
@@ -298,7 +298,7 @@ pub struct InvalidUnmarshalError {
 /// Marshaler is the interface implemented by types that
 /// can marshal themselves into valid JSON.
 pub interface Marshaler {
-  fn MarshalJSON() -> Result<Slice<uint8>, error>
+  fn MarshalJSON() -> Result<Slice<byte>, error>
 }
 
 /// A MarshalerError represents an error from calling a
@@ -314,7 +314,7 @@ pub struct Number(string)
 /// RawMessage is a raw encoded JSON value.
 /// It implements [Marshaler] and [Unmarshaler] and can
 /// be used to delay JSON decoding or precompute a JSON encoding.
-pub struct RawMessage(Slice<uint8>)
+pub struct RawMessage(Slice<byte>)
 
 /// A SyntaxError is a description of a JSON syntax error.
 /// [Unmarshal] will return a SyntaxError if the JSON can't be parsed.
@@ -358,7 +358,7 @@ pub struct UnmarshalTypeError {
 /// a JSON value. UnmarshalJSON must copy the JSON data
 /// if it wishes to retain the data after returning.
 pub interface Unmarshaler {
-  fn UnmarshalJSON(arg0: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalJSON(arg0: Slice<byte>) -> Result<(), error>
 }
 
 /// An UnsupportedTypeError is returned by [Marshal] when attempting
@@ -474,10 +474,10 @@ impl Number {
 
 impl RawMessage {
   /// MarshalJSON returns m as the JSON encoding of m.
-  fn MarshalJSON(self) -> Result<Slice<uint8>, error>
+  fn MarshalJSON(self) -> Result<Slice<byte>, error>
 
   /// UnmarshalJSON sets *m to a copy of data.
-  fn UnmarshalJSON(self: Ref<RawMessage>, data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalJSON(self: Ref<RawMessage>, data: Slice<byte>) -> Result<(), error>
 }
 
 impl SyntaxError {

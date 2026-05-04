@@ -72,7 +72,7 @@ pub fn Perm(n: int) -> Slice<int>
 /// 
 /// Deprecated: For almost all use cases, [crypto/rand.Read] is more appropriate.
 /// If a deterministic source is required, use [math/rand/v2.ChaCha8.Read].
-pub fn Read(mut p: Slice<uint8>) -> Result<int, error>
+pub fn Read(mut p: Slice<byte>) -> Result<int, error>
 
 /// Seed uses the provided seed value to initialize the default Source to a
 /// deterministic state. Seed values that have the same remainder when
@@ -188,7 +188,7 @@ impl Rand {
   /// Read generates len(p) random bytes and writes them into p. It
   /// always returns len(p) and a nil error.
   /// Read should not be called concurrently with any other Rand method.
-  fn Read(self: Ref<Rand>, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Rand>, mut p: Slice<byte>) -> Partial<int, error>
 
   /// Seed uses the provided seed value to initialize the generator to a deterministic state.
   /// Seed should not be called concurrently with any other [Rand] method.

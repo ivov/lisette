@@ -56,7 +56,7 @@ pub struct Error {
 /// An ExitError reports an unsuccessful exit by a command.
 pub struct ExitError {
   pub ProcessState: Option<Ref<os.ProcessState>>,
-  pub Stderr: Slice<uint8>,
+  pub Stderr: Slice<byte>,
 }
 
 /// ErrDot indicates that a path lookup resolved to an executable
@@ -79,7 +79,7 @@ pub var ErrWaitDelay: error
 impl Cmd {
   /// CombinedOutput runs the command and returns its combined standard
   /// output and standard error.
-  fn CombinedOutput(self: Ref<Cmd>) -> Result<Slice<uint8>, error>
+  fn CombinedOutput(self: Ref<Cmd>) -> Result<Slice<byte>, error>
 
   /// Environ returns a copy of the environment in which the command would be run
   /// as it is currently configured.
@@ -90,7 +90,7 @@ impl Cmd {
   /// If c.Stderr was nil and the returned error is of type
   /// [*ExitError], Output populates the Stderr field of the
   /// returned error.
-  fn Output(self: Ref<Cmd>) -> Result<Slice<uint8>, error>
+  fn Output(self: Ref<Cmd>) -> Result<Slice<byte>, error>
 
   /// Run starts the specified command and waits for it to complete.
   /// 

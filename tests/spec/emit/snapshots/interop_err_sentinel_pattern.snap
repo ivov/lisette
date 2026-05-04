@@ -16,14 +16,14 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 loop_1:
 	for {
-		var r_2 int32
+		var r_2 rune
 		ret_4, ret_5, ret_6 := reader.ReadRune()
 		tup_7 := lisette.MakeTuple2(ret_4, ret_5)
-		var subject_3 lisette.Result[lisette.Tuple2[int32, int], error]
+		var subject_3 lisette.Result[lisette.Tuple2[rune, int], error]
 		if ret_6 != nil {
-			subject_3 = lisette.MakeResultErr[lisette.Tuple2[int32, int], error](ret_6)
+			subject_3 = lisette.MakeResultErr[lisette.Tuple2[rune, int], error](ret_6)
 		} else {
-			subject_3 = lisette.MakeResultOk[lisette.Tuple2[int32, int], error](tup_7)
+			subject_3 = lisette.MakeResultOk[lisette.Tuple2[rune, int], error](tup_7)
 		}
 		if subject_3.Tag == lisette.ResultOk {
 			r_2 = subject_3.OkVal.First

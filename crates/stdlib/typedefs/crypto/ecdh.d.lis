@@ -16,8 +16,8 @@ pub fn X25519() -> Curve
 
 pub interface Curve {
   fn GenerateKey(rand: io.Reader) -> Result<Ref<PrivateKey>, error>
-  fn NewPrivateKey(key: Slice<uint8>) -> Result<Ref<PrivateKey>, error>
-  fn NewPublicKey(key: Slice<uint8>) -> Result<Ref<PublicKey>, error>
+  fn NewPrivateKey(key: Slice<byte>) -> Result<Ref<PrivateKey>, error>
+  fn NewPublicKey(key: Slice<byte>) -> Result<Ref<PublicKey>, error>
 }
 
 /// PrivateKey is an ECDH private key, usually kept secret.
@@ -36,7 +36,7 @@ pub type PublicKey
 
 impl PrivateKey {
   /// Bytes returns a copy of the encoding of the private key.
-  fn Bytes(self: Ref<PrivateKey>) -> Slice<uint8>
+  fn Bytes(self: Ref<PrivateKey>) -> Slice<byte>
 
   fn Curve(self: Ref<PrivateKey>) -> Curve
 
@@ -51,7 +51,7 @@ impl PrivateKey {
   /// 
   /// For [X25519], this performs ECDH as specified in RFC 7748, Section 6.1. If
   /// the result is the all-zero value, ECDH returns an error.
-  fn ECDH(self: Ref<PrivateKey>, remote: Ref<PublicKey>) -> Result<Slice<uint8>, error>
+  fn ECDH(self: Ref<PrivateKey>, remote: Ref<PublicKey>) -> Result<Slice<byte>, error>
 
   /// Equal returns whether x represents the same private key as k.
   /// 
@@ -71,7 +71,7 @@ impl PrivateKey {
 
 impl PublicKey {
   /// Bytes returns a copy of the encoding of the public key.
-  fn Bytes(self: Ref<PublicKey>) -> Slice<uint8>
+  fn Bytes(self: Ref<PublicKey>) -> Slice<byte>
 
   fn Curve(self: Ref<PublicKey>) -> Curve
 

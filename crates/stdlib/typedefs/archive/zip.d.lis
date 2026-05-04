@@ -64,7 +64,7 @@ pub struct FileHeader {
   pub UncompressedSize: uint32,
   pub CompressedSize64: uint64,
   pub UncompressedSize64: uint64,
-  pub Extra: Slice<uint8>,
+  pub Extra: Slice<byte>,
   pub ExternalAttrs: uint32,
 }
 

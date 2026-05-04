@@ -12,7 +12,7 @@ func apply(f func([]uint8) []uint8, data []uint8) []uint8 {
 
 func main() {
 	data := []uint8{}
-	out := apply(func(arg0 []uint8) []uint8 {
+	out := apply(func(arg0 []byte) []byte {
 		arr_1 := sha256.Sum256(arg0)
 		return arr_1[:]
 	}, data)

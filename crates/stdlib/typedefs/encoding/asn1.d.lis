@@ -15,11 +15,11 @@
 /// 	numeric:     causes strings to be marshaled as ASN.1, NumericString values
 /// 	utc:         causes time.Time to be marshaled as ASN.1, UTCTime values
 /// 	generalized: causes time.Time to be marshaled as ASN.1, GeneralizedTime values
-pub fn Marshal(val: Unknown) -> Result<Slice<uint8>, error>
+pub fn Marshal(val: Unknown) -> Result<Slice<byte>, error>
 
 /// MarshalWithParams allows field parameters to be specified for the
 /// top-level element. The form of the params is the same as the field tags.
-pub fn MarshalWithParams(val: Unknown, params: string) -> Result<Slice<uint8>, error>
+pub fn MarshalWithParams(val: Unknown, params: string) -> Result<Slice<byte>, error>
 
 /// Unmarshal parses the DER-encoded ASN.1 data structure b
 /// and uses the reflect package to fill in an arbitrary value pointed at by val.
@@ -97,17 +97,17 @@ pub fn MarshalWithParams(val: Unknown, params: string) -> Result<Slice<uint8>, e
 /// 
 /// Other ASN.1 types are not supported; if it encounters them,
 /// Unmarshal returns a parse error.
-pub fn Unmarshal(b: Slice<uint8>, val: Unknown) -> Result<Slice<uint8>, error>
+pub fn Unmarshal(b: Slice<byte>, val: Unknown) -> Result<Slice<byte>, error>
 
 /// UnmarshalWithParams allows field parameters to be specified for the
 /// top-level element. The form of the params is the same as the field tags.
-pub fn UnmarshalWithParams(b: Slice<uint8>, val: Unknown, params: string) -> Result<Slice<uint8>, error>
+pub fn UnmarshalWithParams(b: Slice<byte>, val: Unknown, params: string) -> Result<Slice<byte>, error>
 
 /// BitString is the structure to use when you want an ASN.1 BIT STRING type. A
 /// bit string is padded up to the nearest byte in memory and the number of
 /// valid bits is recorded. Padding bits will be zero.
 pub struct BitString {
-  pub Bytes: Slice<uint8>,
+  pub Bytes: Slice<byte>,
   pub BitLength: int,
 }
 
@@ -123,15 +123,15 @@ pub struct ObjectIdentifier(Slice<int>)
 /// RawContent is used to signal that the undecoded, DER data needs to be
 /// preserved for a struct. To use it, the first field of the struct must have
 /// this type. It's an error for any of the other fields to have this type.
-pub struct RawContent(Slice<uint8>)
+pub struct RawContent(Slice<byte>)
 
 /// A RawValue represents an undecoded ASN.1 object.
 pub struct RawValue {
   pub Class: int,
   pub Tag: int,
   pub IsCompound: bool,
-  pub Bytes: Slice<uint8>,
-  pub FullBytes: Slice<uint8>,
+  pub Bytes: Slice<byte>,
+  pub FullBytes: Slice<byte>,
 }
 
 /// A StructuralError suggests that the ASN.1 data is valid, but the Go type
@@ -212,7 +212,7 @@ pub const TagUTCTime = 23
 pub const TagUTF8String = 12
 
 /// NullBytes contains bytes representing the DER-encoded ASN.1 NULL type.
-pub var NullBytes: Slice<uint8>
+pub var NullBytes: Slice<byte>
 
 /// NullRawValue is a [RawValue] with its Tag set to the ASN.1 NULL type tag (5).
 pub var NullRawValue: RawValue
@@ -224,7 +224,7 @@ impl BitString {
 
   /// RightAlign returns a slice where the padding bits are at the beginning. The
   /// slice may share memory with the BitString.
-  fn RightAlign(self) -> Slice<uint8>
+  fn RightAlign(self) -> Slice<byte>
 }
 
 impl ObjectIdentifier {

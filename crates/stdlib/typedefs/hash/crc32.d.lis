@@ -7,11 +7,11 @@ import "go:hash"
 
 /// Checksum returns the CRC-32 checksum of data
 /// using the polynomial represented by the [Table].
-pub fn Checksum(data: Slice<uint8>, tab: Ref<Table>) -> uint32
+pub fn Checksum(data: Slice<byte>, tab: Ref<Table>) -> uint32
 
 /// ChecksumIEEE returns the CRC-32 checksum of data
 /// using the [IEEE] polynomial.
-pub fn ChecksumIEEE(data: Slice<uint8>) -> uint32
+pub fn ChecksumIEEE(data: Slice<byte>) -> uint32
 
 pub fn MakeTable(poly: uint32) -> Ref<Table>
 
@@ -30,7 +30,7 @@ pub fn New(tab: Ref<Table>) -> hash.Hash32
 pub fn NewIEEE() -> hash.Hash32
 
 /// Update returns the result of adding the bytes in p to the crc.
-pub fn Update(crc: uint32, tab: Ref<Table>, p: Slice<uint8>) -> uint32
+pub fn Update(crc: uint32, tab: Ref<Table>, p: Slice<byte>) -> uint32
 
 /// Table is a 256-word table representing the polynomial for efficient processing.
 pub struct Table(Slice<uint32>)

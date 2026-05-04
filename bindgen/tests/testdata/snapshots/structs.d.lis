@@ -41,7 +41,7 @@ pub struct Form {
 pub struct Handler {
   pub OnSuccess: Option<fn(string) -> ()>,
   pub OnError: Option<fn(error) -> ()>,
-  pub Transform: Option<fn(Slice<uint8>) -> Result<Slice<uint8>, error>>,
+  pub Transform: Option<fn(Slice<byte>) -> Result<Slice<byte>, error>>,
   pub Lookup: Option<fn(string) -> Option<int>>,
   pub GetCoords: Option<fn() -> (float64, float64, float64)>,
 }
@@ -72,8 +72,8 @@ pub struct Project {
 /// Interface embedding
 pub interface ReadWriteCloser {
   fn Close() -> Result<(), error>
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// Shadowing: Shadower declares its own GetID, so Base.GetID should not be promoted
@@ -124,5 +124,5 @@ impl Shadower {
 }
 
 impl Wrapper {
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self, mut p: Slice<byte>) -> Partial<int, error>
 }

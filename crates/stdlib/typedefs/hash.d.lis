@@ -17,8 +17,8 @@ pub interface Cloner {
   fn Clone() -> Result<Cloner, error>
   fn Reset()
   fn Size() -> int
-  fn Sum(mut b: Slice<uint8>) -> Slice<uint8>
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Sum(mut b: Slice<byte>) -> Slice<byte>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// Hash is the common interface implemented by all hash functions.
@@ -41,8 +41,8 @@ pub interface Hash {
   fn BlockSize() -> int
   fn Reset()
   fn Size() -> int
-  fn Sum(mut b: Slice<uint8>) -> Slice<uint8>
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Sum(mut b: Slice<byte>) -> Slice<byte>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// Hash32 is the common interface implemented by all 32-bit hash functions.
@@ -50,9 +50,9 @@ pub interface Hash32 {
   fn BlockSize() -> int
   fn Reset()
   fn Size() -> int
-  fn Sum(mut b: Slice<uint8>) -> Slice<uint8>
+  fn Sum(mut b: Slice<byte>) -> Slice<byte>
   fn Sum32() -> uint32
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// Hash64 is the common interface implemented by all 64-bit hash functions.
@@ -60,15 +60,15 @@ pub interface Hash64 {
   fn BlockSize() -> int
   fn Reset()
   fn Size() -> int
-  fn Sum(mut b: Slice<uint8>) -> Slice<uint8>
+  fn Sum(mut b: Slice<byte>) -> Slice<byte>
   fn Sum64() -> uint64
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }
 
 /// XOF (extendable output function) is a hash function with arbitrary or unlimited output length.
 pub interface XOF {
   fn BlockSize() -> int
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
   fn Reset()
-  fn Write(p: Slice<uint8>) -> Partial<int, error>
+  fn Write(p: Slice<byte>) -> Partial<int, error>
 }

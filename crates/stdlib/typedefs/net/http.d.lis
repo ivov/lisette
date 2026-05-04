@@ -31,7 +31,7 @@ pub fn CanonicalHeaderKey(s: string) -> string
 /// first 512 bytes of data. DetectContentType always returns
 /// a valid MIME type: if it cannot determine a more specific one, it
 /// returns "application/octet-stream".
-pub fn DetectContentType(data: Slice<uint8>) -> string
+pub fn DetectContentType(data: Slice<byte>) -> string
 
 /// Error replies to the request with the specified error message and HTTP code.
 /// It does not otherwise end the request; the caller should ensure no further
@@ -560,7 +560,7 @@ pub struct Dir(string)
 /// The methods should behave the same as those on an [*os.File].
 pub interface File {
   fn Close() -> Result<(), error>
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
   fn Readdir(count: int) -> Result<Slice<fs.FileInfo>, error>
   fn Seek(offset: int64, whence: int) -> Result<int64, error>
   fn Stat() -> Result<fs.FileInfo, error>
@@ -762,7 +762,7 @@ pub type ResponseController
 /// A ResponseWriter may not be used after [Handler.ServeHTTP] has returned.
 pub interface ResponseWriter {
   fn Header() -> Header
-  fn Write(arg0: Slice<uint8>) -> Partial<int, error>
+  fn Write(arg0: Slice<byte>) -> Partial<int, error>
   fn WriteHeader(statusCode: int)
 }
 

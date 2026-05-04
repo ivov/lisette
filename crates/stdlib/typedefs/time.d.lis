@@ -188,7 +188,7 @@ pub fn FixedZone(name: string, offset: int) -> Ref<Location>
 
 pub fn LoadLocation(name: string) -> Result<Ref<Location>, error>
 
-pub fn LoadLocationFromTZData(name: string, data: Slice<uint8>) -> Result<Ref<Location>, error>
+pub fn LoadLocationFromTZData(name: string, data: Slice<byte>) -> Result<Ref<Location>, error>
 
 pub fn NewTicker(d: Duration) -> Ref<Ticker>
 
@@ -2269,17 +2269,17 @@ impl Time {
   fn After(self, u: Time) -> bool
 
   /// AppendBinary implements the [encoding.BinaryAppender] interface.
-  fn AppendBinary(self, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendBinary(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// AppendFormat is like [Time.Format] but appends the textual
   /// representation to b and returns the extended buffer.
-  fn AppendFormat(self, mut b: Slice<uint8>, layout: string) -> Slice<uint8>
+  fn AppendFormat(self, mut b: Slice<byte>, layout: string) -> Slice<byte>
 
   /// AppendText implements the [encoding.TextAppender] interface.
   /// The time is formatted in RFC 3339 format with sub-second precision.
   /// If the timestamp cannot be represented as valid RFC 3339
   /// (e.g., the year is out of range), then an error is returned.
-  fn AppendText(self, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendText(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// Before reports whether the time instant t is before u.
   fn Before(self, u: Time) -> bool
@@ -2317,10 +2317,10 @@ impl Time {
   fn GoString(self) -> string
 
   /// GobDecode implements the gob.GobDecoder interface.
-  fn GobDecode(self: Ref<Time>, data: Slice<uint8>) -> Result<(), error>
+  fn GobDecode(self: Ref<Time>, data: Slice<byte>) -> Result<(), error>
 
   /// GobEncode implements the gob.GobEncoder interface.
-  fn GobEncode(self) -> Result<Slice<uint8>, error>
+  fn GobEncode(self) -> Result<Slice<byte>, error>
 
   /// Hour returns the hour within the day specified by t, in the range [0, 23].
   fn Hour(self) -> int
@@ -2352,19 +2352,19 @@ impl Time {
   fn Location(self) -> Ref<Location>
 
   /// MarshalBinary implements the [encoding.BinaryMarshaler] interface.
-  fn MarshalBinary(self) -> Result<Slice<uint8>, error>
+  fn MarshalBinary(self) -> Result<Slice<byte>, error>
 
   /// MarshalJSON implements the [encoding/json.Marshaler] interface.
   /// The time is a quoted string in the RFC 3339 format with sub-second precision.
   /// If the timestamp cannot be represented as valid RFC 3339
   /// (e.g., the year is out of range), then an error is reported.
-  fn MarshalJSON(self) -> Result<Slice<uint8>, error>
+  fn MarshalJSON(self) -> Result<Slice<byte>, error>
 
   /// MarshalText implements the [encoding.TextMarshaler] interface. The output
   /// matches that of calling the [Time.AppendText] method.
   /// 
   /// See [Time.AppendText] for more information.
-  fn MarshalText(self) -> Result<Slice<uint8>, error>
+  fn MarshalText(self) -> Result<Slice<byte>, error>
 
   /// Minute returns the minute offset within the hour specified by t, in the range [0, 59].
   fn Minute(self) -> int
@@ -2451,15 +2451,15 @@ impl Time {
   fn UnixNano(self) -> int64
 
   /// UnmarshalBinary implements the [encoding.BinaryUnmarshaler] interface.
-  fn UnmarshalBinary(self: Ref<Time>, data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalBinary(self: Ref<Time>, data: Slice<byte>) -> Result<(), error>
 
   /// UnmarshalJSON implements the [encoding/json.Unmarshaler] interface.
   /// The time must be a quoted string in the RFC 3339 format.
-  fn UnmarshalJSON(self: Ref<Time>, data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalJSON(self: Ref<Time>, data: Slice<byte>) -> Result<(), error>
 
   /// UnmarshalText implements the [encoding.TextUnmarshaler] interface.
   /// The time must be in the RFC 3339 format.
-  fn UnmarshalText(self: Ref<Time>, data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalText(self: Ref<Time>, data: Slice<byte>) -> Result<(), error>
 
   /// Weekday returns the day of the week specified by t.
   fn Weekday(self) -> Weekday

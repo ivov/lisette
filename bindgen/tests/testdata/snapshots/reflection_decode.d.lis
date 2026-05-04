@@ -19,7 +19,7 @@ pub fn Log(v: Unknown)
 pub fn ScanRow(dest: VarArgs<Unknown>) -> Result<(), error>
 
 /// Pointer-out shape: json.Unmarshal-like.
-pub fn Unmarshal<T>(data: Slice<uint8>, v: Ref<T>) -> Result<(), error>
+pub fn Unmarshal<T>(data: Slice<byte>, v: Ref<T>) -> Result<(), error>
 
 /// Key + pointer-out shape: viper.UnmarshalKey-like.
 pub fn UnmarshalKey<T>(key: string, v: Ref<T>) -> Result<(), error>
@@ -33,7 +33,7 @@ pub type Decoder
 
 impl Codec {
   fn Set(self: Ref<Codec>, v: Unknown)
-  fn Unmarshal<T>(self: Ref<Codec>, data: Slice<uint8>, v: Ref<T>) -> Result<(), error>
+  fn Unmarshal<T>(self: Ref<Codec>, data: Slice<byte>, v: Ref<T>) -> Result<(), error>
 }
 
 impl Decoder {

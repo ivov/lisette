@@ -10,28 +10,28 @@ import "go:unicode"
 /// Clone returns a copy of b[:len(b)].
 /// The result may have additional unused capacity.
 /// Clone(nil) returns nil.
-pub fn Clone(b: Slice<uint8>) -> Slice<uint8>
+pub fn Clone(b: Slice<byte>) -> Slice<byte>
 
 /// Compare returns an integer comparing two byte slices lexicographically.
 /// The result will be 0 if a == b, -1 if a < b, and +1 if a > b.
 /// A nil argument is equivalent to an empty slice.
-pub fn Compare(a: Slice<uint8>, b: Slice<uint8>) -> int
+pub fn Compare(a: Slice<byte>, b: Slice<byte>) -> int
 
 /// Contains reports whether subslice is within b.
-pub fn Contains(b: Slice<uint8>, subslice: Slice<uint8>) -> bool
+pub fn Contains(b: Slice<byte>, subslice: Slice<byte>) -> bool
 
 /// ContainsAny reports whether any of the UTF-8-encoded code points in chars are within b.
-pub fn ContainsAny(b: Slice<uint8>, chars: string) -> bool
+pub fn ContainsAny(b: Slice<byte>, chars: string) -> bool
 
 /// ContainsFunc reports whether any of the UTF-8-encoded code points r within b satisfy f(r).
-pub fn ContainsFunc(b: Slice<uint8>, f: fn(int32) -> bool) -> bool
+pub fn ContainsFunc(b: Slice<byte>, f: fn(rune) -> bool) -> bool
 
 /// ContainsRune reports whether the rune is contained in the UTF-8-encoded byte slice b.
-pub fn ContainsRune(b: Slice<uint8>, r: int32) -> bool
+pub fn ContainsRune(b: Slice<byte>, r: rune) -> bool
 
 /// Count counts the number of non-overlapping instances of sep in s.
 /// If sep is an empty slice, Count returns 1 + the number of UTF-8-encoded code points in s.
-pub fn Count(s: Slice<uint8>, sep: Slice<uint8>) -> int
+pub fn Count(s: Slice<byte>, sep: Slice<byte>) -> int
 
 /// Cut slices s around the first instance of sep,
 /// returning the text before and after sep.
@@ -39,7 +39,7 @@ pub fn Count(s: Slice<uint8>, sep: Slice<uint8>) -> int
 /// If sep does not appear in s, cut returns s, nil, false.
 /// 
 /// Cut returns slices of the original slice s, not copies.
-pub fn Cut(s: Slice<uint8>, sep: Slice<uint8>) -> Option<(Slice<uint8>, Slice<uint8>)>
+pub fn Cut(s: Slice<byte>, sep: Slice<byte>) -> Option<(Slice<byte>, Slice<byte>)>
 
 /// CutPrefix returns s without the provided leading prefix byte slice
 /// and reports whether it found the prefix.
@@ -47,7 +47,7 @@ pub fn Cut(s: Slice<uint8>, sep: Slice<uint8>) -> Option<(Slice<uint8>, Slice<ui
 /// If prefix is the empty byte slice, CutPrefix returns s, true.
 /// 
 /// CutPrefix returns slices of the original slice s, not copies.
-pub fn CutPrefix(s: Slice<uint8>, prefix: Slice<uint8>) -> Option<Slice<uint8>>
+pub fn CutPrefix(s: Slice<byte>, prefix: Slice<byte>) -> Option<Slice<byte>>
 
 /// CutSuffix returns s without the provided ending suffix byte slice
 /// and reports whether it found the suffix.
@@ -55,17 +55,17 @@ pub fn CutPrefix(s: Slice<uint8>, prefix: Slice<uint8>) -> Option<Slice<uint8>>
 /// If suffix is the empty byte slice, CutSuffix returns s, true.
 /// 
 /// CutSuffix returns slices of the original slice s, not copies.
-pub fn CutSuffix(s: Slice<uint8>, suffix: Slice<uint8>) -> Option<Slice<uint8>>
+pub fn CutSuffix(s: Slice<byte>, suffix: Slice<byte>) -> Option<Slice<byte>>
 
 /// Equal reports whether a and b
 /// are the same length and contain the same bytes.
 /// A nil argument is equivalent to an empty slice.
-pub fn Equal(a: Slice<uint8>, b: Slice<uint8>) -> bool
+pub fn Equal(a: Slice<byte>, b: Slice<byte>) -> bool
 
 /// EqualFold reports whether s and t, interpreted as UTF-8 strings,
 /// are equal under simple Unicode case-folding, which is a more general
 /// form of case-insensitivity.
-pub fn EqualFold(s: Slice<uint8>, t: Slice<uint8>) -> bool
+pub fn EqualFold(s: Slice<byte>, t: Slice<byte>) -> bool
 
 /// Fields interprets s as a sequence of UTF-8-encoded code points.
 /// It splits the slice s around each instance of one or more consecutive white space
@@ -73,7 +73,7 @@ pub fn EqualFold(s: Slice<uint8>, t: Slice<uint8>) -> bool
 /// empty slice if s contains only white space. Every element of the returned slice is
 /// non-empty. Unlike [Split], leading and trailing runs of white space characters
 /// are discarded.
-pub fn Fields(s: Slice<uint8>) -> Slice<Slice<uint8>>
+pub fn Fields(s: Slice<byte>) -> Slice<Slice<byte>>
 
 /// FieldsFunc interprets s as a sequence of UTF-8-encoded code points.
 /// It splits the slice s at each run of code points c satisfying f(c) and
@@ -84,45 +84,45 @@ pub fn Fields(s: Slice<uint8>) -> Slice<Slice<uint8>>
 /// 
 /// FieldsFunc makes no guarantees about the order in which it calls f(c)
 /// and assumes that f always returns the same value for a given c.
-pub fn FieldsFunc(s: Slice<uint8>, f: fn(int32) -> bool) -> Slice<Slice<uint8>>
+pub fn FieldsFunc(s: Slice<byte>, f: fn(rune) -> bool) -> Slice<Slice<byte>>
 
 /// FieldsFuncSeq returns an iterator over subslices of s split around runs of
 /// Unicode code points satisfying f(c).
 /// The iterator yields the same subslices that would be returned by [FieldsFunc](s),
 /// but without constructing a new slice containing the subslices.
-pub fn FieldsFuncSeq(s: Slice<uint8>, f: fn(int32) -> bool) -> iter.Seq<Slice<uint8>>
+pub fn FieldsFuncSeq(s: Slice<byte>, f: fn(rune) -> bool) -> iter.Seq<Slice<byte>>
 
 /// FieldsSeq returns an iterator over subslices of s split around runs of
 /// whitespace characters, as defined by [unicode.IsSpace].
 /// The iterator yields the same subslices that would be returned by [Fields](s),
 /// but without constructing a new slice containing the subslices.
-pub fn FieldsSeq(s: Slice<uint8>) -> iter.Seq<Slice<uint8>>
+pub fn FieldsSeq(s: Slice<byte>) -> iter.Seq<Slice<byte>>
 
 /// HasPrefix reports whether the byte slice s begins with prefix.
-pub fn HasPrefix(s: Slice<uint8>, prefix: Slice<uint8>) -> bool
+pub fn HasPrefix(s: Slice<byte>, prefix: Slice<byte>) -> bool
 
 /// HasSuffix reports whether the byte slice s ends with suffix.
-pub fn HasSuffix(s: Slice<uint8>, suffix: Slice<uint8>) -> bool
+pub fn HasSuffix(s: Slice<byte>, suffix: Slice<byte>) -> bool
 
 /// Index returns the index of the first instance of sep in s, or -1 if sep is not present in s.
 #[go(sentinel_minus_one)]
-pub fn Index(s: Slice<uint8>, sep: Slice<uint8>) -> Option<int>
+pub fn Index(s: Slice<byte>, sep: Slice<byte>) -> Option<int>
 
 /// IndexAny interprets s as a sequence of UTF-8-encoded Unicode code points.
 /// It returns the byte index of the first occurrence in s of any of the Unicode
 /// code points in chars. It returns -1 if chars is empty or if there is no code
 /// point in common.
 #[go(sentinel_minus_one)]
-pub fn IndexAny(s: Slice<uint8>, chars: string) -> Option<int>
+pub fn IndexAny(s: Slice<byte>, chars: string) -> Option<int>
 
 /// IndexByte returns the index of the first instance of c in b, or -1 if c is not present in b.
 #[go(sentinel_minus_one)]
-pub fn IndexByte(b: Slice<uint8>, c: uint8) -> Option<int>
+pub fn IndexByte(b: Slice<byte>, c: byte) -> Option<int>
 
 /// IndexFunc interprets s as a sequence of UTF-8-encoded code points.
 /// It returns the byte index in s of the first Unicode
 /// code point satisfying f(c), or -1 if none do.
-pub fn IndexFunc(s: Slice<uint8>, f: fn(int32) -> bool) -> int
+pub fn IndexFunc(s: Slice<byte>, f: fn(rune) -> bool) -> int
 
 /// IndexRune interprets s as a sequence of UTF-8-encoded code points.
 /// It returns the byte index of the first occurrence in s of the given rune.
@@ -130,56 +130,56 @@ pub fn IndexFunc(s: Slice<uint8>, f: fn(int32) -> bool) -> int
 /// If r is [utf8.RuneError], it returns the first instance of any
 /// invalid UTF-8 byte sequence.
 #[go(sentinel_minus_one)]
-pub fn IndexRune(s: Slice<uint8>, r: int32) -> Option<int>
+pub fn IndexRune(s: Slice<byte>, r: rune) -> Option<int>
 
 /// Join concatenates the elements of s to create a new byte slice. The separator
 /// sep is placed between elements in the resulting slice.
-pub fn Join(s: Slice<Slice<uint8>>, sep: Slice<uint8>) -> Slice<uint8>
+pub fn Join(s: Slice<Slice<byte>>, sep: Slice<byte>) -> Slice<byte>
 
 /// LastIndex returns the index of the last instance of sep in s, or -1 if sep is not present in s.
 #[go(sentinel_minus_one)]
-pub fn LastIndex(s: Slice<uint8>, sep: Slice<uint8>) -> Option<int>
+pub fn LastIndex(s: Slice<byte>, sep: Slice<byte>) -> Option<int>
 
 /// LastIndexAny interprets s as a sequence of UTF-8-encoded Unicode code
 /// points. It returns the byte index of the last occurrence in s of any of
 /// the Unicode code points in chars. It returns -1 if chars is empty or if
 /// there is no code point in common.
 #[go(sentinel_minus_one)]
-pub fn LastIndexAny(s: Slice<uint8>, chars: string) -> Option<int>
+pub fn LastIndexAny(s: Slice<byte>, chars: string) -> Option<int>
 
 /// LastIndexByte returns the index of the last instance of c in s, or -1 if c is not present in s.
 #[go(sentinel_minus_one)]
-pub fn LastIndexByte(s: Slice<uint8>, c: uint8) -> Option<int>
+pub fn LastIndexByte(s: Slice<byte>, c: byte) -> Option<int>
 
 /// LastIndexFunc interprets s as a sequence of UTF-8-encoded code points.
 /// It returns the byte index in s of the last Unicode
 /// code point satisfying f(c), or -1 if none do.
-pub fn LastIndexFunc(s: Slice<uint8>, f: fn(int32) -> bool) -> int
+pub fn LastIndexFunc(s: Slice<byte>, f: fn(rune) -> bool) -> int
 
 /// Lines returns an iterator over the newline-terminated lines in the byte slice s.
 /// The lines yielded by the iterator include their terminating newlines.
 /// If s is empty, the iterator yields no lines at all.
 /// If s does not end in a newline, the final yielded line will not end in a newline.
 /// It returns a single-use iterator.
-pub fn Lines(s: Slice<uint8>) -> iter.Seq<Slice<uint8>>
+pub fn Lines(s: Slice<byte>) -> iter.Seq<Slice<byte>>
 
 /// Map returns a copy of the byte slice s with all its characters modified
 /// according to the mapping function. If mapping returns a negative value, the character is
 /// dropped from the byte slice with no replacement. The characters in s and the
 /// output are interpreted as UTF-8-encoded code points.
-pub fn Map(mapping: fn(int32) -> int32, s: Slice<uint8>) -> Slice<uint8>
+pub fn Map(mapping: fn(rune) -> rune, s: Slice<byte>) -> Slice<byte>
 
-pub fn NewBuffer(mut buf: Slice<uint8>) -> Ref<Buffer>
+pub fn NewBuffer(mut buf: Slice<byte>) -> Ref<Buffer>
 
 pub fn NewBufferString(s: string) -> Ref<Buffer>
 
-pub fn NewReader(b: Slice<uint8>) -> Ref<Reader>
+pub fn NewReader(b: Slice<byte>) -> Ref<Reader>
 
 /// Repeat returns a new byte slice consisting of count copies of b.
 /// 
 /// It panics if count is negative or if the result of (len(b) * count)
 /// overflows.
-pub fn Repeat(b: Slice<uint8>, count: int) -> Slice<uint8>
+pub fn Repeat(b: Slice<byte>, count: int) -> Slice<byte>
 
 /// Replace returns a copy of the slice s with the first n
 /// non-overlapping instances of old replaced by new.
@@ -187,18 +187,18 @@ pub fn Repeat(b: Slice<uint8>, count: int) -> Slice<uint8>
 /// and after each UTF-8 sequence, yielding up to k+1 replacements
 /// for a k-rune slice.
 /// If n < 0, there is no limit on the number of replacements.
-pub fn Replace(s: Slice<uint8>, old: Slice<uint8>, new: Slice<uint8>, n: int) -> Slice<uint8>
+pub fn Replace(s: Slice<byte>, old: Slice<byte>, new: Slice<byte>, n: int) -> Slice<byte>
 
 /// ReplaceAll returns a copy of the slice s with all
 /// non-overlapping instances of old replaced by new.
 /// If old is empty, it matches at the beginning of the slice
 /// and after each UTF-8 sequence, yielding up to k+1 replacements
 /// for a k-rune slice.
-pub fn ReplaceAll(s: Slice<uint8>, old: Slice<uint8>, new: Slice<uint8>) -> Slice<uint8>
+pub fn ReplaceAll(s: Slice<byte>, old: Slice<byte>, new: Slice<byte>) -> Slice<byte>
 
 /// Runes interprets s as a sequence of UTF-8-encoded code points.
 /// It returns a slice of runes (Unicode code points) equivalent to s.
-pub fn Runes(s: Slice<uint8>) -> Slice<int32>
+pub fn Runes(s: Slice<byte>) -> Slice<rune>
 
 /// Split slices s into all subslices separated by sep and returns a slice of
 /// the subslices between those separators.
@@ -206,13 +206,13 @@ pub fn Runes(s: Slice<uint8>) -> Slice<int32>
 /// It is equivalent to SplitN with a count of -1.
 /// 
 /// To split around the first instance of a separator, see [Cut].
-pub fn Split(s: Slice<uint8>, sep: Slice<uint8>) -> Slice<Slice<uint8>>
+pub fn Split(s: Slice<byte>, sep: Slice<byte>) -> Slice<Slice<byte>>
 
 /// SplitAfter slices s into all subslices after each instance of sep and
 /// returns a slice of those subslices.
 /// If sep is empty, SplitAfter splits after each UTF-8 sequence.
 /// It is equivalent to SplitAfterN with a count of -1.
-pub fn SplitAfter(s: Slice<uint8>, sep: Slice<uint8>) -> Slice<Slice<uint8>>
+pub fn SplitAfter(s: Slice<byte>, sep: Slice<byte>) -> Slice<Slice<byte>>
 
 /// SplitAfterN slices s into subslices after each instance of sep and
 /// returns a slice of those subslices.
@@ -221,13 +221,13 @@ pub fn SplitAfter(s: Slice<uint8>, sep: Slice<uint8>) -> Slice<Slice<uint8>>
 ///   - n > 0: at most n subslices; the last subslice will be the unsplit remainder;
 ///   - n == 0: the result is nil (zero subslices);
 ///   - n < 0: all subslices.
-pub fn SplitAfterN(s: Slice<uint8>, sep: Slice<uint8>, n: int) -> Slice<Slice<uint8>>
+pub fn SplitAfterN(s: Slice<byte>, sep: Slice<byte>, n: int) -> Slice<Slice<byte>>
 
 /// SplitAfterSeq returns an iterator over subslices of s split after each instance of sep.
 /// The iterator yields the same subslices that would be returned by [SplitAfter](s, sep),
 /// but without constructing a new slice containing the subslices.
 /// It returns a single-use iterator.
-pub fn SplitAfterSeq(s: Slice<uint8>, sep: Slice<uint8>) -> iter.Seq<Slice<uint8>>
+pub fn SplitAfterSeq(s: Slice<byte>, sep: Slice<byte>) -> iter.Seq<Slice<byte>>
 
 /// SplitN slices s into subslices separated by sep and returns a slice of
 /// the subslices between those separators.
@@ -238,83 +238,83 @@ pub fn SplitAfterSeq(s: Slice<uint8>, sep: Slice<uint8>) -> iter.Seq<Slice<uint8
 ///   - n < 0: all subslices.
 /// 
 /// To split around the first instance of a separator, see [Cut].
-pub fn SplitN(s: Slice<uint8>, sep: Slice<uint8>, n: int) -> Slice<Slice<uint8>>
+pub fn SplitN(s: Slice<byte>, sep: Slice<byte>, n: int) -> Slice<Slice<byte>>
 
 /// SplitSeq returns an iterator over all subslices of s separated by sep.
 /// The iterator yields the same subslices that would be returned by [Split](s, sep),
 /// but without constructing a new slice containing the subslices.
 /// It returns a single-use iterator.
-pub fn SplitSeq(s: Slice<uint8>, sep: Slice<uint8>) -> iter.Seq<Slice<uint8>>
+pub fn SplitSeq(s: Slice<byte>, sep: Slice<byte>) -> iter.Seq<Slice<byte>>
 
 /// Title treats s as UTF-8-encoded bytes and returns a copy with all Unicode letters that begin
 /// words mapped to their title case.
 /// 
 /// Deprecated: The rule Title uses for word boundaries does not handle Unicode
 /// punctuation properly. Use golang.org/x/text/cases instead.
-pub fn Title(s: Slice<uint8>) -> Slice<uint8>
+pub fn Title(s: Slice<byte>) -> Slice<byte>
 
 /// ToLower returns a copy of the byte slice s with all Unicode letters mapped to
 /// their lower case.
-pub fn ToLower(s: Slice<uint8>) -> Slice<uint8>
+pub fn ToLower(s: Slice<byte>) -> Slice<byte>
 
 /// ToLowerSpecial treats s as UTF-8-encoded bytes and returns a copy with all the Unicode letters mapped to their
 /// lower case, giving priority to the special casing rules.
-pub fn ToLowerSpecial(c: unicode.SpecialCase, s: Slice<uint8>) -> Slice<uint8>
+pub fn ToLowerSpecial(c: unicode.SpecialCase, s: Slice<byte>) -> Slice<byte>
 
 /// ToTitle treats s as UTF-8-encoded bytes and returns a copy with all the Unicode letters mapped to their title case.
-pub fn ToTitle(s: Slice<uint8>) -> Slice<uint8>
+pub fn ToTitle(s: Slice<byte>) -> Slice<byte>
 
 /// ToTitleSpecial treats s as UTF-8-encoded bytes and returns a copy with all the Unicode letters mapped to their
 /// title case, giving priority to the special casing rules.
-pub fn ToTitleSpecial(c: unicode.SpecialCase, s: Slice<uint8>) -> Slice<uint8>
+pub fn ToTitleSpecial(c: unicode.SpecialCase, s: Slice<byte>) -> Slice<byte>
 
 /// ToUpper returns a copy of the byte slice s with all Unicode letters mapped to
 /// their upper case.
-pub fn ToUpper(s: Slice<uint8>) -> Slice<uint8>
+pub fn ToUpper(s: Slice<byte>) -> Slice<byte>
 
 /// ToUpperSpecial treats s as UTF-8-encoded bytes and returns a copy with all the Unicode letters mapped to their
 /// upper case, giving priority to the special casing rules.
-pub fn ToUpperSpecial(c: unicode.SpecialCase, s: Slice<uint8>) -> Slice<uint8>
+pub fn ToUpperSpecial(c: unicode.SpecialCase, s: Slice<byte>) -> Slice<byte>
 
 /// ToValidUTF8 treats s as UTF-8-encoded bytes and returns a copy with each run of bytes
 /// representing invalid UTF-8 replaced with the bytes in replacement, which may be empty.
-pub fn ToValidUTF8(s: Slice<uint8>, replacement: Slice<uint8>) -> Slice<uint8>
+pub fn ToValidUTF8(s: Slice<byte>, replacement: Slice<byte>) -> Slice<byte>
 
 /// Trim returns a subslice of s by slicing off all leading and
 /// trailing UTF-8-encoded code points contained in cutset.
-pub fn Trim(s: Slice<uint8>, cutset: string) -> Slice<uint8>
+pub fn Trim(s: Slice<byte>, cutset: string) -> Slice<byte>
 
 /// TrimFunc returns a subslice of s by slicing off all leading and trailing
 /// UTF-8-encoded code points c that satisfy f(c).
-pub fn TrimFunc(s: Slice<uint8>, f: fn(int32) -> bool) -> Slice<uint8>
+pub fn TrimFunc(s: Slice<byte>, f: fn(rune) -> bool) -> Slice<byte>
 
 /// TrimLeft returns a subslice of s by slicing off all leading
 /// UTF-8-encoded code points contained in cutset.
-pub fn TrimLeft(s: Slice<uint8>, cutset: string) -> Slice<uint8>
+pub fn TrimLeft(s: Slice<byte>, cutset: string) -> Slice<byte>
 
 /// TrimLeftFunc treats s as UTF-8-encoded bytes and returns a subslice of s by slicing off
 /// all leading UTF-8-encoded code points c that satisfy f(c).
-pub fn TrimLeftFunc(s: Slice<uint8>, f: fn(int32) -> bool) -> Slice<uint8>
+pub fn TrimLeftFunc(s: Slice<byte>, f: fn(rune) -> bool) -> Slice<byte>
 
 /// TrimPrefix returns s without the provided leading prefix string.
 /// If s doesn't start with prefix, s is returned unchanged.
-pub fn TrimPrefix(s: Slice<uint8>, prefix: Slice<uint8>) -> Slice<uint8>
+pub fn TrimPrefix(s: Slice<byte>, prefix: Slice<byte>) -> Slice<byte>
 
 /// TrimRight returns a subslice of s by slicing off all trailing
 /// UTF-8-encoded code points that are contained in cutset.
-pub fn TrimRight(s: Slice<uint8>, cutset: string) -> Slice<uint8>
+pub fn TrimRight(s: Slice<byte>, cutset: string) -> Slice<byte>
 
 /// TrimRightFunc returns a subslice of s by slicing off all trailing
 /// UTF-8-encoded code points c that satisfy f(c).
-pub fn TrimRightFunc(s: Slice<uint8>, f: fn(int32) -> bool) -> Slice<uint8>
+pub fn TrimRightFunc(s: Slice<byte>, f: fn(rune) -> bool) -> Slice<byte>
 
 /// TrimSpace returns a subslice of s by slicing off all leading and
 /// trailing white space, as defined by Unicode.
-pub fn TrimSpace(s: Slice<uint8>) -> Slice<uint8>
+pub fn TrimSpace(s: Slice<byte>) -> Slice<byte>
 
 /// TrimSuffix returns s without the provided trailing suffix string.
 /// If s doesn't end with suffix, s is returned unchanged.
-pub fn TrimSuffix(s: Slice<uint8>, suffix: Slice<uint8>) -> Slice<uint8>
+pub fn TrimSuffix(s: Slice<byte>, suffix: Slice<byte>) -> Slice<byte>
 
 /// A Buffer is a variable-sized buffer of bytes with [Buffer.Read] and [Buffer.Write] methods.
 /// The zero value for Buffer is an empty buffer ready to use.
@@ -344,14 +344,14 @@ impl Buffer {
   /// This buffer is intended to be appended to and
   /// passed to an immediately succeeding [Buffer.Write] call.
   /// The buffer is only valid until the next write operation on b.
-  fn AvailableBuffer(self: Ref<Buffer>) -> Slice<uint8>
+  fn AvailableBuffer(self: Ref<Buffer>) -> Slice<byte>
 
   /// Bytes returns a slice of length b.Len() holding the unread portion of the buffer.
   /// The slice is valid for use only until the next buffer modification (that is,
   /// only until the next call to a method like [Buffer.Read], [Buffer.Write], [Buffer.Reset], or [Buffer.Truncate]).
   /// The slice aliases the buffer content at least until the next buffer modification,
   /// so immediate changes to the slice will affect the result of future reads.
-  fn Bytes(self: Ref<Buffer>) -> Slice<uint8>
+  fn Bytes(self: Ref<Buffer>) -> Slice<byte>
 
   /// Cap returns the capacity of the buffer's underlying byte slice, that is, the
   /// total space allocated for the buffer's data.
@@ -372,17 +372,17 @@ impl Buffer {
   /// advancing the buffer as if the bytes had been returned by [Buffer.Read].
   /// If there are fewer than n bytes in the buffer, Next returns the entire buffer.
   /// The slice is only valid until the next call to a read or write method.
-  fn Next(self: Ref<Buffer>, n: int) -> Slice<uint8>
+  fn Next(self: Ref<Buffer>, n: int) -> Slice<byte>
 
   /// Read reads the next len(p) bytes from the buffer or until the buffer
   /// is drained. The return value n is the number of bytes read. If the
   /// buffer has no data to return, err is [io.EOF] (unless len(p) is zero);
   /// otherwise it is nil.
-  fn Read(self: Ref<Buffer>, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Buffer>, mut p: Slice<byte>) -> Partial<int, error>
 
   /// ReadByte reads and returns the next byte from the buffer.
   /// If no byte is available, it returns error [io.EOF].
-  fn ReadByte(self: Ref<Buffer>) -> Result<uint8, error>
+  fn ReadByte(self: Ref<Buffer>) -> Result<byte, error>
 
   /// ReadBytes reads until the first occurrence of delim in the input,
   /// returning a slice containing the data up to and including the delimiter.
@@ -390,7 +390,7 @@ impl Buffer {
   /// it returns the data read before the error and the error itself (often [io.EOF]).
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
-  fn ReadBytes(self: Ref<Buffer>, delim: uint8) -> Result<Slice<uint8>, error>
+  fn ReadBytes(self: Ref<Buffer>, delim: byte) -> Result<Slice<byte>, error>
 
   /// ReadFrom reads data from r until EOF and appends it to the buffer, growing
   /// the buffer as needed. The return value n is the number of bytes read. Any
@@ -403,7 +403,7 @@ impl Buffer {
   /// If no bytes are available, the error returned is io.EOF.
   /// If the bytes are an erroneous UTF-8 encoding, it
   /// consumes one byte and returns U+FFFD, 1.
-  fn ReadRune(self: Ref<Buffer>) -> Result<(int32, int), error>
+  fn ReadRune(self: Ref<Buffer>) -> Result<(rune, int), error>
 
   /// ReadString reads until the first occurrence of delim in the input,
   /// returning a string containing the data up to and including the delimiter.
@@ -411,7 +411,7 @@ impl Buffer {
   /// it returns the data read before the error and the error itself (often [io.EOF]).
   /// ReadString returns err != nil if and only if the returned data does not end
   /// in delim.
-  fn ReadString(self: Ref<Buffer>, delim: uint8) -> Result<string, error>
+  fn ReadString(self: Ref<Buffer>, delim: byte) -> Result<string, error>
 
   /// Reset resets the buffer to be empty,
   /// but it retains the underlying storage for use by future writes.
@@ -445,21 +445,21 @@ impl Buffer {
   /// Write appends the contents of p to the buffer, growing the buffer as
   /// needed. The return value n is the length of p; err is always nil. If the
   /// buffer becomes too large, Write will panic with [ErrTooLarge].
-  fn Write(self: Ref<Buffer>, p: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Buffer>, p: Slice<byte>) -> Partial<int, error>
 
   /// WriteByte appends the byte c to the buffer, growing the buffer as needed.
   /// The returned error is always nil, but is included to match [bufio.Writer]'s
   /// WriteByte. If the buffer becomes too large, WriteByte will panic with
   /// [ErrTooLarge].
   #[allow(unused_result)]
-  fn WriteByte(self: Ref<Buffer>, c: uint8) -> Result<(), error>
+  fn WriteByte(self: Ref<Buffer>, c: byte) -> Result<(), error>
 
   /// WriteRune appends the UTF-8 encoding of Unicode code point r to the
   /// buffer, returning its length and an error, which is always nil but is
   /// included to match [bufio.Writer]'s WriteRune. The buffer is grown as needed;
   /// if it becomes too large, WriteRune will panic with [ErrTooLarge].
   #[allow(unused_result)]
-  fn WriteRune(self: Ref<Buffer>, r: int32) -> Result<int, error>
+  fn WriteRune(self: Ref<Buffer>, r: rune) -> Result<int, error>
 
   /// WriteString appends the contents of s to the buffer, growing the buffer as
   /// needed. The return value n is the length of s; err is always nil. If the
@@ -480,19 +480,19 @@ impl Reader {
   fn Len(self: Ref<Reader>) -> int
 
   /// Read implements the [io.Reader] interface.
-  fn Read(self: Ref<Reader>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Reader>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// ReadAt implements the [io.ReaderAt] interface.
-  fn ReadAt(self: Ref<Reader>, mut b: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self: Ref<Reader>, mut b: Slice<byte>, off: int64) -> Partial<int, error>
 
   /// ReadByte implements the [io.ByteReader] interface.
-  fn ReadByte(self: Ref<Reader>) -> Result<uint8, error>
+  fn ReadByte(self: Ref<Reader>) -> Result<byte, error>
 
   /// ReadRune implements the [io.RuneReader] interface.
-  fn ReadRune(self: Ref<Reader>) -> Result<(int32, int), error>
+  fn ReadRune(self: Ref<Reader>) -> Result<(rune, int), error>
 
   /// Reset resets the [Reader] to be reading from b.
-  fn Reset(self: Ref<Reader>, b: Slice<uint8>)
+  fn Reset(self: Ref<Reader>, b: Slice<byte>)
 
   /// Seek implements the [io.Seeker] interface.
   fn Seek(self: Ref<Reader>, offset: int64, whence: int) -> Result<int64, error>

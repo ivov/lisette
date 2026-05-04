@@ -128,10 +128,10 @@ pub type Zipf
 
 impl ChaCha8 {
   /// AppendBinary implements the [encoding.BinaryAppender] interface.
-  fn AppendBinary(self: Ref<ChaCha8>, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendBinary(self: Ref<ChaCha8>, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// MarshalBinary implements the [encoding.BinaryMarshaler] interface.
-  fn MarshalBinary(self: Ref<ChaCha8>) -> Result<Slice<uint8>, error>
+  fn MarshalBinary(self: Ref<ChaCha8>) -> Result<Slice<byte>, error>
 
   /// Read reads exactly len(p) bytes into p.
   /// It always returns len(p) and a nil error.
@@ -139,22 +139,22 @@ impl ChaCha8 {
   /// If calls to Read and Uint64 are interleaved, the order in which bits are
   /// returned by the two is undefined, and Read may return bits generated before
   /// the last call to Uint64.
-  fn Read(self: Ref<ChaCha8>, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<ChaCha8>, mut p: Slice<byte>) -> Partial<int, error>
 
   // SKIPPED method "Seed": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   /// Uint64 returns a uniformly distributed random uint64 value.
   fn Uint64(self: Ref<ChaCha8>) -> uint64
 
   /// UnmarshalBinary implements the [encoding.BinaryUnmarshaler] interface.
-  fn UnmarshalBinary(self: Ref<ChaCha8>, data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalBinary(self: Ref<ChaCha8>, data: Slice<byte>) -> Result<(), error>
 }
 
 impl PCG {
   /// AppendBinary implements the [encoding.BinaryAppender] interface.
-  fn AppendBinary(self: Ref<PCG>, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendBinary(self: Ref<PCG>, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// MarshalBinary implements the [encoding.BinaryMarshaler] interface.
-  fn MarshalBinary(self: Ref<PCG>) -> Result<Slice<uint8>, error>
+  fn MarshalBinary(self: Ref<PCG>) -> Result<Slice<byte>, error>
 
   /// Seed resets the PCG to behave the same way as NewPCG(seed1, seed2).
   fn Seed(self: Ref<PCG>, seed1: uint64, seed2: uint64)
@@ -163,7 +163,7 @@ impl PCG {
   fn Uint64(self: Ref<PCG>) -> uint64
 
   /// UnmarshalBinary implements the [encoding.BinaryUnmarshaler] interface.
-  fn UnmarshalBinary(self: Ref<PCG>, data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalBinary(self: Ref<PCG>, data: Slice<byte>) -> Result<(), error>
 }
 
 impl Rand {

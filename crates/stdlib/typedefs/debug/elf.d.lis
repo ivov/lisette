@@ -4312,10 +4312,10 @@ pub struct Chdr64 {
 }
 
 /// Class is found in Header.Ident[EI_CLASS] and Header.Class.
-pub struct Class(uint8)
+pub struct Class(byte)
 
 /// Data is found in Header.Ident[EI_DATA] and Header.Data.
-pub struct Data(uint8)
+pub struct Data(byte)
 
 /// ELF32 Dynamic structure. The ".dynamic" section contains an array of them.
 pub struct Dyn32 {
@@ -4579,8 +4579,8 @@ pub struct Sym64 {
 /// A Symbol represents an entry in an ELF symbol table section.
 pub struct Symbol {
   pub Name: string,
-  pub Info: uint8,
-  pub Other: uint8,
+  pub Info: byte,
+  pub Other: byte,
   pub HasVersion: bool,
   pub VersionIndex: VersionIndex,
   pub Section: SectionIndex,
@@ -4887,7 +4887,7 @@ impl Prog {
   /// Open returns a new ReadSeeker reading the ELF program body.
   fn Open(self: Ref<Prog>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl ProgFlag {
@@ -4980,7 +4980,7 @@ impl Section {
   /// Data returns uncompressed data.
   /// 
   /// For an [SHT_NOBITS] section, Data always returns a non-nil error.
-  fn Data(self: Ref<Section>) -> Result<Slice<uint8>, error>
+  fn Data(self: Ref<Section>) -> Result<Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the ELF section.
   /// Even if the section is stored compressed in the ELF file,
@@ -4990,7 +4990,7 @@ impl Section {
   /// will return a non-nil error.
   fn Open(self: Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl SectionFlag {

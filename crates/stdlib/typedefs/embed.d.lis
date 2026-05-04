@@ -27,5 +27,5 @@ impl FS {
   fn ReadDir(self, name: string) -> Result<Slice<fs.DirEntry>, error>
 
   /// ReadFile reads and returns the content of the named file.
-  fn ReadFile(self, name: string) -> Result<Slice<uint8>, error>
+  fn ReadFile(self, name: string) -> Result<Slice<byte>, error>
 }

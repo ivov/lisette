@@ -125,7 +125,7 @@ impl InvalidHostError {
 }
 
 impl URL {
-  fn AppendBinary(self: Ref<URL>, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendBinary(self: Ref<URL>, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// EscapedFragment returns the escaped form of u.Fragment.
   /// In general there are multiple possible escaped forms of any fragment.
@@ -163,7 +163,7 @@ impl URL {
   /// Any sequences of multiple / characters will be reduced to a single /.
   fn JoinPath(self: Ref<URL>, elem: VarArgs<string>) -> Ref<URL>
 
-  fn MarshalBinary(self: Ref<URL>) -> Result<Slice<uint8>, error>
+  fn MarshalBinary(self: Ref<URL>) -> Result<Slice<byte>, error>
 
   /// Parse parses a [URL] in the context of the receiver. The provided URL
   /// may be relative or absolute. Parse returns nil, err on parse
@@ -219,7 +219,7 @@ impl URL {
   ///   - if u.Fragment is empty, #fragment is omitted.
   fn String(self: Ref<URL>) -> string
 
-  fn UnmarshalBinary(self: Ref<URL>, text: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalBinary(self: Ref<URL>, text: Slice<byte>) -> Result<(), error>
 }
 
 impl Userinfo {

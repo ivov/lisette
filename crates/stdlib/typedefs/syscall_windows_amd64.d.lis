@@ -526,7 +526,7 @@ pub fn Accept(fd: Handle) -> Result<(Handle, Sockaddr), error>
 pub fn AcceptEx(
   ls: Handle,
   as_: Handle,
-  buf: Ref<uint8>,
+  buf: Ref<byte>,
   rxdatalen: uint32,
   laddrlen: uint32,
   raddrlen: uint32,
@@ -539,12 +539,12 @@ pub fn Bind(fd: Handle, sa: Sockaddr) -> Result<(), error>
 /// BytePtrFromString returns a pointer to a NUL-terminated array of
 /// bytes containing the text of s. If s contains a NUL byte at any
 /// location, it returns (nil, [EINVAL]).
-pub fn BytePtrFromString(s: string) -> Result<Ref<uint8>, error>
+pub fn BytePtrFromString(s: string) -> Result<Ref<byte>, error>
 
 /// ByteSliceFromString returns a NUL-terminated slice of bytes
 /// containing the text of s. If s contains a NUL byte at any
 /// location, it returns (nil, [EINVAL]).
-pub fn ByteSliceFromString(s: string) -> Result<Slice<uint8>, error>
+pub fn ByteSliceFromString(s: string) -> Result<Slice<byte>, error>
 
 pub fn CancelIo(s: Handle) -> Result<(), error>
 
@@ -561,7 +561,7 @@ pub fn CertCloseStore(store: Handle, flags: uint32) -> Result<(), error>
 
 pub fn CertCreateCertificateContext(
   certEncodingType: uint32,
-  certEncoded: Ref<uint8>,
+  certEncoded: Ref<byte>,
   encodedLen: uint32,
 ) -> Result<Ref<CertContext>, error>
 
@@ -624,7 +624,7 @@ pub fn Connect(fd: Handle, sa: Sockaddr) -> Result<(), error>
 pub fn ConnectEx(
   fd: Handle,
   sa: Sockaddr,
-  sendBuf: Ref<uint8>,
+  sendBuf: Ref<byte>,
   sendDataLen: uint32,
   bytesSent: Ref<uint32>,
   overlapped: Ref<Overlapped>,
@@ -721,7 +721,7 @@ pub fn CryptAcquireContext(
   flags: uint32,
 ) -> Result<(), error>
 
-pub fn CryptGenRandom(provhandle: Handle, buflen: uint32, buf: Ref<uint8>) -> Result<(), error>
+pub fn CryptGenRandom(provhandle: Handle, buflen: uint32, buf: Ref<byte>) -> Result<(), error>
 
 pub fn CryptReleaseContext(provhandle: Handle, flags: uint32) -> Result<(), error>
 
@@ -730,9 +730,9 @@ pub fn DeleteFile(path: Ref<uint16>) -> Result<(), error>
 pub fn DeviceIoControl(
   handle: Handle,
   ioControlCode: uint32,
-  inBuffer: Ref<uint8>,
+  inBuffer: Ref<byte>,
   inBufferSize: uint32,
-  outBuffer: Ref<uint8>,
+  outBuffer: Ref<byte>,
   outBufferSize: uint32,
   bytesReturned: Ref<uint32>,
   overlapped: Ref<Overlapped>,
@@ -744,9 +744,9 @@ pub fn DnsQuery(
   name: string,
   qtype: uint16,
   options: uint32,
-  extra: Ref<uint8>,
+  extra: Ref<byte>,
   qrs: Ref<Ref<DNSRecord>>,
-  pr: Ref<uint8>,
+  pr: Ref<byte>,
 ) -> Result<(), error>
 
 pub fn DnsRecordListFree(rl: Ref<DNSRecord>, freetype: uint32)
@@ -806,7 +806,7 @@ pub fn FormatMessage(
   msgid: uint32,
   langid: uint32,
   buf: Slice<uint16>,
-  args: Ref<uint8>,
+  args: Ref<byte>,
 ) -> Result<uint32, error>
 
 pub fn FreeAddrInfoW(addrinfo: Ref<AddrinfoW>)
@@ -823,7 +823,7 @@ pub fn Ftruncate(fd: Handle, length: int64) -> Result<(), error>
 pub fn FullPath(name: string) -> Result<string, error>
 
 pub fn GetAcceptExSockaddrs(
-  buf: Ref<uint8>,
+  buf: Ref<byte>,
   rxdatalen: uint32,
   laddrlen: uint32,
   raddrlen: uint32,
@@ -864,7 +864,7 @@ pub fn GetExitCodeProcess(handle: Handle, exitcode: Ref<uint32>) -> Result<(), e
 
 pub fn GetFileAttributes(name: Ref<uint16>) -> Result<uint32, error>
 
-pub fn GetFileAttributesEx(name: Ref<uint16>, level: uint32, info: Ref<uint8>) -> Result<(), error>
+pub fn GetFileAttributesEx(name: Ref<uint16>, level: uint32, info: Ref<byte>) -> Result<(), error>
 
 pub fn GetFileInformationByHandle(
   handle: Handle,
@@ -932,7 +932,7 @@ pub fn GetTimeZoneInformation(tzi: Ref<Timezoneinformation>) -> Result<uint32, e
 pub fn GetTokenInformation(
   t: Token,
   infoClass: uint32,
-  info: Ref<uint8>,
+  info: Ref<byte>,
   infoLen: uint32,
   returnedLen: Ref<uint32>,
 ) -> Result<(), error>
@@ -971,7 +971,7 @@ pub fn Getsockopt(
   s: Handle,
   level: int32,
   optname: int32,
-  optval: Ref<uint8>,
+  optval: Ref<byte>,
   optlen: Ref<int32>,
 ) -> Result<(), error>
 
@@ -1053,7 +1053,7 @@ pub fn MoveFile(from: Ref<uint16>, to: Ref<uint16>) -> Result<(), error>
 
 pub fn MustLoadDLL(name: string) -> Ref<DLL>
 
-pub fn NetApiBufferFree(buf: Ref<uint8>) -> Result<(), error>
+pub fn NetApiBufferFree(buf: Ref<byte>) -> Result<(), error>
 
 pub fn NetGetJoinInformation(
   server: Ref<uint16>,
@@ -1065,7 +1065,7 @@ pub fn NetUserGetInfo(
   serverName: Ref<uint16>,
   userName: Ref<uint16>,
   level: uint32,
-  buf: Ref<Ref<uint8>>,
+  buf: Ref<Ref<byte>>,
 ) -> Result<(), error>
 
 /// NewCallback converts a Go function to a function pointer conforming to the stdcall calling convention.
@@ -1118,19 +1118,19 @@ pub fn Process32First(snapshot: Handle, procEntry: Ref<ProcessEntry32>) -> Resul
 
 pub fn Process32Next(snapshot: Handle, procEntry: Ref<ProcessEntry32>) -> Result<(), error>
 
-pub fn Read(fd: Handle, mut p: Slice<uint8>) -> Result<int, error>
+pub fn Read(fd: Handle, mut p: Slice<byte>) -> Result<int, error>
 
 pub fn ReadConsole(
   console: Handle,
   buf: Ref<uint16>,
   toread: uint32,
   read: Ref<uint32>,
-  inputControl: Ref<uint8>,
+  inputControl: Ref<byte>,
 ) -> Result<(), error>
 
 pub fn ReadDirectoryChanges(
   handle: Handle,
-  buf: Ref<uint8>,
+  buf: Ref<byte>,
   buflen: uint32,
   watchSubTree: bool,
   mask: uint32,
@@ -1141,15 +1141,15 @@ pub fn ReadDirectoryChanges(
 
 pub fn ReadFile(
   fd: Handle,
-  p: Slice<uint8>,
+  p: Slice<byte>,
   done: Ref<uint32>,
   overlapped: Ref<Overlapped>,
 ) -> Result<(), error>
 
 /// Readlink returns the destination of the named symbolic link.
-pub fn Readlink(path: string, mut buf: Slice<uint8>) -> Result<int, error>
+pub fn Readlink(path: string, mut buf: Slice<byte>) -> Result<int, error>
 
-pub fn Recvfrom(fd: Handle, mut p: Slice<uint8>, flags: int) -> Result<(int, Sockaddr), error>
+pub fn Recvfrom(fd: Handle, mut p: Slice<byte>, flags: int) -> Result<(int, Sockaddr), error>
 
 pub fn RegCloseKey(key: Handle) -> Result<(), error>
 
@@ -1216,7 +1216,7 @@ pub fn RegQueryValueEx(
   name: Ref<uint16>,
   reserved: Ref<uint32>,
   valtype: Ref<uint32>,
-  buf: Ref<uint8>,
+  buf: Ref<byte>,
   buflen: Ref<uint32>,
 ) -> Result<(), error>
 
@@ -1228,7 +1228,7 @@ pub fn Rmdir(path: string) -> Result<(), error>
 
 pub fn Seek(fd: Handle, offset: int64, whence: int) -> Result<int64, error>
 
-pub fn Sendto(fd: Handle, p: Slice<uint8>, flags: int, to: Sockaddr) -> Result<(), error>
+pub fn Sendto(fd: Handle, p: Slice<byte>, flags: int, to: Sockaddr) -> Result<(), error>
 
 pub fn SetCurrentDirectory(path: Ref<uint16>) -> Result<(), error>
 
@@ -1264,7 +1264,7 @@ pub fn Setsockopt(
   s: Handle,
   level: int32,
   optname: int32,
-  optval: Ref<uint8>,
+  optval: Ref<byte>,
   optlen: int32,
 ) -> Result<(), error>
 
@@ -1292,14 +1292,14 @@ pub fn StartProcess(argv0: string, argv: Slice<string>, attr: Ref<ProcAttr>) -> 
 /// an error.
 /// 
 /// Deprecated: Use [BytePtrFromString] instead.
-pub fn StringBytePtr(s: string) -> Ref<uint8>
+pub fn StringBytePtr(s: string) -> Ref<byte>
 
 /// StringByteSlice converts a string to a NUL-terminated []byte,
 /// If s contains a NUL byte this function panics instead of
 /// returning an error.
 /// 
 /// Deprecated: Use ByteSliceFromString instead.
-pub fn StringByteSlice(s: string) -> Slice<uint8>
+pub fn StringByteSlice(s: string) -> Slice<byte>
 
 /// StringToSid converts a string-format security identifier
 /// sid into a valid, functional sid.
@@ -1490,9 +1490,9 @@ pub fn WSAEnumProtocols(
 pub fn WSAIoctl(
   s: Handle,
   iocc: uint32,
-  inbuf: Ref<uint8>,
+  inbuf: Ref<byte>,
   cbif: uint32,
-  outbuf: Ref<uint8>,
+  outbuf: Ref<byte>,
   cbob: uint32,
   cbbr: Ref<uint32>,
   overlapped: Ref<Overlapped>,
@@ -1506,7 +1506,7 @@ pub fn WSARecv(
   recvd: Ref<uint32>,
   flags: Ref<uint32>,
   overlapped: Ref<Overlapped>,
-  croutine: Ref<uint8>,
+  croutine: Ref<byte>,
 ) -> Result<(), error>
 
 pub fn WSARecvFrom(
@@ -1518,7 +1518,7 @@ pub fn WSARecvFrom(
   from: Ref<RawSockaddrAny>,
   fromlen: Ref<int32>,
   overlapped: Ref<Overlapped>,
-  croutine: Ref<uint8>,
+  croutine: Ref<byte>,
 ) -> Result<(), error>
 
 pub fn WSASend(
@@ -1528,7 +1528,7 @@ pub fn WSASend(
   sent: Ref<uint32>,
   flags: uint32,
   overlapped: Ref<Overlapped>,
-  croutine: Ref<uint8>,
+  croutine: Ref<byte>,
 ) -> Result<(), error>
 
 pub fn WSASendTo(
@@ -1540,7 +1540,7 @@ pub fn WSASendTo(
   to: Ref<RawSockaddrAny>,
   tolen: int32,
   overlapped: Ref<Overlapped>,
-  croutine: Ref<uint8>,
+  croutine: Ref<byte>,
 ) -> Result<(), error>
 
 pub fn WSASendto(
@@ -1551,26 +1551,26 @@ pub fn WSASendto(
   flags: uint32,
   to: Sockaddr,
   overlapped: Ref<Overlapped>,
-  croutine: Ref<uint8>,
+  croutine: Ref<byte>,
 ) -> Result<(), error>
 
 pub fn WSAStartup(verreq: uint32, data: Ref<WSAData>) -> Result<(), error>
 
 pub fn WaitForSingleObject(handle: Handle, waitMilliseconds: uint32) -> Result<uint32, error>
 
-pub fn Write(fd: Handle, p: Slice<uint8>) -> Result<int, error>
+pub fn Write(fd: Handle, p: Slice<byte>) -> Result<int, error>
 
 pub fn WriteConsole(
   console: Handle,
   buf: Ref<uint16>,
   towrite: uint32,
   written: Ref<uint32>,
-  reserved: Ref<uint8>,
+  reserved: Ref<byte>,
 ) -> Result<(), error>
 
 pub fn WriteFile(
   fd: Handle,
-  p: Slice<uint8>,
+  p: Slice<byte>,
   done: Ref<uint32>,
   overlapped: Ref<Overlapped>,
 ) -> Result<(), error>
@@ -1646,7 +1646,7 @@ pub struct CertChainPolicyStatus {
 
 pub struct CertContext {
   pub EncodingType: uint32,
-  pub EncodedCert: Option<Ref<uint8>>,
+  pub EncodedCert: Option<Ref<byte>>,
   pub Length: uint32,
   pub CertInfo: Option<Ref<CertInfo>>,
   pub Store: Handle,
@@ -1654,7 +1654,7 @@ pub struct CertContext {
 
 pub struct CertEnhKeyUsage {
   pub Length: uint32,
-  pub UsageIdentifiers: Option<Ref<Ref<uint8>>>,
+  pub UsageIdentifiers: Option<Ref<Ref<byte>>>,
 }
 
 pub type CertInfo
@@ -1664,7 +1664,7 @@ pub type CertRevocationCrlInfo
 pub struct CertRevocationInfo {
   pub Size: uint32,
   pub RevocationResult: uint32,
-  pub RevocationOid: Option<Ref<uint8>>,
+  pub RevocationOid: Option<Ref<byte>>,
   pub OidSpecificInfo: Pointer,
   pub HasFreshnessTime: uint32,
   pub FreshnessTime: uint32,
@@ -1768,11 +1768,11 @@ pub struct GUID {
 pub struct Handle(uint)
 
 pub struct Hostent {
-  pub Name: Option<Ref<uint8>>,
-  pub Aliases: Option<Ref<Ref<uint8>>>,
+  pub Name: Option<Ref<byte>>,
+  pub Aliases: Option<Ref<Ref<byte>>>,
   pub AddrType: uint16,
   pub Length: uint16,
-  pub AddrList: Option<Ref<Ref<uint8>>>,
+  pub AddrList: Option<Ref<Ref<byte>>>,
 }
 
 // SKIPPED field "Multiaddr": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
@@ -1927,8 +1927,8 @@ pub struct ProcessInformation {
 }
 
 pub struct Protoent {
-  pub Name: Option<Ref<uint8>>,
-  pub Aliases: Option<Ref<Ref<uint8>>>,
+  pub Name: Option<Ref<byte>>,
+  pub Aliases: Option<Ref<Ref<byte>>>,
   pub Proto: uint16,
 }
 
@@ -2000,15 +2000,15 @@ pub struct SecurityAttributes {
 }
 
 pub struct Servent {
-  pub Name: Option<Ref<uint8>>,
-  pub Aliases: Option<Ref<Ref<uint8>>>,
-  pub Proto: Option<Ref<uint8>>,
+  pub Name: Option<Ref<byte>>,
+  pub Aliases: Option<Ref<Ref<byte>>>,
+  pub Proto: Option<Ref<byte>>,
   pub Port: uint16,
 }
 
 pub interface Sockaddr {}
 
-pub struct SockaddrGen(Slice<uint8>)
+pub struct SockaddrGen(Slice<byte>)
 
 pub struct SockaddrInet4 {
   pub Port: int,
@@ -2128,7 +2128,7 @@ pub struct UserInfo10 {
 
 pub struct WSABuf {
   pub Len: uint32,
-  pub Buf: Option<Ref<uint8>>,
+  pub Buf: Option<Ref<byte>>,
 }
 
 pub struct WSAData {
@@ -2136,7 +2136,7 @@ pub struct WSAData {
   pub HighVersion: uint16,
   pub MaxSockets: uint16,
   pub MaxUdpDg: uint16,
-  pub VendorInfo: Option<Ref<uint8>>,
+  pub VendorInfo: Option<Ref<byte>>,
   // SKIPPED field "Description": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   // SKIPPED field "SystemStatus": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
@@ -3214,11 +3214,11 @@ pub const XP1_UNI_SEND = 0x00008000
 /// ForkLock is not used on Windows.
 pub var ForkLock: sync.RWMutex
 
-pub var OID_PKIX_KP_SERVER_AUTH: Slice<uint8>
+pub var OID_PKIX_KP_SERVER_AUTH: Slice<byte>
 
-pub var OID_SERVER_GATED_CRYPTO: Slice<uint8>
+pub var OID_SERVER_GATED_CRYPTO: Slice<byte>
 
-pub var OID_SGC_NETSCAPE: Slice<uint8>
+pub var OID_SGC_NETSCAPE: Slice<byte>
 
 /// For testing: clients can set this flag to force
 /// creation of IPv6 sockets to return [EAFNOSUPPORT].

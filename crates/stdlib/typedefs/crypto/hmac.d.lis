@@ -6,7 +6,7 @@
 import "go:hash"
 
 /// Equal compares two MACs for equality without leaking timing information.
-pub fn Equal(mac1: Slice<uint8>, mac2: Slice<uint8>) -> bool
+pub fn Equal(mac1: Slice<byte>, mac2: Slice<byte>) -> bool
 
 /// New returns a new HMAC hash using the given [hash.Hash] type and key.
 /// New functions like [crypto/sha256.New] can be used as h.
@@ -14,4 +14,4 @@ pub fn Equal(mac1: Slice<uint8>, mac2: Slice<uint8>) -> bool
 /// Note that unlike other hash implementations in the standard library,
 /// the returned Hash does not implement [encoding.BinaryMarshaler]
 /// or [encoding.BinaryUnmarshaler].
-pub fn New(h: fn() -> hash.Hash, key: Slice<uint8>) -> hash.Hash
+pub fn New(h: fn() -> hash.Hash, key: Slice<byte>) -> hash.Hash

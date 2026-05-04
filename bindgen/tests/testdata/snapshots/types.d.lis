@@ -10,7 +10,7 @@ pub fn GetBiDir() -> Channel<int>
 
 pub fn GetBool() -> bool
 
-pub fn GetByte() -> uint8
+pub fn GetByte() -> byte
 
 pub fn GetDoublePtr() -> Option<Ref<Ref<int>>>
 
@@ -36,11 +36,11 @@ pub fn GetIntToInterface() -> Map<int, Unknown>
 
 pub fn GetNested() -> Map<string, Map<int, bool>>
 
-pub fn GetNestedSlice() -> Slice<Slice<uint8>>
+pub fn GetNestedSlice() -> Slice<Slice<byte>>
 
 pub fn GetRecvOnly() -> Receiver<string>
 
-pub fn GetRune() -> int32
+pub fn GetRune() -> rune
 
 pub fn GetSendOnly() -> Sender<bool>
 

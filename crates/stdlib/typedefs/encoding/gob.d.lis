@@ -48,7 +48,7 @@ pub type Encoder
 /// GobDecoder is the interface describing data that provides its own
 /// routine for decoding transmitted values sent by a GobEncoder.
 pub interface GobDecoder {
-  fn GobDecode(arg0: Slice<uint8>) -> Result<(), error>
+  fn GobDecode(arg0: Slice<byte>) -> Result<(), error>
 }
 
 /// GobEncoder is the interface describing data that provides its own
@@ -63,7 +63,7 @@ pub interface GobDecoder {
 /// software evolves. For instance, it might make sense for GobEncode
 /// to include a version number in the encoding.
 pub interface GobEncoder {
-  fn GobEncode() -> Result<Slice<uint8>, error>
+  fn GobEncode() -> Result<Slice<byte>, error>
 }
 
 impl Decoder {

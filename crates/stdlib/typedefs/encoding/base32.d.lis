@@ -45,11 +45,11 @@ impl Encoding {
   /// and returns the extended buffer.
   /// If the input is malformed, it returns the partially decoded src and an error.
   /// New line characters (\r and \n) are ignored.
-  fn AppendDecode(self: Ref<Encoding>, mut dst: Slice<uint8>, src: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendDecode(self: Ref<Encoding>, mut dst: Slice<byte>, src: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// AppendEncode appends the base32 encoded src to dst
   /// and returns the extended buffer.
-  fn AppendEncode(self: Ref<Encoding>, mut dst: Slice<uint8>, src: Slice<uint8>) -> Slice<uint8>
+  fn AppendEncode(self: Ref<Encoding>, mut dst: Slice<byte>, src: Slice<byte>) -> Slice<byte>
 
   /// Decode decodes src using the encoding enc. It writes at most
   /// [Encoding.DecodedLen](len(src)) bytes to dst and returns the number of bytes
@@ -57,12 +57,12 @@ impl Encoding {
   /// the decoded data. If src contains invalid base32 data, it will return the
   /// number of bytes successfully written and [CorruptInputError].
   /// Newline characters (\r and \n) are ignored.
-  fn Decode(self: Ref<Encoding>, mut dst: Slice<uint8>, src: Slice<uint8>) -> Result<int, error>
+  fn Decode(self: Ref<Encoding>, mut dst: Slice<byte>, src: Slice<byte>) -> Result<int, error>
 
   /// DecodeString returns the bytes represented by the base32 string s.
   /// If the input is malformed, it returns the partially decoded data and
   /// [CorruptInputError]. New line characters (\r and \n) are ignored.
-  fn DecodeString(self: Ref<Encoding>, s: string) -> Result<Slice<uint8>, error>
+  fn DecodeString(self: Ref<Encoding>, s: string) -> Result<Slice<byte>, error>
 
   /// DecodedLen returns the maximum length in bytes of the decoded data
   /// corresponding to n bytes of base32-encoded data.
@@ -74,10 +74,10 @@ impl Encoding {
   /// The encoding pads the output to a multiple of 8 bytes,
   /// so Encode is not appropriate for use on individual blocks
   /// of a large data stream. Use [NewEncoder] instead.
-  fn Encode(self: Ref<Encoding>, mut dst: Slice<uint8>, src: Slice<uint8>)
+  fn Encode(self: Ref<Encoding>, mut dst: Slice<byte>, src: Slice<byte>)
 
   /// EncodeToString returns the base32 encoding of src.
-  fn EncodeToString(self: Ref<Encoding>, src: Slice<uint8>) -> string
+  fn EncodeToString(self: Ref<Encoding>, src: Slice<byte>) -> string
 
   /// EncodedLen returns the length in bytes of the base32 encoding
   /// of an input buffer of length n.
@@ -90,5 +90,5 @@ impl Encoding {
   /// must not be negative, and must be a rune equal or below '\xff'.
   /// Padding characters above '\x7f' are encoded as their exact byte value
   /// rather than using the UTF-8 representation of the codepoint.
-  fn WithPadding(self, padding: int32) -> Ref<Encoding>
+  fn WithPadding(self, padding: rune) -> Ref<Encoding>
 }

@@ -25,11 +25,11 @@ func (w Widget) MarshalJSON() ([]uint8, error) {
 func main() {
 	w := Widget{id: 7}
 	ret_2, ret_3 := json.Marshal(w)
-	var subject_1 lisette.Result[[]uint8, error]
+	var subject_1 lisette.Result[[]byte, error]
 	if ret_3 != nil {
-		subject_1 = lisette.MakeResultErr[[]uint8, error](ret_3)
+		subject_1 = lisette.MakeResultErr[[]byte, error](ret_3)
 	} else {
-		subject_1 = lisette.MakeResultOk[[]uint8, error](ret_2)
+		subject_1 = lisette.MakeResultOk[[]byte, error](ret_2)
 	}
 	if subject_1.Tag == lisette.ResultOk {
 		b := subject_1.OkVal

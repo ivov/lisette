@@ -8,7 +8,7 @@
 /// If a type implements both [BinaryAppender] and [BinaryMarshaler],
 /// then v.MarshalBinary() must be semantically identical to v.AppendBinary(nil).
 pub interface BinaryAppender {
-  fn AppendBinary(mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendBinary(mut b: Slice<byte>) -> Result<Slice<byte>, error>
 }
 
 /// BinaryMarshaler is the interface implemented by an object that can
@@ -16,7 +16,7 @@ pub interface BinaryAppender {
 /// 
 /// MarshalBinary encodes the receiver into a binary form and returns the result.
 pub interface BinaryMarshaler {
-  fn MarshalBinary() -> Result<Slice<uint8>, error>
+  fn MarshalBinary() -> Result<Slice<byte>, error>
 }
 
 /// BinaryUnmarshaler is the interface implemented by an object that can
@@ -26,7 +26,7 @@ pub interface BinaryMarshaler {
 /// UnmarshalBinary must copy the data if it wishes to retain the data
 /// after returning.
 pub interface BinaryUnmarshaler {
-  fn UnmarshalBinary(data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalBinary(data: Slice<byte>) -> Result<(), error>
 }
 
 /// TextAppender is the interface implemented by an object
@@ -34,7 +34,7 @@ pub interface BinaryUnmarshaler {
 /// If a type implements both [TextAppender] and [TextMarshaler],
 /// then v.MarshalText() must be semantically identical to v.AppendText(nil).
 pub interface TextAppender {
-  fn AppendText(mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendText(mut b: Slice<byte>) -> Result<Slice<byte>, error>
 }
 
 /// TextMarshaler is the interface implemented by an object that can
@@ -42,7 +42,7 @@ pub interface TextAppender {
 /// 
 /// MarshalText encodes the receiver into UTF-8-encoded text and returns the result.
 pub interface TextMarshaler {
-  fn MarshalText() -> Result<Slice<uint8>, error>
+  fn MarshalText() -> Result<Slice<byte>, error>
 }
 
 /// TextUnmarshaler is the interface implemented by an object that can
@@ -52,5 +52,5 @@ pub interface TextMarshaler {
 /// UnmarshalText must copy the text if it wishes to retain the text
 /// after returning.
 pub interface TextUnmarshaler {
-  fn UnmarshalText(text: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalText(text: Slice<byte>) -> Result<(), error>
 }

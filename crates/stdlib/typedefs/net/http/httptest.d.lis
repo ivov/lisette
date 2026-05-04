@@ -105,7 +105,7 @@ impl ResponseRecorder {
 
   /// Write implements http.ResponseWriter. The data in buf is written to
   /// rw.Body, if not nil.
-  fn Write(self: Ref<ResponseRecorder>, buf: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<ResponseRecorder>, buf: Slice<byte>) -> Partial<int, error>
 
   /// WriteHeader implements [http.ResponseWriter].
   fn WriteHeader(self: Ref<ResponseRecorder>, code: int)

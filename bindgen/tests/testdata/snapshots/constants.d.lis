@@ -28,7 +28,7 @@ pub const PriorityLow: Priority = -1
 pub const PriorityNormal: Priority = 0
 
 /// Fixed-size array types
-pub struct Buffer(Slice<uint8>)
+pub struct Buffer(Slice<byte>)
 
 pub struct Matrix(Slice<Slice<float64>>)
 

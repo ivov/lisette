@@ -54,7 +54,7 @@ impl Reader {
   fn Close(self: Ref<Reader>) -> Result<(), error>
 
   /// Read implements io.Reader, reading uncompressed bytes from its underlying reader.
-  fn Read(self: Ref<Reader>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Reader>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// Reset clears the [Reader]'s state and allows it to be reused again
   /// as a new [Reader].
@@ -72,5 +72,5 @@ impl Writer {
   fn Reset(self: Ref<Writer>, dst: io.Writer, order: Order, litWidth: int)
 
   /// Write writes a compressed representation of p to w's underlying writer.
-  fn Write(self: Ref<Writer>, p: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
 }

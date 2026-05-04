@@ -6,7 +6,7 @@
 import "go:io"
 import "go:regexp"
 
-pub fn New(data: Slice<uint8>) -> Ref<Index>
+pub fn New(data: Slice<byte>) -> Ref<Index>
 
 /// Index implements a suffix array for fast substring search.
 pub type Index
@@ -14,7 +14,7 @@ pub type Index
 impl Index {
   /// Bytes returns the data over which the index was created.
   /// It must not be modified.
-  fn Bytes(self: Ref<Index>) -> Slice<uint8>
+  fn Bytes(self: Ref<Index>) -> Slice<byte>
 
   /// FindAllIndex returns a sorted list of non-overlapping matches of the
   /// regular expression r, where a match is a pair of indices specifying
@@ -29,7 +29,7 @@ impl Index {
   /// The result is nil if s is empty, s is not found, or n == 0.
   /// Lookup time is O(log(N)*len(s) + len(result)) where N is the
   /// size of the indexed data.
-  fn Lookup(self: Ref<Index>, s: Slice<uint8>, n: int) -> Slice<int>
+  fn Lookup(self: Ref<Index>, s: Slice<byte>, n: int) -> Slice<int>
 
   /// Read reads the index from r into x; x must not be nil.
   fn Read(self: Ref<Index>, r: io.Reader) -> Result<(), error>

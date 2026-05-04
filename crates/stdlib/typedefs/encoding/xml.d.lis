@@ -11,11 +11,11 @@ pub fn CopyToken(t: Token) -> Token
 /// Escape is like [EscapeText] but omits the error return value.
 /// It is provided for backwards compatibility with Go 1.0.
 /// Code targeting Go 1.1 or later should use [EscapeText].
-pub fn Escape(w: io.Writer, s: Slice<uint8>)
+pub fn Escape(w: io.Writer, s: Slice<byte>)
 
 /// EscapeText writes to w the properly escaped XML equivalent
 /// of the plain text data s.
-pub fn EscapeText(w: io.Writer, s: Slice<uint8>) -> Result<(), error>
+pub fn EscapeText(w: io.Writer, s: Slice<byte>) -> Result<(), error>
 
 /// Marshal returns the XML encoding of v.
 /// 
@@ -73,12 +73,12 @@ pub fn EscapeText(w: io.Writer, s: Slice<uint8>) -> Result<(), error>
 /// See [MarshalIndent] for an example.
 /// 
 /// Marshal will return an error if asked to marshal a channel, function, or map.
-pub fn Marshal(v: Unknown) -> Result<Slice<uint8>, error>
+pub fn Marshal(v: Unknown) -> Result<Slice<byte>, error>
 
 /// MarshalIndent works like [Marshal], but each XML element begins on a new
 /// indented line that starts with prefix and is followed by one or more
 /// copies of indent according to the nesting depth.
-pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<Slice<uint8>, error>
+pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<Slice<byte>, error>
 
 pub fn NewDecoder(r: io.Reader) -> Ref<Decoder>
 
@@ -194,7 +194,7 @@ pub fn NewTokenDecoder(t: TokenReader) -> Ref<Decoder>
 /// A missing element or empty attribute value will be unmarshaled as a zero value.
 /// If the field is a slice, a zero value will be appended to the field. Otherwise, the
 /// field will be set to its zero value.
-pub fn Unmarshal<T>(data: Slice<uint8>, v: Ref<T>) -> Result<(), error>
+pub fn Unmarshal<T>(data: Slice<byte>, v: Ref<T>) -> Result<(), error>
 
 /// An Attr represents an attribute in an XML element (Name=Value).
 pub struct Attr {
@@ -205,11 +205,11 @@ pub struct Attr {
 /// A CharData represents XML character data (raw text),
 /// in which XML escape sequences have been replaced by
 /// the characters they represent.
-pub struct CharData(Slice<uint8>)
+pub struct CharData(Slice<byte>)
 
 /// A Comment represents an XML comment of the form <!--comment-->.
 /// The bytes do not include the <!-- and --> comment markers.
-pub struct Comment(Slice<uint8>)
+pub struct Comment(Slice<byte>)
 
 /// A Decoder represents an XML parser reading a particular input stream.
 /// The parser assumes that its input is encoded in UTF-8.
@@ -223,7 +223,7 @@ pub struct Decoder {
 
 /// A Directive represents an XML directive of the form <!text>.
 /// The bytes do not include the <! and > markers.
-pub struct Directive(Slice<uint8>)
+pub struct Directive(Slice<byte>)
 
 /// An Encoder writes XML data to an output stream.
 pub type Encoder
@@ -281,7 +281,7 @@ pub struct Name {
 /// A ProcInst represents an XML processing instruction of the form <?target inst?>
 pub struct ProcInst {
   pub Target: string,
-  pub Inst: Slice<uint8>,
+  pub Inst: Slice<byte>,
 }
 
 /// A StartElement represents an XML start element.

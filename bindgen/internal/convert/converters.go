@@ -914,7 +914,7 @@ func looksLikeMutableParam(name, typeStr, funcName string) bool {
 	if name == "dst" {
 		return true
 	}
-	if typeStr == "Slice<uint8>" {
+	if typeStr == "Slice<byte>" || typeStr == "Slice<uint8>" {
 		switch funcName {
 		case "Read", "ReadAt", "ReadFull", "ReadFrom", "ReadMsgUDP", "Recv", "ReadPixels":
 			return true

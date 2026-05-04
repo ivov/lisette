@@ -10,7 +10,7 @@ pub fn NewWriter(
   minwidth: int,
   tabwidth: int,
   padding: int,
-  padchar: uint8,
+  padchar: byte,
   flags: uint,
 ) -> Ref<Writer>
 
@@ -127,12 +127,12 @@ impl Writer {
     minwidth: int,
     tabwidth: int,
     padding: int,
-    padchar: uint8,
+    padchar: byte,
     flags: uint,
   ) -> Ref<Writer>
 
   /// Write writes buf to the writer b.
   /// The only errors returned are ones encountered
   /// while writing to the underlying output stream.
-  fn Write(self: Ref<Writer>, buf: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Writer>, buf: Slice<byte>) -> Partial<int, error>
 }

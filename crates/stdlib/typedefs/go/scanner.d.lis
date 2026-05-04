@@ -96,7 +96,7 @@ impl Scanner {
   fn Init(
     self: Ref<Scanner>,
     file: Ref<token.File>,
-    src: Slice<uint8>,
+    src: Slice<byte>,
     err: ErrorHandler,
     mode: Mode,
   )

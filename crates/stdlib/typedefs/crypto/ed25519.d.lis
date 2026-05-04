@@ -13,18 +13,18 @@ import "go:io"
 /// [SeedSize] bytes from rand, and passing them to [NewKeyFromSeed].
 pub fn GenerateKey(rand: io.Reader) -> Result<(PublicKey, PrivateKey), error>
 
-pub fn NewKeyFromSeed(seed: Slice<uint8>) -> PrivateKey
+pub fn NewKeyFromSeed(seed: Slice<byte>) -> PrivateKey
 
 /// Sign signs the message with privateKey and returns a signature. It will
 /// panic if len(privateKey) is not [PrivateKeySize].
-pub fn Sign(privateKey: PrivateKey, message: Slice<uint8>) -> Slice<uint8>
+pub fn Sign(privateKey: PrivateKey, message: Slice<byte>) -> Slice<byte>
 
 /// Verify reports whether sig is a valid signature of message by publicKey. It
 /// will panic if len(publicKey) is not [PublicKeySize].
 /// 
 /// The inputs are not considered confidential, and may leak through timing side
 /// channels, or if an attacker has control of part of the inputs.
-pub fn Verify(publicKey: PublicKey, message: Slice<uint8>, sig: Slice<uint8>) -> bool
+pub fn Verify(publicKey: PublicKey, message: Slice<byte>, sig: Slice<byte>) -> bool
 
 /// VerifyWithOptions reports whether sig is a valid signature of message by
 /// publicKey. A valid signature is indicated by returning a nil error. It will
@@ -39,8 +39,8 @@ pub fn Verify(publicKey: PublicKey, message: Slice<uint8>, sig: Slice<uint8>) ->
 /// channels, or if an attacker has control of part of the inputs.
 pub fn VerifyWithOptions(
   publicKey: PublicKey,
-  message: Slice<uint8>,
-  sig: Slice<uint8>,
+  message: Slice<byte>,
+  sig: Slice<byte>,
   opts: Ref<Options>,
 ) -> Result<(), error>
 
@@ -52,10 +52,10 @@ pub struct Options {
 }
 
 /// PrivateKey is the type of Ed25519 private keys. It implements [crypto.Signer].
-pub struct PrivateKey(Slice<uint8>)
+pub struct PrivateKey(Slice<byte>)
 
 /// PublicKey is the type of Ed25519 public keys.
-pub struct PublicKey(Slice<uint8>)
+pub struct PublicKey(Slice<byte>)
 
 pub const PrivateKeySize = 64
 
@@ -80,7 +80,7 @@ impl PrivateKey {
   /// Seed returns the private key seed corresponding to priv. It is provided for
   /// interoperability with RFC 8032. RFC 8032's private keys correspond to seeds
   /// in this package.
-  fn Seed(self) -> Slice<uint8>
+  fn Seed(self) -> Slice<byte>
 
   /// Sign signs the given message with priv. rand is ignored and can be nil.
   /// 
@@ -91,7 +91,7 @@ impl PrivateKey {
   /// 
   /// A value of type [Options] can be used as opts, or crypto.Hash(0) or
   /// crypto.SHA512 directly to select plain Ed25519 or Ed25519ph, respectively.
-  fn Sign(self, rand: io.Reader, message: Slice<uint8>, opts: crypto.SignerOpts) -> Result<Slice<uint8>, error>
+  fn Sign(self, rand: io.Reader, message: Slice<byte>, opts: crypto.SignerOpts) -> Result<Slice<byte>, error>
 }
 
 impl PublicKey {

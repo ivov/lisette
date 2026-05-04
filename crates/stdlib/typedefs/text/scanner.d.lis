@@ -6,7 +6,7 @@
 import "go:io"
 
 /// TokenString returns a printable string for a token or Unicode character.
-pub fn TokenString(tok: int32) -> string
+pub fn TokenString(tok: rune) -> string
 
 /// Position is a value that represents a source position.
 /// A position is valid if Line > 0.
@@ -23,7 +23,7 @@ pub struct Scanner {
   pub ErrorCount: int,
   pub Mode: uint,
   pub Whitespace: uint64,
-  pub IsIdentRune: Option<fn(int32, int) -> bool>,
+  pub IsIdentRune: Option<fn(rune, int) -> bool>,
   pub Position: Position,
 }
 
@@ -222,12 +222,12 @@ impl Scanner {
   /// it prints an error message to [os.Stderr]. Next does not
   /// update the [Scanner.Position] field; use [Scanner.Pos]() to
   /// get the current position.
-  fn Next(self: Ref<Scanner>) -> int32
+  fn Next(self: Ref<Scanner>) -> rune
 
   /// Peek returns the next Unicode character in the source without advancing
   /// the scanner. It returns [EOF] if the scanner's position is at the last
   /// character of the source.
-  fn Peek(self: Ref<Scanner>) -> int32
+  fn Peek(self: Ref<Scanner>) -> rune
 
   /// Pos returns the position of the character immediately after
   /// the character or token returned by the last call to [Scanner.Next] or [Scanner.Scan].
@@ -240,7 +240,7 @@ impl Scanner {
   /// It returns [EOF] at the end of the source. It reports scanner errors (read and
   /// token errors) by calling s.Error, if not nil; otherwise it prints an error
   /// message to [os.Stderr].
-  fn Scan(self: Ref<Scanner>) -> int32
+  fn Scan(self: Ref<Scanner>) -> rune
 
   fn String(self) -> string
 

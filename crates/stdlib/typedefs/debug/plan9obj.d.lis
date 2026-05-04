@@ -43,7 +43,7 @@ pub struct SectionHeader {
 /// A Symbol represents an entry in a Plan 9 a.out symbol table section.
 pub struct Sym {
   pub Value: uint64,
-  pub Type: int32,
+  pub Type: rune,
   pub Name: string,
 }
 
@@ -76,10 +76,10 @@ impl File {
 
 impl Section {
   /// Data reads and returns the contents of the Plan 9 a.out section.
-  fn Data(self: Ref<Section>) -> Result<Slice<uint8>, error>
+  fn Data(self: Ref<Section>) -> Result<Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the Plan 9 a.out section.
   fn Open(self: Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
 }

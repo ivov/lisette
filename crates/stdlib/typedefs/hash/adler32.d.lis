@@ -6,7 +6,7 @@
 import "go:hash"
 
 /// Checksum returns the Adler-32 checksum of data.
-pub fn Checksum(data: Slice<uint8>) -> uint32
+pub fn Checksum(data: Slice<byte>) -> uint32
 
 /// New returns a new hash.Hash32 computing the Adler-32 checksum. Its
 /// Sum method will lay the value out in big-endian byte order. The

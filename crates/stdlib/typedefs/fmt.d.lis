@@ -7,16 +7,16 @@ import "go:io"
 
 /// Append formats using the default formats for its operands, appends the result to
 /// the byte slice, and returns the updated slice.
-pub fn Append(mut b: Slice<uint8>, a: VarArgs<Unknown>) -> Slice<uint8>
+pub fn Append(mut b: Slice<byte>, a: VarArgs<Unknown>) -> Slice<byte>
 
 /// Appendf formats according to a format specifier, appends the result to the byte
 /// slice, and returns the updated slice.
-pub fn Appendf(mut b: Slice<uint8>, format: string, a: VarArgs<Unknown>) -> Slice<uint8>
+pub fn Appendf(mut b: Slice<byte>, format: string, a: VarArgs<Unknown>) -> Slice<byte>
 
 /// Appendln formats using the default formats for its operands, appends the result
 /// to the byte slice, and returns the updated slice. Spaces are always added
 /// between operands and a newline is appended.
-pub fn Appendln(mut b: Slice<uint8>, a: VarArgs<Unknown>) -> Slice<uint8>
+pub fn Appendln(mut b: Slice<byte>, a: VarArgs<Unknown>) -> Slice<byte>
 
 /// Errorf formats according to a format specifier and returns the string as a
 /// value that satisfies error.
@@ -36,7 +36,7 @@ pub fn Errorf(format: string, a: VarArgs<Unknown>) -> error
 /// flags, the width, and the precision. Missing flags, width, and precision are
 /// omitted. This function allows a [Formatter] to reconstruct the original
 /// directive triggering the call to Format.
-pub fn FormatString(state: State, verb: int32) -> string
+pub fn FormatString(state: State, verb: rune) -> string
 
 /// Fprint formats using the default formats for its operands and writes to w.
 /// Spaces are added between operands when neither is a string.
@@ -138,7 +138,7 @@ pub fn Sscanln(str: string, a: VarArgs<Unknown>) -> Result<int, error>
 /// The implementation controls how [State] and rune are interpreted,
 /// and may call [Sprint] or [Fprint](f) etc. to generate its output.
 pub interface Formatter {
-  fn Format(f: State, verb: int32)
+  fn Format(f: State, verb: rune)
 }
 
 /// GoStringer is implemented by any value that has a GoString method,
@@ -153,10 +153,10 @@ pub interface GoStringer {
 /// Scanners may do rune-at-a-time scanning or ask the ScanState
 /// to discover the next space-delimited token.
 pub interface ScanState {
-  fn Read(mut buf: Slice<uint8>) -> Partial<int, error>
-  fn ReadRune() -> Result<(int32, int), error>
+  fn Read(mut buf: Slice<byte>) -> Partial<int, error>
+  fn ReadRune() -> Result<(rune, int), error>
   fn SkipSpace()
-  fn Token(skipSpace: bool, f: fn(int32) -> bool) -> Result<Slice<uint8>, error>
+  fn Token(skipSpace: bool, f: fn(rune) -> bool) -> Result<Slice<byte>, error>
   fn UnreadRune() -> Result<(), error>
   fn Width() -> Option<int>
 }
@@ -166,7 +166,7 @@ pub interface ScanState {
 /// receiver, which must be a pointer to be useful. The Scan method is called
 /// for any argument to [Scan], [Scanf], or [Scanln] that implements it.
 pub interface Scanner {
-  fn Scan(state: ScanState, verb: int32) -> Result<(), error>
+  fn Scan(state: ScanState, verb: rune) -> Result<(), error>
 }
 
 /// State represents the printer state passed to custom formatters.
@@ -176,7 +176,7 @@ pub interface State {
   fn Flag(c: int) -> bool
   fn Precision() -> Option<int>
   fn Width() -> Option<int>
-  fn Write(b: Slice<uint8>) -> Partial<int, error>
+  fn Write(b: Slice<byte>) -> Partial<int, error>
 }
 
 /// Stringer is implemented by any value that has a String method,

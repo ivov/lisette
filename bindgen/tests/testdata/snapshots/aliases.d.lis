@@ -4,7 +4,7 @@
 // Lisette: 0.0.0
 
 #[go(array_return)]
-pub fn ComputeDigest() -> Slice<uint8>
+pub fn ComputeDigest() -> Slice<byte>
 
 pub fn GetMap() -> Map<string, int>
 
@@ -36,7 +36,7 @@ pub struct MyInt(int)
 pub struct MyString(string)
 
 /// Processor processes data.
-pub type Processor = fn(Slice<uint8>) -> Slice<uint8>
+pub type Processor = fn(Slice<byte>) -> Slice<byte>
 
 /// Type definition over map
 pub struct StringMap(Map<string, int>)

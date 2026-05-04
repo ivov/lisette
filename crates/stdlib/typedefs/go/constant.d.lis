@@ -39,7 +39,7 @@ pub fn BoolVal(x: Value) -> bool
 
 /// Bytes returns the bytes for the absolute value of x in little-
 /// endian binary representation; x must be an [Int].
-pub fn Bytes(x: Value) -> Slice<uint8>
+pub fn Bytes(x: Value) -> Slice<byte>
 
 /// Compare returns the result of the comparison x op y.
 /// The comparison must be defined for the operands.
@@ -72,7 +72,7 @@ pub fn MakeBool(b: bool) -> Value
 
 pub fn MakeFloat64(x: float64) -> Value
 
-pub fn MakeFromBytes(bytes: Slice<uint8>) -> Value
+pub fn MakeFromBytes(bytes: Slice<byte>) -> Value
 
 pub fn MakeFromLiteral(lit: string, tok: token.Token, zero: uint) -> Value
 

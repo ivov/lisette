@@ -6,7 +6,7 @@
 /// AppendRune appends the UTF-8 encoding of r to the end of p and
 /// returns the extended buffer. If the rune is out of range,
 /// it appends the encoding of [RuneError].
-pub fn AppendRune(mut p: Slice<uint8>, r: int32) -> Slice<uint8>
+pub fn AppendRune(mut p: Slice<byte>, r: rune) -> Slice<byte>
 
 /// DecodeLastRune unpacks the last UTF-8 encoding in p and returns the rune and
 /// its width in bytes. If p is empty it returns ([RuneError], 0). Otherwise, if
@@ -16,7 +16,7 @@ pub fn AppendRune(mut p: Slice<uint8>, r: int32) -> Slice<uint8>
 /// An encoding is invalid if it is incorrect UTF-8, encodes a rune that is
 /// out of range, or is not the shortest possible UTF-8 encoding for the
 /// value. No other validation is performed.
-pub fn DecodeLastRune(p: Slice<uint8>) -> (int32, int)
+pub fn DecodeLastRune(p: Slice<byte>) -> (rune, int)
 
 /// DecodeLastRuneInString is like [DecodeLastRune] but its input is a string. If
 /// s is empty it returns ([RuneError], 0). Otherwise, if the encoding is invalid,
@@ -26,7 +26,7 @@ pub fn DecodeLastRune(p: Slice<uint8>) -> (int32, int)
 /// An encoding is invalid if it is incorrect UTF-8, encodes a rune that is
 /// out of range, or is not the shortest possible UTF-8 encoding for the
 /// value. No other validation is performed.
-pub fn DecodeLastRuneInString(s: string) -> (int32, int)
+pub fn DecodeLastRuneInString(s: string) -> (rune, int)
 
 /// DecodeRune unpacks the first UTF-8 encoding in p and returns the rune and
 /// its width in bytes. If p is empty it returns ([RuneError], 0). Otherwise, if
@@ -36,7 +36,7 @@ pub fn DecodeLastRuneInString(s: string) -> (int32, int)
 /// An encoding is invalid if it is incorrect UTF-8, encodes a rune that is
 /// out of range, or is not the shortest possible UTF-8 encoding for the
 /// value. No other validation is performed.
-pub fn DecodeRune(p: Slice<uint8>) -> (int32, int)
+pub fn DecodeRune(p: Slice<byte>) -> (rune, int)
 
 /// DecodeRuneInString is like [DecodeRune] but its input is a string. If s is
 /// empty it returns ([RuneError], 0). Otherwise, if the encoding is invalid, it
@@ -46,42 +46,42 @@ pub fn DecodeRune(p: Slice<uint8>) -> (int32, int)
 /// An encoding is invalid if it is incorrect UTF-8, encodes a rune that is
 /// out of range, or is not the shortest possible UTF-8 encoding for the
 /// value. No other validation is performed.
-pub fn DecodeRuneInString(s: string) -> (int32, int)
+pub fn DecodeRuneInString(s: string) -> (rune, int)
 
 /// EncodeRune writes into p (which must be large enough) the UTF-8 encoding of the rune.
 /// If the rune is out of range, it writes the encoding of [RuneError].
 /// It returns the number of bytes written.
-pub fn EncodeRune(mut p: Slice<uint8>, r: int32) -> int
+pub fn EncodeRune(mut p: Slice<byte>, r: rune) -> int
 
 /// FullRune reports whether the bytes in p begin with a full UTF-8 encoding of a rune.
 /// An invalid encoding is considered a full Rune since it will convert as a width-1 error rune.
-pub fn FullRune(p: Slice<uint8>) -> bool
+pub fn FullRune(p: Slice<byte>) -> bool
 
 /// FullRuneInString is like FullRune but its input is a string.
 pub fn FullRuneInString(s: string) -> bool
 
 /// RuneCount returns the number of runes in p. Erroneous and short
 /// encodings are treated as single runes of width 1 byte.
-pub fn RuneCount(p: Slice<uint8>) -> int
+pub fn RuneCount(p: Slice<byte>) -> int
 
 /// RuneCountInString is like [RuneCount] but its input is a string.
 pub fn RuneCountInString(s: string) -> int
 
 /// RuneLen returns the number of bytes in the UTF-8 encoding of the rune.
 /// It returns -1 if the rune is not a valid value to encode in UTF-8.
-pub fn RuneLen(r: int32) -> int
+pub fn RuneLen(r: rune) -> int
 
 /// RuneStart reports whether the byte could be the first byte of an encoded,
 /// possibly invalid rune. Second and subsequent bytes always have the top two
 /// bits set to 10.
-pub fn RuneStart(b: uint8) -> bool
+pub fn RuneStart(b: byte) -> bool
 
 /// Valid reports whether p consists entirely of valid UTF-8-encoded runes.
-pub fn Valid(p: Slice<uint8>) -> bool
+pub fn Valid(p: Slice<byte>) -> bool
 
 /// ValidRune reports whether r can be legally encoded as UTF-8.
 /// Code points that are out of range or a surrogate half are illegal.
-pub fn ValidRune(r: int32) -> bool
+pub fn ValidRune(r: rune) -> bool
 
 /// ValidString reports whether s consists entirely of valid UTF-8-encoded runes.
 pub fn ValidString(s: string) -> bool

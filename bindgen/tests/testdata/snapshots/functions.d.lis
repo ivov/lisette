@@ -37,7 +37,7 @@ pub struct ErrorOnly {
 
 /// Function returning multiple values including error
 pub struct Fetcher {
-  pub Fetch: Option<fn(string) -> Result<Slice<uint8>, error>>,
+  pub Fetch: Option<fn(string) -> Result<Slice<byte>, error>>,
 }
 
 pub type Handler = fn(int) -> Result<(), error>

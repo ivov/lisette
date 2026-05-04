@@ -22,11 +22,11 @@ pub fn NewReader(r: io.Reader) -> io.ReadCloser
 /// to read data compressed by [NewWriterDict].
 /// 
 /// The ReadCloser returned by NewReaderDict also implements [Resetter].
-pub fn NewReaderDict(r: io.Reader, dict: Slice<uint8>) -> io.ReadCloser
+pub fn NewReaderDict(r: io.Reader, dict: Slice<byte>) -> io.ReadCloser
 
 pub fn NewWriter(w: io.Writer, level: int) -> Result<Ref<Writer>, error>
 
-pub fn NewWriterDict(w: io.Writer, level: int, dict: Slice<uint8>) -> Result<Ref<Writer>, error>
+pub fn NewWriterDict(w: io.Writer, level: int, dict: Slice<byte>) -> Result<Ref<Writer>, error>
 
 /// A CorruptInputError reports the presence of corrupt input at a given offset.
 pub struct CorruptInputError(int64)
@@ -46,15 +46,15 @@ pub struct ReadError {
 /// If the passed in [io.Reader] does not also have ReadByte,
 /// the [NewReader] will introduce its own buffering.
 pub interface Reader {
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
-  fn ReadByte() -> Result<uint8, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn ReadByte() -> Result<byte, error>
 }
 
 /// Resetter resets a ReadCloser returned by [NewReader] or [NewReaderDict]
 /// to switch to a new underlying [Reader]. This permits reusing a ReadCloser
 /// instead of allocating a new one.
 pub interface Resetter {
-  fn Reset(r: io.Reader, dict: Slice<uint8>) -> Result<(), error>
+  fn Reset(r: io.Reader, dict: Slice<byte>) -> Result<(), error>
 }
 
 /// A WriteError reports an error encountered while writing output.
@@ -119,5 +119,5 @@ impl Writer {
 
   /// Write writes data to w, which will eventually write the
   /// compressed form of data to its underlying writer.
-  fn Write(self: Ref<Writer>, data: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Writer>, data: Slice<byte>) -> Partial<int, error>
 }

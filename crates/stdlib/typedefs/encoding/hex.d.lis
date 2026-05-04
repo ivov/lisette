@@ -8,11 +8,11 @@ import "go:io"
 /// AppendDecode appends the hexadecimally decoded src to dst
 /// and returns the extended buffer.
 /// If the input is malformed, it returns the partially decoded src and an error.
-pub fn AppendDecode(mut dst: Slice<uint8>, src: Slice<uint8>) -> Result<Slice<uint8>, error>
+pub fn AppendDecode(mut dst: Slice<byte>, src: Slice<byte>) -> Result<Slice<byte>, error>
 
 /// AppendEncode appends the hexadecimally encoded src to dst
 /// and returns the extended buffer.
-pub fn AppendEncode(mut dst: Slice<uint8>, src: Slice<uint8>) -> Slice<uint8>
+pub fn AppendEncode(mut dst: Slice<byte>, src: Slice<byte>) -> Slice<byte>
 
 /// Decode decodes src into [DecodedLen](len(src)) bytes,
 /// returning the actual number of bytes written to dst.
@@ -21,7 +21,7 @@ pub fn AppendEncode(mut dst: Slice<uint8>, src: Slice<uint8>) -> Slice<uint8>
 /// characters and that src has even length.
 /// If the input is malformed, Decode returns the number
 /// of bytes decoded before the error.
-pub fn Decode(mut dst: Slice<uint8>, src: Slice<uint8>) -> Result<int, error>
+pub fn Decode(mut dst: Slice<byte>, src: Slice<byte>) -> Result<int, error>
 
 /// DecodeString returns the bytes represented by the hexadecimal string s.
 /// 
@@ -29,7 +29,7 @@ pub fn Decode(mut dst: Slice<uint8>, src: Slice<uint8>) -> Result<int, error>
 /// characters and that src has even length.
 /// If the input is malformed, DecodeString returns
 /// the bytes decoded before the error.
-pub fn DecodeString(s: string) -> Result<Slice<uint8>, error>
+pub fn DecodeString(s: string) -> Result<Slice<byte>, error>
 
 /// DecodedLen returns the length of a decoding of x source bytes.
 /// Specifically, it returns x / 2.
@@ -37,7 +37,7 @@ pub fn DecodedLen(x: int) -> int
 
 /// Dump returns a string that contains a hex dump of the given data. The format
 /// of the hex dump matches the output of `hexdump -C` on the command line.
-pub fn Dump(data: Slice<uint8>) -> string
+pub fn Dump(data: Slice<byte>) -> string
 
 /// Dumper returns a [io.WriteCloser] that writes a hex dump of all written data to
 /// w. The format of the dump matches the output of `hexdump -C` on the command
@@ -48,10 +48,10 @@ pub fn Dumper(w: io.Writer) -> io.WriteCloser
 /// bytes of dst. As a convenience, it returns the number
 /// of bytes written to dst, but this value is always [EncodedLen](len(src)).
 /// Encode implements hexadecimal encoding.
-pub fn Encode(mut dst: Slice<uint8>, src: Slice<uint8>) -> int
+pub fn Encode(mut dst: Slice<byte>, src: Slice<byte>) -> int
 
 /// EncodeToString returns the hexadecimal encoding of src.
-pub fn EncodeToString(src: Slice<uint8>) -> string
+pub fn EncodeToString(src: Slice<byte>) -> string
 
 /// EncodedLen returns the length of an encoding of n source bytes.
 /// Specifically, it returns n * 2.
@@ -65,7 +65,7 @@ pub fn NewDecoder(r: io.Reader) -> io.Reader
 pub fn NewEncoder(w: io.Writer) -> io.Writer
 
 /// InvalidByteError values describe errors resulting from an invalid byte in a hex string.
-pub struct InvalidByteError(uint8)
+pub struct InvalidByteError(byte)
 
 /// ErrLength reports an attempt to decode an odd-length input
 /// using [Decode] or [DecodeString].

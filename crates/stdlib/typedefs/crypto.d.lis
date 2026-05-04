@@ -77,15 +77,15 @@ pub fn RegisterHash(h: Hash, f: fn() -> hash.Hash)
 pub fn SignMessage(
   signer: Signer,
   rand: io.Reader,
-  msg: Slice<uint8>,
+  msg: Slice<byte>,
   opts: SignerOpts,
-) -> Result<Slice<uint8>, error>
+) -> Result<Slice<byte>, error>
 
 /// Decrypter is an interface for an opaque private key that can be used for
 /// asymmetric decryption operations. An example would be an RSA key
 /// kept in a hardware module.
 pub interface Decrypter {
-  fn Decrypt(rand: io.Reader, msg: Slice<uint8>, opts: DecrypterOpts) -> Result<Slice<uint8>, error>
+  fn Decrypt(rand: io.Reader, msg: Slice<byte>, opts: DecrypterOpts) -> Result<Slice<byte>, error>
   fn Public() -> PublicKey
 }
 
@@ -105,8 +105,8 @@ pub type DecrypterOpts = Unknown
 /// Signer.Sign by always returning an error.
 pub interface MessageSigner {
   fn Public() -> PublicKey
-  fn Sign(rand: io.Reader, digest: Slice<uint8>, opts: SignerOpts) -> Result<Slice<uint8>, error>
-  fn SignMessage(rand: io.Reader, msg: Slice<uint8>, opts: SignerOpts) -> Result<Slice<uint8>, error>
+  fn Sign(rand: io.Reader, digest: Slice<byte>, opts: SignerOpts) -> Result<Slice<byte>, error>
+  fn SignMessage(rand: io.Reader, msg: Slice<byte>, opts: SignerOpts) -> Result<Slice<byte>, error>
 }
 
 /// PrivateKey represents a private key using an unspecified algorithm.
@@ -139,7 +139,7 @@ pub type PublicKey = Unknown
 /// signing operations. For example, an RSA key kept in a hardware module.
 pub interface Signer {
   fn Public() -> PublicKey
-  fn Sign(rand: io.Reader, digest: Slice<uint8>, opts: SignerOpts) -> Result<Slice<uint8>, error>
+  fn Sign(rand: io.Reader, digest: Slice<byte>, opts: SignerOpts) -> Result<Slice<byte>, error>
 }
 
 /// SignerOpts contains options for signing with a [Signer].

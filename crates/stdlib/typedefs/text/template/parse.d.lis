@@ -263,7 +263,7 @@ pub struct TemplateNode {
 pub struct TextNode {
   pub NodeType: NodeType,
   pub Pos: Pos,
-  pub Text: Slice<uint8>,
+  pub Text: Slice<byte>,
 }
 
 /// Tree is the representation of a single parsed template.

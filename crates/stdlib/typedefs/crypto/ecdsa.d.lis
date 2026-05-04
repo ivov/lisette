@@ -11,16 +11,16 @@ import "go:math/big"
 
 pub fn GenerateKey(c: elliptic.Curve, rand: io.Reader) -> Result<Ref<PrivateKey>, error>
 
-pub fn ParseRawPrivateKey(curve: elliptic.Curve, data: Slice<uint8>) -> Result<Ref<PrivateKey>, error>
+pub fn ParseRawPrivateKey(curve: elliptic.Curve, data: Slice<byte>) -> Result<Ref<PrivateKey>, error>
 
-pub fn ParseUncompressedPublicKey(curve: elliptic.Curve, data: Slice<uint8>) -> Result<Ref<PublicKey>, error>
+pub fn ParseUncompressedPublicKey(curve: elliptic.Curve, data: Slice<byte>) -> Result<Ref<PublicKey>, error>
 
 /// Sign signs a hash (which should be the result of hashing a larger message)
 /// using the private key, priv. If the hash is longer than the bit-length of the
 /// private key's curve order, the hash will be truncated to that length. It
 /// returns the signature as a pair of integers. Most applications should use
 /// [SignASN1] instead of dealing directly with r, s.
-pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<uint8>) -> Result<(Ref<big.Int>, Ref<big.Int>), error>
+pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<byte>) -> Result<(Ref<big.Int>, Ref<big.Int>), error>
 
 /// SignASN1 signs a hash (which should be the result of hashing a larger message)
 /// using the private key, priv. If the hash is longer than the bit-length of the
@@ -30,7 +30,7 @@ pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<uint8>) -> Resul
 /// The signature is randomized. Most applications should use [crypto/rand.Reader]
 /// as rand. Note that the returned signature does not depend deterministically on
 /// the bytes read from rand, and may change between calls and/or between versions.
-pub fn SignASN1(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<uint8>) -> Result<Slice<uint8>, error>
+pub fn SignASN1(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<byte>) -> Result<Slice<byte>, error>
 
 /// Verify verifies the signature in r, s of hash using the public key, pub. Its
 /// return value records whether the signature is valid. Most applications should
@@ -40,7 +40,7 @@ pub fn SignASN1(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<uint8>) -> R
 /// channels, or if an attacker has control of part of the inputs.
 pub fn Verify(
   pub_: Ref<PublicKey>,
-  hash: Slice<uint8>,
+  hash: Slice<byte>,
   r: Ref<big.Int>,
   s: Ref<big.Int>,
 ) -> bool
@@ -50,7 +50,7 @@ pub fn Verify(
 /// 
 /// The inputs are not considered confidential, and may leak through timing side
 /// channels, or if an attacker has control of part of the inputs.
-pub fn VerifyASN1(pub_: Ref<PublicKey>, hash: Slice<uint8>, sig: Slice<uint8>) -> bool
+pub fn VerifyASN1(pub_: Ref<PublicKey>, hash: Slice<byte>, sig: Slice<byte>) -> bool
 
 /// PrivateKey represents an ECDSA private key.
 pub struct PrivateKey {
@@ -89,7 +89,7 @@ impl PrivateKey {
   /// Note that private keys are more commonly encoded in ASN.1 or PKCS#8 format,
   /// which can be generated with [crypto/x509.MarshalECPrivateKey] or
   /// [crypto/x509.MarshalPKCS8PrivateKey] (and [encoding/pem]).
-  fn Bytes(self: Ref<PrivateKey>) -> Result<Slice<uint8>, error>
+  fn Bytes(self: Ref<PrivateKey>) -> Result<Slice<byte>, error>
 
   /// Double returns 2*(x,y).
   /// 
@@ -125,14 +125,14 @@ impl PrivateKey {
   /// Deprecated: this is a low-level unsafe API. For ECDH, use the crypto/ecdh
   /// package. Most uses of ScalarBaseMult can be replaced by a call to the
   /// PrivateKey.PublicKey method in crypto/ecdh.
-  fn ScalarBaseMult(self, k: Slice<uint8>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn ScalarBaseMult(self, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
 
   /// ScalarMult returns k*(x,y) where k is an integer in big-endian form.
   /// 
   /// Deprecated: this is a low-level unsafe API. For ECDH, use the crypto/ecdh
   /// package. Most uses of ScalarMult can be replaced by a call to the ECDH
   /// methods of NIST curves in crypto/ecdh.
-  fn ScalarMult(self, x1: Ref<big.Int>, y1: Ref<big.Int>, k: Slice<uint8>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn ScalarMult(self, x1: Ref<big.Int>, y1: Ref<big.Int>, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
 
   /// Sign signs a hash (which should be the result of hashing a larger message
   /// with opts.HashFunc()) using the private key, priv. If the hash is longer than
@@ -151,9 +151,9 @@ impl PrivateKey {
   fn Sign(
     self: Ref<PrivateKey>,
     rand: io.Reader,
-    digest: Slice<uint8>,
+    digest: Slice<byte>,
     opts: crypto.SignerOpts,
-  ) -> Result<Slice<uint8>, error>
+  ) -> Result<Slice<byte>, error>
 }
 
 impl PublicKey {
@@ -179,7 +179,7 @@ impl PublicKey {
   /// 
   /// Note that public keys are more commonly encoded in DER (or PEM) format, which
   /// can be generated with [crypto/x509.MarshalPKIXPublicKey] (and [encoding/pem]).
-  fn Bytes(self: Ref<PublicKey>) -> Result<Slice<uint8>, error>
+  fn Bytes(self: Ref<PublicKey>) -> Result<Slice<byte>, error>
 
   /// Double returns 2*(x,y).
   /// 
@@ -214,12 +214,12 @@ impl PublicKey {
   /// Deprecated: this is a low-level unsafe API. For ECDH, use the crypto/ecdh
   /// package. Most uses of ScalarBaseMult can be replaced by a call to the
   /// PrivateKey.PublicKey method in crypto/ecdh.
-  fn ScalarBaseMult(self, k: Slice<uint8>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn ScalarBaseMult(self, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
 
   /// ScalarMult returns k*(x,y) where k is an integer in big-endian form.
   /// 
   /// Deprecated: this is a low-level unsafe API. For ECDH, use the crypto/ecdh
   /// package. Most uses of ScalarMult can be replaced by a call to the ECDH
   /// methods of NIST curves in crypto/ecdh.
-  fn ScalarMult(self, x1: Ref<big.Int>, y1: Ref<big.Int>, k: Slice<uint8>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn ScalarMult(self, x1: Ref<big.Int>, y1: Ref<big.Int>, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
 }

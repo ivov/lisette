@@ -49,7 +49,7 @@ pub fn ReadDir(fsys: FS, name: string) -> Result<Slice<DirEntry>, error>
 /// If fs implements [ReadFileFS], ReadFile calls fs.ReadFile.
 /// Otherwise ReadFile calls fs.Open and uses Read and Close
 /// on the returned [File].
-pub fn ReadFile(fsys: FS, name: string) -> Result<Slice<uint8>, error>
+pub fn ReadFile(fsys: FS, name: string) -> Result<Slice<byte>, error>
 
 /// ReadLink returns the destination of the named symbolic link.
 /// 
@@ -116,7 +116,7 @@ pub interface FS {
 /// A file may implement [io.ReaderAt] or [io.Seeker] as optimizations.
 pub interface File {
   fn Close() -> Result<(), error>
-  fn Read(mut arg0: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut arg0: Slice<byte>) -> Partial<int, error>
   fn Stat() -> Result<FileInfo, error>
 }
 
@@ -163,7 +163,7 @@ pub interface ReadDirFS {
 /// but if so ReadDir should return an error for non-directories.)
 pub interface ReadDirFile {
   fn Close() -> Result<(), error>
-  fn Read(mut arg0: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut arg0: Slice<byte>) -> Partial<int, error>
   fn ReadDir(n: int) -> Result<Slice<DirEntry>, error>
   fn Stat() -> Result<FileInfo, error>
 }
@@ -172,7 +172,7 @@ pub interface ReadDirFile {
 /// that provides an optimized implementation of [ReadFile].
 pub interface ReadFileFS {
   fn Open(name: string) -> Result<File, error>
-  fn ReadFile(name: string) -> Result<Slice<uint8>, error>
+  fn ReadFile(name: string) -> Result<Slice<byte>, error>
 }
 
 /// ReadLinkFS is the interface implemented by a file system

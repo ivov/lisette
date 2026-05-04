@@ -9,7 +9,7 @@ import "go:crypto/cipher"
 /// The key argument must be the AES key,
 /// either 16, 24, or 32 bytes to select
 /// AES-128, AES-192, or AES-256.
-pub fn NewCipher(key: Slice<uint8>) -> Result<cipher.Block, error>
+pub fn NewCipher(key: Slice<byte>) -> Result<cipher.Block, error>
 
 pub struct KeySizeError(int)
 

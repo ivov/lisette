@@ -13,7 +13,7 @@ import "go:hash"
 /// 	h.SetSeed(seed)
 /// 	h.Write(b)
 /// 	return h.Sum64()
-pub fn Bytes(seed: Seed, b: Slice<uint8>) -> uint64
+pub fn Bytes(seed: Seed, b: Slice<byte>) -> uint64
 
 /// Comparable returns the hash of comparable value v with the given seed
 /// such that Comparable(s, v1) == Comparable(s, v2) if v1 == v2.
@@ -100,7 +100,7 @@ impl Hash {
   /// Sum appends the hash's current 64-bit value to b.
   /// It exists for implementing [hash.Hash].
   /// For direct calls, it is more efficient to use [Hash.Sum64].
-  fn Sum(self: Ref<Hash>, mut b: Slice<uint8>) -> Slice<uint8>
+  fn Sum(self: Ref<Hash>, mut b: Slice<byte>) -> Slice<byte>
 
   /// Sum64 returns h's current 64-bit value, which depends on
   /// h's seed and the sequence of bytes added to h since the
@@ -113,11 +113,11 @@ impl Hash {
 
   /// Write adds b to the sequence of bytes hashed by h.
   /// It always writes all of b and never fails; the count and error result are for implementing [io.Writer].
-  fn Write(self: Ref<Hash>, b: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Hash>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteByte adds b to the sequence of bytes hashed by h.
   /// It never fails; the error result is for implementing [io.ByteWriter].
-  fn WriteByte(self: Ref<Hash>, b: uint8) -> Result<(), error>
+  fn WriteByte(self: Ref<Hash>, b: byte) -> Result<(), error>
 
   /// WriteString adds the bytes of s to the sequence of bytes hashed by h.
   /// It always writes all of s and never fails; the count and error result are for implementing [io.StringWriter].

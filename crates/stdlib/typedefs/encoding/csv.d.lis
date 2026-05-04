@@ -28,8 +28,8 @@ pub struct ParseError {
 /// including in multiline field values, so that the returned data does
 /// not depend on which line-ending convention an input file uses.
 pub struct Reader {
-  pub Comma: int32,
-  pub Comment: int32,
+  pub Comma: rune,
+  pub Comment: rune,
   pub FieldsPerRecord: int,
   pub LazyQuotes: bool,
   pub TrimLeadingSpace: bool,
@@ -55,7 +55,7 @@ pub struct Reader {
 /// the underlying [io.Writer].  Any errors that occurred should
 /// be checked by calling the [Writer.Error] method.
 pub struct Writer {
-  pub Comma: int32,
+  pub Comma: rune,
   pub UseCRLF: bool,
 }
 

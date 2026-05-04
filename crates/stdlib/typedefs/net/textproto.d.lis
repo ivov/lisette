@@ -25,7 +25,7 @@ pub fn NewReader(r: Ref<bufio.Reader>) -> Ref<Reader>
 pub fn NewWriter(w: Ref<bufio.Writer>) -> Ref<Writer>
 
 /// TrimBytes returns b without leading and trailing ASCII space.
-pub fn TrimBytes(b: Slice<uint8>) -> Slice<uint8>
+pub fn TrimBytes(b: Slice<byte>) -> Slice<byte>
 
 /// TrimString returns s without leading and trailing ASCII space.
 pub fn TrimString(s: string) -> string
@@ -199,12 +199,12 @@ impl Conn {
 
   /// ReadContinuedLineBytes is like [Reader.ReadContinuedLine] but
   /// returns a []byte instead of a string.
-  fn ReadContinuedLineBytes(self: Ref<Conn>) -> Result<Slice<uint8>, error>
+  fn ReadContinuedLineBytes(self: Ref<Conn>) -> Result<Slice<byte>, error>
 
   /// ReadDotBytes reads a dot-encoding and returns the decoded data.
   /// 
   /// See the documentation for the [Reader.DotReader] method for details about dot-encoding.
-  fn ReadDotBytes(self: Ref<Conn>) -> Result<Slice<uint8>, error>
+  fn ReadDotBytes(self: Ref<Conn>) -> Result<Slice<byte>, error>
 
   /// ReadDotLines reads a dot-encoding and returns a slice
   /// containing the decoded lines, with the final \r\n or \n elided from each.
@@ -217,7 +217,7 @@ impl Conn {
   fn ReadLine(self: Ref<Conn>) -> Result<string, error>
 
   /// ReadLineBytes is like [Reader.ReadLine] but returns a []byte instead of a string.
-  fn ReadLineBytes(self: Ref<Conn>) -> Result<Slice<uint8>, error>
+  fn ReadLineBytes(self: Ref<Conn>) -> Result<Slice<byte>, error>
 
   /// ReadMIMEHeader reads a MIME-style header from r.
   /// The header is a sequence of possibly continued Key: Value lines
@@ -394,12 +394,12 @@ impl Reader {
 
   /// ReadContinuedLineBytes is like [Reader.ReadContinuedLine] but
   /// returns a []byte instead of a string.
-  fn ReadContinuedLineBytes(self: Ref<Reader>) -> Result<Slice<uint8>, error>
+  fn ReadContinuedLineBytes(self: Ref<Reader>) -> Result<Slice<byte>, error>
 
   /// ReadDotBytes reads a dot-encoding and returns the decoded data.
   /// 
   /// See the documentation for the [Reader.DotReader] method for details about dot-encoding.
-  fn ReadDotBytes(self: Ref<Reader>) -> Result<Slice<uint8>, error>
+  fn ReadDotBytes(self: Ref<Reader>) -> Result<Slice<byte>, error>
 
   /// ReadDotLines reads a dot-encoding and returns a slice
   /// containing the decoded lines, with the final \r\n or \n elided from each.
@@ -412,7 +412,7 @@ impl Reader {
   fn ReadLine(self: Ref<Reader>) -> Result<string, error>
 
   /// ReadLineBytes is like [Reader.ReadLine] but returns a []byte instead of a string.
-  fn ReadLineBytes(self: Ref<Reader>) -> Result<Slice<uint8>, error>
+  fn ReadLineBytes(self: Ref<Reader>) -> Result<Slice<byte>, error>
 
   /// ReadMIMEHeader reads a MIME-style header from r.
   /// The header is a sequence of possibly continued Key: Value lines

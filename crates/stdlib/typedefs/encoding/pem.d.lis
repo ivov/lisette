@@ -5,7 +5,7 @@
 
 import "go:io"
 
-pub fn Decode(data: Slice<uint8>) -> (Ref<Block>, Slice<uint8>)
+pub fn Decode(data: Slice<byte>) -> (Ref<Block>, Slice<byte>)
 
 /// Encode writes the PEM encoding of b to out.
 pub fn Encode(out: io.Writer, b: Ref<Block>) -> Result<(), error>
@@ -15,7 +15,7 @@ pub fn Encode(out: io.Writer, b: Ref<Block>) -> Result<(), error>
 /// If b has invalid headers and cannot be encoded,
 /// EncodeToMemory returns nil. If it is important to
 /// report details about this error case, use [Encode] instead.
-pub fn EncodeToMemory(b: Ref<Block>) -> Slice<uint8>
+pub fn EncodeToMemory(b: Ref<Block>) -> Slice<byte>
 
 /// A Block represents a PEM encoded structure.
 /// 
@@ -30,5 +30,5 @@ pub fn EncodeToMemory(b: Ref<Block>) -> Slice<uint8>
 pub struct Block {
   pub Type: string,
   pub Headers: Map<string, string>,
-  pub Bytes: Slice<uint8>,
+  pub Bytes: Slice<byte>,
 }

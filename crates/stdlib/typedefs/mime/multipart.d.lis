@@ -19,8 +19,8 @@ pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 /// If stored on disk, the File's underlying concrete type will be an *os.File.
 pub interface File {
   fn Close() -> Result<(), error>
-  fn Read(mut p: Slice<uint8>) -> Partial<int, error>
-  fn ReadAt(mut p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn Read(mut p: Slice<byte>) -> Partial<int, error>
+  fn ReadAt(mut p: Slice<byte>, off: int64) -> Partial<int, error>
   fn Seek(offset: int64, whence: int) -> Result<int64, error>
 }
 
@@ -83,7 +83,7 @@ impl Part {
 
   /// Read reads the body of a part, after its headers and before the
   /// next part (if any) begins.
-  fn Read(self: Ref<Part>, mut d: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Part>, mut d: Slice<byte>) -> Partial<int, error>
 }
 
 impl Reader {

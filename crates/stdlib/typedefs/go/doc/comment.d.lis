@@ -170,17 +170,17 @@ impl Parser {
 impl Printer {
   /// Comment returns the standard Go formatting of the [Doc],
   /// without any comment markers.
-  fn Comment(self: Ref<Printer>, d: Ref<Doc>) -> Slice<uint8>
+  fn Comment(self: Ref<Printer>, d: Ref<Doc>) -> Slice<byte>
 
   /// HTML returns an HTML formatting of the [Doc].
   /// See the [Printer] documentation for ways to customize the HTML output.
-  fn HTML(self: Ref<Printer>, d: Ref<Doc>) -> Slice<uint8>
+  fn HTML(self: Ref<Printer>, d: Ref<Doc>) -> Slice<byte>
 
   /// Markdown returns a Markdown formatting of the Doc.
   /// See the [Printer] documentation for ways to customize the Markdown output.
-  fn Markdown(self: Ref<Printer>, d: Ref<Doc>) -> Slice<uint8>
+  fn Markdown(self: Ref<Printer>, d: Ref<Doc>) -> Slice<byte>
 
   /// Text returns a textual formatting of the [Doc].
   /// See the [Printer] documentation for ways to customize the text output.
-  fn Text(self: Ref<Printer>, d: Ref<Doc>) -> Slice<uint8>
+  fn Text(self: Ref<Printer>, d: Ref<Doc>) -> Slice<byte>
 }

@@ -44,7 +44,7 @@ pub fn GenerateParameters(
 /// 
 /// Be aware that calling Sign with an attacker-controlled [PrivateKey] may
 /// require an arbitrary amount of CPU.
-pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<uint8>) -> Result<(Ref<big.Int>, Ref<big.Int>), error>
+pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<byte>) -> Result<(Ref<big.Int>, Ref<big.Int>), error>
 
 /// Verify verifies the signature in r, s of hash using the public key, pub. It
 /// reports whether the signature is valid.
@@ -54,7 +54,7 @@ pub fn Sign(rand: io.Reader, priv: Ref<PrivateKey>, hash: Slice<uint8>) -> Resul
 /// truncation itself.
 pub fn Verify(
   pub_: Ref<PublicKey>,
-  hash: Slice<uint8>,
+  hash: Slice<byte>,
   r: Ref<big.Int>,
   s: Ref<big.Int>,
 ) -> bool

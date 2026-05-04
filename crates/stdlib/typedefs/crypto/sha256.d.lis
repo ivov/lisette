@@ -19,11 +19,11 @@ pub fn New224() -> hash.Hash
 
 /// Sum224 returns the SHA224 checksum of the data.
 #[go(array_return)]
-pub fn Sum224(data: Slice<uint8>) -> Slice<uint8>
+pub fn Sum224(data: Slice<byte>) -> Slice<byte>
 
 /// Sum256 returns the SHA256 checksum of the data.
 #[go(array_return)]
-pub fn Sum256(data: Slice<uint8>) -> Slice<uint8>
+pub fn Sum256(data: Slice<byte>) -> Slice<byte>
 
 /// The blocksize of SHA256 and SHA224 in bytes.
 pub const BlockSize = 64

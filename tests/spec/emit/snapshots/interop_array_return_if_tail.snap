@@ -8,12 +8,12 @@ import "crypto/sha256"
 
 func get(cond bool) func([]uint8) []uint8 {
 	if cond {
-		return func(arg0 []uint8) []uint8 {
+		return func(arg0 []byte) []byte {
 			arr_1 := sha256.Sum256(arg0)
 			return arr_1[:]
 		}
 	} else {
-		return func(arg0 []uint8) []uint8 {
+		return func(arg0 []byte) []byte {
 			arr_2 := sha256.Sum224(arg0)
 			return arr_2[:]
 		}

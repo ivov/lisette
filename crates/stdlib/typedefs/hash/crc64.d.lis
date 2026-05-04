@@ -7,7 +7,7 @@ import "go:hash"
 
 /// Checksum returns the CRC-64 checksum of data
 /// using the polynomial represented by the [Table].
-pub fn Checksum(data: Slice<uint8>, tab: Ref<Table>) -> uint64
+pub fn Checksum(data: Slice<byte>, tab: Ref<Table>) -> uint64
 
 pub fn MakeTable(poly: uint64) -> Ref<Table>
 
@@ -19,7 +19,7 @@ pub fn MakeTable(poly: uint64) -> Ref<Table>
 pub fn New(tab: Ref<Table>) -> hash.Hash64
 
 /// Update returns the result of adding the bytes in p to the crc.
-pub fn Update(crc: uint64, tab: Ref<Table>, p: Slice<uint8>) -> uint64
+pub fn Update(crc: uint64, tab: Ref<Table>, p: Slice<byte>) -> uint64
 
 /// Table is a 256-word table representing the polynomial for efficient processing.
 pub struct Table(Slice<uint64>)

@@ -7,13 +7,13 @@ pub fn GenerateKey1024() -> Result<Ref<DecapsulationKey1024>, error>
 
 pub fn GenerateKey768() -> Result<Ref<DecapsulationKey768>, error>
 
-pub fn NewDecapsulationKey1024(seed: Slice<uint8>) -> Result<Ref<DecapsulationKey1024>, error>
+pub fn NewDecapsulationKey1024(seed: Slice<byte>) -> Result<Ref<DecapsulationKey1024>, error>
 
-pub fn NewDecapsulationKey768(seed: Slice<uint8>) -> Result<Ref<DecapsulationKey768>, error>
+pub fn NewDecapsulationKey768(seed: Slice<byte>) -> Result<Ref<DecapsulationKey768>, error>
 
-pub fn NewEncapsulationKey1024(encapsulationKey: Slice<uint8>) -> Result<Ref<EncapsulationKey1024>, error>
+pub fn NewEncapsulationKey1024(encapsulationKey: Slice<byte>) -> Result<Ref<EncapsulationKey1024>, error>
 
-pub fn NewEncapsulationKey768(encapsulationKey: Slice<uint8>) -> Result<Ref<EncapsulationKey768>, error>
+pub fn NewEncapsulationKey768(encapsulationKey: Slice<byte>) -> Result<Ref<EncapsulationKey768>, error>
 
 /// DecapsulationKey1024 is the secret key used to decapsulate a shared key
 /// from a ciphertext. It includes various precomputed values.
@@ -47,13 +47,13 @@ impl DecapsulationKey1024 {
   /// Bytes returns the decapsulation key as a 64-byte seed in the "d || z" form.
   /// 
   /// The decapsulation key must be kept secret.
-  fn Bytes(self: Ref<DecapsulationKey1024>) -> Slice<uint8>
+  fn Bytes(self: Ref<DecapsulationKey1024>) -> Slice<byte>
 
   /// Decapsulate generates a shared key from a ciphertext and a decapsulation
   /// key. If the ciphertext is not valid, Decapsulate returns an error.
   /// 
   /// The shared key must be kept secret.
-  fn Decapsulate(self: Ref<DecapsulationKey1024>, ciphertext: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn Decapsulate(self: Ref<DecapsulationKey1024>, ciphertext: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// EncapsulationKey returns the public encapsulation key necessary to produce
   /// ciphertexts.
@@ -64,13 +64,13 @@ impl DecapsulationKey768 {
   /// Bytes returns the decapsulation key as a 64-byte seed in the "d || z" form.
   /// 
   /// The decapsulation key must be kept secret.
-  fn Bytes(self: Ref<DecapsulationKey768>) -> Slice<uint8>
+  fn Bytes(self: Ref<DecapsulationKey768>) -> Slice<byte>
 
   /// Decapsulate generates a shared key from a ciphertext and a decapsulation
   /// key. If the ciphertext is not valid, Decapsulate returns an error.
   /// 
   /// The shared key must be kept secret.
-  fn Decapsulate(self: Ref<DecapsulationKey768>, ciphertext: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn Decapsulate(self: Ref<DecapsulationKey768>, ciphertext: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// EncapsulationKey returns the public encapsulation key necessary to produce
   /// ciphertexts.
@@ -79,22 +79,22 @@ impl DecapsulationKey768 {
 
 impl EncapsulationKey1024 {
   /// Bytes returns the encapsulation key as a byte slice.
-  fn Bytes(self: Ref<EncapsulationKey1024>) -> Slice<uint8>
+  fn Bytes(self: Ref<EncapsulationKey1024>) -> Slice<byte>
 
   /// Encapsulate generates a shared key and an associated ciphertext from an
   /// encapsulation key, drawing random bytes from the default crypto/rand source.
   /// 
   /// The shared key must be kept secret.
-  fn Encapsulate(self: Ref<EncapsulationKey1024>) -> (Slice<uint8>, Slice<uint8>)
+  fn Encapsulate(self: Ref<EncapsulationKey1024>) -> (Slice<byte>, Slice<byte>)
 }
 
 impl EncapsulationKey768 {
   /// Bytes returns the encapsulation key as a byte slice.
-  fn Bytes(self: Ref<EncapsulationKey768>) -> Slice<uint8>
+  fn Bytes(self: Ref<EncapsulationKey768>) -> Slice<byte>
 
   /// Encapsulate generates a shared key and an associated ciphertext from an
   /// encapsulation key, drawing random bytes from the default crypto/rand source.
   /// 
   /// The shared key must be kept secret.
-  fn Encapsulate(self: Ref<EncapsulationKey768>) -> (Slice<uint8>, Slice<uint8>)
+  fn Encapsulate(self: Ref<EncapsulationKey768>) -> (Slice<byte>, Slice<byte>)
 }

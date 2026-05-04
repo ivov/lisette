@@ -334,7 +334,7 @@ impl Kind {
 impl Level {
   /// AppendText implements [encoding.TextAppender]
   /// by calling [Level.String].
-  fn AppendText(self, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendText(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// Level returns the receiver.
   /// It implements [Leveler].
@@ -342,11 +342,11 @@ impl Level {
 
   /// MarshalJSON implements [encoding/json.Marshaler]
   /// by quoting the output of [Level.String].
-  fn MarshalJSON(self) -> Result<Slice<uint8>, error>
+  fn MarshalJSON(self) -> Result<Slice<byte>, error>
 
   /// MarshalText implements [encoding.TextMarshaler]
   /// by calling [Level.AppendText].
-  fn MarshalText(self) -> Result<Slice<uint8>, error>
+  fn MarshalText(self) -> Result<Slice<byte>, error>
 
   /// String returns a name for the level.
   /// If the level has a name, then that name
@@ -364,27 +364,27 @@ impl Level {
   /// ignoring case.
   /// It also accepts numeric offsets that would result in a different string on
   /// output. For example, "Error-8" would marshal as "INFO".
-  fn UnmarshalJSON(self: Ref<Level>, data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalJSON(self: Ref<Level>, data: Slice<byte>) -> Result<(), error>
 
   /// UnmarshalText implements [encoding.TextUnmarshaler].
   /// It accepts any string produced by [Level.MarshalText],
   /// ignoring case.
   /// It also accepts numeric offsets that would result in a different string on
   /// output. For example, "Error-8" would marshal as "INFO".
-  fn UnmarshalText(self: Ref<Level>, data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalText(self: Ref<Level>, data: Slice<byte>) -> Result<(), error>
 }
 
 impl LevelVar {
   /// AppendText implements [encoding.TextAppender]
   /// by calling [Level.AppendText].
-  fn AppendText(self: Ref<LevelVar>, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendText(self: Ref<LevelVar>, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// Level returns v's level.
   fn Level(self: Ref<LevelVar>) -> Level
 
   /// MarshalText implements [encoding.TextMarshaler]
   /// by calling [LevelVar.AppendText].
-  fn MarshalText(self: Ref<LevelVar>) -> Result<Slice<uint8>, error>
+  fn MarshalText(self: Ref<LevelVar>) -> Result<Slice<byte>, error>
 
   /// Set sets v's level to l.
   fn Set(self: Ref<LevelVar>, l: Level)
@@ -393,7 +393,7 @@ impl LevelVar {
 
   /// UnmarshalText implements [encoding.TextUnmarshaler]
   /// by calling [Level.UnmarshalText].
-  fn UnmarshalText(self: Ref<LevelVar>, data: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalText(self: Ref<LevelVar>, data: Slice<byte>) -> Result<(), error>
 }
 
 impl Logger {

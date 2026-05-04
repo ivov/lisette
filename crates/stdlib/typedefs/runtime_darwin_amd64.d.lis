@@ -26,7 +26,7 @@ pub fn Breakpoint()
 /// Deprecated: Use the [runtime/pprof] package,
 /// or the handlers in the [net/http/pprof] package,
 /// or the [testing] package's -test.cpuprofile flag instead.
-pub fn CPUProfile() -> Slice<uint8>
+pub fn CPUProfile() -> Slice<byte>
 
 /// Caller reports file and line number information about function invocations on
 /// the calling goroutine's stack. The argument skip is the number of stack frames
@@ -254,7 +254,7 @@ pub fn ReadMemStats(m: Ref<MemStats>)
 /// was on has been returned, ReadTrace returns nil. The caller must copy the
 /// returned data before calling ReadTrace again.
 /// ReadTrace must be called from one goroutine at a time.
-pub fn ReadTrace() -> Slice<uint8>
+pub fn ReadTrace() -> Slice<byte>
 
 /// SetBlockProfileRate controls the fraction of goroutine blocking events
 /// that are reported in the blocking profile. The profiler aims to sample
@@ -558,7 +558,7 @@ pub fn SetMutexProfileFraction(rate: int) -> int
 /// and returns the number of bytes written to buf.
 /// If all is true, Stack formats stack traces of all other goroutines
 /// into buf after the trace for the current goroutine.
-pub fn Stack(mut buf: Slice<uint8>, all: bool) -> int
+pub fn Stack(mut buf: Slice<byte>, all: bool) -> int
 
 /// StartTrace enables tracing for the current process.
 /// While tracing, the data will be buffered and available via [ReadTrace].

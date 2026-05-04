@@ -645,14 +645,14 @@ pub const TagVolatileType: Tag = 0x35
 pub const TagWithStmt: Tag = 0x22
 
 pub fn New(
-  abbrev: Slice<uint8>,
-  aranges: Slice<uint8>,
-  frame: Slice<uint8>,
-  info: Slice<uint8>,
-  line: Slice<uint8>,
-  pubnames: Slice<uint8>,
-  ranges: Slice<uint8>,
-  str: Slice<uint8>,
+  abbrev: Slice<byte>,
+  aranges: Slice<byte>,
+  frame: Slice<byte>,
+  info: Slice<byte>,
+  line: Slice<byte>,
+  pubnames: Slice<byte>,
+  ranges: Slice<byte>,
+  str: Slice<byte>,
 ) -> Result<Ref<Data>, error>
 
 /// An AddrType represents a machine address type.
@@ -1061,13 +1061,13 @@ impl Data {
   /// DWARF section name such as ".debug_addr", ".debug_str_offsets", and
   /// so forth. This approach is used for new DWARF sections added in
   /// DWARF 5 and later.
-  fn AddSection(self: Ref<Data>, name: string, contents: Slice<uint8>) -> Result<(), error>
+  fn AddSection(self: Ref<Data>, name: string, contents: Slice<byte>) -> Result<(), error>
 
   /// AddTypes will add one .debug_types section to the DWARF data. A
   /// typical object with DWARF version 4 debug info will have multiple
   /// .debug_types sections. The name is used for error reporting only,
   /// and serves to distinguish one .debug_types section from another.
-  fn AddTypes(self: Ref<Data>, name: string, types: Slice<uint8>) -> Result<(), error>
+  fn AddTypes(self: Ref<Data>, name: string, types: Slice<byte>) -> Result<(), error>
 
   /// LineReader returns a new reader for the line table of compilation
   /// unit cu, which must be an [Entry] with tag [TagCompileUnit].

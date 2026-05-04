@@ -19,19 +19,19 @@ pub fn NewReader(r: io.Reader) -> Result<io.ReadCloser, error>
 /// If the compressed data refers to a different dictionary, NewReaderDict returns [ErrDictionary].
 /// 
 /// The ReadCloser returned by NewReaderDict also implements [Resetter].
-pub fn NewReaderDict(r: io.Reader, dict: Slice<uint8>) -> Result<io.ReadCloser, error>
+pub fn NewReaderDict(r: io.Reader, dict: Slice<byte>) -> Result<io.ReadCloser, error>
 
 pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 
 pub fn NewWriterLevel(w: io.Writer, level: int) -> Result<Ref<Writer>, error>
 
-pub fn NewWriterLevelDict(w: io.Writer, level: int, dict: Slice<uint8>) -> Result<Ref<Writer>, error>
+pub fn NewWriterLevelDict(w: io.Writer, level: int, dict: Slice<byte>) -> Result<Ref<Writer>, error>
 
 /// Resetter resets a ReadCloser returned by [NewReader] or [NewReaderDict]
 /// to switch to a new underlying Reader. This permits reusing a ReadCloser
 /// instead of allocating a new one.
 pub interface Resetter {
-  fn Reset(r: io.Reader, dict: Slice<uint8>) -> Result<(), error>
+  fn Reset(r: io.Reader, dict: Slice<byte>) -> Result<(), error>
 }
 
 /// A Writer takes data written to it and writes the compressed
@@ -82,5 +82,5 @@ impl Writer {
   /// Write writes a compressed form of p to the underlying [io.Writer]. The
   /// compressed bytes are not necessarily flushed until the [Writer] is closed or
   /// explicitly flushed.
-  fn Write(self: Ref<Writer>, p: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
 }

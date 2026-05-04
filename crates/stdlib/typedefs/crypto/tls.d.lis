@@ -151,9 +151,9 @@ pub fn NewLRUClientSessionCache(capacity: int) -> ClientSessionCache
 /// at least one certificate or else set GetCertificate.
 pub fn NewListener(inner: net.Listener, config: Ref<Config>) -> net.Listener
 
-pub fn NewResumptionState(ticket: Slice<uint8>, state: Ref<SessionState>) -> Result<Ref<ClientSessionState>, error>
+pub fn NewResumptionState(ticket: Slice<byte>, state: Ref<SessionState>) -> Result<Ref<ClientSessionState>, error>
 
-pub fn ParseSessionState(data: Slice<uint8>) -> Result<Ref<SessionState>, error>
+pub fn ParseSessionState(data: Slice<byte>) -> Result<Ref<SessionState>, error>
 
 pub fn QUICClient(config: Ref<QUICConfig>) -> Ref<QUICConn>
 
@@ -166,7 +166,7 @@ pub fn Server(conn: net.Conn, config: Ref<Config>) -> Ref<Conn>
 /// version is not implemented by this package.
 pub fn VersionName(version: uint16) -> string
 
-pub fn X509KeyPair(certPEMBlock: Slice<uint8>, keyPEMBlock: Slice<uint8>) -> Result<Certificate, error>
+pub fn X509KeyPair(certPEMBlock: Slice<byte>, keyPEMBlock: Slice<byte>) -> Result<Certificate, error>
 
 /// An AlertError is a TLS alert.
 /// 
@@ -176,11 +176,11 @@ pub struct AlertError(uint8)
 
 /// A Certificate is a chain of one or more certificates, leaf first.
 pub struct Certificate {
-  pub Certificate: Slice<Slice<uint8>>,
+  pub Certificate: Slice<Slice<byte>>,
   pub PrivateKey: crypto.PrivateKey,
   pub SupportedSignatureAlgorithms: Slice<SignatureScheme>,
-  pub OCSPStaple: Slice<uint8>,
-  pub SignedCertificateTimestamps: Slice<Slice<uint8>>,
+  pub OCSPStaple: Slice<byte>,
+  pub SignedCertificateTimestamps: Slice<Slice<byte>>,
   pub Leaf: Option<Ref<x509.Certificate>>,
 }
 
@@ -188,7 +188,7 @@ pub struct Certificate {
 /// CertificateRequest message, which is used to demand a certificate and proof
 /// of control from a client.
 pub struct CertificateRequestInfo {
-  pub AcceptableCAs: Slice<Slice<uint8>>,
+  pub AcceptableCAs: Slice<Slice<byte>>,
   pub SignatureSchemes: Slice<SignatureScheme>,
   pub Version: uint16,
 }
@@ -254,7 +254,7 @@ pub struct Config {
   pub GetCertificate: Option<fn(Ref<ClientHelloInfo>) -> Result<Ref<Certificate>, error>>,
   pub GetClientCertificate: Option<fn(Ref<CertificateRequestInfo>) -> Result<Ref<Certificate>, error>>,
   pub GetConfigForClient: Option<fn(Ref<ClientHelloInfo>) -> Result<Ref<Config>, error>>,
-  pub VerifyPeerCertificate: Option<fn(Slice<Slice<uint8>>, Slice<Slice<Ref<x509.Certificate>>>) -> Result<(), error>>,
+  pub VerifyPeerCertificate: Option<fn(Slice<Slice<byte>>, Slice<Slice<Ref<x509.Certificate>>>) -> Result<(), error>>,
   pub VerifyConnection: Option<fn(ConnectionState) -> Result<(), error>>,
   pub RootCAs: Option<Ref<x509.CertPool>>,
   pub NextProtos: Slice<string>,
@@ -267,15 +267,15 @@ pub struct Config {
   pub SessionTicketsDisabled: bool,
   // SKIPPED field "SessionTicketKey": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
   pub ClientSessionCache: Option<ClientSessionCache>,
-  pub UnwrapSession: Option<fn(Slice<uint8>, ConnectionState) -> Result<Ref<SessionState>, error>>,
-  pub WrapSession: Option<fn(ConnectionState, Ref<SessionState>) -> Result<Slice<uint8>, error>>,
+  pub UnwrapSession: Option<fn(Slice<byte>, ConnectionState) -> Result<Ref<SessionState>, error>>,
+  pub WrapSession: Option<fn(ConnectionState, Ref<SessionState>) -> Result<Slice<byte>, error>>,
   pub MinVersion: uint16,
   pub MaxVersion: uint16,
   pub CurvePreferences: Slice<CurveID>,
   pub DynamicRecordSizingDisabled: bool,
   pub Renegotiation: RenegotiationSupport,
   pub KeyLogWriter: Option<io.Writer>,
-  pub EncryptedClientHelloConfigList: Slice<uint8>,
+  pub EncryptedClientHelloConfigList: Slice<byte>,
   pub EncryptedClientHelloRejectionVerify: Option<fn(ConnectionState) -> Result<(), error>>,
   pub GetEncryptedClientHelloKeys: Option<fn(Ref<ClientHelloInfo>) -> Result<Slice<EncryptedClientHelloKey>, error>>,
   pub EncryptedClientHelloKeys: Slice<EncryptedClientHelloKey>,
@@ -297,9 +297,9 @@ pub struct ConnectionState {
   pub ServerName: string,
   pub PeerCertificates: Slice<Option<Ref<x509.Certificate>>>,
   pub VerifiedChains: Slice<Slice<Option<Ref<x509.Certificate>>>>,
-  pub SignedCertificateTimestamps: Slice<Slice<uint8>>,
-  pub OCSPResponse: Slice<uint8>,
-  pub TLSUnique: Slice<uint8>,
+  pub SignedCertificateTimestamps: Slice<Slice<byte>>,
+  pub OCSPResponse: Slice<byte>,
+  pub TLSUnique: Slice<byte>,
   pub ECHAccepted: bool,
 }
 
@@ -317,14 +317,14 @@ pub struct Dialer {
 /// The client may treat an ECHRejectionError with an empty set of RetryConfigs
 /// as a secure signal from the server.
 pub struct ECHRejectionError {
-  pub RetryConfigList: Slice<uint8>,
+  pub RetryConfigList: Slice<byte>,
 }
 
 /// EncryptedClientHelloKey holds a private key that is associated
 /// with a specific ECH config known to a client.
 pub struct EncryptedClientHelloKey {
-  pub Config: Slice<uint8>,
-  pub PrivateKey: Slice<uint8>,
+  pub Config: Slice<byte>,
+  pub PrivateKey: Slice<byte>,
   pub SendAsRetry: bool,
 }
 
@@ -347,14 +347,14 @@ pub type QUICConn
 pub struct QUICEvent {
   pub Kind: QUICEventKind,
   pub Level: QUICEncryptionLevel,
-  pub Data: Slice<uint8>,
+  pub Data: Slice<byte>,
   pub Suite: uint16,
   pub SessionState: Option<Ref<SessionState>>,
 }
 
 pub struct QUICSessionTicketOptions {
   pub EarlyData: bool,
-  pub Extra: Slice<Slice<uint8>>,
+  pub Extra: Slice<Slice<byte>>,
 }
 
 /// RecordHeaderError is returned when a TLS record header is invalid.
@@ -382,7 +382,7 @@ pub struct RenegotiationSupport(int)
 
 /// A SessionState is a resumable session.
 pub struct SessionState {
-  pub Extra: Slice<Slice<uint8>>,
+  pub Extra: Slice<Slice<byte>>,
   pub EarlyData: bool,
 }
 
@@ -632,7 +632,7 @@ impl ClientSessionState {
   /// 
   /// It can be called by [ClientSessionCache.Put] to serialize (with
   /// [SessionState.Bytes]) and store the session.
-  fn ResumptionState(self: Ref<ClientSessionState>) -> Result<(Slice<uint8>, Ref<SessionState>), error>
+  fn ResumptionState(self: Ref<ClientSessionState>) -> Result<(Slice<byte>, Ref<SessionState>), error>
 }
 
 impl Config {
@@ -655,7 +655,7 @@ impl Config {
   /// If the ticket can't be decrypted or parsed, DecryptTicket returns (nil, nil).
   fn DecryptTicket(
     self: Ref<Config>,
-    identity: Slice<uint8>,
+    identity: Slice<byte>,
     cs: ConnectionState,
   ) -> Result<Ref<SessionState>, error>
 
@@ -665,7 +665,7 @@ impl Config {
     self: Ref<Config>,
     cs: ConnectionState,
     ss: Ref<SessionState>,
-  ) -> Result<Slice<uint8>, error>
+  ) -> Result<Slice<byte>, error>
 
   // SKIPPED method "SetSessionTicketKeys": array-currently-not-representable — fixed-size array cannot currently be represented in Lisette
 }
@@ -720,7 +720,7 @@ impl Conn {
 
   /// OCSPResponse returns the stapled OCSP response from the TLS server, if
   /// any. (Only valid for client connections.)
-  fn OCSPResponse(self: Ref<Conn>) -> Slice<uint8>
+  fn OCSPResponse(self: Ref<Conn>) -> Slice<byte>
 
   /// Read reads data from the connection.
   /// 
@@ -728,7 +728,7 @@ impl Conn {
   /// must be set for both Read and [Conn.Write] before Read is called when the handshake
   /// has not yet completed. See [Conn.SetDeadline], [Conn.SetReadDeadline], and
   /// [Conn.SetWriteDeadline].
-  fn Read(self: Ref<Conn>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Conn>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// RemoteAddr returns the remote network address.
   fn RemoteAddr(self: Ref<Conn>) -> Option<net.Addr>
@@ -758,7 +758,7 @@ impl Conn {
   /// must be set for both [Conn.Read] and Write before Write is called when the handshake
   /// has not yet completed. See [Conn.SetDeadline], [Conn.SetReadDeadline], and
   /// [Conn.SetWriteDeadline].
-  fn Write(self: Ref<Conn>, b: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Conn>, b: Slice<byte>) -> Partial<int, error>
 }
 
 impl ConnectionState {
@@ -775,9 +775,9 @@ impl ConnectionState {
   fn ExportKeyingMaterial(
     self: Ref<ConnectionState>,
     label: string,
-    context: Slice<uint8>,
+    context: Slice<byte>,
     length: int,
-  ) -> Result<Slice<uint8>, error>
+  ) -> Result<Slice<byte>, error>
 }
 
 impl CurveID {
@@ -828,7 +828,7 @@ impl QUICConn {
   fn HandleData(
     self: Ref<QUICConn>,
     level: QUICEncryptionLevel,
-    data: Slice<uint8>,
+    data: Slice<byte>,
   ) -> Result<(), error>
 
   /// NextEvent returns the next event occurring on the connection.
@@ -844,7 +844,7 @@ impl QUICConn {
   /// 
   /// Server connections may delay setting the transport parameters until after
   /// receiving the client's transport parameters. See [QUICTransportParametersRequired].
-  fn SetTransportParameters(self: Ref<QUICConn>, params: Slice<uint8>)
+  fn SetTransportParameters(self: Ref<QUICConn>, params: Slice<byte>)
 
   /// Start starts the client or server handshake protocol.
   /// It may produce connection events, which may be read with [QUICConn.NextEvent].
@@ -874,7 +874,7 @@ impl SessionState {
   /// 
   /// The specific encoding should be considered opaque and may change incompatibly
   /// between Go versions.
-  fn Bytes(self: Ref<SessionState>) -> Result<Slice<uint8>, error>
+  fn Bytes(self: Ref<SessionState>) -> Result<Slice<byte>, error>
 }
 
 impl SignatureScheme {

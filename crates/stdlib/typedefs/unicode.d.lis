@@ -4,50 +4,50 @@
 // Lisette: 0.1.24
 
 /// In reports whether the rune is a member of one of the ranges.
-pub fn In(r: int32, ranges: VarArgs<Ref<RangeTable>>) -> bool
+pub fn In(r: rune, ranges: VarArgs<Ref<RangeTable>>) -> bool
 
 /// Is reports whether the rune is in the specified table of ranges.
-pub fn Is(rangeTab: Ref<RangeTable>, r: int32) -> bool
+pub fn Is(rangeTab: Ref<RangeTable>, r: rune) -> bool
 
 /// IsControl reports whether the rune is a control character.
 /// The [C] ([Other]) Unicode category includes more code points
 /// such as surrogates; use [Is](C, r) to test for them.
-pub fn IsControl(r: int32) -> bool
+pub fn IsControl(r: rune) -> bool
 
 /// IsDigit reports whether the rune is a decimal digit.
-pub fn IsDigit(r: int32) -> bool
+pub fn IsDigit(r: rune) -> bool
 
 /// IsGraphic reports whether the rune is defined as a Graphic by Unicode.
 /// Such characters include letters, marks, numbers, punctuation, symbols, and
 /// spaces, from categories [L], [M], [N], [P], [S], [Zs].
-pub fn IsGraphic(r: int32) -> bool
+pub fn IsGraphic(r: rune) -> bool
 
 /// IsLetter reports whether the rune is a letter (category [L]).
-pub fn IsLetter(r: int32) -> bool
+pub fn IsLetter(r: rune) -> bool
 
 /// IsLower reports whether the rune is a lower case letter.
-pub fn IsLower(r: int32) -> bool
+pub fn IsLower(r: rune) -> bool
 
 /// IsMark reports whether the rune is a mark character (category [M]).
-pub fn IsMark(r: int32) -> bool
+pub fn IsMark(r: rune) -> bool
 
 /// IsNumber reports whether the rune is a number (category [N]).
-pub fn IsNumber(r: int32) -> bool
+pub fn IsNumber(r: rune) -> bool
 
 /// IsOneOf reports whether the rune is a member of one of the ranges.
 /// The function "In" provides a nicer signature and should be used in preference to IsOneOf.
-pub fn IsOneOf(ranges: Slice<Ref<RangeTable>>, r: int32) -> bool
+pub fn IsOneOf(ranges: Slice<Ref<RangeTable>>, r: rune) -> bool
 
 /// IsPrint reports whether the rune is defined as printable by Go. Such
 /// characters include letters, marks, numbers, punctuation, symbols, and the
 /// ASCII space character, from categories [L], [M], [N], [P], [S] and the ASCII space
 /// character. This categorization is the same as [IsGraphic] except that the
 /// only spacing character is ASCII space, U+0020.
-pub fn IsPrint(r: int32) -> bool
+pub fn IsPrint(r: rune) -> bool
 
 /// IsPunct reports whether the rune is a Unicode punctuation character
 /// (category [P]).
-pub fn IsPunct(r: int32) -> bool
+pub fn IsPunct(r: rune) -> bool
 
 /// IsSpace reports whether the rune is a space character as defined
 /// by Unicode's White Space property; in the Latin-1 space
@@ -57,16 +57,16 @@ pub fn IsPunct(r: int32) -> bool
 /// 
 /// Other definitions of spacing characters are set by category
 /// Z and property [Pattern_White_Space].
-pub fn IsSpace(r: int32) -> bool
+pub fn IsSpace(r: rune) -> bool
 
 /// IsSymbol reports whether the rune is a symbolic character.
-pub fn IsSymbol(r: int32) -> bool
+pub fn IsSymbol(r: rune) -> bool
 
 /// IsTitle reports whether the rune is a title case letter.
-pub fn IsTitle(r: int32) -> bool
+pub fn IsTitle(r: rune) -> bool
 
 /// IsUpper reports whether the rune is an upper case letter.
-pub fn IsUpper(r: int32) -> bool
+pub fn IsUpper(r: rune) -> bool
 
 /// SimpleFold iterates over Unicode code points equivalent under
 /// the Unicode-defined simple case folding. Among the code points
@@ -86,19 +86,19 @@ pub fn IsUpper(r: int32) -> bool
 /// 	SimpleFold('1') = '1'
 /// 
 /// 	SimpleFold(-2) = -2
-pub fn SimpleFold(r: int32) -> int32
+pub fn SimpleFold(r: rune) -> rune
 
 /// To maps the rune to the specified case: [UpperCase], [LowerCase], or [TitleCase].
-pub fn To(_case: int, r: int32) -> int32
+pub fn To(_case: int, r: rune) -> rune
 
 /// ToLower maps the rune to lower case.
-pub fn ToLower(r: int32) -> int32
+pub fn ToLower(r: rune) -> rune
 
 /// ToTitle maps the rune to title case.
-pub fn ToTitle(r: int32) -> int32
+pub fn ToTitle(r: rune) -> rune
 
 /// ToUpper maps the rune to upper case.
-pub fn ToUpper(r: int32) -> int32
+pub fn ToUpper(r: rune) -> rune
 
 /// CaseRange represents a range of Unicode code points for simple (one
 /// code point to one code point) case conversion.
@@ -960,11 +960,11 @@ pub var Zs: Ref<RangeTable>
 
 impl SpecialCase {
   /// ToLower maps the rune to lower case giving priority to the special mapping.
-  fn ToLower(self, r: int32) -> int32
+  fn ToLower(self, r: rune) -> rune
 
   /// ToTitle maps the rune to title case giving priority to the special mapping.
-  fn ToTitle(self, r: int32) -> int32
+  fn ToTitle(self, r: rune) -> rune
 
   /// ToUpper maps the rune to upper case giving priority to the special mapping.
-  fn ToUpper(self, r: int32) -> int32
+  fn ToUpper(self, r: rune) -> rune
 }

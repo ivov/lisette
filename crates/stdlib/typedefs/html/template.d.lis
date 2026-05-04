@@ -51,7 +51,7 @@ pub const ErrSlashAmbig: ErrorCode = 10
 pub const OK: ErrorCode = 0
 
 /// HTMLEscape writes to w the escaped HTML equivalent of the plain text data b.
-pub fn HTMLEscape(w: io.Writer, b: Slice<uint8>)
+pub fn HTMLEscape(w: io.Writer, b: Slice<byte>)
 
 /// HTMLEscapeString returns the escaped HTML equivalent of the plain text data s.
 pub fn HTMLEscapeString(s: string) -> string
@@ -66,7 +66,7 @@ pub fn HTMLEscaper(args: VarArgs<Unknown>) -> string
 pub fn IsTrue(val: Unknown) -> Option<bool>
 
 /// JSEscape writes to w the escaped JavaScript equivalent of the plain text data b.
-pub fn JSEscape(w: io.Writer, b: Slice<uint8>)
+pub fn JSEscape(w: io.Writer, b: Slice<byte>)
 
 /// JSEscapeString returns the escaped JavaScript equivalent of the plain text data s.
 pub fn JSEscapeString(s: string) -> string

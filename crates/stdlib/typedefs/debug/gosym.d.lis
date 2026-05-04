@@ -3,9 +3,9 @@
 // Go: 1.25.5
 // Lisette: 0.1.24
 
-pub fn NewLineTable(data: Slice<uint8>, text: uint64) -> Ref<LineTable>
+pub fn NewLineTable(data: Slice<byte>, text: uint64) -> Ref<LineTable>
 
-pub fn NewTable(symtab: Slice<uint8>, pcln: Ref<LineTable>) -> Result<Ref<Table>, error>
+pub fn NewTable(symtab: Slice<byte>, pcln: Ref<LineTable>) -> Result<Ref<Table>, error>
 
 /// DecodingError represents an error during the decoding of
 /// the symbol table.
@@ -37,7 +37,7 @@ pub struct Func {
 /// For the most part, LineTable's methods should be treated as an internal
 /// detail of the package; callers should use the methods on [Table] instead.
 pub struct LineTable {
-  pub Data: Slice<uint8>,
+  pub Data: Slice<byte>,
   pub PC: uint64,
   pub Line: int,
 }
@@ -61,7 +61,7 @@ pub struct Obj {
 /// A Sym represents a single symbol table entry.
 pub struct Sym {
   pub Value: uint64,
-  pub Type: uint8,
+  pub Type: byte,
   pub Name: string,
   pub GoType: uint64,
   pub Func: Option<Ref<Func>>,

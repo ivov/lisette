@@ -19,10 +19,10 @@ pub fn NewWriterLevel(w: io.Writer, level: int) -> Result<Ref<Writer>, error>
 /// U+0001 through U+00FF, due to limitations of the GZIP file format.
 pub struct Header {
   pub Comment: string,
-  pub Extra: Slice<uint8>,
+  pub Extra: Slice<byte>,
   pub ModTime: time.Time,
   pub Name: string,
-  pub OS: uint8,
+  pub OS: byte,
 }
 
 /// A Reader is an [io.Reader] that can be read to retrieve
@@ -99,7 +99,7 @@ impl Reader {
   fn Multistream(self: Ref<Reader>, ok: bool)
 
   /// Read implements [io.Reader], reading uncompressed bytes from its underlying reader.
-  fn Read(self: Ref<Reader>, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Reader>, mut p: Slice<byte>) -> Partial<int, error>
 
   /// Reset discards the [Reader] z's state and makes it equivalent to the
   /// result of its original state from [NewReader], but reading from r instead.
@@ -133,5 +133,5 @@ impl Writer {
 
   /// Write writes a compressed form of p to the underlying [io.Writer]. The
   /// compressed bytes are not necessarily flushed until the [Writer] is closed.
-  fn Write(self: Ref<Writer>, p: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
 }

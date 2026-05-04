@@ -34,10 +34,10 @@ pub fn Contains(s: string, substr: string) -> bool
 pub fn ContainsAny(s: string, chars: string) -> bool
 
 /// ContainsFunc reports whether any Unicode code points r within s satisfy f(r).
-pub fn ContainsFunc(s: string, f: fn(int32) -> bool) -> bool
+pub fn ContainsFunc(s: string, f: fn(rune) -> bool) -> bool
 
 /// ContainsRune reports whether the Unicode code point r is within s.
-pub fn ContainsRune(s: string, r: int32) -> bool
+pub fn ContainsRune(s: string, r: rune) -> bool
 
 /// Count counts the number of non-overlapping instances of substr in s.
 /// If substr is an empty string, Count returns 1 + the number of Unicode code points in s.
@@ -81,13 +81,13 @@ pub fn Fields(s: string) -> Slice<string>
 /// 
 /// FieldsFunc makes no guarantees about the order in which it calls f(c)
 /// and assumes that f always returns the same value for a given c.
-pub fn FieldsFunc(s: string, f: fn(int32) -> bool) -> Slice<string>
+pub fn FieldsFunc(s: string, f: fn(rune) -> bool) -> Slice<string>
 
 /// FieldsFuncSeq returns an iterator over substrings of s split around runs of
 /// Unicode code points satisfying f(c).
 /// The iterator yields the same strings that would be returned by [FieldsFunc](s),
 /// but without constructing the slice.
-pub fn FieldsFuncSeq(s: string, f: fn(int32) -> bool) -> iter.Seq<string>
+pub fn FieldsFuncSeq(s: string, f: fn(rune) -> bool) -> iter.Seq<string>
 
 /// FieldsSeq returns an iterator over substrings of s split around runs of
 /// whitespace characters, as defined by [unicode.IsSpace].
@@ -112,19 +112,19 @@ pub fn IndexAny(s: string, chars: string) -> Option<int>
 
 /// IndexByte returns the index of the first instance of c in s, or -1 if c is not present in s.
 #[go(sentinel_minus_one)]
-pub fn IndexByte(s: string, c: uint8) -> Option<int>
+pub fn IndexByte(s: string, c: byte) -> Option<int>
 
 /// IndexFunc returns the index into s of the first Unicode
 /// code point satisfying f(c), or -1 if none do.
 #[go(sentinel_minus_one)]
-pub fn IndexFunc(s: string, f: fn(int32) -> bool) -> Option<int>
+pub fn IndexFunc(s: string, f: fn(rune) -> bool) -> Option<int>
 
 /// IndexRune returns the index of the first instance of the Unicode code point
 /// r, or -1 if rune is not present in s.
 /// If r is [utf8.RuneError], it returns the first instance of any
 /// invalid UTF-8 byte sequence.
 #[go(sentinel_minus_one)]
-pub fn IndexRune(s: string, r: int32) -> Option<int>
+pub fn IndexRune(s: string, r: rune) -> Option<int>
 
 /// Join concatenates the elements of its first argument to create a single string. The separator
 /// string sep is placed between elements in the resulting string.
@@ -142,12 +142,12 @@ pub fn LastIndexAny(s: string, chars: string) -> Option<int>
 
 /// LastIndexByte returns the index of the last instance of c in s, or -1 if c is not present in s.
 #[go(sentinel_minus_one)]
-pub fn LastIndexByte(s: string, c: uint8) -> Option<int>
+pub fn LastIndexByte(s: string, c: byte) -> Option<int>
 
 /// LastIndexFunc returns the index into s of the last
 /// Unicode code point satisfying f(c), or -1 if none do.
 #[go(sentinel_minus_one)]
-pub fn LastIndexFunc(s: string, f: fn(int32) -> bool) -> Option<int>
+pub fn LastIndexFunc(s: string, f: fn(rune) -> bool) -> Option<int>
 
 /// Lines returns an iterator over the newline-terminated lines in the string s.
 /// The lines yielded by the iterator include their terminating newlines.
@@ -159,7 +159,7 @@ pub fn Lines(s: string) -> iter.Seq<string>
 /// Map returns a copy of the string s with all its characters modified
 /// according to the mapping function. If mapping returns a negative value, the character is
 /// dropped from the string with no replacement.
-pub fn Map(mapping: fn(int32) -> int32, s: string) -> string
+pub fn Map(mapping: fn(rune) -> rune, s: string) -> string
 
 pub fn NewReader(s: string) -> Ref<Reader>
 
@@ -289,7 +289,7 @@ pub fn Trim(s: string, cutset: string) -> string
 
 /// TrimFunc returns a slice of the string s with all leading
 /// and trailing Unicode code points c satisfying f(c) removed.
-pub fn TrimFunc(s: string, f: fn(int32) -> bool) -> string
+pub fn TrimFunc(s: string, f: fn(rune) -> bool) -> string
 
 /// TrimLeft returns a slice of the string s with all leading
 /// Unicode code points contained in cutset removed.
@@ -299,7 +299,7 @@ pub fn TrimLeft(s: string, cutset: string) -> string
 
 /// TrimLeftFunc returns a slice of the string s with all leading
 /// Unicode code points c satisfying f(c) removed.
-pub fn TrimLeftFunc(s: string, f: fn(int32) -> bool) -> string
+pub fn TrimLeftFunc(s: string, f: fn(rune) -> bool) -> string
 
 /// TrimPrefix returns s without the provided leading prefix string.
 /// If s doesn't start with prefix, s is returned unchanged.
@@ -313,7 +313,7 @@ pub fn TrimRight(s: string, cutset: string) -> string
 
 /// TrimRightFunc returns a slice of the string s with all trailing
 /// Unicode code points c satisfying f(c) removed.
-pub fn TrimRightFunc(s: string, f: fn(int32) -> bool) -> string
+pub fn TrimRightFunc(s: string, f: fn(rune) -> bool) -> string
 
 /// TrimSpace returns a slice of the string s, with all leading
 /// and trailing white space removed, as defined by Unicode.
@@ -360,17 +360,17 @@ impl Builder {
 
   /// Write appends the contents of p to b's buffer.
   /// Write always returns len(p), nil.
-  fn Write(self: Ref<Builder>, p: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Builder>, p: Slice<byte>) -> Partial<int, error>
 
   /// WriteByte appends the byte c to b's buffer.
   /// The returned error is always nil.
   #[allow(unused_result)]
-  fn WriteByte(self: Ref<Builder>, c: uint8) -> Result<(), error>
+  fn WriteByte(self: Ref<Builder>, c: byte) -> Result<(), error>
 
   /// WriteRune appends the UTF-8 encoding of Unicode code point r to b's buffer.
   /// It returns the length of r and a nil error.
   #[allow(unused_result)]
-  fn WriteRune(self: Ref<Builder>, r: int32) -> Result<int, error>
+  fn WriteRune(self: Ref<Builder>, r: rune) -> Result<int, error>
 
   /// WriteString appends the contents of s to b's buffer.
   /// It returns the length of s and a nil error.
@@ -384,16 +384,16 @@ impl Reader {
   fn Len(self: Ref<Reader>) -> int
 
   /// Read implements the [io.Reader] interface.
-  fn Read(self: Ref<Reader>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Reader>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// ReadAt implements the [io.ReaderAt] interface.
-  fn ReadAt(self: Ref<Reader>, mut b: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self: Ref<Reader>, mut b: Slice<byte>, off: int64) -> Partial<int, error>
 
   /// ReadByte implements the [io.ByteReader] interface.
-  fn ReadByte(self: Ref<Reader>) -> Result<uint8, error>
+  fn ReadByte(self: Ref<Reader>) -> Result<byte, error>
 
   /// ReadRune implements the [io.RuneReader] interface.
-  fn ReadRune(self: Ref<Reader>) -> Result<(int32, int), error>
+  fn ReadRune(self: Ref<Reader>) -> Result<(rune, int), error>
 
   /// Reset resets the [Reader] to be reading from s.
   fn Reset(self: Ref<Reader>, s: string)

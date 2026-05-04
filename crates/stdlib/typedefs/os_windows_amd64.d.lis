@@ -291,7 +291,7 @@ pub fn ReadDir(name: string) -> Result<Slice<fs.DirEntry>, error>
 /// A successful call returns err == nil, not err == EOF.
 /// Because ReadFile reads the whole file, it does not treat an EOF from Read
 /// as an error to be reported.
-pub fn ReadFile(name: string) -> Result<Slice<uint8>, error>
+pub fn ReadFile(name: string) -> Result<Slice<byte>, error>
 
 /// Readlink returns the destination of the named symbolic link.
 /// If there is an error, it will be of type [*PathError].
@@ -404,7 +404,7 @@ pub fn UserHomeDir() -> Result<string, error>
 /// otherwise WriteFile truncates it before writing, without changing permissions.
 /// Since WriteFile requires multiple system calls to complete, a failure mid-operation
 /// can leave the file in a partially written state.
-pub fn WriteFile(name: string, data: Slice<uint8>, perm: fs.FileMode) -> Result<(), error>
+pub fn WriteFile(name: string, data: Slice<byte>, perm: fs.FileMode) -> Result<(), error>
 
 /// A DirEntry is an entry read from a directory
 /// (using the [ReadDir] function or a [File.ReadDir] method).
@@ -791,13 +791,13 @@ impl File {
   /// Read reads up to len(b) bytes from the File and stores them in b.
   /// It returns the number of bytes read and any error encountered.
   /// At end of file, Read returns 0, io.EOF.
-  fn Read(self: Ref<File>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<File>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// ReadAt reads len(b) bytes from the File starting at byte offset off.
   /// It returns the number of bytes read and the error, if any.
   /// ReadAt always returns a non-nil error when n < len(b).
   /// At end of file, that error is io.EOF.
-  fn ReadAt(self: Ref<File>, mut b: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self: Ref<File>, mut b: Slice<byte>, off: int64) -> Partial<int, error>
 
   /// ReadDir reads the contents of the directory associated with the file f
   /// and returns a slice of [DirEntry] values in directory order.
@@ -918,14 +918,14 @@ impl File {
   /// Write writes len(b) bytes from b to the File.
   /// It returns the number of bytes written and an error, if any.
   /// Write returns a non-nil error when n != len(b).
-  fn Write(self: Ref<File>, b: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<File>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteAt writes len(b) bytes to the File starting at byte offset off.
   /// It returns the number of bytes written and an error, if any.
   /// WriteAt returns a non-nil error when n != len(b).
   /// 
   /// If file was opened with the [O_APPEND] flag, WriteAt returns an error.
-  fn WriteAt(self: Ref<File>, b: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn WriteAt(self: Ref<File>, b: Slice<byte>, off: int64) -> Partial<int, error>
 
   /// WriteString is like Write, but writes the contents of string s rather than
   /// a slice of bytes.
@@ -1087,7 +1087,7 @@ impl Root {
 
   /// ReadFile reads the named file in the root and returns its contents.
   /// See [ReadFile] for more details.
-  fn ReadFile(self: Ref<Root>, name: string) -> Result<Slice<uint8>, error>
+  fn ReadFile(self: Ref<Root>, name: string) -> Result<Slice<byte>, error>
 
   /// Readlink returns the destination of the named symbolic link in the root.
   /// See [Readlink] for more details.
@@ -1125,7 +1125,7 @@ impl Root {
   fn WriteFile(
     self: Ref<Root>,
     name: string,
-    data: Slice<uint8>,
+    data: Slice<byte>,
     perm: fs.FileMode,
   ) -> Result<(), error>
 }

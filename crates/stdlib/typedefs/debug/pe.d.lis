@@ -186,7 +186,7 @@ pub struct SectionHeader32 {
 }
 
 /// StringTable is a COFF string table.
-pub struct StringTable(Slice<uint8>)
+pub struct StringTable(Slice<byte>)
 
 /// Symbol is similar to [COFFSymbol] with Name field replaced
 /// by Go string. Symbol also does not have NumberOfAuxSymbols.
@@ -530,7 +530,7 @@ impl Section {
   /// 
   /// If s.Offset is 0, the section has no contents,
   /// and Data will always return a non-nil error.
-  fn Data(self: Ref<Section>) -> Result<Slice<uint8>, error>
+  fn Data(self: Ref<Section>) -> Result<Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the PE section s.
   /// 
@@ -538,7 +538,7 @@ impl Section {
   /// to the returned reader will return a non-nil error.
   fn Open(self: Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl StringTable {

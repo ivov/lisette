@@ -476,7 +476,7 @@ impl Value {
   /// Bytes returns v's underlying value.
   /// It panics if v's underlying value is not a slice of bytes or
   /// an addressable array of bytes.
-  fn Bytes(self) -> Slice<uint8>
+  fn Bytes(self) -> Slice<byte>
 
   /// Call calls the function v with the input arguments in.
   /// For example, if len(in) == 3, v.Call(in) represents the Go call v(in[0], in[1], in[2]).
@@ -805,7 +805,7 @@ impl Value {
   /// SetBytes sets v's underlying value.
   /// It panics if v's underlying value is not a slice of bytes
   /// or if [Value.CanSet] returns false.
-  fn SetBytes(self, x: Slice<uint8>)
+  fn SetBytes(self, x: Slice<byte>)
 
   /// SetCap sets v's capacity to n.
   /// It panics if v's Kind is not [Slice], or if n is smaller than the length or

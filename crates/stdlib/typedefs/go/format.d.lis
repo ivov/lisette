@@ -26,4 +26,4 @@ pub fn Node(dst: io.Writer, fset: Ref<token.FileSet>, node: Unknown) -> Result<(
 /// is applied to the result (such that it has the same leading and trailing
 /// space as src), and the result is indented by the same amount as the first
 /// line of src containing code. Imports are not sorted for partial source files.
-pub fn Source(src: Slice<uint8>) -> Result<Slice<uint8>, error>
+pub fn Source(src: Slice<byte>) -> Result<Slice<byte>, error>

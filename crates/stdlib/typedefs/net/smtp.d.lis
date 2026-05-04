@@ -46,13 +46,13 @@ pub fn SendMail(
   a: Auth,
   from: string,
   to: Slice<string>,
-  msg: Slice<uint8>,
+  msg: Slice<byte>,
 ) -> Result<(), error>
 
 /// Auth is implemented by an SMTP authentication mechanism.
 pub interface Auth {
-  fn Next(fromServer: Slice<uint8>, more: bool) -> Result<Slice<uint8>, error>
-  fn Start(server: Ref<ServerInfo>) -> Result<(string, Slice<uint8>), error>
+  fn Next(fromServer: Slice<byte>, more: bool) -> Result<Slice<byte>, error>
+  fn Start(server: Ref<ServerInfo>) -> Result<(string, Slice<byte>), error>
 }
 
 /// A Client represents a client connection to an SMTP server.

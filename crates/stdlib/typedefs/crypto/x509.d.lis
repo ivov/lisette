@@ -219,7 +219,7 @@ pub fn CreateCertificate(
   parent: Ref<Certificate>,
   pub_: Unknown,
   priv: Unknown,
-) -> Result<Slice<uint8>, error>
+) -> Result<Slice<byte>, error>
 
 /// CreateCertificateRequest creates a new certificate request based on a
 /// template. The following members of template are used:
@@ -244,7 +244,7 @@ pub fn CreateCertificateRequest(
   rand: io.Reader,
   template: Ref<CertificateRequest>,
   priv: Unknown,
-) -> Result<Slice<uint8>, error>
+) -> Result<Slice<byte>, error>
 
 /// CreateRevocationList creates a new X.509 v2 [Certificate] Revocation List,
 /// according to RFC 5280, based on template.
@@ -264,7 +264,7 @@ pub fn CreateRevocationList(
   template: Ref<RevocationList>,
   issuer: Ref<Certificate>,
   priv: crypto.Signer,
-) -> Result<Slice<uint8>, error>
+) -> Result<Slice<byte>, error>
 
 /// DecryptPEMBlock takes a PEM block encrypted according to RFC 1423 and the
 /// password used to encrypt it and returns a slice of decrypted DER encoded
@@ -278,7 +278,7 @@ pub fn CreateRevocationList(
 /// Deprecated: Legacy PEM encryption as specified in RFC 1423 is insecure by
 /// design. Since it does not authenticate the ciphertext, it is vulnerable to
 /// padding oracle attacks that can let an attacker recover the plaintext.
-pub fn DecryptPEMBlock(b: Ref<pem.Block>, password: Slice<uint8>) -> Result<Slice<uint8>, error>
+pub fn DecryptPEMBlock(b: Ref<pem.Block>, password: Slice<byte>) -> Result<Slice<byte>, error>
 
 /// EncryptPEMBlock returns a PEM block of the specified type holding the
 /// given DER encoded data encrypted with the specified algorithm and
@@ -290,8 +290,8 @@ pub fn DecryptPEMBlock(b: Ref<pem.Block>, password: Slice<uint8>) -> Result<Slic
 pub fn EncryptPEMBlock(
   rand: io.Reader,
   blockType: string,
-  data: Slice<uint8>,
-  password: Slice<uint8>,
+  data: Slice<byte>,
+  password: Slice<byte>,
   alg: PEMCipher,
 ) -> Result<Ref<pem.Block>, error>
 
@@ -308,7 +308,7 @@ pub fn IsEncryptedPEMBlock(b: Ref<pem.Block>) -> bool
 /// This kind of key is commonly encoded in PEM blocks of type "EC PRIVATE KEY".
 /// For a more flexible key format which is not EC specific, use
 /// [MarshalPKCS8PrivateKey].
-pub fn MarshalECPrivateKey(key: Ref<ecdsa.PrivateKey>) -> Result<Slice<uint8>, error>
+pub fn MarshalECPrivateKey(key: Ref<ecdsa.PrivateKey>) -> Result<Slice<byte>, error>
 
 /// MarshalPKCS1PrivateKey converts an [RSA] private key to PKCS #1, ASN.1 DER form.
 /// 
@@ -319,12 +319,12 @@ pub fn MarshalECPrivateKey(key: Ref<ecdsa.PrivateKey>) -> Result<Slice<uint8>, e
 /// The key must have passed validation by calling [rsa.PrivateKey.Validate]
 /// first. MarshalPKCS1PrivateKey calls [rsa.PrivateKey.Precompute], which may
 /// modify the key if not already precomputed.
-pub fn MarshalPKCS1PrivateKey(key: Ref<rsa.PrivateKey>) -> Slice<uint8>
+pub fn MarshalPKCS1PrivateKey(key: Ref<rsa.PrivateKey>) -> Slice<byte>
 
 /// MarshalPKCS1PublicKey converts an [RSA] public key to PKCS #1, ASN.1 DER form.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "RSA PUBLIC KEY".
-pub fn MarshalPKCS1PublicKey(key: Ref<rsa.PublicKey>) -> Slice<uint8>
+pub fn MarshalPKCS1PublicKey(key: Ref<rsa.PublicKey>) -> Slice<byte>
 
 /// MarshalPKCS8PrivateKey converts a private key to PKCS #8, ASN.1 DER form.
 /// 
@@ -335,7 +335,7 @@ pub fn MarshalPKCS1PublicKey(key: Ref<rsa.PublicKey>) -> Slice<uint8>
 /// This kind of key is commonly encoded in PEM blocks of type "PRIVATE KEY".
 /// 
 /// MarshalPKCS8PrivateKey runs [rsa.PrivateKey.Precompute] on RSA keys.
-pub fn MarshalPKCS8PrivateKey(key: Unknown) -> Result<Slice<uint8>, error>
+pub fn MarshalPKCS8PrivateKey(key: Unknown) -> Result<Slice<byte>, error>
 
 /// MarshalPKIXPublicKey converts a public key to PKIX, ASN.1 DER form.
 /// The encoded public key is a SubjectPublicKeyInfo structure
@@ -346,7 +346,7 @@ pub fn MarshalPKCS8PrivateKey(key: Unknown) -> Result<Slice<uint8>, error>
 /// Unsupported key types result in an error.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "PUBLIC KEY".
-pub fn MarshalPKIXPublicKey(pub_: Unknown) -> Result<Slice<uint8>, error>
+pub fn MarshalPKIXPublicKey(pub_: Unknown) -> Result<Slice<byte>, error>
 
 pub fn NewCertPool() -> Ref<CertPool>
 
@@ -358,23 +358,23 @@ pub fn OIDFromInts(oid: Slice<uint64>) -> Result<OID, error>
 /// garbage.
 /// 
 /// Deprecated: Use [ParseRevocationList] instead.
-pub fn ParseCRL(crlBytes: Slice<uint8>) -> Result<Ref<pkix.CertificateList>, error>
+pub fn ParseCRL(crlBytes: Slice<byte>) -> Result<Ref<pkix.CertificateList>, error>
 
-pub fn ParseCertificate(der: Slice<uint8>) -> Result<Ref<Certificate>, error>
+pub fn ParseCertificate(der: Slice<byte>) -> Result<Ref<Certificate>, error>
 
-pub fn ParseCertificateRequest(asn1Data: Slice<uint8>) -> Result<Ref<CertificateRequest>, error>
+pub fn ParseCertificateRequest(asn1Data: Slice<byte>) -> Result<Ref<CertificateRequest>, error>
 
-pub fn ParseCertificates(der: Slice<uint8>) -> Result<Slice<Ref<Certificate>>, error>
+pub fn ParseCertificates(der: Slice<byte>) -> Result<Slice<Ref<Certificate>>, error>
 
 /// ParseDERCRL parses a DER encoded CRL from the given bytes.
 /// 
 /// Deprecated: Use [ParseRevocationList] instead.
-pub fn ParseDERCRL(derBytes: Slice<uint8>) -> Result<Ref<pkix.CertificateList>, error>
+pub fn ParseDERCRL(derBytes: Slice<byte>) -> Result<Ref<pkix.CertificateList>, error>
 
 /// ParseECPrivateKey parses an EC private key in SEC 1, ASN.1 DER form.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "EC PRIVATE KEY".
-pub fn ParseECPrivateKey(der: Slice<uint8>) -> Result<Ref<ecdsa.PrivateKey>, error>
+pub fn ParseECPrivateKey(der: Slice<byte>) -> Result<Ref<ecdsa.PrivateKey>, error>
 
 pub fn ParseOID(oid: string) -> Result<OID, error>
 
@@ -384,12 +384,12 @@ pub fn ParseOID(oid: string) -> Result<OID, error>
 /// 
 /// Before Go 1.24, the CRT parameters were ignored and recomputed. To restore
 /// the old behavior, use the GODEBUG=x509rsacrt=0 environment variable.
-pub fn ParsePKCS1PrivateKey(der: Slice<uint8>) -> Result<Ref<rsa.PrivateKey>, error>
+pub fn ParsePKCS1PrivateKey(der: Slice<byte>) -> Result<Ref<rsa.PrivateKey>, error>
 
 /// ParsePKCS1PublicKey parses an [RSA] public key in PKCS #1, ASN.1 DER form.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "RSA PUBLIC KEY".
-pub fn ParsePKCS1PublicKey(der: Slice<uint8>) -> Result<Ref<rsa.PublicKey>, error>
+pub fn ParsePKCS1PublicKey(der: Slice<byte>) -> Result<Ref<rsa.PublicKey>, error>
 
 /// ParsePKCS8PrivateKey parses an unencrypted private key in PKCS #8, ASN.1 DER form.
 /// 
@@ -401,7 +401,7 @@ pub fn ParsePKCS1PublicKey(der: Slice<uint8>) -> Result<Ref<rsa.PublicKey>, erro
 /// 
 /// Before Go 1.24, the CRT parameters of RSA keys were ignored and recomputed.
 /// To restore the old behavior, use the GODEBUG=x509rsacrt=0 environment variable.
-pub fn ParsePKCS8PrivateKey(der: Slice<uint8>) -> Result<Unknown, error>
+pub fn ParsePKCS8PrivateKey(der: Slice<byte>) -> Result<Unknown, error>
 
 /// ParsePKIXPublicKey parses a public key in PKIX, ASN.1 DER form. The encoded
 /// public key is a SubjectPublicKeyInfo structure (see RFC 5280, Section 4.1).
@@ -411,9 +411,9 @@ pub fn ParsePKCS8PrivateKey(der: Slice<uint8>) -> Result<Unknown, error>
 /// More types might be supported in the future.
 /// 
 /// This kind of key is commonly encoded in PEM blocks of type "PUBLIC KEY".
-pub fn ParsePKIXPublicKey(derBytes: Slice<uint8>) -> Result<Unknown, error>
+pub fn ParsePKIXPublicKey(derBytes: Slice<byte>) -> Result<Unknown, error>
 
-pub fn ParseRevocationList(der: Slice<uint8>) -> Result<Ref<RevocationList>, error>
+pub fn ParseRevocationList(der: Slice<byte>) -> Result<Ref<RevocationList>, error>
 
 /// SetFallbackRoots sets the roots to use during certificate verification, if no
 /// custom roots are specified and a platform verifier or a system certificate
@@ -437,12 +437,12 @@ pub type CertPool
 
 /// A Certificate represents an X.509 certificate.
 pub struct Certificate {
-  pub Raw: Slice<uint8>,
-  pub RawTBSCertificate: Slice<uint8>,
-  pub RawSubjectPublicKeyInfo: Slice<uint8>,
-  pub RawSubject: Slice<uint8>,
-  pub RawIssuer: Slice<uint8>,
-  pub Signature: Slice<uint8>,
+  pub Raw: Slice<byte>,
+  pub RawTBSCertificate: Slice<byte>,
+  pub RawSubjectPublicKeyInfo: Slice<byte>,
+  pub RawSubject: Slice<byte>,
+  pub RawIssuer: Slice<byte>,
+  pub Signature: Slice<byte>,
   pub SignatureAlgorithm: SignatureAlgorithm,
   pub PublicKeyAlgorithm: PublicKeyAlgorithm,
   pub PublicKey: Unknown,
@@ -462,8 +462,8 @@ pub struct Certificate {
   pub IsCA: bool,
   pub MaxPathLen: int,
   pub MaxPathLenZero: bool,
-  pub SubjectKeyId: Slice<uint8>,
-  pub AuthorityKeyId: Slice<uint8>,
+  pub SubjectKeyId: Slice<byte>,
+  pub AuthorityKeyId: Slice<byte>,
   pub OCSPServer: Slice<string>,
   pub IssuingCertificateURL: Slice<string>,
   pub DNSNames: Slice<string>,
@@ -501,12 +501,12 @@ pub struct CertificateInvalidError {
 
 /// CertificateRequest represents a PKCS #10, certificate signature request.
 pub struct CertificateRequest {
-  pub Raw: Slice<uint8>,
-  pub RawTBSCertificateRequest: Slice<uint8>,
-  pub RawSubjectPublicKeyInfo: Slice<uint8>,
-  pub RawSubject: Slice<uint8>,
+  pub Raw: Slice<byte>,
+  pub RawTBSCertificateRequest: Slice<byte>,
+  pub RawSubjectPublicKeyInfo: Slice<byte>,
+  pub RawSubject: Slice<byte>,
   pub Version: int,
-  pub Signature: Slice<uint8>,
+  pub Signature: Slice<byte>,
   pub SignatureAlgorithm: SignatureAlgorithm,
   pub PublicKeyAlgorithm: PublicKeyAlgorithm,
   pub PublicKey: Unknown,
@@ -556,12 +556,12 @@ pub struct PublicKeyAlgorithm(int)
 /// RevocationList represents a [Certificate] Revocation List (CRL) as specified
 /// by RFC 5280.
 pub struct RevocationList {
-  pub Raw: Slice<uint8>,
-  pub RawTBSRevocationList: Slice<uint8>,
-  pub RawIssuer: Slice<uint8>,
+  pub Raw: Slice<byte>,
+  pub RawTBSRevocationList: Slice<byte>,
+  pub RawIssuer: Slice<byte>,
   pub Issuer: pkix.Name,
-  pub AuthorityKeyId: Slice<uint8>,
-  pub Signature: Slice<uint8>,
+  pub AuthorityKeyId: Slice<byte>,
+  pub Signature: Slice<byte>,
   pub SignatureAlgorithm: SignatureAlgorithm,
   pub RevokedCertificateEntries: Slice<RevocationListEntry>,
   pub RevokedCertificates: Slice<pkix.RevokedCertificate>,
@@ -575,7 +575,7 @@ pub struct RevocationList {
 /// RevocationListEntry represents an entry in the revokedCertificates
 /// sequence of a CRL.
 pub struct RevocationListEntry {
-  pub Raw: Slice<uint8>,
+  pub Raw: Slice<byte>,
   pub SerialNumber: Option<Ref<big.Int>>,
   pub RevocationTime: time.Time,
   pub ReasonCode: int,
@@ -672,7 +672,7 @@ impl CertPool {
   /// 
   /// On many Linux systems, /etc/ssl/cert.pem will contain the system wide set
   /// of root CAs in a format suitable for this function.
-  fn AppendCertsFromPEM(self: Ref<CertPool>, pemCerts: Slice<uint8>) -> bool
+  fn AppendCertsFromPEM(self: Ref<CertPool>, pemCerts: Slice<byte>) -> bool
 
   /// Clone returns a copy of s.
   fn Clone(self: Ref<CertPool>) -> Ref<CertPool>
@@ -685,7 +685,7 @@ impl CertPool {
   /// 
   /// Deprecated: if s was returned by [SystemCertPool], Subjects
   /// will not include the system roots.
-  fn Subjects(self: Ref<CertPool>) -> Slice<Slice<uint8>>
+  fn Subjects(self: Ref<CertPool>) -> Slice<Slice<byte>>
 }
 
 impl Certificate {
@@ -704,8 +704,8 @@ impl Certificate {
   fn CheckSignature(
     self: Ref<Certificate>,
     algo: SignatureAlgorithm,
-    signed: Slice<uint8>,
-    signature: Slice<uint8>,
+    signed: Slice<byte>,
+    signature: Slice<byte>,
   ) -> Result<(), error>
 
   /// CheckSignatureFrom verifies that the signature on c is a valid signature from parent.
@@ -726,7 +726,7 @@ impl Certificate {
     revokedCerts: Slice<pkix.RevokedCertificate>,
     now: time.Time,
     expiry: time.Time,
-  ) -> Result<Slice<uint8>, error>
+  ) -> Result<Slice<byte>, error>
 
   fn Equal(self: Ref<Certificate>, other: Ref<Certificate>) -> bool
 
@@ -799,10 +799,10 @@ impl InsecureAlgorithmError {
 
 impl OID {
   /// AppendBinary implements [encoding.BinaryAppender]
-  fn AppendBinary(self, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendBinary(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// AppendText implements [encoding.TextAppender]
-  fn AppendText(self, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendText(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// Equal returns true when oid and other represents the same Object Identifier.
   fn Equal(self, other: OID) -> bool
@@ -813,19 +813,19 @@ impl OID {
   fn EqualASN1OID(self, other: asn1.ObjectIdentifier) -> bool
 
   /// MarshalBinary implements [encoding.BinaryMarshaler]
-  fn MarshalBinary(self) -> Result<Slice<uint8>, error>
+  fn MarshalBinary(self) -> Result<Slice<byte>, error>
 
   /// MarshalText implements [encoding.TextMarshaler]
-  fn MarshalText(self) -> Result<Slice<uint8>, error>
+  fn MarshalText(self) -> Result<Slice<byte>, error>
 
   /// Strings returns the string representation of the Object Identifier.
   fn String(self) -> string
 
   /// UnmarshalBinary implements [encoding.BinaryUnmarshaler]
-  fn UnmarshalBinary(self: Ref<OID>, b: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalBinary(self: Ref<OID>, b: Slice<byte>) -> Result<(), error>
 
   /// UnmarshalText implements [encoding.TextUnmarshaler]
-  fn UnmarshalText(self: Ref<OID>, text: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalText(self: Ref<OID>, text: Slice<byte>) -> Result<(), error>
 }
 
 impl PublicKeyAlgorithm {

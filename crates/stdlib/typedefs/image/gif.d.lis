@@ -29,9 +29,9 @@ pub struct GIF {
   pub Image: Slice<Option<Ref<image.Paletted>>>,
   pub Delay: Slice<int>,
   pub LoopCount: int,
-  pub Disposal: Slice<uint8>,
+  pub Disposal: Slice<byte>,
   pub Config: image.Config,
-  pub BackgroundIndex: uint8,
+  pub BackgroundIndex: byte,
 }
 
 /// Options are the encoding parameters.

@@ -74,7 +74,7 @@ pub struct Format(int)
 /// should do so by creating a new Header and copying the fields
 /// that they are interested in preserving.
 pub struct Header {
-  pub Typeflag: uint8,
+  pub Typeflag: byte,
   pub Name: string,
   pub Linkname: string,
   pub Size: int64,
@@ -196,7 +196,7 @@ impl Reader {
   /// Calling Read on special types like [TypeLink], [TypeSymlink], [TypeChar],
   /// [TypeBlock], [TypeDir], and [TypeFifo] returns (0, [io.EOF]) regardless of what
   /// the [Header.Size] claims.
-  fn Read(self: Ref<Reader>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Reader>, mut b: Slice<byte>) -> Partial<int, error>
 }
 
 impl Writer {
@@ -226,7 +226,7 @@ impl Writer {
   /// Calling Write on special types like [TypeLink], [TypeSymlink], [TypeChar],
   /// [TypeBlock], [TypeDir], and [TypeFifo] returns (0, [ErrWriteTooLong]) regardless
   /// of what the [Header.Size] claims.
-  fn Write(self: Ref<Writer>, b: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Writer>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteHeader writes hdr and prepares to accept the file's contents.
   /// The Header.Size determines how many bytes can be written for the next file.

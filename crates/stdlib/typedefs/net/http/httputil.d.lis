@@ -27,15 +27,15 @@ import "go:time"
 /// 
 /// The documentation for [http.Request.Write] details which fields
 /// of req are included in the dump.
-pub fn DumpRequest(req: Ref<http.Request>, body: bool) -> Result<Slice<uint8>, error>
+pub fn DumpRequest(req: Ref<http.Request>, body: bool) -> Result<Slice<byte>, error>
 
 /// DumpRequestOut is like [DumpRequest] but for outgoing client requests. It
 /// includes any headers that the standard [http.Transport] adds, such as
 /// User-Agent.
-pub fn DumpRequestOut(req: Ref<http.Request>, body: bool) -> Result<Slice<uint8>, error>
+pub fn DumpRequestOut(req: Ref<http.Request>, body: bool) -> Result<Slice<byte>, error>
 
 /// DumpResponse is like DumpRequest but dumps a response.
-pub fn DumpResponse(resp: Ref<http.Response>, body: bool) -> Result<Slice<uint8>, error>
+pub fn DumpResponse(resp: Ref<http.Response>, body: bool) -> Result<Slice<byte>, error>
 
 /// NewChunkedReader returns a new chunkedReader that translates the data read from r
 /// out of HTTP "chunked" format before returning it.
@@ -69,8 +69,8 @@ pub fn NewSingleHostReverseProxy(target: Ref<url.URL>) -> Ref<ReverseProxy>
 /// A BufferPool is an interface for getting and returning temporary
 /// byte slices for use by [io.CopyBuffer].
 pub interface BufferPool {
-  fn Get() -> Slice<uint8>
-  fn Put(arg0: Slice<uint8>)
+  fn Get() -> Slice<byte>
+  fn Put(arg0: Slice<byte>)
 }
 
 /// ClientConn is an artifact of Go's early HTTP implementation.

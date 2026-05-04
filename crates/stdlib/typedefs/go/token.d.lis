@@ -455,7 +455,7 @@ impl File {
 
   /// SetLinesForContent sets the line offsets for the given file content.
   /// It ignores position-altering //line comments.
-  fn SetLinesForContent(self: Ref<File>, content: Slice<uint8>)
+  fn SetLinesForContent(self: Ref<File>, content: Slice<byte>)
 
   /// Size returns the size of file f as registered with AddFile.
   fn Size(self: Ref<File>) -> int

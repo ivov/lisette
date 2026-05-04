@@ -31,19 +31,19 @@ pub fn New512_256() -> hash.Hash
 
 /// Sum384 returns the SHA384 checksum of the data.
 #[go(array_return)]
-pub fn Sum384(data: Slice<uint8>) -> Slice<uint8>
+pub fn Sum384(data: Slice<byte>) -> Slice<byte>
 
 /// Sum512 returns the SHA512 checksum of the data.
 #[go(array_return)]
-pub fn Sum512(data: Slice<uint8>) -> Slice<uint8>
+pub fn Sum512(data: Slice<byte>) -> Slice<byte>
 
 /// Sum512_224 returns the Sum512/224 checksum of the data.
 #[go(array_return)]
-pub fn Sum512_224(data: Slice<uint8>) -> Slice<uint8>
+pub fn Sum512_224(data: Slice<byte>) -> Slice<byte>
 
 /// Sum512_256 returns the Sum512/256 checksum of the data.
 #[go(array_return)]
-pub fn Sum512_256(data: Slice<uint8>) -> Slice<uint8>
+pub fn Sum512_256(data: Slice<byte>) -> Slice<byte>
 
 pub const BlockSize = 128
 

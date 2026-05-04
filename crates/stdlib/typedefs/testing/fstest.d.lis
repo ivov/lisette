@@ -48,7 +48,7 @@ pub struct MapFS(Map<string, Ref<MapFile>>)
 
 /// A MapFile describes a single file in a [MapFS].
 pub struct MapFile {
-  pub Data: Slice<uint8>,
+  pub Data: Slice<byte>,
   pub Mode: fs.FileMode,
   pub ModTime: time.Time,
   pub Sys: Unknown,
@@ -67,7 +67,7 @@ impl MapFS {
 
   fn ReadDir(self, name: string) -> Result<Slice<fs.DirEntry>, error>
 
-  fn ReadFile(self, name: string) -> Result<Slice<uint8>, error>
+  fn ReadFile(self, name: string) -> Result<Slice<byte>, error>
 
   /// ReadLink returns the destination of the named symbolic link.
   fn ReadLink(self, name: string) -> Result<string, error>

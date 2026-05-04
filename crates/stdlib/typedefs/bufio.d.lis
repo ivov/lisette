@@ -18,7 +18,7 @@ pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 pub fn NewWriterSize(w: io.Writer, size: int) -> Ref<Writer>
 
 /// ScanBytes is a split function for a [Scanner] that returns each byte as a token.
-pub fn ScanBytes(data: Slice<uint8>, atEOF: bool) -> Result<(int, Slice<uint8>), error>
+pub fn ScanBytes(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), error>
 
 /// ScanLines is a split function for a [Scanner] that returns each line of
 /// text, stripped of any trailing end-of-line marker. The returned line may
@@ -26,7 +26,7 @@ pub fn ScanBytes(data: Slice<uint8>, atEOF: bool) -> Result<(int, Slice<uint8>),
 /// by one mandatory newline. In regular expression notation, it is `\r?\n`.
 /// The last non-empty line of input will be returned even if it has no
 /// newline.
-pub fn ScanLines(data: Slice<uint8>, atEOF: bool) -> Result<(int, Slice<uint8>), error>
+pub fn ScanLines(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), error>
 
 /// ScanRunes is a split function for a [Scanner] that returns each
 /// UTF-8-encoded rune as a token. The sequence of runes returned is
@@ -34,13 +34,13 @@ pub fn ScanLines(data: Slice<uint8>, atEOF: bool) -> Result<(int, Slice<uint8>),
 /// means that erroneous UTF-8 encodings translate to U+FFFD = "\xef\xbf\xbd".
 /// Because of the Scan interface, this makes it impossible for the client to
 /// distinguish correctly encoded replacement runes from encoding errors.
-pub fn ScanRunes(data: Slice<uint8>, atEOF: bool) -> Result<(int, Slice<uint8>), error>
+pub fn ScanRunes(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), error>
 
 /// ScanWords is a split function for a [Scanner] that returns each
 /// space-separated word of text, with surrounding spaces deleted. It will
 /// never return an empty string. The definition of space is set by
 /// unicode.IsSpace.
-pub fn ScanWords(data: Slice<uint8>, atEOF: bool) -> Result<(int, Slice<uint8>), error>
+pub fn ScanWords(data: Slice<byte>, atEOF: bool) -> Result<(int, Slice<byte>), error>
 
 /// ReadWriter stores pointers to a [Reader] and a [Writer].
 /// It implements [io.ReadWriter].
@@ -96,7 +96,7 @@ pub type Scanner
 /// The function is never called with an empty data slice unless atEOF
 /// is true. If atEOF is true, however, data may be non-empty and,
 /// as always, holds unprocessed text.
-pub type SplitFunc = fn(Slice<uint8>, bool) -> Result<(int, Slice<uint8>), error>
+pub type SplitFunc = fn(Slice<byte>, bool) -> Result<(int, Slice<byte>), error>
 
 /// Writer implements buffering for an [io.Writer] object.
 /// If an error occurs writing to a [Writer], no more data will be
@@ -148,7 +148,7 @@ impl ReadWriter {
   /// This buffer is intended to be appended to and
   /// passed to an immediately succeeding [Writer.Write] call.
   /// The buffer is only valid until the next write operation on b.
-  fn AvailableBuffer(self) -> Slice<uint8>
+  fn AvailableBuffer(self) -> Slice<byte>
 
   /// Discard skips the next n bytes, returning the number of bytes discarded.
   /// 
@@ -169,7 +169,7 @@ impl ReadWriter {
   /// 
   /// Calling Peek prevents a [Reader.UnreadByte] or [Reader.UnreadRune] call from succeeding
   /// until the next read operation.
-  fn Peek(self, n: int) -> Result<Slice<uint8>, error>
+  fn Peek(self, n: int) -> Result<Slice<byte>, error>
 
   /// Read reads data into p.
   /// It returns the number of bytes read into p.
@@ -178,11 +178,11 @@ impl ReadWriter {
   /// To read exactly len(p) bytes, use io.ReadFull(b, p).
   /// If the underlying [Reader] can return a non-zero count with io.EOF,
   /// then this Read method can do so as well; see the [io.Reader] docs.
-  fn Read(self, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self, mut p: Slice<byte>) -> Partial<int, error>
 
   /// ReadByte reads and returns a single byte.
   /// If no byte is available, returns an error.
-  fn ReadByte(self) -> Result<uint8, error>
+  fn ReadByte(self) -> Result<byte, error>
 
   /// ReadBytes reads until the first occurrence of delim in the input,
   /// returning a slice containing the data up to and including the delimiter.
@@ -191,7 +191,7 @@ impl ReadWriter {
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadBytes(self, delim: uint8) -> Result<Slice<uint8>, error>
+  fn ReadBytes(self, delim: byte) -> Result<Slice<byte>, error>
 
   /// ReadFrom implements [io.ReaderFrom]. If the underlying writer
   /// supports the ReadFrom method, this calls the underlying ReadFrom.
@@ -215,12 +215,12 @@ impl ReadWriter {
   /// Calling [Reader.UnreadByte] after ReadLine will always unread the last byte read
   /// (possibly a character belonging to the line end) even if that byte is not
   /// part of the line returned by ReadLine.
-  fn ReadLine(self) -> Result<(Slice<uint8>, bool), error>
+  fn ReadLine(self) -> Result<(Slice<byte>, bool), error>
 
   /// ReadRune reads a single UTF-8 encoded Unicode character and returns the
   /// rune and its size in bytes. If the encoded rune is invalid, it consumes one byte
   /// and returns unicode.ReplacementChar (U+FFFD) with a size of 1.
-  fn ReadRune(self) -> Result<(int32, int), error>
+  fn ReadRune(self) -> Result<(rune, int), error>
 
   /// ReadSlice reads until the first occurrence of delim in the input,
   /// returning a slice pointing at the bytes in the buffer.
@@ -232,7 +232,7 @@ impl ReadWriter {
   /// by the next I/O operation, most clients should use
   /// [Reader.ReadBytes] or ReadString instead.
   /// ReadSlice returns err != nil if and only if line does not end in delim.
-  fn ReadSlice(self, delim: uint8) -> Result<Slice<uint8>, error>
+  fn ReadSlice(self, delim: byte) -> Result<Slice<byte>, error>
 
   /// ReadString reads until the first occurrence of delim in the input,
   /// returning a string containing the data up to and including the delimiter.
@@ -241,7 +241,7 @@ impl ReadWriter {
   /// ReadString returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadString(self, delim: uint8) -> Result<string, error>
+  fn ReadString(self, delim: byte) -> Result<string, error>
 
   /// UnreadByte unreads the last byte. Only the most recently read byte can be unread.
   /// 
@@ -260,14 +260,14 @@ impl ReadWriter {
   /// It returns the number of bytes written.
   /// If nn < len(p), it also returns an error explaining
   /// why the write is short.
-  fn Write(self, p: Slice<uint8>) -> Partial<int, error>
+  fn Write(self, p: Slice<byte>) -> Partial<int, error>
 
   /// WriteByte writes a single byte.
-  fn WriteByte(self, c: uint8) -> Result<(), error>
+  fn WriteByte(self, c: byte) -> Result<(), error>
 
   /// WriteRune writes a single Unicode code point, returning
   /// the number of bytes written and any error.
-  fn WriteRune(self, r: int32) -> Result<int, error>
+  fn WriteRune(self, r: rune) -> Result<int, error>
 
   /// WriteString writes a string.
   /// It returns the number of bytes written.
@@ -301,7 +301,7 @@ impl Reader {
   /// 
   /// Calling Peek prevents a [Reader.UnreadByte] or [Reader.UnreadRune] call from succeeding
   /// until the next read operation.
-  fn Peek(self: Ref<Reader>, n: int) -> Result<Slice<uint8>, error>
+  fn Peek(self: Ref<Reader>, n: int) -> Result<Slice<byte>, error>
 
   /// Read reads data into p.
   /// It returns the number of bytes read into p.
@@ -310,11 +310,11 @@ impl Reader {
   /// To read exactly len(p) bytes, use io.ReadFull(b, p).
   /// If the underlying [Reader] can return a non-zero count with io.EOF,
   /// then this Read method can do so as well; see the [io.Reader] docs.
-  fn Read(self: Ref<Reader>, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Reader>, mut p: Slice<byte>) -> Partial<int, error>
 
   /// ReadByte reads and returns a single byte.
   /// If no byte is available, returns an error.
-  fn ReadByte(self: Ref<Reader>) -> Result<uint8, error>
+  fn ReadByte(self: Ref<Reader>) -> Result<byte, error>
 
   /// ReadBytes reads until the first occurrence of delim in the input,
   /// returning a slice containing the data up to and including the delimiter.
@@ -323,7 +323,7 @@ impl Reader {
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadBytes(self: Ref<Reader>, delim: uint8) -> Result<Slice<uint8>, error>
+  fn ReadBytes(self: Ref<Reader>, delim: byte) -> Result<Slice<byte>, error>
 
   /// ReadLine is a low-level line-reading primitive. Most callers should use
   /// [Reader.ReadBytes]('\n') or [Reader.ReadString]('\n') instead or use a [Scanner].
@@ -341,12 +341,12 @@ impl Reader {
   /// Calling [Reader.UnreadByte] after ReadLine will always unread the last byte read
   /// (possibly a character belonging to the line end) even if that byte is not
   /// part of the line returned by ReadLine.
-  fn ReadLine(self: Ref<Reader>) -> Result<(Slice<uint8>, bool), error>
+  fn ReadLine(self: Ref<Reader>) -> Result<(Slice<byte>, bool), error>
 
   /// ReadRune reads a single UTF-8 encoded Unicode character and returns the
   /// rune and its size in bytes. If the encoded rune is invalid, it consumes one byte
   /// and returns unicode.ReplacementChar (U+FFFD) with a size of 1.
-  fn ReadRune(self: Ref<Reader>) -> Result<(int32, int), error>
+  fn ReadRune(self: Ref<Reader>) -> Result<(rune, int), error>
 
   /// ReadSlice reads until the first occurrence of delim in the input,
   /// returning a slice pointing at the bytes in the buffer.
@@ -358,7 +358,7 @@ impl Reader {
   /// by the next I/O operation, most clients should use
   /// [Reader.ReadBytes] or ReadString instead.
   /// ReadSlice returns err != nil if and only if line does not end in delim.
-  fn ReadSlice(self: Ref<Reader>, delim: uint8) -> Result<Slice<uint8>, error>
+  fn ReadSlice(self: Ref<Reader>, delim: byte) -> Result<Slice<byte>, error>
 
   /// ReadString reads until the first occurrence of delim in the input,
   /// returning a string containing the data up to and including the delimiter.
@@ -367,7 +367,7 @@ impl Reader {
   /// ReadString returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadString(self: Ref<Reader>, delim: uint8) -> Result<string, error>
+  fn ReadString(self: Ref<Reader>, delim: byte) -> Result<string, error>
 
   /// Reset discards any buffered data, resets all state, and switches
   /// the buffered reader to read from r.
@@ -412,12 +412,12 @@ impl Scanner {
   /// maximum token size to [MaxScanTokenSize].
   /// 
   /// Buffer panics if it is called after scanning has started.
-  fn Buffer(self: Ref<Scanner>, mut buf: Slice<uint8>, max: int)
+  fn Buffer(self: Ref<Scanner>, mut buf: Slice<byte>, max: int)
 
   /// Bytes returns the most recent token generated by a call to [Scanner.Scan].
   /// The underlying array may point to data that will be overwritten
   /// by a subsequent call to Scan. It does no allocation.
-  fn Bytes(self: Ref<Scanner>) -> Slice<uint8>
+  fn Bytes(self: Ref<Scanner>) -> Slice<byte>
 
   /// Err returns the first non-EOF error that was encountered by the [Scanner].
   fn Err(self: Ref<Scanner>) -> Option<error>
@@ -452,7 +452,7 @@ impl Writer {
   /// This buffer is intended to be appended to and
   /// passed to an immediately succeeding [Writer.Write] call.
   /// The buffer is only valid until the next write operation on b.
-  fn AvailableBuffer(self: Ref<Writer>) -> Slice<uint8>
+  fn AvailableBuffer(self: Ref<Writer>) -> Slice<byte>
 
   /// Buffered returns the number of bytes that have been written into the current buffer.
   fn Buffered(self: Ref<Writer>) -> int
@@ -481,14 +481,14 @@ impl Writer {
   /// It returns the number of bytes written.
   /// If nn < len(p), it also returns an error explaining
   /// why the write is short.
-  fn Write(self: Ref<Writer>, p: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<Writer>, p: Slice<byte>) -> Partial<int, error>
 
   /// WriteByte writes a single byte.
-  fn WriteByte(self: Ref<Writer>, c: uint8) -> Result<(), error>
+  fn WriteByte(self: Ref<Writer>, c: byte) -> Result<(), error>
 
   /// WriteRune writes a single Unicode code point, returning
   /// the number of bytes written and any error.
-  fn WriteRune(self: Ref<Writer>, r: int32) -> Result<int, error>
+  fn WriteRune(self: Ref<Writer>, r: rune) -> Result<int, error>
 
   /// WriteString writes a string.
   /// It returns the number of bytes written.

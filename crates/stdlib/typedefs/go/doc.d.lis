@@ -180,14 +180,14 @@ impl Package {
   /// To customize details of the HTML, use [Package.Printer]
   /// to obtain a [comment.Printer], and configure it
   /// before calling its HTML method.
-  fn HTML(self: Ref<Package>, text: string) -> Slice<uint8>
+  fn HTML(self: Ref<Package>, text: string) -> Slice<byte>
 
   /// Markdown returns formatted Markdown for the doc comment text.
   /// 
   /// To customize details of the Markdown, use [Package.Printer]
   /// to obtain a [comment.Printer], and configure it
   /// before calling its Markdown method.
-  fn Markdown(self: Ref<Package>, text: string) -> Slice<uint8>
+  fn Markdown(self: Ref<Package>, text: string) -> Slice<byte>
 
   /// Parser returns a doc comment parser configured
   /// for parsing doc comments from package p.
@@ -216,5 +216,5 @@ impl Package {
   /// To customize details of the formatting, use [Package.Printer]
   /// to obtain a [comment.Printer], and configure it
   /// before calling its Text method.
-  fn Text(self: Ref<Package>, text: string) -> Slice<uint8>
+  fn Text(self: Ref<Package>, text: string) -> Slice<byte>
 }

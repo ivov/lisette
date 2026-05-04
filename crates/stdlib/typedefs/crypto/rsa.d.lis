@@ -22,9 +22,9 @@ pub fn DecryptOAEP(
   hash: hash.Hash,
   random: io.Reader,
   priv: Ref<PrivateKey>,
-  ciphertext: Slice<uint8>,
-  label: Slice<uint8>,
-) -> Result<Slice<uint8>, error>
+  ciphertext: Slice<byte>,
+  label: Slice<byte>,
+) -> Result<Slice<byte>, error>
 
 /// DecryptPKCS1v15 decrypts a plaintext using RSA and the padding scheme from PKCS #1 v1.5.
 /// The random parameter is legacy and ignored, and it can be nil.
@@ -37,8 +37,8 @@ pub fn DecryptOAEP(
 pub fn DecryptPKCS1v15(
   random: io.Reader,
   priv: Ref<PrivateKey>,
-  ciphertext: Slice<uint8>,
-) -> Result<Slice<uint8>, error>
+  ciphertext: Slice<byte>,
+) -> Result<Slice<byte>, error>
 
 /// DecryptPKCS1v15SessionKey decrypts a session key using RSA and the padding
 /// scheme from PKCS #1 v1.5. The random parameter is legacy and ignored, and it
@@ -77,8 +77,8 @@ pub fn DecryptPKCS1v15(
 pub fn DecryptPKCS1v15SessionKey(
   random: io.Reader,
   priv: Ref<PrivateKey>,
-  ciphertext: Slice<uint8>,
-  key: Slice<uint8>,
+  ciphertext: Slice<byte>,
+  key: Slice<byte>,
 ) -> Result<(), error>
 
 /// EncryptOAEP encrypts the given message with RSA-OAEP.
@@ -103,9 +103,9 @@ pub fn EncryptOAEP(
   hash: hash.Hash,
   random: io.Reader,
   pub_: Ref<PublicKey>,
-  msg: Slice<uint8>,
-  label: Slice<uint8>,
-) -> Result<Slice<uint8>, error>
+  msg: Slice<byte>,
+  label: Slice<byte>,
+) -> Result<Slice<byte>, error>
 
 /// EncryptPKCS1v15 encrypts the given message with RSA and the padding
 /// scheme from PKCS #1 v1.5.  The message must be no longer than the
@@ -123,8 +123,8 @@ pub fn EncryptOAEP(
 pub fn EncryptPKCS1v15(
   random: io.Reader,
   pub_: Ref<PublicKey>,
-  msg: Slice<uint8>,
-) -> Result<Slice<uint8>, error>
+  msg: Slice<byte>,
+) -> Result<Slice<byte>, error>
 
 pub fn GenerateKey(random: io.Reader, bits: int) -> Result<Ref<PrivateKey>, error>
 
@@ -146,8 +146,8 @@ pub fn SignPKCS1v15(
   random: io.Reader,
   priv: Ref<PrivateKey>,
   hash: crypto.Hash,
-  hashed: Slice<uint8>,
-) -> Result<Slice<uint8>, error>
+  hashed: Slice<byte>,
+) -> Result<Slice<byte>, error>
 
 /// SignPSS calculates the signature of digest using PSS.
 /// 
@@ -162,9 +162,9 @@ pub fn SignPSS(
   rand: io.Reader,
   priv: Ref<PrivateKey>,
   hash: crypto.Hash,
-  digest: Slice<uint8>,
+  digest: Slice<byte>,
   opts: Ref<PSSOptions>,
-) -> Result<Slice<uint8>, error>
+) -> Result<Slice<byte>, error>
 
 /// VerifyPKCS1v15 verifies an RSA PKCS #1 v1.5 signature.
 /// hashed is the result of hashing the input message using the given hash
@@ -177,8 +177,8 @@ pub fn SignPSS(
 pub fn VerifyPKCS1v15(
   pub_: Ref<PublicKey>,
   hash: crypto.Hash,
-  hashed: Slice<uint8>,
-  sig: Slice<uint8>,
+  hashed: Slice<byte>,
+  sig: Slice<byte>,
 ) -> Result<(), error>
 
 /// VerifyPSS verifies a PSS signature.
@@ -193,8 +193,8 @@ pub fn VerifyPKCS1v15(
 pub fn VerifyPSS(
   pub_: Ref<PublicKey>,
   hash: crypto.Hash,
-  digest: Slice<uint8>,
-  sig: Slice<uint8>,
+  digest: Slice<byte>,
+  sig: Slice<byte>,
   opts: Ref<PSSOptions>,
 ) -> Result<(), error>
 
@@ -210,7 +210,7 @@ pub struct CRTValue {
 pub struct OAEPOptions {
   pub Hash: crypto.Hash,
   pub MGFHash: crypto.Hash,
-  pub Label: Slice<uint8>,
+  pub Label: Slice<byte>,
 }
 
 /// PKCS1v15DecryptOptions is for passing options to PKCS #1 v1.5 decryption using
@@ -278,9 +278,9 @@ impl PrivateKey {
   fn Decrypt(
     self: Ref<PrivateKey>,
     rand: io.Reader,
-    ciphertext: Slice<uint8>,
+    ciphertext: Slice<byte>,
     opts: crypto.DecrypterOpts,
-  ) -> Result<Slice<uint8>, error>
+  ) -> Result<Slice<byte>, error>
 
   /// Equal reports whether priv and x have equivalent values. It ignores
   /// Precomputed values.
@@ -304,9 +304,9 @@ impl PrivateKey {
   fn Sign(
     self: Ref<PrivateKey>,
     rand: io.Reader,
-    digest: Slice<uint8>,
+    digest: Slice<byte>,
     opts: crypto.SignerOpts,
-  ) -> Result<Slice<uint8>, error>
+  ) -> Result<Slice<byte>, error>
 
   /// Size returns the modulus size in bytes. Raw signatures and ciphertexts
   /// for or by this public key will have the same size.

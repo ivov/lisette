@@ -132,7 +132,7 @@ pub struct NullBool {
 /// NullByte implements the [Scanner] interface so
 /// it can be used as a scan destination, similar to [NullString].
 pub struct NullByte {
-  pub Byte: uint8,
+  pub Byte: byte,
   pub Valid: bool,
 }
 
@@ -209,7 +209,7 @@ pub struct Out {
 /// RawBytes is a byte slice that holds a reference to memory owned by
 /// the database itself. After a [Rows.Scan] into a RawBytes, the slice is only
 /// valid until the next call to [Rows.Next], [Rows.Scan], or [Rows.Close].
-pub struct RawBytes(Slice<uint8>)
+pub struct RawBytes(Slice<byte>)
 
 /// A Result summarizes an executed SQL command.
 pub interface Result {

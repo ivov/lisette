@@ -6,29 +6,29 @@
 /// AppendRune appends the UTF-16 encoding of the Unicode code point r
 /// to the end of p and returns the extended buffer. If the rune is not
 /// a valid Unicode code point, it appends the encoding of U+FFFD.
-pub fn AppendRune(mut a: Slice<uint16>, r: int32) -> Slice<uint16>
+pub fn AppendRune(mut a: Slice<uint16>, r: rune) -> Slice<uint16>
 
 /// Decode returns the Unicode code point sequence represented
 /// by the UTF-16 encoding s.
-pub fn Decode(s: Slice<uint16>) -> Slice<int32>
+pub fn Decode(s: Slice<uint16>) -> Slice<rune>
 
 /// DecodeRune returns the UTF-16 decoding of a surrogate pair.
 /// If the pair is not a valid UTF-16 surrogate pair, DecodeRune returns
 /// the Unicode replacement code point U+FFFD.
-pub fn DecodeRune(r1: int32, r2: int32) -> int32
+pub fn DecodeRune(r1: rune, r2: rune) -> rune
 
 /// Encode returns the UTF-16 encoding of the Unicode code point sequence s.
-pub fn Encode(s: Slice<int32>) -> Slice<uint16>
+pub fn Encode(s: Slice<rune>) -> Slice<uint16>
 
 /// EncodeRune returns the UTF-16 surrogate pair r1, r2 for the given rune.
 /// If the rune is not a valid Unicode code point or does not need encoding,
 /// EncodeRune returns U+FFFD, U+FFFD.
-pub fn EncodeRune(r: int32) -> (int32, int32)
+pub fn EncodeRune(r: rune) -> (rune, rune)
 
 /// IsSurrogate reports whether the specified Unicode code point
 /// can appear in a surrogate pair.
-pub fn IsSurrogate(r: int32) -> bool
+pub fn IsSurrogate(r: rune) -> bool
 
 /// RuneLen returns the number of 16-bit words in the UTF-16 encoding of the rune.
 /// It returns -1 if the rune is not a valid value to encode in UTF-16.
-pub fn RuneLen(r: int32) -> int
+pub fn RuneLen(r: rune) -> int

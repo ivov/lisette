@@ -20,7 +20,7 @@ pub fn Prime(rand: io.Reader, bits: int) -> Result<Ref<big.Int>, error>
 /// Read calls [io.ReadFull] on [Reader] and crashes the program irrecoverably if
 /// an error is returned. The default Reader uses operating system APIs that are
 /// documented to never return an error on all but legacy Linux systems.
-pub fn Read(mut b: Slice<uint8>) -> Result<int, error>
+pub fn Read(mut b: Slice<byte>) -> Result<int, error>
 
 /// Text returns a cryptographically random string using the standard RFC 4648 base32 alphabet
 /// for use when a secret string, token, password, or other text is needed.

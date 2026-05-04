@@ -170,7 +170,7 @@ pub fn SetTraceback(level: string)
 
 /// Stack returns a formatted stack trace of the goroutine that calls it.
 /// It calls [runtime.Stack] with a large enough buffer to capture the entire trace.
-pub fn Stack() -> Slice<uint8>
+pub fn Stack() -> Slice<byte>
 
 /// WriteHeapDump writes a description of the heap and the objects in
 /// it to the given file descriptor.

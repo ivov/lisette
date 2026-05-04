@@ -5,7 +5,7 @@
 
 pub fn Alpha() -> Ref<Widget>
 
-pub fn Append(data: Slice<uint8>) -> Ref<Builder>
+pub fn Append(data: Slice<byte>) -> Ref<Builder>
 
 pub fn Beta() -> Ref<Widget>
 
@@ -75,7 +75,7 @@ pub struct Widget {
 
 impl Builder {
   #[allow(unused_value)]
-  fn Append(self: Ref<Builder>, data: Slice<uint8>) -> Ref<Builder>
+  fn Append(self: Ref<Builder>, data: Slice<byte>) -> Ref<Builder>
   #[allow(unused_value)]
   fn Reset(self: Ref<Builder>) -> Ref<Builder>
   #[allow(unused_value)]

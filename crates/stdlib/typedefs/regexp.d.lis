@@ -12,7 +12,7 @@ pub fn CompilePOSIX(expr: string) -> Result<Ref<Regexp>, error>
 /// Match reports whether the byte slice b
 /// contains any match of the regular expression pattern.
 /// More complicated queries need to use [Compile] and the full [Regexp] interface.
-pub fn Match(pattern: string, b: Slice<uint8>) -> Result<bool, error>
+pub fn Match(pattern: string, b: Slice<byte>) -> Result<bool, error>
 
 /// MatchReader reports whether the text returned by the [io.RuneReader]
 /// contains any match of the regular expression pattern.
@@ -45,7 +45,7 @@ impl Regexp {
   /// Note that the output is lossy in some cases: This method does not indicate
   /// POSIX regular expressions (i.e. those compiled by calling [CompilePOSIX]), or
   /// those for which the [Regexp.Longest] method has been called.
-  fn AppendText(self: Ref<Regexp>, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendText(self: Ref<Regexp>, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// Copy returns a new [Regexp] object copied from re.
   /// Calling [Regexp.Longest] on one copy does not affect another.
@@ -76,38 +76,38 @@ impl Regexp {
   /// To insert a literal $ in the output, use $$ in the template.
   fn Expand(
     self: Ref<Regexp>,
-    mut dst: Slice<uint8>,
-    template: Slice<uint8>,
-    src: Slice<uint8>,
+    mut dst: Slice<byte>,
+    template: Slice<byte>,
+    src: Slice<byte>,
     match_: Slice<int>,
-  ) -> Slice<uint8>
+  ) -> Slice<byte>
 
   /// ExpandString is like [Regexp.Expand] but the template and source are strings.
   /// It appends to and returns a byte slice in order to give the calling
   /// code control over allocation.
   fn ExpandString(
     self: Ref<Regexp>,
-    mut dst: Slice<uint8>,
+    mut dst: Slice<byte>,
     template: string,
     src: string,
     match_: Slice<int>,
-  ) -> Slice<uint8>
+  ) -> Slice<byte>
 
   /// Find returns a slice holding the text of the leftmost match in b of the regular expression.
   /// A return value of nil indicates no match.
-  fn Find(self: Ref<Regexp>, b: Slice<uint8>) -> Slice<uint8>
+  fn Find(self: Ref<Regexp>, b: Slice<byte>) -> Slice<byte>
 
   /// FindAll is the 'All' version of [Regexp.Find]; it returns a slice of all successive
   /// matches of the expression, as defined by the 'All' description in the
   /// package comment.
   /// A return value of nil indicates no match.
-  fn FindAll(self: Ref<Regexp>, b: Slice<uint8>, n: int) -> Slice<Slice<uint8>>
+  fn FindAll(self: Ref<Regexp>, b: Slice<byte>, n: int) -> Slice<Slice<byte>>
 
   /// FindAllIndex is the 'All' version of [Regexp.FindIndex]; it returns a slice of all
   /// successive matches of the expression, as defined by the 'All' description
   /// in the package comment.
   /// A return value of nil indicates no match.
-  fn FindAllIndex(self: Ref<Regexp>, b: Slice<uint8>, n: int) -> Slice<Slice<int>>
+  fn FindAllIndex(self: Ref<Regexp>, b: Slice<byte>, n: int) -> Slice<Slice<int>>
 
   /// FindAllString is the 'All' version of [Regexp.FindString]; it returns a slice of all
   /// successive matches of the expression, as defined by the 'All' description
@@ -138,19 +138,19 @@ impl Regexp {
   /// of all successive matches of the expression, as defined by the 'All'
   /// description in the package comment.
   /// A return value of nil indicates no match.
-  fn FindAllSubmatch(self: Ref<Regexp>, b: Slice<uint8>, n: int) -> Slice<Slice<Slice<uint8>>>
+  fn FindAllSubmatch(self: Ref<Regexp>, b: Slice<byte>, n: int) -> Slice<Slice<Slice<byte>>>
 
   /// FindAllSubmatchIndex is the 'All' version of [Regexp.FindSubmatchIndex]; it returns
   /// a slice of all successive matches of the expression, as defined by the
   /// 'All' description in the package comment.
   /// A return value of nil indicates no match.
-  fn FindAllSubmatchIndex(self: Ref<Regexp>, b: Slice<uint8>, n: int) -> Slice<Slice<int>>
+  fn FindAllSubmatchIndex(self: Ref<Regexp>, b: Slice<byte>, n: int) -> Slice<Slice<int>>
 
   /// FindIndex returns a two-element slice of integers defining the location of
   /// the leftmost match in b of the regular expression. The match itself is at
   /// b[loc[0]:loc[1]].
   /// A return value of nil indicates no match.
-  fn FindIndex(self: Ref<Regexp>, b: Slice<uint8>) -> Slice<int>
+  fn FindIndex(self: Ref<Regexp>, b: Slice<byte>) -> Slice<int>
 
   /// FindReaderIndex returns a two-element slice of integers defining the
   /// location of the leftmost match of the regular expression in text read from
@@ -198,14 +198,14 @@ impl Regexp {
   /// subexpressions, as defined by the 'Submatch' descriptions in the package
   /// comment.
   /// A return value of nil indicates no match.
-  fn FindSubmatch(self: Ref<Regexp>, b: Slice<uint8>) -> Slice<Slice<uint8>>
+  fn FindSubmatch(self: Ref<Regexp>, b: Slice<byte>) -> Slice<Slice<byte>>
 
   /// FindSubmatchIndex returns a slice holding the index pairs identifying the
   /// leftmost match of the regular expression in b and the matches, if any, of
   /// its subexpressions, as defined by the 'Submatch' and 'Index' descriptions
   /// in the package comment.
   /// A return value of nil indicates no match.
-  fn FindSubmatchIndex(self: Ref<Regexp>, b: Slice<uint8>) -> Slice<int>
+  fn FindSubmatchIndex(self: Ref<Regexp>, b: Slice<byte>) -> Slice<int>
 
   /// LiteralPrefix returns a literal string that must begin any match
   /// of the regular expression re. It returns the boolean true if the
@@ -224,11 +224,11 @@ impl Regexp {
   /// matches that of calling the [Regexp.AppendText] method.
   /// 
   /// See [Regexp.AppendText] for more information.
-  fn MarshalText(self: Ref<Regexp>) -> Result<Slice<uint8>, error>
+  fn MarshalText(self: Ref<Regexp>) -> Result<Slice<byte>, error>
 
   /// Match reports whether the byte slice b
   /// contains any match of the regular expression re.
-  fn Match(self: Ref<Regexp>, b: Slice<uint8>) -> bool
+  fn Match(self: Ref<Regexp>, b: Slice<byte>) -> bool
 
   /// MatchReader reports whether the text returned by the [io.RuneReader]
   /// contains any match of the regular expression re.
@@ -244,7 +244,7 @@ impl Regexp {
   /// ReplaceAll returns a copy of src, replacing matches of the [Regexp]
   /// with the replacement text repl.
   /// Inside repl, $ signs are interpreted as in [Regexp.Expand].
-  fn ReplaceAll(self: Ref<Regexp>, src: Slice<uint8>, repl: Slice<uint8>) -> Slice<uint8>
+  fn ReplaceAll(self: Ref<Regexp>, src: Slice<byte>, repl: Slice<byte>) -> Slice<byte>
 
   /// ReplaceAllFunc returns a copy of src in which all matches of the
   /// [Regexp] have been replaced by the return value of function repl applied
@@ -252,14 +252,14 @@ impl Regexp {
   /// directly, without using [Regexp.Expand].
   fn ReplaceAllFunc(
     self: Ref<Regexp>,
-    src: Slice<uint8>,
-    repl: fn(Slice<uint8>) -> Slice<uint8>,
-  ) -> Slice<uint8>
+    src: Slice<byte>,
+    repl: fn(Slice<byte>) -> Slice<byte>,
+  ) -> Slice<byte>
 
   /// ReplaceAllLiteral returns a copy of src, replacing matches of the [Regexp]
   /// with the replacement bytes repl. The replacement repl is substituted directly,
   /// without using [Regexp.Expand].
-  fn ReplaceAllLiteral(self: Ref<Regexp>, src: Slice<uint8>, repl: Slice<uint8>) -> Slice<uint8>
+  fn ReplaceAllLiteral(self: Ref<Regexp>, src: Slice<byte>, repl: Slice<byte>) -> Slice<byte>
 
   /// ReplaceAllLiteralString returns a copy of src, replacing matches of the [Regexp]
   /// with the replacement string repl. The replacement repl is substituted directly,
@@ -320,5 +320,5 @@ impl Regexp {
 
   /// UnmarshalText implements [encoding.TextUnmarshaler] by calling
   /// [Compile] on the encoded value.
-  fn UnmarshalText(self: Ref<Regexp>, text: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalText(self: Ref<Regexp>, text: Slice<byte>) -> Result<(), error>
 }

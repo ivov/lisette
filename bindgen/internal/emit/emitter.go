@@ -341,7 +341,8 @@ func (e *Emitter) shouldAllowUnusedResult(qualifiedName, methodName string, resu
 	case "Close", "Flush":
 		return len(result.Params) == 0 && result.ReturnType == "Result<(), error>"
 	case "Write":
-		return len(result.Params) == 1 && result.Params[0].Type == "Slice<uint8>" &&
+		return len(result.Params) == 1 &&
+			(result.Params[0].Type == "Slice<byte>" || result.Params[0].Type == "Slice<uint8>") &&
 			result.ReturnType == "Result<int, error>"
 	}
 

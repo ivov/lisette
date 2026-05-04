@@ -127,9 +127,9 @@ pub fn FileListener(f: Ref<os.File>) -> Result<Listener, error>
 /// Closing c does not affect f, and closing f does not affect c.
 pub fn FilePacketConn(f: Ref<os.File>) -> Result<PacketConn, error>
 
-pub fn IPv4(a: uint8, b: uint8, c: uint8, d: uint8) -> IP
+pub fn IPv4(a: byte, b: byte, c: byte, d: byte) -> IP
 
-pub fn IPv4Mask(a: uint8, b: uint8, c: uint8, d: uint8) -> IPMask
+pub fn IPv4Mask(a: byte, b: byte, c: byte, d: byte) -> IPMask
 
 /// InterfaceAddrs returns a list of the system's unicast interface
 /// addresses.
@@ -496,7 +496,7 @@ pub struct AddrError {
 /// On certain machines, for certain types of connections, this is
 /// optimized into an OS-specific batch write operation (such as
 /// "writev").
-pub struct Buffers(Slice<Slice<uint8>>)
+pub struct Buffers(Slice<Slice<byte>>)
 
 /// Conn is a generic stream-oriented network connection.
 /// 
@@ -504,12 +504,12 @@ pub struct Buffers(Slice<Slice<uint8>>)
 pub interface Conn {
   fn Close() -> Result<(), error>
   fn LocalAddr() -> Addr
-  fn Read(mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(mut b: Slice<byte>) -> Partial<int, error>
   fn RemoteAddr() -> Addr
   fn SetDeadline(t: time.Time) -> Result<(), error>
   fn SetReadDeadline(t: time.Time) -> Result<(), error>
   fn SetWriteDeadline(t: time.Time) -> Result<(), error>
-  fn Write(b: Slice<uint8>) -> Partial<int, error>
+  fn Write(b: Slice<byte>) -> Partial<int, error>
 }
 
 /// DNSConfigError represents an error reading the machine's DNS configuration.
@@ -560,7 +560,7 @@ pub interface Error {
 pub struct Flags(uint)
 
 /// A HardwareAddr represents a physical hardware address.
-pub struct HardwareAddr(Slice<uint8>)
+pub struct HardwareAddr(Slice<byte>)
 
 /// An IP is a single IP address, a slice of bytes.
 /// Functions in this package accept either 4-byte (IPv4)
@@ -571,7 +571,7 @@ pub struct HardwareAddr(Slice<uint8>)
 /// is a semantic property of the address, not just the
 /// length of the byte slice: a 16-byte slice can still
 /// be an IPv4 address.
-pub struct IP(Slice<uint8>)
+pub struct IP(Slice<byte>)
 
 /// IPAddr represents the address of an IP end point.
 pub struct IPAddr {
@@ -587,7 +587,7 @@ pub type IPConn
 /// IP addresses for IP addressing and routing.
 /// 
 /// See type [IPNet] and func [ParseCIDR] for details.
-pub struct IPMask(Slice<uint8>)
+pub struct IPMask(Slice<byte>)
 
 /// An IPNet represents an IP network.
 pub struct IPNet {
@@ -675,11 +675,11 @@ pub struct OpError {
 pub interface PacketConn {
   fn Close() -> Result<(), error>
   fn LocalAddr() -> Addr
-  fn ReadFrom(mut p: Slice<uint8>) -> Result<(int, Addr), error>
+  fn ReadFrom(mut p: Slice<byte>) -> Result<(int, Addr), error>
   fn SetDeadline(t: time.Time) -> Result<(), error>
   fn SetReadDeadline(t: time.Time) -> Result<(), error>
   fn SetWriteDeadline(t: time.Time) -> Result<(), error>
-  fn WriteTo(p: Slice<uint8>, addr: Addr) -> Result<int, error>
+  fn WriteTo(p: Slice<byte>, addr: Addr) -> Result<int, error>
 }
 
 /// A ParseError is the error type of literal network address parsers.
@@ -825,7 +825,7 @@ impl Buffers {
   /// 
   /// Read modifies the slice v as well as v[i] for 0 <= i < len(v),
   /// but does not modify v[i][j] for any i, j.
-  fn Read(self: Ref<Buffers>, mut p: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<Buffers>, mut p: Slice<byte>) -> Partial<int, error>
 
   /// WriteTo writes contents of the buffers to w.
   /// 
@@ -925,7 +925,7 @@ impl IP {
   /// AppendText implements the [encoding.TextAppender] interface.
   /// The encoding is the same as returned by [IP.String], with one exception:
   /// When len(ip) is zero, it appends nothing.
-  fn AppendText(self, mut b: Slice<uint8>) -> Result<Slice<uint8>, error>
+  fn AppendText(self, mut b: Slice<byte>) -> Result<Slice<byte>, error>
 
   /// DefaultMask returns the default IP mask for the IP address ip.
   /// Only IPv4 addresses have default masks; DefaultMask returns
@@ -976,7 +976,7 @@ impl IP {
   /// MarshalText implements the [encoding.TextMarshaler] interface.
   /// The encoding is the same as returned by [IP.String], with one exception:
   /// When len(ip) is zero, it returns an empty slice.
-  fn MarshalText(self) -> Result<Slice<uint8>, error>
+  fn MarshalText(self) -> Result<Slice<byte>, error>
 
   /// Mask returns the result of masking the IP address ip with mask.
   fn Mask(self, mask: IPMask) -> IP
@@ -999,7 +999,7 @@ impl IP {
 
   /// UnmarshalText implements the [encoding.TextUnmarshaler] interface.
   /// The IP address is expected in a form accepted by [ParseIP].
-  fn UnmarshalText(self: Ref<IP>, text: Slice<uint8>) -> Result<(), error>
+  fn UnmarshalText(self: Ref<IP>, text: Slice<byte>) -> Result<(), error>
 }
 
 impl IPAddr {
@@ -1032,13 +1032,13 @@ impl IPConn {
   fn LocalAddr(self: Ref<IPConn>) -> Addr
 
   /// Read implements the Conn Read method.
-  fn Read(self: Ref<IPConn>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<IPConn>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// ReadFrom implements the [PacketConn] ReadFrom method.
-  fn ReadFrom(self: Ref<IPConn>, mut b: Slice<uint8>) -> Result<(int, Addr), error>
+  fn ReadFrom(self: Ref<IPConn>, mut b: Slice<byte>) -> Result<(int, Addr), error>
 
   /// ReadFromIP acts like ReadFrom but returns an IPAddr.
-  fn ReadFromIP(self: Ref<IPConn>, mut b: Slice<uint8>) -> Result<(int, Ref<IPAddr>), error>
+  fn ReadFromIP(self: Ref<IPConn>, mut b: Slice<byte>) -> Result<(int, Ref<IPAddr>), error>
 
   /// ReadMsgIP reads a message from c, copying the payload into b and
   /// the associated out-of-band data into oob. It returns the number of
@@ -1047,7 +1047,7 @@ impl IPConn {
   /// 
   /// The packages golang.org/x/net/ipv4 and golang.org/x/net/ipv6 can be
   /// used to manipulate IP-level socket options in oob.
-  fn ReadMsgIP(self: Ref<IPConn>, mut b: Slice<uint8>, mut oob: Slice<uint8>) -> Result<(int, int, int, Ref<IPAddr>), error>
+  fn ReadMsgIP(self: Ref<IPConn>, mut b: Slice<byte>, mut oob: Slice<byte>) -> Result<(int, int, int, Ref<IPAddr>), error>
 
   /// RemoteAddr returns the remote network address.
   /// The Addr returned is shared by all invocations of RemoteAddr, so
@@ -1076,7 +1076,7 @@ impl IPConn {
   fn SyscallConn(self: Ref<IPConn>) -> Result<syscall.RawConn, error>
 
   /// Write implements the Conn Write method.
-  fn Write(self: Ref<IPConn>, b: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<IPConn>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteMsgIP writes a message to addr via c, copying the payload from
   /// b and the associated out-of-band data from oob. It returns the
@@ -1086,16 +1086,16 @@ impl IPConn {
   /// used to manipulate IP-level socket options in oob.
   fn WriteMsgIP(
     self: Ref<IPConn>,
-    b: Slice<uint8>,
-    oob: Slice<uint8>,
+    b: Slice<byte>,
+    oob: Slice<byte>,
     addr: Ref<IPAddr>,
   ) -> Result<(int, int), error>
 
   /// WriteTo implements the [PacketConn] WriteTo method.
-  fn WriteTo(self: Ref<IPConn>, b: Slice<uint8>, addr: Addr) -> Result<int, error>
+  fn WriteTo(self: Ref<IPConn>, b: Slice<byte>, addr: Addr) -> Result<int, error>
 
   /// WriteToIP acts like [IPConn.WriteTo] but takes an [IPAddr].
-  fn WriteToIP(self: Ref<IPConn>, b: Slice<uint8>, addr: Ref<IPAddr>) -> Result<int, error>
+  fn WriteToIP(self: Ref<IPConn>, b: Slice<byte>, addr: Ref<IPAddr>) -> Result<int, error>
 }
 
 impl IPMask {
@@ -1369,7 +1369,7 @@ impl TCPConn {
   fn MultipathTCP(self: Ref<TCPConn>) -> Result<bool, error>
 
   /// Read implements the Conn Read method.
-  fn Read(self: Ref<TCPConn>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<TCPConn>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// ReadFrom implements the [io.ReaderFrom] ReadFrom method.
   fn ReadFrom(self: Ref<TCPConn>, r: io.Reader) -> Result<int64, error>
@@ -1437,7 +1437,7 @@ impl TCPConn {
   fn SyscallConn(self: Ref<TCPConn>) -> Result<syscall.RawConn, error>
 
   /// Write implements the Conn Write method.
-  fn Write(self: Ref<TCPConn>, b: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<TCPConn>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteTo implements the io.WriterTo WriteTo method.
   fn WriteTo(self: Ref<TCPConn>, w: io.Writer) -> Result<int64, error>
@@ -1523,20 +1523,20 @@ impl UDPConn {
   fn LocalAddr(self: Ref<UDPConn>) -> Addr
 
   /// Read implements the Conn Read method.
-  fn Read(self: Ref<UDPConn>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<UDPConn>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// ReadFrom implements the [PacketConn] ReadFrom method.
-  fn ReadFrom(self: Ref<UDPConn>, mut b: Slice<uint8>) -> Result<(int, Addr), error>
+  fn ReadFrom(self: Ref<UDPConn>, mut b: Slice<byte>) -> Result<(int, Addr), error>
 
   /// ReadFromUDP acts like [UDPConn.ReadFrom] but returns a UDPAddr.
-  fn ReadFromUDP(self: Ref<UDPConn>, mut b: Slice<uint8>) -> Result<(int, Ref<UDPAddr>), error>
+  fn ReadFromUDP(self: Ref<UDPConn>, mut b: Slice<byte>) -> Result<(int, Ref<UDPAddr>), error>
 
   /// ReadFromUDPAddrPort acts like ReadFrom but returns a [netip.AddrPort].
   /// 
   /// If c is bound to an unspecified address, the returned
   /// netip.AddrPort's address might be an IPv4-mapped IPv6 address.
   /// Use [netip.Addr.Unmap] to get the address without the IPv6 prefix.
-  fn ReadFromUDPAddrPort(self: Ref<UDPConn>, mut b: Slice<uint8>) -> Result<(int, netip.AddrPort), error>
+  fn ReadFromUDPAddrPort(self: Ref<UDPConn>, mut b: Slice<byte>) -> Result<(int, netip.AddrPort), error>
 
   /// ReadMsgUDP reads a message from c, copying the payload into b and
   /// the associated out-of-band data into oob. It returns the number of
@@ -1545,13 +1545,13 @@ impl UDPConn {
   /// 
   /// The packages [golang.org/x/net/ipv4] and [golang.org/x/net/ipv6] can be
   /// used to manipulate IP-level socket options in oob.
-  fn ReadMsgUDP(self: Ref<UDPConn>, mut b: Slice<uint8>, mut oob: Slice<uint8>) -> Result<(int, int, int, Ref<UDPAddr>), error>
+  fn ReadMsgUDP(self: Ref<UDPConn>, mut b: Slice<byte>, mut oob: Slice<byte>) -> Result<(int, int, int, Ref<UDPAddr>), error>
 
   /// ReadMsgUDPAddrPort is like [UDPConn.ReadMsgUDP] but returns an [netip.AddrPort] instead of a [UDPAddr].
   fn ReadMsgUDPAddrPort(
     self: Ref<UDPConn>,
-    mut b: Slice<uint8>,
-    mut oob: Slice<uint8>,
+    mut b: Slice<byte>,
+    mut oob: Slice<byte>,
   ) -> Result<(int, int, int, netip.AddrPort), error>
 
   /// RemoteAddr returns the remote network address.
@@ -1581,7 +1581,7 @@ impl UDPConn {
   fn SyscallConn(self: Ref<UDPConn>) -> Result<syscall.RawConn, error>
 
   /// Write implements the Conn Write method.
-  fn Write(self: Ref<UDPConn>, b: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<UDPConn>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteMsgUDP writes a message to addr via c if c isn't connected, or
   /// to c's remote address if c is connected (in which case addr must be
@@ -1593,29 +1593,29 @@ impl UDPConn {
   /// used to manipulate IP-level socket options in oob.
   fn WriteMsgUDP(
     self: Ref<UDPConn>,
-    b: Slice<uint8>,
-    oob: Slice<uint8>,
+    b: Slice<byte>,
+    oob: Slice<byte>,
     addr: Ref<UDPAddr>,
   ) -> Result<(int, int), error>
 
   /// WriteMsgUDPAddrPort is like [UDPConn.WriteMsgUDP] but takes a [netip.AddrPort] instead of a [UDPAddr].
   fn WriteMsgUDPAddrPort(
     self: Ref<UDPConn>,
-    b: Slice<uint8>,
-    oob: Slice<uint8>,
+    b: Slice<byte>,
+    oob: Slice<byte>,
     addr: netip.AddrPort,
   ) -> Result<(int, int), error>
 
   /// WriteTo implements the [PacketConn] WriteTo method.
-  fn WriteTo(self: Ref<UDPConn>, b: Slice<uint8>, addr: Addr) -> Result<int, error>
+  fn WriteTo(self: Ref<UDPConn>, b: Slice<byte>, addr: Addr) -> Result<int, error>
 
   /// WriteToUDP acts like [UDPConn.WriteTo] but takes a [UDPAddr].
-  fn WriteToUDP(self: Ref<UDPConn>, b: Slice<uint8>, addr: Ref<UDPAddr>) -> Result<int, error>
+  fn WriteToUDP(self: Ref<UDPConn>, b: Slice<byte>, addr: Ref<UDPAddr>) -> Result<int, error>
 
   /// WriteToUDPAddrPort acts like [UDPConn.WriteTo] but takes a [netip.AddrPort].
   fn WriteToUDPAddrPort(
     self: Ref<UDPConn>,
-    b: Slice<uint8>,
+    b: Slice<byte>,
     addr: netip.AddrPort,
   ) -> Result<int, error>
 }
@@ -1659,13 +1659,13 @@ impl UnixConn {
   fn LocalAddr(self: Ref<UnixConn>) -> Addr
 
   /// Read implements the Conn Read method.
-  fn Read(self: Ref<UnixConn>, mut b: Slice<uint8>) -> Partial<int, error>
+  fn Read(self: Ref<UnixConn>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// ReadFrom implements the [PacketConn].ReadFrom method.
-  fn ReadFrom(self: Ref<UnixConn>, mut b: Slice<uint8>) -> Result<(int, Addr), error>
+  fn ReadFrom(self: Ref<UnixConn>, mut b: Slice<byte>) -> Result<(int, Addr), error>
 
   /// ReadFromUnix acts like [UnixConn.ReadFrom] but returns a [UnixAddr].
-  fn ReadFromUnix(self: Ref<UnixConn>, mut b: Slice<uint8>) -> Result<(int, Ref<UnixAddr>), error>
+  fn ReadFromUnix(self: Ref<UnixConn>, mut b: Slice<byte>) -> Result<(int, Ref<UnixAddr>), error>
 
   /// ReadMsgUnix reads a message from c, copying the payload into b and
   /// the associated out-of-band data into oob. It returns the number of
@@ -1674,11 +1674,7 @@ impl UnixConn {
   /// 
   /// Note that if len(b) == 0 and len(oob) > 0, this function will still
   /// read (and discard) 1 byte from the connection.
-  fn ReadMsgUnix(
-    self: Ref<UnixConn>,
-    mut b: Slice<uint8>,
-    mut oob: Slice<uint8>,
-  ) -> Result<(int, int, int, Ref<UnixAddr>), error>
+  fn ReadMsgUnix(self: Ref<UnixConn>, mut b: Slice<byte>, mut oob: Slice<byte>) -> Result<(int, int, int, Ref<UnixAddr>), error>
 
   /// RemoteAddr returns the remote network address.
   /// The Addr returned is shared by all invocations of RemoteAddr, so
@@ -1707,7 +1703,7 @@ impl UnixConn {
   fn SyscallConn(self: Ref<UnixConn>) -> Result<syscall.RawConn, error>
 
   /// Write implements the Conn Write method.
-  fn Write(self: Ref<UnixConn>, b: Slice<uint8>) -> Partial<int, error>
+  fn Write(self: Ref<UnixConn>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteMsgUnix writes a message to addr via c, copying the payload
   /// from b and the associated out-of-band data from oob. It returns the
@@ -1717,16 +1713,16 @@ impl UnixConn {
   /// write 1 byte to the connection.
   fn WriteMsgUnix(
     self: Ref<UnixConn>,
-    b: Slice<uint8>,
-    oob: Slice<uint8>,
+    b: Slice<byte>,
+    oob: Slice<byte>,
     addr: Ref<UnixAddr>,
   ) -> Result<(int, int), error>
 
   /// WriteTo implements the [PacketConn].WriteTo method.
-  fn WriteTo(self: Ref<UnixConn>, b: Slice<uint8>, addr: Addr) -> Result<int, error>
+  fn WriteTo(self: Ref<UnixConn>, b: Slice<byte>, addr: Addr) -> Result<int, error>
 
   /// WriteToUnix acts like [UnixConn.WriteTo] but takes a [UnixAddr].
-  fn WriteToUnix(self: Ref<UnixConn>, b: Slice<uint8>, addr: Ref<UnixAddr>) -> Result<int, error>
+  fn WriteToUnix(self: Ref<UnixConn>, b: Slice<byte>, addr: Ref<UnixAddr>) -> Result<int, error>
 }
 
 impl UnixListener {

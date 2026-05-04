@@ -287,11 +287,11 @@ pub type FormatError
 
 /// A Load represents any Mach-O load command.
 pub interface Load {
-  fn Raw() -> Slice<uint8>
+  fn Raw() -> Slice<byte>
 }
 
 /// A LoadBytes is the uninterpreted bytes of a Mach-O load command.
-pub struct LoadBytes(Slice<uint8>)
+pub struct LoadBytes(Slice<byte>)
 
 /// An Nlist32 is a Mach-O 32-bit symbol table entry.
 pub struct Nlist32 {
@@ -595,11 +595,11 @@ impl Cpu {
 }
 
 impl Dylib {
-  fn Raw(self) -> Slice<uint8>
+  fn Raw(self) -> Slice<byte>
 }
 
 impl Dysymtab {
-  fn Raw(self) -> Slice<uint8>
+  fn Raw(self) -> Slice<byte>
 }
 
 impl FatArch {
@@ -668,7 +668,7 @@ impl FormatError {
 }
 
 impl LoadBytes {
-  fn Raw(self) -> Slice<uint8>
+  fn Raw(self) -> Slice<byte>
 }
 
 impl LoadCmd {
@@ -702,33 +702,33 @@ impl RelocTypeX86_64 {
 }
 
 impl Rpath {
-  fn Raw(self) -> Slice<uint8>
+  fn Raw(self) -> Slice<byte>
 }
 
 impl Section {
   /// Data reads and returns the contents of the Mach-O section.
-  fn Data(self: Ref<Section>) -> Result<Slice<uint8>, error>
+  fn Data(self: Ref<Section>) -> Result<Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the Mach-O section.
   fn Open(self: Ref<Section>) -> io.ReadSeeker
 
-  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl Segment {
   /// Data reads and returns the contents of the segment.
-  fn Data(self: Ref<Segment>) -> Result<Slice<uint8>, error>
+  fn Data(self: Ref<Segment>) -> Result<Slice<byte>, error>
 
   /// Open returns a new ReadSeeker reading the segment.
   fn Open(self: Ref<Segment>) -> io.ReadSeeker
 
-  fn Raw(self) -> Slice<uint8>
+  fn Raw(self) -> Slice<byte>
 
-  fn ReadAt(self, mut p: Slice<uint8>, off: int64) -> Partial<int, error>
+  fn ReadAt(self, mut p: Slice<byte>, off: int64) -> Partial<int, error>
 }
 
 impl Symtab {
-  fn Raw(self) -> Slice<uint8>
+  fn Raw(self) -> Slice<byte>
 }
 
 impl Type {

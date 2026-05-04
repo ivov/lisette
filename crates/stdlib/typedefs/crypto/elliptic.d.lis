@@ -11,7 +11,7 @@ import "go:math/big"
 /// 
 /// Deprecated: for ECDH, use the GenerateKey methods of the [crypto/ecdh] package;
 /// for ECDSA, use the GenerateKey function of the crypto/ecdsa package.
-pub fn GenerateKey(curve: Curve, rand: io.Reader) -> Result<(Slice<uint8>, Ref<big.Int>, Ref<big.Int>), error>
+pub fn GenerateKey(curve: Curve, rand: io.Reader) -> Result<(Slice<byte>, Ref<big.Int>, Ref<big.Int>), error>
 
 /// Marshal converts a point on the curve into the uncompressed form specified in
 /// SEC 1, Version 2.0, Section 2.3.3. If the point is not on the curve (or is
@@ -19,12 +19,12 @@ pub fn GenerateKey(curve: Curve, rand: io.Reader) -> Result<(Slice<uint8>, Ref<b
 /// 
 /// Deprecated: for ECDH, use the crypto/ecdh package. This function returns an
 /// encoding equivalent to that of PublicKey.Bytes in crypto/ecdh.
-pub fn Marshal(curve: Curve, x: Ref<big.Int>, y: Ref<big.Int>) -> Slice<uint8>
+pub fn Marshal(curve: Curve, x: Ref<big.Int>, y: Ref<big.Int>) -> Slice<byte>
 
 /// MarshalCompressed converts a point on the curve into the compressed form
 /// specified in SEC 1, Version 2.0, Section 2.3.3. If the point is not on the
 /// curve (or is the conventional point at infinity), the behavior is undefined.
-pub fn MarshalCompressed(curve: Curve, x: Ref<big.Int>, y: Ref<big.Int>) -> Slice<uint8>
+pub fn MarshalCompressed(curve: Curve, x: Ref<big.Int>, y: Ref<big.Int>) -> Slice<byte>
 
 pub fn P224() -> Curve
 
@@ -40,12 +40,12 @@ pub fn P521() -> Curve
 /// 
 /// Deprecated: for ECDH, use the crypto/ecdh package. This function accepts an
 /// encoding equivalent to that of the NewPublicKey methods in crypto/ecdh.
-pub fn Unmarshal(curve: Curve, data: Slice<uint8>) -> (Ref<big.Int>, Ref<big.Int>)
+pub fn Unmarshal(curve: Curve, data: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
 
 /// UnmarshalCompressed converts a point, serialized by [MarshalCompressed], into
 /// an x, y pair. It is an error if the point is not in compressed form, is not
 /// on the curve, or is the point at infinity. On error, x = nil.
-pub fn UnmarshalCompressed(curve: Curve, data: Slice<uint8>) -> (Ref<big.Int>, Ref<big.Int>)
+pub fn UnmarshalCompressed(curve: Curve, data: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
 
 /// A Curve represents a short-form Weierstrass curve with a=-3.
 /// 
@@ -63,8 +63,8 @@ pub interface Curve {
   fn Double(x1: Ref<big.Int>, y1: Ref<big.Int>) -> (Ref<big.Int>, Ref<big.Int>)
   fn IsOnCurve(x: Ref<big.Int>, y: Ref<big.Int>) -> bool
   fn Params() -> Ref<CurveParams>
-  fn ScalarBaseMult(k: Slice<uint8>) -> (Ref<big.Int>, Ref<big.Int>)
-  fn ScalarMult(x1: Ref<big.Int>, y1: Ref<big.Int>, k: Slice<uint8>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn ScalarBaseMult(k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn ScalarMult(x1: Ref<big.Int>, y1: Ref<big.Int>, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
 }
 
 /// CurveParams contains the parameters of an elliptic curve and also provides
@@ -122,7 +122,7 @@ impl CurveParams {
   /// provide any security property. For ECDH, use the [crypto/ecdh] package.
   /// For ECDSA, use the [crypto/ecdsa] package with a [Curve] value returned directly
   /// from [P224], [P256], [P384], or [P521].
-  fn ScalarBaseMult(self: Ref<CurveParams>, k: Slice<uint8>) -> (Ref<big.Int>, Ref<big.Int>)
+  fn ScalarBaseMult(self: Ref<CurveParams>, k: Slice<byte>) -> (Ref<big.Int>, Ref<big.Int>)
 
   /// ScalarMult implements [Curve.ScalarMult].
   /// 
@@ -134,6 +134,6 @@ impl CurveParams {
     self: Ref<CurveParams>,
     bx: Ref<big.Int>,
     by: Ref<big.Int>,
-    k: Slice<uint8>,
+    k: Slice<byte>,
   ) -> (Ref<big.Int>, Ref<big.Int>)
 }

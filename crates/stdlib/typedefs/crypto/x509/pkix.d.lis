@@ -44,7 +44,7 @@ pub struct CertificateList {
 pub struct Extension {
   pub Id: asn1.ObjectIdentifier,
   pub Critical: bool,
-  pub Value: Slice<uint8>,
+  pub Value: Slice<byte>,
 }
 
 /// Name represents an X.509 distinguished name. This only includes the common
