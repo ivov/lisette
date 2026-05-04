@@ -326,6 +326,36 @@ fn miscased_known_host(path: &str) -> Option<String> {
     None
 }
 
+fn find_first_parent_module(
+    path: &str,
+    max_hops: usize,
+    mut is_module: impl FnMut(&str) -> bool,
+) -> Option<String> {
+    let mut p = path;
+    for _ in 0..max_hops {
+        let pos = p.rfind('/')?;
+        p = &p[..pos];
+        if is_module(p) {
+            return Some(p.to_string());
+        }
+    }
+    None
+}
+
+fn enrich_with_parent_hint(workspace: &GoWorkspace, path: &str, msg: String) -> String {
+    if !msg.contains("not found") && !msg.contains("No matching versions") {
+        return msg;
+    }
+    let parent = find_first_parent_module(path, 3, |p| workspace.query_latest_version(p).is_ok());
+    let Some(parent) = parent else {
+        return msg;
+    };
+    let leaf = path.strip_prefix(&format!("{parent}/")).unwrap_or("");
+    format!(
+        "{msg}\n · help: `{parent}` is the published module; `{leaf}` is one of its sub-packages - try `lis add {parent}`"
+    )
+}
+
 pub(crate) fn find_project_root() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
     let mut current: &Path = &cwd;
@@ -436,7 +466,8 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         match workspace.query_latest_version(&dep.module_path) {
             Ok(v) => v,
             Err(msg) => {
-                error!("failed to resolve latest version", msg);
+                let enriched = enrich_with_parent_hint(&workspace, &dep.module_path, msg);
+                error!("failed to resolve latest version", enriched);
                 return Err(1);
             }
         }
@@ -450,7 +481,8 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         path: &dep.module_path,
         version: &dep_version,
     }) {
-        error!("failed to download dependency", msg);
+        let enriched = enrich_with_parent_hint(&workspace, &dep.module_path, msg);
+        error!("failed to download dependency", enriched);
         return Err(1);
     }
 
@@ -736,4 +768,51 @@ fn apply_graph_to_manifest(
     })?;
 
     Ok(upgraded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn returns_first_ancestor_that_resolves() {
+        let known = ["golang.org/x/net"];
+        let parent =
+            find_first_parent_module("golang.org/x/net/context", 3, |p| known.contains(&p));
+        assert_eq!(parent.as_deref(), Some("golang.org/x/net"));
+    }
+
+    #[test]
+    fn returns_none_when_no_ancestor_resolves() {
+        let parent = find_first_parent_module("example.com/no/such/thing", 3, |_| false);
+        assert!(parent.is_none());
+    }
+
+    #[test]
+    fn returns_none_for_single_segment_path() {
+        let mut probed = false;
+        let parent = find_first_parent_module("singleton", 3, |_| {
+            probed = true;
+            true
+        });
+        assert!(parent.is_none());
+        assert!(!probed, "single-segment path should not trigger any probe");
+    }
+
+    #[test]
+    fn stops_at_max_hops() {
+        let mut probes = Vec::new();
+        let _ = find_first_parent_module("a/b/c/d/e", 2, |p| {
+            probes.push(p.to_string());
+            false
+        });
+        assert_eq!(probes, vec!["a/b/c/d", "a/b/c"]);
+    }
+
+    #[test]
+    fn picks_nearest_module_when_multiple_ancestors_resolve() {
+        let known = ["foo", "foo/bar"];
+        let parent = find_first_parent_module("foo/bar/baz/qux", 5, |p| known.contains(&p));
+        assert_eq!(parent.as_deref(), Some("foo/bar"));
+    }
 }
