@@ -24,4 +24,6 @@ pub const LevelInfo = 1
 
 pub const LevelWarn = 2
 
+pub var AnyError: error
+
 pub var DefaultTier: int

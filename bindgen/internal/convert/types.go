@@ -277,6 +277,9 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 		if conv != nil && !conv.hasReachableUnexportedType(t) {
 			return TypeResult{LisetteType: "Unknown"}
 		}
+		if namedImplementsError(t) {
+			return TypeResult{LisetteType: "error"}
+		}
 		return toLisetteRecursive(t.Underlying(), seen, conv)
 	}
 
@@ -439,6 +442,14 @@ func isInternalPackagePath(path string) bool {
 	}
 
 	return strings.Contains(path, "/internal/")
+}
+
+func namedImplementsError(t *types.Named) bool {
+	errorIface := universeErrorInterface()
+	if errorIface == nil {
+		return false
+	}
+	return types.Implements(t, errorIface) || types.Implements(types.NewPointer(t), errorIface)
 }
 
 func isErrorInterface(_interface *types.Interface) bool {

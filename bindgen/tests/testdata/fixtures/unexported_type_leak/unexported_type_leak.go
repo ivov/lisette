@@ -35,3 +35,13 @@ type band uint8
 
 func GetVisitor() func() band { return nil }
 func PromoteBand(b band)      {}
+
+// Sentinel of an unexported type that satisfies error via value-receiver
+// methods (mirrors cmpopts.AnyError). Without the implementsError check, the
+// empty-struct underlying would leak as Lisette's unit type `()`.
+type anyError struct{}
+
+func (anyError) Error() string     { return "any error" }
+func (anyError) Is(err error) bool { return err != nil }
+
+var AnyError anyError
