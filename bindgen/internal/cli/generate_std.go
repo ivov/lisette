@@ -492,10 +492,10 @@ func buildEntries(pkgPaths []string, canonical map[string]Target) string {
 		if t, ok := canonical[pkgPath]; ok {
 			suffix = "_" + t.Suffix()
 		}
-		b.WriteString(fmt.Sprintf(
+		fmt.Fprintf(&b,
 			"        (%q, include_str!(\"../typedefs/%s%s.d.lis\")),\n",
 			pkgPath, pkgPath, suffix,
-		))
+		)
 	}
 	return b.String()
 }
@@ -516,7 +516,7 @@ func buildIntendedEntries(intended map[string][]Target) string {
 			}
 			fmt.Fprintf(&pairs, "(%q, %q)", t.GOOS, t.GOARCH)
 		}
-		b.WriteString(fmt.Sprintf("            (%q, &[%s][..]),\n", pkg, pairs.String()))
+		fmt.Fprintf(&b, "            (%q, &[%s][..]),\n", pkg, pairs.String())
 	}
 	return b.String()
 }
