@@ -44,20 +44,22 @@ pub struct GoWorkspace<'a> {
     root: &'a Path,
     /// The typedef cache root, e.g. `~/.lisette/cache/typedefs/lis@v0.1.7`.
     pub typedef_cache_dir: &'a Path,
+    target: stdlib::Target,
 }
 
 impl<'a> GoWorkspace<'a> {
-    pub fn new(root: &'a Path, typedef_cache_dir: &'a Path) -> Self {
+    pub fn new(root: &'a Path, typedef_cache_dir: &'a Path, target: stdlib::Target) -> Self {
         Self {
             root,
             typedef_cache_dir,
+            target,
         }
     }
 
     /// Run a `go` subcommand and return its stdout on success.
     fn run_go(&self, args: &[&str]) -> Result<String, String> {
         let cmd_display = format!("go {}", args.join(" "));
-        let output = crate::go_cli::go_command(stdlib::Target::host())
+        let output = crate::go_cli::go_command(self.target)
             .args(args)
             .current_dir(self.root)
             .output()
@@ -188,7 +190,7 @@ impl<'a> GoWorkspace<'a> {
             c
         } else {
             let bindgen_at_version = format!("{}@v{}", BINDGEN_GO_MODULE, BINDGEN_VERSION);
-            let mut c = crate::go_cli::go_command(stdlib::Target::host());
+            let mut c = crate::go_cli::go_command(self.target);
             c.args(["run", &bindgen_at_version, sub]);
             c
         };
@@ -277,7 +279,8 @@ impl<'a> GoWorkspace<'a> {
                     module,
                     package: pkg_path,
                 };
-                !pkg.typedef_path(self.typedef_cache_dir).exists()
+                !pkg.typedef_path(self.typedef_cache_dir, self.target)
+                    .exists()
             })
             .cloned()
             .collect();
@@ -288,7 +291,7 @@ impl<'a> GoWorkspace<'a> {
 
         let manifest = self.run_bindgen_batch(&uncached)?;
 
-        let outcome = apply_batch_manifest_to_cache(&manifest, module, self.typedef_cache_dir);
+        let outcome = self.apply_batch_manifest(&manifest, module);
 
         for stubbed in &outcome.stubbed {
             crate::output::print_warning(&format!(
@@ -318,7 +321,7 @@ impl<'a> GoWorkspace<'a> {
                 module,
                 package: pkg_path,
             };
-            let pkg_typedef_path = pkg.typedef_path(self.typedef_cache_dir);
+            let pkg_typedef_path = pkg.typedef_path(self.typedef_cache_dir, self.target);
 
             let typedef = fs::read_to_string(&pkg_typedef_path)
                 .map_err(|e| format!("Failed to read cached typedef for `{}`: {}", pkg_path, e))?;
@@ -565,55 +568,57 @@ pub(crate) struct BatchOutcome {
     pub(crate) failures: Vec<String>,
 }
 
-pub(crate) fn apply_batch_manifest_to_cache(
-    manifest: &BatchManifest,
-    module: GoModule,
-    typedef_cache_dir: &Path,
-) -> BatchOutcome {
-    let mut outcome = BatchOutcome::default();
+impl GoWorkspace<'_> {
+    pub(crate) fn apply_batch_manifest(
+        &self,
+        manifest: &BatchManifest,
+        module: GoModule,
+    ) -> BatchOutcome {
+        let mut outcome = BatchOutcome::default();
 
-    for e in &manifest.errors {
+        for e in &manifest.errors {
+            outcome
+                .failures
+                .push(format!("{}: {} ({})", e.package, e.message, e.kind));
+        }
+
+        for entry in &manifest.ok {
+            if let Err(msg) = validate_typedef_parses(&entry.package, &entry.content) {
+                outcome.failures.push(msg);
+                continue;
+            }
+
+            let pkg = GoPackage {
+                module,
+                package: &entry.package,
+            };
+            let pkg_typedef_path = pkg.typedef_path(self.typedef_cache_dir, self.target);
+
+            if let Some(parent_dir) = pkg_typedef_path.parent()
+                && let Err(e) = fs::create_dir_all(parent_dir)
+            {
+                outcome.failures.push(format!(
+                    "Failed to create cache directory for `{}`: {}",
+                    entry.package, e
+                ));
+                continue;
+            }
+
+            if let Err(e) = fs::write(&pkg_typedef_path, &entry.content) {
+                outcome.failures.push(format!(
+                    "Failed to cache typedef for `{}`: {}",
+                    entry.package, e
+                ));
+                continue;
+            }
+
+            if entry.stubbed {
+                outcome.stubbed.push(entry.package.clone());
+            }
+        }
+
         outcome
-            .failures
-            .push(format!("{}: {} ({})", e.package, e.message, e.kind));
     }
-
-    for entry in &manifest.ok {
-        if let Err(msg) = validate_typedef_parses(&entry.package, &entry.content) {
-            outcome.failures.push(msg);
-            continue;
-        }
-
-        let pkg = GoPackage {
-            module,
-            package: &entry.package,
-        };
-        let pkg_typedef_path = pkg.typedef_path(typedef_cache_dir);
-
-        if let Some(parent_dir) = pkg_typedef_path.parent()
-            && let Err(e) = fs::create_dir_all(parent_dir)
-        {
-            outcome.failures.push(format!(
-                "Failed to create cache directory for `{}`: {}",
-                entry.package, e
-            ));
-            continue;
-        }
-
-        if let Err(e) = fs::write(&pkg_typedef_path, &entry.content) {
-            outcome.failures.push(format!(
-                "Failed to cache typedef for `{}`: {}",
-                entry.package, e
-            ));
-            continue;
-        }
-
-        if entry.stubbed {
-            outcome.stubbed.push(entry.package.clone());
-        }
-    }
-
-    outcome
 }
 
 fn validate_typedef_parses(pkg_path: &str, typedef: &str) -> Result<(), String> {
@@ -703,12 +708,20 @@ mod tests {
         }
     }
 
+    fn test_target() -> stdlib::Target {
+        stdlib::Target::new("linux", "amd64")
+    }
+
+    fn workspace_for(cache_dir: &Path) -> GoWorkspace<'_> {
+        GoWorkspace::new(cache_dir, cache_dir, test_target())
+    }
+
     fn cache_path_for(cache_dir: &Path, pkg: &str) -> std::path::PathBuf {
         let go_pkg = GoPackage {
             module: module(),
             package: pkg,
         };
-        go_pkg.typedef_path(cache_dir)
+        go_pkg.typedef_path(cache_dir, test_target())
     }
 
     #[test]
@@ -724,7 +737,7 @@ mod tests {
             errors: vec![],
         };
 
-        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+        let outcome = workspace_for(tmp.path()).apply_batch_manifest(&manifest, module());
 
         assert!(outcome.failures.is_empty());
         assert!(outcome.stubbed.is_empty());
@@ -749,7 +762,7 @@ mod tests {
             )],
         };
 
-        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+        let outcome = workspace_for(tmp.path()).apply_batch_manifest(&manifest, module());
 
         assert_eq!(outcome.failures.len(), 1);
         assert!(outcome.failures[0].contains("broken"));
@@ -770,7 +783,7 @@ mod tests {
             errors: vec![],
         };
 
-        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+        let outcome = workspace_for(tmp.path()).apply_batch_manifest(&manifest, module());
 
         assert_eq!(outcome.failures.len(), 1);
         assert!(outcome.failures[0].contains("bad"));
@@ -790,7 +803,7 @@ mod tests {
             errors: vec![],
         };
 
-        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+        let outcome = workspace_for(tmp.path()).apply_batch_manifest(&manifest, module());
 
         assert!(outcome.failures.is_empty());
         assert_eq!(outcome.stubbed, vec![format!("{}/stub", MODULE_PATH)]);
@@ -806,7 +819,7 @@ mod tests {
             errors: vec![],
         };
 
-        let outcome = apply_batch_manifest_to_cache(&manifest, module(), tmp.path());
+        let outcome = workspace_for(tmp.path()).apply_batch_manifest(&manifest, module());
 
         assert!(outcome.stubbed.is_empty());
         assert!(outcome.failures.is_empty());

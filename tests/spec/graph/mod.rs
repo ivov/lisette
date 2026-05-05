@@ -11,6 +11,12 @@ fn default_resolver() -> deps::TypedefLocator {
     deps::TypedefLocator::default()
 }
 
+fn host_module_cache_dir(home: &str, module: &str) -> std::path::PathBuf {
+    deps::typedef_cache_dir(home)
+        .join(stdlib::Target::host().cache_segment())
+        .join(module)
+}
+
 fn has_diagnostic_code(sink: &LocalSink, code: &str) -> bool {
     sink.take().iter().any(|d| d.code_str() == Some(code))
 }
@@ -414,7 +420,7 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
 
     // Set up cache with root package and subpackage
     let home = tmp.path().join("home").to_string_lossy().to_string();
-    let root_dir = deps::typedef_cache_dir(&home).join("github.com/gorilla/mux@v1.8.0");
+    let root_dir = host_module_cache_dir(&home, "github.com/gorilla/mux@v1.8.0");
     let sub_dir = root_dir.join("middleware");
     std::fs::create_dir_all(&sub_dir).unwrap();
     std::fs::write(root_dir.join("mux.d.lis"), "// root\n").unwrap();
@@ -466,7 +472,7 @@ fn third_party_go_struct_impl_methods_registered() {
 
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path().join("home").to_string_lossy().to_string();
-    let cache_dir = deps::typedef_cache_dir(&home).join("github.com/gorilla/mux@v1.8.0");
+    let cache_dir = host_module_cache_dir(&home, "github.com/gorilla/mux@v1.8.0");
     std::fs::create_dir_all(&cache_dir).unwrap();
     std::fs::write(
         cache_dir.join("mux.d.lis"),
@@ -555,7 +561,7 @@ fn stdlib_cache_save_load_excludes_third_party() {
 
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path().join("home").to_string_lossy().to_string();
-    let cache_dir = deps::typedef_cache_dir(&home).join("github.com/gorilla/mux@v1.8.0");
+    let cache_dir = host_module_cache_dir(&home, "github.com/gorilla/mux@v1.8.0");
     std::fs::create_dir_all(&cache_dir).unwrap();
     std::fs::write(cache_dir.join("mux.d.lis"), "pub const VERSION: string\n").unwrap();
 

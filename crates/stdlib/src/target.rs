@@ -11,6 +11,10 @@ impl Target {
         Self { goos, goarch }
     }
 
+    pub fn cache_segment(self) -> String {
+        format!("{}_{}", self.goos, self.goarch)
+    }
+
     pub fn host() -> Self {
         let goos = match std::env::consts::OS {
             "macos" => "darwin",

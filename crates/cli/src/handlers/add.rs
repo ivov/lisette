@@ -8,6 +8,7 @@ use crate::output::{print_add_success, print_preview_notice, print_progress, pri
 use crate::workspace::GoWorkspace;
 use crate::{cli_error, error};
 use deps::{GoModule, remove_go_dep, resolve_empty_via, trim_dead_via_parents, upsert_go_dep};
+use stdlib::Target;
 
 struct ParsedDependency {
     module_path: String,
@@ -75,7 +76,11 @@ pub fn add(dep_string: &str) -> i32 {
         Err(code) => return code,
     };
 
-    let workspace = GoWorkspace::new(&project_ctx.target_dir, &project_ctx.typedef_cache_dir);
+    let workspace = GoWorkspace::new(
+        &project_ctx.target_dir,
+        &project_ctx.typedef_cache_dir,
+        Target::host(),
+    );
 
     let module_graph = match reconcile_module_graph(&dep, &workspace) {
         Ok(v) => v,
@@ -200,7 +205,7 @@ fn parse_dep_string(input: &str) -> Result<ParsedDependency, String> {
         ));
     }
 
-    let host = stdlib::Target::host();
+    let host = Target::host();
     if stdlib::get_go_stdlib_typedef(path, host).is_some() {
         return Err(format!(
             "`{}` is a Go standard library package; stdlib packages do not need `lis add` (just `import \"go:{}\"`)",
@@ -440,7 +445,7 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         manifest.go_deps(),
         Some(project_root.clone()),
         std::env::var("HOME").ok(),
-        stdlib::Target::host(),
+        Target::host(),
     );
 
     if let Err(msg) = go_cli::write_go_mod(&project_target_dir, &manifest.project.name, &locator) {
@@ -459,7 +464,7 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         }
     };
 
-    let workspace = GoWorkspace::new(&project_target_dir, &typedef_cache_dir);
+    let workspace = GoWorkspace::new(&project_target_dir, &typedef_cache_dir, Target::host());
 
     let dep_version = if dep.version == "latest" {
         print_progress(&format!("Resolving {}@latest", dep.module_path));

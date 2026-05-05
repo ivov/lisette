@@ -8,7 +8,7 @@ use deps::TypedefLocator;
 use emit::{OutputFile, PRELUDE_IMPORT_PATH};
 use stdlib::Target;
 
-pub fn go_command(_target: Target) -> Command {
+pub fn go_command(target: Target) -> Command {
     let mut c = Command::new("go");
     // Isolate from any user-side env that would change Go's mode against
     // lisette's `target/`: a stray `go.work` (workspace mode) or a stray
@@ -16,6 +16,8 @@ pub fn go_command(_target: Target) -> Command {
     // for unrelated `lis add` invocations otherwise.
     c.env("GOWORK", "off");
     c.env("GOFLAGS", "");
+    c.env("GOOS", target.goos);
+    c.env("GOARCH", target.goarch);
     c
 }
 

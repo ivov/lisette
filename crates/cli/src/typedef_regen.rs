@@ -9,6 +9,7 @@ use crate::output::{print_progress, print_warning};
 use crate::workspace::GoWorkspace;
 use crate::{cli_error, error};
 use deps::{GoModule, Manifest, TypedefLocator};
+use stdlib::Target;
 
 /// Generate any Go typedefs declared in the manifest but missing from the cache:
 /// `~/.lisette/cache/typedefs/lis@v{version}/{module}@{version}/*.d.lis`
@@ -29,11 +30,12 @@ pub fn generate_missing_typedefs(project_root: &Path, manifest: &Manifest) -> Re
         }
     };
     let typedef_cache_dir = deps::typedef_cache_dir(&home);
+    let target = Target::host();
 
     let missing_modules: Vec<(String, String)> = go_deps
         .iter()
         .filter(|(module_path, dep)| {
-            !module_dir_populated(&typedef_cache_dir, module_path, &dep.version)
+            !module_dir_populated(&typedef_cache_dir, target, module_path, &dep.version)
         })
         .map(|(module_path, dep)| (module_path.clone(), dep.version.clone()))
         .collect();
@@ -75,7 +77,7 @@ pub fn generate_missing_typedefs(project_root: &Path, manifest: &Manifest) -> Re
     let still_missing: Vec<(String, String)> = missing_modules
         .into_iter()
         .filter(|(module_path, version)| {
-            !module_dir_populated(&typedef_cache_dir, module_path, version)
+            !module_dir_populated(&typedef_cache_dir, target, module_path, version)
         })
         .collect();
 
@@ -87,14 +89,14 @@ pub fn generate_missing_typedefs(project_root: &Path, manifest: &Manifest) -> Re
         go_deps.clone(),
         Some(project_root.to_path_buf()),
         Some(home),
-        stdlib::Target::host(),
+        target,
     );
     if let Err(msg) = go_cli::write_go_mod(&project_target_dir, &manifest.project.name, &locator) {
         error!("failed to write target/go.mod", msg);
         return Err(1);
     }
 
-    let workspace = GoWorkspace::new(&project_target_dir, &typedef_cache_dir);
+    let workspace = GoWorkspace::new(&project_target_dir, &typedef_cache_dir, target);
 
     let lis_version = env!("CARGO_PKG_VERSION");
     print_progress(&format!(
@@ -117,8 +119,15 @@ pub fn generate_missing_typedefs(project_root: &Path, manifest: &Manifest) -> Re
     Ok(())
 }
 
-fn module_dir_populated(cache_dir: &Path, module_path: &str, version: &str) -> bool {
-    let module_dir = cache_dir.join(format!("{}@{}", module_path, version));
+fn module_dir_populated(
+    cache_dir: &Path,
+    target: Target,
+    module_path: &str,
+    version: &str,
+) -> bool {
+    let module_dir = cache_dir
+        .join(target.cache_segment())
+        .join(format!("{}@{}", module_path, version));
     match fs::read_dir(&module_dir) {
         Ok(mut entries) => entries.next().is_some(),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,

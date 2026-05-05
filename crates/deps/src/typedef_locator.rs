@@ -126,7 +126,7 @@ impl TypedefLocator {
             package: package_path,
         };
         let typedef_cache_dir = typedef_cache_dir(home_path);
-        let typedef_path = pkg.typedef_path(&typedef_cache_dir);
+        let typedef_path = pkg.typedef_path(&typedef_cache_dir, self.target);
 
         match std::fs::read_to_string(&typedef_path) {
             Ok(source) => TypedefLocatorResult::Found {

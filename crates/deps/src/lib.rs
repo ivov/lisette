@@ -3,6 +3,8 @@ mod typedef_locator;
 
 use std::path::{Path, PathBuf};
 
+use stdlib::Target;
+
 pub use project_manifest::{
     GoDependency, Manifest, ResolveReport, TrimmedVia, check_no_subpackage_deps,
     check_toolchain_version, parse_manifest, remove_go_dep, resolve_empty_via,
@@ -46,11 +48,13 @@ impl GoPackage<'_> {
     /// Build the path to a `.d.lis` file under a base directory.
     ///
     /// ```text
-    /// ~/.lisette/cache/typedefs/lis@v0.1.6/github.com/gorilla/mux@v1.8.0/mux.d.lis
-    /// ~/.lisette/cache/typedefs/lis@v0.1.6/github.com/gorilla/mux@v1.8.0/middleware/middleware.d.lis
+    /// ~/.lisette/cache/typedefs/lis@v0.1.6/darwin_arm64/github.com/gorilla/mux@v1.8.0/mux.d.lis
+    /// ~/.lisette/cache/typedefs/lis@v0.1.6/darwin_arm64/github.com/gorilla/mux@v1.8.0/middleware/middleware.d.lis
     /// ```
-    pub fn typedef_path(&self, base_dir: &Path) -> PathBuf {
-        let module_dir = base_dir.join(format!("{}@{}", self.module.path, self.module.version));
+    pub fn typedef_path(&self, base_dir: &Path, target: Target) -> PathBuf {
+        let module_dir = base_dir
+            .join(target.cache_segment())
+            .join(format!("{}@{}", self.module.path, self.module.version));
 
         let relative = if self.package == self.module.path {
             ""

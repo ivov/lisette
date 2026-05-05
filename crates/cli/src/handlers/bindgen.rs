@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::process::Command;
 
+use stdlib::Target;
+
 use crate::cli_error;
 
 pub fn bindgen(
@@ -43,7 +45,8 @@ fn bindgen_pkg(target_pkg: &str, output: Option<String>, verbose: bool) -> i32 {
     }
 
     // lis bindgen writes to a user-specified path, not the typedef cache
-    let workspace = crate::workspace::GoWorkspace::new(Path::new("."), Path::new(""));
+    let workspace =
+        crate::workspace::GoWorkspace::new(Path::new("."), Path::new(""), Target::host());
 
     match workspace.run_bindgen(target_pkg) {
         Ok(content) => {
