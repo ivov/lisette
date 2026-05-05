@@ -115,6 +115,13 @@ html, body {
   letter-spacing: 0.5px;
 }
 
+.brand-version {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ─── Buttons ─────────────────────────────── */
 .btn {
   display: inline-flex;

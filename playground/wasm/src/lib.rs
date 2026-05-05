@@ -22,6 +22,12 @@ pub fn init() {
     console_error_panic_hook::set_once();
 }
 
+/// The Lisette compiler version this WASM was built against.
+#[wasm_bindgen]
+pub fn version() -> String {
+    env!("LIS_VERSION").to_string()
+}
+
 // ─── Serialisable output types ────────────────────────────────────────────────
 
 #[derive(Serialize, Default)]

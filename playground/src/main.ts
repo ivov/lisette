@@ -3,6 +3,7 @@ import { setupEditors, type DiagnosticItem } from "./editor/index.js";
 import { loadWasmBridge, type Diagnostic } from "./runner/wasm-bridge.js";
 import { executeGoSource, formatGoSource } from "./runner/executor.js";
 import { THEME_LIGHT, THEME_DARK } from "./editor/theme.js";
+import { readSourceFromHash, writeSourceToHash, copyShareUrl } from "./share.js";
 
 // ─── Pane resizer ─────────────────────────────────────────────────────────────
 function initResizer() {
@@ -42,6 +43,8 @@ const overlay        = document.getElementById("wasm-loading-overlay")!;
 const btnRun         = document.getElementById("btn-run") as HTMLButtonElement;
 const btnFormat      = document.getElementById("btn-format") as HTMLButtonElement;
 const btnCheck       = document.getElementById("btn-check") as HTMLButtonElement;
+const btnShare       = document.getElementById("btn-share") as HTMLButtonElement;
+const versionTag     = document.getElementById("brand-version")!;
 const statusEl       = document.getElementById("status-indicator")!;
 const outputText     = document.getElementById("output-text")!;
 const diagnosticList = document.getElementById("diagnostics-list")!;
@@ -100,6 +103,7 @@ function setButtons(disabled: boolean) {
   btnRun.disabled = disabled;
   btnFormat.disabled = disabled;
   btnCheck.disabled = disabled;
+  btnShare.disabled = disabled;
 }
 
 // ─── Diagnostics panel ────────────────────────────────────────────────────────
@@ -135,9 +139,11 @@ function escapeHtml(s: string): string {
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 async function main() {
   initResizer();
+  const sharedCode = readSourceFromHash();
   const editorResult = await setupEditors(
     document.getElementById("editor-container")!,
     document.getElementById("go-source-editor-container")!,
+    sharedCode ?? undefined,
   );
 
   // Switch editor theme when the OS colour scheme changes
@@ -169,9 +175,21 @@ async function main() {
     }
   })();
 
+  if (bridge) {
+    versionTag.textContent = `v${bridge.version}`;
+    versionTag.hidden = false;
+  }
+
   overlay.classList.add("hidden");
   setStatus("idle", "Ready");
   setButtons(false);
+
+  // ── Share ─────────────────────────────────────────────────────────────────
+  btnShare.addEventListener("click", async () => {
+    writeSourceToHash(editorResult.getCode());
+    const ok = await copyShareUrl();
+    setStatus(ok ? "ok" : "error", ok ? "Link copied" : "Copy failed");
+  });
 
   // ── Format ────────────────────────────────────────────────────────────────
   btnFormat.addEventListener("click", async () => {

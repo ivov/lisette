@@ -47,6 +47,7 @@ export interface DiagnosticItem {
 export async function setupEditors(
   editorContainer: HTMLElement,
   goSourceContainer: HTMLElement,
+  initialCode?: string,
 ): Promise<EditorSetupResult> {
   const monaco = await import("monaco-editor");
 
@@ -153,7 +154,7 @@ export async function setupEditors(
 
   // Main Lisette editor
   const mainEditor = monaco.editor.create(editorContainer, {
-    value: INITIAL_CODE,
+    value: initialCode ?? INITIAL_CODE,
     language: LANG_ID,
     theme,
     fontSize: 14,

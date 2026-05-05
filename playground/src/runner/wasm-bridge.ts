@@ -8,6 +8,7 @@
 // Matches the wasm-pack generated exports from public/wasm/lisette_wasm.js
 interface LisetteWasmModule {
   default(input?: unknown): Promise<unknown>;
+  version(): string;
   format(code: string): string;
   check(code: string): string;
   compile(code: string): string;
@@ -71,6 +72,7 @@ export interface SignatureHelpResult {
 }
 
 export interface LisetteBridge {
+  readonly version: string;
   format(code: string): Promise<FormatResult>;
   check(code: string): Promise<Diagnostic[]>;
   compile(code: string): Promise<CompileResult>;
@@ -81,7 +83,10 @@ export interface LisetteBridge {
 }
 
 class WasmBridge implements LisetteBridge {
-  constructor(private readonly wasm: LisetteWasmModule) {}
+  readonly version: string;
+  constructor(private readonly wasm: LisetteWasmModule) {
+    this.version = this.wasm.version();
+  }
 
   async format(code: string): Promise<FormatResult> {
     try {

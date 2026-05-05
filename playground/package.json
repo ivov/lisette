@@ -11,6 +11,7 @@
     "build:all": "npm run build:wasm && npm run build"
   },
   "dependencies": {
+    "lz-string": "^1.5.0",
     "monaco-editor": "^0.52.2",
     "monaco-editor-textmate": "^4.0.0",
     "onigasm": "^2.2.5",
