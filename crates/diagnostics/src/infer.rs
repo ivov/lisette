@@ -625,7 +625,7 @@ pub fn struct_missing_fields(
     LisetteDiagnostic::error(format!("Struct `{}` is missing fields", simple_name))
         .with_infer_code("missing_struct_fields")
         .with_span_label(&name_span, format!("missing fields: {}", fields_list))
-        .with_help("Initialize all fields in this struct literal")
+        .with_help("Initialize all fields, or add `..` to zero-fill the rest")
 }
 
 pub fn pattern_missing_fields(missing: &[String], span: Span) -> LisetteDiagnostic {

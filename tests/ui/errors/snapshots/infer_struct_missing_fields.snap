@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
     ·              ╰── missing fields: age, email
  10 │     name: "Alice",
     ╰────
-  help: Initialize all fields in this struct literal · code: [infer.missing_struct_fields]
+  help: Initialize all fields, or add `..` to zero-fill the rest · code: [infer.missing_struct_fields]
