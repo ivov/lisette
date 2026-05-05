@@ -39,6 +39,11 @@ export function init(): void;
  */
 export function signature_help(code: string, offset: number): string;
 
+/**
+ * The Lisette compiler version this WASM was built against.
+ */
+export function version(): string;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -51,6 +56,7 @@ export interface InitOutput {
     readonly hover: (a: number, b: number, c: number) => [number, number];
     readonly init: () => void;
     readonly signature_help: (a: number, b: number, c: number) => [number, number];
+    readonly version: () => [number, number];
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
