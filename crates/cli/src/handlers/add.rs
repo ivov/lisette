@@ -444,7 +444,6 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
     let locator = deps::TypedefLocator::new(
         manifest.go_deps(),
         Some(project_root.clone()),
-        std::env::var("HOME").ok(),
         Target::host(),
     );
 
@@ -453,16 +452,7 @@ fn setup_project(dep: &ParsedDependency) -> Result<ProjectContext, i32> {
         return Err(1);
     }
 
-    let typedef_cache_dir = match std::env::var("HOME") {
-        Ok(h) => deps::typedef_cache_dir(&h),
-        Err(_) => {
-            error!(
-                "failed to add dependency",
-                "HOME environment variable not set".to_string()
-            );
-            return Err(1);
-        }
-    };
+    let typedef_cache_dir = deps::typedef_cache_dir(&project_root);
 
     let workspace = GoWorkspace::new(&project_target_dir, &typedef_cache_dir, Target::host());
 

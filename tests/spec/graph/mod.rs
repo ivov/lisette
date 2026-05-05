@@ -11,8 +11,8 @@ fn default_resolver() -> deps::TypedefLocator {
     deps::TypedefLocator::default()
 }
 
-fn host_module_cache_dir(home: &str, module: &str) -> std::path::PathBuf {
-    deps::typedef_cache_dir(home)
+fn host_module_cache_dir(project_root: &std::path::Path, module: &str) -> std::path::PathBuf {
+    deps::typedef_cache_dir(project_root)
         .join(stdlib::Target::host().cache_segment())
         .join(module)
 }
@@ -227,7 +227,7 @@ fn graph_declared_dep_missing_typedef() {
             via: None,
         },
     );
-    let resolver = deps::TypedefLocator::new(go_deps, None, None, stdlib::Target::host());
+    let resolver = deps::TypedefLocator::new(go_deps, None, stdlib::Target::host());
 
     let sink = LocalSink::new();
     let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
@@ -268,7 +268,7 @@ fn graph_subpackage_missing_typedef_points_at_add() {
             via: None,
         },
     );
-    let resolver = deps::TypedefLocator::new(go_deps, None, None, stdlib::Target::host());
+    let resolver = deps::TypedefLocator::new(go_deps, None, stdlib::Target::host());
 
     let sink = LocalSink::new();
     let _result = build_module_graph(&mut store, Some(&fs), "main", &sink, false, &resolver);
@@ -417,10 +417,10 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
     use std::collections::BTreeMap;
 
     let tmp = tempfile::tempdir().unwrap();
+    let project_root = tmp.path();
 
     // Set up cache with root package and subpackage
-    let home = tmp.path().join("home").to_string_lossy().to_string();
-    let root_dir = host_module_cache_dir(&home, "github.com/gorilla/mux@v1.8.0");
+    let root_dir = host_module_cache_dir(project_root, "github.com/gorilla/mux@v1.8.0");
     let sub_dir = root_dir.join("middleware");
     std::fs::create_dir_all(&sub_dir).unwrap();
     std::fs::write(root_dir.join("mux.d.lis"), "// root\n").unwrap();
@@ -436,8 +436,7 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
     );
     let resolver = deps::TypedefLocator::new(
         go_deps,
-        None,
-        Some(tmp.path().join("home").to_string_lossy().to_string()),
+        Some(project_root.to_path_buf()),
         stdlib::Target::host(),
     );
 
@@ -471,8 +470,8 @@ fn third_party_go_struct_impl_methods_registered() {
     use semantics::loader::Loader;
 
     let tmp = tempfile::tempdir().unwrap();
-    let home = tmp.path().join("home").to_string_lossy().to_string();
-    let cache_dir = host_module_cache_dir(&home, "github.com/gorilla/mux@v1.8.0");
+    let project_root = tmp.path();
+    let cache_dir = host_module_cache_dir(project_root, "github.com/gorilla/mux@v1.8.0");
     std::fs::create_dir_all(&cache_dir).unwrap();
     std::fs::write(
         cache_dir.join("mux.d.lis"),
@@ -488,7 +487,11 @@ fn third_party_go_struct_impl_methods_registered() {
             via: None,
         },
     );
-    let resolver = deps::TypedefLocator::new(go_deps, None, Some(home), stdlib::Target::host());
+    let resolver = deps::TypedefLocator::new(
+        go_deps,
+        Some(project_root.to_path_buf()),
+        stdlib::Target::host(),
+    );
 
     let source = r#"
 import "go:github.com/gorilla/mux"
@@ -560,8 +563,8 @@ fn stdlib_cache_save_load_excludes_third_party() {
     use semantics::loader::Loader;
 
     let tmp = tempfile::tempdir().unwrap();
-    let home = tmp.path().join("home").to_string_lossy().to_string();
-    let cache_dir = host_module_cache_dir(&home, "github.com/gorilla/mux@v1.8.0");
+    let project_root = tmp.path();
+    let cache_dir = host_module_cache_dir(project_root, "github.com/gorilla/mux@v1.8.0");
     std::fs::create_dir_all(&cache_dir).unwrap();
     std::fs::write(cache_dir.join("mux.d.lis"), "pub const VERSION: string\n").unwrap();
 
@@ -573,7 +576,11 @@ fn stdlib_cache_save_load_excludes_third_party() {
             via: None,
         },
     );
-    let resolver = deps::TypedefLocator::new(go_deps, None, Some(home), stdlib::Target::host());
+    let resolver = deps::TypedefLocator::new(
+        go_deps,
+        Some(project_root.to_path_buf()),
+        stdlib::Target::host(),
+    );
 
     let source = r#"
 import "go:github.com/gorilla/mux"

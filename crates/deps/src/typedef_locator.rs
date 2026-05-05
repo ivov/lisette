@@ -36,7 +36,6 @@ pub enum TypedefOrigin {
 pub struct TypedefLocator {
     deps: BTreeMap<String, GoDependency>,
     project_root: Option<PathBuf>,
-    home: Option<String>,
     target: Target,
 }
 
@@ -44,13 +43,11 @@ impl TypedefLocator {
     pub fn new(
         deps: BTreeMap<String, GoDependency>,
         project_root: Option<PathBuf>,
-        home: Option<String>,
         target: Target,
     ) -> Self {
         Self {
             deps,
             project_root,
-            home,
             target,
         }
     }
@@ -69,7 +66,6 @@ impl TypedefLocator {
         let locator = Self::new(
             manifest.go_deps(),
             Some(project_root.to_path_buf()),
-            std::env::var("HOME").ok(),
             Target::host(),
         );
 
@@ -111,7 +107,7 @@ impl TypedefLocator {
 
         let version = &dep.version;
 
-        let Some(home_path) = &self.home else {
+        let Some(project_root) = &self.project_root else {
             return TypedefLocatorResult::MissingTypedef {
                 module: module_path.to_string(),
                 version: version.clone(),
@@ -125,7 +121,7 @@ impl TypedefLocator {
             },
             package: package_path,
         };
-        let typedef_cache_dir = typedef_cache_dir(home_path);
+        let typedef_cache_dir = typedef_cache_dir(project_root);
         let typedef_path = pkg.typedef_path(&typedef_cache_dir, self.target);
 
         match std::fs::read_to_string(&typedef_path) {

@@ -22,9 +22,11 @@ pub fn is_stdlib(pkg: &str) -> bool {
     !is_third_party(pkg)
 }
 
-pub fn typedef_cache_dir(home: &str) -> PathBuf {
+pub fn typedef_cache_dir(project_root: &Path) -> PathBuf {
     let lis_version = env!("CARGO_PKG_VERSION");
-    PathBuf::from(home).join(format!(".lisette/cache/typedefs/lis@v{}", lis_version))
+    project_root
+        .join("target/.lisette/typedefs")
+        .join(format!("lis@v{}", lis_version))
 }
 
 #[derive(Clone, Copy)]
@@ -48,8 +50,8 @@ impl GoPackage<'_> {
     /// Build the path to a `.d.lis` file under a base directory.
     ///
     /// ```text
-    /// ~/.lisette/cache/typedefs/lis@v0.1.6/darwin_arm64/github.com/gorilla/mux@v1.8.0/mux.d.lis
-    /// ~/.lisette/cache/typedefs/lis@v0.1.6/darwin_arm64/github.com/gorilla/mux@v1.8.0/middleware/middleware.d.lis
+    /// <project>/target/.lisette/typedefs/lis@v0.1.6/darwin_arm64/github.com/gorilla/mux@v1.8.0/mux.d.lis
+    /// <project>/target/.lisette/typedefs/lis@v0.1.6/darwin_arm64/github.com/gorilla/mux@v1.8.0/middleware/middleware.d.lis
     /// ```
     pub fn typedef_path(&self, base_dir: &Path, target: Target) -> PathBuf {
         let module_dir = base_dir

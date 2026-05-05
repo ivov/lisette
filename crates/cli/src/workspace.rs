@@ -42,7 +42,7 @@ pub struct GoModuleInfo {
 pub struct GoWorkspace<'a> {
     /// The dir with the `go.mod` that `go` commands run against.
     root: &'a Path,
-    /// The typedef cache root, e.g. `~/.lisette/cache/typedefs/lis@v0.1.7`.
+    /// The typedef cache root, e.g. `<project>/target/.lisette/typedefs/lis@v0.1.7`.
     pub typedef_cache_dir: &'a Path,
     target: stdlib::Target,
 }

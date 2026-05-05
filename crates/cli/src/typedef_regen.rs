@@ -12,24 +12,14 @@ use deps::{GoModule, Manifest, TypedefLocator};
 use stdlib::Target;
 
 /// Generate any Go typedefs declared in the manifest but missing from the cache:
-/// `~/.lisette/cache/typedefs/lis@v{version}/{module}@{version}/*.d.lis`
+/// `<project>/target/.lisette/typedefs/lis@v{version}/<target>/{module}@{version}/*.d.lis`
 pub fn generate_missing_typedefs(project_root: &Path, manifest: &Manifest) -> Result<(), i32> {
     let go_deps = manifest.go_deps();
     if go_deps.is_empty() {
         return Ok(());
     }
 
-    let home = match std::env::var("HOME") {
-        Ok(h) => h,
-        Err(_) => {
-            error!(
-                "failed to regenerate Go typedefs",
-                "HOME environment variable not set".to_string()
-            );
-            return Err(1);
-        }
-    };
-    let typedef_cache_dir = deps::typedef_cache_dir(&home);
+    let typedef_cache_dir = deps::typedef_cache_dir(project_root);
     let target = Target::host();
 
     let missing_modules: Vec<(String, String)> = go_deps
@@ -85,12 +75,7 @@ pub fn generate_missing_typedefs(project_root: &Path, manifest: &Manifest) -> Re
         return Ok(());
     }
 
-    let locator = TypedefLocator::new(
-        go_deps.clone(),
-        Some(project_root.to_path_buf()),
-        Some(home),
-        target,
-    );
+    let locator = TypedefLocator::new(go_deps, Some(project_root.to_path_buf()), target);
     if let Err(msg) = go_cli::write_go_mod(&project_target_dir, &manifest.project.name, &locator) {
         error!("failed to write target/go.mod", msg);
         return Err(1);
