@@ -99,9 +99,9 @@ func (e *Emitter) EmitImports(externalPkgs convert.ExternalPkgs) {
 
 // computePkgAliases resolves each path to a local prefix. On a Go-declared
 // name collision (e.g. `html/template` vs `text/template`) the path with
-// the fewest segments keeps the bare name (lex tiebreaker); later paths
-// get a `<parent>_<base>` alias. Shortest-first matters because
-// `aliasForPath` cannot synthesize an alias for a single-segment path.
+// the fewest segments keeps the bare name (lex tiebreaker); the rest get a
+// synthesized alias by widening the trailing-segment window until unique
+// against bare names and previously-synthesized aliases.
 func computePkgAliases(externalPkgs convert.ExternalPkgs) map[string]string {
 	byName := make(map[string][]string)
 	for path, name := range externalPkgs {
@@ -109,31 +109,56 @@ func computePkgAliases(externalPkgs convert.ExternalPkgs) map[string]string {
 	}
 
 	aliases := make(map[string]string, len(externalPkgs))
+	taken := make(map[string]bool)
+	pending := make([]string, 0, len(externalPkgs)-len(byName))
+
 	for name, paths := range byName {
-		if len(paths) == 1 {
-			aliases[paths[0]] = name
-			continue
-		}
-		slices.SortFunc(paths, func(a, b string) int {
-			if as, bs := strings.Count(a, "/"), strings.Count(b, "/"); as != bs {
-				return as - bs
-			}
-			return strings.Compare(a, b)
-		})
+		slices.SortFunc(paths, compareByDepth)
 		aliases[paths[0]] = name
-		for _, path := range paths[1:] {
-			aliases[path] = aliasForPath(path)
-		}
+		taken[name] = true
+		pending = append(pending, paths[1:]...)
 	}
+
+	slices.SortFunc(pending, compareByDepth)
+	for _, path := range pending {
+		alias := aliasForPath(path, taken)
+		aliases[path] = alias
+		taken[alias] = true
+	}
+
 	return aliases
 }
 
-func aliasForPath(path string) string {
+func compareByDepth(a, b string) int {
+	if as, bs := strings.Count(a, "/"), strings.Count(b, "/"); as != bs {
+		return as - bs
+	}
+	return strings.Compare(a, b)
+}
+
+func aliasForPath(path string, taken map[string]bool) string {
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 {
 		return sanitizeIdent(path)
 	}
-	return sanitizeIdent(parts[len(parts)-2]) + "_" + sanitizeIdent(parts[len(parts)-1])
+	for n := 2; n < len(parts); n++ {
+		candidate := joinAndSanitize(parts[len(parts)-n:])
+		if !taken[candidate] {
+			return candidate
+		}
+	}
+	return joinAndSanitize(parts)
+}
+
+func joinAndSanitize(parts []string) string {
+	var b strings.Builder
+	for i, p := range parts {
+		if i > 0 {
+			b.WriteByte('_')
+		}
+		b.WriteString(sanitizeIdent(p))
+	}
+	return b.String()
 }
 
 func sanitizeIdent(s string) string {
