@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 96
+description: "input: \nimport \"go:fmt\"\nfn test(s: string) {\n  for b in s.bytes() {\n    fmt.Println(b)\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func test(s string) {
+	for _i_1 := 0; _i_1 < len(s); _i_1++ {
+		b := s[_i_1]
+		fmt.Println(b)
+	}
+}

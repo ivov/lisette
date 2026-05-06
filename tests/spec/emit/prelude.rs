@@ -51,6 +51,52 @@ fn test(s: string, i: int) -> rune {
 }
 
 #[test]
+fn string_bytes() {
+    let input = r#"
+fn test(s: string) -> Slice<byte> {
+  s.bytes()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_runes() {
+    let input = r#"
+fn test(s: string) -> Slice<rune> {
+  s.runes()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_runes_zero_alloc() {
+    let input = r#"
+import "go:fmt"
+fn test(s: string) {
+  for r in s.runes() {
+    fmt.Println(r)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_bytes_zero_alloc() {
+    let input = r#"
+import "go:fmt"
+fn test(s: string) {
+  for b in s.bytes() {
+    fmt.Println(b)
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_new() {
     let input = r#"
 fn test() -> Slice<int> {
@@ -757,6 +803,135 @@ fn main() {
   let opt: Option<int> = Some(1)
   let r = opt.and_then(g)
   let _ = r
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_range() {
+    let input = r#"
+fn test(s: string) -> string {
+  s.substring(0..5)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_range_inclusive() {
+    let input = r#"
+fn test(s: string) -> string {
+  s.substring(0..=4)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_range_from() {
+    let input = r#"
+fn test(s: string) -> string {
+  s.substring(6..)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_range_to() {
+    let input = r#"
+fn test(s: string) -> string {
+  s.substring(..5)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_range_to_inclusive() {
+    let input = r#"
+fn test(s: string) -> string {
+  s.substring(..=4)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_stored_range_to() {
+    let input = r#"
+fn test(s: string, r: RangeTo<int>) -> string {
+  s.substring(r)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_ufcs() {
+    let input = r#"
+fn test(s: string) -> string {
+  string.substring(s, 0..5)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_alias_receiver() {
+    let input = r#"
+type MyString = string
+
+fn test(s: MyString, r: RangeTo<int>) -> string {
+  s.substring(r)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_native_method_on_alias() {
+    let input = r#"
+type MyString = string
+
+fn test(s: MyString) -> bool {
+  s.contains("foo")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_aliased_range() {
+    let input = r#"
+type Prefix = RangeTo<int>
+fn test(s: string, r: Prefix) -> string {
+  s.substring(r)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_index_aliased_range() {
+    let input = r#"
+type Prefix = RangeTo<int>
+fn test(xs: Slice<int>, r: Prefix) -> Slice<int> {
+  xs[r]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn mut_subslice_clones_for_aliased_range() {
+    let input = r#"
+type Prefix = Range<int>
+fn test(arr: Slice<int>, r: Prefix) -> Slice<int> {
+  let mut owned = arr[r]
+  owned[0] = 99
+  owned
 }
 "#;
     assert_emit_snapshot!(input);

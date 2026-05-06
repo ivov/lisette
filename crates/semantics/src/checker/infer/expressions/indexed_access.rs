@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
-use syntax::types::{CompoundKind, Type};
+use syntax::types::{CompoundKind, Type, peel_to_range_type};
 
 use super::super::super::TaskState;
 
@@ -81,16 +81,14 @@ impl TaskState<'_> {
         // Handle range-typed variables used as slice indices (e.g. `let r = 2..5; items[r]`).
         // Inline ranges are caught by `index.is_range()` above; this handles the case where
         // the range is stored in a variable.
-        let is_range_index = (type_name == "Slice" || type_name == "string")
-            && resolved_index_ty.get_name().is_some_and(|n| {
-                matches!(
-                    n,
-                    "Range" | "RangeInclusive" | "RangeFrom" | "RangeTo" | "RangeToInclusive"
-                )
-            });
+        let peeled_range = if type_name == "Slice" || type_name == "string" {
+            peel_to_range_type(&resolved_index_ty)
+        } else {
+            None
+        };
 
-        if is_range_index {
-            if let Some(bound_ty) = resolved_index_ty.get_type_params().and_then(|p| p.first()) {
+        if let Some(peeled) = peeled_range {
+            if let Some(bound_ty) = peeled.get_type_params().and_then(|p| p.first()) {
                 let int_ty = self.type_int();
                 self.unify(store, &int_ty, bound_ty, &span);
             }

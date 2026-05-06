@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 70
+description: "input: \nfn test(s: string) -> Slice<rune> {\n  s.runes()\n}\n"
+---
+package main
+
+func test(s string) []rune {
+	return []rune(s)
+}

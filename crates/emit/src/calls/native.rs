@@ -1,9 +1,11 @@
 use super::NativeCallContext;
 use crate::Emitter;
+use crate::expressions::access::index_access::range_var_bounds;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
 use crate::utils::Staged;
 use syntax::ast::Expression;
+use syntax::types::peel_to_range_type;
 
 #[derive(Clone, Copy)]
 pub(super) enum InlineImport {
@@ -11,6 +13,7 @@ pub(super) enum InlineImport {
     Slices,
     Strings,
     Maps,
+    Stdlib,
 }
 
 struct InlineRule {
@@ -81,6 +84,20 @@ static INLINE_METHODS: &[InlineRule] = &[
         template: "maps.Clone({r})",
         import: InlineImport::Maps,
     },
+    InlineRule {
+        types: &[N::String],
+        method: "bytes",
+        arity: 0,
+        template: "[]byte({r})",
+        import: InlineImport::None,
+    },
+    InlineRule {
+        types: &[N::String],
+        method: "runes",
+        arity: 0,
+        template: "[]rune({r})",
+        import: InlineImport::None,
+    },
     // Single-arg methods
     InlineRule {
         types: &[N::Map],
@@ -149,8 +166,8 @@ static INLINE_METHODS: &[InlineRule] = &[
         types: &[N::String],
         method: "rune_at",
         arity: 1,
-        template: "[]rune({r})[{0}]",
-        import: InlineImport::None,
+        template: "lisette.RuneAt({r}, {0})",
+        import: InlineImport::Stdlib,
     },
     InlineRule {
         types: &[N::Slice],
@@ -228,6 +245,7 @@ impl Emitter<'_> {
             InlineImport::Slices => self.flags.needs_slices = true,
             InlineImport::Strings => self.flags.needs_strings = true,
             InlineImport::Maps => self.flags.needs_maps = true,
+            InlineImport::Stdlib => self.flags.needs_stdlib = true,
             InlineImport::None => {}
         }
     }
@@ -240,6 +258,10 @@ impl Emitter<'_> {
         let Expression::DotAccess { expression, .. } = ctx.function else {
             unreachable!("expected DotAccess for native method call")
         };
+
+        if matches!(ctx.native_type, NativeGoType::String) && ctx.method == "substring" {
+            return self.emit_string_substring(output, expression, ctx.args);
+        }
 
         let mut all_stages: Vec<Staged> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
@@ -305,6 +327,13 @@ impl Emitter<'_> {
         output: &mut String,
         ctx: &NativeCallContext,
     ) -> String {
+        if matches!(ctx.native_type, NativeGoType::String)
+            && ctx.method == "substring"
+            && ctx.args.len() >= 2
+        {
+            return self.emit_string_substring(output, &ctx.args[0], &ctx.args[1..]);
+        }
+
         let stages = self.stage_native_method_args(ctx.function, ctx.args);
 
         let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 0);
@@ -336,5 +365,64 @@ impl Emitter<'_> {
             type_args_string,
             emitted_args.join(", ")
         )
+    }
+
+    fn emit_string_substring(
+        &mut self,
+        output: &mut String,
+        receiver_expr: &Expression,
+        args: &[Expression],
+    ) -> String {
+        self.flags.needs_stdlib = true;
+        let arg = &args[0];
+
+        if let Expression::Range {
+            start,
+            end,
+            inclusive,
+            ..
+        } = arg
+        {
+            let mut stages = vec![self.stage_operand(receiver_expr)];
+            if let Some(s) = start.as_deref() {
+                stages.push(self.stage_operand(s));
+            }
+            if let Some(e) = end.as_deref() {
+                stages.push(self.stage_operand(e));
+            }
+            let values = self.sequence(output, stages, "_arg");
+            let mut bounds = values.iter().skip(1);
+            let start_bound = start.is_some().then(|| bounds.next().unwrap().clone());
+            let end_bound = end.is_some().then(|| {
+                let e = bounds.next().unwrap();
+                if *inclusive {
+                    format!("{}+1", e)
+                } else {
+                    e.clone()
+                }
+            });
+            return format_substring_call(&values[0], start_bound.as_deref(), end_bound.as_deref());
+        }
+
+        let arg_ty = arg.get_type();
+        let range_kind = peel_to_range_type(&arg_ty)
+            .and_then(|t| t.get_name())
+            .expect("substring arg should resolve to a known range type");
+        let receiver_staged = self.stage_operand(receiver_expr);
+        output.push_str(&receiver_staged.setup);
+        let recv = receiver_staged.value;
+        let range_var = self.emit_or_capture(output, arg, "range");
+        let (start, end) = range_var_bounds(&range_var, range_kind);
+        format_substring_call(&recv, start.as_deref(), end.as_deref())
+    }
+}
+
+fn format_substring_call(recv: &str, start: Option<&str>, end: Option<&str>) -> String {
+    let pkg = go_name::GO_STDLIB_PKG;
+    match (start, end) {
+        (Some(s), Some(e)) => format!("{}.Substring({}, {}, {})", pkg, recv, s, e),
+        (Some(s), None) => format!("{}.SubstringFrom({}, {})", pkg, recv, s),
+        (None, Some(e)) => format!("{}.SubstringTo({}, {})", pkg, recv, e),
+        (None, None) => unreachable!("`s.substring(..)` is rejected upstream"),
     }
 }

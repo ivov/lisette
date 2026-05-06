@@ -54,6 +54,14 @@ impl Emitter<'_> {
             return;
         }
 
+        if let Some((kind, receiver)) = recognize_string_view_loop(binding, iterable) {
+            match kind {
+                StringViewKind::Runes => self.emit_runes_for_loop(output, binding, receiver, body),
+                StringViewKind::Bytes => self.emit_bytes_for_loop(output, binding, receiver, body),
+            }
+            return;
+        }
+
         let iter_expression = self.emit_operand(output, iterable);
         let iter_expression = if iterable.get_type().is_ref() {
             format!("*{}", iter_expression)
@@ -375,5 +383,112 @@ impl Emitter<'_> {
         output.push_str("}\n");
 
         self.exit_scope();
+    }
+
+    /// `for r in s.runes()` lowers to Go's native rune-range over the string,
+    /// bypassing the `[]rune(s)` allocation.
+    fn emit_runes_for_loop(
+        &mut self,
+        output: &mut String,
+        binding: &Binding,
+        receiver: &Expression,
+        body: &Expression,
+    ) {
+        self.enter_scope();
+        let recv_str = self.emit_operand(output, receiver);
+        if let Some(label) = self.current_loop_label() {
+            write_line!(output, "{}:", label);
+        }
+        let loop_var = self.bind_loop_pattern(&binding.pattern, None);
+        if loop_var == "_" {
+            write_line!(output, "for range {} {{", recv_str);
+        } else {
+            write_line!(output, "for _, {} := range {} {{", loop_var, recv_str);
+        }
+        self.emit_block(output, body);
+        output.push_str("}\n");
+        self.exit_scope();
+    }
+
+    /// `for b in s.bytes()` lowers to a C-style byte-indexed loop, bypassing
+    /// the `[]byte(s)` allocation. Captures the receiver if it has side
+    /// effects, since `len(s)` and `s[i]` reference it twice.
+    fn emit_bytes_for_loop(
+        &mut self,
+        output: &mut String,
+        binding: &Binding,
+        receiver: &Expression,
+        body: &Expression,
+    ) {
+        self.enter_scope();
+        let recv_var = self.emit_or_capture(output, receiver, "_s");
+        if let Some(label) = self.current_loop_label() {
+            write_line!(output, "{}:", label);
+        }
+        let idx_var = self.fresh_var(Some("_i"));
+        let loop_var = self.bind_loop_pattern(&binding.pattern, None);
+        write_line!(
+            output,
+            "for {} := 0; {} < len({}); {}++ {{",
+            idx_var,
+            idx_var,
+            recv_var,
+            idx_var
+        );
+        if loop_var != "_" {
+            write_line!(output, "{} := {}[{}]", loop_var, recv_var, idx_var);
+        }
+        self.emit_block(output, body);
+        output.push_str("}\n");
+        self.exit_scope();
+    }
+}
+
+#[derive(Clone, Copy)]
+enum StringViewKind {
+    Bytes,
+    Runes,
+}
+
+/// Recognise `for x in s.bytes()` / `for x in s.runes()` for zero-alloc lowering.
+fn recognize_string_view_loop<'a>(
+    binding: &'a Binding,
+    iterable: &'a Expression,
+) -> Option<(StringViewKind, &'a Expression)> {
+    if !matches!(
+        &binding.pattern,
+        Pattern::Identifier { .. } | Pattern::WildCard { .. }
+    ) {
+        return None;
+    }
+
+    let Expression::Call {
+        expression, args, ..
+    } = iterable
+    else {
+        return None;
+    };
+
+    if !args.is_empty() {
+        return None;
+    }
+
+    let Expression::DotAccess {
+        expression: receiver,
+        member,
+        ..
+    } = expression.as_ref()
+    else {
+        return None;
+    };
+
+    if !receiver.get_type().has_name("string") {
+        return None;
+    }
+
+    match member.as_str() {
+        "bytes" => Some((StringViewKind::Bytes, receiver.as_ref())),
+        "runes" => Some((StringViewKind::Runes, receiver.as_ref())),
+        _ => None,
     }
 }

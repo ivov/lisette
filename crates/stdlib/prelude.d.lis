@@ -89,6 +89,15 @@ impl string {
 
   /// Returns the rune at index `i`.
   fn rune_at(self, i: int) -> rune
+
+  /// Returns the bytes of the string as a `Slice<byte>`.
+  fn bytes(self) -> Slice<byte>
+
+  /// Returns the runes of the string as a `Slice<rune>`.
+  fn runes(self) -> Slice<rune>
+
+  /// Returns the substring at the given rune-indexed range.
+  fn substring(self, r: Range<int>) -> string
 }
 
 // -----------------------

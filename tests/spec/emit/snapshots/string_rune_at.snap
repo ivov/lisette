@@ -4,6 +4,8 @@ description: "input: \nfn test(s: string, i: int) -> rune {\n  s.rune_at(i)\n}\n
 ---
 package main
 
+import lisette "github.com/ivov/lisette/prelude"
+
 func test(s string, i int) rune {
-	return []rune(s)[i]
+	return lisette.RuneAt(s, i)
 }

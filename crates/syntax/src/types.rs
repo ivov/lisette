@@ -157,6 +157,24 @@ pub fn module_part(id: &str) -> &str {
     id.split('.').next().unwrap_or(id)
 }
 
+pub fn is_range_type_name(name: &str) -> bool {
+    matches!(
+        name,
+        "Range" | "RangeInclusive" | "RangeFrom" | "RangeTo" | "RangeToInclusive"
+    )
+}
+
+pub fn peel_to_range_type(ty: &Type) -> Option<&Type> {
+    std::iter::successors(Some(ty), |t| match t {
+        Type::Nominal {
+            underlying_ty: Some(u),
+            ..
+        } => Some(u.as_ref()),
+        _ => None,
+    })
+    .find(|t| t.get_name().is_some_and(is_range_type_name))
+}
+
 /// type param name -> type variable
 pub type SubstitutionMap = HashMap<EcoString, Type>;
 

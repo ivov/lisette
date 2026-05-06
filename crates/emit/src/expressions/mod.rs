@@ -1,4 +1,4 @@
-mod access;
+pub(crate) mod access;
 mod dot_classify;
 mod identifiers;
 pub(crate) mod literals;

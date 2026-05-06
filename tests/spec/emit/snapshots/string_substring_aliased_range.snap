@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 893
+description: "input: \ntype Prefix = RangeTo<int>\nfn test(s: string, r: Prefix) -> string {\n  s.substring(r)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Prefix = lisette.RangeTo[int]
+
+func test(s string, r Prefix) string {
+	return lisette.SubstringTo(s, r.End)
+}

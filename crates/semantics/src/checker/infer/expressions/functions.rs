@@ -4,7 +4,9 @@ use crate::checker::EnvResolve;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Pattern, Span, StructKind};
 use syntax::program::{CallKind, Definition, DefinitionBody, NativeTypeKind};
-use syntax::types::{Bound, SubstitutionMap, Symbol, Type, substitute, unqualified_name};
+use syntax::types::{
+    Bound, SubstitutionMap, Symbol, Type, peel_to_range_type, substitute, unqualified_name,
+};
 
 use super::super::TaskState;
 use super::super::unify::Dispatched;
@@ -366,10 +368,28 @@ impl TaskState<'_> {
             let _ = self.speculatively(|this| this.try_unify(store, &peeled, &return_ty, &span));
         }
 
-        let new_args = self.infer_call_arguments(store, args, &param_types);
+        let call_kind = self.classify_call(store, &callee_expression);
+
+        let substring_range_idx =
+            self.substring_carve_out_param_idx(call_kind, &callee_expression, &param_types);
+        let effective_param_types = if let Some(idx) = substring_range_idx {
+            let mut adjusted = param_types.clone();
+            adjusted[idx] = self.new_type_var();
+            adjusted
+        } else {
+            param_types.clone()
+        };
+
+        let new_args = self.infer_call_arguments(store, args, &effective_param_types);
         self.check_call_arity(&param_types, &new_args, &callee_expression, &span);
         self.check_mut_param_arguments(&new_args, &param_mutability, &callee_expression);
         self.check_range_to_for_variadic(&new_args, &variadic_elem_ty);
+
+        if let Some(idx) = substring_range_idx
+            && let Some(arg) = new_args.get(idx)
+        {
+            self.validate_substring_range_arg(store, arg);
+        }
 
         let new_spread = (*spread).map(|spread_expr| match variadic_elem_ty {
             Some(elem_ty) => {
@@ -440,8 +460,6 @@ impl TaskState<'_> {
         } else {
             return_ty.clone()
         };
-
-        let call_kind = self.classify_call(store, &callee_expression);
 
         Expression::Call {
             expression: callee_expression.into(),
@@ -1096,7 +1114,8 @@ impl TaskState<'_> {
                 }
 
                 // Native method: receiver.method() on Slice/Map/Channel/etc.
-                if let Some(kind) = NativeTypeKind::from_type(&receiver_ty) {
+                let peeled = store.deep_resolve_alias(&receiver_ty);
+                if let Some(kind) = NativeTypeKind::from_type(&peeled) {
                     return CallKind::NativeMethod(kind);
                 }
 
@@ -1398,5 +1417,52 @@ impl TaskState<'_> {
         if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
             self.facts.mark_mutated(binding_id);
         }
+    }
+
+    /// Verify the substring arg is a range type over `int`; emit a `Range<int>` mismatch otherwise.
+    fn validate_substring_range_arg(&mut self, store: &mut Store, arg: &Expression) {
+        let arg_ty = arg.get_type().resolve_in(&self.env);
+        let arg_span = arg.get_span();
+        let int_ty = self.type_int();
+
+        if let Some(peeled) = peel_to_range_type(&arg_ty) {
+            if let Some(inner) = peeled.get_type_params().and_then(|p| p.first()) {
+                self.unify(store, &int_ty, inner, &arg_span);
+            }
+        } else {
+            let expected = self.type_range(store, int_ty);
+            self.unify(store, &expected, &arg_ty, &arg_span);
+        }
+    }
+
+    /// Index of the `Range` param to relax for a native-string `substring` call, or `None`.
+    fn substring_carve_out_param_idx(
+        &self,
+        call_kind: CallKind,
+        callee: &Expression,
+        param_types: &[Type],
+    ) -> Option<usize> {
+        if !matches!(
+            call_kind,
+            CallKind::NativeMethod(NativeTypeKind::String)
+                | CallKind::NativeMethodIdentifier(NativeTypeKind::String)
+        ) {
+            return None;
+        }
+        let is_substring = match callee {
+            Expression::DotAccess { member, .. } => member.as_str() == "substring",
+            Expression::Identifier { value, .. } => value
+                .rsplit_once('.')
+                .is_some_and(|(_, method)| method == "substring"),
+            _ => false,
+        };
+        if !is_substring {
+            return None;
+        }
+        param_types.iter().position(|p| {
+            p.resolve_in(&self.env)
+                .get_name()
+                .is_some_and(|n| n == "Range")
+        })
     }
 }

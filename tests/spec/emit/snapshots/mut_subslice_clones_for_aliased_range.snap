@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 917
+description: "input: \ntype Prefix = Range<int>\nfn test(arr: Slice<int>, r: Prefix) -> Slice<int> {\n  let mut owned = arr[r]\n  owned[0] = 99\n  owned\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"slices"
+)
+
+type Prefix = lisette.Range[int]
+
+func test(arr []int, r Prefix) []int {
+	owned := slices.Clone(arr[r.Start:r.End:r.End])
+	owned[0] = 99
+	return owned
+}

@@ -1,4 +1,5 @@
 use syntax::ast::{Expression, UnaryOperator};
+use syntax::types::peel_to_range_type;
 
 use crate::Emitter;
 use crate::utils::Staged;
@@ -29,14 +30,10 @@ impl Emitter<'_> {
 
         let base_staged = self.stage_base_with_deref(expression);
 
-        // Range-typed variable as index (e.g. `items[r]` where `r: Range<int>`).
+        // Range-typed variable as index (e.g. `items[r]` where `r: Range<int>`,
+        // or `r: Prefix` where `type Prefix = RangeTo<int>`).
         let index_ty = index.get_type();
-        if let Some(range_kind) = index_ty.get_name()
-            && matches!(
-                range_kind,
-                "Range" | "RangeInclusive" | "RangeFrom" | "RangeTo" | "RangeToInclusive"
-            )
-        {
+        if let Some(range_kind) = peel_to_range_type(&index_ty).and_then(|t| t.get_name()) {
             let needs_cap = expression.get_type().has_name("Slice");
             output.push_str(&base_staged.setup);
             let index_string = self.emit_or_capture(output, index, "range");
@@ -142,26 +139,41 @@ impl Emitter<'_> {
         range_kind: &str,
         needs_cap: bool,
     ) -> String {
-        let (start, end) = match range_kind {
-            "Range" => (format!("{}.Start", range), format!("{}.End", range)),
-            "RangeInclusive" => (format!("{}.Start", range), format!("{}.End+1", range)),
-            "RangeFrom" => (format!("{}.Start", range), String::new()),
-            "RangeTo" => (String::new(), format!("{}.End", range)),
-            "RangeToInclusive" => (String::new(), format!("{}.End+1", range)),
-            _ => unreachable!("unexpected range kind: {}", range_kind),
-        };
+        let (start, end) = range_var_bounds(range, range_kind);
+        let start_str = start.as_deref().unwrap_or("");
+        let end_str = end.as_deref().unwrap_or("");
 
         if !needs_cap {
-            return format!("{}[{}:{}]", base, start, end);
+            return format!("{}[{}:{}]", base, start_str, end_str);
         }
 
         // For open-ended ranges, cap at len(base).
-        let cap = if end.is_empty() {
+        let cap = if end_str.is_empty() {
             format!("len({})", base)
         } else {
-            end.clone()
+            end_str.to_string()
         };
 
-        format!("{}[{}:{}:{}]", base, start, end, cap)
+        format!("{}[{}:{}:{}]", base, start_str, end_str, cap)
+    }
+}
+
+pub(crate) fn range_var_bounds(
+    range_var: &str,
+    range_kind: &str,
+) -> (Option<String>, Option<String>) {
+    match range_kind {
+        "Range" => (
+            Some(format!("{}.Start", range_var)),
+            Some(format!("{}.End", range_var)),
+        ),
+        "RangeInclusive" => (
+            Some(format!("{}.Start", range_var)),
+            Some(format!("{}.End+1", range_var)),
+        ),
+        "RangeFrom" => (Some(format!("{}.Start", range_var)), None),
+        "RangeTo" => (None, Some(format!("{}.End", range_var))),
+        "RangeToInclusive" => (None, Some(format!("{}.End+1", range_var))),
+        _ => unreachable!("unexpected range kind: {}", range_kind),
     }
 }

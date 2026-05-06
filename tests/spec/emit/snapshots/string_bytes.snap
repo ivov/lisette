@@ -1,0 +1,10 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 60
+description: "input: \nfn test(s: string) -> Slice<byte> {\n  s.bytes()\n}\n"
+---
+package main
+
+func test(s string) []byte {
+	return []byte(s)
+}

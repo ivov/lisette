@@ -1,5 +1,5 @@
 use syntax::ast::{Expression, UnaryOperator};
-use syntax::types::Type;
+use syntax::types::{Type, peel_to_range_type};
 
 use crate::Emitter;
 use crate::definitions::interface_adapter::AdapterPlan;
@@ -195,12 +195,7 @@ fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
     };
 
     let is_range_index = matches!(**index, Expression::Range { .. })
-        || index.get_type().get_name().is_some_and(|n| {
-            matches!(
-                n,
-                "Range" | "RangeInclusive" | "RangeFrom" | "RangeTo" | "RangeToInclusive"
-            )
-        });
+        || peel_to_range_type(&index.get_type()).is_some();
 
     if !is_range_index {
         return false;

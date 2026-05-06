@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 838
+description: "input: \nfn test(s: string) -> string {\n  s.substring(6..)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(s string) string {
+	return lisette.SubstringFrom(s, 6)
+}

@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 870
+description: "input: \ntype MyString = string\n\nfn test(s: MyString, r: RangeTo<int>) -> string {\n  s.substring(r)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type MyString = string
+
+func test(s MyString, r lisette.RangeTo[int]) string {
+	return lisette.SubstringTo(s, r.End)
+}

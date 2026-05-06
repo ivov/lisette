@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 83
+description: "input: \nimport \"go:fmt\"\nfn test(s: string) {\n  for r in s.runes() {\n    fmt.Println(r)\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func test(s string) {
+	for _, r := range s {
+		fmt.Println(r)
+	}
+}
