@@ -3163,8 +3163,17 @@
                   "type": "SEQ",
                   "members": [
                     {
-                      "type": "SYMBOL",
-                      "name": "_expression"
+                      "type": "CHOICE",
+                      "members": [
+                        {
+                          "type": "SYMBOL",
+                          "name": "_expression"
+                        },
+                        {
+                          "type": "SYMBOL",
+                          "name": "spread_argument"
+                        }
+                      ]
                     },
                     {
                       "type": "REPEAT",
@@ -3176,8 +3185,17 @@
                             "value": ","
                           },
                           {
-                            "type": "SYMBOL",
-                            "name": "_expression"
+                            "type": "CHOICE",
+                            "members": [
+                              {
+                                "type": "SYMBOL",
+                                "name": "_expression"
+                              },
+                              {
+                                "type": "SYMBOL",
+                                "name": "spread_argument"
+                              }
+                            ]
                           }
                         ]
                       }
@@ -3208,6 +3226,23 @@
           "value": ")"
         }
       ]
+    },
+    "spread_argument": {
+      "type": "PREC",
+      "value": 10,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "_expression"
+          },
+          {
+            "type": "STRING",
+            "value": "..."
+          }
+        ]
+      }
     },
     "slice_expression": {
       "type": "SEQ",
