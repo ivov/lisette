@@ -115,6 +115,7 @@ description: "input: \nfn test() { let result = [1, 2, 3][index]; }\n"
                             byte_offset: 35,
                             byte_length: 7,
                         },
+                        from_colon_syntax: false,
                     },
                     mutable: false,
                     mut_span: None,

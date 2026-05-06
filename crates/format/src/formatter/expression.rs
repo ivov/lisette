@@ -91,8 +91,11 @@ impl<'a> Formatter<'a> {
             } => self.dot_access(expression, member),
 
             Expression::IndexedAccess {
-                expression, index, ..
-            } => self.indexed_access(expression, index),
+                expression,
+                index,
+                from_colon_syntax,
+                ..
+            } => self.indexed_access(expression, index, *from_colon_syntax),
 
             Expression::Tuple { elements, .. } => self.tuple(elements),
 
@@ -772,10 +775,24 @@ impl<'a> Formatter<'a> {
         &mut self,
         expression: &'a Expression,
         index: &'a Expression,
+        from_colon_syntax: bool,
     ) -> Document<'a> {
+        let body = if from_colon_syntax && let Expression::Range { start, end, .. } = index {
+            let start_doc = match start {
+                Some(s) => self.expression(s),
+                None => Document::str(""),
+            };
+            let end_doc = match end {
+                Some(e) => self.expression(e),
+                None => Document::str(""),
+            };
+            start_doc.append(":").append(end_doc)
+        } else {
+            self.expression(index)
+        };
         self.expression(expression)
             .append("[")
-            .append(self.expression(index))
+            .append(body)
             .append("]")
     }
 

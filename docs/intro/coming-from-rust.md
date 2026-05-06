@@ -122,6 +122,51 @@ let msg = format!("Hello, {}!", name);
 let msg = f"Hello, {name}!"
 ```
 
+### String access
+
+To index into a string:
+
+```rust
+s.chars().nth(i)          // Option<char>
+```
+
+```rust
+s.rune_at(i)              // rune
+s.byte_at(i)              // byte
+```
+
+Lisette panics on out-of-bounds; Rust returns `Option<char>` because `nth` is a generic iterator method.
+
+To slice into a string:
+
+```rust
+&s[a..b]                  // &str
+```
+
+```rust
+s.substring(a..b)         // string (rune-indexed)
+s.bytes()[a..b]           // Slice<byte>
+s.runes()[a..b]           // Slice<rune>
+```
+
+To iterate over a string:
+
+```rust
+for c in s.chars() {
+  fmt.Println(c)
+}
+```
+
+```rust
+for r in s.runes() {
+  fmt.Println(r)
+}
+
+for b in s.bytes() {
+  fmt.Println(b)
+}
+```
+
 ## Pipeline operator
 
 ```rust

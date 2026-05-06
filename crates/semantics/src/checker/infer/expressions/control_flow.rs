@@ -506,7 +506,14 @@ impl TaskState<'_> {
         };
 
         let element_ty = match iterable_ty_name {
-            "string" => self.type_char(),
+            "string" => {
+                let receiver = new_iterable.root_identifier().unwrap_or("s");
+                self.sink.push(diagnostics::infer::string_not_iterable(
+                    new_iterable.get_span(),
+                    receiver,
+                ));
+                Type::Error
+            }
             "Slice" | "EnumeratedSlice" | "Receiver" | "Channel"
                 if !iterable_ty_args.is_empty() =>
             {

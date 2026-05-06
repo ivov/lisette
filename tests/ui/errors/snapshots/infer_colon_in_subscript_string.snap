@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid syntax for string slicing
+   ╭─[test.lis:3:11]
+ 2 │ fn test(s: string) {
+ 3 │   let _ = s[1:3]
+   ·           ───┬──
+   ·              ╰── expected a method call
+ 4 │ }
+   ╰────
+  help: Use `s.substring(a..b)` for a string, or `s.bytes()[a..b]` for a range of bytes · code: [parse.colon_in_subscript]

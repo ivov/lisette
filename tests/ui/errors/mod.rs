@@ -538,6 +538,26 @@ fn main() {
 }
 
 #[test]
+fn infer_colon_in_subscript_string() {
+    let input = r#"
+fn test(s: string) {
+  let _ = s[1:3]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_colon_in_subscript_slice() {
+    let input = r#"
+fn test(items: Slice<int>) {
+  let _ = items[1:3]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn parse_invalid_token_in_pattern() {
     let input = r#"
 fn test() {
@@ -1512,6 +1532,26 @@ fn infer_string_not_indexable() {
     let input = r#"
 fn test(s: string) -> byte {
   s[0]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_string_not_sliceable() {
+    let input = r#"
+fn test(s: string) {
+  let _ = s[0..3]
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_string_not_iterable() {
+    let input = r#"
+fn test(s: string) {
+  for _c in s {}
 }
 "#;
     assert_infer_error_snapshot!(input);

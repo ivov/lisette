@@ -112,6 +112,7 @@ description: "input: \nfn test(key: string) {\n  let value = get_map()[key];\n}\
                             byte_offset: 47,
                             byte_length: 5,
                         },
+                        from_colon_syntax: false,
                     },
                     mutable: false,
                     mut_span: None,

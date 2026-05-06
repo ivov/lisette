@@ -327,6 +327,49 @@ let msg = f"Hello, {name}!"
 
 Format strings use `f"..."` with `{expr}` interpolation.
 
+### String access
+
+To index into a string:
+
+```go
+s[i] // byte
+```
+
+```rust
+s.rune_at(i)              // rune
+s.byte_at(i)              // byte
+```
+
+To slice a string:
+
+```go
+s[a:b] // bytes
+```
+
+```rust
+s.substring(a..b)         // string (rune-indexed)
+s.bytes()[a..b]           // Slice<byte>
+s.runes()[a..b]           // Slice<rune>
+```
+
+To iterate over a string:
+
+```go
+for _, r := range s {
+  fmt.Println(r)
+}
+```
+
+```rust
+for r in s.runes() {
+  fmt.Println(r)
+}
+
+for b in s.bytes() {
+  fmt.Println(b)
+}
+```
+
 ## Pipeline operator
 
 ```go

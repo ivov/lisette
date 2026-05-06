@@ -68,13 +68,30 @@ let no = false
 
 ### String
 
-UTF-8 encoded. Strings are immutable.
+Strings are immutable and UTF-8 encoded.
 
 ```rust
 let name = "Alice"
 let length = name.length()    // number of bytes
 let empty = name.is_empty()   // false
 ```
+
+To index into a string, pick a unit:
+
+```rust
+s.byte_at(i)              // byte
+s.rune_at(i)              // rune
+```
+
+To slice a string, pick a unit:
+
+```rust
+s.substring(a..b)         // string (rune-indexed)
+s.bytes()[a..b]           // Slice<byte>
+s.runes()[a..b]           // Slice<rune>
+```
+
+📚 See [`04-control-flow.md`](04-control-flow.md#for) for iteration.
 
 ## Compound types
 

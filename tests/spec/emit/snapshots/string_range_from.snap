@@ -1,9 +1,0 @@
----
-source: tests/spec/emit/types.rs
-description: "input: \nfn test(s: string) -> string {\n  s[6..]\n}\n"
----
-package main
-
-func test(s string) string {
-	return s[6:]
-}

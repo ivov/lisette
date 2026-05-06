@@ -1504,6 +1504,51 @@ pub fn string_not_indexable(span: Span, receiver: &str) -> LisetteDiagnostic {
         ))
 }
 
+pub fn string_not_sliceable(span: Span, receiver: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot slice into `string`")
+        .with_infer_code("string_not_sliceable")
+        .with_span_label(&span, "not sliceable")
+        .with_help(format!(
+            "Use `{receiver}.substring(a..b)` for a rune-indexed substring, or `{receiver}.bytes()[a..b]` for a range of bytes"
+        ))
+}
+
+pub fn string_not_iterable(span: Span, receiver: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot iterate over `string`")
+        .with_infer_code("string_not_iterable")
+        .with_span_label(&span, "not iterable")
+        .with_help(format!(
+            "Use `for r in {receiver}.runes()` for code points, or `for b in {receiver}.bytes()` for bytes"
+        ))
+}
+
+pub fn colon_in_subscript(
+    span: Span,
+    receiver: &str,
+    type_name: Option<&str>,
+) -> LisetteDiagnostic {
+    let (message, label, help) = match type_name {
+        Some("string") => (
+            "Invalid syntax for string slicing",
+            "expected a method call",
+            format!(
+                "Use `{receiver}.substring(a..b)` for a string, or `{receiver}.bytes()[a..b]` for a range of bytes"
+            ),
+        ),
+        _ => (
+            "Invalid syntax for subslicing",
+            "expected `..`",
+            format!(
+                "Use `{receiver}[a..b]` or `{receiver}[a..=b]` for an exclusive or inclusive slice, respectively"
+            ),
+        ),
+    };
+    LisetteDiagnostic::error(message)
+        .with_parse_code("colon_in_subscript")
+        .with_span_label(&span, label)
+        .with_help(help)
+}
+
 pub fn not_callable(
     ty: &Type,
     callee_name: Option<&str>,

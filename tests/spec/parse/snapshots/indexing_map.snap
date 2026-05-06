@@ -118,6 +118,7 @@ description: "input: \nfn test(data: Map<string, bool>) {\n  let active = data[\
                             byte_offset: 55,
                             byte_length: 15,
                         },
+                        from_colon_syntax: false,
                     },
                     mutable: false,
                     mut_span: None,

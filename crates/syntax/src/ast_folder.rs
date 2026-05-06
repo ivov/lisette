@@ -226,11 +226,13 @@ pub trait AstFolder {
                 index,
                 ty,
                 span,
+                from_colon_syntax,
             } => IndexedAccess {
                 expression: Box::new(self.fold_expression(*expression)?),
                 index: Box::new(self.fold_expression(*index)?),
                 ty,
                 span,
+                from_colon_syntax,
             },
 
             Assignment {

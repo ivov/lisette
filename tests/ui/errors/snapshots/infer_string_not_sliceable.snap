@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot slice into `string`
+   ╭─[test.lis:3:11]
+ 2 │ fn test(s: string) {
+ 3 │   let _ = s[0..3]
+   ·           ───┬───
+   ·              ╰── not sliceable
+ 4 │ }
+   ╰────
+  help: Use `s.substring(a..b)` for a rune-indexed substring, or `s.bytes()[a..b]` for a range of bytes · code: [infer.string_not_sliceable]

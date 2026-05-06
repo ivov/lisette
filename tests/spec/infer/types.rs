@@ -1413,14 +1413,25 @@ fn slice_range_preserves_element_type() {
 }
 
 #[test]
-fn string_range_returns_string() {
+fn string_substring_returns_string() {
     infer(
         r#"{
     let s = "hello world";
-    let sub: string = s[0..5];
+    let sub: string = s.substring(0..5);
   }"#,
     )
     .assert_no_errors();
+}
+
+#[test]
+fn string_range_slice_rejected() {
+    infer(
+        r#"{
+    let s = "hello world";
+    let _ = s[0..5];
+  }"#,
+    )
+    .assert_infer_code("string_not_sliceable");
 }
 
 #[test]

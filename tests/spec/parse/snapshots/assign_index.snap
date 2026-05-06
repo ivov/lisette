@@ -150,6 +150,7 @@ description: "input: \nfn test() {\n  let mut arr = [1, 2, 3];\n  arr[0] = 100;\
                             byte_offset: 45,
                             byte_length: 3,
                         },
+                        from_colon_syntax: false,
                     },
                     value: Literal {
                         literal: Integer {

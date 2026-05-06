@@ -175,6 +175,7 @@ description: "input: \nfn test(items: Slice<Option<int>>) {\n  let mut i = 0;\n 
                             byte_offset: 82,
                             byte_length: 3,
                         },
+                        from_colon_syntax: false,
                     },
                     body: Block {
                         items: [

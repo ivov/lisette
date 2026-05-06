@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid syntax for subslicing
+   ╭─[test.lis:3:11]
+ 2 │ fn test(items: Slice<int>) {
+ 3 │   let _ = items[1:3]
+   ·           ─────┬────
+   ·                ╰── expected `..`
+ 4 │ }
+   ╰────
+  help: Use `items[a..b]` or `items[a..=b]` for an exclusive or inclusive slice, respectively · code: [parse.colon_in_subscript]

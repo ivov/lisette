@@ -534,6 +534,14 @@ impl Span {
     pub fn end(&self) -> u32 {
         self.byte_offset + self.byte_length
     }
+
+    pub fn merge(self, other: Span) -> Span {
+        Span::new(
+            self.file_id,
+            self.byte_offset,
+            other.end() - self.byte_offset,
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -817,6 +825,7 @@ pub enum Expression {
         index: Box<Expression>,
         ty: Type,
         span: Span,
+        from_colon_syntax: bool,
     },
     Task {
         expression: Box<Expression>,

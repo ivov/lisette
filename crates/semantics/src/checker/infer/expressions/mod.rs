@@ -299,8 +299,15 @@ impl TaskState<'_> {
                 expression,
                 index,
                 span,
+                from_colon_syntax,
                 ..
-            } => self.infer_indexed_access(store, expression, index, span, expected_ty),
+            } => {
+                if from_colon_syntax {
+                    self.infer_colon_subscript(store, expression, index, span)
+                } else {
+                    self.infer_indexed_access(store, expression, index, span, expected_ty)
+                }
+            }
 
             Expression::Task {
                 expression, span, ..

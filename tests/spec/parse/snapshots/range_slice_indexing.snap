@@ -138,6 +138,7 @@ description: "input: \nfn test(arr: Slice<int>) { let sub = arr[1..4]; }\n"
                             byte_offset: 41,
                             byte_length: 6,
                         },
+                        from_colon_syntax: false,
                     },
                     mutable: false,
                     mut_span: None,

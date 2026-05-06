@@ -108,6 +108,7 @@ description: "input: \nfn test(arr: Slice<int>) { let copy = arr[..]; }\n"
                             byte_offset: 42,
                             byte_length: 4,
                         },
+                        from_colon_syntax: false,
                     },
                     mutable: false,
                     mut_span: None,

@@ -90,11 +90,24 @@ Supported iterables:
 | Iterable                                        | Element type |
 | ----------------------------------------------- | ------------ |
 | `Slice<T>`                                      | `T`          |
-| `string`                                        | `rune`       |
 | `Map<K, V>`                                     | `(K, V)`     |
 | `Range<T>`, `RangeInclusive<T>`, `RangeFrom<T>` | `T`          |
 | `Channel<T>`, `Receiver<T>`                     | `T`          |
 | `items.enumerate()`                              | `(int, T)`   |
+
+To iterate over a string, pick a unit:
+
+```rust
+for r in s.runes() {
+  fmt.Println(r)
+}
+
+for b in s.bytes() {
+  fmt.Println(b)
+}
+```
+
+📚 See [`02-types.md`](02-types.md#string) for indexing and slicing.
 
 Maps require destructuring into key and value:
 

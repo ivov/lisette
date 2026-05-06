@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+assertion_line: 1537
+---
+  [error] Cannot iterate over `string`
+   ╭─[test.lis:3:13]
+ 2 │ fn test(s: string) {
+ 3 │   for _c in s {}
+   ·             ┬
+   ·             ╰── not iterable
+ 4 │ }
+   ╰────
+  help: Use `for r in s.runes()` for code points, or `for b in s.bytes()` for bytes · code: [infer.string_not_iterable]

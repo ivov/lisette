@@ -473,16 +473,27 @@ fn for_loop_with_wrong_annotation_fails() {
 }
 
 #[test]
-fn for_loop_over_string() {
+fn for_loop_over_string_runes() {
     infer(
         r#"{
     let s = "hello";
-    for ch in s {
+    for ch in s.runes() {
       let c = ch;
     }
   }"#,
     )
     .assert_no_errors();
+}
+
+#[test]
+fn for_loop_over_string_rejected() {
+    infer(
+        r#"{
+    let s = "hello";
+    for _ch in s {}
+  }"#,
+    )
+    .assert_infer_code("string_not_iterable");
 }
 
 #[test]

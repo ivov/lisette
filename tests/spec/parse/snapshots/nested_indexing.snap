@@ -97,6 +97,7 @@ description: "input: \nfn test() { let result = arr[i + j][k * l]; }\n"
                                 byte_offset: 29,
                                 byte_length: 7,
                             },
+                            from_colon_syntax: false,
                         },
                         index: Binary {
                             operator: Multiplication,
@@ -143,6 +144,7 @@ description: "input: \nfn test() { let result = arr[i + j][k * l]; }\n"
                             byte_offset: 36,
                             byte_length: 7,
                         },
+                        from_colon_syntax: false,
                     },
                     mutable: false,
                     mut_span: None,

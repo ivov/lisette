@@ -3501,8 +3501,8 @@ fn test_map_from() -> int {
 
 fn test_string_range_slicing() -> int {
   let s = "hello world"
-  if s[0..5] == "hello" {
-    if s[6..] == "world" { if s[..5] == "hello" { 100 } else { 0 } } else { 0 }
+  if s.substring(0..5) == "hello" {
+    if s.substring(6..) == "world" { if s.substring(..5) == "hello" { 100 } else { 0 } } else { 0 }
   } else {
     0
   }

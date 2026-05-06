@@ -169,6 +169,7 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                                 byte_offset: 77,
                                 byte_length: 5,
                             },
+                            from_colon_syntax: false,
                         },
                         index: Identifier {
                             value: "col",
@@ -191,6 +192,7 @@ description: "input: \nfn test(matrix: Slice<Slice<int>>, row: int, col: int) {\
                             byte_offset: 82,
                             byte_length: 5,
                         },
+                        from_colon_syntax: false,
                     },
                     mutable: false,
                     mut_span: None,

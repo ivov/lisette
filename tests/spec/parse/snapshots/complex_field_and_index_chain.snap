@@ -89,6 +89,7 @@ description: "input: \nfn test() { let result = obj.field[i].method().nested.val
                                             byte_offset: 35,
                                             byte_length: 3,
                                         },
+                                        from_colon_syntax: false,
                                     },
                                     member: "method",
                                     ty: Var {

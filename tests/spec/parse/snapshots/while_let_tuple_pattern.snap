@@ -210,6 +210,7 @@ description: "input: \nfn test(pairs: Slice<Option<(int, int)>>) {\n  let mut i 
                             byte_offset: 94,
                             byte_length: 3,
                         },
+                        from_colon_syntax: false,
                     },
                     body: Block {
                         items: [

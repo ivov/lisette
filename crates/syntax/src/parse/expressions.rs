@@ -356,7 +356,32 @@ impl<'source> Parser<'source> {
 
         self.ensure(LeftSquareBracket);
 
-        let index = self.parse_expression();
+        let index_start = self.current_token();
+        let lower = if self.is(Colon) {
+            None
+        } else {
+            Some(Box::new(self.parse_expression()))
+        };
+
+        let mut from_colon_syntax = false;
+        let index = if self.is(Colon) {
+            from_colon_syntax = true;
+            self.next();
+            let upper = if self.is(RightSquareBracket) {
+                None
+            } else {
+                Some(Box::new(self.parse_expression()))
+            };
+            Expression::Range {
+                start: lower,
+                end: upper,
+                inclusive: false,
+                ty: Type::uninferred(),
+                span: self.span_from_tokens(index_start),
+            }
+        } else {
+            *lower.expect("non-colon index must have a lower expression")
+        };
 
         self.ensure(RightSquareBracket);
 
@@ -365,6 +390,7 @@ impl<'source> Parser<'source> {
             expression: expression.into(),
             index: index.into(),
             span: self.span_from_tokens(start),
+            from_colon_syntax,
         }
     }
 

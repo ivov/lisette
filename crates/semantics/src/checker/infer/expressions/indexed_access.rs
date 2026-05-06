@@ -63,6 +63,7 @@ impl TaskState<'_> {
                 index: index_expression.into(),
                 ty: Type::Error,
                 span,
+                from_colon_syntax: false,
             };
         }
 
@@ -75,41 +76,50 @@ impl TaskState<'_> {
                 index: index_expression.into(),
                 ty: Type::Error,
                 span,
+                from_colon_syntax: false,
             };
         };
 
-        // Handle range-typed variables used as slice indices (e.g. `let r = 2..5; items[r]`).
-        // Inline ranges are caught by `index.is_range()` above; this handles the case where
-        // the range is stored in a variable.
-        let peeled_range = if type_name == "Slice" || type_name == "string" {
-            peel_to_range_type(&resolved_index_ty)
-        } else {
-            None
-        };
-
-        if let Some(peeled) = peeled_range {
-            if let Some(bound_ty) = peeled.get_type_params().and_then(|p| p.first()) {
-                let int_ty = self.type_int();
-                self.unify(store, &int_ty, bound_ty, &span);
+        // Handle a stored range used as an index (e.g. `let r = 2..5; items[r]`).
+        // Inline ranges are caught by `index.is_range()` above. Strings are
+        // rejected; slices return a sub-slice.
+        match (peel_to_range_type(&resolved_index_ty), type_name) {
+            (Some(_), "string") => {
+                let receiver = collection_expression.root_identifier().unwrap_or("s");
+                let full_span = collection_expression.get_span().merge(span);
+                self.sink.push(diagnostics::infer::string_not_sliceable(
+                    full_span, receiver,
+                ));
+                return Expression::IndexedAccess {
+                    expression: collection_expression.into(),
+                    index: index_expression.into(),
+                    ty: Type::Error,
+                    span,
+                    from_colon_syntax: false,
+                };
             }
+            (Some(peeled), "Slice") => {
+                if let Some(bound_ty) = peeled.get_type_params().and_then(|p| p.first()) {
+                    let int_ty = self.type_int();
+                    self.unify(store, &int_ty, bound_ty, &span);
+                }
 
-            let result_ty = if type_name == "string" {
-                self.type_string()
-            } else {
                 let element_ty = resolved_collection_ty
                     .get_type_params()
                     .and_then(|params| params.first().cloned())
                     .unwrap_or_else(|| self.new_type_var());
-                self.type_slice(element_ty)
-            };
-            self.unify(store, expected_ty, &result_ty, &span);
+                let result_ty = self.type_slice(element_ty);
+                self.unify(store, expected_ty, &result_ty, &span);
 
-            return Expression::IndexedAccess {
-                expression: collection_expression.into(),
-                index: index_expression.into(),
-                ty: result_ty,
-                span,
-            };
+                return Expression::IndexedAccess {
+                    expression: collection_expression.into(),
+                    index: index_expression.into(),
+                    ty: result_ty,
+                    span,
+                    from_colon_syntax: false,
+                };
+            }
+            _ => {}
         }
 
         let element_ty = self.new_type_var();
@@ -124,6 +134,7 @@ impl TaskState<'_> {
                         index: index_expression.into(),
                         ty: Type::Error,
                         span,
+                        from_colon_syntax: false,
                     };
                 };
                 let key_ty = &type_params[0];
@@ -133,12 +144,7 @@ impl TaskState<'_> {
                 )
             }
             "string" => {
-                let receiver = if let Expression::Identifier { value, .. } = &collection_expression
-                {
-                    value.as_str()
-                } else {
-                    "s"
-                };
+                let receiver = collection_expression.root_identifier().unwrap_or("s");
                 self.sink.push(diagnostics::infer::string_not_indexable(
                     collection_expression.get_span(),
                     receiver,
@@ -148,6 +154,7 @@ impl TaskState<'_> {
                     index: index_expression.into(),
                     ty: Type::Error,
                     span,
+                    from_colon_syntax: false,
                 };
             }
             _ => {
@@ -161,6 +168,7 @@ impl TaskState<'_> {
                     index: index_expression.into(),
                     ty: Type::Error,
                     span,
+                    from_colon_syntax: false,
                 };
             }
         };
@@ -185,6 +193,36 @@ impl TaskState<'_> {
             index: index_expression.into(),
             ty: element_ty,
             span,
+            from_colon_syntax: false,
+        }
+    }
+
+    /// Emits a type-aware diagnostic for Go-style `expr[a:b]` colon syntax.
+    pub(super) fn infer_colon_subscript(
+        &mut self,
+        store: &mut Store,
+        expression: Box<Expression>,
+        index: Box<Expression>,
+        span: syntax::ast::Span,
+    ) -> Expression {
+        let collection_ty_var = self.new_type_var();
+        let collection_expression =
+            self.with_value_context(|s| s.infer_expression(store, *expression, &collection_ty_var));
+        let resolved_collection_ty = store.peel_alias(&collection_ty_var.resolve_in(&self.env));
+
+        let receiver = collection_expression.root_identifier().unwrap_or("s");
+        let full_span = collection_expression.get_span().merge(span);
+        let type_name = resolved_collection_ty.get_name();
+        self.sink.push(diagnostics::infer::colon_in_subscript(
+            full_span, receiver, type_name,
+        ));
+
+        Expression::IndexedAccess {
+            expression: collection_expression.into(),
+            index,
+            ty: Type::Error,
+            span,
+            from_colon_syntax: true,
         }
     }
 
@@ -209,6 +247,7 @@ impl TaskState<'_> {
                 index: inferred_range.into(),
                 ty: Type::Error,
                 span,
+                from_colon_syntax: false,
             };
         }
 
@@ -222,34 +261,36 @@ impl TaskState<'_> {
                 index: inferred_range.into(),
                 ty: Type::Error,
                 span,
+                from_colon_syntax: false,
             };
         };
 
-        if type_name != "Slice" && type_name != "string" {
-            self.sink
-                .push(diagnostics::infer::only_slices_indexable_by_range(
+        if type_name != "Slice" {
+            let diagnostic = if type_name == "string" {
+                let receiver = collection_expression.root_identifier().unwrap_or("s");
+                let full_span = collection_expression.get_span().merge(span);
+                diagnostics::infer::string_not_sliceable(full_span, receiver)
+            } else {
+                diagnostics::infer::only_slices_indexable_by_range(
                     &resolved_collection_ty,
                     &collection_expression.get_span(),
-                ));
+                )
+            };
+            self.sink.push(diagnostic);
             let inferred_range = self.infer_range_bounds_only(store, range);
             return Expression::IndexedAccess {
                 expression: collection_expression.into(),
                 index: inferred_range.into(),
                 ty: Type::Error,
                 span,
+                from_colon_syntax: false,
             };
         }
 
-        let is_string = type_name == "string";
-
-        let element_ty = if is_string {
-            self.new_type_var() // not used for result, but range bounds still need inferring
-        } else {
-            resolved_collection_ty
-                .get_type_params()
-                .and_then(|params| params.first().cloned())
-                .unwrap_or_else(|| self.new_type_var())
-        };
+        let element_ty = resolved_collection_ty
+            .get_type_params()
+            .and_then(|params| params.first().cloned())
+            .unwrap_or_else(|| self.new_type_var());
 
         let range_expression = match *range {
             Expression::Range {
@@ -291,11 +332,7 @@ impl TaskState<'_> {
             _ => unreachable!("infer_slice_range_access called with non-range expression"),
         };
 
-        let result_ty = if is_string {
-            self.type_string()
-        } else {
-            self.type_slice(element_ty)
-        };
+        let result_ty = self.type_slice(element_ty);
 
         self.unify(store, expected_ty, &result_ty, &span);
 
@@ -304,6 +341,7 @@ impl TaskState<'_> {
             index: range_expression.into(),
             ty: result_ty,
             span,
+            from_colon_syntax: false,
         }
     }
 

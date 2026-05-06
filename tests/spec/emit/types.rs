@@ -668,20 +668,6 @@ fn test(arr: Slice<int>) -> Slice<int> {
 }
 
 #[test]
-fn slice_range_three_index_not_applied_to_strings() {
-    let input = r#"
-fn test_slice(arr: Slice<int>) -> Slice<int> {
-  arr[1..4]
-}
-
-fn test_string(s: string) -> string {
-  s[1..4]
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn mutable_subslice_cloned() {
     let input = r#"
 fn test(arr: Slice<int>) {
@@ -689,46 +675,6 @@ fn test(arr: Slice<int>) {
   let mut owned = arr[1..4]
   owned[0] = 99
   let _ = view
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn string_range_exclusive() {
-    let input = r#"
-fn test(s: string) -> string {
-  s[0..5]
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn string_range_inclusive() {
-    let input = r#"
-fn test(s: string) -> string {
-  s[0..=4]
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn string_range_from() {
-    let input = r#"
-fn test(s: string) -> string {
-  s[6..]
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn string_range_to() {
-    let input = r#"
-fn test(s: string) -> string {
-  s[..5]
 }
 "#;
     assert_emit_snapshot!(input);
