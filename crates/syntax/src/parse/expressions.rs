@@ -400,10 +400,23 @@ impl<'source> Parser<'source> {
             {
                 break;
             }
-            if self.is(DotDot) {
-                return (args, Some(self.parse_spread_arg()));
+            let arg = self.parse_expression();
+            if self.is(Ellipsis) {
+                self.next();
+                self.expect_comma_or(RightParen);
+                if !self.is(RightParen) && !self.at_eof() {
+                    self.track_error(
+                        "argument after spread",
+                        "The `spread...` must be the last argument in the call.",
+                    );
+                    while !self.at_eof() && !self.is(RightParen) {
+                        self.next();
+                    }
+                }
+                self.advance_if(RightParen);
+                return (args, Some(arg));
             }
-            args.push(self.parse_expression());
+            args.push(arg);
             self.expect_comma_or(RightParen);
         }
 
@@ -427,23 +440,6 @@ impl<'source> Parser<'source> {
             span,
         });
         true
-    }
-
-    fn parse_spread_arg(&mut self) -> Expression {
-        self.ensure(DotDot);
-        let spread = self.parse_expression();
-        self.expect_comma_or(RightParen);
-        if !self.is(RightParen) && !self.at_eof() {
-            self.track_error(
-                "argument after spread",
-                "The `..spread` must be the last argument in the call.",
-            );
-            while !self.at_eof() && !self.is(RightParen) {
-                self.next();
-            }
-        }
-        self.advance_if(RightParen);
-        spread
     }
 
     pub fn parse_type_args(&mut self) -> Vec<Annotation> {

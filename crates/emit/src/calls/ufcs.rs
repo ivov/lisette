@@ -112,7 +112,9 @@ impl Emitter<'_> {
         for (i, arg) in args.iter().enumerate() {
             all_stages.push(self.stage_prelude_arg(arg, formal_params.get(i)));
         }
-        let all_values = self.sequence_with_spread(output, all_stages, spread, false, "_arg");
+        let combine = Self::variadic_combine_for(function, spread, 1);
+        let all_values =
+            self.sequence_with_spread(output, all_stages, spread, false, "_arg", combine);
         let receiver_arg = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
 
@@ -168,9 +170,11 @@ impl Emitter<'_> {
         format!("{}({})", fn_name, new_args.join(", "))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn emit_receiver_method_ufcs(
         &mut self,
         output: &mut String,
+        function: &Expression,
         args: &[Expression],
         type_args: &[Annotation],
         method: &str,
@@ -188,7 +192,10 @@ impl Emitter<'_> {
         };
 
         let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
-        let emitted_all = self.sequence_with_spread(output, stages, spread, false, "_arg");
+
+        let combine = Self::variadic_combine_for(function, spread, 0);
+        let emitted_all = self.sequence_with_spread(output, stages, spread, false, "_arg", combine);
+
         let receiver = emitted_all[0].clone();
         let emitted_rest: Vec<String> = emitted_all[1..].to_vec();
 

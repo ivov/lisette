@@ -1,7 +1,7 @@
 ---
 source: tests/spec/parse/mod.rs
-assertion_line: 3569
-description: "input: \nfn test() { func(xs...,); }\n"
+assertion_line: 3593
+description: "input: \nfn test() { func(..=4); }\n"
 ---
 [
     Function {
@@ -36,22 +36,37 @@ description: "input: \nfn test() { func(xs...,); }\n"
                         binding_id: None,
                         qualified: None,
                     },
-                    args: [],
-                    spread: Some(
-                        Identifier {
-                            value: "xs",
+                    args: [
+                        Range {
+                            start: None,
+                            end: Some(
+                                Literal {
+                                    literal: Integer {
+                                        value: 4,
+                                        text: None,
+                                    },
+                                    ty: Var {
+                                        id: uninferred,
+                                    },
+                                    span: Span {
+                                        file_id: 0,
+                                        byte_offset: 21,
+                                        byte_length: 1,
+                                    },
+                                },
+                            ),
+                            inclusive: true,
                             ty: Var {
                                 id: uninferred,
                             },
                             span: Span {
                                 file_id: 0,
                                 byte_offset: 18,
-                                byte_length: 2,
+                                byte_length: 4,
                             },
-                            binding_id: None,
-                            qualified: None,
                         },
-                    ),
+                    ],
+                    spread: None,
                     type_args: [],
                     ty: Var {
                         id: uninferred,
@@ -59,7 +74,7 @@ description: "input: \nfn test() { func(xs...,); }\n"
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
-                        byte_length: 12,
+                        byte_length: 10,
                     },
                     call_kind: None,
                 },
@@ -70,7 +85,7 @@ description: "input: \nfn test() { func(xs...,); }\n"
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
-                byte_length: 17,
+                byte_length: 15,
             },
         },
         ty: Var {
@@ -79,7 +94,7 @@ description: "input: \nfn test() { func(xs...,); }\n"
         span: Span {
             file_id: 0,
             byte_offset: 1,
-            byte_length: 27,
+            byte_length: 25,
         },
     },
 ]

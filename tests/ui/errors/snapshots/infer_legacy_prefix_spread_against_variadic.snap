@@ -1,0 +1,13 @@
+---
+source: tests/ui/errors/mod.rs
+assertion_line: 6893
+---
+  [error] Invalid range argument
+   ╭─[test.lis:5:15]
+ 4 │ fn test(parts: Slice<string>) {
+ 5 │   fmt.Println(..parts)
+   ·               ───┬───
+   ·                  ╰── this is a range, not a spread
+ 6 │ }
+   ╰────
+  help: Use postfix: `parts...` · code: [infer.range_to_for_variadic]

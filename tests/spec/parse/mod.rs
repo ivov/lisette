@@ -3548,7 +3548,7 @@ fn test() -> Slice<string> {
 #[test]
 fn call_with_spread_arg() {
     let input = r#"
-fn test() { func(..xs); }
+fn test() { func(xs...); }
 "#;
     assert_parse_snapshot!(input);
 }
@@ -3556,7 +3556,7 @@ fn test() { func(..xs); }
 #[test]
 fn call_with_leading_args_and_spread_arg() {
     let input = r#"
-fn test() { func(a, b, ..xs); }
+fn test() { func(a, b, xs...); }
 "#;
     assert_parse_snapshot!(input);
 }
@@ -3564,7 +3564,7 @@ fn test() { func(a, b, ..xs); }
 #[test]
 fn call_with_spread_arg_trailing_comma() {
     let input = r#"
-fn test() { func(..xs,); }
+fn test() { func(xs...,); }
 "#;
     assert_parse_snapshot!(input);
 }
@@ -3572,7 +3572,39 @@ fn test() { func(..xs,); }
 #[test]
 fn call_with_leading_args_and_spread_arg_trailing_comma() {
     let input = r#"
-fn test() { func(a, b, ..xs,); }
+fn test() { func(a, b, xs...,); }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn call_with_range_to_arg() {
+    let input = r#"
+fn test() { func(..5); }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn call_with_range_to_inclusive_arg() {
+    let input = r#"
+fn test() { func(..=4); }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn call_with_range_full_arg() {
+    let input = r#"
+fn test() { func(..); }
+"#;
+    assert_parse_snapshot!(input);
+}
+
+#[test]
+fn standalone_range_to_binding() {
+    let input = r#"
+fn test() { let r: RangeTo<int> = ..5; }
 "#;
     assert_parse_snapshot!(input);
 }

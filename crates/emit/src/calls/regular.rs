@@ -1,6 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
+use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
 use crate::types::coercion::Coercion;
 use crate::utils::Staged;
@@ -17,6 +18,7 @@ struct CallArgsContext<'a> {
     is_prelude_dispatch: bool,
     spread: Option<&'a Expression>,
     wrap_spread_to_any: bool,
+    combine_variadic: Option<VariadicCombine>,
 }
 
 /// Collapse redundant fmt wrappers:
@@ -78,8 +80,9 @@ impl Emitter<'_> {
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
             let stages: Vec<Staged> = args.iter().map(|a| self.stage_operand(a)).collect();
             let wrap_to_any = Self::spread_needs_any_wrap(function, spread);
+            let combine = Self::variadic_combine_for(function, spread, 0);
             let args_strings =
-                self.sequence_with_spread(output, stages, spread, wrap_to_any, "_arg");
+                self.sequence_with_spread(output, stages, spread, wrap_to_any, "_arg", combine);
             return format!("{}({})", go_name, args_strings.join(", "));
         }
 
@@ -126,6 +129,7 @@ impl Emitter<'_> {
             is_prelude_dispatch,
             spread,
             wrap_spread_to_any: Self::spread_needs_any_wrap(function, spread),
+            combine_variadic: Self::variadic_combine_for(function, spread, 0),
         };
         let args_strings = self.emit_call_args(output, args, &ctx);
 
@@ -229,7 +233,30 @@ impl Emitter<'_> {
                 Staged::new(setup, value)
             })
             .collect();
-        self.sequence_with_spread(output, stages, ctx.spread, ctx.wrap_spread_to_any, "_arg")
+        self.sequence_with_spread(
+            output,
+            stages,
+            ctx.spread,
+            ctx.wrap_spread_to_any,
+            "_arg",
+            ctx.combine_variadic.as_ref().cloned(),
+        )
+    }
+
+    pub(crate) fn variadic_combine_for(
+        function: &Expression,
+        spread: Option<&Expression>,
+        extra_leading: usize,
+    ) -> Option<VariadicCombine> {
+        spread?;
+        let fn_ty = function.get_type();
+        let unwrapped = fn_ty.unwrap_forall();
+        let elem_ty = unwrapped.is_variadic()?;
+        let fixed_in_signature = unwrapped.get_function_params()?.len().saturating_sub(1);
+        Some(VariadicCombine {
+            elem_ty,
+            fixed_count: fixed_in_signature + extra_leading,
+        })
     }
 
     fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> bool {

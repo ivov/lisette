@@ -204,7 +204,7 @@ impl Emitter<'_> {
             Some(CallKind::ReceiverMethodUfcs { is_public }) => {
                 let method = self.extract_receiver_ufcs_method(function);
                 return self.emit_receiver_method_ufcs(
-                    output, args, type_args, &method, is_public, spread,
+                    output, function, args, type_args, &method, is_public, spread,
                 );
             }
             _ => {}

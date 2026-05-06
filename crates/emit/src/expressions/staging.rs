@@ -3,6 +3,15 @@ use crate::names::go_name;
 use crate::utils::Staged;
 use crate::write_line;
 use syntax::ast::Expression;
+use syntax::types::Type;
+
+/// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)` — Go rejects the former.
+#[derive(Clone)]
+pub(crate) struct VariadicCombine {
+    pub elem_ty: Type,
+    /// Staged-value index where variadic-feeding args begin.
+    pub fixed_count: usize,
+}
 
 impl Emitter<'_> {
     pub(crate) fn emit_or_capture(
@@ -108,6 +117,9 @@ impl Emitter<'_> {
 
     /// Like `sequence`, but also stages the spread as a sibling (so its
     /// setup participates in eval-order) and appends `...` to its value.
+    /// When `combine` is `Some`, leading args feeding the variadic are folded
+    /// with the spread into a single `append([]T{...}, spread...)...` value
+    /// so the resulting Go is well-formed.
     pub(crate) fn sequence_with_spread(
         &mut self,
         output: &mut String,
@@ -115,6 +127,7 @@ impl Emitter<'_> {
         spread: Option<&Expression>,
         wrap_to_any: bool,
         prefix: &str,
+        combine: Option<VariadicCombine>,
     ) -> Vec<String> {
         let spread_idx = spread.map(|s| {
             stages.push(self.stage_operand(s));
@@ -126,7 +139,17 @@ impl Emitter<'_> {
                 self.flags.needs_stdlib = true;
                 values[i] = format!("{}.SliceToAny({})", go_name::GO_STDLIB_PKG, values[i]);
             }
-            values[i].push_str("...");
+            match combine {
+                Some(c) if i > c.fixed_count => {
+                    let elem_go = self.go_type_as_string(&c.elem_ty);
+                    let leading = values[c.fixed_count..i].join(", ");
+                    let spread_value = &values[i];
+                    let combined =
+                        format!("append([]{elem_go}{{{leading}}}, {spread_value}...)...");
+                    values.splice(c.fixed_count..=i, std::iter::once(combined));
+                }
+                _ => values[i].push_str("..."),
+            }
         }
         values
     }

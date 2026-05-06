@@ -1,6 +1,6 @@
 ---
 source: tests/spec/parse/mod.rs
-description: "input: \nfn test() { func(..xs); }\n"
+description: "input: \nfn test() { func(xs...); }\n"
 ---
 [
     Function {
@@ -44,7 +44,7 @@ description: "input: \nfn test() { func(..xs); }\n"
                             },
                             span: Span {
                                 file_id: 0,
-                                byte_offset: 20,
+                                byte_offset: 18,
                                 byte_length: 2,
                             },
                             binding_id: None,
@@ -58,7 +58,7 @@ description: "input: \nfn test() { func(..xs); }\n"
                     span: Span {
                         file_id: 0,
                         byte_offset: 13,
-                        byte_length: 10,
+                        byte_length: 11,
                     },
                     call_kind: None,
                 },
@@ -69,7 +69,7 @@ description: "input: \nfn test() { func(..xs); }\n"
             span: Span {
                 file_id: 0,
                 byte_offset: 11,
-                byte_length: 15,
+                byte_length: 16,
             },
         },
         ty: Var {
@@ -78,7 +78,7 @@ description: "input: \nfn test() { func(..xs); }\n"
         span: Span {
             file_id: 0,
             byte_offset: 1,
-            byte_length: 25,
+            byte_length: 26,
         },
     },
 ]

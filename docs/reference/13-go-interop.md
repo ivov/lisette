@@ -88,15 +88,15 @@ import "go:fmt"
 fmt.Println("a", "b", "c")
 ```
 
-To pass an existing slice, prefix it with `..`:
+To pass an existing slice, suffix it with `...`:
 
 ```rust
 let parts = ["a", "b", "c"]
-fmt.Println(..parts)
-fmt.Println("prefix:", ..parts)
+fmt.Println(parts...)
+fmt.Println("prefix:", parts...)
 ```
 
-`..` is only valid as the last argument, and only when the receiving parameter is `VarArgs<T>`. Consuming a `VarArgs<T>` inside a Lisette function body is not currently supported.
+`...` is only valid as the last argument, and only when the receiving parameter is `VarArgs<T>`. Consuming a `VarArgs<T>` inside a Lisette function body is not currently supported.
 
 ### `Unknown`
 

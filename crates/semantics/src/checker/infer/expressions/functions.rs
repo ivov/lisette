@@ -325,7 +325,18 @@ impl TaskState<'_> {
             );
         }
 
-        let variadic_elem_ty = if spread.is_some() {
+        let needs_variadic_check = spread.is_some()
+            || matches!(
+                args.last(),
+                Some(Expression::Range {
+                    start: None,
+                    end: Some(_),
+                    inclusive: false,
+                    ..
+                })
+            );
+
+        let variadic_elem_ty = if needs_variadic_check {
             callee_ty.resolve_in(&self.env).is_variadic()
         } else {
             None
@@ -358,6 +369,7 @@ impl TaskState<'_> {
         let new_args = self.infer_call_arguments(store, args, &param_types);
         self.check_call_arity(&param_types, &new_args, &callee_expression, &span);
         self.check_mut_param_arguments(&new_args, &param_mutability, &callee_expression);
+        self.check_range_to_for_variadic(&new_args, &variadic_elem_ty);
 
         let new_spread = (*spread).map(|spread_expr| match variadic_elem_ty {
             Some(elem_ty) => {
@@ -870,6 +882,46 @@ impl TaskState<'_> {
                 self.with_value_context(|s| s.infer_expression(store, arg, &expected_ty))
             })
             .collect()
+    }
+
+    /// Suggests postfix `f(xs...)` when a `..xs` range arg lands against a variadic callee.
+    fn check_range_to_for_variadic(
+        &mut self,
+        args: &[Expression],
+        variadic_elem_ty: &Option<Type>,
+    ) {
+        if variadic_elem_ty.is_none() {
+            return;
+        }
+
+        let Some(arg) = args.last() else {
+            return;
+        };
+
+        let Expression::Range {
+            start: None,
+            end: Some(inner),
+            inclusive: false,
+            ..
+        } = arg
+        else {
+            return;
+        };
+
+        let inner_ty = inner.get_type().resolve_in(&self.env);
+        if !inner_ty.is_slice() {
+            return;
+        }
+
+        let var_name = match inner.as_ref() {
+            Expression::Identifier { value, .. } => Some(value.as_str()),
+            _ => None,
+        };
+
+        self.sink.push(diagnostics::infer::range_to_for_variadic(
+            arg.get_span(),
+            var_name,
+        ));
     }
 
     fn unify_trait_bounds(

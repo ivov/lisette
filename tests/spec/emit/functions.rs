@@ -1475,7 +1475,7 @@ fn spread_arg_into_go_variadic() {
 import filepath "go:path/filepath"
 
 fn test(parts: Slice<string>) -> string {
-  filepath.Join(..parts)
+  filepath.Join(parts...)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1487,7 +1487,7 @@ fn spread_arg_with_leading_args_into_go_variadic() {
 import filepath "go:path/filepath"
 
 fn test(base: string, rest: Slice<string>) -> string {
-  filepath.Join(base, ..rest)
+  filepath.Join(base, rest...)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1503,7 +1503,7 @@ impl Logger {
 }
 
 fn test(l: Logger, parts: Slice<string>) {
-  l.push(..parts)
+  l.push(parts...)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1519,7 +1519,7 @@ impl Logger {
 }
 
 fn test(l: Logger, parts: Slice<string>) {
-  Logger.push(l, ..parts)
+  Logger.push(l, parts...)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1529,7 +1529,7 @@ fn test(l: Logger, parts: Slice<string>) {
 fn spread_arg_into_native_slice_append() {
     let input = r#"
 fn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {
-  s.append(..more)
+  s.append(more...)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1539,7 +1539,7 @@ fn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {
 fn spread_arg_into_native_slice_append_assignment() {
     let input = r#"
 fn test(mut s: Slice<int>, more: Slice<int>) -> Slice<int> {
-  s = s.append(..more)
+  s = s.append(more...)
   s
 }
 "#;
@@ -1550,7 +1550,7 @@ fn test(mut s: Slice<int>, more: Slice<int>) -> Slice<int> {
 fn spread_arg_with_leading_args_into_native_slice_append_assignment() {
     let input = r#"
 fn test(mut s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {
-  s = s.append(extra, ..more)
+  s = s.append(extra, more...)
   s
 }
 "#;
@@ -1564,7 +1564,7 @@ import "go:fmt"
 
 fn main() {
   let xs = ["a", "b", "c"]
-  fmt.Println(..xs)
+  fmt.Println(xs...)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1580,7 +1580,7 @@ fn get_xs() -> Result<Slice<int>, error> { Ok([1, 2, 3]) }
 fn variadic(_first: int, _rest: VarArgs<int>) -> int { 0 }
 
 fn run() -> Result<int, error> {
-  Ok(variadic(side_a(), ..get_xs()?))
+  Ok(variadic(side_a(), get_xs()?...))
 }
 "#;
     assert_emit_snapshot!(input);

@@ -4,8 +4,8 @@ source: tests/ui/errors/mod.rs
   [error] Wrong argument count
    ╭─[test.lis:5:3]
  4 │ fn test(rest: Slice<string>) -> Result<string, error> {
- 5 │   url.JoinPath(..rest)
-   ·   ──────────┬─────────
+ 5 │   url.JoinPath(rest...)
+   ·   ──────────┬──────────
    ·             ╰── expected `(string)`, found `()`
  6 │ }
    ╰────

@@ -367,7 +367,8 @@ impl Emitter<'_> {
         if receiver_is_lvalue {
             // false: append args never produce RHS temp statements (if/match/block).
             let receiver_lv = self.emit_left_value_capturing(output, unwrapped, false);
-            let args_str = self.emit_append_args(output, args, (**spread).as_ref(), is_extend);
+            let args_str =
+                self.emit_append_args(output, func, args, (**spread).as_ref(), is_extend);
             write_line!(output, "{} = append({}, {})", var, receiver_lv, args_str);
         } else {
             let value_str = self.emit_value(output, last);
@@ -506,12 +507,15 @@ impl Emitter<'_> {
     fn emit_append_args(
         &mut self,
         output: &mut String,
+        function: &Expression,
         args: &[Expression],
         spread: Option<&Expression>,
         is_extend: bool,
     ) -> String {
         let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
-        let emitted_args = self.sequence_with_spread(output, stages, spread, false, "_arg");
+        let combine = Self::variadic_combine_for(function, spread, 0);
+        let emitted_args =
+            self.sequence_with_spread(output, stages, spread, false, "_arg", combine);
         let args_str = emitted_args.join(", ");
         let suffix = if is_extend { "..." } else { "" };
         format!("{}{}", args_str, suffix)

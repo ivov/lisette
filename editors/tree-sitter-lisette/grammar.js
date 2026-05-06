@@ -603,7 +603,9 @@ module.exports = grammar({
       '>',
     ),
 
-    arguments: $ => parenList($._expression),
+    arguments: $ => parenList(choice($._expression, $.spread_argument)),
+
+    spread_argument: $ => prec(PREC.try, seq($._expression, '...')),
 
     slice_expression: $ => seq('[', commaSep($._expression), ']'),
 

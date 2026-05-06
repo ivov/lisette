@@ -6834,7 +6834,7 @@ fn infer_spread_on_non_variadic() {
 fn takes_int(x: int) {}
 
 fn test(args: Slice<int>) {
-  takes_int(..args)
+  takes_int(args...)
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -6846,7 +6846,7 @@ fn infer_spread_missing_required_positional_arg() {
 import url "go:net/url"
 
 fn test(rest: Slice<string>) -> Result<string, error> {
-  url.JoinPath(..rest)
+  url.JoinPath(rest...)
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -6858,7 +6858,7 @@ fn infer_spread_on_type_conversion() {
 type Callback = fn(string) -> int
 
 fn test(rest: Slice<fn(string) -> int>) {
-  Callback(..rest)
+  Callback(rest...)
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -6867,9 +6867,30 @@ fn test(rest: Slice<fn(string) -> int>) {
 #[test]
 fn parse_spread_not_last_arg() {
     let input = r#"
-fn test() { foo(..xs, y); }
+fn test() { foo(xs..., y); }
 "#;
     assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_spread_split_across_newline() {
+    let input = "
+fn test(xs: Slice<int>) { foo(xs
+  ...) }
+";
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn infer_legacy_prefix_spread_against_variadic() {
+    let input = r#"
+import "go:fmt"
+
+fn test(parts: Slice<string>) {
+  fmt.Println(..parts)
+}
+"#;
+    assert_infer_error_snapshot!(input);
 }
 
 #[test]
@@ -6881,7 +6902,7 @@ fn touch(mut items: VarArgs<int>) {
 
 fn main() {
   let data = [3, 1, 2]
-  touch(..data)
+  touch(data...)
 }
 "#;
     assert_infer_error_snapshot!(input);

@@ -233,8 +233,12 @@
           "match": "->|=>|\\|>"
         },
         {
+          "name": "keyword.operator.spread.lisette",
+          "match": "\\.\\.\\."
+        },
+        {
           "name": "keyword.operator.range.lisette",
-          "match": "\\.\\.=|\\.\\.(?!\\.)"
+          "match": "\\.\\.=|\\.\\."
         },
         {
           "name": "keyword.operator.comparison.lisette",

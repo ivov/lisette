@@ -44,7 +44,7 @@ Prelude variants need no prefix: `Some(x)`, `None`, `Ok(x)`, `Err(e)`.
 | `(T, bool)` return             | `Option<T>`                                   |
 | `for i := 0; i < n; i++`       | `for i in 0..n`                               |
 | `for {}`                       | `loop {}`                                     |
-| `f(args...)` (variadic spread) | `f(..args)`                                   |
+| `f(args...)` (variadic spread) | `f(args...)`                                  |
 
 Variables are immutable by default. Use `let mut` for mutable bindings.
 

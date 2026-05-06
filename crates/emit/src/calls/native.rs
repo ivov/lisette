@@ -245,7 +245,11 @@ impl Emitter<'_> {
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
         all_stages.push(self.stage_operand(expression));
         all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
-        let all_values = self.sequence_with_spread(output, all_stages, ctx.spread, false, "_arg");
+
+        let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 1);
+        let all_values =
+            self.sequence_with_spread(output, all_stages, ctx.spread, false, "_arg", combine);
+
         let raw_receiver = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
 
@@ -302,7 +306,11 @@ impl Emitter<'_> {
         ctx: &NativeCallContext,
     ) -> String {
         let stages = self.stage_native_method_args(ctx.function, ctx.args);
-        let emitted_args = self.sequence_with_spread(output, stages, ctx.spread, false, "_arg");
+
+        let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 0);
+        let emitted_args =
+            self.sequence_with_spread(output, stages, ctx.spread, false, "_arg", combine);
+
         if !emitted_args.is_empty() {
             let receiver = &emitted_args[0];
             let remaining_args = &emitted_args[1..];

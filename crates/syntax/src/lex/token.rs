@@ -65,6 +65,7 @@ pub enum TokenKind {
     Hash,
     DotDot,
     DotDotEqual,
+    Ellipsis,
     Backtick,
     Function,
     Let,
@@ -159,6 +160,7 @@ impl fmt::Display for TokenKind {
             Hash => "`#`",
             DotDot => "`..`",
             DotDotEqual => "`..=`",
+            Ellipsis => "`...`",
             Backtick => "`` ` ``",
             Function => "`fn`",
             Let => "`let`",
@@ -272,6 +274,7 @@ impl TokenKind {
     pub fn from_three_char_symbol(c1: char, c2: char, c3: char) -> Option<Self> {
         match (c1, c2, c3) {
             ('.', '.', '=') => Some(TokenKind::DotDotEqual),
+            ('.', '.', '.') => Some(TokenKind::Ellipsis),
             _ => None,
         }
     }

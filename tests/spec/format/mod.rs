@@ -1383,12 +1383,12 @@ fn function_with_mut_parameter() {
 
 #[test]
 fn call_with_spread_arg() {
-    assert_format_snapshot!("fn test() { foo(..args) }");
+    assert_format_snapshot!("fn test() { foo(args...) }");
 }
 
 #[test]
 fn call_with_leading_args_and_spread_arg() {
-    assert_format_snapshot!("fn test() { foo(a, b, ..args) }");
+    assert_format_snapshot!("fn test() { foo(a, b, args...) }");
 }
 
 #[test]
@@ -1774,7 +1774,7 @@ fn comment_same_line_trailing_on_last_struct_field() {
 
 #[test]
 fn comment_same_line_trailing_before_call_spread_arg() {
-    assert_format_snapshot!("fn f(args: Slice<int>) {\n  foo(1, // trailing\n  ..args)\n}");
+    assert_format_snapshot!("fn f(args: Slice<int>) {\n  foo(1, // trailing\n  args...)\n}");
 }
 
 #[test]

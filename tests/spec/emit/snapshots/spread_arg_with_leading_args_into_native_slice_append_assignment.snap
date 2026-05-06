@@ -1,10 +1,11 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test(mut s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {\n  s = s.append(extra, ..more)\n  s\n}\n"
+assertion_line: 1557
+description: "input: \nfn test(mut s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {\n  s = s.append(extra, more...)\n  s\n}\n"
 ---
 package main
 
 func test(s []int, extra int, more []int) []int {
-	s = append(s, extra, more...)
+	s = append(s, append([]int{extra}, more...)...)
 	return s
 }

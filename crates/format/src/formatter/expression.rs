@@ -646,7 +646,7 @@ impl<'a> Formatter<'a> {
 
         if let Some(spread_expr) = spread {
             if args.is_empty() {
-                let spread_doc = Document::str("..").append(self.expression(spread_expr));
+                let spread_doc = self.expression(spread_expr).append(Document::str("..."));
                 return head
                     .append("(")
                     .append(spread_doc.group().next_break_fits(true))
@@ -655,9 +655,9 @@ impl<'a> Formatter<'a> {
                     .group();
             }
             let mut entries = self.call_arg_entries(args);
-            let dots_pos = spread_expr.get_span().byte_offset.saturating_sub(2);
-            let spread_leading = self.split_for_rest(&mut entries, dots_pos);
-            let spread_doc = Document::str("..").append(self.expression(spread_expr));
+            let spread_start = spread_expr.get_span().byte_offset;
+            let spread_leading = self.split_for_rest(&mut entries, spread_start);
+            let spread_doc = self.expression(spread_expr).append(Document::str("..."));
             let (body, close_sep) =
                 Self::join_pattern_entries(entries, Some((spread_leading, spread_doc)), "");
             return head

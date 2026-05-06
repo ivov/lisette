@@ -1,11 +1,12 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport filepath \"go:path/filepath\"\n\nfn test(base: string, rest: Slice<string>) -> string {\n  filepath.Join(base, ..rest)\n}\n"
+assertion_line: 1493
+description: "input: \nimport filepath \"go:path/filepath\"\n\nfn test(base: string, rest: Slice<string>) -> string {\n  filepath.Join(base, rest...)\n}\n"
 ---
 package main
 
 import "path/filepath"
 
 func test(base string, rest []string) string {
-	return filepath.Join(base, rest...)
+	return filepath.Join(append([]string{base}, rest...)...)
 }
