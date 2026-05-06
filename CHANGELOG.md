@@ -1,6 +1,21 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.0](https://github.com/ivov/lisette/compare/lisette-v0.1.26...lisette-v0.2.0) - 2026-05-06
+
+- refactor!: reject positional access on string [#323](https://github.com/ivov/lisette/pull/323) [`a7c7245`](https://github.com/ivov/lisette/commit/a7c7245aab153ad88d44ef5ea93529c26cad2d8c)
+- feat: add substring, bytes, and runes methods on string [#320](https://github.com/ivov/lisette/pull/320) [`ebd679d`](https://github.com/ivov/lisette/commit/ebd679deed12383da5cbeffc9b60b0b3770c3104)
+- refactor!: switch variadic spread to postfix syntax [#322](https://github.com/ivov/lisette/pull/322) [`8f597b2`](https://github.com/ivov/lisette/commit/8f597b2ae00b68a6cf48df63077d66e382496865)
+- fix: allow rune to string cast, block rune to byte cast [#318](https://github.com/ivov/lisette/pull/318) [`3ce2fb6`](https://github.com/ivov/lisette/commit/3ce2fb6b8c8859ee10ef9508b093fff1bc62cb3c)
+- docs: add snippet sharing to playground [#319](https://github.com/ivov/lisette/pull/319) [`0234b42`](https://github.com/ivov/lisette/commit/0234b42056f50951226d60d76735bc33945886a0)
+- docs: add link to WASM playground in index.html [#310](https://github.com/ivov/lisette/pull/310) [`38d46b6`](https://github.com/ivov/lisette/commit/38d46b648b9678b94fe4a4bef7189648b985d02b)
+- refactor: add rune-indexed string access to prelude [#317](https://github.com/ivov/lisette/pull/317) [`5395a8d`](https://github.com/ivov/lisette/commit/5395a8db2fbd2e85826cfbe11e5ea3c168b9449d)
+- refactor: move third-party typedefs into project [#315](https://github.com/ivov/lisette/pull/315) [`d7d8adc`](https://github.com/ivov/lisette/commit/d7d8adcfaf5c87e109ba3bc135e49876c9793d53)
+- refactor: thread target through third-party typedef cache paths [#314](https://github.com/ivov/lisette/pull/314) [`e3d6ed2`](https://github.com/ivov/lisette/commit/e3d6ed2bb8324144a188de7baf55846dd1addf16)
+- ci: lint bindgen and prelude with golangci-lint [#313](https://github.com/ivov/lisette/pull/313) [`48e57b8`](https://github.com/ivov/lisette/commit/48e57b8eab6d034242173b5d1651fb640db11b46)
+- fix: disambiguate bindgen aliases on shared trailing segments [#312](https://github.com/ivov/lisette/pull/312) [`cc2f820`](https://github.com/ivov/lisette/commit/cc2f820039f6c8dd0551dbc27b922eb91eef1295)
+- fix: suggest `..` zero-fill in missing-fields help [#311](https://github.com/ivov/lisette/pull/311) [`219cf0a`](https://github.com/ivov/lisette/commit/219cf0ab8f5f062320eabbf6fd4d5e195d328dc2)
+- fix: preserve all returns when trailing bool is a flag [#307](https://github.com/ivov/lisette/pull/307) [`227e61e`](https://github.com/ivov/lisette/commit/227e61e7e23246ee08e69e671d2df53be5708c17)
 ## [0.1.26](https://github.com/ivov/lisette/compare/lisette-v0.1.25...lisette-v0.1.26) - 2026-05-04
 
 - fix: tailor nil and member-not-found help to context [#306](https://github.com/ivov/lisette/pull/306) [`aa12647`](https://github.com/ivov/lisette/commit/aa12647673d779dad69b6142b3b61b681611a205)
