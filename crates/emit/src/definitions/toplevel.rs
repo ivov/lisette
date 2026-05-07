@@ -69,7 +69,15 @@ impl Emitter<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> String {
-        let go_identifier = self.scope.bindings.add(identifier, identifier);
+        let initial_go_name = self.scope.bindings.add(identifier, identifier);
+        let go_identifier = if self.try_declare(&initial_go_name) {
+            initial_go_name
+        } else {
+            let fresh = self.fresh_var(Some(identifier));
+            self.scope.bindings.add(identifier, &fresh);
+            self.try_declare(&fresh);
+            fresh
+        };
         let ty_str = self.go_type_as_string(ty);
 
         let mut output = String::new();

@@ -1260,6 +1260,36 @@ fn parse(s: string) -> Result<int, error> {
 }
 
 #[test]
+fn local_const_shadows_let_binding() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let x = 1
+  fmt.Println(x)
+  const x = 2
+  fmt.Println(x)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn local_let_shadows_const_binding() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  const x = 1
+  fmt.Println(x)
+  let x = 2
+  fmt.Println(x)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn let_discard_empty_block() {
     let input = r#"
 fn test() {

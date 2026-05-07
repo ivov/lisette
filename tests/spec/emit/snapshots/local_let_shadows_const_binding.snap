@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/expressions.rs
+assertion_line: 1289
+description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  const x = 1\n  fmt.Println(x)\n  let x = 2\n  fmt.Println(x)\n}\n"
+---
+package main
+
+import "fmt"
+
+func main() {
+	const x int = 1
+	fmt.Println(x)
+	x_1 := 2
+	fmt.Println(x_1)
+}
