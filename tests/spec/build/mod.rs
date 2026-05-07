@@ -4802,6 +4802,41 @@ fn main() {
 }
 
 #[test]
+fn user_iface_adapter_uses_exported_go_method_name_for_snake_case() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct Entry { name: string }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn get_session(key: string) -> Option<Ref<Entry>>
+}
+
+struct MyCache {}
+
+impl MyCache {
+  fn get_session(self, _key: string) -> Option<Ref<Entry>> {
+    None
+  }
+}
+
+fn use_cache(_c: Cache) {}
+
+fn main() {
+  let c = MyCache {}
+  use_cache(c)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn result_with_pointer_error_lowers_to_native_tuple() {
     let mut fs = MockFileSystem::new();
 

@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::write_line;
 use ecow::EcoString;
@@ -323,7 +324,12 @@ impl Emitter<'_> {
             .map(|(n, t)| format!("{} {}", n, t))
             .collect();
 
-        let inner_call = format!("a.inner.{}({})", method.name, param_names.join(", "));
+        let go_method_name = if self.method_needs_export(&method.name) {
+            go_name::snake_to_camel(&method.name)
+        } else {
+            go_name::escape_keyword(&method.name).into_owned()
+        };
+        let inner_call = format!("a.inner.{}({})", go_method_name, param_names.join(", "));
 
         let user_shape = method.user_shape.clone();
         let interface_shape = method.interface_shape.clone();
@@ -333,7 +339,7 @@ impl Emitter<'_> {
             && let Some(shape) = user_shape
         {
             let go_ret = self.render_lowered_return_ty(&shape, &method.return_type);
-            write_method_header(decl, adapter_name, &method.name, &params_str, &go_ret);
+            write_method_header(decl, adapter_name, &go_method_name, &params_str, &go_ret);
             decl.push_str(&format!("return {}\n", inner_call));
             write_line!(decl, "}}");
             self.exit_scope();
@@ -345,7 +351,7 @@ impl Emitter<'_> {
             && let Some((go_ret, body)) =
                 self.emit_hint_shift_bridge(&inner_call, &method.return_type, &user, &interface)
         {
-            write_method_header(decl, adapter_name, &method.name, &params_str, &go_ret);
+            write_method_header(decl, adapter_name, &go_method_name, &params_str, &go_ret);
             decl.push_str(&body);
             write_line!(decl, "}}");
             self.exit_scope();
@@ -373,7 +379,7 @@ impl Emitter<'_> {
             decl,
             "func (a {}) {}({}){} {{",
             adapter_name,
-            method.name,
+            go_method_name,
             params_decl.join(", "),
             ret_suffix
         );
