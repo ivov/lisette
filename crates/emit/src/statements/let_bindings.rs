@@ -615,13 +615,11 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             .map(|alt| decision_tree::collect_pattern_info(self.emitter, alt, None))
             .collect();
 
-        if collected.iter().any(|(checks, _)| checks.is_empty()) {
-            return;
-        }
+        let irrefutable_idx = collected.iter().position(|(checks, _)| checks.is_empty());
+        let chain_len = irrefutable_idx.unwrap_or(collected.len());
 
-        for (i, (checks, bindings)) in collected.iter().enumerate() {
+        for (i, (checks, bindings)) in collected.iter().take(chain_len).enumerate() {
             let condition = decision_tree::render_condition(checks, subject_var);
-
             if i == 0 {
                 write_line!(output, "if {} {{", condition);
             } else {
@@ -629,6 +627,18 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             }
 
             decision_tree::emit_tree_assignments(self.emitter, output, bindings, subject_var);
+        }
+
+        if let Some(idx) = irrefutable_idx {
+            let (_, bindings) = &collected[idx];
+            if idx == 0 {
+                decision_tree::emit_tree_assignments(self.emitter, output, bindings, subject_var);
+            } else {
+                output.push_str("} else {\n");
+                decision_tree::emit_tree_assignments(self.emitter, output, bindings, subject_var);
+                output.push_str("}\n");
+            }
+            return;
         }
 
         // Restore outer bindings for else body.

@@ -3000,6 +3000,19 @@ fn test() {
 }
 
 #[test]
+fn let_else_or_pattern_irrefutable_binding() {
+    let input = r#"
+fn test() -> int {
+  let x | x = 42 else {
+    return 0
+  }
+  x
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn for_complex_pattern_unused_item() {
     let input = r#"
 struct P { v: int }
