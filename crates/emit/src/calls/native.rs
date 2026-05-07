@@ -409,11 +409,10 @@ impl Emitter<'_> {
             .and_then(|t| t.get_name())
             .expect("substring arg should resolve to a known range type");
         let receiver_staged = self.stage_operand(receiver_expr);
-        output.push_str(&receiver_staged.setup);
-        let recv = receiver_staged.value;
-        let range_var = self.emit_or_capture(output, arg, "range");
-        let (start, end) = range_var_bounds(&range_var, range_kind);
-        format_substring_call(&recv, start.as_deref(), end.as_deref())
+        let range_staged = self.stage_or_capture(arg, "range");
+        let values = self.sequence(output, vec![receiver_staged, range_staged], "_arg");
+        let (start, end) = range_var_bounds(&values[1], range_kind);
+        format_substring_call(&values[0], start.as_deref(), end.as_deref())
     }
 }
 

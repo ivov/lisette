@@ -1,0 +1,30 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 890
+description: "input: \nimport \"go:fmt\"\n\nfn make_s() -> string {\n  fmt.Println(\"receiver\")\n  \"hello\"\n}\n\nfn make_range() -> Range<int> {\n  fmt.Println(\"range\")\n  1..4\n}\n\nfn main() {\n  fmt.Println(make_s().substring(make_range()))\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func make_s() string {
+	fmt.Println("receiver")
+	return "hello"
+}
+
+func make_range() lisette.Range[int] {
+	fmt.Println("range")
+	return lisette.Range[int]{
+		Start: 1,
+		End:   4,
+	}
+}
+
+func main() {
+	_arg_2 := make_s()
+	range_1 := make_range()
+	fmt.Println(lisette.Substring(_arg_2, range_1.Start, range_1.End))
+}

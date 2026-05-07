@@ -20,20 +20,25 @@ impl Emitter<'_> {
         expression: &Expression,
         prefix: &str,
     ) -> String {
-        let emit_directly = matches!(
+        let staged = self.stage_or_capture(expression, prefix);
+        output.push_str(&staged.setup);
+        staged.value
+    }
+
+    pub(crate) fn stage_or_capture(&mut self, expression: &Expression, prefix: &str) -> Staged {
+        if matches!(
             expression,
             Expression::Literal { .. } | Expression::Identifier { .. }
-        );
-
-        if emit_directly {
-            return self.emit_operand(output, expression);
+        ) {
+            return self.stage_operand(expression);
         }
 
+        let mut setup = String::new();
+        let value_expr = self.emit_operand(&mut setup, expression);
         let temp_var = self.fresh_var(Some(prefix));
         self.declare(&temp_var);
-        let expression_string = self.emit_operand(output, expression);
-        write_line!(output, "{} := {}", temp_var, expression_string);
-        temp_var
+        write_line!(setup, "{} := {}", temp_var, value_expr);
+        Staged::new(setup, temp_var)
     }
 
     pub(crate) fn emit_force_capture(

@@ -1729,6 +1729,29 @@ fn main() {
 }
 
 #[test]
+fn slice_range_value_eval_order() {
+    let input = r#"
+import "go:fmt"
+
+fn make_items() -> Slice<int> {
+  fmt.Println("receiver")
+  [10, 20, 30, 40]
+}
+
+fn make_range() -> Range<int> {
+  fmt.Println("range")
+  1..3
+}
+
+fn main() {
+  let xs = make_items()[make_range()]
+  fmt.Println(xs.length())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn map_field_assignment_expression_position() {
     let input = r#"
 import "go:fmt"

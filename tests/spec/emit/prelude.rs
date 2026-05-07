@@ -869,6 +869,28 @@ fn test(s: string, r: RangeTo<int>) -> string {
 }
 
 #[test]
+fn string_substring_range_value_eval_order() {
+    let input = r#"
+import "go:fmt"
+
+fn make_s() -> string {
+  fmt.Println("receiver")
+  "hello"
+}
+
+fn make_range() -> Range<int> {
+  fmt.Println("range")
+  1..4
+}
+
+fn main() {
+  fmt.Println(make_s().substring(make_range()))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn string_substring_ufcs() {
     let input = r#"
 fn test(s: string) -> string {

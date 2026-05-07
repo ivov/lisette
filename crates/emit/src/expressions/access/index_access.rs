@@ -35,14 +35,9 @@ impl Emitter<'_> {
         let index_ty = index.get_type();
         if let Some(range_kind) = peel_to_range_type(&index_ty).and_then(|t| t.get_name()) {
             let needs_cap = expression.get_type().has_name("Slice");
-            output.push_str(&base_staged.setup);
-            let index_string = self.emit_or_capture(output, index, "range");
-            return self.emit_range_var_slice(
-                &base_staged.value,
-                &index_string,
-                range_kind,
-                needs_cap,
-            );
+            let index_staged = self.stage_or_capture(index, "range");
+            let values = self.sequence(output, vec![base_staged, index_staged], "_base");
+            return self.emit_range_var_slice(&values[0], &values[1], range_kind, needs_cap);
         }
 
         let index_staged = self.stage_composite(index);
