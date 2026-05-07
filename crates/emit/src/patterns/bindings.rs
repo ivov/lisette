@@ -261,6 +261,18 @@ impl Emitter<'_> {
             self.scope.bindings.add(lisette_name, "_");
             return;
         };
+        self.declare_var_decl(output, lisette_name, go_name, resolved);
+    }
+
+    /// Freshen `go_name` against the current scope, register the binding, and
+    /// emit `var X T`. Used for both identifier and slice-rest declarations.
+    fn declare_var_decl(
+        &mut self,
+        output: &mut String,
+        lisette_name: &EcoString,
+        go_name: String,
+        resolved: &Type,
+    ) {
         let go_name = if self.is_declared(&go_name) {
             self.fresh_var(Some(lisette_name))
         } else {
@@ -542,9 +554,7 @@ impl Emitter<'_> {
         if let RestPattern::Bind { name, .. } = rest
             && let Some(go_name) = self.go_name_for_rest_binding(rest)
         {
-            let go_name = self.scope.bindings.add(name, go_name);
-            let go_ty = self.go_type_as_string(resolved);
-            write_line!(output, "var {} {}", go_name, go_ty);
+            self.declare_var_decl(output, name, go_name, resolved);
         }
     }
 

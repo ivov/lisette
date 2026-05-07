@@ -580,6 +580,23 @@ fn main() {
 }
 
 #[test]
+fn or_pattern_let_else_rest_shadow() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  let rest = [99]
+  fmt.Println(rest[0])
+  let [x, ..rest] | [x, ..rest] = [1, 2] else {
+    return
+  }
+  fmt.Println(x, rest[0])
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_on_go_interface_emits_type_switch() {
     let input = r#"
 import "go:example.com/events"
