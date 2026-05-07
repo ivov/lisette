@@ -65,7 +65,7 @@ impl Emitter<'_> {
         Staged {
             value: format!("(*{})", s.value),
             setup: s.setup,
-            has_side_effects: s.has_side_effects,
+            needs_capture: s.needs_capture,
         }
     }
 

@@ -144,24 +144,29 @@ pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
     )
 }
 
+/// True for any expression except a pure literal — i.e. one whose value can
+/// be invalidated by a later sibling's setup, or is a call we should not
+/// re-evaluate.
+pub(crate) fn observable_after_mutation(expression: &Expression) -> bool {
+    !matches!(expression.unwrap_parens(), Expression::Literal { .. })
+}
+
 /// Result of emitting a sub-expression to a separate buffer.
-/// `setup` contains any statements the emitter produced (temp vars, etc.).
-/// `value` is the final expression string.
 pub(crate) struct Staged {
     pub setup: String,
     pub value: String,
-    /// Whether the emitted value contains a call (side-effectful).
-    /// Detected via `value.contains('(')` on the Go output string.
-    pub has_side_effects: bool,
+    /// Recapture before later sibling setup runs. Only set for inline values
+    /// (empty setup); a non-empty setup already bound `value` to a temp.
+    pub needs_capture: bool,
 }
 
 impl Staged {
-    pub(crate) fn new(setup: String, value: String) -> Self {
-        let has_side_effects = value.contains('(');
+    pub(crate) fn new(setup: String, value: String, expression: &Expression) -> Self {
+        let needs_capture = setup.is_empty() && observable_after_mutation(expression);
         Self {
             setup,
             value,
-            has_side_effects,
+            needs_capture,
         }
     }
 }
