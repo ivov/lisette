@@ -375,6 +375,14 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
         let arg = &args[0];
+        let is_ref_receiver = receiver_expr.get_type().is_ref();
+        let deref = |raw: &str| -> String {
+            if is_ref_receiver {
+                format!("*{}", raw)
+            } else {
+                raw.to_string()
+            }
+        };
 
         if let Expression::Range {
             start,
@@ -401,7 +409,11 @@ impl Emitter<'_> {
                     e.clone()
                 }
             });
-            return format_substring_call(&values[0], start_bound.as_deref(), end_bound.as_deref());
+            return format_substring_call(
+                &deref(&values[0]),
+                start_bound.as_deref(),
+                end_bound.as_deref(),
+            );
         }
 
         let arg_ty = arg.get_type();
@@ -412,7 +424,7 @@ impl Emitter<'_> {
         let range_staged = self.stage_or_capture(arg, "range");
         let values = self.sequence(output, vec![receiver_staged, range_staged], "_arg");
         let (start, end) = range_var_bounds(&values[1], range_kind);
-        format_substring_call(&values[0], start.as_deref(), end.as_deref())
+        format_substring_call(&deref(&values[0]), start.as_deref(), end.as_deref())
     }
 }
 

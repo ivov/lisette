@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/expressions.rs
+assertion_line: 2673
+description: "input: \nstruct Counter { x: int }\n\nimpl Counter {\n  fn inc(self: Ref<Counter>) -> int {\n    self.x = self.x + 1\n    self.x\n  }\n}\n\nfn main() {\n  let _ = Counter.inc(&Counter { x: 0 })\n}\n"
+---
+package main
+
+import "fmt"
+
+type Counter struct {
+	x int
+}
+
+func (c Counter) String() string {
+	return fmt.Sprintf("Counter { x: %v }", c.x)
+}
+
+func (c *Counter) inc() int {
+	c.x++
+	return c.x
+}
+
+func main() {
+	_ = (&Counter{x: 0}).inc()
+}

@@ -6,7 +6,7 @@ use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
 use crate::utils::Staged;
-use syntax::ast::{Annotation, Expression};
+use syntax::ast::{Annotation, Expression, Literal};
 use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
 
@@ -198,7 +198,11 @@ impl Emitter<'_> {
         let type_args_string = self.format_type_args_from_annotations(type_args);
 
         let receiver = if let Some(stripped) = receiver.strip_prefix('&') {
-            stripped.to_string()
+            if Self::is_address_of_composite_literal(args.first()) {
+                format!("(&{})", stripped)
+            } else {
+                stripped.to_string()
+            }
         } else if receiver.starts_with('*') {
             format!("({})", receiver)
         } else {
@@ -211,6 +215,23 @@ impl Emitter<'_> {
             go_method,
             type_args_string,
             emitted_rest.join(", ")
+        )
+    }
+
+    fn is_address_of_composite_literal(arg: Option<&Expression>) -> bool {
+        let Some(Expression::Reference {
+            expression: inner, ..
+        }) = arg.map(Expression::unwrap_parens)
+        else {
+            return false;
+        };
+        matches!(
+            inner.unwrap_parens(),
+            Expression::StructCall { .. }
+                | Expression::Literal {
+                    literal: Literal::Slice(_),
+                    ..
+                }
         )
     }
 }

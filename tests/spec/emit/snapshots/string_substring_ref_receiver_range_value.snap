@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 922
+description: "input: \nfn test(r: Ref<string>, range: Range<int>) -> string {\n  r.substring(range)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func test(r *string, range_ lisette.Range[int]) string {
+	return lisette.Substring(*r, range_.Start, range_.End)
+}
