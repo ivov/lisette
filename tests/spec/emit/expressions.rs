@@ -142,6 +142,49 @@ fn test() -> bool {
 }
 
 #[test]
+fn binary_logical_and_short_circuits_rhs_with_setup() {
+    let input = r#"
+fn track(flag: Ref<bool>) -> Result<int, error> {
+  flag.* = true
+  Ok(1)
+}
+
+fn test() {
+  let mut ran = false
+  if false && track(&ran).is_ok() {
+    panic("body should not run")
+  }
+  if ran {
+    panic("rhs evaluated despite short-circuit")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn binary_logical_or_short_circuits_rhs_with_setup() {
+    let input = r#"
+fn track(flag: Ref<bool>) -> Result<int, error> {
+  flag.* = true
+  Ok(1)
+}
+
+fn test() {
+  let mut ran = false
+  if true || track(&ran).is_ok() {
+    if ran {
+      panic("rhs evaluated despite short-circuit")
+    }
+    return
+  }
+  panic("if-body should run")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn unary_negation() {
     let input = r#"
 fn test() -> int {

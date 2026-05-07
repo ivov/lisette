@@ -71,6 +71,15 @@ impl Emitter<'_> {
             }
         }
 
+        if matches!(operator, BinaryOperator::And | BinaryOperator::Or) {
+            return self.emit_short_circuit_binary(
+                output,
+                operator,
+                left_expression,
+                right_expression,
+            );
+        }
+
         let stages = vec![
             self.stage_composite(left_expression),
             self.stage_composite(right_expression),
@@ -80,6 +89,31 @@ impl Emitter<'_> {
         let right_string = values[1].clone();
 
         format!("{} {} {}", left_string, operator, right_string)
+    }
+
+    fn emit_short_circuit_binary(
+        &mut self,
+        output: &mut String,
+        operator: &BinaryOperator,
+        left_expression: &Expression,
+        right_expression: &Expression,
+    ) -> String {
+        let left_staged = self.stage_composite(left_expression);
+        output.push_str(&left_staged.setup);
+
+        // Wrap RHS setup in an IIFE so it runs only when control reaches the
+        // RHS — hoisting it before the operator would defeat short-circuit.
+        let right_staged = self.stage_composite(right_expression);
+        let right_string = if right_staged.setup.is_empty() {
+            right_staged.value
+        } else {
+            format!(
+                "func() bool {{\n{}return {}\n}}()",
+                right_staged.setup, right_staged.value
+            )
+        };
+
+        format!("{} {} {}", left_staged.value, operator, right_string)
     }
 
     pub(crate) fn emit_unary_expression(
