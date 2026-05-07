@@ -1125,3 +1125,21 @@ fn test(p: Point) -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn match_subject_var_discard_ignores_string_literal_lookalike() {
+    let input = r#"
+struct Point { x: int }
+
+fn make() -> Point {
+  Point { x: 1 }
+}
+
+fn test() -> string {
+  match make() {
+    _ => "subject_1",
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

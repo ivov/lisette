@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn test(s: string) -> bool {\n  !(\"x == y\" == s)\n}\n"
+---
+package main
+
+func test(s string) bool {
+	return ("x == y" != s)
+}

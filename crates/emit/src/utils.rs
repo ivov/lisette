@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use syntax::ast::Expression;
 
 macro_rules! write_line {
@@ -22,33 +23,67 @@ pub(crate) fn receiver_name(type_name: &str) -> String {
         .to_string()
 }
 
-/// Check if emitted Go output references `var` as a standalone identifier
-/// (not as a substring of another identifier like `p` in `tmp_1`).
+/// Whether `var` appears as a standalone identifier in emitted Go,
+/// ignoring string-literal contents.
 pub(crate) fn output_references_var(output: &str, var: &str) -> bool {
-    let var_bytes = var.as_bytes();
-    let out_bytes = output.as_bytes();
-    let mut start = 0;
-    while start + var.len() <= output.len() {
-        if let Some(position) = output[start..].find(var) {
-            let abs = start + position;
-            let before_ok = abs == 0 || {
-                let c = out_bytes[abs - 1];
-                !c.is_ascii_alphanumeric() && c != b'_'
-            };
-            let after = abs + var_bytes.len();
-            let after_ok = after >= out_bytes.len() || {
-                let c = out_bytes[after];
-                !c.is_ascii_alphanumeric() && c != b'_'
-            };
-            if before_ok && after_ok {
-                return true;
+    let masked = mask_go_string_literals(output);
+    let bytes = masked.as_bytes();
+    masked.match_indices(var).any(|(abs, _)| {
+        let before_ok = abs == 0 || {
+            let c = bytes[abs - 1];
+            !c.is_ascii_alphanumeric() && c != b'_'
+        };
+        let after = abs + var.len();
+        let after_ok = after >= bytes.len() || {
+            let c = bytes[after];
+            !c.is_ascii_alphanumeric() && c != b'_'
+        };
+        before_ok && after_ok
+    })
+}
+
+/// Replace Go string/rune/raw-string contents with spaces, preserving byte
+/// positions. Borrows when no quote is present.
+fn mask_go_string_literals(go_text: &str) -> Cow<'_, str> {
+    if !go_text.bytes().any(|b| matches!(b, b'"' | b'\'' | b'`')) {
+        return Cow::Borrowed(go_text);
+    }
+    let bytes = go_text.as_bytes();
+    let mut out = String::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            quote @ (b'"' | b'\'') => i = mask_literal(bytes, i, quote, true, &mut out),
+            b'`' => i = mask_literal(bytes, i, b'`', false, &mut out),
+            _ => {
+                let start = i;
+                while i < bytes.len() && !matches!(bytes[i], b'"' | b'\'' | b'`') {
+                    i += 1;
+                }
+                out.push_str(&go_text[start..i]);
             }
-            start = abs + 1;
-        } else {
-            break;
         }
     }
-    false
+    Cow::Owned(out)
+}
+
+fn mask_literal(bytes: &[u8], start: usize, quote: u8, escapes: bool, out: &mut String) -> usize {
+    out.push(quote as char);
+    let mut i = start + 1;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if escapes && b == b'\\' && i + 1 < bytes.len() {
+            out.push_str("  ");
+            i += 2;
+        } else if b == quote {
+            out.push(quote as char);
+            return i + 1;
+        } else {
+            out.push(' ');
+            i += 1;
+        }
+    }
+    i
 }
 
 /// Group consecutive parameters with the same Go type: `a int, b int` → `a, b int`.
@@ -81,7 +116,8 @@ pub(crate) fn group_params(params: &[(String, String)]) -> String {
 /// Returns `None` for compound expressions (`&&`/`||`) or non-comparisons.
 /// Used by unary-not emission and let-else condition negation.
 pub(crate) fn try_flip_comparison(expression: &str) -> Option<String> {
-    if expression.contains(" && ") || expression.contains(" || ") {
+    let masked = mask_go_string_literals(expression);
+    if masked.contains(" && ") || masked.contains(" || ") {
         return None;
     }
     for (op, flipped) in [
@@ -92,7 +128,7 @@ pub(crate) fn try_flip_comparison(expression: &str) -> Option<String> {
         (" < ", " >= "),
         (" > ", " <= "),
     ] {
-        if let Some(position) = expression.find(op) {
+        if let Some(position) = masked.find(op) {
             let lhs = &expression[..position];
             let rhs = &expression[position + op.len()..];
             return Some(format!("{}{}{}", lhs, flipped, rhs));

@@ -205,6 +205,16 @@ fn test() -> bool {
 }
 
 #[test]
+fn unary_not_skips_operator_text_inside_string_literal() {
+    let input = r#"
+fn test(s: string) -> bool {
+  !("x == y" == s)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn parenthesized_expression() {
     let input = r#"
 fn test() -> int {
