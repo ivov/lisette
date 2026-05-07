@@ -1,6 +1,26 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.1](https://github.com/ivov/lisette/compare/lisette-v0.2.0...lisette-v0.2.1) - 2026-05-07
+
+- fix: snapshot bytes-loop receiver to survive body reassignment [#344](https://github.com/ivov/lisette/pull/344) [`1eda7c8`](https://github.com/ivov/lisette/commit/1eda7c83360ca712eabfe0ec081878ea647c5d94)
+- fix: freshen rest binding in let-else or-pattern [#343](https://github.com/ivov/lisette/pull/343) [`f88c1ef`](https://github.com/ivov/lisette/commit/f88c1efc04ec425748004e2e955ad5dbae639f60)
+- fix: freshen go-escaped names that clash with siblings [#342](https://github.com/ivov/lisette/pull/342) [`36b6de2`](https://github.com/ivov/lisette/commit/36b6de2eac3ed929c3acd02235cba8bb77928d52)
+- fix: declare local const in go scope for let/const shadowing [#341](https://github.com/ivov/lisette/pull/341) [`f7d8afb`](https://github.com/ivov/lisette/commit/f7d8afb898060786ec8ee944baae19e379fa637e)
+- fix: ignore string literal contents in emit text scans [#337](https://github.com/ivov/lisette/pull/337) [`eaa4e69`](https://github.com/ivov/lisette/commit/eaa4e696d7badb625eb5632d6c8f7ae5d697bda0)
+- fix: assign bindings in irrefutable let-else or-patterns [#338](https://github.com/ivov/lisette/pull/338) [`6362b34`](https://github.com/ivov/lisette/commit/6362b344ef9a4b17245d4ecdea92c553819867fc)
+- ci: pass missing expression to fix build [#340](https://github.com/ivov/lisette/pull/340) [`495a95b`](https://github.com/ivov/lisette/commit/495a95bf8fc73b735b2a9a7977b30abc6d93e7e9)
+- ci: skip pr-specific checks on release-plz prs [#339](https://github.com/ivov/lisette/pull/339) [`1b0a0ec`](https://github.com/ivov/lisette/commit/1b0a0ec0508c14239f642885a06894a324cacc5a)
+- fix: capture mutable reads before later sibling setup runs [#336](https://github.com/ivov/lisette/pull/336) [`ead1048`](https://github.com/ivov/lisette/commit/ead1048e55e08eb0bb9f8bf840912cf9d048e38b)
+- docs: show project layout in lis new and lis learn help [#335](https://github.com/ivov/lisette/pull/335) [`e16d7cf`](https://github.com/ivov/lisette/commit/e16d7cfc1138350b28a35add04e1f5155351c36e)
+- fix: sequence receiver before range value in substring and slice [#334](https://github.com/ivov/lisette/pull/334) [`4559d27`](https://github.com/ivov/lisette/commit/4559d27f0d433fd18b5ebf8cfa036bf0b0b60884)
+- fix: dereference Ref<string> receiver in substring call [#333](https://github.com/ivov/lisette/pull/333) [`855ae00`](https://github.com/ivov/lisette/commit/855ae00886ddb88b543b8ca5de16ef717a0041d3)
+- fix: preserve & on UFCS composite literal receivers [#331](https://github.com/ivov/lisette/pull/331) [`589a9fa`](https://github.com/ivov/lisette/commit/589a9fad527778f17e89de446876406828677ecf)
+- fix: parenthesize pointer newtype cast in match patterns [#332](https://github.com/ivov/lisette/pull/332) [`4035606`](https://github.com/ivov/lisette/commit/403560667e43c4b7d74ac311114ea81d6e790133)
+- fix: camel-case snake_case names in receiver-method UFCS calls [#330](https://github.com/ivov/lisette/pull/330) [`06d098e`](https://github.com/ivov/lisette/commit/06d098e148ffa23642b185f8d9b3799666f62207)
+- fix: export camel-case method names in interface adapters [#329](https://github.com/ivov/lisette/pull/329) [`d35f8d3`](https://github.com/ivov/lisette/commit/d35f8d3113ff9c9089f3f90719e206a669be0a51)
+- fix: handle escaped quotes in fmt.Println f-string collapse [#328](https://github.com/ivov/lisette/pull/328) [`a798d21`](https://github.com/ivov/lisette/commit/a798d218279b08e0d201fc5e05a830bf9dc9590e)
+- fix: preserve short-circuit when && or || RHS needs setup [#326](https://github.com/ivov/lisette/pull/326) [`4126b50`](https://github.com/ivov/lisette/commit/4126b50af7cd378fdc0730fe3ca8ef23e0a7ff75)
 ## [0.2.0](https://github.com/ivov/lisette/compare/lisette-v0.1.26...lisette-v0.2.0) - 2026-05-06
 
 - refactor!: reject positional access on string [#323](https://github.com/ivov/lisette/pull/323) [`a7c7245`](https://github.com/ivov/lisette/commit/a7c7245aab153ad88d44ef5ea93529c26cad2d8c)
