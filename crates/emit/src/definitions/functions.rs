@@ -145,9 +145,7 @@ impl Emitter<'_> {
             .map(|p| {
                 let name = if let Pattern::Identifier { identifier, .. } = &p.pattern {
                     if let Some(go_name) = self.go_name_for_binding(&p.pattern) {
-                        let go_id = self.scope.bindings.add(identifier, go_name);
-                        self.declare(&go_id);
-                        go_id
+                        self.declare_param(identifier, go_name)
                     } else {
                         self.scope.bindings.add(identifier, "_");
                         "_".to_string()
@@ -228,6 +226,20 @@ impl Emitter<'_> {
         )
     }
 
+    /// Bind and declare a parameter. If the natural post-escape Go name is
+    /// already declared in this scope, pick a fresh Go name so later identifier lookups in the body resolve to the renamed slot.
+    fn declare_param(&mut self, lisette_name: &str, raw_go_name: impl Into<String>) -> String {
+        let go_id = self.scope.bindings.add(lisette_name, raw_go_name);
+        let go_id = if self.is_declared(&go_id) {
+            let fresh = self.fresh_var(Some(lisette_name));
+            self.scope.bindings.add(lisette_name, fresh)
+        } else {
+            go_id
+        };
+        self.declare(&go_id);
+        go_id
+    }
+
     pub(crate) fn is_go_never(expression: &Expression) -> bool {
         match expression {
             Expression::Return { .. } => true,
@@ -273,6 +285,12 @@ impl Emitter<'_> {
             go_name::snake_to_camel(&function_definition.name)
         } else if receiver.is_some() {
             go_name::escape_keyword(&function_definition.name).into_owned()
+        } else if let Some(remapped) = self
+            .module
+            .escape_remap
+            .get(function_definition.name.as_str())
+        {
+            remapped.clone()
         } else {
             go_name::escape_reserved(&function_definition.name).into_owned()
         };
@@ -460,9 +478,7 @@ impl Emitter<'_> {
             let name = match &param.pattern {
                 Pattern::Identifier { identifier, .. } => {
                     if let Some(go_name) = self.go_name_for_binding(&param.pattern) {
-                        let go_id = self.scope.bindings.add(identifier, go_name);
-                        self.declare(&go_id);
-                        go_id
+                        self.declare_param(identifier, go_name)
                     } else {
                         "_".to_string()
                     }

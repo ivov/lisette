@@ -5,6 +5,13 @@ use crate::names::go_name;
 
 impl Emitter<'_> {
     pub(crate) fn resolve_go_name(&mut self, name: &str) -> String {
+        if !self.module.escape_remap.is_empty()
+            && !name.contains('.')
+            && let Some(remapped) = self.module.escape_remap.get(name)
+        {
+            return remapped.clone();
+        }
+
         if let Some(go_call) = self.try_resolve_cross_module_static_method(name) {
             return go_call;
         }

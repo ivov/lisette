@@ -69,7 +69,11 @@ impl Emitter<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> String {
-        let go_identifier = self.scope.bindings.add(identifier, identifier);
+        let target_name = match self.module.escape_remap.get(identifier) {
+            Some(remapped) => remapped.clone(),
+            None => identifier.to_string(),
+        };
+        let go_identifier = self.scope.bindings.add(identifier, target_name);
         let ty_str = self.go_type_as_string(ty);
 
         let mut output = String::new();

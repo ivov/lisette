@@ -95,6 +95,10 @@ struct ModuleData {
     absorbed_ref_generics: HashSet<String>,
     /// Pre-computed wrapping strategy per Go function.
     go_call_strategies: HashMap<String, GoCallStrategy>,
+    /// Lisette name → freshened Go name when `escape_reserved` would collide
+    /// with a sibling top-level definition (e.g. `fn len` and `fn len_` both
+    /// targeting `len_`). Consulted at definition and call sites.
+    escape_remap: HashMap<String, String>,
 }
 
 struct ScopeState {
@@ -284,6 +288,7 @@ impl<'a> Emitter<'a> {
                 reverse_module_aliases: HashMap::default(),
                 absorbed_ref_generics: HashSet::default(),
                 go_call_strategies: HashMap::default(),
+                escape_remap: HashMap::default(),
             },
             scope: ScopeState {
                 next_var: 0,
@@ -499,6 +504,7 @@ impl<'a> Emitter<'a> {
         self.collect_exported_method_names(files);
         self.collect_impl_bounds(files);
         self.collect_enum_layouts();
+        self.collect_escape_remap(files);
         let mut make_functions_by_file = self.collect_make_functions();
 
         let mut output_files = Vec::new();

@@ -1,7 +1,8 @@
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use super::names::go_name;
 use crate::Emitter;
+use syntax::ast::{Expression, Visibility};
 use syntax::program::{DefinitionBody, File};
 use syntax::types::Type;
 
@@ -62,6 +63,50 @@ impl Emitter<'_> {
                 }
                 _ => {}
             }
+        }
+    }
+
+    /// Detect free top-level private Lisette names (free functions and
+    /// constants) whose natural Go form would collide after `escape_reserved`
+    /// — e.g. `len` escapes to `len_` and clashes with a sibling `len_`. The
+    /// verbatim name claims its Go form; each escaped collider is remapped
+    /// to `name_2`, `name_3`, etc. until unique. Public functions go through
+    /// `snake_to_camel` and a separate identifier path, so they are not
+    /// considered here.
+    pub(crate) fn collect_escape_remap(&mut self, files: &[&File]) {
+        let entries: Vec<(&str, String)> = files
+            .iter()
+            .flat_map(|f| &f.items)
+            .filter_map(|item| match item {
+                Expression::Function {
+                    name,
+                    visibility: Visibility::Private,
+                    ..
+                } => Some((name.as_str(), go_name::escape_reserved(name).into_owned())),
+                Expression::Const { identifier, .. } => Some((
+                    identifier.as_str(),
+                    go_name::escape_reserved(identifier).into_owned(),
+                )),
+                _ => None,
+            })
+            .collect();
+
+        let mut taken: HashSet<String> = entries
+            .iter()
+            .filter(|(name, natural)| *name == natural)
+            .map(|(_, natural)| natural.clone())
+            .collect();
+
+        for (name, natural) in &entries {
+            if *name == natural || taken.insert(natural.clone()) {
+                continue;
+            }
+            let fresh = (2..)
+                .map(|n| format!("{}_{}", name, n))
+                .find(|c| !taken.contains(c))
+                .expect("freshening counter is unbounded");
+            taken.insert(fresh.clone());
+            self.module.escape_remap.insert((*name).to_string(), fresh);
         }
     }
 
