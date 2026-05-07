@@ -903,6 +903,26 @@ fn test(s: MyString) -> bool {
 }
 
 #[test]
+fn string_substring_ref_receiver_range_literal() {
+    let input = r#"
+fn test(r: Ref<string>) -> string {
+  r.substring(1..4)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn string_substring_ref_receiver_range_value() {
+    let input = r#"
+fn test(r: Ref<string>, range: Range<int>) -> string {
+  r.substring(range)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn string_substring_aliased_range() {
     let input = r#"
 type Prefix = RangeTo<int>
