@@ -50,10 +50,19 @@ pub fn print_command_help(command: &str) {
         "new" => print_help(
             "`lis new` <name>
 
-Create a new Lisette project.
+Create a new Lisette project in the current directory.
+
+    .
+    └── `hello_world`/
+        ├── src/
+        │   └── main.lis
+        ├── lisette.toml
+        ├── README.md
+        ├── AGENTS.md
+        └── .gitignore
 
 Arguments:
-    <name>    Name of the project to create (e.g., `myproject`)",
+    <name>    Name of the project, e.g. `hello_world`",
         ),
 
         "build" | "b" => print_help(
@@ -151,10 +160,28 @@ Examples:
         "learn" => print_help(
             "`lis learn`
 
-Generate a sample project to explore Lisette's features.
+Create a sample Lisette project in the current directory.
 
-Creates a `learn-lisette` dir with a CLI task manager that demonstrates
-enums, structs, pattern matching, error handling, closures, Go interop, and concurrency.",
+    .
+    └── learn-lisette/
+        ├── src/
+        │   ├── main.lis
+        │   ├── models/
+        │   │   ├── props.lis
+        │   │   └── task.lis
+        │   ├── store/
+        │   │   └── store.lis
+        │   ├── commands/
+        │   │   └── commands.lis
+        │   └── display/
+        │       └── display.lis
+        ├── lisette.toml
+        ├── README.md
+        ├── AGENTS.md
+        └── .gitignore
+
+The sample is a CLI task manager that demonstrates enums, structs, pattern
+matching, error handling, closures, Go interop, and concurrency.",
         ),
 
         "doc" => print_help(
