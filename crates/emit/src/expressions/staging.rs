@@ -14,17 +14,6 @@ pub(crate) struct VariadicCombine {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn emit_or_capture(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        prefix: &str,
-    ) -> String {
-        let staged = self.stage_or_capture(expression, prefix);
-        output.push_str(&staged.setup);
-        staged.value
-    }
-
     pub(crate) fn stage_or_capture(&mut self, expression: &Expression, prefix: &str) -> Staged {
         if matches!(
             expression,

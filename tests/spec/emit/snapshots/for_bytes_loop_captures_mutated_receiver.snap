@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/prelude.rs
+assertion_line: 115
+description: "input: \nfn main() {\n  let mut s = \"ab\"\n  let mut count = 0\n  for b in s.bytes() {\n    count += 1\n    s = \"\"\n    let _ = b\n  }\n  if count != 2 {\n    panic(\"expected count 2 — bytes loop must iterate over the original string\")\n  }\n}\n"
+---
+package main
+
+func main() {
+	s := "ab"
+	count := 0
+	_s_1 := s
+	for _i_2 := 0; _i_2 < len(_s_1); _i_2++ {
+		b := _s_1[_i_2]
+		count++
+		s = ""
+		_ = b
+	}
+	if count != 2 {
+		panic("expected count 2 — bytes loop must iterate over the original string")
+	}
+}

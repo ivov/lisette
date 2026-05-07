@@ -97,6 +97,25 @@ fn test(s: string) {
 }
 
 #[test]
+fn for_bytes_loop_captures_mutated_receiver() {
+    let input = r#"
+fn main() {
+  let mut s = "ab"
+  let mut count = 0
+  for b in s.bytes() {
+    count += 1
+    s = ""
+    let _ = b
+  }
+  if count != 2 {
+    panic("expected count 2 — bytes loop must iterate over the original string")
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn slice_new() {
     let input = r#"
 fn test() -> Slice<int> {

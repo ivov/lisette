@@ -324,16 +324,7 @@ impl Emitter<'_> {
     ) {
         self.enter_scope();
 
-        let can_skip_copy = if let Expression::Identifier {
-            binding_id: Some(id),
-            ..
-        } = iterable
-        {
-            !self.ctx.mutations.is_mutated(*id)
-        } else {
-            false
-        };
-        let range_var = if can_skip_copy {
+        let range_var = if self.is_unmutated_identifier(iterable) {
             self.emit_operand(output, iterable)
         } else {
             self.emit_force_capture(output, iterable, "_range")
@@ -411,8 +402,8 @@ impl Emitter<'_> {
     }
 
     /// `for b in s.bytes()` lowers to a C-style byte-indexed loop, bypassing
-    /// the `[]byte(s)` allocation. Captures the receiver if it has side
-    /// effects, since `len(s)` and `s[i]` reference it twice.
+    /// the `[]byte(s)` allocation. Snapshots the receiver unless it is an
+    /// unmutated identifier, since `len(s)` and `s[i]` reference it twice.
     fn emit_bytes_for_loop(
         &mut self,
         output: &mut String,
@@ -421,7 +412,11 @@ impl Emitter<'_> {
         body: &Expression,
     ) {
         self.enter_scope();
-        let recv_var = self.emit_or_capture(output, receiver, "_s");
+        let recv_var = if self.is_unmutated_identifier(receiver) {
+            self.emit_operand(output, receiver)
+        } else {
+            self.emit_force_capture(output, receiver, "_s")
+        };
         if let Some(label) = self.current_loop_label() {
             write_line!(output, "{}:", label);
         }
@@ -441,6 +436,18 @@ impl Emitter<'_> {
         self.emit_block(output, body);
         output.push_str("}\n");
         self.exit_scope();
+    }
+
+    fn is_unmutated_identifier(&self, expression: &Expression) -> bool {
+        if let Expression::Identifier {
+            binding_id: Some(id),
+            ..
+        } = expression
+        {
+            !self.ctx.mutations.is_mutated(*id)
+        } else {
+            false
+        }
     }
 }
 
