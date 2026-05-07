@@ -1,5 +1,6 @@
 ---
 source: tests/spec/emit/expressions.rs
+assertion_line: 3491
 description: "input: \nfn noop() {}\n\nfn main() {\n  let mut m = Map.new<(), int>()\n  m[()] = 7\n  let x = m[noop()]\n  let _ = x\n}\n"
 ---
 package main
@@ -10,6 +11,7 @@ func main() {
 	m := make(map[struct{}]int)
 	idx_1 := struct{}{}
 	m[idx_1] = 7
+	_base_2 := m
 	noop()
-	_ = m[struct{}{}]
+	_ = _base_2[struct{}{}]
 }

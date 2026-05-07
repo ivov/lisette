@@ -1,6 +1,6 @@
 use crate::Emitter;
 use crate::names::go_name;
-use crate::utils::Staged;
+use crate::utils::{Staged, observable_after_mutation};
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -38,7 +38,7 @@ impl Emitter<'_> {
         let temp_var = self.fresh_var(Some(prefix));
         self.declare(&temp_var);
         write_line!(setup, "{} := {}", temp_var, value_expr);
-        Staged::new(setup, temp_var)
+        Staged::new(setup, temp_var, expression)
     }
 
     pub(crate) fn emit_force_capture(
@@ -47,7 +47,7 @@ impl Emitter<'_> {
         expression: &Expression,
         prefix: &str,
     ) -> String {
-        if matches!(expression.unwrap_parens(), Expression::Literal { .. }) {
+        if !observable_after_mutation(expression) {
             return self.emit_operand(output, expression);
         }
 
@@ -62,14 +62,14 @@ impl Emitter<'_> {
     pub(crate) fn stage_operand(&mut self, expression: &Expression) -> Staged {
         let mut setup = String::new();
         let value = self.emit_operand(&mut setup, expression);
-        Staged::new(setup, value)
+        Staged::new(setup, value, expression)
     }
 
     /// Emit an expression as a composite value to a separate buffer.
     pub(crate) fn stage_composite(&mut self, expression: &Expression) -> Staged {
         let mut setup = String::new();
         let value = self.emit_composite_value(&mut setup, expression);
-        Staged::new(setup, value)
+        Staged::new(setup, value, expression)
     }
 
     /// Suppresses the Go-fn identity short-circuit when the formal param
@@ -98,7 +98,7 @@ impl Emitter<'_> {
             self.declare(&cb_var);
             write_line!(setup, "{} := {}", cb_var, staged.value);
             let tagged = self.lower_arg_to_tagged(&mut setup, &cb_var, param_ty);
-            return Staged::new(setup, tagged);
+            return Staged::new(setup, tagged, expression);
         }
 
         staged
@@ -181,7 +181,7 @@ impl Emitter<'_> {
 
             output.push_str(&s.setup);
 
-            if later_has_setup && s.has_side_effects {
+            if later_has_setup && s.needs_capture {
                 let tmp = self.fresh_var(Some(prefix));
                 self.declare(&tmp);
                 write_line!(output, "{} := {}", tmp, s.value);

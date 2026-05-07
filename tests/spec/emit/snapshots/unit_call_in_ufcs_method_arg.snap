@@ -1,5 +1,6 @@
 ---
 source: tests/spec/emit/functions.rs
+assertion_line: 1428
 description: "input: \nfn noop() {}\n\nstruct Box {}\n\nimpl Box {\n  fn ping(self, _x: ()) {}\n}\n\nfn test() {\n  let b = Box {}\n  Box.ping(b, noop())\n}\n"
 ---
 package main
@@ -16,6 +17,7 @@ func (b Box) ping(_ struct{}) {}
 
 func test() {
 	b := Box{}
+	_arg_1 := b
 	noop()
-	b.ping(struct{}{})
+	_arg_1.ping(struct{}{})
 }

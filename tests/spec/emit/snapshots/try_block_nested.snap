@@ -1,5 +1,6 @@
 ---
 source: tests/spec/emit/control_flow.rs
+assertion_line: 1737
 description: "input: \nfn risky_a() -> Result<int, string> { Ok(1) }\nfn risky_b() -> Result<int, string> { Ok(2) }\n\nfn test() -> int {\n  let outer = try {\n    let inner: Result<int, string> = try {\n      risky_a()?\n    };\n    let inner_val = match inner {\n      Ok(x) => x,\n      Err(_) => 0,\n    };\n    inner_val + risky_b()?\n  };\n  match outer {\n    Ok(x) => x,\n    Err(_) => -1,\n  }\n}\n"
 ---
 package main
@@ -27,18 +28,18 @@ func test() int {
 			return lisette.MakeResultOk[int, string](result_4)
 		}()
 		inner = tryResult_2
-		var inner_val int
+		var _left_7 int
 		if inner.Tag == lisette.ResultOk {
-			inner_val = inner.OkVal
+			_left_7 = inner.OkVal
 		} else {
-			inner_val = 0
+			_left_7 = 0
 		}
 		check_5 := risky_b()
 		if check_5.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[int, string](check_5.ErrVal)
 		}
 		result_6 := check_5.OkVal
-		return lisette.MakeResultOk[int, string](inner_val + result_6)
+		return lisette.MakeResultOk[int, string](_left_7 + result_6)
 	}()
 	outer = tryResult_1
 	if outer.Tag == lisette.ResultOk {

@@ -1,5 +1,6 @@
 ---
 source: tests/spec/emit/control_flow.rs
+assertion_line: 2665
 description: "input: \nfn g() -> Result<int, string> { Ok(0) }\n\nfn f() -> Result<int, string> {\n  let chans = [Channel.buffered<int>(1)]\n  chans[0].send(7)\n  let x = select {\n    let Some(v) = chans[g()?].receive() => v,\n    _ => 0,\n  }\n  Ok(x)\n}\n\nfn main() { let _ = f() }\n"
 ---
 package main
@@ -14,19 +15,20 @@ func f() lisette.Result[int, string] {
 	chans := []chan int{make(chan int, 1)}
 	_ = lisette.ChannelSend(chans[0], 7)
 	var x int
+	_base_3 := chans
 	check_1 := g()
 	if check_1.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](check_1.ErrVal)
 	}
 	result_2 := check_1.OkVal
-	ch_3 := chans[result_2]
+	ch_4 := _base_3[result_2]
 	for {
 		select {
-		case v, ok := <-ch_3:
+		case v, ok := <-ch_4:
 			if ok {
 				x = v
 			} else {
-				ch_3 = nil
+				ch_4 = nil
 				continue
 			}
 		default:
