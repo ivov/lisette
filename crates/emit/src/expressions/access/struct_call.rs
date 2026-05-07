@@ -7,9 +7,8 @@ use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 use crate::Emitter;
 use crate::definitions::enum_layout;
 use crate::go_name;
-use crate::is_order_sensitive;
 use crate::types::coercion::Coercion;
-use crate::utils::Staged;
+use crate::utils::{Staged, observable_after_mutation};
 use crate::write_line;
 
 /// Context for emitting a struct literal or enum variant construction.
@@ -104,7 +103,7 @@ impl Emitter<'_> {
                 field_side_effects.extend(
                     field_assignments
                         .iter()
-                        .map(|f| is_order_sensitive(&f.value)),
+                        .map(|f| observable_after_mutation(&f.value)),
                 );
                 self.emit_struct_update(output, base, &field_pairs, &field_side_effects)
             }

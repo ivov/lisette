@@ -5,7 +5,7 @@ use crate::control_flow::fallible::{
 };
 use crate::types::abi::AbiShape;
 use crate::types::emitter::Position;
-use crate::utils::{inline_trivial_bindings, optimize_region};
+use crate::utils::{Staged, inline_trivial_bindings, optimize_region};
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -314,16 +314,21 @@ impl Emitter<'_> {
                 .ty
                 .clone();
             let slot_tys = crate::types::abi::tuple_element_types(&self.peel_alias(&return_ty));
-            let parts: Vec<String> = elements
+            let stages: Vec<Staged> = elements
                 .iter()
                 .enumerate()
-                .map(|(i, e)| match slot_tys.get(i) {
-                    Some(slot_ty) if self.is_nullable_option(slot_ty) => {
-                        self.emit_nullable_slot_value(output, e, slot_ty)
-                    }
-                    _ => self.emit_composite_value(output, e),
+                .map(|(i, e)| {
+                    let mut setup = String::new();
+                    let value = match slot_tys.get(i) {
+                        Some(slot_ty) if self.is_nullable_option(slot_ty) => {
+                            self.emit_nullable_slot_value(&mut setup, e, slot_ty)
+                        }
+                        _ => self.emit_composite_value(&mut setup, e),
+                    };
+                    Staged::new(setup, value, e)
                 })
                 .collect();
+            let parts = self.sequence(output, stages, "_ret");
             write_line!(output, "return {}", parts.join(", "));
             return true;
         }

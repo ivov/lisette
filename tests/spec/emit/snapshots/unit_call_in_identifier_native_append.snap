@@ -1,5 +1,6 @@
 ---
 source: tests/spec/emit/expressions.rs
+assertion_line: 3463
 description: "input: \nfn noop() {}\n\nfn main() {\n  let xs: Slice<()> = []\n  let y = Slice.append(xs, noop())\n  let _ = y\n}\n"
 ---
 package main
@@ -8,6 +9,7 @@ func noop() {}
 
 func main() {
 	xs := []struct{}{}
+	_arg_1 := xs
 	noop()
-	_ = append(xs, struct{}{})
+	_ = append(_arg_1, struct{}{})
 }

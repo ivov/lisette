@@ -243,7 +243,7 @@ impl Emitter<'_> {
             .map(|(i, arg)| {
                 let mut setup = String::new();
                 let value = self.emit_call_arg(&mut setup, arg, i, ctx);
-                Staged::new(setup, value)
+                Staged::new(setup, value, arg)
             })
             .collect();
         self.sequence_with_spread(
