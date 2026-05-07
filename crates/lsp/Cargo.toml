@@ -13,11 +13,11 @@ doctest = false
 test = false
 
 [dependencies]
-syntax = { package = "lisette-syntax", version = "0.2.0", path = "../syntax" }
-semantics = { package = "lisette-semantics", version = "0.2.0", path = "../semantics" }
-diagnostics = { package = "lisette-diagnostics", version = "0.2.0", path = "../diagnostics" }
-deps = { package = "lisette-deps", version = "0.2.0", path = "../deps" }
-format = { package = "lisette-format", version = "0.2.0", path = "../format" }
+syntax = { package = "lisette-syntax", version = "0.2.1", path = "../syntax" }
+semantics = { package = "lisette-semantics", version = "0.2.1", path = "../semantics" }
+diagnostics = { package = "lisette-diagnostics", version = "0.2.1", path = "../diagnostics" }
+deps = { package = "lisette-deps", version = "0.2.1", path = "../deps" }
+format = { package = "lisette-format", version = "0.2.1", path = "../format" }
 tower-lsp = "0.20"
 tokio = { version = "1", features = ["full"] }
 dashmap = "6"
