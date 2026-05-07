@@ -2312,6 +2312,23 @@ fn main() {
 }
 
 #[test]
+fn ufcs_call_to_public_snake_case_receiver_method() {
+    let input = r#"
+pub struct Service {}
+
+impl Service {
+  pub fn get_session(self) -> int { 42 }
+}
+
+fn main() {
+  let s = Service {};
+  let _ = Service.get_session(s);
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn ufcs_call_return_only_type_args() {
     let input = r#"
 struct Box<T> { value: T }

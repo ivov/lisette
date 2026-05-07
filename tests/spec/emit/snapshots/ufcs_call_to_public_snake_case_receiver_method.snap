@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/expressions.rs
+assertion_line: 2328
+description: "input: \npub struct Service {}\n\nimpl Service {\n  pub fn get_session(self) -> int { 42 }\n}\n\nfn main() {\n  let s = Service {};\n  let _ = Service.get_session(s);\n}\n"
+---
+package main
+
+type Service struct{}
+
+func (s Service) String() string {
+	return "Service"
+}
+
+func (s Service) GetSession() int {
+	return 42
+}
+
+func main() {
+	s := Service{}
+	_ = s.GetSession()
+}

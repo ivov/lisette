@@ -182,11 +182,7 @@ impl Emitter<'_> {
         spread: Option<&Expression>,
     ) -> String {
         let go_method = if is_public {
-            let mut chars = method.chars();
-            match chars.next() {
-                Some(c) => format!("{}{}", c.to_uppercase(), chars.as_str()),
-                None => method.to_string(),
-            }
+            go_name::snake_to_camel(method)
         } else {
             go_name::escape_keyword(method).into_owned()
         };
