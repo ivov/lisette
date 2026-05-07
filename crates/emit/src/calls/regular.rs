@@ -21,6 +21,23 @@ struct CallArgsContext<'a> {
     combine_variadic: Option<VariadicCombine>,
 }
 
+/// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
+fn find_go_string_literal_close(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    if bytes.first() != Some(&b'"') {
+        return None;
+    }
+    let mut i = 1;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i += 2,
+            b'"' => return Some(i),
+            _ => i += 1,
+        }
+    }
+    None
+}
+
 /// Collapse redundant fmt wrappers:
 /// - `fmt.Print{ln}(fmt.Sprintf(...))` → `fmt.Printf(..., "\n")`
 /// - `fmt.Print{ln}(fmt.Sprint(x))` → `fmt.Print{ln}(x)`
@@ -45,14 +62,10 @@ fn collapse_fmt_print(function_string: &str, args_strings: &[String], call_str: 
         if suffix.is_empty() {
             return format!("fmt.Printf({})", inner);
         }
-        if let Some(close_quote) = inner.find("\", ") {
-            let format_str = &inner[..close_quote];
-            let rest = &inner[close_quote + 1..];
-            return format!("fmt.Printf({}{}\"{})", format_str, suffix, rest);
-        }
-        if inner.starts_with('"') && inner.ends_with('"') {
-            let format_str = &inner[..inner.len() - 1];
-            return format!("fmt.Printf({}{}\")", format_str, suffix);
+        if let Some(close_quote) = find_go_string_literal_close(inner) {
+            let format_open = &inner[..close_quote];
+            let close_and_rest = &inner[close_quote..];
+            return format!("fmt.Printf({}{}{})", format_open, suffix, close_and_rest);
         }
         return call_str;
     }

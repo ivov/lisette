@@ -465,6 +465,19 @@ fn test() {
 }
 
 #[test]
+fn format_string_escaped_quote_before_interp() {
+    let input = r#"
+import "go:fmt"
+
+fn test() {
+  let x = 7;
+  fmt.Println(f"prefix \", {x}")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn format_string_variable() {
     let input = r#"
 import "go:fmt"
