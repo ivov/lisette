@@ -38,7 +38,7 @@ impl Emitter<'_> {
         let temp_var = self.fresh_var(Some(prefix));
         self.declare(&temp_var);
         write_line!(setup, "{} := {}", temp_var, value_expr);
-        Staged::new(setup, temp_var)
+        Staged::new(setup, temp_var, expression)
     }
 
     pub(crate) fn emit_force_capture(
