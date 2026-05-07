@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nstruct Wrap(Ref<int>)\n\nfn test(w: Wrap) -> int {\n  match w {\n    Wrap(r) => r.*,\n  }\n}\n"
+---
+package main
+
+type Wrap *int
+
+func test(w Wrap) int {
+	r := (*int)(w)
+	return *r
+}

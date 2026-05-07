@@ -524,6 +524,20 @@ fn test(uid: UserId) -> int {
 }
 
 #[test]
+fn newtype_ref_struct_pattern_match() {
+    let input = r#"
+struct Wrap(Ref<int>)
+
+fn test(w: Wrap) -> int {
+  match w {
+    Wrap(r) => r.*,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn pattern_unicode_escape_conversion() {
     let input = r#"
 fn test(s: string) -> int {

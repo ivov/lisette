@@ -59,7 +59,13 @@ impl AccessPath {
                         result = format!("(*{})", result);
                     }
                 }
-                PathSegment::NewtypeCast(ty) => result = format!("{}({})", ty, result),
+                PathSegment::NewtypeCast(ty) => {
+                    result = if ty.starts_with('*') {
+                        format!("({})({})", ty, result)
+                    } else {
+                        format!("{}({})", ty, result)
+                    }
+                }
             }
         }
         result
