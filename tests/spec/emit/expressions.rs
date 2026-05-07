@@ -2655,6 +2655,25 @@ fn main() {
 }
 
 #[test]
+fn ufcs_address_of_struct_literal_receiver() {
+    let input = r#"
+struct Counter { x: int }
+
+impl Counter {
+  fn inc(self: Ref<Counter>) -> int {
+    self.x = self.x + 1
+    self.x
+  }
+}
+
+fn main() {
+  let _ = Counter.inc(&Counter { x: 0 })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn private_field_not_capitalized_by_method_export() {
     let input = r#"
 pub interface IFoo {
