@@ -46,6 +46,11 @@ func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport) (
 			continue
 		}
 
+		typeObj := namedType.Obj()
+		if typeObj.Pkg() == nil || typeObj.Pkg() != constObj.Pkg() {
+			continue
+		}
+
 		underlying := namedType.Underlying()
 		basic, ok := underlying.(*types.Basic)
 		if !ok {
@@ -56,7 +61,7 @@ func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport) (
 			continue
 		}
 
-		typeName := namedType.Obj().Name()
+		typeName := typeObj.Name()
 
 		if _, exists := typeToUnderlying[typeName]; !exists {
 			typeToUnderlying[typeName] = basic.Name()
