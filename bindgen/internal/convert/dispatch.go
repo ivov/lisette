@@ -3,6 +3,7 @@ package convert
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 
 	"github.com/ivov/lisette/bindgen/internal/config"
 	"github.com/ivov/lisette/bindgen/internal/extract"
@@ -101,6 +102,7 @@ type Converter struct {
 	crossPkgConverters       map[string]*Converter        // lazily built; cached converters for imported packages
 	noCrossPkg               bool                         // when true, skip cross-package transitive analysis
 	reachableUnexportedTypes map[string]bool              // lazily computed; unexported type names reachable from an exported decl. nil = uncomputed
+	shallowUnderlyingCache   map[token.Pos]types.Type     // lazily built; spec-level wrapped type by Named.Obj().Pos(). nil sentinels cached.
 	// Set per-function-conversion: maps `S` to `Slice<E>` for the `S ~[]E` shape.
 	typeParamSubstitutions map[string]string
 }
@@ -122,6 +124,75 @@ func (c *Converter) trackExternalPkg(pkgPath, pkgName string) {
 	if pkgPath != "" && pkgPath != c.currentPkgPath {
 		c.externalPkgs[pkgPath] = pkgName
 	}
+}
+
+// shallowUnderlying returns the immediate spec-level wrapped type of a Named
+// type by walking its declaring package's syntax. For `type NodeTimeout
+// time.Duration` it returns `time.Duration`, not the fully-resolved `int64`
+// that types.Type.Underlying would yield. Returns nil when the AST is
+// unreachable or the spec is itself a type alias.
+func (c *Converter) shallowUnderlying(named *types.Named) types.Type {
+	obj := named.Obj()
+	if obj == nil || obj.Pkg() == nil || c.pkg == nil {
+		return nil
+	}
+	pos := obj.Pos()
+	if c.shallowUnderlyingCache == nil {
+		c.shallowUnderlyingCache = make(map[token.Pos]types.Type)
+	} else if cached, ok := c.shallowUnderlyingCache[pos]; ok {
+		return cached
+	}
+	resolved := resolveShallowUnderlying(c.pkg.Imports[obj.Pkg().Path()], obj.Name())
+	c.shallowUnderlyingCache[pos] = resolved
+	return resolved
+}
+
+func resolveShallowUnderlying(declPkg *packages.Package, typeName string) types.Type {
+	if declPkg == nil || declPkg.TypesInfo == nil {
+		return nil
+	}
+	for _, file := range declPkg.Syntax {
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range genDecl.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok || ts.Name == nil || ts.Name.Name != typeName {
+					continue
+				}
+				if ts.Assign != token.NoPos {
+					return nil
+				}
+				return declPkg.TypesInfo.TypeOf(ts.Type)
+			}
+		}
+	}
+	return nil
+}
+
+// salvageInternalAlias rescues a type alias whose RHS is in an internal
+// package (Ginkgo's `type NodeTimeout = internal.NodeTimeout` pattern) by
+// exposing the immediate wrapped type as a Lisette newtype. Returns the
+// newtype payload and true on success.
+func (c *Converter) salvageInternalAlias(rhs types.Type, reason *SkipReason) (string, bool) {
+	if reason == nil || reason.Code != "internal-package-ref" {
+		return "", false
+	}
+	named, ok := rhs.(*types.Named)
+	if !ok {
+		return "", false
+	}
+	shallow := c.shallowUnderlying(named)
+	if shallow == nil {
+		return "", false
+	}
+	under := ToLisette(shallow, c)
+	if under.SkipReason != nil {
+		return "", false
+	}
+	return under.LisetteType, true
 }
 
 func (c *Converter) Convert(symbolExport extract.SymbolExport) ConvertResult {

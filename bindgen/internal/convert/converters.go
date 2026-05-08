@@ -484,6 +484,10 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		rhs := alias.Rhs()
 		t := ToLisette(rhs, c)
 		if t.SkipReason != nil {
+			if newtype, ok := c.salvageInternalAlias(rhs, t.SkipReason); ok {
+				result.LisetteType = newtype
+				return
+			}
 			result.SkipReason = withOpaqueType(t.SkipReason)
 			return
 		}
@@ -580,6 +584,15 @@ func (c *Converter) convertConstant(result *ConvertResult, exp extract.SymbolExp
 
 	t := ToLisette(actualType, c)
 	if t.SkipReason != nil {
+		// Const typed by an internal package stays referenceable as an opaque
+		// value; the rendered Lisette code emits the qualified name verbatim,
+		// and Go preserves the original const's type at the call site. Mirrors
+		// the function-return fallback in convertFunction.
+		if t.SkipReason.Code == "internal-package-ref" {
+			result.LisetteType = "Unknown"
+			result.ConstValue = ""
+			return
+		}
 		result.SkipReason = t.SkipReason
 		return
 	}
@@ -593,11 +606,15 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 	}
 
 	t := ToLisette(exp.GoType, c)
-	if t.SkipReason != nil {
+	if t.SkipReason != nil && t.SkipReason.Code != "internal-package-ref" {
 		result.SkipReason = t.SkipReason
 		return
 	}
-	result.LisetteType = t.LisetteType
+	if t.SkipReason != nil {
+		result.LisetteType = "Unknown"
+	} else {
+		result.LisetteType = t.LisetteType
+	}
 
 	isNilable := isNilableGoType(exp.GoType)
 	forceNonNilable := c.cfg != nil && (c.cfg.IsNonNilableVar(c.currentPkgPath, result.Name) || c.cfg.IsNonNilableReturn(c.currentPkgPath, result.Name))

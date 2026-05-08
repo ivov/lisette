@@ -21,5 +21,6 @@ pub struct Local {
   pub Value: int,
 }
 
-// SKIPPED: GlobalInner - internal-package-ref
-// references type from internal package "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/internalref/internal/inner"
+/// Package-level variable typed by an internal package — type collapses to
+/// Unknown so the symbol stays referenceable as an opaque value.
+pub var GlobalInner: Unknown
