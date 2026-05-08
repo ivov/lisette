@@ -44,6 +44,11 @@ opt-level = 3
 inherits = "release"
 debug = true
 
+[profile.bindgen]
+inherits = "release"
+opt-level = 1
+codegen-units = 256
+
 [profile.dist]
 inherits = "release"
 lto = "thin"

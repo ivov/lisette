@@ -95,10 +95,10 @@ _stdlib-typedef-version:
 
 check-stdlib-drift:
     cd bindgen && just build
-    just build
-    ./target/release/lis check crates/stdlib/typedefs/
-    BINDGEN_TARGETS={{_supported-targets}} ./target/release/lis bindgen stdlib "$(just _stdlib-typedef-version)"
-    ./target/release/lis format crates/stdlib/typedefs/
+    cargo build --profile bindgen
+    ./target/bindgen/lis check crates/stdlib/typedefs/
+    BINDGEN_TARGETS={{_supported-targets}} ./target/bindgen/lis bindgen stdlib "$(just _stdlib-typedef-version)"
+    ./target/bindgen/lis format crates/stdlib/typedefs/
     just format
     git diff --exit-code crates/stdlib/
 
