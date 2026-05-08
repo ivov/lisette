@@ -390,8 +390,10 @@ impl Emitter<'_> {
         Some(self.emit_lisette_callback_wrapper(output, &value, &param_fn_ty))
     }
 
-    /// Bridge a Lisette `Option<Ref<T>>` argument to Go `*T` when the Go
-    /// parameter accepts nil.
+    /// Bridge a Lisette `Option<T>` argument to Go's nil-accepting form: `*T`
+    /// when the param is `Option<Ref<T>>` (`is_nullable_option`), and also `*T`
+    /// when the param is `Option<scalar>` (`is_non_nilable_option`, the
+    /// pointer-bridged shape produced by bindgen's `nilable_param` config).
     fn try_emit_go_pointer_param_unwrap(
         &mut self,
         output: &mut String,
@@ -399,14 +401,19 @@ impl Emitter<'_> {
         effective_param_ty: Option<&Type>,
     ) -> Option<String> {
         let param_ty = effective_param_ty?;
-        if !self.is_nullable_option(param_ty) {
-            return None;
-        }
         let arg_ty = arg.get_type();
-        if !self.is_nullable_option(&arg_ty) {
-            return None;
+        if self.is_nullable_option(param_ty) && self.is_nullable_option(&arg_ty) {
+            return Some(self.emit_unwrap_go_nullable_arg(output, arg, &arg_ty));
         }
-        Some(self.emit_unwrap_go_nullable_arg(output, arg, &arg_ty))
+        if self.is_non_nilable_option(param_ty) && self.is_non_nilable_option(&arg_ty) {
+            if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
+                return Some("nil".to_string());
+            }
+            let value = self.emit_value(output, arg);
+            let coercion = Coercion::resolve_unwrap_go_nullable(self, &arg_ty, Some(param_ty));
+            return Some(coercion.apply(self, output, value));
+        }
+        None
     }
 
     fn try_emit_nullable_coercion(

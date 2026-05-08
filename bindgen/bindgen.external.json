@@ -66,6 +66,17 @@
         ]
       },
       "nilable_param": {
+        "github.com/ilyakaznacheev/cleanenv": {
+          "FUsage": [
+            "headerText"
+          ],
+          "GetDescription": [
+            "headerText"
+          ],
+          "Usage": [
+            "headerText"
+          ]
+        },
         "go.mongodb.org/mongo-driver/v2/mongo": {
           "Client.Ping": [
             "rp"
