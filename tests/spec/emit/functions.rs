@@ -715,6 +715,33 @@ fn test() -> string {
 }
 
 #[test]
+fn never_bodied_lambda_into_unknown_emits_unit_return() {
+    let input = r#"
+fn take_any(x: Unknown) {}
+
+fn test() {
+  take_any(|| { panic("boom") })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn never_bodied_lambda_into_generic_keeps_struct_return() {
+    let input = r#"
+fn run<T>(f: fn() -> T) -> int {
+  let _ = f
+  0
+}
+
+fn test() -> int {
+  run(|| { panic("boom") })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn doc_comment_on_public_function() {
     let input = r#"
 /// A publicly exported function.

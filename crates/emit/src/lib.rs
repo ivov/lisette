@@ -163,6 +163,10 @@ pub struct Emitter<'a> {
     /// Set when the destination is a Go-side function (e.g. a generic
     /// `func(T) U` callback) that needs the unlowered single-return form.
     suppress_go_fn_short_circuit: bool,
+    /// True while emitting an argument into an `Unknown` (`any`) param;
+    /// makes `emit_lambda` render `Never`-returning lambdas as `func()`
+    /// (not `func() struct{}`).
+    arg_flows_to_unknown: bool,
 }
 
 /// `force_tagged` is set inside try-block IIFEs whose outer signature is
@@ -312,6 +316,7 @@ impl<'a> Emitter<'a> {
             skip_array_return_wrap: false,
             current_slot_expected_ty: None,
             suppress_go_fn_short_circuit: false,
+            arg_flows_to_unknown: false,
         }
     }
 

@@ -326,12 +326,15 @@ impl Emitter<'_> {
             return format!("&{}", temp);
         }
 
+        let unwrapped_param_ty = effective_param_ty.map(|p| p.unwrap_forall());
         let suppress = ctx.is_prelude_dispatch
-            && effective_param_ty
-                .is_some_and(|p| matches!(p.unwrap_forall(), Type::Function { .. }));
+            && unwrapped_param_ty.is_some_and(|p| matches!(p, Type::Function { .. }));
+        let flows_to_unknown = unwrapped_param_ty.is_some_and(|p| p.resolves_to_unknown());
         let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
+        let saved_flows = std::mem::replace(&mut self.arg_flows_to_unknown, flows_to_unknown);
         let value = self.emit_composite_value(output, arg);
         self.suppress_go_fn_short_circuit = saved;
+        self.arg_flows_to_unknown = saved_flows;
         match effective_param_ty {
             Some(target) => {
                 let coercion = Coercion::resolve(self, &arg.get_type(), target);

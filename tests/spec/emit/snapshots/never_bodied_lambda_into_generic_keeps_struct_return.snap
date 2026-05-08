@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn run<T>(f: fn() -> T) -> int {\n  let _ = f\n  0\n}\n\nfn test() -> int {\n  run(|| { panic(\"boom\") })\n}\n"
+---
+package main
+
+func run[T any](f func() T) int {
+	_ = f
+	return 0
+}
+
+func test() int {
+	return run(func() struct{} {
+		panic("boom")
+	})
+}

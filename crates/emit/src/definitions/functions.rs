@@ -167,7 +167,9 @@ impl Emitter<'_> {
             .collect();
 
         let has_return = matches!(ty, Type::Function { return_type, .. }
-            if !return_type.is_unit() && !return_type.is_variable());
+            if !(return_type.is_unit()
+                || return_type.is_variable()
+                || (self.arg_flows_to_unknown && return_type.is_never())));
 
         // When the lambda flows into a Go-prelude generic callback that
         // expects the unlowered single-return form, suppress the lambda's
@@ -201,6 +203,7 @@ impl Emitter<'_> {
             });
         }
         let saved_suppress = std::mem::replace(&mut self.suppress_go_fn_short_circuit, false);
+        let saved_flows = std::mem::replace(&mut self.arg_flows_to_unknown, false);
 
         let mut body_string = String::new();
 
@@ -217,6 +220,7 @@ impl Emitter<'_> {
 
         self.current_return_context = saved_return_context;
         self.suppress_go_fn_short_circuit = saved_suppress;
+        self.arg_flows_to_unknown = saved_flows;
 
         format!(
             "func({}){} {{\n{}}}",

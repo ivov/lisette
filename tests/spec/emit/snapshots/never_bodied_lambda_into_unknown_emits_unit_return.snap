@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/functions.rs
+description: "input: \nfn take_any(x: Unknown) {}\n\nfn test() {\n  take_any(|| { panic(\"boom\") })\n}\n"
+---
+package main
+
+func take_any(_ any) {}
+
+func test() {
+	take_any(func() {
+		panic("boom")
+	})
+}
