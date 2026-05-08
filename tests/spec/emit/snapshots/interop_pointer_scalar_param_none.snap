@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+assertion_line: 1280
+description: "input: \nimport \"go:example.com/cfg\"\n\nfn main() {\n  cfg.Configure(None)\n}\n"
+---
+package main
+
+import "example.com/cfg"
+
+func main() {
+	cfg.Configure(nil)
+}

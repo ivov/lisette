@@ -1251,6 +1251,36 @@ pub struct Options {
 }
 
 #[test]
+fn interop_pointer_scalar_param_some() {
+    let input = r#"
+import "go:example.com/cfg"
+
+fn main() {
+  cfg.Configure(Some("custom"))
+}
+"#;
+    let typedef = r#"
+pub fn Configure(name: Option<string>) -> ()
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cfg", typedef)]);
+}
+
+#[test]
+fn interop_pointer_scalar_param_none() {
+    let input = r#"
+import "go:example.com/cfg"
+
+fn main() {
+  cfg.Configure(None)
+}
+"#;
+    let typedef = r#"
+pub fn Configure(name: Option<string>) -> ()
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cfg", typedef)]);
+}
+
+#[test]
 fn interop_struct_field_read_option_string_match() {
     let input = r#"
 import "go:example.com/aws"
