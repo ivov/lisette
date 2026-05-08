@@ -500,6 +500,7 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 
 	typeParams, _, skip := collectTypeParams(named.TypeParams(), true, c)
 	if skip != nil {
+		result.TypeParams = bareTypeParamSpecs(named.TypeParams())
 		result.SkipReason = skip
 		return
 	}
@@ -859,11 +860,7 @@ func extractReceiverTypeParams(named *types.Named, conv *Converter) TypeParamSpe
 	specs, _, skip := collectTypeParams(typeParams, false, conv)
 	if skip != nil {
 		// Base type emits the skip; impl block falls back to bare names.
-		var fallback TypeParamSpecs
-		for tp := range typeParams.TypeParams() {
-			fallback = append(fallback, TypeParamSpec{Name: tp.Obj().Name()})
-		}
-		return fallback
+		return bareTypeParamSpecs(typeParams)
 	}
 	return specs
 }

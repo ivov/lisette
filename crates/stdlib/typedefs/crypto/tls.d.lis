@@ -645,8 +645,15 @@ impl Config {
   /// compatible chain from Certificates.
   fn BuildNameToCertificate(self: Ref<Config>)
 
-  /// Clone returns a shallow clone of c or nil if c is nil. It is safe to clone a [Config] that is
-  /// being used concurrently by a TLS client or server.
+  /// Clone returns a shallow clone of c or nil if c is nil. It is safe to clone a
+  /// [Config] that is being used concurrently by a TLS client or server.
+  /// 
+  /// The returned Config can share session ticket keys with the original Config,
+  /// which means connections could be resumed across the two Configs. WARNING:
+  /// [Config.VerifyPeerCertificate] does not get called on resumed connections,
+  /// including connections that were originally established on the parent Config.
+  /// If that is not intended, use [Config.VerifyConnection] instead, or set
+  /// [Config.SessionTicketsDisabled].
   fn Clone(self: Ref<Config>) -> Ref<Config>
 
   /// DecryptTicket decrypts a ticket encrypted by [Config.EncryptTicket]. It can

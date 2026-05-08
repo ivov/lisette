@@ -12,6 +12,19 @@ type TypeParamSpec struct {
 
 type TypeParamSpecs []TypeParamSpec
 
+// Used when a constraint is unrepresentable: callers still need the arity so
+// opaque placeholders, dependent aliases, and impl heads stay in sync.
+func bareTypeParamSpecs(tps *types.TypeParamList) TypeParamSpecs {
+	if tps == nil || tps.Len() == 0 {
+		return nil
+	}
+	specs := make(TypeParamSpecs, 0, tps.Len())
+	for tp := range tps.TypeParams() {
+		specs = append(specs, TypeParamSpec{Name: tp.Obj().Name()})
+	}
+	return specs
+}
+
 // `E: cmp.Ordered, V` for sites that introduce type parameters.
 func (ps TypeParamSpecs) FormatDecl() string {
 	if len(ps) == 0 {

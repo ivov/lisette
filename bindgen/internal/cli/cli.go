@@ -188,7 +188,7 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 			if result.Kind == extract.ExportMethod && emitter.CollectSkippedMethod(result) {
 				continue
 			}
-			emitter.EmitSkipped(exports[i].Name, result.SkipReason)
+			emitter.EmitSkipped(result)
 			continue
 		}
 		emitter.EmitExport(result)

@@ -232,12 +232,12 @@ func (e *Emitter) EmitUnloadableNote(firstError string) {
 	e.buf.WriteString("\n")
 }
 
-func (e *Emitter) EmitSkipped(name string, reason *convert.SkipReason) {
-	fmt.Fprintf(&e.buf, "// SKIPPED: %s - %s\n", name, reason.Code)
-	fmt.Fprintf(&e.buf, "// %s\n", reason.Message)
+func (e *Emitter) EmitSkipped(result convert.ConvertResult) {
+	fmt.Fprintf(&e.buf, "// SKIPPED: %s - %s\n", result.Name, result.SkipReason.Code)
+	fmt.Fprintf(&e.buf, "// %s\n", result.SkipReason.Message)
 
-	if reason.EmitOpaqueType {
-		fmt.Fprintf(&e.buf, "pub type %s\n", name)
+	if result.SkipReason.EmitOpaqueType {
+		fmt.Fprintf(&e.buf, "pub type %s%s\n", result.Name, result.TypeParams.DeclBlock())
 		e.stats.types++
 	}
 
