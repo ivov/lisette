@@ -73,7 +73,8 @@ jobs:
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
         with:
           go-version-file: go-version
-          cache: false
+          cache: true
+          cache-dependency-path: '**/go.sum'
       - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.1
       - run: cd bindgen && golangci-lint run
       - run: cd prelude && golangci-lint run
@@ -87,18 +88,10 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           go: 'true'
-      - run: cargo test -p tests --test suite -- --format terse
-
-  build:
-    name: Build
-    if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
-      - uses: ./.github/actions/setup-rust
+      - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
         with:
-          just: 'true'
-      - run: just build
+          tool: cargo-nextest@0.9.133
+      - run: cargo nextest run -p tests --test suite
 
   stdlib-check:
     name: Stdlib check
@@ -145,7 +138,8 @@ jobs:
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # ratchet:actions/setup-go@v6
         with:
           go-version-file: go-version
-          cache: false
+          cache: true
+          cache-dependency-path: '**/go.sum'
       - run: cd prelude && go test ./...
 
   shear:
