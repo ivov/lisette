@@ -88,10 +88,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           go: 'true'
-      - uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37 # ratchet:taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest@0.9.133
-      - run: cargo nextest run -p tests --test suite
+      - run: cargo test -p tests --test suite -- --format terse
 
   stdlib-check:
     name: Stdlib check

@@ -18,7 +18,7 @@ build-debug:
     cargo build
 
 test:
-    cargo nextest run -p tests --test suite --test lsp
+    cargo test -p tests --test suite --test lsp
 
 test-infer:
     cargo test -p tests --test suite infer_tests
