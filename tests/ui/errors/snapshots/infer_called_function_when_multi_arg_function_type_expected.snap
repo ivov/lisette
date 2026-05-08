@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:5:33]
+ 4 │ fn test() {
+ 5 │   let _x: fn(int, int) -> int = add(1, 2)
+   ·                                 ────┬────
+   ·                                     ╰── expected `fn (int, int) -> int`, found `int`
+ 6 │ }
+   ╰────
+  help: Remove the `()` so that the type matches · code: [infer.type_mismatch]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Type mismatch
+   ╭─[test.lis:7:17]
+ 6 │ fn test() {
+ 7 │   let _x: Cmd = quit()
+   ·                 ───┬──
+   ·                    ╰── expected `Cmd`, found `int`
+ 8 │ }
+   ╰────
+  help: Remove the `()` so that the type matches · code: [infer.type_mismatch]

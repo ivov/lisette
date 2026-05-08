@@ -805,10 +805,27 @@ impl TaskState<'_> {
             return format!("Cast with `as`, e.g. `value as {}`", expected);
         }
 
+        if let Some(ret) = function_return_under_nominal(expected)
+            && ret == actual
+        {
+            return "Remove the `()` so that the type matches".to_string();
+        }
+
         format!(
             "Change the type annotation to `{}` or convert the value to `{}`",
             actual, expected
         )
+    }
+}
+
+fn function_return_under_nominal(ty: &Type) -> Option<&Type> {
+    match ty {
+        Type::Function { return_type, .. } => Some(return_type),
+        Type::Nominal {
+            underlying_ty: Some(u),
+            ..
+        } => function_return_under_nominal(u),
+        _ => None,
     }
 }
 

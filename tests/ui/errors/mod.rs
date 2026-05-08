@@ -1045,6 +1045,44 @@ fn test() {
 }
 
 #[test]
+fn infer_called_function_when_function_alias_expected() {
+    let input = r#"
+type Cmd = fn() -> int
+
+fn quit() -> int { 0 }
+
+fn test() {
+  let _x: Cmd = quit()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_called_function_when_bare_function_type_expected() {
+    let input = r#"
+fn quit() -> int { 0 }
+
+fn test() {
+  let _x: fn() -> int = quit()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_called_function_when_multi_arg_function_type_expected() {
+    let input = r#"
+fn add(a: int, b: int) -> int { a + b }
+
+fn test() {
+  let _x: fn(int, int) -> int = add(1, 2)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_nested_function() {
     let input = r#"
 fn main() {
