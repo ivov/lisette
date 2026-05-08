@@ -39,6 +39,9 @@ impl<'source> Parser<'source> {
             LeftCurlyBrace => self.parse_block_expression(),
             LeftSquareBracket => self.parse_slice_literal(),
             Identifier => self.parse_identifier(),
+            Function if self.stream.peek_ahead(1).kind == LeftParen => {
+                self.parse_fn_as_lambda_recovery()
+            }
             Function => self.parse_function(None, vec![]),
             Match => self.parse_match(),
             If => self.parse_if(),
@@ -454,18 +457,46 @@ impl<'source> Parser<'source> {
         if !(self.is(Function) && self.stream.peek_ahead(1).kind == LeftParen) {
             return false;
         }
-        let start = self.current_token();
-        let span = Span::new(self.file_id, start.byte_offset, start.byte_length + 1);
-        let error = ParseError::new("Syntax error", span, "expected a lambda")
-            .with_parse_code("fn_as_lambda")
-            .with_help("Use a lambda instead: `|x| x * 2`");
-        self.errors.push(error);
+        let span = self.track_fn_as_lambda_error();
         self.resync_on_error();
         args.push(Expression::Unit {
             ty: Type::uninferred(),
             span,
         });
         true
+    }
+
+    fn parse_fn_as_lambda_recovery(&mut self) -> Expression {
+        let start = self.current_token();
+        self.track_fn_as_lambda_error();
+
+        self.ensure(Function);
+        let params = self.parse_function_params();
+        let return_annotation = self.parse_function_return_annotation();
+
+        let body = if self.is(LeftCurlyBrace) {
+            self.parse_block_expression()
+        } else {
+            Expression::NoOp
+        };
+
+        Expression::Lambda {
+            params,
+            return_annotation,
+            body: body.into(),
+            ty: Type::uninferred(),
+            span: self.span_from_tokens(start),
+        }
+    }
+
+    fn track_fn_as_lambda_error(&mut self) -> Span {
+        let start = self.current_token();
+        let span = Span::new(self.file_id, start.byte_offset, start.byte_length + 1);
+        let error = ParseError::new("Syntax error", span, "expected a lambda")
+            .with_parse_code("fn_as_lambda")
+            .with_help("Use a lambda instead: `|x| x * 2`");
+        self.errors.push(error);
+        span
     }
 
     pub fn parse_type_args(&mut self) -> Vec<Annotation> {
@@ -796,12 +827,7 @@ impl<'source> Parser<'source> {
             }
 
             if self.is(Function) && self.stream.peek_ahead(1).kind == LeftParen {
-                let start = self.current_token();
-                let span = Span::new(self.file_id, start.byte_offset, start.byte_length + 1);
-                let error = ParseError::new("Syntax error", span, "expected a lambda")
-                    .with_parse_code("fn_as_lambda")
-                    .with_help("Use a lambda instead: `|x| x * 2`");
-                self.errors.push(error);
+                let span = self.track_fn_as_lambda_error();
                 self.resync_on_error();
                 expressions.push(Expression::Unit {
                     ty: Type::uninferred(),

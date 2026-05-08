@@ -4447,6 +4447,22 @@ fn main() {
 }
 
 #[test]
+fn parse_fn_as_lambda_in_let_rhs() {
+    let input = r#"
+fn main() {
+  let op = fn() -> Result<(), error> {
+    Ok(())
+  }
+  match op() {
+    Ok(()) => 0,
+    Err(_) => 1,
+  };
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_go_slice_syntax_in_type() {
     let input = r#"
 fn test(arr: []int) {}
