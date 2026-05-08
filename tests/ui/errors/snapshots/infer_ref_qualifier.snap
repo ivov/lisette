@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `Ref` construction
+   ╭─[test.lis:4:11]
+ 3 │   let x = 42
+ 4 │   let r = Ref.new(x)
+   ·           ─┬─
+   ·            ╰── `Ref` has no `new`
+ 5 │   let _ = r
+   ╰────
+  help: To take a reference, use `&value` · code: [infer.ref_qualifier]

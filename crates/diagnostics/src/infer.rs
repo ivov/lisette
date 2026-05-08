@@ -2615,6 +2615,13 @@ pub fn type_alias_as_qualifier(
         ))
 }
 
+pub fn ref_qualifier(member: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Invalid `Ref` construction")
+        .with_infer_code("ref_qualifier")
+        .with_span_label(&span, format!("`Ref` has no `{}`", member))
+        .with_help("To take a reference, use `&value`")
+}
+
 pub fn control_flow_in_expression(keyword: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!(
         "`{}` cannot be used in expression position",

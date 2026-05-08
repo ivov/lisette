@@ -127,17 +127,24 @@ impl TaskState<'_> {
             let is_generic = matches!(alias_ty, Type::Forall { .. })
                 || matches!(underlying, Type::Nominal { params, .. } if !params.is_empty());
             if is_generic {
-                let type_name = if let Type::Nominal { id, .. } = underlying {
-                    unqualified_name(id).to_string()
+                if qualified_root == "prelude.Ref" {
+                    self.sink.push(diagnostics::infer::ref_qualifier(
+                        &member,
+                        expression.get_span(),
+                    ));
                 } else {
-                    "the original type".to_string()
-                };
-                self.sink.push(diagnostics::infer::type_alias_as_qualifier(
-                    root,
-                    &type_name,
-                    &member,
-                    expression.get_span(),
-                ));
+                    let type_name = if let Type::Nominal { id, .. } = underlying {
+                        unqualified_name(id).to_string()
+                    } else {
+                        "the original type".to_string()
+                    };
+                    self.sink.push(diagnostics::infer::type_alias_as_qualifier(
+                        root,
+                        &type_name,
+                        &member,
+                        expression.get_span(),
+                    ));
+                }
                 return Expression::DotAccess {
                     expression,
                     member,

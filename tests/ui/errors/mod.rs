@@ -6756,6 +6756,18 @@ fn main() {
 }
 
 #[test]
+fn infer_ref_qualifier() {
+    let input = r#"
+fn main() {
+  let x = 42
+  let r = Ref.new(x)
+  let _ = r
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_parenthesized_type_qualifier() {
     let input = r#"
 struct Box {}
