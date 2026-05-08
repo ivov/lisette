@@ -27,6 +27,19 @@
           "SetStaticPath",
           "SetViewsPath",
           "UnregisterFixedRoute"
+        ],
+        "github.com/gobuffalo/buffalo": [
+          "App.DELETE",
+          "App.GET",
+          "App.Group",
+          "App.HEAD",
+          "App.OPTIONS",
+          "App.PATCH",
+          "App.POST",
+          "App.PUT",
+          "App.Redirect",
+          "App.Resource",
+          "App.VirtualHost"
         ]
       }
     },

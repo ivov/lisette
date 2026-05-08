@@ -400,7 +400,12 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
 			e.buf.WriteString("  #[allow(unused_result)]\n")
 		}
 	}
-	if result.BuilderMethod {
+	allowUnusedValue := result.BuilderMethod
+	if !allowUnusedValue && result.Receiver != nil && result.HasReturn() {
+		qualifiedName := result.Receiver.BaseTypeName + "." + result.Name
+		allowUnusedValue = e.cfg.ShouldAllowUnusedValue(e.pkgPath, qualifiedName)
+	}
+	if allowUnusedValue {
 		e.buf.WriteString("  #[allow(unused_value)]\n")
 	}
 
