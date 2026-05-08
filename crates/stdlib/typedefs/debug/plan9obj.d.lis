@@ -5,8 +5,11 @@
 
 import "go:io"
 
+/// NewFile creates a new [File] for accessing a Plan 9 binary in an underlying reader.
+/// The Plan 9 binary is expected to start at position 0 in the ReaderAt.
 pub fn NewFile(r: io.ReaderAt) -> Result<Ref<File>, error>
 
+/// Open opens the named file using [os.Open] and prepares it for use as a Plan 9 a.out binary.
 pub fn Open(name: string) -> Result<Ref<File>, error>
 
 /// A File represents an open Plan 9 a.out file.

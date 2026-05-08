@@ -21,10 +21,26 @@ pub fn NewReader(r: io.Reader) -> Result<io.ReadCloser, error>
 /// The ReadCloser returned by NewReaderDict also implements [Resetter].
 pub fn NewReaderDict(r: io.Reader, dict: Slice<byte>) -> Result<io.ReadCloser, error>
 
+/// NewWriter creates a new [Writer].
+/// Writes to the returned Writer are compressed and written to w.
+/// 
+/// It is the caller's responsibility to call Close on the Writer when done.
+/// Writes may be buffered and not flushed until Close.
 pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 
+/// NewWriterLevel is like [NewWriter] but specifies the compression level instead
+/// of assuming [DefaultCompression].
+/// 
+/// The compression level can be [DefaultCompression], [NoCompression], [HuffmanOnly]
+/// or any integer value between [BestSpeed] and [BestCompression] inclusive.
+/// The error returned will be nil if the level is valid.
 pub fn NewWriterLevel(w: io.Writer, level: int) -> Result<Ref<Writer>, error>
 
+/// NewWriterLevelDict is like [NewWriterLevel] but specifies a dictionary to
+/// compress with.
+/// 
+/// The dictionary may be nil. If not, its contents should not be modified until
+/// the Writer is closed.
 pub fn NewWriterLevelDict(w: io.Writer, level: int, dict: Slice<byte>) -> Result<Ref<Writer>, error>
 
 /// Resetter resets a ReadCloser returned by [NewReader] or [NewReaderDict]

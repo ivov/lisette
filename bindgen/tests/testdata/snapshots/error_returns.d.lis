@@ -9,14 +9,18 @@ pub fn ClosePair() -> (Option<error>, Option<error>)
 /// Three parallel errors → (Option<error>, Option<error>, Option<error>).
 pub fn CloseTriple() -> (Option<error>, Option<error>, Option<error>)
 
+/// Nilable pointer return (not error impl) → should remain Option<Ref<Widget>>
 pub fn GetWidget() -> Option<Ref<Widget>>
 
+/// Single *T returns where T implements error → should become "error"
 pub fn NewAppError() -> error
 
 pub fn NewPtrError() -> error
 
+/// Normal pointer return (not error impl) → should remain Ref<Widget>
 pub fn NewWidget() -> Ref<Widget>
 
+/// Multi-return with error last → Result<Ref<AppError>, error>, not error
 pub fn ParseAppError() -> Result<Ref<AppError>, error>
 
 /// Single error interface return (not *T) → Result<(), error>

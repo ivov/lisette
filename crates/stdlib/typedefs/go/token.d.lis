@@ -263,8 +263,10 @@ pub fn IsIdentifier(name: string) -> bool
 /// IsKeyword reports whether name is a Go keyword, such as "func" or "return".
 pub fn IsKeyword(name: string) -> bool
 
+/// Lookup maps an identifier to its keyword token or [IDENT] (if not a keyword).
 pub fn Lookup(ident: string) -> Token
 
+/// NewFileSet creates a new file set.
 pub fn NewFileSet() -> Ref<FileSet>
 
 /// A File is a handle for a file belonging to a [FileSet].

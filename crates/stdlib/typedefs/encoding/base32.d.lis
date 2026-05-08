@@ -15,6 +15,13 @@ pub fn NewDecoder(enc: Ref<Encoding>, r: io.Reader) -> io.Reader
 /// partially written blocks.
 pub fn NewEncoder(enc: Ref<Encoding>, w: io.Writer) -> io.WriteCloser
 
+/// NewEncoding returns a new padded Encoding defined by the given alphabet,
+/// which must be a 32-byte string that contains unique byte values and
+/// does not contain the padding character or CR / LF ('\r', '\n').
+/// The alphabet is treated as a sequence of byte values
+/// without any special treatment for multi-byte UTF-8.
+/// The resulting Encoding uses the default padding character ('='),
+/// which may be changed or disabled via [Encoding.WithPadding].
 pub fn NewEncoding(encoder: string) -> Ref<Encoding>
 
 pub struct CorruptInputError(int64)

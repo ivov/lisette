@@ -181,12 +181,20 @@ pub const X86_64_RELOC_TLV: RelocTypeX86_64 = 9
 
 pub const X86_64_RELOC_UNSIGNED: RelocTypeX86_64 = 0
 
+/// NewFatFile creates a new [FatFile] for accessing all the Mach-O images in a
+/// universal binary. The Mach-O binary is expected to start at position 0 in
+/// the ReaderAt.
 pub fn NewFatFile(r: io.ReaderAt) -> Result<Ref<FatFile>, error>
 
+/// NewFile creates a new [File] for accessing a Mach-O binary in an underlying reader.
+/// The Mach-O binary is expected to start at position 0 in the ReaderAt.
 pub fn NewFile(r: io.ReaderAt) -> Result<Ref<File>, error>
 
+/// Open opens the named file using [os.Open] and prepares it for use as a Mach-O binary.
 pub fn Open(name: string) -> Result<Ref<File>, error>
 
+/// OpenFat opens the named file using [os.Open] and prepares it for use as a Mach-O
+/// universal binary.
 pub fn OpenFat(name: string) -> Result<Ref<FatFile>, error>
 
 /// A Dylib represents a Mach-O load dynamic library command.

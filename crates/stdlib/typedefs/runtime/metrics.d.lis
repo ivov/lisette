@@ -18,6 +18,7 @@ pub const KindFloat64Histogram: ValueKind = 3
 
 pub const KindUint64: ValueKind = 1
 
+/// All returns a slice of containing metric descriptions for all supported metrics.
 pub fn All() -> Slice<Description>
 
 /// Read populates each [Value] field in the given slice of metric samples.

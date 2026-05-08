@@ -6,8 +6,10 @@
 import "go:debug/dwarf"
 import "go:io"
 
+/// NewFile creates a new [File] for accessing a PE binary in an underlying reader.
 pub fn NewFile(r: io.ReaderAt) -> Result<Ref<File>, error>
 
+/// Open opens the named file using [os.Open] and prepares it for use as a PE binary.
 pub fn Open(name: string) -> Result<Ref<File>, error>
 
 /// COFFSymbol represents single COFF symbol table record.

@@ -9,32 +9,72 @@
 // SKIPPED: AddrFrom4 - array-currently-not-representable
 // fixed-size array cannot currently be represented in Lisette
 
+/// AddrFromSlice parses the 4- or 16-byte byte slice as an IPv4 or IPv6 address.
+/// Note that a [net.IP] can be passed directly as the []byte argument.
+/// If slice's length is not 4 or 16, AddrFromSlice returns [Addr]{}, false.
 pub fn AddrFromSlice(slice: Slice<byte>) -> Option<Addr>
 
+/// AddrPortFrom returns an [AddrPort] with the provided IP and port.
+/// It does not allocate.
 pub fn AddrPortFrom(ip: Addr, port: uint16) -> AddrPort
 
+/// IPv4Unspecified returns the IPv4 unspecified address "0.0.0.0".
 pub fn IPv4Unspecified() -> Addr
 
+/// IPv6LinkLocalAllNodes returns the IPv6 link-local all nodes multicast
+/// address ff02::1.
 pub fn IPv6LinkLocalAllNodes() -> Addr
 
+/// IPv6LinkLocalAllRouters returns the IPv6 link-local all routers multicast
+/// address ff02::2.
 pub fn IPv6LinkLocalAllRouters() -> Addr
 
+/// IPv6Loopback returns the IPv6 loopback address ::1.
 pub fn IPv6Loopback() -> Addr
 
+/// IPv6Unspecified returns the IPv6 unspecified address "::".
 pub fn IPv6Unspecified() -> Addr
 
+/// MustParseAddr calls [ParseAddr](s) and panics on error.
+/// It is intended for use in tests with hard-coded strings.
 pub fn MustParseAddr(s: string) -> Addr
 
+/// MustParseAddrPort calls [ParseAddrPort](s) and panics on error.
+/// It is intended for use in tests with hard-coded strings.
 pub fn MustParseAddrPort(s: string) -> AddrPort
 
+/// MustParsePrefix calls [ParsePrefix](s) and panics on error.
+/// It is intended for use in tests with hard-coded strings.
 pub fn MustParsePrefix(s: string) -> Prefix
 
+/// ParseAddr parses s as an IP address, returning the result. The string
+/// s can be in dotted decimal ("192.0.2.1"), IPv6 ("2001:db8::68"),
+/// or IPv6 with a scoped addressing zone ("fe80::1cc0:3e8c:119f:c2e1%ens18").
 pub fn ParseAddr(s: string) -> Result<Addr, error>
 
+/// ParseAddrPort parses s as an [AddrPort].
+/// 
+/// It doesn't do any name resolution: both the address and the port
+/// must be numeric.
 pub fn ParseAddrPort(s: string) -> Result<AddrPort, error>
 
+/// ParsePrefix parses s as an IP address prefix.
+/// The string can be in the form "192.168.1.0/24" or "2001:db8::/32",
+/// the CIDR notation defined in RFC 4632 and RFC 4291.
+/// IPv6 zones are not permitted in prefixes, and an error will be returned if a
+/// zone is present.
+/// 
+/// Note that masked address bits are not zeroed. Use Masked for that.
 pub fn ParsePrefix(s: string) -> Result<Prefix, error>
 
+/// PrefixFrom returns a [Prefix] with the provided IP address and bit
+/// prefix length.
+/// 
+/// It does not allocate. Unlike [Addr.Prefix], [PrefixFrom] does not mask
+/// off the host bits of ip.
+/// 
+/// If bits is less than zero or greater than ip.BitLen, [Prefix.Bits]
+/// will return an invalid value -1.
 pub fn PrefixFrom(ip: Addr, bits: int) -> Prefix
 
 /// Addr represents an IPv4 or IPv6 address (with or without a scoped

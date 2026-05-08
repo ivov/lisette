@@ -6,10 +6,31 @@
 import "go:io"
 import "go:time"
 
+/// NewReader creates a new [Reader] reading the given reader.
+/// If r does not also implement [io.ByteReader],
+/// the decompressor may read more data than necessary from r.
+/// 
+/// It is the caller's responsibility to call [Reader.Close] when done.
+/// 
+/// The Reader.[Header] fields will be valid in the [Reader] returned.
 pub fn NewReader(r: io.Reader) -> Result<Ref<Reader>, error>
 
+/// NewWriter returns a new [Writer].
+/// Writes to the returned writer are compressed and written to w.
+/// 
+/// It is the caller's responsibility to call Close on the [Writer] when done.
+/// Writes may be buffered and not flushed until Close.
+/// 
+/// Callers that wish to set the fields in Writer.[Header] must do so before
+/// the first call to Write, Flush, or Close.
 pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 
+/// NewWriterLevel is like [NewWriter] but specifies the compression level instead
+/// of assuming [DefaultCompression].
+/// 
+/// The compression level can be [DefaultCompression], [NoCompression], [HuffmanOnly]
+/// or any integer value between [BestSpeed] and [BestCompression] inclusive.
+/// The error returned will be nil if the level is valid.
 pub fn NewWriterLevel(w: io.Writer, level: int) -> Result<Ref<Writer>, error>
 
 /// The gzip file stores a header giving metadata about the compressed file.

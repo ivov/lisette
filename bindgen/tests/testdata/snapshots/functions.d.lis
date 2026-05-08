@@ -6,6 +6,8 @@
 /// Function with unnamed params - tests convertFunc unnamed param path
 pub fn Callback(arg0: int, arg1: string) -> bool
 
+/// Comma-ok with pointer inner type - produces tuple to avoid
+/// ambiguity with single-pointer returns that also produce Option<Ref<T>>
 #[go(comma_ok)]
 pub fn FindNode(key: string) -> Option<Ref<Node>>
 

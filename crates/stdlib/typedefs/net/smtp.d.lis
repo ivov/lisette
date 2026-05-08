@@ -8,12 +8,28 @@ import "go:io"
 import "go:net"
 import "go:net/textproto"
 
+/// CRAMMD5Auth returns an [Auth] that implements the CRAM-MD5 authentication
+/// mechanism as defined in RFC 2195.
+/// The returned Auth uses the given username and secret to authenticate
+/// to the server using the challenge-response mechanism.
 pub fn CRAMMD5Auth(username: string, secret: string) -> Auth
 
+/// Dial returns a new [Client] connected to an SMTP server at addr.
+/// The addr must include a port, as in "mail.example.com:smtp".
 pub fn Dial(addr: string) -> Result<Ref<Client>, error>
 
+/// NewClient returns a new [Client] using an existing connection and host as a
+/// server name to be used when authenticating.
 pub fn NewClient(conn: net.Conn, host: string) -> Result<Ref<Client>, error>
 
+/// PlainAuth returns an [Auth] that implements the PLAIN authentication
+/// mechanism as defined in RFC 4616. The returned Auth uses the given
+/// username and password to authenticate to host and act as identity.
+/// Usually identity should be the empty string, to act as username.
+/// 
+/// PlainAuth will only send the credentials if the connection is using TLS
+/// or is connected to localhost. Otherwise authentication will fail with an
+/// error, without sending the credentials.
 pub fn PlainAuth(
   identity: string,
   username: string,

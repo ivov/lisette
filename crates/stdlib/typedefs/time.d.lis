@@ -171,8 +171,30 @@ pub const Wednesday: Weekday = 3
 /// unstopped timers. There is no reason to prefer NewTimer when After will do.
 pub fn After(d: Duration) -> Receiver<Time>
 
+/// AfterFunc waits for the duration to elapse and then calls f
+/// in its own goroutine. It returns a [Timer] that can
+/// be used to cancel the call using its Stop method.
+/// The returned Timer's C field is not used and will be nil.
 pub fn AfterFunc(d: Duration, f: fn() -> ()) -> Ref<Timer>
 
+/// Date returns the Time corresponding to
+/// 
+/// 	yyyy-mm-dd hh:mm:ss + nsec nanoseconds
+/// 
+/// in the appropriate zone for that time in the given location.
+/// 
+/// The month, day, hour, min, sec, and nsec values may be outside
+/// their usual ranges and will be normalized during the conversion.
+/// For example, October 32 converts to November 1.
+/// 
+/// A daylight savings time transition skips or repeats times.
+/// For example, in the United States, March 13, 2011 2:15am never occurred,
+/// while November 6, 2011 1:15am occurred twice. In such cases, the
+/// choice of time zone, and therefore the time, is not well-defined.
+/// Date returns a time that is correct in one of the two zones involved
+/// in the transition, but it does not guarantee which.
+/// 
+/// Date panics if loc is nil.
 pub fn Date(
   year: int,
   month: Month,
@@ -184,24 +206,138 @@ pub fn Date(
   loc: Ref<Location>,
 ) -> Time
 
+/// FixedZone returns a [Location] that always uses
+/// the given zone name and offset (seconds east of UTC).
 pub fn FixedZone(name: string, offset: int) -> Ref<Location>
 
+/// LoadLocation returns the Location with the given name.
+/// 
+/// If the name is "" or "UTC", LoadLocation returns UTC.
+/// If the name is "Local", LoadLocation returns Local.
+/// 
+/// Otherwise, the name is taken to be a location name corresponding to a file
+/// in the IANA Time Zone database, such as "America/New_York".
+/// 
+/// LoadLocation looks for the IANA Time Zone database in the following
+/// locations in order:
+/// 
+///   - the directory or uncompressed zip file named by the ZONEINFO environment variable
+///   - on a Unix system, the system standard installation location
+///   - $GOROOT/lib/time/zoneinfo.zip
+///   - the time/tzdata package, if it was imported
 pub fn LoadLocation(name: string) -> Result<Ref<Location>, error>
 
+/// LoadLocationFromTZData returns a Location with the given name
+/// initialized from the IANA Time Zone database-formatted data.
+/// The data should be in the format of a standard IANA time zone file
+/// (for example, the content of /etc/localtime on Unix systems).
 pub fn LoadLocationFromTZData(name: string, data: Slice<byte>) -> Result<Ref<Location>, error>
 
+/// NewTicker returns a new [Ticker] containing a channel that will send
+/// the current time on the channel after each tick. The period of the
+/// ticks is specified by the duration argument. The ticker will adjust
+/// the time interval or drop ticks to make up for slow receivers.
+/// The duration d must be greater than zero; if not, NewTicker will
+/// panic.
+/// 
+/// Before Go 1.23, the garbage collector did not recover
+/// tickers that had not yet expired or been stopped, so code often
+/// immediately deferred t.Stop after calling NewTicker, to make
+/// the ticker recoverable when it was no longer needed.
+/// As of Go 1.23, the garbage collector can recover unreferenced
+/// tickers, even if they haven't been stopped.
+/// The Stop method is no longer necessary to help the garbage collector.
+/// (Code may of course still want to call Stop to stop the ticker for other reasons.)
 pub fn NewTicker(d: Duration) -> Ref<Ticker>
 
+/// NewTimer creates a new Timer that will send
+/// the current time on its channel after at least duration d.
+/// 
+/// Before Go 1.23, the garbage collector did not recover
+/// timers that had not yet expired or been stopped, so code often
+/// immediately deferred t.Stop after calling NewTimer, to make
+/// the timer recoverable when it was no longer needed.
+/// As of Go 1.23, the garbage collector can recover unreferenced
+/// timers, even if they haven't expired or been stopped.
+/// The Stop method is no longer necessary to help the garbage collector.
+/// (Code may of course still want to call Stop to stop the timer for other reasons.)
+/// 
+/// Before Go 1.23, the channel associated with a Timer was
+/// asynchronous (buffered, capacity 1), which meant that
+/// stale time values could be received even after [Timer.Stop]
+/// or [Timer.Reset] returned.
+/// As of Go 1.23, the channel is synchronous (unbuffered, capacity 0),
+/// eliminating the possibility of those stale values.
+/// 
+/// The GODEBUG setting asynctimerchan=1 restores both pre-Go 1.23
+/// behaviors: when set, unexpired timers won't be garbage collected, and
+/// channels will have buffered capacity. This setting may be removed
+/// in Go 1.27 or later.
 pub fn NewTimer(d: Duration) -> Ref<Timer>
 
+/// Now returns the current local time.
 pub fn Now() -> Time
 
+/// Parse parses a formatted string and returns the time value it represents.
+/// See the documentation for the constant called [Layout] to see how to
+/// represent the format. The second argument must be parseable using
+/// the format string (layout) provided as the first argument.
+/// 
+/// The example for [Time.Format] demonstrates the working of the layout string
+/// in detail and is a good reference.
+/// 
+/// When parsing (only), the input may contain a fractional second
+/// field immediately after the seconds field, even if the layout does not
+/// signify its presence. In that case either a comma or a decimal point
+/// followed by a maximal series of digits is parsed as a fractional second.
+/// Fractional seconds are truncated to nanosecond precision.
+/// 
+/// Elements omitted from the layout are assumed to be zero or, when
+/// zero is impossible, one, so parsing "3:04pm" returns the time
+/// corresponding to Jan 1, year 0, 15:04:00 UTC (note that because the year is
+/// 0, this time is before the zero Time).
+/// Years must be in the range 0000..9999. The day of the week is checked
+/// for syntax but it is otherwise ignored.
+/// 
+/// For layouts specifying the two-digit year 06, a value NN >= 69 will be treated
+/// as 19NN and a value NN < 69 will be treated as 20NN.
+/// 
+/// The remainder of this comment describes the handling of time zones.
+/// 
+/// In the absence of a time zone indicator, Parse returns a time in UTC.
+/// 
+/// When parsing a time with a zone offset like -0700, if the offset corresponds
+/// to a time zone used by the current location ([Local]), then Parse uses that
+/// location and zone in the returned time. Otherwise it records the time as
+/// being in a fabricated location with time fixed at the given zone offset.
+/// 
+/// When parsing a time with a zone abbreviation like MST, if the zone abbreviation
+/// has a defined offset in the current location, then that offset is used.
+/// The zone abbreviation "UTC" is recognized as UTC regardless of location.
+/// If the zone abbreviation is unknown, Parse records the time as being
+/// in a fabricated location with the given zone abbreviation and a zero offset.
+/// This choice means that such a time can be parsed and reformatted with the
+/// same layout losslessly, but the exact instant used in the representation will
+/// differ by the actual zone offset. To avoid such problems, prefer time layouts
+/// that use a numeric zone offset, or use [ParseInLocation].
 pub fn Parse(layout: string, value: string) -> Result<Time, error>
 
+/// ParseDuration parses a duration string.
+/// A duration string is a possibly signed sequence of
+/// decimal numbers, each with optional fraction and a unit suffix,
+/// such as "300ms", "-1.5h" or "2h45m".
+/// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 pub fn ParseDuration(s: string) -> Result<Duration, error>
 
+/// ParseInLocation is like Parse but differs in two important ways.
+/// First, in the absence of time zone information, Parse interprets a time as UTC;
+/// ParseInLocation interprets the time as in the given location.
+/// Second, when given a zone offset or abbreviation, Parse tries to match it
+/// against the Local location; ParseInLocation uses the given location.
 pub fn ParseInLocation(layout: string, value: string, loc: Ref<Location>) -> Result<Time, error>
 
+/// Since returns the time elapsed since t.
+/// It is shorthand for time.Now().Sub(t).
 pub fn Since(t: Time) -> Duration
 
 /// Sleep pauses the current goroutine for at least the duration d.
@@ -221,12 +357,23 @@ pub fn Sleep(d: Duration)
 /// There is no longer any reason to prefer NewTicker when Tick will do.
 pub fn Tick(d: Duration) -> Receiver<Time>
 
+/// Unix returns the local Time corresponding to the given Unix time,
+/// sec seconds and nsec nanoseconds since January 1, 1970 UTC.
+/// It is valid to pass nsec outside the range [0, 999999999].
+/// Not all sec values have a corresponding time value. One such
+/// value is 1<<63-1 (the largest int64 value).
 pub fn Unix(sec: int64, nsec: int64) -> Time
 
+/// UnixMicro returns the local Time corresponding to the given Unix time,
+/// usec microseconds since January 1, 1970 UTC.
 pub fn UnixMicro(usec: int64) -> Time
 
+/// UnixMilli returns the local Time corresponding to the given Unix time,
+/// msec milliseconds since January 1, 1970 UTC.
 pub fn UnixMilli(msec: int64) -> Time
 
+/// Until returns the duration until t.
+/// It is shorthand for t.Sub(time.Now()).
 pub fn Until(t: Time) -> Duration
 
 /// A Location maps time instants to the zone in use at that time.

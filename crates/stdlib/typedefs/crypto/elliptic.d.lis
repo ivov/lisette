@@ -26,12 +26,41 @@ pub fn Marshal(curve: Curve, x: Ref<big.Int>, y: Ref<big.Int>) -> Slice<byte>
 /// curve (or is the conventional point at infinity), the behavior is undefined.
 pub fn MarshalCompressed(curve: Curve, x: Ref<big.Int>, y: Ref<big.Int>) -> Slice<byte>
 
+/// P224 returns a [Curve] which implements NIST P-224 (FIPS 186-3, section D.2.2),
+/// also known as secp224r1. The CurveParams.Name of this [Curve] is "P-224".
+/// 
+/// Multiple invocations of this function will return the same value, so it can
+/// be used for equality checks and switch statements.
+/// 
+/// The cryptographic operations are implemented using constant-time algorithms.
 pub fn P224() -> Curve
 
+/// P256 returns a [Curve] which implements NIST P-256 (FIPS 186-3, section D.2.3),
+/// also known as secp256r1 or prime256v1. The CurveParams.Name of this [Curve] is
+/// "P-256".
+/// 
+/// Multiple invocations of this function will return the same value, so it can
+/// be used for equality checks and switch statements.
+/// 
+/// The cryptographic operations are implemented using constant-time algorithms.
 pub fn P256() -> Curve
 
+/// P384 returns a [Curve] which implements NIST P-384 (FIPS 186-3, section D.2.4),
+/// also known as secp384r1. The CurveParams.Name of this [Curve] is "P-384".
+/// 
+/// Multiple invocations of this function will return the same value, so it can
+/// be used for equality checks and switch statements.
+/// 
+/// The cryptographic operations are implemented using constant-time algorithms.
 pub fn P384() -> Curve
 
+/// P521 returns a [Curve] which implements NIST P-521 (FIPS 186-3, section D.2.5),
+/// also known as secp521r1. The CurveParams.Name of this [Curve] is "P-521".
+/// 
+/// Multiple invocations of this function will return the same value, so it can
+/// be used for equality checks and switch statements.
+/// 
+/// The cryptographic operations are implemented using constant-time algorithms.
 pub fn P521() -> Curve
 
 /// Unmarshal converts a point, serialized by [Marshal], into an x, y pair. It is

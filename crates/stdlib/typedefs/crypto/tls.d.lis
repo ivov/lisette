@@ -120,12 +120,39 @@ pub const PSSWithSHA512: SignatureScheme = 0x0806
 /// of the ID value if the cipher suite is not implemented by this package.
 pub fn CipherSuiteName(id: uint16) -> string
 
+/// CipherSuites returns a list of cipher suites currently implemented by this
+/// package, excluding those with security issues, which are returned by
+/// [InsecureCipherSuites].
+/// 
+/// The list is sorted by ID. Note that the default cipher suites selected by
+/// this package might depend on logic that can't be captured by a static list,
+/// and might not match those returned by this function.
 pub fn CipherSuites() -> Slice<Ref<CipherSuite>>
 
+/// Client returns a new TLS client side connection
+/// using conn as the underlying transport.
+/// The config cannot be nil: users must set either ServerName or
+/// InsecureSkipVerify in the config.
 pub fn Client(conn: net.Conn, config: Ref<Config>) -> Ref<Conn>
 
+/// Dial connects to the given network address using net.Dial
+/// and then initiates a TLS handshake, returning the resulting
+/// TLS connection.
+/// Dial interprets a nil configuration as equivalent to
+/// the zero configuration; see the documentation of Config
+/// for the defaults.
 pub fn Dial(network: string, addr: string, config: Ref<Config>) -> Result<Ref<Conn>, error>
 
+/// DialWithDialer connects to the given network address using dialer.Dial and
+/// then initiates a TLS handshake, returning the resulting TLS connection. Any
+/// timeout or deadline given in the dialer apply to connection and TLS
+/// handshake as a whole.
+/// 
+/// DialWithDialer interprets a nil configuration as equivalent to the zero
+/// configuration; see the documentation of [Config] for the defaults.
+/// 
+/// DialWithDialer uses context.Background internally; to specify the context,
+/// use [Dialer.DialContext] with NetDialer set to the desired dialer.
 pub fn DialWithDialer(
   dialer: Ref<net.Dialer>,
   network: string,
@@ -133,6 +160,11 @@ pub fn DialWithDialer(
   config: Ref<Config>,
 ) -> Result<Ref<Conn>, error>
 
+/// InsecureCipherSuites returns a list of cipher suites currently implemented by
+/// this package and which have security issues.
+/// 
+/// Most applications should not use the cipher suites in this list, and should
+/// only use those returned by [CipherSuites].
 pub fn InsecureCipherSuites() -> Slice<Ref<CipherSuite>>
 
 /// Listen creates a TLS listener accepting connections on the
@@ -141,8 +173,19 @@ pub fn InsecureCipherSuites() -> Slice<Ref<CipherSuite>>
 /// at least one certificate or else set GetCertificate.
 pub fn Listen(network: string, laddr: string, config: Ref<Config>) -> Result<net.Listener, error>
 
+/// LoadX509KeyPair reads and parses a public/private key pair from a pair of
+/// files. The files must contain PEM encoded data. The certificate file may
+/// contain intermediate certificates following the leaf certificate to form a
+/// certificate chain. On successful return, Certificate.Leaf will be populated.
+/// 
+/// Before Go 1.23 Certificate.Leaf was left nil, and the parsed certificate was
+/// discarded. This behavior can be re-enabled by setting "x509keypairleaf=0"
+/// in the GODEBUG environment variable.
 pub fn LoadX509KeyPair(certFile: string, keyFile: string) -> Result<Certificate, error>
 
+/// NewLRUClientSessionCache returns a [ClientSessionCache] with the given
+/// capacity that uses an LRU strategy. If capacity is < 1, a default capacity
+/// is used instead.
 pub fn NewLRUClientSessionCache(capacity: int) -> ClientSessionCache
 
 /// NewListener creates a Listener which accepts connections from an inner
@@ -151,14 +194,32 @@ pub fn NewLRUClientSessionCache(capacity: int) -> ClientSessionCache
 /// at least one certificate or else set GetCertificate.
 pub fn NewListener(inner: net.Listener, config: Ref<Config>) -> net.Listener
 
+/// NewResumptionState returns a state value that can be returned by
+/// [ClientSessionCache.Get] to resume a previous session.
+/// 
+/// state needs to be returned by [ParseSessionState], and the ticket and session
+/// state must have been returned by [ClientSessionState.ResumptionState].
 pub fn NewResumptionState(ticket: Slice<byte>, state: Ref<SessionState>) -> Result<Ref<ClientSessionState>, error>
 
+/// ParseSessionState parses a [SessionState] encoded by [SessionState.Bytes].
 pub fn ParseSessionState(data: Slice<byte>) -> Result<Ref<SessionState>, error>
 
+/// QUICClient returns a new TLS client side connection using QUICTransport as the
+/// underlying transport. The config cannot be nil.
+/// 
+/// The config's MinVersion must be at least TLS 1.3.
 pub fn QUICClient(config: Ref<QUICConfig>) -> Ref<QUICConn>
 
+/// QUICServer returns a new TLS server side connection using QUICTransport as the
+/// underlying transport. The config cannot be nil.
+/// 
+/// The config's MinVersion must be at least TLS 1.3.
 pub fn QUICServer(config: Ref<QUICConfig>) -> Ref<QUICConn>
 
+/// Server returns a new TLS server side connection
+/// using conn as the underlying transport.
+/// The configuration config must be non-nil and must include
+/// at least one certificate or else set GetCertificate.
 pub fn Server(conn: net.Conn, config: Ref<Config>) -> Ref<Conn>
 
 /// VersionName returns the name for the provided TLS version number
@@ -166,6 +227,12 @@ pub fn Server(conn: net.Conn, config: Ref<Config>) -> Ref<Conn>
 /// version is not implemented by this package.
 pub fn VersionName(version: uint16) -> string
 
+/// X509KeyPair parses a public/private key pair from a pair of
+/// PEM encoded data. On successful return, Certificate.Leaf will be populated.
+/// 
+/// Before Go 1.23 Certificate.Leaf was left nil, and the parsed certificate was
+/// discarded. This behavior can be re-enabled by setting "x509keypairleaf=0"
+/// in the GODEBUG environment variable.
 pub fn X509KeyPair(certPEMBlock: Slice<byte>, keyPEMBlock: Slice<byte>) -> Result<Certificate, error>
 
 /// An AlertError is a TLS alert.
@@ -645,8 +712,15 @@ impl Config {
   /// compatible chain from Certificates.
   fn BuildNameToCertificate(self: Ref<Config>)
 
-  /// Clone returns a shallow clone of c or nil if c is nil. It is safe to clone a [Config] that is
-  /// being used concurrently by a TLS client or server.
+  /// Clone returns a shallow clone of c or nil if c is nil. It is safe to clone a
+  /// [Config] that is being used concurrently by a TLS client or server.
+  /// 
+  /// The returned Config can share session ticket keys with the original Config,
+  /// which means connections could be resumed across the two Configs. WARNING:
+  /// [Config.VerifyPeerCertificate] does not get called on resumed connections,
+  /// including connections that were originally established on the parent Config.
+  /// If that is not intended, use [Config.VerifyConnection] instead, or set
+  /// [Config.SessionTicketsDisabled].
   fn Clone(self: Ref<Config>) -> Ref<Config>
 
   /// DecryptTicket decrypts a ticket encrypted by [Config.EncryptTicket]. It can

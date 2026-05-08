@@ -3,6 +3,7 @@
 // Go: 1.25.5
 // Lisette: 0.1.24
 
+/// New returns an initialized list.
 pub fn New() -> Ref<List>
 
 /// Element is an element of a linked list.

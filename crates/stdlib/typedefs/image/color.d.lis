@@ -6,6 +6,7 @@
 /// CMYKToRGB converts a [CMYK] quadruple to an RGB triple.
 pub fn CMYKToRGB(c: uint8, m: uint8, y: uint8, k: uint8) -> (uint8, uint8, uint8)
 
+/// ModelFunc returns a [Model] that invokes f to implement the conversion.
 pub fn ModelFunc(f: fn(Color) -> Color) -> Model
 
 /// RGBToCMYK converts an RGB triple to a CMYK quadruple.

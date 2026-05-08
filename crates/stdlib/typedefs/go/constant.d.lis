@@ -26,6 +26,15 @@ pub const String: Kind = 2
 
 pub const Unknown: Kind = 0
 
+/// BinaryOp returns the result of the binary expression x op y.
+/// The operation must be defined for the operands. If one of the
+/// operands is [Unknown], the result is [Unknown].
+/// BinaryOp doesn't handle comparisons or shifts; use [Compare]
+/// or [Shift] instead.
+/// 
+/// To force integer division of [Int] operands, use op == [token.QUO_ASSIGN]
+/// instead of [token.QUO]; the result is guaranteed to be [Int] in this case.
+/// Division by zero leads to a run-time panic.
 pub fn BinaryOp(x_: Value, op: token.Token, y_: Value) -> Value
 
 /// BitLen returns the number of bits required to represent
@@ -47,6 +56,9 @@ pub fn Bytes(x: Value) -> Slice<byte>
 /// false.
 pub fn Compare(x_: Value, op: token.Token, y_: Value) -> bool
 
+/// Denom returns the denominator of x; x must be [Int], [Float], or [Unknown].
+/// If x is [Unknown], or if it is too large or small to represent as a
+/// fraction, the result is [Unknown]. Otherwise the result is an [Int] >= 1.
 pub fn Denom(x: Value) -> Value
 
 /// Float32Val is like [Float64Val] but for float32 instead of float64.
@@ -59,6 +71,8 @@ pub fn Float32Val(x: Value) -> (float32, bool)
 /// If x is [Unknown], the result is (0, false).
 pub fn Float64Val(x: Value) -> (float64, bool)
 
+/// Imag returns the imaginary part of x, which must be a numeric or unknown value.
+/// If x is [Unknown], the result is [Unknown].
 pub fn Imag(x: Value) -> Value
 
 /// Int64Val returns the Go int64 value of x and whether the result is exact;
@@ -66,30 +80,68 @@ pub fn Imag(x: Value) -> Value
 /// If x is [Unknown], the result is (0, false).
 pub fn Int64Val(x: Value) -> (int64, bool)
 
+/// Make returns the [Value] for x.
+/// 
+/// 	type of x        result Kind
+/// 	----------------------------
+/// 	bool             Bool
+/// 	string           String
+/// 	int64            Int
+/// 	*big.Int         Int
+/// 	*big.Float       Float
+/// 	*big.Rat         Float
+/// 	anything else    Unknown
 pub fn Make(x: Unknown) -> Value
 
+/// MakeBool returns the [Bool] value for b.
 pub fn MakeBool(b: bool) -> Value
 
+/// MakeFloat64 returns the [Float] value for x.
+/// If x is -0.0, the result is 0.0.
+/// If x is not finite, the result is an [Unknown].
 pub fn MakeFloat64(x: float64) -> Value
 
+/// MakeFromBytes returns the [Int] value given the bytes of its little-endian
+/// binary representation. An empty byte slice argument represents 0.
 pub fn MakeFromBytes(bytes: Slice<byte>) -> Value
 
+/// MakeFromLiteral returns the corresponding integer, floating-point,
+/// imaginary, character, or string value for a Go literal string. The
+/// tok value must be one of [token.INT], [token.FLOAT], [token.IMAG],
+/// [token.CHAR], or [token.STRING]. The final argument must be zero.
+/// If the literal string syntax is invalid, the result is an [Unknown].
 pub fn MakeFromLiteral(lit: string, tok: token.Token, zero: uint) -> Value
 
+/// MakeImag returns the [Complex] value x*i;
+/// x must be [Int], [Float], or [Unknown].
+/// If x is [Unknown], the result is [Unknown].
 pub fn MakeImag(x: Value) -> Value
 
+/// MakeInt64 returns the [Int] value for x.
 pub fn MakeInt64(x: int64) -> Value
 
+/// MakeString returns the [String] value for s.
 pub fn MakeString(s: string) -> Value
 
+/// MakeUint64 returns the [Int] value for x.
 pub fn MakeUint64(x: uint64) -> Value
 
+/// MakeUnknown returns the [Unknown] value.
 pub fn MakeUnknown() -> Value
 
+/// Num returns the numerator of x; x must be [Int], [Float], or [Unknown].
+/// If x is [Unknown], or if it is too large or small to represent as a
+/// fraction, the result is [Unknown]. Otherwise the result is an [Int]
+/// with the same sign as x.
 pub fn Num(x: Value) -> Value
 
+/// Real returns the real part of x, which must be a numeric or unknown value.
+/// If x is [Unknown], the result is [Unknown].
 pub fn Real(x: Value) -> Value
 
+/// Shift returns the result of the shift expression x op s
+/// with op == [token.SHL] or [token.SHR] (<< or >>). x must be
+/// an [Int] or an [Unknown]. If x is [Unknown], the result is x.
 pub fn Shift(x: Value, op: token.Token, s: uint) -> Value
 
 /// Sign returns -1, 0, or 1 depending on whether x < 0, x == 0, or x > 0;
@@ -101,10 +153,16 @@ pub fn Sign(x: Value) -> int
 /// If x is [Unknown], the result is "".
 pub fn StringVal(x: Value) -> string
 
+/// ToComplex converts x to a [Complex] value if x is representable as a [Complex].
+/// Otherwise it returns an [Unknown].
 pub fn ToComplex(x: Value) -> Value
 
+/// ToFloat converts x to a [Float] value if x is representable as a [Float].
+/// Otherwise it returns an [Unknown].
 pub fn ToFloat(x: Value) -> Value
 
+/// ToInt converts x to an [Int] value if x is representable as an [Int].
+/// Otherwise it returns an [Unknown].
 pub fn ToInt(x: Value) -> Value
 
 /// Uint64Val returns the Go uint64 value of x and whether the result is exact;
@@ -112,6 +170,10 @@ pub fn ToInt(x: Value) -> Value
 /// If x is [Unknown], the result is (0, false).
 pub fn Uint64Val(x: Value) -> (uint64, bool)
 
+/// UnaryOp returns the result of the unary expression op y.
+/// The operation must be defined for the operand.
+/// If prec > 0 it specifies the ^ (xor) result size in bits.
+/// If y is [Unknown], the result is [Unknown].
 pub fn UnaryOp(op: token.Token, y: Value, prec: uint) -> Value
 
 /// Val returns the underlying value for a given constant. Since it returns an

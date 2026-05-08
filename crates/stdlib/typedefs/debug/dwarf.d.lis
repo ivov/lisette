@@ -644,6 +644,14 @@ pub const TagVolatileType: Tag = 0x35
 
 pub const TagWithStmt: Tag = 0x22
 
+/// New returns a new [Data] object initialized from the given parameters.
+/// Rather than calling this function directly, clients should typically use
+/// the DWARF method of the File type of the appropriate package [debug/elf],
+/// [debug/macho], or [debug/pe].
+/// 
+/// The []byte arguments are the data from the corresponding debug section
+/// in the object file; for example, for an ELF object, abbrev is the contents of
+/// the ".debug_abbrev" section.
 pub fn New(
   abbrev: Slice<byte>,
   aranges: Slice<byte>,

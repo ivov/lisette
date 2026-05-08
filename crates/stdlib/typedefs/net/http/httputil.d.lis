@@ -58,12 +58,47 @@ pub fn NewChunkedReader(r: io.Reader) -> io.Reader
 /// length, both of which are wrong.
 pub fn NewChunkedWriter(w: io.Writer) -> io.WriteCloser
 
+/// NewClientConn is an artifact of Go's early HTTP implementation.
+/// It is low-level, old, and unused by Go's current HTTP stack.
+/// We should have deleted it before Go 1.
+/// 
+/// Deprecated: Use the Client or Transport in package [net/http] instead.
 pub fn NewClientConn(c: net.Conn, r: Ref<bufio.Reader>) -> Ref<ClientConn>
 
+/// NewProxyClientConn is an artifact of Go's early HTTP implementation.
+/// It is low-level, old, and unused by Go's current HTTP stack.
+/// We should have deleted it before Go 1.
+/// 
+/// Deprecated: Use the Client or Transport in package [net/http] instead.
 pub fn NewProxyClientConn(c: net.Conn, r: Ref<bufio.Reader>) -> Ref<ClientConn>
 
+/// NewServerConn is an artifact of Go's early HTTP implementation.
+/// It is low-level, old, and unused by Go's current HTTP stack.
+/// We should have deleted it before Go 1.
+/// 
+/// Deprecated: Use the Server in package [net/http] instead.
 pub fn NewServerConn(c: net.Conn, r: Ref<bufio.Reader>) -> Ref<ServerConn>
 
+/// NewSingleHostReverseProxy returns a new [ReverseProxy] that routes
+/// URLs to the scheme, host, and base path provided in target. If the
+/// target's path is "/base" and the incoming request was for "/dir",
+/// the target request will be for /base/dir.
+/// 
+/// NewSingleHostReverseProxy does not rewrite the Host header.
+/// 
+/// To customize the ReverseProxy behavior beyond what
+/// NewSingleHostReverseProxy provides, use ReverseProxy directly
+/// with a Rewrite function. The ProxyRequest SetURL method
+/// may be used to route the outbound request. (Note that SetURL,
+/// unlike NewSingleHostReverseProxy, rewrites the Host header
+/// of the outbound request by default.)
+/// 
+/// 	proxy := &ReverseProxy{
+/// 		Rewrite: func(r *ProxyRequest) {
+/// 			r.SetURL(target)
+/// 			r.Out.Host = r.In.Host // if desired
+/// 		},
+/// 	}
 pub fn NewSingleHostReverseProxy(target: Ref<url.URL>) -> Ref<ReverseProxy>
 
 /// A BufferPool is an interface for getting and returning temporary

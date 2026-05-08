@@ -93,12 +93,26 @@ pub const Uintptr: Kind = 12
 
 pub const UnsafePointer: Kind = 26
 
+/// Append appends the values x to a slice s and returns the resulting slice.
+/// As in Go, each x's value must be assignable to the slice's element type.
 pub fn Append(s: Value, x: VarArgs<Value>) -> Value
 
+/// AppendSlice appends a slice t to a slice s and returns the resulting slice.
+/// The slices s and t must have the same element type.
 pub fn AppendSlice(s: Value, t: Value) -> Value
 
+/// ArrayOf returns the array type with the given length and element type.
+/// For example, if t represents int, ArrayOf(5, t) represents [5]int.
+/// 
+/// If the resulting type would be larger than the available address space,
+/// ArrayOf panics.
 pub fn ArrayOf(length: int, elem: Type) -> Type
 
+/// ChanOf returns the channel type with the given direction and element type.
+/// For example, if t represents int, ChanOf(RecvDir, t) represents <-chan int.
+/// 
+/// The gc runtime imposes a limit of 64 kB on channel element types.
+/// If t's size is equal to or exceeds this limit, ChanOf panics.
 pub fn ChanOf(dir: ChanDir, t: Type) -> Type
 
 /// Copy copies the contents of src into dst until either
@@ -164,28 +178,84 @@ pub fn Copy(dst: Value, src: Value) -> int
 /// This ensures that DeepEqual terminates.
 pub fn DeepEqual(x: Unknown, y: Unknown) -> bool
 
+/// FuncOf returns the function type with the given argument and result types.
+/// For example if k represents int and e represents string,
+/// FuncOf([]Type{k}, []Type{e}, false) represents func(int) string.
+/// 
+/// The variadic argument controls whether the function is variadic. FuncOf
+/// panics if the in[len(in)-1] does not represent a slice and variadic is
+/// true.
 pub fn FuncOf(in_: Slice<Type>, out: Slice<Type>, variadic: bool) -> Type
 
+/// Indirect returns the value that v points to.
+/// If v is a nil pointer, Indirect returns a zero Value.
+/// If v is not a pointer, Indirect returns v.
 pub fn Indirect(v: Value) -> Value
 
+/// MakeChan creates a new channel with the specified type and buffer size.
 pub fn MakeChan(typ: Type, buffer: int) -> Value
 
+/// MakeFunc returns a new function of the given [Type]
+/// that wraps the function fn. When called, that new function
+/// does the following:
+/// 
+///   - converts its arguments to a slice of Values.
+///   - runs results := fn(args).
+///   - returns the results as a slice of Values, one per formal result.
+/// 
+/// The implementation fn can assume that the argument [Value] slice
+/// has the number and type of arguments given by typ.
+/// If typ describes a variadic function, the final Value is itself
+/// a slice representing the variadic arguments, as in the
+/// body of a variadic function. The result Value slice returned by fn
+/// must have the number and type of results given by typ.
+/// 
+/// The [Value.Call] method allows the caller to invoke a typed function
+/// in terms of Values; in contrast, MakeFunc allows the caller to implement
+/// a typed function in terms of Values.
+/// 
+/// The Examples section of the documentation includes an illustration
+/// of how to use MakeFunc to build a swap function for different types.
 pub fn MakeFunc(typ: Type, fn_: fn(Slice<Value>) -> Slice<Value>) -> Value
 
+/// MakeMap creates a new map with the specified type.
 pub fn MakeMap(typ: Type) -> Value
 
+/// MakeMapWithSize creates a new map with the specified type
+/// and initial space for approximately n elements.
 pub fn MakeMapWithSize(typ: Type, n: int) -> Value
 
+/// MakeSlice creates a new zero-initialized slice value
+/// for the specified slice type, length, and capacity.
 pub fn MakeSlice(typ: Type, len: int, cap: int) -> Value
 
+/// MapOf returns the map type with the given key and element types.
+/// For example, if k represents int and e represents string,
+/// MapOf(k, e) represents map[int]string.
+/// 
+/// If the key type is not a valid map key type (that is, if it does
+/// not implement Go's == operator), MapOf panics.
 pub fn MapOf(key: Type, elem: Type) -> Type
 
+/// New returns a Value representing a pointer to a new zero value
+/// for the specified type. That is, the returned Value's Type is [PointerTo](typ).
 pub fn New(typ: Type) -> Value
 
+/// NewAt returns a Value representing a pointer to a value of the
+/// specified type, using p as that pointer.
 pub fn NewAt(typ: Type, p: Unknown) -> Value
 
+/// PointerTo returns the pointer type with element t.
+/// For example, if t represents type Foo, PointerTo(t) represents *Foo.
 pub fn PointerTo(t: Type) -> Type
 
+/// PtrTo returns the pointer type with element t.
+/// For example, if t represents type Foo, PtrTo(t) represents *Foo.
+/// 
+/// PtrTo is the old spelling of [PointerTo].
+/// The two functions behave identically.
+/// 
+/// Deprecated: Superseded by [PointerTo].
 pub fn PtrTo(t: Type) -> Type
 
 /// Select executes a select operation described by the list of cases.
@@ -198,10 +268,22 @@ pub fn PtrTo(t: Type) -> Type
 /// Select supports a maximum of 65536 cases.
 pub fn Select(cases: Slice<SelectCase>) -> (int, Value, bool)
 
+/// SliceAt returns a [Value] representing a slice whose underlying
+/// data starts at p, with length and capacity equal to n.
+/// 
+/// This is like [unsafe.Slice].
 pub fn SliceAt(typ: Type, p: Unknown, n: int) -> Value
 
+/// SliceOf returns the slice type with element type t.
+/// For example, if t represents int, SliceOf(t) represents []int.
 pub fn SliceOf(t: Type) -> Type
 
+/// StructOf returns the struct type containing fields.
+/// The Offset and Index fields are ignored and computed as they would be
+/// by the compiler.
+/// 
+/// StructOf currently does not support promoted methods of embedded fields
+/// and panics if passed unexported StructFields.
 pub fn StructOf(fields: Slice<StructField>) -> Type
 
 /// Swapper returns a function that swaps the elements in the provided
@@ -215,14 +297,33 @@ pub fn Swapper(slice: Unknown) -> Option<fn(int, int) -> ()>
 /// 	v2, ok := v.Interface().(T)
 pub fn TypeAssert<T>(v: Value) -> Option<T>
 
+/// TypeFor returns the [Type] that represents the type argument T.
 pub fn TypeFor<T>() -> Type
 
+/// TypeOf returns the reflection [Type] that represents the dynamic type of i.
+/// If i is a nil interface value, TypeOf returns nil.
 pub fn TypeOf(i: Unknown) -> Option<Type>
 
+/// ValueOf returns a new Value initialized to the concrete value
+/// stored in the interface i. ValueOf(nil) returns the zero Value.
 pub fn ValueOf(i: Unknown) -> Value
 
+/// VisibleFields returns all the visible fields in t, which must be a
+/// struct type. A field is defined as visible if it's accessible
+/// directly with a FieldByName call. The returned fields include fields
+/// inside anonymous struct members and unexported fields. They follow
+/// the same order found in the struct, with anonymous fields followed
+/// immediately by their promoted fields.
+/// 
+/// For each element e of the returned slice, the corresponding field
+/// can be retrieved from a value v of type t by calling v.FieldByIndex(e.Index).
 pub fn VisibleFields(t: Type) -> Slice<StructField>
 
+/// Zero returns a Value representing the zero value for the specified type.
+/// The result is different from the zero value of the Value struct,
+/// which represents no value at all.
+/// For example, Zero(TypeOf(42)) returns a Value with Kind [Int] and value 0.
+/// The returned value is neither addressable nor settable.
 pub fn Zero(typ: Type) -> Value
 
 /// ChanDir represents a channel type's direction.

@@ -75,14 +75,42 @@ pub fn JSEscapeString(s: string) -> string
 /// representation of its arguments.
 pub fn JSEscaper(args: VarArgs<Unknown>) -> string
 
+/// Must is a helper that wraps a call to a function returning ([*Template], error)
+/// and panics if the error is non-nil. It is intended for use in variable initializations
+/// such as
+/// 
+/// 	var t = template.Must(template.New("name").Parse("html"))
 pub fn Must(t: Ref<Template>, err: error) -> Ref<Template>
 
+/// New allocates a new HTML template with the given name.
 pub fn New(name: string) -> Ref<Template>
 
+/// ParseFS is like [ParseFiles] or [ParseGlob] but reads from the file system fs
+/// instead of the host operating system's file system.
+/// It accepts a list of glob patterns.
+/// (Note that most file names serve as glob patterns matching only themselves.)
 pub fn ParseFS(fs: fs.FS, patterns: VarArgs<string>) -> Result<Ref<Template>, error>
 
+/// ParseFiles creates a new [Template] and parses the template definitions from
+/// the named files. The returned template's name will have the (base) name and
+/// (parsed) contents of the first file. There must be at least one file.
+/// If an error occurs, parsing stops and the returned [*Template] is nil.
+/// 
+/// When parsing multiple files with the same name in different directories,
+/// the last one mentioned will be the one that results.
+/// For instance, ParseFiles("a/foo", "b/foo") stores "b/foo" as the template
+/// named "foo", while "a/foo" is unavailable.
 pub fn ParseFiles(filenames: VarArgs<string>) -> Result<Ref<Template>, error>
 
+/// ParseGlob creates a new [Template] and parses the template definitions from
+/// the files identified by the pattern. The files are matched according to the
+/// semantics of filepath.Match, and the pattern must match at least one file.
+/// The returned template will have the (base) name and (parsed) contents of the
+/// first file matched by the pattern. ParseGlob is equivalent to calling
+/// [ParseFiles] with the list of files matched by the pattern.
+/// 
+/// When parsing multiple files with the same name in different directories,
+/// the last one mentioned will be the one that results.
 pub fn ParseGlob(pattern: string) -> Result<Ref<Template>, error>
 
 /// URLQueryEscaper returns the escaped value of the textual representation of

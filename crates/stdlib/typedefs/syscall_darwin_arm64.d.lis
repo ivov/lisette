@@ -591,11 +591,13 @@ pub fn BpfHeadercmpl(fd: int) -> Result<int, error>
 /// Deprecated: Use golang.org/x/net/bpf instead.
 pub fn BpfInterface(fd: int, name: string) -> Result<string, error>
 
+/// Deprecated: Use golang.org/x/net/bpf instead.
 pub fn BpfJump(code: int, k: int, jt: int, jf: int) -> Ref<BpfInsn>
 
 /// Deprecated: Use golang.org/x/net/bpf instead.
 pub fn BpfStats(fd: int) -> Result<Ref<BpfStat>, error>
 
+/// Deprecated: Use golang.org/x/net/bpf instead.
 pub fn BpfStmt(code: int, k: int) -> Ref<BpfInsn>
 
 /// Deprecated: Use golang.org/x/net/bpf instead.
@@ -783,8 +785,10 @@ pub fn Munlockall() -> Result<(), error>
 
 pub fn Munmap(b: Slice<byte>) -> Result<(), error>
 
+/// NsecToTimespec converts a number of nanoseconds into a [Timespec].
 pub fn NsecToTimespec(nsec: int64) -> Timespec
 
+/// NsecToTimeval converts a number of nanoseconds into a [Timeval].
 pub fn NsecToTimeval(nsec: int64) -> Timeval
 
 pub fn Open(path: string, mode: int, perm: uint32) -> Result<int, error>

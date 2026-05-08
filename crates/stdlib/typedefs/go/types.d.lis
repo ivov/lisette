@@ -175,8 +175,21 @@ pub fn ConvertibleTo(v: Type, t: Type) -> bool
 /// package only.
 pub fn DefPredeclaredTestFuncs()
 
+/// Default returns the default "typed" type for an "untyped" type;
+/// it returns the incoming type for all other types. The default type
+/// for untyped nil is untyped nil.
 pub fn Default(t: Type) -> Type
 
+/// Eval returns the type and, if constant, the value for the
+/// expression expr, evaluated at position pos of package pkg,
+/// which must have been derived from type-checking an AST with
+/// complete position information relative to the provided file
+/// set.
+/// 
+/// The meaning of the parameters fset, pkg, and pos is the
+/// same as in [CheckExpr]. An error is returned if expr cannot
+/// be parsed successfully, or the resulting expr AST cannot be
+/// type-checked.
 pub fn Eval(
   fset: Ref<token.FileSet>,
   pkg: Ref<Package>,
@@ -219,6 +232,34 @@ pub fn IdenticalIgnoreTags(x: Type, y: Type) -> bool
 /// generic type.
 pub fn Implements(v: Type, t: Ref<Interface>) -> bool
 
+/// Instantiate instantiates the type orig with the given type arguments targs.
+/// orig must be an *Alias, *Named, or *Signature type. If there is no error,
+/// the resulting Type is an instantiated type of the same kind (*Alias, *Named
+/// or *Signature, respectively).
+/// 
+/// Methods attached to a *Named type are also instantiated, and associated with
+/// a new *Func that has the same position as the original method, but nil function
+/// scope.
+/// 
+/// If ctxt is non-nil, it may be used to de-duplicate the instance against
+/// previous instances with the same identity. As a special case, generic
+/// *Signature origin types are only considered identical if they are pointer
+/// equivalent, so that instantiating distinct (but possibly identical)
+/// signatures will yield different instances. The use of a shared context does
+/// not guarantee that identical instances are deduplicated in all cases.
+/// 
+/// If validate is set, Instantiate verifies that the number of type arguments
+/// and parameters match, and that the type arguments satisfy their respective
+/// type constraints. If verification fails, the resulting error may wrap an
+/// *ArgumentError indicating which type argument did not satisfy its type parameter
+/// constraint, and why.
+/// 
+/// If validate is not set, Instantiate does not verify the type argument count
+/// or whether the type arguments satisfy their constraints. Instantiate is
+/// guaranteed to not return an error, but may panic. Specifically, for
+/// *Signature types, Instantiate will panic immediately if the type argument
+/// count is incorrect; for *Named types, a panic may occur later inside the
+/// *Named API.
 pub fn Instantiate(
   ctxt: Ref<Context>,
   orig: Type,
@@ -229,6 +270,33 @@ pub fn Instantiate(
 /// IsInterface reports whether t is an interface type.
 pub fn IsInterface(t: Type) -> bool
 
+/// LookupFieldOrMethod looks up a field or method with given package and name
+/// in T and returns the corresponding *Var or *Func, an index sequence, and a
+/// bool indicating if there were any pointer indirections on the path to the
+/// field or method. If addressable is set, T is the type of an addressable
+/// variable (only matters for method lookups). T must not be nil.
+/// 
+/// The last index entry is the field or method index in the (possibly embedded)
+/// type where the entry was found, either:
+/// 
+///  1. the list of declared methods of a named type; or
+///  2. the list of all methods (method set) of an interface type; or
+///  3. the list of fields of a struct type.
+/// 
+/// The earlier index entries are the indices of the embedded struct fields
+/// traversed to get to the found entry, starting at depth 0.
+/// 
+/// If no entry is found, a nil object is returned. In this case, the returned
+/// index and indirect values have the following meaning:
+/// 
+///   - If index != nil, the index sequence points to an ambiguous entry
+///     (the same name appeared more than once at the same embedding level).
+/// 
+///   - If indirect is set, a method with a pointer receiver type was found
+///     but there was no pointer on the path from the actual receiver type to
+///     the method's formal receiver base type, nor was the receiver addressable.
+/// 
+/// See also [LookupSelection], which returns the result as a [Selection].
 pub fn LookupFieldOrMethod(
   t: Type,
   addressable: bool,
@@ -236,6 +304,29 @@ pub fn LookupFieldOrMethod(
   name: string,
 ) -> (Object, Slice<int>, bool)
 
+/// LookupSelection selects the field or method whose ID is Id(pkg,
+/// name), on a value of type T. If addressable is set, T is the type
+/// of an addressable variable (this matters only for method lookups).
+/// T must not be nil.
+/// 
+/// If the selection is valid:
+/// 
+///   - [Selection.Obj] returns the field ([Var]) or method ([Func]);
+///   - [Selection.Indirect] reports whether there were any pointer
+///     indirections on the path to the field or method.
+///   - [Selection.Index] returns the index sequence, defined below.
+/// 
+/// The last index entry is the field or method index in the (possibly
+/// embedded) type where the entry was found, either:
+/// 
+///  1. the list of declared methods of a named type; or
+///  2. the list of all methods (method set) of an interface type; or
+///  3. the list of fields of a struct type.
+/// 
+/// The earlier index entries are the indices of the embedded struct
+/// fields traversed to get to the found entry, starting at depth 0.
+/// 
+/// See also [LookupFieldOrMethod], which returns the components separately.
 pub fn LookupSelection(
   t: Type,
   addressable: bool,
@@ -243,15 +334,31 @@ pub fn LookupSelection(
   name: string,
 ) -> Option<Selection>
 
+/// MissingMethod returns (nil, false) if V implements T, otherwise it
+/// returns a missing method required by T and whether it is missing or
+/// just has the wrong type: either a pointer receiver or wrong signature.
+/// 
+/// For non-interface types V, or if static is set, V implements T if all
+/// methods of T are present in V. Otherwise (V is an interface and static
+/// is not set), MissingMethod only checks that methods of T which are also
+/// present in V have matching types (e.g., for a type assertion x.(T) where
+/// x is of interface type V).
 #[go(comma_ok)]
 pub fn MissingMethod(v: Type, t: Ref<Interface>, static: bool) -> Option<Ref<Func>>
 
+/// NewAlias creates a new Alias type with the given type name and rhs.
+/// rhs must not be nil.
 pub fn NewAlias(obj: Ref<TypeName>, rhs: Type) -> Ref<Alias>
 
+/// NewArray returns a new array type for the given element type and length.
+/// A negative length indicates an unknown length.
 pub fn NewArray(elem: Type, len: int64) -> Ref<Array>
 
+/// NewChan returns a new channel type for the given direction and element type.
 pub fn NewChan(dir: ChanDir, elem: Type) -> Ref<Chan>
 
+/// NewChecker returns a new [Checker] instance for a given package.
+/// [Package] files may be added incrementally via checker.Files.
 pub fn NewChecker(
   conf: Ref<Config>,
   fset: Ref<token.FileSet>,
@@ -259,6 +366,8 @@ pub fn NewChecker(
   info: Ref<Info>,
 ) -> Ref<Checker>
 
+/// NewConst returns a new constant with value val.
+/// The remaining arguments set the attributes found with all Objects.
 pub fn NewConst(
   pos: token.Pos,
   pkg: Ref<Package>,
@@ -267,8 +376,12 @@ pub fn NewConst(
   val: constant.Value,
 ) -> Ref<Const>
 
+/// NewContext creates a new Context.
 pub fn NewContext() -> Ref<Context>
 
+/// NewField returns a new variable representing a struct field.
+/// For embedded fields, the name is the unqualified type name
+/// under which the field is accessible.
 pub fn NewField(
   pos: token.Pos,
   pkg: Ref<Package>,
@@ -277,6 +390,8 @@ pub fn NewField(
   embedded: bool,
 ) -> Ref<Var>
 
+/// NewFunc returns a new function with the given signature, representing
+/// the function's type.
 pub fn NewFunc(
   pos: token.Pos,
   pkg: Ref<Package>,
@@ -284,22 +399,48 @@ pub fn NewFunc(
   sig: Ref<Signature>,
 ) -> Ref<Func>
 
+/// NewInterface returns a new interface for the given methods and embedded types.
+/// NewInterface takes ownership of the provided methods and may modify their types
+/// by setting missing receivers.
+/// 
+/// Deprecated: Use NewInterfaceType instead which allows arbitrary embedded types.
 pub fn NewInterface(methods: Slice<Ref<Func>>, embeddeds: Slice<Ref<Named>>) -> Ref<Interface>
 
+/// NewInterfaceType returns a new interface for the given methods and embedded
+/// types. NewInterfaceType takes ownership of the provided methods and may
+/// modify their types by setting missing receivers.
+/// 
+/// To avoid race conditions, the interface's type set should be computed before
+/// concurrent use of the interface, by explicitly calling Complete.
 pub fn NewInterfaceType(methods: Slice<Ref<Func>>, embeddeds: Slice<Type>) -> Ref<Interface>
 
+/// NewLabel returns a new label.
 pub fn NewLabel(pos: token.Pos, pkg: Ref<Package>, name: string) -> Ref<Label>
 
+/// NewMap returns a new map for the given key and element types.
 pub fn NewMap(key: Type, elem: Type) -> Ref<Map>
 
+/// NewMethodSet returns the method set for the given type T.
+/// It always returns a non-nil method set, even if it is empty.
 pub fn NewMethodSet(t: Type) -> Ref<MethodSet>
 
+/// NewNamed returns a new named type for the given type name, underlying type, and associated methods.
+/// If the given type name obj doesn't have a type yet, its type is set to the returned named type.
+/// The underlying type must not be a *Named.
 pub fn NewNamed(obj: Ref<TypeName>, underlying: Type, methods: Slice<Ref<Func>>) -> Ref<Named>
 
+/// NewPackage returns a new Package for the given package path and name.
+/// The package is not complete and contains no explicit imports.
 pub fn NewPackage(path: string, name: string) -> Ref<Package>
 
+/// NewParam returns a new variable representing a function parameter.
+/// 
+/// The caller must subsequently call [Var.SetKind] if the desired Var
+/// is not of kind [ParamVar]: for example, [RecvVar] or [ResultVar].
 pub fn NewParam(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> Ref<Var>
 
+/// NewPkgName returns a new PkgName object representing an imported package.
+/// The remaining arguments set the attributes found with all Objects.
 pub fn NewPkgName(
   pos: token.Pos,
   pkg: Ref<Package>,
@@ -307,8 +448,11 @@ pub fn NewPkgName(
   imported: Ref<Package>,
 ) -> Ref<PkgName>
 
+/// NewPointer returns a new pointer type for the given element (base) type.
 pub fn NewPointer(elem: Type) -> Ref<Pointer>
 
+/// NewScope returns a new, empty scope contained in the given parent
+/// scope, if any. The comment is for debugging only.
 pub fn NewScope(
   parent: Ref<Scope>,
   pos: token.Pos,
@@ -316,6 +460,12 @@ pub fn NewScope(
   comment: string,
 ) -> Ref<Scope>
 
+/// NewSignature returns a new function type for the given receiver, parameters,
+/// and results, either of which may be nil. If variadic is set, the function
+/// is variadic, it must have at least one parameter, and the last parameter
+/// must be of unnamed slice type.
+/// 
+/// Deprecated: Use [NewSignatureType] instead which allows for type parameters.
 pub fn NewSignature(
   recv: Ref<Var>,
   params: Ref<Tuple>,
@@ -323,6 +473,16 @@ pub fn NewSignature(
   variadic: bool,
 ) -> Ref<Signature>
 
+/// NewSignatureType creates a new function type for the given receiver,
+/// receiver type parameters, type parameters, parameters, and results.
+/// If variadic is set, params must hold at least one parameter and the
+/// last parameter must be an unnamed slice or a type parameter whose
+/// type set has an unnamed slice as common underlying type.
+/// As a special case, for variadic signatures the last parameter may
+/// also be a string type, or a type parameter containing a mix of byte
+/// slices and string types in its type set.
+/// If recv is non-nil, typeParams must be empty. If recvTypeParams is
+/// non-empty, recv must be non-nil.
 pub fn NewSignatureType(
   recv: Ref<Var>,
   recvTypeParams: Slice<Ref<TypeParam>>,
@@ -332,20 +492,47 @@ pub fn NewSignatureType(
   variadic: bool,
 ) -> Ref<Signature>
 
+/// NewSlice returns a new slice type for the given element type.
 pub fn NewSlice(elem: Type) -> Ref<Slice>
 
+/// NewStruct returns a new struct with the given fields and corresponding field tags.
+/// If a field with index i has a tag, tags[i] must be that tag, but len(tags) may be
+/// only as long as required to hold the tag with the largest index i. Consequently,
+/// if no field has a tag, tags may be nil.
 pub fn NewStruct(fields: Slice<Ref<Var>>, tags: Slice<string>) -> Ref<Struct>
 
+/// NewTerm returns a new union term.
 pub fn NewTerm(tilde: bool, typ: Type) -> Ref<Term>
 
+/// NewTuple returns a new tuple for the given variables.
 pub fn NewTuple(x: VarArgs<Ref<Var>>) -> Ref<Tuple>
 
+/// NewTypeName returns a new type name denoting the given typ.
+/// The remaining arguments set the attributes found with all Objects.
+/// 
+/// The typ argument may be a defined (Named) type or an alias type.
+/// It may also be nil such that the returned TypeName can be used as
+/// argument for NewNamed, which will set the TypeName's type as a side-
+/// effect.
 pub fn NewTypeName(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> Ref<TypeName>
 
+/// NewTypeParam returns a new TypeParam. Type parameters may be set on a Named
+/// type by calling SetTypeParams. Setting a type parameter on more than one type
+/// will result in a panic.
+/// 
+/// The constraint argument can be nil, and set later via SetConstraint. If the
+/// constraint is non-nil, it must be fully defined.
 pub fn NewTypeParam(obj: Ref<TypeName>, constraint: Type) -> Ref<TypeParam>
 
+/// NewUnion returns a new [Union] type with the given terms.
+/// It is an error to create an empty union; they are syntactically not possible.
 pub fn NewUnion(terms: Slice<Ref<Term>>) -> Ref<Union>
 
+/// NewVar returns a new variable.
+/// The arguments set the attributes found with all Objects.
+/// 
+/// The caller must subsequently call [Var.SetKind]
+/// if the desired Var is not of kind [PackageVar].
 pub fn NewVar(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> Ref<Var>
 
 /// ObjectString returns the string form of obj.
@@ -353,6 +540,8 @@ pub fn NewVar(pos: token.Pos, pkg: Ref<Package>, name: string, typ: Type) -> Ref
 /// package-level objects, and may be nil.
 pub fn ObjectString(obj: Object, qf: Qualifier) -> string
 
+/// RelativeTo returns a [Qualifier] that fully qualifies members of
+/// all packages other than pkg.
 pub fn RelativeTo(pkg: Ref<Package>) -> Qualifier
 
 /// Satisfies reports whether type V satisfies the constraint T.
@@ -372,6 +561,12 @@ pub fn Satisfies(v: Type, t: Ref<Interface>) -> bool
 /// 	"method expr (T) f(X) Y"
 pub fn SelectionString(s: Ref<Selection>, qf: Qualifier) -> string
 
+/// SizesFor returns the Sizes used by a compiler for an architecture.
+/// The result is nil if a compiler/architecture pair is not known.
+/// 
+/// Supported architectures for compiler "gc":
+/// "386", "amd64", "amd64p32", "arm", "arm64", "loong64", "mips", "mipsle",
+/// "mips64", "mips64le", "ppc64", "ppc64le", "riscv64", "s390x", "sparc64", "wasm".
 pub fn SizesFor(compiler: string, arch: string) -> Option<Sizes>
 
 /// TypeString returns the string representation of typ.
@@ -379,6 +574,10 @@ pub fn SizesFor(compiler: string, arch: string) -> Option<Sizes>
 /// package-level objects, and may be nil.
 pub fn TypeString(typ: Type, qf: Qualifier) -> string
 
+/// Unalias returns t if it is not an alias type;
+/// otherwise it follows t's alias chain until it
+/// reaches a non-alias type which is then returned.
+/// Consequently, the result is never an alias type.
 pub fn Unalias(t: Type) -> Type
 
 /// WriteExpr writes the (possibly shortened) string representation for x to buf.

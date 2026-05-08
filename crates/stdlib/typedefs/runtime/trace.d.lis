@@ -25,8 +25,31 @@ pub fn Logf(
   args: VarArgs<Unknown>,
 )
 
+/// NewFlightRecorder creates a new flight recorder from the provided configuration.
 pub fn NewFlightRecorder(cfg: FlightRecorderConfig) -> Ref<FlightRecorder>
 
+/// NewTask creates a task instance with the type taskType and returns
+/// it along with a Context that carries the task.
+/// If the input context contains a task, the new task is its subtask.
+/// 
+/// The taskType is used to classify task instances. Analysis tools
+/// like the Go execution tracer may assume there are only a bounded
+/// number of unique task types in the system.
+/// 
+/// The returned Task's [Task.End] method is used to mark the task's end.
+/// The trace tool measures task latency as the time between task creation
+/// and when the End method is called, and provides the latency
+/// distribution per task type.
+/// If the End method is called multiple times, only the first
+/// call is used in the latency measurement.
+/// 
+/// 	ctx, task := trace.NewTask(ctx, "awesomeTask")
+/// 	trace.WithRegion(ctx, "preparation", prepWork)
+/// 	// preparation of the task
+/// 	go func() {  // continue processing the task in a separate goroutine.
+/// 	    defer task.End()
+/// 	    trace.WithRegion(ctx, "remainingWork", remainingWork)
+/// 	}()
 pub fn NewTask(pctx: context.Context, taskType: string) -> (context.Context, Ref<Task>)
 
 /// Start enables tracing for the current program.
@@ -34,6 +57,14 @@ pub fn NewTask(pctx: context.Context, taskType: string) -> (context.Context, Ref
 /// Start returns an error if tracing is already enabled.
 pub fn Start(w: io.Writer) -> Result<(), error>
 
+/// StartRegion starts a region and returns it.
+/// The returned Region's [Region.End] method must be called
+/// from the same goroutine where the region was started.
+/// Within each goroutine, regions must nest. That is, regions started
+/// after this region must be ended before this region can be ended.
+/// Recommended usage is
+/// 
+/// 	defer trace.StartRegion(ctx, "myTracedRegion").End()
 pub fn StartRegion(ctx: context.Context, regionType: string) -> Ref<Region>
 
 /// Stop stops the current tracing, if any.

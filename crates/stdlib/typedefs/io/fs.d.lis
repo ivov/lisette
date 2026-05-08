@@ -5,6 +5,8 @@
 
 import "go:time"
 
+/// FileInfoToDirEntry returns a [DirEntry] that returns information from info.
+/// If info is nil, FileInfoToDirEntry returns nil.
 pub fn FileInfoToDirEntry(info: FileInfo) -> DirEntry
 
 /// FormatDirEntry returns a formatted version of dir for human readability.
@@ -37,8 +39,19 @@ pub fn FormatFileInfo(info: FileInfo) -> string
 /// and look for matches for the pattern.
 pub fn Glob(fsys: FS, pattern: string) -> Result<Slice<string>, error>
 
+/// Lstat returns a [FileInfo] describing the named file.
+/// If the file is a symbolic link, the returned [FileInfo] describes the symbolic link.
+/// Lstat makes no attempt to follow the link.
+/// 
+/// If fsys does not implement [ReadLinkFS], then Lstat is identical to [Stat].
 pub fn Lstat(fsys: FS, name: string) -> Result<FileInfo, error>
 
+/// ReadDir reads the named directory
+/// and returns a list of directory entries sorted by filename.
+/// 
+/// If fs implements [ReadDirFS], ReadDir calls fs.ReadDir.
+/// Otherwise ReadDir calls fs.Open and uses ReadDir and Close
+/// on the returned file.
 pub fn ReadDir(fsys: FS, name: string) -> Result<Slice<DirEntry>, error>
 
 /// ReadFile reads the named file from the file system fs and returns its contents.
@@ -56,8 +69,27 @@ pub fn ReadFile(fsys: FS, name: string) -> Result<Slice<byte>, error>
 /// If fsys does not implement [ReadLinkFS], then ReadLink returns an error.
 pub fn ReadLink(fsys: FS, name: string) -> Result<string, error>
 
+/// Stat returns a [FileInfo] describing the named file from the file system.
+/// 
+/// If fs implements [StatFS], Stat calls fs.Stat.
+/// Otherwise, Stat opens the [File] to stat it.
 pub fn Stat(fsys: FS, name: string) -> Result<FileInfo, error>
 
+/// Sub returns an [FS] corresponding to the subtree rooted at fsys's dir.
+/// 
+/// If dir is ".", Sub returns fsys unchanged.
+/// Otherwise, if fs implements [SubFS], Sub returns fsys.Sub(dir).
+/// Otherwise, Sub returns a new [FS] implementation sub that,
+/// in effect, implements sub.Open(name) as fsys.Open(path.Join(dir, name)).
+/// The implementation also translates calls to ReadDir, ReadFile,
+/// ReadLink, Lstat, and Glob appropriately.
+/// 
+/// Note that Sub(os.DirFS("/"), "prefix") is equivalent to os.DirFS("/prefix")
+/// and that neither of them guarantees to avoid operating system
+/// accesses outside "/prefix", because the implementation of [os.DirFS]
+/// does not check for symbolic links inside "/prefix" that point to
+/// other directories. That is, [os.DirFS] is not a general substitute for a
+/// chroot-style security mechanism, and Sub does not change that fact.
 pub fn Sub(fsys: FS, dir: string) -> Result<FS, error>
 
 /// ValidPath reports whether the given path name

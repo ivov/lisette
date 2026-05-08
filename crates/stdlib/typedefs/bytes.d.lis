@@ -169,10 +169,26 @@ pub fn Lines(s: Slice<byte>) -> iter.Seq<Slice<byte>>
 /// output are interpreted as UTF-8-encoded code points.
 pub fn Map(mapping: fn(rune) -> rune, s: Slice<byte>) -> Slice<byte>
 
+/// NewBuffer creates and initializes a new [Buffer] using buf as its
+/// initial contents. The new [Buffer] takes ownership of buf, and the
+/// caller should not use buf after this call. NewBuffer is intended to
+/// prepare a [Buffer] to read existing data. It can also be used to set
+/// the initial size of the internal buffer for writing. To do that,
+/// buf should have the desired capacity but a length of zero.
+/// 
+/// In most cases, new([Buffer]) (or just declaring a [Buffer] variable) is
+/// sufficient to initialize a [Buffer].
 pub fn NewBuffer(mut buf: Slice<byte>) -> Ref<Buffer>
 
+/// NewBufferString creates and initializes a new [Buffer] using string s as its
+/// initial contents. It is intended to prepare a buffer to read an existing
+/// string.
+/// 
+/// In most cases, new([Buffer]) (or just declaring a [Buffer] variable) is
+/// sufficient to initialize a [Buffer].
 pub fn NewBufferString(s: string) -> Ref<Buffer>
 
+/// NewReader returns a new [Reader] reading from b.
 pub fn NewReader(b: Slice<byte>) -> Ref<Reader>
 
 /// Repeat returns a new byte slice consisting of count copies of b.

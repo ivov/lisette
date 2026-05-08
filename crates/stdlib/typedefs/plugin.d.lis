@@ -3,6 +3,9 @@
 // Go: 1.25.5
 // Lisette: 0.1.24
 
+/// Open opens a Go plugin.
+/// If a path has already been opened, then the existing *[Plugin] is returned.
+/// It is safe for concurrent use by multiple goroutines.
 pub fn Open(path: string) -> Result<Ref<Plugin>, error>
 
 /// Plugin is a loaded Go plugin.

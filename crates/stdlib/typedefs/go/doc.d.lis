@@ -8,13 +8,54 @@ import "go:go/doc/comment"
 import "go:go/token"
 import "go:io"
 
+/// Examples returns the examples found in testFiles, sorted by Name field.
+/// The Order fields record the order in which the examples were encountered.
+/// The Suffix field is not populated when Examples is called directly, it is
+/// only populated by [NewFromFiles] for examples it finds in _test.go files.
+/// 
+/// Playable Examples must be in a package whose name ends in "_test".
+/// An Example is "playable" (the Play field is non-nil) in either of these
+/// circumstances:
+///   - The example function is self-contained: the function references only
+///     identifiers from other packages (or predeclared identifiers, such as
+///     "int") and the test file does not include a dot import.
+///   - The entire test file is the example: the file contains exactly one
+///     example function, zero test, fuzz test, or benchmark function, and at
+///     least one top-level function, type, variable, or constant declaration
+///     other than the example function.
 pub fn Examples(testFiles: VarArgs<Ref<ast.File>>) -> Slice<Ref<Example>>
 
 /// IsPredeclared reports whether s is a predeclared identifier.
 pub fn IsPredeclared(s: string) -> bool
 
+/// New computes the package documentation for the given package AST.
+/// New takes ownership of the AST pkg and may edit or overwrite it.
+/// To have the [Examples] fields populated, use [NewFromFiles] and include
+/// the package's _test.go files.
 pub fn New(pkg: Ref<ast.Package>, importPath: string, mode: Mode) -> Ref<Package>
 
+/// NewFromFiles computes documentation for a package.
+/// 
+/// The package is specified by a list of *ast.Files and corresponding
+/// file set, which must not be nil.
+/// 
+/// NewFromFiles uses all provided files when computing documentation,
+/// so it is the caller's responsibility to provide only the files that
+/// match the desired build context. "go/build".Context.MatchFile can
+/// be used for determining whether a file matches a build context with
+/// the desired GOOS and GOARCH values, and other build constraints.
+/// The import path of the package is specified by importPath.
+/// 
+/// Examples found in _test.go files are associated with the corresponding
+/// type, function, method, or the package, based on their name.
+/// If the example has a suffix in its name, it is set in the
+/// [Example.Suffix] field. [Examples] with malformed names are skipped.
+/// 
+/// Optionally, a single extra argument of type [Mode] can be provided to
+/// control low-level aspects of the documentation extraction behavior.
+/// 
+/// NewFromFiles takes ownership of the AST files and may edit them,
+/// unless the PreserveAST Mode bit is on.
 pub fn NewFromFiles(
   fset: Ref<token.FileSet>,
   files: Slice<Ref<ast.File>>,

@@ -7,10 +7,23 @@ import "go:io"
 import "go:io/fs"
 import "go:time"
 
+/// FileInfoHeader creates a partially-populated [Header] from fi.
+/// If fi describes a symlink, FileInfoHeader records link as the link target.
+/// If fi describes a directory, a slash is appended to the name.
+/// 
+/// Since fs.FileInfo's Name method only returns the base name of
+/// the file it describes, it may be necessary to modify Header.Name
+/// to provide the full path name of the file.
+/// 
+/// If fi implements [FileInfoNames]
+/// Header.Gname and Header.Uname
+/// are provided by the methods of the interface.
 pub fn FileInfoHeader(fi: fs.FileInfo, link: string) -> Result<Ref<Header>, error>
 
+/// NewReader creates a new [Reader] reading from r.
 pub fn NewReader(r: io.Reader) -> Ref<Reader>
 
+/// NewWriter creates a new Writer writing to w.
 pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 
 /// FileInfoNames extends [fs.FileInfo].

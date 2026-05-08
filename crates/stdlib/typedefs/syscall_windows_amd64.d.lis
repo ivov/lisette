@@ -1051,6 +1051,7 @@ pub fn Mkdir(path: string, mode: uint32) -> Result<(), error>
 
 pub fn MoveFile(from: Ref<uint16>, to: Ref<uint16>) -> Result<(), error>
 
+/// MustLoadDLL is like [LoadDLL] but panics if load operation fails.
 pub fn MustLoadDLL(name: string) -> Ref<DLL>
 
 pub fn NetApiBufferFree(buf: Ref<byte>) -> Result<(), error>
@@ -1084,6 +1085,7 @@ pub fn NewCallback(fn_: Unknown) -> uint
 /// Between NewCallback and NewCallbackCDecl, at least 1024 callbacks can always be created.
 pub fn NewCallbackCDecl(fn_: Unknown) -> uint
 
+/// NewLazyDLL creates new [LazyDLL] associated with [DLL] file.
 pub fn NewLazyDLL(name: string) -> Ref<LazyDLL>
 
 pub fn NsecToFiletime(nsec: int64) -> Filetime

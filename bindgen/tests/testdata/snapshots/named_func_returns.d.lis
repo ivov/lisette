@@ -9,6 +9,7 @@ pub fn MakeRaw() -> Option<fn(int) -> bool>
 
 pub fn WithDisabled() -> BindingOpt
 
+/// Factory functions that return BindingOpt must bind as BindingOpt, not Option<BindingOpt>.
 pub fn WithKeys(keys: VarArgs<string>) -> BindingOpt
 
 pub type Binding

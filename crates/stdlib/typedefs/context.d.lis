@@ -24,6 +24,10 @@ import "go:time"
 /// AfterFunc will use it to schedule the call.
 pub fn AfterFunc(ctx: Context, f: fn() -> ()) -> fn() -> bool
 
+/// Background returns a non-nil, empty [Context]. It is never canceled, has no
+/// values, and has no deadline. It is typically used by the main function,
+/// initialization, and tests, and as the top-level Context for incoming
+/// requests.
 pub fn Background() -> Context
 
 /// Cause returns a non-nil error explaining why c was canceled.
@@ -34,6 +38,10 @@ pub fn Background() -> Context
 /// Cause returns nil if c has not been canceled yet.
 pub fn Cause(c: Context) -> Option<error>
 
+/// TODO returns a non-nil, empty [Context]. Code should use context.TODO when
+/// it's unclear which Context to use or it is not yet available (because the
+/// surrounding function has not yet been extended to accept a Context
+/// parameter).
 pub fn TODO() -> Context
 
 /// WithCancel returns a derived context that points to the parent context
@@ -91,8 +99,25 @@ pub fn WithTimeout(parent: Context, timeout: time.Duration) -> (Context, CancelF
 /// not set the cause.
 pub fn WithTimeoutCause(parent: Context, timeout: time.Duration, cause: error) -> (Context, CancelFunc)
 
+/// WithValue returns a derived context that points to the parent Context.
+/// In the derived context, the value associated with key is val.
+/// 
+/// Use context Values only for request-scoped data that transits processes and
+/// APIs, not for passing optional parameters to functions.
+/// 
+/// The provided key must be comparable and should not be of type
+/// string or any other built-in type to avoid collisions between
+/// packages using context. Users of WithValue should define their own
+/// types for keys. To avoid allocating when assigning to an
+/// interface{}, context keys often have concrete type
+/// struct{}. Alternatively, exported context key variables' static
+/// type should be a pointer or interface.
 pub fn WithValue(parent: Context, key: Unknown, val: Unknown) -> Context
 
+/// WithoutCancel returns a derived context that points to the parent context
+/// and is not canceled when parent is canceled.
+/// The returned context returns no Deadline or Err, and its Done channel is nil.
+/// Calling [Cause] on the returned context returns nil.
 pub fn WithoutCancel(parent: Context) -> Context
 
 /// A CancelCauseFunc behaves like a [CancelFunc] but additionally sets the cancellation cause.

@@ -9,6 +9,8 @@ import "go:net"
 import "go:net/textproto"
 import "go:time"
 
+/// ContextClientTrace returns the [ClientTrace] associated with the
+/// provided context. If none, it returns nil.
 pub fn ContextClientTrace(ctx: context.Context) -> Option<Ref<ClientTrace>>
 
 /// WithClientTrace returns a new context based on the provided parent

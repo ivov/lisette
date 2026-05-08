@@ -31,6 +31,8 @@ pub fn IsGoBuild(line: string) -> bool
 /// It only checks the prefix of the text, not that the expression itself parses.
 pub fn IsPlusBuild(line: string) -> bool
 
+/// Parse parses a single build constraint line of the form “//go:build ...” or “// +build ...”
+/// and returns the corresponding boolean expression.
 pub fn Parse(line: string) -> Result<Expr, error>
 
 /// PlusBuildLines returns a sequence of “// +build” lines that evaluate to the build expression x.

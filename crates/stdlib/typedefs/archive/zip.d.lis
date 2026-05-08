@@ -7,12 +7,39 @@ import "go:io"
 import "go:io/fs"
 import "go:time"
 
+/// FileInfoHeader creates a partially-populated [FileHeader] from an
+/// fs.FileInfo.
+/// Because fs.FileInfo's Name method returns only the base name of
+/// the file it describes, it may be necessary to modify the Name field
+/// of the returned header to provide the full path name of the file.
+/// If compression is desired, callers should set the FileHeader.Method
+/// field; it is unset by default.
 pub fn FileInfoHeader(fi: fs.FileInfo) -> Result<Ref<FileHeader>, error>
 
+/// NewReader returns a new [Reader] reading from r, which is assumed to
+/// have the given size in bytes.
+/// 
+/// If any file inside the archive uses a non-local name
+/// (as defined by [filepath.IsLocal]) or a name containing backslashes
+/// and the GODEBUG environment variable contains `zipinsecurepath=0`,
+/// NewReader returns the reader with an [ErrInsecurePath] error.
+/// A future version of Go may introduce this behavior by default.
+/// Programs that want to accept non-local names can ignore
+/// the [ErrInsecurePath] error and use the returned reader.
 pub fn NewReader(r: io.ReaderAt, size: int64) -> Result<Ref<Reader>, error>
 
+/// NewWriter returns a new [Writer] writing a zip file to w.
 pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 
+/// OpenReader will open the Zip file specified by name and return a ReadCloser.
+/// 
+/// If any file inside the archive uses a non-local name
+/// (as defined by [filepath.IsLocal]) or a name containing backslashes
+/// and the GODEBUG environment variable contains `zipinsecurepath=0`,
+/// OpenReader returns the reader with an ErrInsecurePath error.
+/// A future version of Go may introduce this behavior by default.
+/// Programs that want to accept non-local names can ignore
+/// the ErrInsecurePath error and use the returned reader.
 pub fn OpenReader(name: string) -> Result<Ref<ReadCloser>, error>
 
 /// RegisterCompressor registers custom compressors for a specified method ID.

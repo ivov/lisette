@@ -6,8 +6,10 @@
 #[go(array_return)]
 pub fn ComputeDigest() -> Slice<byte>
 
+/// Function returning alias
 pub fn GetMap() -> Map<string, int>
 
+/// Function using type aliases
 pub fn TakeAlias(s: string) -> Slice<int>
 
 pub type AliasIntSlice = Slice<int>

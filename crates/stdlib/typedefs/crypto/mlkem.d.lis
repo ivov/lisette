@@ -3,16 +3,28 @@
 // Go: 1.25.5
 // Lisette: 0.1.24
 
+/// GenerateKey1024 generates a new decapsulation key, drawing random bytes from
+/// the default crypto/rand source. The decapsulation key must be kept secret.
 pub fn GenerateKey1024() -> Result<Ref<DecapsulationKey1024>, error>
 
+/// GenerateKey768 generates a new decapsulation key, drawing random bytes from
+/// the default crypto/rand source. The decapsulation key must be kept secret.
 pub fn GenerateKey768() -> Result<Ref<DecapsulationKey768>, error>
 
+/// NewDecapsulationKey1024 expands a decapsulation key from a 64-byte seed in the
+/// "d || z" form. The seed must be uniformly random.
 pub fn NewDecapsulationKey1024(seed: Slice<byte>) -> Result<Ref<DecapsulationKey1024>, error>
 
+/// NewDecapsulationKey768 expands a decapsulation key from a 64-byte seed in the
+/// "d || z" form. The seed must be uniformly random.
 pub fn NewDecapsulationKey768(seed: Slice<byte>) -> Result<Ref<DecapsulationKey768>, error>
 
+/// NewEncapsulationKey1024 parses an encapsulation key from its encoded form. If
+/// the encapsulation key is not valid, NewEncapsulationKey1024 returns an error.
 pub fn NewEncapsulationKey1024(encapsulationKey: Slice<byte>) -> Result<Ref<EncapsulationKey1024>, error>
 
+/// NewEncapsulationKey768 parses an encapsulation key from its encoded form. If
+/// the encapsulation key is not valid, NewEncapsulationKey768 returns an error.
 pub fn NewEncapsulationKey768(encapsulationKey: Slice<byte>) -> Result<Ref<EncapsulationKey768>, error>
 
 /// DecapsulationKey1024 is the secret key used to decapsulate a shared key

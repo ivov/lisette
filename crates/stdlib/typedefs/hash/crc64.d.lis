@@ -9,6 +9,8 @@ import "go:hash"
 /// using the polynomial represented by the [Table].
 pub fn Checksum(data: Slice<byte>, tab: Ref<Table>) -> uint64
 
+/// MakeTable returns a [Table] constructed from the specified polynomial.
+/// The contents of this [Table] must not be modified.
 pub fn MakeTable(poly: uint64) -> Ref<Table>
 
 /// New creates a new hash.Hash64 computing the CRC-64 checksum using the

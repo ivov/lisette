@@ -3,6 +3,7 @@
 // Go: 1.25.5
 // Lisette: 0.1.24
 
+/// New creates a ring of n elements.
 pub fn New(n: int) -> Ref<Ring>
 
 /// A Ring is an element of a circular list, or ring.

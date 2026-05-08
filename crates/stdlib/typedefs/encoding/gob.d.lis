@@ -6,8 +6,12 @@
 import "go:io"
 import "go:reflect"
 
+/// NewDecoder returns a new decoder that reads from the [io.Reader].
+/// If r does not also implement [io.ByteReader], it will be wrapped in a
+/// [bufio.Reader].
 pub fn NewDecoder(r: io.Reader) -> Ref<Decoder>
 
+/// NewEncoder returns a new encoder that will transmit on the [io.Writer].
 pub fn NewEncoder(w: io.Writer) -> Ref<Encoder>
 
 /// Register records a type, identified by a value for that type, under its

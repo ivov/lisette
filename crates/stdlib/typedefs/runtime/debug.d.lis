@@ -12,11 +12,20 @@ import "go:time"
 /// returns memory to the operating system in a background task.)
 pub fn FreeOSMemory()
 
+/// ParseBuildInfo parses the string returned by [*BuildInfo.String],
+/// restoring the original BuildInfo,
+/// except that the GoVersion field is not set.
+/// Programs should normally not call this function,
+/// but instead call [ReadBuildInfo], [debug/buildinfo.ReadFile],
+/// or [debug/buildinfo.Read].
 pub fn ParseBuildInfo(data: string) -> Result<Ref<BuildInfo>, error>
 
 /// PrintStack prints to standard error the stack trace returned by runtime.Stack.
 pub fn PrintStack()
 
+/// ReadBuildInfo returns the build information embedded
+/// in the running binary. The information is available only
+/// in binaries built with module support.
 #[go(comma_ok)]
 pub fn ReadBuildInfo() -> Option<Ref<BuildInfo>>
 

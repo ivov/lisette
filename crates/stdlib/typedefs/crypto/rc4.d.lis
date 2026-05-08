@@ -3,6 +3,8 @@
 // Go: 1.25.5
 // Lisette: 0.1.24
 
+/// NewCipher creates and returns a new [Cipher]. The key argument should be the
+/// RC4 key, at least 1 byte and at most 256 bytes.
 pub fn NewCipher(key: Slice<byte>) -> Result<Ref<Cipher>, error>
 
 /// A Cipher is an instance of RC4 using a particular key.

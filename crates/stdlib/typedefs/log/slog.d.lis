@@ -56,12 +56,31 @@ pub const LevelInfo: Level = 0
 
 pub const LevelWarn: Level = 4
 
+/// Any returns an Attr for the supplied value.
+/// See [AnyValue] for how values are treated.
 pub fn Any(key: string, value: Unknown) -> Attr
 
+/// AnyValue returns a [Value] for the supplied value.
+/// 
+/// If the supplied value is of type Value, it is returned
+/// unmodified.
+/// 
+/// Given a value of one of Go's predeclared string, bool, or
+/// (non-complex) numeric types, AnyValue returns a Value of kind
+/// [KindString], [KindBool], [KindUint64], [KindInt64], or [KindFloat64].
+/// The width of the original numeric type is not preserved.
+/// 
+/// Given a [time.Time] or [time.Duration] value, AnyValue returns a Value of kind
+/// [KindTime] or [KindDuration]. The monotonic time is not preserved.
+/// 
+/// For nil, or values of all other types, including named types whose
+/// underlying type is numeric, AnyValue returns a value of kind [KindAny].
 pub fn AnyValue(v: Unknown) -> Value
 
+/// Bool returns an Attr for a bool.
 pub fn Bool(key: string, v: bool) -> Attr
 
+/// BoolValue returns a [Value] for a bool.
 pub fn BoolValue(v: bool) -> Value
 
 /// Debug calls [Logger.Debug] on the default logger.
@@ -70,10 +89,13 @@ pub fn Debug(msg: string, args: VarArgs<Unknown>)
 /// DebugContext calls [Logger.DebugContext] on the default logger.
 pub fn DebugContext(ctx: context.Context, msg: string, args: VarArgs<Unknown>)
 
+/// Default returns the default [Logger].
 pub fn Default() -> Ref<Logger>
 
+/// Duration returns an Attr for a [time.Duration].
 pub fn Duration(key: string, v: time.Duration) -> Attr
 
+/// DurationValue returns a [Value] for a [time.Duration].
 pub fn DurationValue(v: time.Duration) -> Value
 
 /// Error calls [Logger.Error] on the default logger.
@@ -82,14 +104,30 @@ pub fn Error(msg: string, args: VarArgs<Unknown>)
 /// ErrorContext calls [Logger.ErrorContext] on the default logger.
 pub fn ErrorContext(ctx: context.Context, msg: string, args: VarArgs<Unknown>)
 
+/// Float64 returns an Attr for a floating-point number.
 pub fn Float64(key: string, v: float64) -> Attr
 
+/// Float64Value returns a [Value] for a floating-point number.
 pub fn Float64Value(v: float64) -> Value
 
+/// Group returns an Attr for a Group [Value].
+/// The first argument is the key; the remaining arguments
+/// are converted to Attrs as in [Logger.Log].
+/// 
+/// Use Group to collect several key-value pairs under a single
+/// key on a log line, or as the result of LogValue
+/// in order to log a single value as multiple Attrs.
 pub fn Group(key: string, args: VarArgs<Unknown>) -> Attr
 
+/// GroupAttrs returns an Attr for a Group [Value]
+/// consisting of the given Attrs.
+/// 
+/// GroupAttrs is a more efficient version of [Group]
+/// that accepts only [Attr] values.
 pub fn GroupAttrs(key: string, attrs: VarArgs<Attr>) -> Attr
 
+/// GroupValue returns a new [Value] for a list of Attrs.
+/// The caller must not subsequently mutate the argument slice.
 pub fn GroupValue(as_: VarArgs<Attr>) -> Value
 
 /// Info calls [Logger.Info] on the default logger.
@@ -98,12 +136,17 @@ pub fn Info(msg: string, args: VarArgs<Unknown>)
 /// InfoContext calls [Logger.InfoContext] on the default logger.
 pub fn InfoContext(ctx: context.Context, msg: string, args: VarArgs<Unknown>)
 
+/// Int converts an int to an int64 and returns
+/// an Attr with that value.
 pub fn Int(key: string, value: int) -> Attr
 
+/// Int64 returns an Attr for an int64.
 pub fn Int64(key: string, value: int64) -> Attr
 
+/// Int64Value returns a [Value] for an int64.
 pub fn Int64Value(v: int64) -> Value
 
+/// IntValue returns a [Value] for an int.
 pub fn IntValue(v: int) -> Value
 
 /// Log calls [Logger.Log] on the default logger.
@@ -122,8 +165,12 @@ pub fn LogAttrs(
   attrs: VarArgs<Attr>,
 )
 
+/// New creates a new Logger with the given non-nil Handler.
 pub fn New(h: Handler) -> Ref<Logger>
 
+/// NewJSONHandler creates a [JSONHandler] that writes to w,
+/// using the given options.
+/// If opts is nil, the default options are used.
 pub fn NewJSONHandler(w: io.Writer, opts: Ref<HandlerOptions>) -> Ref<JSONHandler>
 
 /// NewLogLogger returns a new [log.Logger] such that each call to its Output method
@@ -131,8 +178,16 @@ pub fn NewJSONHandler(w: io.Writer, opts: Ref<HandlerOptions>) -> Ref<JSONHandle
 /// the older log API to newer structured logging handlers.
 pub fn NewLogLogger(h: Handler, level: Level) -> Ref<log.Logger>
 
+/// NewRecord creates a [Record] from the given arguments.
+/// Use [Record.AddAttrs] to add attributes to the Record.
+/// 
+/// NewRecord is intended for logging APIs that want to support a [Handler] as
+/// a backend.
 pub fn NewRecord(t: time.Time, level: Level, msg: string, pc: uint) -> Record
 
+/// NewTextHandler creates a [TextHandler] that writes to w,
+/// using the given options.
+/// If opts is nil, the default options are used.
 pub fn NewTextHandler(w: io.Writer, opts: Ref<HandlerOptions>) -> Ref<TextHandler>
 
 /// SetDefault makes l the default [Logger], which is used by
@@ -142,18 +197,48 @@ pub fn NewTextHandler(w: io.Writer, opts: Ref<HandlerOptions>) -> Ref<TextHandle
 /// at a level controlled by [SetLogLoggerLevel].
 pub fn SetDefault(l: Ref<Logger>)
 
+/// SetLogLoggerLevel controls the level for the bridge to the [log] package.
+/// 
+/// Before [SetDefault] is called, slog top-level logging functions call the default [log.Logger].
+/// In that mode, SetLogLoggerLevel sets the minimum level for those calls.
+/// By default, the minimum level is Info, so calls to [Debug]
+/// (as well as top-level logging calls at lower levels)
+/// will not be passed to the log.Logger. After calling
+/// 
+/// 	slog.SetLogLoggerLevel(slog.LevelDebug)
+/// 
+/// calls to [Debug] will be passed to the log.Logger.
+/// 
+/// After [SetDefault] is called, calls to the default [log.Logger] are passed to the
+/// slog default handler. In that mode,
+/// SetLogLoggerLevel sets the level at which those calls are logged.
+/// That is, after calling
+/// 
+/// 	slog.SetLogLoggerLevel(slog.LevelDebug)
+/// 
+/// A call to [log.Printf] will result in output at level [LevelDebug].
+/// 
+/// SetLogLoggerLevel returns the previous value.
 pub fn SetLogLoggerLevel(level: Level) -> Level
 
+/// String returns an Attr for a string value.
 pub fn String(key: string, value: string) -> Attr
 
+/// StringValue returns a new [Value] for a string.
 pub fn StringValue(value: string) -> Value
 
+/// Time returns an Attr for a [time.Time].
+/// It discards the monotonic portion.
 pub fn Time(key: string, v: time.Time) -> Attr
 
+/// TimeValue returns a [Value] for a [time.Time].
+/// It discards the monotonic portion.
 pub fn TimeValue(v: time.Time) -> Value
 
+/// Uint64 returns an Attr for a uint64.
 pub fn Uint64(key: string, v: uint64) -> Attr
 
+/// Uint64Value returns a [Value] for a uint64.
 pub fn Uint64Value(v: uint64) -> Value
 
 /// Warn calls [Logger.Warn] on the default logger.
@@ -162,6 +247,7 @@ pub fn Warn(msg: string, args: VarArgs<Unknown>)
 /// WarnContext calls [Logger.WarnContext] on the default logger.
 pub fn WarnContext(ctx: context.Context, msg: string, args: VarArgs<Unknown>)
 
+/// With calls [Logger.With] on the default logger.
 pub fn With(args: VarArgs<Unknown>) -> Ref<Logger>
 
 /// An Attr is a key-value pair.

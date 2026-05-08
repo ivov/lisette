@@ -6,6 +6,7 @@
 import "go:io"
 import "go:reflect"
 
+/// CopyToken returns a copy of a Token.
 pub fn CopyToken(t: Token) -> Token
 
 /// Escape is like [EscapeText] but omits the error return value.
@@ -80,10 +81,15 @@ pub fn Marshal(v: Unknown) -> Result<Slice<byte>, error>
 /// copies of indent according to the nesting depth.
 pub fn MarshalIndent(v: Unknown, prefix: string, indent: string) -> Result<Slice<byte>, error>
 
+/// NewDecoder creates a new XML parser reading from r.
+/// If r does not implement [io.ByteReader], NewDecoder will
+/// do its own buffering.
 pub fn NewDecoder(r: io.Reader) -> Ref<Decoder>
 
+/// NewEncoder returns a new encoder that writes to w.
 pub fn NewEncoder(w: io.Writer) -> Ref<Encoder>
 
+/// NewTokenDecoder creates a new XML parser using an underlying token stream.
 pub fn NewTokenDecoder(t: TokenReader) -> Ref<Decoder>
 
 /// Unmarshal parses the XML-encoded data and stores the result in

@@ -27,38 +27,66 @@ pub const YCbCrSubsampleRatio440: YCbCrSubsampleRatio = 3
 
 pub const YCbCrSubsampleRatio444: YCbCrSubsampleRatio = 0
 
+/// Decode decodes an image that has been encoded in a registered format.
+/// The string returned is the format name used during format registration.
+/// Format registration is typically done by an init function in the codec-
+/// specific package.
 pub fn Decode(r: io.Reader) -> Result<(Image, string), error>
 
+/// DecodeConfig decodes the color model and dimensions of an image that has
+/// been encoded in a registered format. The string returned is the format name
+/// used during format registration. Format registration is typically done by
+/// an init function in the codec-specific package.
 pub fn DecodeConfig(r: io.Reader) -> Result<(Config, string), error>
 
+/// NewAlpha returns a new [Alpha] image with the given bounds.
 pub fn NewAlpha(r: Rectangle) -> Ref<Alpha>
 
+/// NewAlpha16 returns a new [Alpha16] image with the given bounds.
 pub fn NewAlpha16(r: Rectangle) -> Ref<Alpha16>
 
+/// NewCMYK returns a new CMYK image with the given bounds.
 pub fn NewCMYK(r: Rectangle) -> Ref<CMYK>
 
+/// NewGray returns a new [Gray] image with the given bounds.
 pub fn NewGray(r: Rectangle) -> Ref<Gray>
 
+/// NewGray16 returns a new [Gray16] image with the given bounds.
 pub fn NewGray16(r: Rectangle) -> Ref<Gray16>
 
+/// NewNRGBA returns a new [NRGBA] image with the given bounds.
 pub fn NewNRGBA(r: Rectangle) -> Ref<NRGBA>
 
+/// NewNRGBA64 returns a new [NRGBA64] image with the given bounds.
 pub fn NewNRGBA64(r: Rectangle) -> Ref<NRGBA64>
 
+/// NewNYCbCrA returns a new [NYCbCrA] image with the given bounds and subsample
+/// ratio.
 pub fn NewNYCbCrA(r: Rectangle, subsampleRatio: YCbCrSubsampleRatio) -> Ref<NYCbCrA>
 
+/// NewPaletted returns a new [Paletted] image with the given width, height and
+/// palette.
 pub fn NewPaletted(r: Rectangle, p: color.Palette) -> Ref<Paletted>
 
+/// NewRGBA returns a new [RGBA] image with the given bounds.
 pub fn NewRGBA(r: Rectangle) -> Ref<RGBA>
 
+/// NewRGBA64 returns a new [RGBA64] image with the given bounds.
 pub fn NewRGBA64(r: Rectangle) -> Ref<RGBA64>
 
+/// NewUniform returns a new [Uniform] image of the given color.
 pub fn NewUniform(c: color.Color) -> Ref<Uniform>
 
+/// NewYCbCr returns a new YCbCr image with the given bounds and subsample
+/// ratio.
 pub fn NewYCbCr(r: Rectangle, subsampleRatio: YCbCrSubsampleRatio) -> Ref<YCbCr>
 
+/// Pt is shorthand for [Point]{X, Y}.
 pub fn Pt(x: int, y: int) -> Point
 
+/// Rect is shorthand for [Rectangle]{Pt(x0, y0), [Pt](x1, y1)}. The returned
+/// rectangle has minimum and maximum coordinates swapped if necessary so that
+/// it is well-formed.
 pub fn Rect(x0: int, y0: int, x1: int, y1: int) -> Rectangle
 
 /// RegisterFormat registers an image format for use by [Decode].

@@ -92,8 +92,19 @@ pub const LOG_UUCP: Priority = 64
 
 pub const LOG_WARNING: Priority = 4
 
+/// Dial establishes a connection to a log daemon by connecting to
+/// address raddr on the specified network. Each write to the returned
+/// writer sends a log message with the facility and severity
+/// (from priority) and tag. If tag is empty, the [os.Args][0] is used.
+/// If network is empty, Dial will connect to the local syslog server.
+/// Otherwise, see the documentation for net.Dial for valid values
+/// of network and raddr.
 pub fn Dial(network: string, raddr: string, priority: Priority, tag: string) -> Result<Ref<Writer>, error>
 
+/// New establishes a new connection to the system log daemon. Each
+/// write to the returned writer sends a log message with the given
+/// priority (a combination of the syslog facility and severity) and
+/// prefix tag. If tag is empty, the [os.Args][0] is used.
 pub fn New(priority: Priority, tag: string) -> Result<Ref<Writer>, error>
 
 /// NewLogger creates a [log.Logger] whose output is written to the

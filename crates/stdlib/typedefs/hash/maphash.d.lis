@@ -20,6 +20,7 @@ pub fn Bytes(seed: Seed, b: Slice<byte>) -> uint64
 /// If v != v, then the resulting hash is randomly distributed.
 pub fn Comparable<T: Comparable>(seed: Seed, v: T) -> uint64
 
+/// MakeSeed returns a new random seed.
 pub fn MakeSeed() -> Seed
 
 /// String returns the hash of s with the given seed.

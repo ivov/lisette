@@ -43,10 +43,15 @@ pub const ToZero: RoundingMode = 2
 /// The y argument must be an odd integer.
 pub fn Jacobi(x: Ref<Int>, y: Ref<Int>) -> int
 
+/// NewFloat allocates and returns a new [Float] set to x,
+/// with precision 53 and rounding mode [ToNearestEven].
+/// NewFloat panics with [ErrNaN] if x is a NaN.
 pub fn NewFloat(x: float64) -> Ref<Float>
 
+/// NewInt allocates and returns a new [Int] set to x.
 pub fn NewInt(x: int64) -> Ref<Int>
 
+/// NewRat creates a new [Rat] with numerator a and denominator b.
 pub fn NewRat(a: int64, b: int64) -> Ref<Rat>
 
 /// ParseFloat is like f.Parse(s, base) with f set to the given precision

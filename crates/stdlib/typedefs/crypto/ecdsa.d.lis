@@ -9,10 +9,43 @@ import "go:crypto/elliptic"
 import "go:io"
 import "go:math/big"
 
+/// GenerateKey generates a new ECDSA private key for the specified curve.
+/// 
+/// Most applications should use [crypto/rand.Reader] as rand. Note that the
+/// returned key does not depend deterministically on the bytes read from rand,
+/// and may change between calls and/or between versions.
 pub fn GenerateKey(c: elliptic.Curve, rand: io.Reader) -> Result<Ref<PrivateKey>, error>
 
+/// ParseRawPrivateKey parses a private key encoded as a fixed-length big-endian
+/// integer, according to SEC 1, Version 2.0, Section 2.3.6 (sometimes referred
+/// to as the raw format). It returns an error if the value is not reduced modulo
+/// the curve's order, or if it's zero.
+/// 
+/// curve must be one of [elliptic.P224], [elliptic.P256], [elliptic.P384], or
+/// [elliptic.P521], or ParseRawPrivateKey returns an error.
+/// 
+/// ParseRawPrivateKey accepts the same format as [ecdh.Curve.NewPrivateKey] does
+/// for NIST curves, but returns a [PrivateKey] instead of an [ecdh.PrivateKey].
+/// 
+/// Note that private keys are more commonly encoded in ASN.1 or PKCS#8 format,
+/// which can be parsed with [crypto/x509.ParseECPrivateKey] or
+/// [crypto/x509.ParsePKCS8PrivateKey] (and [encoding/pem]).
 pub fn ParseRawPrivateKey(curve: elliptic.Curve, data: Slice<byte>) -> Result<Ref<PrivateKey>, error>
 
+/// ParseUncompressedPublicKey parses a public key encoded as an uncompressed
+/// point according to SEC 1, Version 2.0, Section 2.3.3 (also known as the X9.62
+/// uncompressed format). It returns an error if the point is not in uncompressed
+/// form, is not on the curve, or is the point at infinity.
+/// 
+/// curve must be one of [elliptic.P224], [elliptic.P256], [elliptic.P384], or
+/// [elliptic.P521], or ParseUncompressedPublicKey returns an error.
+/// 
+/// ParseUncompressedPublicKey accepts the same format as
+/// [ecdh.Curve.NewPublicKey] does for NIST curves, but returns a [PublicKey]
+/// instead of an [ecdh.PublicKey].
+/// 
+/// Note that public keys are more commonly encoded in DER (or PEM) format, which
+/// can be parsed with [crypto/x509.ParsePKIXPublicKey] (and [encoding/pem]).
 pub fn ParseUncompressedPublicKey(curve: elliptic.Curve, data: Slice<byte>) -> Result<Ref<PublicKey>, error>
 
 /// Sign signs a hash (which should be the result of hashing a larger message)

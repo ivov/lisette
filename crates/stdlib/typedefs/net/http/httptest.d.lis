@@ -11,6 +11,7 @@ import "go:io"
 import "go:net"
 import "go:net/http"
 
+/// NewRecorder returns an initialized [ResponseRecorder].
 pub fn NewRecorder() -> Ref<ResponseRecorder>
 
 /// NewRequest wraps NewRequestWithContext using context.Background.
@@ -46,10 +47,20 @@ pub fn NewRequestWithContext(
   body: io.Reader,
 ) -> Ref<http.Request>
 
+/// NewServer starts and returns a new [Server].
+/// The caller should call Close when finished, to shut it down.
 pub fn NewServer(handler: http.Handler) -> Ref<Server>
 
+/// NewTLSServer starts and returns a new [Server] using TLS.
+/// The caller should call Close when finished, to shut it down.
 pub fn NewTLSServer(handler: http.Handler) -> Ref<Server>
 
+/// NewUnstartedServer returns a new [Server] but doesn't start it.
+/// 
+/// After changing its configuration, the caller should call Start or
+/// StartTLS.
+/// 
+/// The caller should call Close when finished, to shut it down.
 pub fn NewUnstartedServer(handler: http.Handler) -> Ref<Server>
 
 /// ResponseRecorder is an implementation of [http.ResponseWriter] that

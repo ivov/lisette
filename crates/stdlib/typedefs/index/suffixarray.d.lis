@@ -6,6 +6,8 @@
 import "go:io"
 import "go:regexp"
 
+/// New creates a new [Index] for data.
+/// [Index] creation time is O(N) for N = len(data).
 pub fn New(data: Slice<byte>) -> Ref<Index>
 
 /// Index implements a suffix array for fast substring search.

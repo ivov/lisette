@@ -126,8 +126,37 @@ pub fn EncryptPKCS1v15(
   msg: Slice<byte>,
 ) -> Result<Slice<byte>, error>
 
+/// GenerateKey generates a random RSA private key of the given bit size.
+/// 
+/// If bits is less than 1024, [GenerateKey] returns an error. See the "[Minimum
+/// key size]" section for further details.
+/// 
+/// Most applications should use [crypto/rand.Reader] as rand. Note that the
+/// returned key does not depend deterministically on the bytes read from rand,
+/// and may change between calls and/or between versions.
+/// 
+/// [Minimum key size]: https://pkg.go.dev/crypto/rsa#hdr-Minimum_key_size
 pub fn GenerateKey(random: io.Reader, bits: int) -> Result<Ref<PrivateKey>, error>
 
+/// GenerateMultiPrimeKey generates a multi-prime RSA keypair of the given bit
+/// size and the given random source.
+/// 
+/// Table 1 in "[On the Security of Multi-prime RSA]" suggests maximum numbers of
+/// primes for a given bit size.
+/// 
+/// Although the public keys are compatible (actually, indistinguishable) from
+/// the 2-prime case, the private keys are not. Thus it may not be possible to
+/// export multi-prime private keys in certain formats or to subsequently import
+/// them into other code.
+/// 
+/// This package does not implement CRT optimizations for multi-prime RSA, so the
+/// keys with more than two primes will have worse performance.
+/// 
+/// Deprecated: The use of this function with a number of primes different from
+/// two is not recommended for the above security, compatibility, and performance
+/// reasons. Use [GenerateKey] instead.
+/// 
+/// [On the Security of Multi-prime RSA]: http://www.cacr.math.uwaterloo.ca/techreports/2006/cacr2006-16.pdf
 pub fn GenerateMultiPrimeKey(random: io.Reader, nprimes: int, bits: int) -> Result<Ref<PrivateKey>, error>
 
 /// SignPKCS1v15 calculates the signature of hashed using

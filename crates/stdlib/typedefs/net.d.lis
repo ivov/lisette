@@ -10,6 +10,9 @@ import "go:os"
 import "go:syscall"
 import "go:time"
 
+/// CIDRMask returns an [IPMask] consisting of 'ones' 1 bits
+/// followed by 0s up to a total length of 'bits' bits.
+/// For a mask of this form, CIDRMask is the inverse of [IPMask.Size].
 pub fn CIDRMask(ones: int, bits: int) -> IPMask
 
 /// Dial connects to the address on the named network.
@@ -127,8 +130,12 @@ pub fn FileListener(f: Ref<os.File>) -> Result<Listener, error>
 /// Closing c does not affect f, and closing f does not affect c.
 pub fn FilePacketConn(f: Ref<os.File>) -> Result<PacketConn, error>
 
+/// IPv4 returns the IP address (in 16-byte form) of the
+/// IPv4 address a.b.c.d.
 pub fn IPv4(a: byte, b: byte, c: byte, d: byte) -> IP
 
+/// IPv4Mask returns the IP mask (in 4-byte form) of the
+/// IPv4 mask a.b.c.d.
 pub fn IPv4Mask(a: byte, b: byte, c: byte, d: byte) -> IPMask
 
 /// InterfaceAddrs returns a list of the system's unicast interface
@@ -381,6 +388,12 @@ pub fn LookupTXT(name: string) -> Result<Slice<string>, error>
 /// 192.0.2.1 and the network 192.0.2.0/24.
 pub fn ParseCIDR(s: string) -> Result<(IP, Ref<IPNet>), error>
 
+/// ParseIP parses s as an IP address, returning the result.
+/// The string s can be in IPv4 dotted decimal ("192.0.2.1"), IPv6
+/// ("2001:db8::68"), or IPv4-mapped IPv6 ("::ffff:192.0.2.1") form.
+/// If s is not a valid textual representation of an IP address,
+/// ParseIP returns nil. The returned address is always 16 bytes,
+/// IPv4 addresses are returned in IPv4-mapped IPv6 form.
 pub fn ParseIP(s: string) -> IP
 
 /// ParseMAC parses s as an IEEE 802 MAC-48, EUI-48, EUI-64, or a 20-octet
@@ -472,8 +485,14 @@ pub fn ResolveUnixAddr(network: string, address: string) -> Result<Ref<UnixAddr>
 /// and port results.
 pub fn SplitHostPort(hostport: string) -> Result<(string, string), error>
 
+/// TCPAddrFromAddrPort returns addr as a [TCPAddr]. If addr.IsValid() is false,
+/// then the returned TCPAddr will contain a nil IP field, indicating an
+/// address family-agnostic unspecified address.
 pub fn TCPAddrFromAddrPort(addr: netip.AddrPort) -> Ref<TCPAddr>
 
+/// UDPAddrFromAddrPort returns addr as a [UDPAddr]. If addr.IsValid() is false,
+/// then the returned UDPAddr will contain a nil IP field, indicating an
+/// address family-agnostic unspecified address.
 pub fn UDPAddrFromAddrPort(addr: netip.AddrPort) -> Ref<UDPAddr>
 
 /// Addr represents a network end point address.

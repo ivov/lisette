@@ -57,6 +57,7 @@ pub fn IntsAreSorted(x: Slice<int>) -> bool
 /// ergonomic and runs faster.
 pub fn IsSorted(data: Interface) -> bool
 
+/// Reverse returns the reverse order for data.
 pub fn Reverse(data: Interface) -> Interface
 
 /// Search uses binary search to find and return the smallest index i

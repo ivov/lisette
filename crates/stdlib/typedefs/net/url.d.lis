@@ -7,10 +7,31 @@
 /// the existing path of base and the resulting path cleaned of any ./ or ../ elements.
 pub fn JoinPath(base: string, elem: VarArgs<string>) -> Result<string, error>
 
+/// Parse parses a raw url into a [URL] structure.
+/// 
+/// The url may be relative (a path, without a host) or absolute
+/// (starting with a scheme). Trying to parse a hostname and path
+/// without a scheme is invalid but may not necessarily return an
+/// error, due to parsing ambiguities.
 pub fn Parse(rawURL: string) -> Result<Ref<URL>, error>
 
+/// ParseQuery parses the URL-encoded query string and returns
+/// a map listing the values specified for each key.
+/// ParseQuery always returns a non-nil map containing all the
+/// valid query parameters found; err describes the first decoding error
+/// encountered, if any.
+/// 
+/// Query is expected to be a list of key=value settings separated by ampersands.
+/// A setting without an equals sign is interpreted as a key set to an empty
+/// value.
+/// Settings containing a non-URL-encoded semicolon are considered invalid.
 pub fn ParseQuery(query: string) -> Result<Values, error>
 
+/// ParseRequestURI parses a raw url into a [URL] structure. It assumes that
+/// url was received in an HTTP request, so the url is interpreted
+/// only as an absolute URI or an absolute path.
+/// The string url is assumed not to have a #fragment suffix.
+/// (Web browsers strip #fragment before sending the URL to a web server.)
 pub fn ParseRequestURI(rawURL: string) -> Result<Ref<URL>, error>
 
 /// PathEscape escapes the string so it can be safely placed inside a [URL] path segment,
@@ -37,8 +58,18 @@ pub fn QueryEscape(s: string) -> string
 /// digits.
 pub fn QueryUnescape(s: string) -> Result<string, error>
 
+/// User returns a [Userinfo] containing the provided username
+/// and no password set.
 pub fn User(username: string) -> Ref<Userinfo>
 
+/// UserPassword returns a [Userinfo] containing the provided username
+/// and password.
+/// 
+/// This functionality should only be used with legacy web sites.
+/// RFC 2396 warns that interpreting Userinfo this way
+/// “is NOT RECOMMENDED, because the passing of authentication
+/// information in clear text (such as URI) has proven to be a
+/// security risk in almost every case where it has been used.”
 pub fn UserPassword(username: string, password: string) -> Ref<Userinfo>
 
 /// Error reports an error and the operation and URL that caused it.

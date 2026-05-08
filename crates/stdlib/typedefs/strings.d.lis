@@ -161,8 +161,16 @@ pub fn Lines(s: string) -> iter.Seq<string>
 /// dropped from the string with no replacement.
 pub fn Map(mapping: fn(rune) -> rune, s: string) -> string
 
+/// NewReader returns a new [Reader] reading from s.
+/// It is similar to [bytes.NewBufferString] but more efficient and non-writable.
 pub fn NewReader(s: string) -> Ref<Reader>
 
+/// NewReplacer returns a new [Replacer] from a list of old, new string
+/// pairs. Replacements are performed in the order they appear in the
+/// target string, without overlapping matches. The old string
+/// comparisons are done in argument order.
+/// 
+/// NewReplacer panics if given an odd number of arguments.
 pub fn NewReplacer(oldnew: VarArgs<string>) -> Ref<Replacer>
 
 /// Repeat returns a new string consisting of count copies of the string s.

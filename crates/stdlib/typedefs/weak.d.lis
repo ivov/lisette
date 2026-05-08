@@ -3,6 +3,7 @@
 // Go: 1.25.5
 // Lisette: 0.1.24
 
+/// Make creates a weak pointer from a pointer to some value of type T.
 pub fn Make<T>(ptr: Ref<T>) -> Pointer<T>
 
 /// Pointer is a weak pointer to a value of type T.

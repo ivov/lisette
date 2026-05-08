@@ -36,6 +36,11 @@ func getDocForObject(docPkg *doc.Package, name string) string {
 		if t.Name == name {
 			return cleanDoc(t.Doc)
 		}
+		for _, f := range t.Funcs {
+			if f.Name == name {
+				return cleanDoc(f.Doc)
+			}
+		}
 	}
 
 	for _, c := range docPkg.Consts {

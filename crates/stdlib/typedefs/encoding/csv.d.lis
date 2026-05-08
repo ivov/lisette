@@ -5,8 +5,10 @@
 
 import "go:io"
 
+/// NewReader returns a new Reader that reads from r.
 pub fn NewReader(r: io.Reader) -> Ref<Reader>
 
+/// NewWriter returns a new Writer that writes to w.
 pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 
 /// A ParseError is returned for parsing errors.

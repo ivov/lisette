@@ -7,13 +7,18 @@ import "go:io"
 import "go:mime"
 import "go:time"
 
+/// ParseAddress parses a single RFC 5322 address, e.g. "Barry Gibbs <bg@example.com>"
 pub fn ParseAddress(address: string) -> Result<Ref<Address>, error>
 
+/// ParseAddressList parses the given string as a list of addresses.
 pub fn ParseAddressList(list: string) -> Result<Slice<Ref<Address>>, error>
 
 /// ParseDate parses an RFC 5322 date string.
 pub fn ParseDate(date: string) -> Result<time.Time, error>
 
+/// ReadMessage reads a message from r.
+/// The headers are parsed, and the body of the message will be available
+/// for reading from msg.Body.
 pub fn ReadMessage(r: io.Reader) -> Result<Ref<Message>, error>
 
 /// Address represents a single mail address.

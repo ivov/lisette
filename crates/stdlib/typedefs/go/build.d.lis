@@ -14,8 +14,10 @@ import "go:io/fs"
 /// no longer vary by architecture; they are compile, link, .o, and a.out, respectively.
 pub fn ArchChar(goarch: string) -> Result<string, error>
 
+/// Import is shorthand for Default.Import.
 pub fn Import(path: string, srcDir: string, mode: ImportMode) -> Result<Ref<Package>, error>
 
+/// ImportDir is shorthand for Default.ImportDir.
 pub fn ImportDir(dir: string, mode: ImportMode) -> Result<Ref<Package>, error>
 
 /// IsLocalImport reports whether the import path is

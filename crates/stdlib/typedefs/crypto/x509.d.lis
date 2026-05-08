@@ -348,8 +348,10 @@ pub fn MarshalPKCS8PrivateKey(key: Unknown) -> Result<Slice<byte>, error>
 /// This kind of key is commonly encoded in PEM blocks of type "PUBLIC KEY".
 pub fn MarshalPKIXPublicKey(pub_: Unknown) -> Result<Slice<byte>, error>
 
+/// NewCertPool returns a new, empty CertPool.
 pub fn NewCertPool() -> Ref<CertPool>
 
+/// OIDFromInts creates a new OID using ints, each integer is a separate component.
 pub fn OIDFromInts(oid: Slice<uint64>) -> Result<OID, error>
 
 /// ParseCRL parses a CRL from the given bytes. It's often the case that PEM
@@ -360,10 +362,19 @@ pub fn OIDFromInts(oid: Slice<uint64>) -> Result<OID, error>
 /// Deprecated: Use [ParseRevocationList] instead.
 pub fn ParseCRL(crlBytes: Slice<byte>) -> Result<Ref<pkix.CertificateList>, error>
 
+/// ParseCertificate parses a single certificate from the given ASN.1 DER data.
+/// 
+/// Before Go 1.23, ParseCertificate accepted certificates with negative serial
+/// numbers. This behavior can be restored by including "x509negativeserial=1" in
+/// the GODEBUG environment variable.
 pub fn ParseCertificate(der: Slice<byte>) -> Result<Ref<Certificate>, error>
 
+/// ParseCertificateRequest parses a single certificate request from the
+/// given ASN.1 DER data.
 pub fn ParseCertificateRequest(asn1Data: Slice<byte>) -> Result<Ref<CertificateRequest>, error>
 
+/// ParseCertificates parses one or more certificates from the given ASN.1 DER
+/// data. The certificates must be concatenated with no intermediate padding.
 pub fn ParseCertificates(der: Slice<byte>) -> Result<Slice<Ref<Certificate>>, error>
 
 /// ParseDERCRL parses a DER encoded CRL from the given bytes.
@@ -376,6 +387,7 @@ pub fn ParseDERCRL(derBytes: Slice<byte>) -> Result<Ref<pkix.CertificateList>, e
 /// This kind of key is commonly encoded in PEM blocks of type "EC PRIVATE KEY".
 pub fn ParseECPrivateKey(der: Slice<byte>) -> Result<Ref<ecdsa.PrivateKey>, error>
 
+/// ParseOID parses a Object Identifier string, represented by ASCII numbers separated by dots.
 pub fn ParseOID(oid: string) -> Result<OID, error>
 
 /// ParsePKCS1PrivateKey parses an [RSA] private key in PKCS #1, ASN.1 DER form.
@@ -413,6 +425,8 @@ pub fn ParsePKCS8PrivateKey(der: Slice<byte>) -> Result<Unknown, error>
 /// This kind of key is commonly encoded in PEM blocks of type "PUBLIC KEY".
 pub fn ParsePKIXPublicKey(derBytes: Slice<byte>) -> Result<Unknown, error>
 
+/// ParseRevocationList parses a X509 v2 [Certificate] Revocation List from the given
+/// ASN.1 DER data.
 pub fn ParseRevocationList(der: Slice<byte>) -> Result<Ref<RevocationList>, error>
 
 /// SetFallbackRoots sets the roots to use during certificate verification, if no
@@ -430,6 +444,17 @@ pub fn ParseRevocationList(der: Slice<byte>) -> Result<Ref<RevocationList>, erro
 /// x509usefallbackroots=1 without calling SetFallbackRoots has no effect.
 pub fn SetFallbackRoots(roots: Ref<CertPool>)
 
+/// SystemCertPool returns a copy of the system cert pool.
+/// 
+/// On Unix systems other than macOS the environment variables SSL_CERT_FILE and
+/// SSL_CERT_DIR can be used to override the system default locations for the SSL
+/// certificate file and SSL certificate files directory, respectively. The
+/// latter can be a colon-separated list.
+/// 
+/// Any mutations to the returned pool are not written to disk and do not affect
+/// any other pool returned by SystemCertPool.
+/// 
+/// New changes in the system cert pool might not be reflected in subsequent calls.
 pub fn SystemCertPool() -> Result<Ref<CertPool>, error>
 
 /// CertPool is a set of certificates.

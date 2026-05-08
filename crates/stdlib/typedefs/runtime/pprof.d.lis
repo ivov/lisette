@@ -23,12 +23,26 @@ pub fn ForLabels(ctx: context.Context, f: fn(string, string) -> bool)
 /// whether that label exists.
 pub fn Label(ctx: context.Context, key: string) -> Option<string>
 
+/// Labels takes an even number of strings representing key-value pairs
+/// and makes a [LabelSet] containing them.
+/// A label overwrites a prior label with the same key.
+/// Currently only the CPU and goroutine profiles utilize any labels
+/// information.
+/// See https://golang.org/issue/23458 for details.
 pub fn Labels(args: VarArgs<string>) -> LabelSet
 
+/// Lookup returns the profile with the given name, or nil if no such profile exists.
 pub fn Lookup(name: string) -> Option<Ref<Profile>>
 
+/// NewProfile creates a new profile with the given name.
+/// If a profile with that name already exists, NewProfile panics.
+/// The convention is to use a 'import/path.' prefix to create
+/// separate name spaces for each package.
+/// For compatibility with various tools that read pprof data,
+/// profile names should not contain spaces.
 pub fn NewProfile(name: string) -> Ref<Profile>
 
+/// Profiles returns a slice of all the known profiles, sorted by name.
 pub fn Profiles() -> Slice<Ref<Profile>>
 
 /// SetGoroutineLabels sets the current goroutine's labels to match ctx.

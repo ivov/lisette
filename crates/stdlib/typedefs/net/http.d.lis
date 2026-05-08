@@ -14,6 +14,15 @@ import "go:net"
 import "go:net/url"
 import "go:time"
 
+/// AllowQuerySemicolons returns a handler that serves requests by converting any
+/// unescaped semicolons in the URL query to ampersands, and invoking the handler h.
+/// 
+/// This restores the pre-Go 1.17 behavior of splitting query parameters on both
+/// semicolons and ampersands. (See golang.org/issue/25192). Note that this
+/// behavior doesn't match that of many proxies, and the mismatch can lead to
+/// security issues.
+/// 
+/// AllowQuerySemicolons should be invoked before [Request.ParseForm] is called.
 pub fn AllowQuerySemicolons(h: Handler) -> Handler
 
 /// CanonicalHeaderKey returns the canonical format of the
@@ -45,10 +54,35 @@ pub fn DetectContentType(data: Slice<byte>) -> string
 /// in case the caller had set it up expecting a successful output.
 pub fn Error(w: ResponseWriter, error: string, code: int)
 
+/// FS converts fsys to a [FileSystem] implementation,
+/// for use with [FileServer] and [NewFileTransport].
+/// The files provided by fsys must implement [io.Seeker].
 pub fn FS(fsys: fs.FS) -> FileSystem
 
+/// FileServer returns a handler that serves HTTP requests
+/// with the contents of the file system rooted at root.
+/// 
+/// As a special case, the returned file server redirects any request
+/// ending in "/index.html" to the same path, without the final
+/// "index.html".
+/// 
+/// To use the operating system's file system implementation,
+/// use [http.Dir]:
+/// 
+/// 	http.Handle("/", http.FileServer(http.Dir("/tmp")))
+/// 
+/// To use an [fs.FS] implementation, use [http.FileServerFS] instead.
 pub fn FileServer(root: FileSystem) -> Handler
 
+/// FileServerFS returns a handler that serves HTTP requests
+/// with the contents of the file system fsys.
+/// The files provided by fsys must implement [io.Seeker].
+/// 
+/// As a special case, the returned file server redirects any request
+/// ending in "/index.html" to the same path, without the final
+/// "index.html".
+/// 
+/// 	http.Handle("/", http.FileServerFS(fsys))
 pub fn FileServerFS(root: fs.FS) -> Handler
 
 /// Get issues a GET to the specified URL. If the response is one of
@@ -126,6 +160,7 @@ pub fn ListenAndServeTLS(
   handler: Handler,
 ) -> Result<(), error>
 
+/// MaxBytesHandler returns a [Handler] that runs h with its [ResponseWriter] and [Request.Body] wrapped by a MaxBytesReader.
 pub fn MaxBytesHandler(h: Handler, n: int64) -> Handler
 
 /// MaxBytesReader is similar to [io.LimitReader] but is intended for
@@ -140,10 +175,38 @@ pub fn MaxBytesHandler(h: Handler, n: int64) -> Handler
 /// has been reached.
 pub fn MaxBytesReader(w: ResponseWriter, r: io.ReadCloser, n: int64) -> io.ReadCloser
 
+/// NewCrossOriginProtection returns a new [CrossOriginProtection] value.
 pub fn NewCrossOriginProtection() -> Ref<CrossOriginProtection>
 
+/// NewFileTransport returns a new [RoundTripper], serving the provided
+/// [FileSystem]. The returned RoundTripper ignores the URL host in its
+/// incoming requests, as well as most other properties of the
+/// request.
+/// 
+/// The typical use case for NewFileTransport is to register the "file"
+/// protocol with a [Transport], as in:
+/// 
+/// 	t := &http.Transport{}
+/// 	t.RegisterProtocol("file", http.NewFileTransport(http.Dir("/")))
+/// 	c := &http.Client{Transport: t}
+/// 	res, err := c.Get("file:///etc/passwd")
+/// 	...
 pub fn NewFileTransport(fs: FileSystem) -> RoundTripper
 
+/// NewFileTransportFS returns a new [RoundTripper], serving the provided
+/// file system fsys. The returned RoundTripper ignores the URL host in its
+/// incoming requests, as well as most other properties of the
+/// request. The files provided by fsys must implement [io.Seeker].
+/// 
+/// The typical use case for NewFileTransportFS is to register the "file"
+/// protocol with a [Transport], as in:
+/// 
+/// 	fsys := os.DirFS("/")
+/// 	t := &http.Transport{}
+/// 	t.RegisterProtocol("file", http.NewFileTransportFS(fsys))
+/// 	c := &http.Client{Transport: t}
+/// 	res, err := c.Get("file:///etc/passwd")
+/// 	...
 pub fn NewFileTransportFS(fsys: fs.FS) -> RoundTripper
 
 /// NewRequest wraps [NewRequestWithContext] using [context.Background].
@@ -179,13 +242,33 @@ pub fn NewRequestWithContext(
   body: io.Reader,
 ) -> Result<Ref<Request>, error>
 
+/// NewResponseController creates a [ResponseController] for a request.
+/// 
+/// The ResponseWriter should be the original value passed to the [Handler.ServeHTTP] method,
+/// or have an Unwrap method returning the original ResponseWriter.
+/// 
+/// If the ResponseWriter implements any of the following methods, the ResponseController
+/// will call them as appropriate:
+/// 
+/// 	Flush()
+/// 	FlushError() error // alternative Flush returning an error
+/// 	Hijack() (net.Conn, *bufio.ReadWriter, error)
+/// 	SetReadDeadline(deadline time.Time) error
+/// 	SetWriteDeadline(deadline time.Time) error
+/// 	EnableFullDuplex() error
+/// 
+/// If the ResponseWriter does not support a method, ResponseController returns
+/// an error matching [ErrNotSupported].
 pub fn NewResponseController(rw: ResponseWriter) -> Ref<ResponseController>
 
+/// NewServeMux allocates and returns a new [ServeMux].
 pub fn NewServeMux() -> Ref<ServeMux>
 
 /// NotFound replies to the request with an HTTP 404 not found error.
 pub fn NotFound(w: ResponseWriter, r: Ref<Request>)
 
+/// NotFoundHandler returns a simple request handler
+/// that replies to each request with a “404 page not found” reply.
 pub fn NotFoundHandler() -> Handler
 
 /// ParseCookie parses a Cookie header value and returns all the cookies
@@ -295,6 +378,12 @@ pub fn ReadResponse(r: Ref<bufio.Reader>, req: Ref<Request>) -> Result<Ref<Respo
 /// disables that behavior.
 pub fn Redirect(w: ResponseWriter, r: Ref<Request>, url: string, code: int)
 
+/// RedirectHandler returns a request handler that redirects
+/// each request it receives to the given url using the given
+/// status code.
+/// 
+/// The provided code should be in the 3xx range and is usually
+/// [StatusMovedPermanently], [StatusFound] or [StatusSeeOther].
 pub fn RedirectHandler(url: string, code: int) -> Handler
 
 /// Serve accepts incoming HTTP connections on the listener l,
@@ -427,8 +516,25 @@ pub fn SetCookie(w: ResponseWriter, cookie: Ref<Cookie>)
 /// string if the code is unknown.
 pub fn StatusText(code: int) -> string
 
+/// StripPrefix returns a handler that serves HTTP requests by removing the
+/// given prefix from the request URL's Path (and RawPath if set) and invoking
+/// the handler h. StripPrefix handles a request for a path that doesn't begin
+/// with prefix by replying with an HTTP 404 not found error. The prefix must
+/// match exactly: if the prefix in the request contains escaped characters
+/// the reply is also an HTTP 404 not found error.
 pub fn StripPrefix(prefix: string, h: Handler) -> Handler
 
+/// TimeoutHandler returns a [Handler] that runs h with the given time limit.
+/// 
+/// The new Handler calls h.ServeHTTP to handle each request, but if a
+/// call runs for longer than its time limit, the handler responds with
+/// a 503 Service Unavailable error and the given message in its body.
+/// (If msg is empty, a suitable default message will be sent.)
+/// After such a timeout, writes by h to its [ResponseWriter] will return
+/// [ErrHandlerTimeout].
+/// 
+/// TimeoutHandler supports the [Pusher] interface but does not support
+/// the [Hijacker] or [Flusher] interfaces.
 pub fn TimeoutHandler(h: Handler, dt: time.Duration, msg: string) -> Handler
 
 /// A Client is an HTTP client. Its zero value ([DefaultClient]) is a

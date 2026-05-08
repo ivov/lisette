@@ -5,20 +5,36 @@
 
 import "go:hash"
 
+/// New224 creates a new SHA3-224 hash.
 pub fn New224() -> Ref<SHA3>
 
+/// New256 creates a new SHA3-256 hash.
 pub fn New256() -> Ref<SHA3>
 
+/// New384 creates a new SHA3-384 hash.
 pub fn New384() -> Ref<SHA3>
 
+/// New512 creates a new SHA3-512 hash.
 pub fn New512() -> Ref<SHA3>
 
+/// NewCSHAKE128 creates a new cSHAKE128 XOF.
+/// 
+/// N is used to define functions based on cSHAKE, it can be empty when plain
+/// cSHAKE is desired. S is a customization byte string used for domain
+/// separation. When N and S are both empty, this is equivalent to NewSHAKE128.
 pub fn NewCSHAKE128(n: Slice<byte>, s: Slice<byte>) -> Ref<SHAKE>
 
+/// NewCSHAKE256 creates a new cSHAKE256 XOF.
+/// 
+/// N is used to define functions based on cSHAKE, it can be empty when plain
+/// cSHAKE is desired. S is a customization byte string used for domain
+/// separation. When N and S are both empty, this is equivalent to NewSHAKE256.
 pub fn NewCSHAKE256(n: Slice<byte>, s: Slice<byte>) -> Ref<SHAKE>
 
+/// NewSHAKE128 creates a new SHAKE128 XOF.
 pub fn NewSHAKE128() -> Ref<SHAKE>
 
+/// NewSHAKE256 creates a new SHAKE256 XOF.
 pub fn NewSHAKE256() -> Ref<SHAKE>
 
 /// Sum224 returns the SHA3-224 hash of data.

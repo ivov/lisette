@@ -5,6 +5,8 @@
 
 import "go:io"
 
+/// NewWriter allocates and initializes a new [Writer].
+/// The parameters are the same as for the Init function.
 pub fn NewWriter(
   output: io.Writer,
   minwidth: int,

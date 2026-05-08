@@ -6,8 +6,14 @@
 import "go:io"
 import "go:runtime/debug"
 
+/// Read returns build information embedded in a Go binary file
+/// accessed through the given ReaderAt. Most information is only available for
+/// binaries built with module support.
 pub fn Read(r: io.ReaderAt) -> Result<Ref<debug.BuildInfo>, error>
 
+/// ReadFile returns build information embedded in a Go binary
+/// file at the given path. Most information is only available for binaries built
+/// with module support.
 pub fn ReadFile(name: string) -> Result<Ref<debug.BuildInfo>, error>
 
 /// Type alias for build info. We cannot move the types here, since

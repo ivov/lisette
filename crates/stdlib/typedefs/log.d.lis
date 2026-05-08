@@ -5,6 +5,7 @@
 
 import "go:io"
 
+/// Default returns the standard logger used by the package-level output functions.
 pub fn Default() -> Ref<Logger>
 
 /// Fatal is equivalent to [Print] followed by a call to [os.Exit](1).
@@ -20,6 +21,11 @@ pub fn Fatalln(v: VarArgs<Unknown>) -> Never
 /// The flag bits are [Ldate], [Ltime], and so on.
 pub fn Flags() -> int
 
+/// New creates a new [Logger]. The out variable sets the
+/// destination to which log data will be written.
+/// The prefix appears at the beginning of each generated log line, or
+/// after the log header if the [Lmsgprefix] flag is provided.
+/// The flag argument defines the logging properties.
 pub fn New(out: io.Writer, prefix: string, flag: int) -> Ref<Logger>
 
 /// Output writes the output for a logging event. The string s contains

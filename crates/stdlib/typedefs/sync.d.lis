@@ -3,6 +3,7 @@
 // Go: 1.25.5
 // Lisette: 0.1.24
 
+/// NewCond returns a new Cond with Locker l.
 pub fn NewCond(l: Locker) -> Ref<Cond>
 
 /// OnceFunc returns a function that invokes f only once. The returned function

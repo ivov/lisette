@@ -16,12 +16,21 @@ import "go:io"
 /// defined by RFC 9112, it is returned without modifications.
 pub fn CanonicalMIMEHeaderKey(s: string) -> string
 
+/// Dial connects to the given address on the given network using [net.Dial]
+/// and then returns a new [Conn] for the connection.
 pub fn Dial(network: string, addr: string) -> Result<Ref<Conn>, error>
 
+/// NewConn returns a new [Conn] using conn for I/O.
 pub fn NewConn(conn: io.ReadWriteCloser) -> Ref<Conn>
 
+/// NewReader returns a new [Reader] reading from r.
+/// 
+/// To avoid denial of service attacks, the provided [bufio.Reader]
+/// should be reading from an [io.LimitReader] or similar Reader to bound
+/// the size of responses.
 pub fn NewReader(r: Ref<bufio.Reader>) -> Ref<Reader>
 
+/// NewWriter returns a new [Writer] writing to w.
 pub fn NewWriter(w: Ref<bufio.Writer>) -> Ref<Writer>
 
 /// TrimBytes returns b without leading and trailing ASCII space.

@@ -10,6 +10,8 @@ import "go:net/http"
 /// but existing entries may be concurrently updated.
 pub fn Do(f: fn(KeyValue) -> ())
 
+/// Get retrieves a named exported variable. It returns nil if the name has
+/// not been registered.
 pub fn Get(name: string) -> Option<Var>
 
 /// Handler returns the expvar HTTP Handler.

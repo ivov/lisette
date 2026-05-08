@@ -34,16 +34,37 @@ pub fn CopyBuffer(dst: Writer, src: Reader, mut buf: Slice<byte>) -> Result<int6
 /// If dst implements [ReaderFrom], the copy is implemented using it.
 pub fn CopyN(dst: Writer, src: Reader, n: int64) -> Result<int64, error>
 
+/// LimitReader returns a Reader that reads from r
+/// but stops with EOF after n bytes.
+/// The underlying implementation is a *LimitedReader.
 pub fn LimitReader(r: Reader, n: int64) -> Reader
 
+/// MultiReader returns a Reader that's the logical concatenation of
+/// the provided input readers. They're read sequentially. Once all
+/// inputs have returned EOF, Read will return EOF.  If any of the readers
+/// return a non-nil, non-EOF error, Read will return that error.
 pub fn MultiReader(readers: VarArgs<Reader>) -> Reader
 
+/// MultiWriter creates a writer that duplicates its writes to all the
+/// provided writers, similar to the Unix tee(1) command.
+/// 
+/// Each write is written to each listed writer, one at a time.
+/// If a listed writer returns an error, that overall write operation
+/// stops and returns the error; it does not continue down the list.
 pub fn MultiWriter(writers: VarArgs<Writer>) -> Writer
 
+/// NewOffsetWriter returns an [OffsetWriter] that writes to w
+/// starting at offset off.
 pub fn NewOffsetWriter(w: WriterAt, off: int64) -> Ref<OffsetWriter>
 
+/// NewSectionReader returns a [SectionReader] that reads from r
+/// starting at offset off and stops with EOF after n bytes.
 pub fn NewSectionReader(r: ReaderAt, off: int64, n: int64) -> Ref<SectionReader>
 
+/// NopCloser returns a [ReadCloser] with a no-op Close method wrapping
+/// the provided [Reader] r.
+/// If r implements [WriterTo], the returned [ReadCloser] will implement [WriterTo]
+/// by forwarding calls to r.
 pub fn NopCloser(r: Reader) -> ReadCloser
 
 /// Pipe creates a synchronous in-memory pipe.
@@ -88,6 +109,11 @@ pub fn ReadAtLeast(r: Reader, mut buf: Slice<byte>, min: int) -> Partial<int, er
 /// If r returns an error having read at least len(buf) bytes, the error is dropped.
 pub fn ReadFull(r: Reader, mut buf: Slice<byte>) -> Partial<int, error>
 
+/// TeeReader returns a [Reader] that writes to w what it reads from r.
+/// All reads from r performed through it are matched with
+/// corresponding writes to w. There is no internal buffering -
+/// the write must complete before the read completes.
+/// Any error encountered while writing is reported as a read error.
 pub fn TeeReader(r: Reader, w: Writer) -> Reader
 
 /// WriteString writes the contents of the string s to w, which accepts a slice of bytes.

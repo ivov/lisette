@@ -13,6 +13,10 @@ import "go:io"
 /// [SeedSize] bytes from rand, and passing them to [NewKeyFromSeed].
 pub fn GenerateKey(rand: io.Reader) -> Result<(PublicKey, PrivateKey), error>
 
+/// NewKeyFromSeed calculates a private key from a seed. It will panic if
+/// len(seed) is not [SeedSize]. This function is provided for interoperability
+/// with RFC 8032. RFC 8032's private keys correspond to seeds in this
+/// package.
 pub fn NewKeyFromSeed(seed: Slice<byte>) -> PrivateKey
 
 /// Sign signs the message with privateKey and returns a signature. It will

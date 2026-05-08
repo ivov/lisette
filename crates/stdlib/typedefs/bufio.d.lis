@@ -5,16 +5,29 @@
 
 import "go:io"
 
+/// NewReadWriter allocates a new [ReadWriter] that dispatches to r and w.
 pub fn NewReadWriter(r: Ref<Reader>, w: Ref<Writer>) -> Ref<ReadWriter>
 
+/// NewReader returns a new [Reader] whose buffer has the default size.
 pub fn NewReader(rd: io.Reader) -> Ref<Reader>
 
+/// NewReaderSize returns a new [Reader] whose buffer has at least the specified
+/// size. If the argument io.Reader is already a [Reader] with large enough
+/// size, it returns the underlying [Reader].
 pub fn NewReaderSize(rd: io.Reader, size: int) -> Ref<Reader>
 
+/// NewScanner returns a new [Scanner] to read from r.
+/// The split function defaults to [ScanLines].
 pub fn NewScanner(r: io.Reader) -> Ref<Scanner>
 
+/// NewWriter returns a new [Writer] whose buffer has the default size.
+/// If the argument io.Writer is already a [Writer] with large enough buffer size,
+/// it returns the underlying [Writer].
 pub fn NewWriter(w: io.Writer) -> Ref<Writer>
 
+/// NewWriterSize returns a new [Writer] whose buffer has at least the specified
+/// size. If the argument io.Writer is already a [Writer] with large enough
+/// size, it returns the underlying [Writer].
 pub fn NewWriterSize(w: io.Writer, size: int) -> Ref<Writer>
 
 /// ScanBytes is a split function for a [Scanner] that returns each byte as a token.

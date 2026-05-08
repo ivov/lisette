@@ -72,8 +72,10 @@ pub const NodeWith: NodeType = 19
 /// IsEmptyTree reports whether this tree (node) is empty of everything but space or comments.
 pub fn IsEmptyTree(n: Node) -> bool
 
+/// New allocates a new parse tree with the given name.
 pub fn New(name: string, funcs: VarArgs<Map<string, Unknown>>) -> Ref<Tree>
 
+/// NewIdentifier returns a new [IdentifierNode] with the given identifier name.
 pub fn NewIdentifier(ident: string) -> Ref<IdentifierNode>
 
 /// Parse returns a map from template name to [Tree], created by parsing the

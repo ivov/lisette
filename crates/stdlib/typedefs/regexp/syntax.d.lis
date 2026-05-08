@@ -150,8 +150,16 @@ pub const OpStar: Op = 14
 
 pub const OpWordBoundary: Op = 11
 
+/// Compile compiles the regexp into a program to be executed.
+/// The regexp should have been simplified already (returned from re.Simplify).
 pub fn Compile(re: Ref<Regexp>) -> Result<Ref<Prog>, error>
 
+/// EmptyOpContext returns the zero-width assertions
+/// satisfied at the position between the runes r1 and r2.
+/// Passing r1 == -1 indicates that the position is
+/// at the beginning of the text.
+/// Passing r2 == -1 indicates that the position is
+/// at the end of the text.
 pub fn EmptyOpContext(r1: rune, r2: rune) -> EmptyOp
 
 /// IsWordChar reports whether r is considered a “word character”
@@ -159,6 +167,9 @@ pub fn EmptyOpContext(r1: rune, r2: rune) -> EmptyOp
 /// These assertions are ASCII-only: the word characters are [A-Za-z0-9_].
 pub fn IsWordChar(r: rune) -> bool
 
+/// Parse parses a regular expression string s, controlled by the specified
+/// Flags, and returns a regular expression parse tree. The syntax is
+/// described in the top-level comment.
 pub fn Parse(s: string, flags: Flags) -> Result<Ref<Regexp>, error>
 
 /// An EmptyOp specifies a kind or mixture of zero-width assertions.

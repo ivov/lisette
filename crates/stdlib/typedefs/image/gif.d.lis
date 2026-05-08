@@ -11,6 +11,8 @@ import "go:io"
 /// image as an [image.Image].
 pub fn Decode(r: io.Reader) -> Result<image.Image, error>
 
+/// DecodeAll reads a GIF image from r and returns the sequential frames
+/// and timing information.
 pub fn DecodeAll(r: io.Reader) -> Result<Ref<GIF>, error>
 
 /// DecodeConfig returns the global color model and dimensions of a GIF image

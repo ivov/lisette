@@ -6,6 +6,8 @@
 import "go:net/http"
 import "go:net/url"
 
+/// New returns a new cookie jar. A nil [*Options] is equivalent to a zero
+/// Options.
 pub fn New(o: Ref<Options>) -> Result<Ref<Jar>, error>
 
 /// Jar implements the http.CookieJar interface from the net/http package.

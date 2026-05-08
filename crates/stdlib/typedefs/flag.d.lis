@@ -76,6 +76,8 @@ pub fn Int64Var(p: Ref<int64>, name: string, value: int64, usage: string)
 /// The argument p points to an int variable in which to store the value of the flag.
 pub fn IntVar(p: Ref<int>, name: string, value: int, usage: string)
 
+/// Lookup returns the [Flag] structure of the named command-line flag,
+/// returning nil if none exists.
 pub fn Lookup(name: string) -> Option<Ref<Flag>>
 
 /// NArg is the number of arguments remaining after flags have been processed.
@@ -84,6 +86,9 @@ pub fn NArg() -> int
 /// NFlag returns the number of command-line flags that have been set.
 pub fn NFlag() -> int
 
+/// NewFlagSet returns a new, empty flag set with the specified name and
+/// error handling property. If the name is not empty, it will be printed
+/// in the default usage message and in error messages.
 pub fn NewFlagSet(name: string, errorHandling: ErrorHandling) -> Ref<FlagSet>
 
 /// Parse parses the command-line flags from [os.Args][1:]. Must be called
