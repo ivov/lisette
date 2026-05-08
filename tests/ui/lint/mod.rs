@@ -1112,6 +1112,24 @@ fn main() {
 }
 
 #[test]
+fn field_with_tag_attribute_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+struct User {
+  #[tag(`validate:"required,email"`)]
+  email: string,
+  #[tag(`validate:"gte=0"`)]
+  age: int,
+}
+
+fn main() {
+  let _u = User { email: "a@b.c", age: 1 }
+}
+"#
+    );
+}
+
+#[test]
 fn struct_field_used_in_pattern() {
     assert_no_lint_warnings!(
         r#"

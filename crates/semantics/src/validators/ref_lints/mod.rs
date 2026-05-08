@@ -201,12 +201,15 @@ fn collect_items(
 
                     for struct_field in fields {
                         let field_id = StructFieldId::new(name, &struct_field.name);
+                        let has_tag_attribute =
+                            struct_field.attributes.iter().any(|a| a.name == "tag");
                         graph.add_struct_field(
                             field_id,
                             StructFieldInfo {
                                 span: struct_field.name_span,
                                 parent_is_public: is_public,
                                 parent_has_serialization_attr: has_serialization_attr,
+                                has_tag_attribute,
                             },
                         );
                     }
