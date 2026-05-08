@@ -1,5 +1,35 @@
 {
   "overrides": {
+    "lints": {
+      "allow_unused_value": {
+        "github.com/beego/beego/v2/server/web": [
+          "AddTemplateEngine",
+          "Any",
+          "AutoPrefix",
+          "AutoRouter",
+          "DelStaticPath",
+          "Delete",
+          "ErrorController",
+          "ErrorHandler",
+          "Get",
+          "Handler",
+          "Head",
+          "Include",
+          "InsertFilter",
+          "InsertFilterChain",
+          "Options",
+          "Patch",
+          "Post",
+          "Put",
+          "RESTRouter",
+          "Router",
+          "RouterWithOpts",
+          "SetStaticPath",
+          "SetViewsPath",
+          "UnregisterFixedRoute"
+        ]
+      }
+    },
     "types": {
       "bool_as_flag": {
         "github.com/charmbracelet/lipgloss": [

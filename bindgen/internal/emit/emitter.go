@@ -319,6 +319,9 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 	if e.shouldAllowUnusedResult(result.Name, "", result) {
 		e.buf.WriteString("#[allow(unused_result)]\n")
 	}
+	if result.HasReturn() && e.cfg.ShouldAllowUnusedValue(e.pkgPath, result.Name) {
+		e.buf.WriteString("#[allow(unused_value)]\n")
+	}
 
 	var functionSignature strings.Builder
 	functionSignature.WriteString("pub fn ")
@@ -337,7 +340,7 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 	functionSignature.WriteString(strings.Join(params, ", "))
 	functionSignature.WriteString(")")
 
-	if result.ReturnType != "" && result.ReturnType != "()" {
+	if result.HasReturn() {
 		functionSignature.WriteString(" -> ")
 		functionSignature.WriteString(result.ReturnType)
 	}
@@ -426,7 +429,7 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
 	methodSignature.WriteString(strings.Join(params, ", "))
 	methodSignature.WriteString(")")
 
-	if result.ReturnType != "" && result.ReturnType != "()" {
+	if result.HasReturn() {
 		methodSignature.WriteString(" -> ")
 		methodSignature.WriteString(result.ReturnType)
 	}
@@ -472,7 +475,7 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 				signature.WriteString(strings.Join(params, ", "))
 				signature.WriteString(")")
 
-				if m.ReturnType != "" && m.ReturnType != "()" {
+				if m.HasReturn() {
 					signature.WriteString(" -> ")
 					signature.WriteString(m.ReturnType)
 				}

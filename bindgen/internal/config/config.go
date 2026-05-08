@@ -21,6 +21,7 @@ type Overrides struct {
 // LintOverrides holds lint-suppression overrides.
 type LintOverrides struct {
 	AllowUnusedResult map[string][]string `json:"allow_unused_result"`
+	AllowUnusedValue  map[string][]string `json:"allow_unused_value"`
 	DenyUnusedValue   map[string][]string `json:"deny_unused_value"`
 }
 
@@ -80,6 +81,23 @@ func LoadConfig(configPath string, defaultData []byte) (Config, error) {
 //   - "*.Method" matches Method on any type (e.g., "*.Write" for all Writer types)
 func (c *Config) ShouldAllowUnusedResult(pkg, funcName string) bool {
 	funcs, ok := lookupWithGlob(c.Overrides.Lints.AllowUnusedResult, pkg)
+	if !ok {
+		return false
+	}
+	return matchesWildcard(funcs, funcName)
+}
+
+// ShouldAllowUnusedValue returns true if the given package-level function in
+// the given package should be annotated with #[allow(unused_value)]. Used for
+// fluent registration APIs (e.g. beego's `web.Get` returns `*HttpServer` for
+// chaining but is idiomatically called for side effect).
+//
+// Supports the same wildcards as ShouldAllowUnusedResult.
+func (c *Config) ShouldAllowUnusedValue(pkg, funcName string) bool {
+	if c == nil {
+		return false
+	}
+	funcs, ok := lookupWithGlob(c.Overrides.Lints.AllowUnusedValue, pkg)
 	if !ok {
 		return false
 	}

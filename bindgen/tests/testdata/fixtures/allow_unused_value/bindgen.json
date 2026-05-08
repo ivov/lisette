@@ -1,0 +1,13 @@
+{
+  "overrides": {
+    "lints": {
+      "allow_unused_value": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/allow_unused_value": [
+          "Register",
+          "Mount",
+          "VoidReturn"
+        ]
+      }
+    }
+  }
+}

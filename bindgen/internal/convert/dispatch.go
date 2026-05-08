@@ -40,6 +40,12 @@ type ConvertResult struct {
 	SyntheticType *ConvertResult
 }
 
+// HasReturn reports whether this function/method has a non-unit return type
+// the caller can observe (i.e. anything other than `()` or absent).
+func (r *ConvertResult) HasReturn() bool {
+	return r.ReturnType != "" && r.ReturnType != "()"
+}
+
 type FunctionParameter struct {
 	Name    string
 	Type    string
@@ -67,6 +73,11 @@ type InterfaceMethod struct {
 	ReturnType  string
 	CommaOk     bool
 	ArrayReturn bool
+}
+
+// HasReturn reports whether this interface method has a non-unit return type.
+func (m *InterfaceMethod) HasReturn() bool {
+	return m.ReturnType != "" && m.ReturnType != "()"
 }
 
 type EnumVariant struct {

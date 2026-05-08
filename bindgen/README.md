@@ -176,6 +176,13 @@ Bindgen accepts a config file with per-package overrides:
       "allow_unused_result": {
         "fmt": ["Print", "Printf", "Println"],
       },
+
+      // Suppress unused_value on fluent registration APIs whose return is a
+      // shared singleton callers idiomatically discard.
+      // e.g. `web.Get/Post` in beego returns `*HttpServer` for chaining
+      "allow_unused_value": {
+        "github.com/beego/beego/v2/server/web": ["Get", "Post"],
+      },
     },
 
     // Override type mapping decisions
