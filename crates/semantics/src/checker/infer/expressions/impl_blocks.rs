@@ -11,7 +11,7 @@ use crate::store::Store;
 impl TaskState<'_> {
     pub(super) fn infer_impl_block(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         annotation: Annotation,
         methods: Vec<Expression>,
         receiver_name: EcoString,
@@ -94,11 +94,7 @@ impl TaskState<'_> {
         }
     }
 
-    pub(super) fn infer_interface(
-        &mut self,
-        store: &mut Store,
-        expression: Expression,
-    ) -> Expression {
+    pub(super) fn infer_interface(&mut self, store: &Store, expression: Expression) -> Expression {
         let Expression::Interface {
             doc,
             name,

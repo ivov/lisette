@@ -9,7 +9,7 @@ use crate::validators::temp_producing::is_temp_producing;
 impl TaskState<'_> {
     pub(super) fn infer_select(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         arms: Vec<SelectArm>,
         span: Span,
         expected_ty: &Type,
@@ -128,7 +128,7 @@ impl TaskState<'_> {
 
     fn infer_select_receive(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         binding: Box<Pattern>,
         receive_expression: Box<Expression>,
         body: Box<Expression>,
@@ -219,7 +219,7 @@ impl TaskState<'_> {
 
     fn infer_select_send(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         send_expression: Box<Expression>,
         body: Box<Expression>,
         result_ty: &Type,
@@ -250,7 +250,7 @@ impl TaskState<'_> {
 
     fn infer_select_match_receive(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         receive_expression: Box<Expression>,
         match_arms: Vec<MatchArm>,
         result_ty: &Type,
@@ -339,7 +339,7 @@ impl TaskState<'_> {
 
     fn infer_select_wildcard(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         body: Box<Expression>,
         result_ty: &Type,
     ) -> SelectArmPattern {

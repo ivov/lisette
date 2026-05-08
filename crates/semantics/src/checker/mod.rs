@@ -83,6 +83,12 @@ pub(crate) enum FileContextKind {
     Prelude,
 }
 
+struct SavedFileContext {
+    file_id: Option<u32>,
+    scopes: Scopes,
+    imports: ImportState,
+}
+
 /// Cache for builtin types (int, bool, string, etc.) resolved from the prelude.
 /// These never change once populated, so no invalidation needed.
 type BuiltinCache = HashMap<String, Type>;
@@ -350,10 +356,14 @@ impl<'s> TaskState<'s> {
     }
 
     pub(crate) fn is_const_var(&self, store: &Store, var_name: &str) -> bool {
-        self.scopes.lookup_binding_id(var_name).is_none()
-            && self
-                .lookup_qualified_name(store, var_name)
-                .is_some_and(|qname| self.is_const_name(store, &qname))
+        if self.scopes.lookup_binding_id(var_name).is_some() {
+            return false;
+        }
+        if self.scopes.lookup_const(var_name) {
+            return true;
+        }
+        self.lookup_qualified_name(store, var_name)
+            .is_some_and(|qname| self.is_const_name(store, &qname))
     }
 
     /// Track that `name` (at the start of `span`) refers to the definition at `qualified_name`.
@@ -544,6 +554,23 @@ impl<'s> TaskState<'s> {
 
     pub(crate) fn with_file_context<T>(
         &mut self,
+        store: &Store,
+        module_id: &str,
+        file_id: u32,
+        imports: &[FileImport],
+        kind: FileContextKind,
+        f: impl FnOnce(&mut Self, &Store) -> T,
+    ) -> T {
+        self.with_module_cursor(module_id, |this| {
+            let saved = this.enter_file_context(store, module_id, file_id, imports, kind);
+            let result = f(this, store);
+            this.exit_file_context(saved);
+            result
+        })
+    }
+
+    pub(crate) fn with_file_context_mut<T>(
+        &mut self,
         store: &mut Store,
         module_id: &str,
         file_id: u32,
@@ -552,31 +579,48 @@ impl<'s> TaskState<'s> {
         f: impl FnOnce(&mut Self, &mut Store) -> T,
     ) -> T {
         self.with_module_cursor(module_id, |this| {
-            let previous_file_id = this.cursor.file_id.replace(file_id);
-            let previous_scopes = std::mem::take(&mut this.scopes);
-            let previous_imports = std::mem::take(&mut this.imports);
-
-            match kind {
-                FileContextKind::Standard => {
-                    this.put_prelude_in_scope(&*store);
-                    this.put_unprefixed_module_in_scope(&*store, module_id);
-                }
-                FileContextKind::ImportedTypedef => {
-                    this.put_prelude_in_scope(&*store);
-                }
-                FileContextKind::Prelude => {
-                    this.put_unprefixed_module_in_scope(&*store, module_id);
-                }
-            }
-            this.put_imported_modules_in_scope(&*store, imports);
-
+            let saved = this.enter_file_context(&*store, module_id, file_id, imports, kind);
             let result = f(this, store);
-
-            this.scopes = previous_scopes;
-            this.imports = previous_imports;
-            this.cursor.file_id = previous_file_id;
+            this.exit_file_context(saved);
             result
         })
+    }
+
+    fn enter_file_context(
+        &mut self,
+        store: &Store,
+        module_id: &str,
+        file_id: u32,
+        imports: &[FileImport],
+        kind: FileContextKind,
+    ) -> SavedFileContext {
+        let saved = SavedFileContext {
+            file_id: self.cursor.file_id.replace(file_id),
+            scopes: std::mem::take(&mut self.scopes),
+            imports: std::mem::take(&mut self.imports),
+        };
+
+        match kind {
+            FileContextKind::Standard => {
+                self.put_prelude_in_scope(store);
+                self.put_unprefixed_module_in_scope(store, module_id);
+            }
+            FileContextKind::ImportedTypedef => {
+                self.put_prelude_in_scope(store);
+            }
+            FileContextKind::Prelude => {
+                self.put_unprefixed_module_in_scope(store, module_id);
+            }
+        }
+        self.put_imported_modules_in_scope(store, imports);
+
+        saved
+    }
+
+    fn exit_file_context(&mut self, saved: SavedFileContext) {
+        self.scopes = saved.scopes;
+        self.imports = saved.imports;
+        self.cursor.file_id = saved.file_id;
     }
 
     pub fn failed(&self) -> bool {

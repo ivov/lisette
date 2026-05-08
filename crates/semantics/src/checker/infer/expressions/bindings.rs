@@ -34,7 +34,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_const_binding(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         doc: Option<String>,
         annotation: Option<Annotation>,
         expression: Box<Expression>,
@@ -92,7 +92,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_let_binding(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         binding: Binding,
         value: Box<Expression>,
         mutable: bool,

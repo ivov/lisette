@@ -73,6 +73,7 @@ pub struct Scope {
     /// variable name -> type
     pub values: HashMap<String, Type>,
     pub mutables: Option<HashSet<String>>,
+    pub consts: Option<HashSet<String>>,
     pub type_params: Option<HashMap<String, usize>>,
     pub trait_bounds: Option<HashMap<Symbol, Vec<Type>>>,
     pub fn_return_type: Option<Type>,
@@ -99,6 +100,7 @@ impl Scope {
         Scope {
             values: HashMap::default(),
             mutables: None,
+            consts: None,
             type_params: None,
             trait_bounds: None,
             fn_return_type: None,
@@ -169,28 +171,14 @@ impl Scopes {
 
     pub fn push(&mut self) {
         let current = self.current();
-        let loop_depth = current.loop_depth.get();
-        let defer_block_depth = current.defer_block_depth.get();
-        let negation_depth = current.negation_depth.get();
-        let type_param_depth = current.type_param_depth.get();
-        let use_context = current.use_context.get();
-        let loop_break_type = current.loop_break_type.clone();
-        self.stack.push(Scope {
-            values: HashMap::default(),
-            mutables: None,
-            type_params: None,
-            trait_bounds: None,
-            fn_return_type: None,
-            try_block_context: None,
-            recover_block_context: None,
-            loop_break_type,
-            loop_depth: DepthCounter::with_value(loop_depth),
-            defer_block_depth: DepthCounter::with_value(defer_block_depth),
-            negation_depth: DepthCounter::with_value(negation_depth),
-            type_param_depth: DepthCounter::with_value(type_param_depth),
-            use_context: Cell::new(use_context),
-            name_to_binding: HashMap::default(),
-        });
+        let mut scope = Scope::new();
+        scope.loop_break_type = current.loop_break_type.clone();
+        scope.loop_depth = DepthCounter::with_value(current.loop_depth.get());
+        scope.defer_block_depth = DepthCounter::with_value(current.defer_block_depth.get());
+        scope.negation_depth = DepthCounter::with_value(current.negation_depth.get());
+        scope.type_param_depth = DepthCounter::with_value(current.type_param_depth.get());
+        scope.use_context = Cell::new(current.use_context.get());
+        self.stack.push(scope);
     }
 
     pub fn pop(&mut self) {
@@ -225,6 +213,14 @@ impl Scopes {
             .iter()
             .rev()
             .any(|s| s.mutables.as_ref().is_some_and(|m| m.contains(name)))
+    }
+
+    /// Whether `name` is a block-local `const` in any enclosing scope.
+    pub fn lookup_const(&self, name: &str) -> bool {
+        self.stack
+            .iter()
+            .rev()
+            .any(|s| s.consts.as_ref().is_some_and(|c| c.contains(name)))
     }
 
     /// Look up a binding ID by walking the scope stack from top to bottom.

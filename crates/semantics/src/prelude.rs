@@ -32,7 +32,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
         .cloned()
         .expect("prelude module must exist");
 
-    checker.with_file_context(
+    checker.with_file_context_mut(
         store,
         PRELUDE_MODULE_ID,
         PRELUDE_FILE_ID,

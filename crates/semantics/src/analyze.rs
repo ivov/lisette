@@ -201,8 +201,16 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
             to_infer.push(module_id);
         }
 
-        for module_id in &to_infer {
-            checker.infer_module(&mut store, module_id);
+        let module_files: Vec<(String, Vec<File>)> = to_infer
+            .iter()
+            .map(|module_id| {
+                let files = checker.take_module_files(&mut store, module_id);
+                (module_id.clone(), files)
+            })
+            .collect();
+
+        for (module_id, files) in module_files {
+            checker.infer_module(&store, &module_id, files);
         }
 
         for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {

@@ -14,7 +14,7 @@ use super::primitives::contains_deref;
 impl TaskState<'_> {
     pub(super) fn infer_dot_access_or_qualified_path(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         member: EcoString,
         span: Span,
@@ -192,7 +192,7 @@ impl DotAccessResolutionArgs<'_> {
 impl TaskState<'_> {
     pub(super) fn infer_dot_access(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         member: EcoString,
         span: Span,

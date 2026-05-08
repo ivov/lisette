@@ -50,7 +50,7 @@ pub(crate) enum NoZeroReason {
 impl TaskState<'_> {
     pub(super) fn infer_struct_call(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         struct_name: EcoString,
         field_assignments: Vec<StructFieldAssignment>,
         spread: StructSpread,
@@ -243,7 +243,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_struct_call_for_struct(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         struct_name: EcoString,
         qualified_name: String,
         struct_ty: Type,
@@ -355,7 +355,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_struct_call_for_enum_variant(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         variant_name: EcoString,
         variant_fields: Vec<syntax::ast::EnumFieldDefinition>,
         map: SubstitutionMap,
@@ -410,7 +410,7 @@ impl TaskState<'_> {
 
     fn infer_struct_spread(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         spread: StructSpread,
         target_ty: &Type,
     ) -> StructSpread {
@@ -427,7 +427,7 @@ impl TaskState<'_> {
 
     fn infer_structish_fields<'a, FindDef>(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         ctx: StructishCtx<'a, '_, impl Iterator<Item = (&'a EcoString, &'a Type)> + Clone>,
         mut find_def: FindDef,
     ) -> (Vec<StructFieldAssignment>, HashSet<EcoString>)

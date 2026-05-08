@@ -10,7 +10,7 @@ use super::super::TaskState;
 impl TaskState<'_> {
     pub(super) fn infer_literal(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         literal: Literal,
         expected_ty: &Type,
         span: Span,
@@ -183,7 +183,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_unit(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         span: Span,
         expected_ty: &Type,
     ) -> Expression {

@@ -72,7 +72,8 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
 
             store.store_module(&module_id, files);
             checker.register_module(&mut store, &module_id);
-            checker.infer_module(&mut store, &module_id);
+            let module_files = checker.take_module_files(&mut store, &module_id);
+            checker.infer_module(&store, &module_id, module_files);
 
             checker.cursor.module_id = prev_module_id;
         }

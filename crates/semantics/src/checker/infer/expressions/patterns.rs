@@ -53,7 +53,7 @@ pub(crate) fn collect_pattern_bindings(pattern: &Pattern) -> Vec<(String, Span)>
 impl TaskState<'_> {
     pub(super) fn infer_pattern(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
@@ -63,7 +63,7 @@ impl TaskState<'_> {
 
     fn infer_pattern_inner(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         pattern: Pattern,
         expected_ty: Type,
         kind: BindingKind,
@@ -333,7 +333,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_enum_variant_pattern(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         identifier: EcoString,
         fields: Vec<Pattern>,
         rest: bool,
@@ -469,7 +469,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_struct_pattern(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         identifier: EcoString,
         fields: Vec<StructFieldPattern>,
         rest: bool,
@@ -627,7 +627,7 @@ impl TaskState<'_> {
 
     fn infer_or_pattern(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         patterns: Vec<Pattern>,
         span: Span,
         expected_ty: Type,
@@ -785,7 +785,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn try_infer_enum_struct_variant(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         identifier: &str,
         fields: &[StructFieldPattern],
         rest: bool,

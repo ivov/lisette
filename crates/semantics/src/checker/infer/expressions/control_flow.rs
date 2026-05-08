@@ -16,7 +16,7 @@ enum BranchReconciliation {
 impl TaskState<'_> {
     pub(crate) fn reconcile_and_unify(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         result_ty: &Type,
         branch_types: &[Type],
         span: &Span,
@@ -142,7 +142,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_if(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         condition: Box<Expression>,
         consequence: Box<Expression>,
         alternative: Box<Expression>,
@@ -236,7 +236,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_match(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         subject: Box<Expression>,
         arms: Vec<MatchArm>,
         origin: MatchOrigin,
@@ -331,7 +331,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_loop(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         body: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -376,7 +376,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_while(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         condition: Box<Expression>,
         body: Box<Expression>,
         span: Span,
@@ -412,7 +412,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_while_let(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         pattern: Pattern,
         scrutinee: Box<Expression>,
         body: Box<Expression>,
@@ -462,7 +462,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_for(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         binding: Binding,
         iterable: Box<Expression>,
         body: Box<Expression>,
@@ -618,7 +618,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_return_statement(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         span: Span,
         parent_is_subexpression: bool,
@@ -655,7 +655,7 @@ impl TaskState<'_> {
 
     fn infer_return(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         span: Span,
     ) -> Expression {
@@ -681,7 +681,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_defer(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -728,7 +728,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_break(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         value: Option<Box<Expression>>,
         span: Span,
         parent_is_subexpression: bool,
@@ -811,7 +811,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_task(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,

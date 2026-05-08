@@ -92,7 +92,7 @@ pub(crate) fn check_not_comparable(
 impl TaskState<'_> {
     pub(super) fn infer_unary(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         operator: UnaryOperator,
         operand: Box<Expression>,
         expected_ty: &Type,
@@ -164,7 +164,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_binary(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         operator: BinaryOperator,
         left_operand: Box<Expression>,
         right_operand: Box<Expression>,
@@ -223,7 +223,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_binary_with_left(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         operator: BinaryOperator,
         left_inferred: Expression,
         left_ty: Type,
@@ -298,7 +298,7 @@ impl TaskState<'_> {
 
     fn infer_binary_impl(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         operator: BinaryOperator,
         left_operand: Box<Expression>,
         right_operand: Box<Expression>,
@@ -395,7 +395,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn resolve_binary_type(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         operator: &BinaryOperator,
         left_operand_ty: &Type,
         right_operand_ty: &Type,
@@ -691,7 +691,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_range(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         start: Option<Box<Expression>>,
         end: Option<Box<Expression>>,
         inclusive: bool,
@@ -735,7 +735,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_cast(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         target_type: syntax::ast::Annotation,
         span: Span,

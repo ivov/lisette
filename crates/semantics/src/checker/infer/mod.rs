@@ -6,7 +6,7 @@ mod validation;
 
 pub(crate) use unify::BuiltinBound;
 
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use super::freeze::FreezeFolder;
 use super::{FileContextKind, TaskState};
@@ -15,17 +15,18 @@ use syntax::ast::Expression;
 use syntax::program::{File, FileImport};
 
 impl TaskState<'_> {
-    pub fn infer_module(&mut self, store: &mut Store, module_id: &str) {
-        let files = self.take_module_files(store, module_id);
+    /// Infer types for `files` belonging to `module_id`.
+    pub fn infer_module(&mut self, store: &Store, module_id: &str, files: Vec<File>) {
         let items_per_file: Vec<&[Expression]> = files.iter().map(|f| f.items.as_slice()).collect();
-        self.check_const_cycles(&*store, &items_per_file);
+        self.check_const_cycles(store, &items_per_file);
 
         for file in files {
             self.infer_file(store, module_id, file);
         }
     }
 
-    fn take_module_files(&mut self, store: &mut Store, module_id: &str) -> Vec<File> {
+    /// Extract a module's `.lis` files from the store.
+    pub fn take_module_files(&mut self, store: &mut Store, module_id: &str) -> Vec<File> {
         self.with_module_cursor(module_id, |_this| {
             let module = store
                 .get_module_mut(module_id)
@@ -34,7 +35,7 @@ impl TaskState<'_> {
         })
     }
 
-    fn infer_file(&mut self, store: &mut Store, module_id: &str, file: File) {
+    fn infer_file(&mut self, store: &Store, module_id: &str, file: File) {
         let file_id = file.id;
         let imports = file.imports();
 
@@ -45,7 +46,7 @@ impl TaskState<'_> {
             &imports,
             FileContextKind::Standard,
             |this, store| {
-                this.check_definition_module_collisions(&*store, &file.items, &imports);
+                this.check_definition_module_collisions(store, &file.items, &imports);
 
                 let inferred_items: Vec<_> = file
                     .items
@@ -126,5 +127,72 @@ impl TaskState<'_> {
                     ));
             }
         }
+    }
+
+    pub(crate) fn register_block_local_items(&mut self, store: &Store, items: &[Expression]) {
+        for item in items {
+            match item {
+                Expression::Const { .. } => self.register_block_local_const(store, item),
+                Expression::Function { .. } => self.register_block_local_fn(store, item),
+                _ => {}
+            }
+        }
+    }
+
+    fn register_block_local_const(&mut self, store: &Store, item: &Expression) {
+        let Expression::Const {
+            identifier,
+            identifier_span,
+            annotation,
+            expression,
+            span,
+            ..
+        } = item
+        else {
+            return;
+        };
+
+        let qualified_name = self.qualify_name(identifier);
+        let is_duplicate = self.scopes.lookup_const(identifier)
+            || self.is_const_name(store, qualified_name.as_str());
+        if is_duplicate && self.is_lis(store) {
+            self.sink.push(diagnostics::infer::duplicate_definition(
+                "constant",
+                identifier,
+                *identifier_span,
+            ));
+            return;
+        }
+
+        let before = self.sink.len();
+        let const_ty = if let Some(annotation) = annotation {
+            self.convert_to_type(store, annotation, span)
+        } else {
+            self.type_from_literal_expression(expression)
+                .unwrap_or_else(|| self.new_type_var())
+        };
+        self.sink.truncate(before);
+
+        let scope = self.scopes.current_mut();
+        scope.values.insert(identifier.to_string(), const_ty);
+        scope
+            .consts
+            .get_or_insert_with(HashSet::default)
+            .insert(identifier.to_string());
+    }
+
+    fn register_block_local_fn(&mut self, store: &Store, item: &Expression) {
+        let Expression::Function { name, span, .. } = item else {
+            return;
+        };
+
+        let fn_sig = item.to_function_signature();
+
+        let before = self.sink.len();
+        let fn_ty = self.extract_function_signature(store, &fn_sig, span);
+        self.sink.truncate(before);
+
+        let scope = self.scopes.current_mut();
+        scope.values.insert(name.to_string(), fn_ty);
     }
 }

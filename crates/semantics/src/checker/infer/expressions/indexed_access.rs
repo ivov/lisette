@@ -28,7 +28,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_indexed_access(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         index: Box<Expression>,
         span: syntax::ast::Span,
@@ -200,7 +200,7 @@ impl TaskState<'_> {
     /// Emits a type-aware diagnostic for Go-style `expr[a:b]` colon syntax.
     pub(super) fn infer_colon_subscript(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         index: Box<Expression>,
         span: syntax::ast::Span,
@@ -228,7 +228,7 @@ impl TaskState<'_> {
 
     fn infer_slice_range_access(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         range: Box<Expression>,
         span: syntax::ast::Span,
@@ -345,7 +345,7 @@ impl TaskState<'_> {
         }
     }
 
-    fn infer_range_bounds_only(&mut self, store: &mut Store, range: Box<Expression>) -> Expression {
+    fn infer_range_bounds_only(&mut self, store: &Store, range: Box<Expression>) -> Expression {
         match *range {
             Expression::Range {
                 start,

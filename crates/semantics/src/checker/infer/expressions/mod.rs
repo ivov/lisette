@@ -22,7 +22,7 @@ use crate::store::Store;
 impl TaskState<'_> {
     pub fn infer_expression(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Expression,
         expected_ty: &Type,
     ) -> Expression {
@@ -39,7 +39,7 @@ impl TaskState<'_> {
 
     fn infer_expression_inner(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Expression,
         expected_ty: &Type,
         parent_is_subexpression: bool,

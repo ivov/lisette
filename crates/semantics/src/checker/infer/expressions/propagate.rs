@@ -4,7 +4,6 @@ use crate::checker::EnvResolve;
 use crate::checker::scopes::{CarrierKind, DepthCounter, RecoverBlockContext, TryBlockContext};
 use crate::store::Store;
 use syntax::ast::{Expression, Span};
-use syntax::program::Visibility;
 use syntax::types::Type;
 
 use super::super::TaskState;
@@ -12,7 +11,7 @@ use super::super::TaskState;
 impl TaskState<'_> {
     pub(super) fn infer_propagate(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -102,7 +101,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_propagate_in_block(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         new_expression: Expression,
         tried_ty: &Type,
         try_ok_ty: &Type,
@@ -140,7 +139,7 @@ impl TaskState<'_> {
 
     fn infer_propagate_in_function(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         new_expression: Expression,
         tried_ty: &Type,
         span: Span,
@@ -212,7 +211,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_try_block(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         items: Vec<Expression>,
         try_keyword_span: Span,
         span: Span,
@@ -249,7 +248,7 @@ impl TaskState<'_> {
             });
         }
 
-        self.register_types_and_values(store, &items, &Visibility::Local);
+        self.register_block_local_items(store, &items);
 
         let new_items = self.infer_block_items(store, items, ok_ty.clone());
 
@@ -338,7 +337,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_recover_block(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         items: Vec<Expression>,
         recover_keyword_span: Span,
         span: Span,
@@ -372,7 +371,7 @@ impl TaskState<'_> {
             });
         }
 
-        self.register_types_and_values(store, &items, &Visibility::Local);
+        self.register_block_local_items(store, &items);
 
         let new_items = self.infer_block_items(store, items, inner_ty.clone());
 

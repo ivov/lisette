@@ -3,7 +3,6 @@ use crate::store::Store;
 use syntax::EcoString;
 use syntax::ast::DeadCodeCause;
 use syntax::ast::{BinaryOperator, Expression, Span, UnaryOperator};
-use syntax::program::Visibility;
 use syntax::types::Type;
 
 use super::super::TaskState;
@@ -90,7 +89,7 @@ fn contains_stored_reference_to(expression: &Expression, var_name: &str) -> bool
 impl TaskState<'_> {
     pub(super) fn infer_paren(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -129,7 +128,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_block(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         items: Vec<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -155,7 +154,7 @@ impl TaskState<'_> {
         }
 
         self.scopes.push();
-        self.register_types_and_values(store, &items, &Visibility::Local);
+        self.register_block_local_items(store, &items);
 
         let new_items = self.infer_block_items(store, items, expected_ty.clone());
 
@@ -173,7 +172,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_reference(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -225,7 +224,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_identifier(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         value: EcoString,
         span: Span,
         expected_ty: &Type,
@@ -284,7 +283,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_assignment(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         target: Box<Expression>,
         value: Box<Expression>,
         compound_operator: Option<BinaryOperator>,
@@ -389,7 +388,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_tuple(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         elements: Vec<Expression>,
         span: Span,
         expected_ty: &Type,
@@ -422,7 +421,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_block_items(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         items: Vec<Expression>,
         last_item_expected_ty: Type,
     ) -> Vec<Expression> {

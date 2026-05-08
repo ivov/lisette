@@ -97,7 +97,7 @@ fn has_numeric_member_in_chain(expression: &Expression) -> bool {
 impl TaskState<'_> {
     pub(super) fn infer_function(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Expression,
         expected_ty: &Type,
     ) -> Expression {
@@ -226,7 +226,7 @@ impl TaskState<'_> {
 
     pub(super) fn infer_lambda(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         params: Vec<Binding>,
         return_annotation: Annotation,
         body: Box<Expression>,
@@ -293,7 +293,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn infer_function_call(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         expression: Box<Expression>,
         args: Vec<Expression>,
         spread: Box<Option<Expression>>,
@@ -545,7 +545,7 @@ impl TaskState<'_> {
 
     fn instantiate_callee_type(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         forall_ty: &Type,
         type_args: &[Annotation],
         callee_expression: &Expression,
@@ -825,7 +825,7 @@ impl TaskState<'_> {
     #[allow(clippy::too_many_arguments)]
     fn infer_type_conversion_call(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         callee_expression: Expression,
         named_ty: Type,
         underlying_fn: Type,
@@ -886,7 +886,7 @@ impl TaskState<'_> {
 
     fn infer_call_arguments(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         args: Vec<Expression>,
         param_types: &[Type],
     ) -> Vec<Expression> {
@@ -982,7 +982,7 @@ impl TaskState<'_> {
 
     fn infer_function_body(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         body: Box<Expression>,
         body_ty: &Type,
         return_annotation: &Annotation,
@@ -1014,7 +1014,7 @@ impl TaskState<'_> {
 
     fn infer_function_params(
         &mut self,
-        store: &mut Store,
+        store: &Store,
         params: Vec<Binding>,
         expected_params: &[Type],
         handle_self_receiver: bool,
@@ -1420,7 +1420,7 @@ impl TaskState<'_> {
     }
 
     /// Verify the substring arg is a range type over `int`; emit a `Range<int>` mismatch otherwise.
-    fn validate_substring_range_arg(&mut self, store: &mut Store, arg: &Expression) {
+    fn validate_substring_range_arg(&mut self, store: &Store, arg: &Expression) {
         let arg_ty = arg.get_type().resolve_in(&self.env);
         let arg_span = arg.get_span();
         let int_ty = self.type_int();

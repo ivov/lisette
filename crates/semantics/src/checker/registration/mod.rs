@@ -164,7 +164,7 @@ impl TaskState<'_> {
 
         store.store_file(module_id, file);
 
-        self.with_file_context(
+        self.with_file_context_mut(
             store,
             module_id,
             file_id,
@@ -240,7 +240,7 @@ impl TaskState<'_> {
         file_id: u32,
         imports: &[FileImport],
     ) {
-        self.with_file_context(
+        self.with_file_context_mut(
             store,
             module_id,
             file_id,
@@ -271,7 +271,7 @@ impl TaskState<'_> {
         file_id: u32,
         imports: &[FileImport],
     ) {
-        self.with_file_context(
+        self.with_file_context_mut(
             store,
             module_id,
             file_id,
