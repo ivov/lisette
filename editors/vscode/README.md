@@ -21,7 +21,7 @@ VSCode language support for [Lisette](https://github.com/ivov/lisette).
 
     ```bash
     cargo install lisette
-    lis version # -> lisette 0.1.0 (go 1.25.5)
+    lis version # -> lisette 0.2.1 (go 1.25.10)
     ```
 
 2. Install the [Lisette extension](https://marketplace.visualstudio.com/items?itemName=ivov.lisette) from the Visual Studio marketplace.

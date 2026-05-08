@@ -21,7 +21,7 @@ Neovim language support for [Lisette](https://github.com/ivov/lisette). Requires
 
     ```bash
     cargo install lisette
-    lis version # -> lisette 0.1.0 (go 1.25.5)
+    lis version # -> lisette 0.2.1 (go 1.25.10)
     ```
 
 2. Add to your `lazy.nvim` config:

@@ -1,7 +1,7 @@
 # Lisette
 
 [![crates.io](https://img.shields.io/crates/v/lisette.svg?logo=rust)](https://crates.io/crates/lisette)
-[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.25.10-00ADD8?logo=go)](https://go.dev)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Little language inspired by Rust that compiles to Go.

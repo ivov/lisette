@@ -21,7 +21,7 @@ Zed language support for [Lisette](https://github.com/ivov/lisette).
 
     ```bash
     cargo install lisette
-    lis version # -> lisette 0.1.0 (go 1.25.5)
+    lis version # -> lisette 0.2.1 (go 1.25.10)
     ```
 
 2. Search for "Lisette" in Zed's extensions panel and click "Install".
