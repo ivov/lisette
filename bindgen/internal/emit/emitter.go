@@ -537,7 +537,17 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 	if result.LisetteType != "" {
 		var sig strings.Builder
 
-		if strings.HasPrefix(result.LisetteType, "fn(") || result.IsTypeAlias {
+		// Lisette rejects self-referential type aliases, so a Go function-type
+		// like `type Filter func([]Filter)` falls back to an opaque type;
+		// downstream signatures referencing it still resolve.
+		isFnType := strings.HasPrefix(result.LisetteType, "fn(")
+		isRecursiveFnAlias := isFnType && containsIdent(result.LisetteType, typeName)
+
+		if isRecursiveFnAlias {
+			sig.WriteString("pub type ")
+			sig.WriteString(typeName)
+			sig.WriteString(result.TypeParams.DeclBlock())
+		} else if isFnType || result.IsTypeAlias {
 			sig.WriteString("pub type ")
 			sig.WriteString(typeName)
 			sig.WriteString(result.TypeParams.DeclBlock())
@@ -661,4 +671,37 @@ func sentinelFlag(value int) string {
 		return "#[go(sentinel_minus_one)]"
 	}
 	panic(fmt.Sprintf("bindgen: unsupported sentinel value %d (add a flag mapping)", value))
+}
+
+// containsIdent reports whether name appears in s as a standalone identifier.
+func containsIdent(s, name string) bool {
+	if name == "" {
+		return false
+	}
+	for i := 0; ; {
+		rel := strings.Index(s[i:], name)
+		if rel < 0 {
+			return false
+		}
+		idx := i + rel
+		end := idx + len(name)
+		var before, after byte
+		if idx > 0 {
+			before = s[idx-1]
+		}
+		if end < len(s) {
+			after = s[end]
+		}
+		if !isIdentByte(before) && !isIdentByte(after) {
+			return true
+		}
+		i = idx + 1
+	}
+}
+
+func isIdentByte(b byte) bool {
+	return b == '_' ||
+		(b >= 'a' && b <= 'z') ||
+		(b >= 'A' && b <= 'Z') ||
+		(b >= '0' && b <= '9')
 }
