@@ -53,7 +53,7 @@ impl LocalSink {
 
     pub fn merge(sinks: Vec<LocalSink>) -> Vec<LisetteDiagnostic> {
         let mut all: Vec<LisetteDiagnostic> = sinks.into_iter().flat_map(|s| s.take()).collect();
-        all.sort_by_key(|d| d.primary_offset());
+        all.sort_by(LisetteDiagnostic::sort_key);
         all
     }
 }

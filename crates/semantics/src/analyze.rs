@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -209,8 +210,41 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
             })
             .collect();
 
-        for (module_id, files) in module_files {
-            checker.infer_module(&store, &module_id, files);
+        // Single-file or tiny multi-module projects stay serial to avoid rayon
+        // overhead. This threshold is a conservative starting point, not a
+        // measured inflection point. To be tuned in future.
+        const PARALLEL_THRESHOLD: usize = 4;
+
+        if module_files.len() < PARALLEL_THRESHOLD {
+            for (module_id, files) in module_files {
+                checker.infer_module(&store, &module_id, files);
+            }
+        } else {
+            let allocator = binding_ids.clone();
+            let ufcs_snapshot = checker.ufcs_methods.clone();
+            let store_ref: &Store = &store;
+
+            type WorkerOutput = (Vec<(String, File)>, Facts, LocalSink);
+            let outputs: Vec<WorkerOutput> = module_files
+                .into_par_iter()
+                .map(|(module_id, files)| {
+                    let local_sink = LocalSink::new();
+                    let mut worker = TaskState::new(&local_sink, allocator.clone());
+                    worker.ufcs_methods = ufcs_snapshot.clone();
+                    worker.infer_module(store_ref, &module_id, files);
+                    let typed_files = std::mem::take(&mut worker.typed_files);
+                    let facts = std::mem::replace(&mut worker.facts, Facts::new(allocator.clone()));
+                    (typed_files, facts, local_sink)
+                })
+                .collect();
+
+            let mut worker_sinks: Vec<LocalSink> = Vec::with_capacity(outputs.len());
+            for (typed_files, facts, sink_local) in outputs {
+                checker.typed_files.extend(typed_files);
+                checker.facts.merge(facts);
+                worker_sinks.push(sink_local);
+            }
+            sink.extend(LocalSink::merge(worker_sinks));
         }
 
         for (module_id, typed_file) in std::mem::take(&mut checker.typed_files) {

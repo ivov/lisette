@@ -20,4 +20,5 @@ serde = { version = "1", features = ["derive"] }
 bincode = "1"
 ecow = "0.2"
 rustc-hash.workspace = true
+rayon.workspace = true
 

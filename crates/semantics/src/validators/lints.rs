@@ -157,7 +157,7 @@ fn lint_module(
     }
     diagnostics.extend(ref_result.diagnostics);
 
-    diagnostics.sort_by_key(|d| d.primary_offset());
+    diagnostics.sort_by(LisetteDiagnostic::sort_key);
     sink.extend(diagnostics);
 }
 
@@ -175,18 +175,23 @@ pub fn lint_all_facts(facts: &Facts, unused: &mut UnusedInfo, sink: &LocalSink) 
     collect_always_failing_try_blocks(facts, &mut diagnostics);
     collect_expression_only_fstrings(facts, &mut diagnostics);
 
-    diagnostics.sort_by_key(|d| d.primary_offset());
+    diagnostics.sort_by(LisetteDiagnostic::sort_key);
     sink.extend(diagnostics);
 }
 
 fn collect_bindings(facts: &Facts, unused: &mut UnusedInfo, out: &mut Vec<LisetteDiagnostic>) {
     for b in facts.bindings.values() {
         let is_anon = b.name.starts_with('_');
+        let written_but_not_read = b.kind.is_mutable() && b.mutated && !b.used && !is_anon;
 
         if !b.used {
             if !is_anon && b.kind.is_param() && !b.is_typedef && b.name != "self" {
                 out.push(diagnostics::lint::unused_parameter(&b.span, &b.name));
-            } else if !is_anon && !b.kind.is_param() && (!b.kind.is_match_arm() || b.is_as_alias) {
+            } else if !written_but_not_read
+                && !is_anon
+                && !b.kind.is_param()
+                && (!b.kind.is_match_arm() || b.is_as_alias)
+            {
                 out.push(diagnostics::lint::unused_variable(
                     &b.span,
                     &b.name,
@@ -200,7 +205,7 @@ fn collect_bindings(facts: &Facts, unused: &mut UnusedInfo, out: &mut Vec<Lisett
             out.push(diagnostics::lint::unused_mut(&b.span));
         }
 
-        if b.kind.is_mutable() && b.mutated && !b.used && !is_anon {
+        if written_but_not_read {
             out.push(diagnostics::lint::written_but_not_read(&b.span, &b.name));
         }
     }

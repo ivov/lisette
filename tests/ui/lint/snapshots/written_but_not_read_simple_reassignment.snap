@@ -1,12 +1,12 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Unused variable
+  [warning] Variable assigned but never read
    ╭─[test.lis:3:11]
  2 │ fn main() {
  3 │   let mut a = 0
    ·           ┬
-   ·           ╰── never used
+   ·           ╰── `a` is assigned but never read
  4 │   a = 42
    ╰────
-  help: Use this variable or prefix it with an underscore: `_a` · code: [lint.unused_variable]
+  help: Read the variable after assigning it, or explicitly discard it with `let _ = ...` · code: [lint.assigned_but_never_read]

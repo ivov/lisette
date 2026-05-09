@@ -446,4 +446,12 @@ impl LisetteDiagnostic {
     pub fn is_warning(&self) -> bool {
         self.severity == Severity::Warning
     }
+
+    pub fn sort_key(a: &Self, b: &Self) -> std::cmp::Ordering {
+        a.file_id()
+            .cmp(&b.file_id())
+            .then_with(|| a.primary_offset().cmp(&b.primary_offset()))
+            .then_with(|| a.code_str().cmp(&b.code_str()))
+            .then_with(|| a.plain_message().cmp(b.plain_message()))
+    }
 }
