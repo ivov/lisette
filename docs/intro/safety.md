@@ -266,16 +266,16 @@ In Lisette, value receivers are immutable like any other binding:
   help: Use `self: Ref<Counter>` to mutate the receiver
 ```
 
-### Mutability indicator
+### Mutable parameters
 
-Go functions that mutate their parameters (e.g. `sort.Ints`) do not signal that they do so:
+Go does not signal parameter mutation that affects the caller:
 
 ```go
 nums := []int{3, 1, 2}
 sort.Ints(nums) // silently mutates `nums`
 ```
 
-In Lisette, functions that mutate their parameters must declare so:
+In Lisette, functions that mutate their parameters in a way observable to the caller must declare so with `mut`.
 
 ```
   [error] Immutable argument passed to `mut` parameter
@@ -285,26 +285,10 @@ In Lisette, functions that mutate their parameters must declare so:
    ·             ──┬─
    ·               ╰── expected mutable, found immutable
    ╰────
-  help: Bindings in Lisette are immutable by default. Use `let mut nums = ...` to allow mutation
+  help: `sort.Ints()` may mutate `nums`, so declare it mutable using `let mut nums = ...`
 ```
 
-Lisette warns about excess mutability:
-
-```
-  [warning] Unnecessary `mut`
-   ╭─[example.lis:2:11]
- 1 │ fn main() {
- 2 │   let mut count = items.length()
-   ·           ──┬──
-   ·             ╰── declared as mutable
- 3 │ }
-   ╰────
-  help: Remove `mut` from the declaration if you do not need to mutate the variable
-```
-
-ℹ️ The immutability of `let` protects the binding from reassignment, but it does not protect the value from mutation through a `Ref<T>` pointer.
-
-📚 See [`02-types.md`](../reference/02-types.md)
+📚 See [`05-functions.md`](../reference/05-functions.md#mutable-parameters)
 
 ## Zero values
 

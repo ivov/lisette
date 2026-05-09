@@ -5,7 +5,7 @@ use crate::store::Store;
 use syntax::ast::{EnumVariant, Generic, StructFieldDefinition};
 use syntax::program::DefinitionBody;
 use syntax::types::Type;
-use syntax::types::{SubstitutionMap, substitute};
+use syntax::types::{SubstitutionMap, build_substitution_map, substitute};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InhabitanceState {
@@ -193,12 +193,4 @@ pub fn is_struct_inhabited(
         let field_ty = substitute(&f.ty, &map);
         is_inhabited(&field_ty, store, cache)
     })
-}
-
-fn build_substitution_map(generics: &[Generic], type_args: &[Type]) -> SubstitutionMap {
-    generics
-        .iter()
-        .map(|g| g.name.clone())
-        .zip(type_args.iter().cloned())
-        .collect()
 }

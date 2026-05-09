@@ -912,8 +912,8 @@
    ·               <span class="diag-ptr">╰── expected mutable, found immutable</span>
  <span class="diag-dim">6</span> │ }
    ╰────
-  <span class="diag-dim">help: Bindings in Lisette are immutable by default.
-        Use <span class="diag-accent">let mut nums = ...</span> to allow mutation</span></pre>
+  <span class="diag-dim">help: <span class="diag-accent">sort.Ints()</span> may mutate <span class="diag-accent">nums</span>, so declare it mutable
+        using <span class="diag-accent">let mut nums = ...</span></span></pre>
         </div>
 
         <div class="diag-block">

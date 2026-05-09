@@ -4,6 +4,8 @@ use std::cell::OnceCell;
 
 use ecow::EcoString;
 
+use crate::ast::Generic;
+
 /// Dot-qualified identifier for a named type, method, value, or variant.
 ///
 /// Wraps the qualified name (`"main.Point.sum"`, `"prelude.Option"`,
@@ -177,6 +179,16 @@ pub fn peel_to_range_type(ty: &Type) -> Option<&Type> {
 
 /// type param name -> type variable
 pub type SubstitutionMap = HashMap<EcoString, Type>;
+
+/// Build a substitution map from a list of generics and their type arguments,
+/// pairing each generic's name with the type at the same position.
+pub fn build_substitution_map(generics: &[Generic], type_args: &[Type]) -> SubstitutionMap {
+    generics
+        .iter()
+        .zip(type_args.iter())
+        .map(|(g, t)| (g.name.clone(), t.clone()))
+        .collect()
+}
 
 pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
     if map.is_empty() {

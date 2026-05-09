@@ -2218,3 +2218,261 @@ fn my_sort(items: Slice<int>) {
     )
     .assert_infer_code("immutable_arg_to_mut_param");
 }
+
+#[test]
+fn mut_int_param_does_not_require_mut_arg() {
+    infer(
+        r#"
+fn to_char(mut n: int) -> int {
+  n = n - 10
+  return n
+}
+
+fn main() {
+  let rnd = 42
+  let _ = to_char(rnd)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_string_param_does_not_require_mut_arg() {
+    infer(
+        r#"
+fn append_bang(mut s: string) -> string {
+  s = s + "!"
+  return s
+}
+
+fn main() {
+  let greeting = "hi"
+  let _ = append_bang(greeting)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_bool_param_does_not_require_mut_arg() {
+    infer(
+        r#"
+fn flip(mut b: bool) -> bool {
+  b = !b
+  return b
+}
+
+fn main() {
+  let flag = true
+  let _ = flip(flag)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_float_param_does_not_require_mut_arg() {
+    infer(
+        r#"
+fn bump(mut f: float64) -> float64 {
+  f = f + 1.0
+  return f
+}
+
+fn main() {
+  let v = 1.5
+  let _ = bump(v)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_byte_param_does_not_require_mut_arg() {
+    infer(
+        r#"
+fn inc(mut x: byte) -> byte {
+  x = x + 1
+  return x
+}
+
+fn main() {
+  let b: byte = 65
+  let _ = inc(b)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_value_struct_param_does_not_require_mut_arg() {
+    infer(
+        r#"
+struct Point { x: int, y: int }
+
+fn relocate(mut p: Point) -> Point {
+  p = Point { x: 0, y: 0 }
+  return p
+}
+
+fn main() {
+  let p = Point { x: 1, y: 2 }
+  let _ = relocate(p)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_value_tuple_param_does_not_require_mut_arg() {
+    infer(
+        r#"
+fn reset(mut t: (int, int)) -> (int, int) {
+  t = (0, 0)
+  return t
+}
+
+fn main() {
+  let t = (1, 2)
+  let _ = reset(t)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_struct_containing_slice_requires_mut_arg() {
+    infer(
+        r#"
+struct Box { items: Slice<int> }
+
+fn write_first(mut b: Box) {
+  b.items[0] = 99
+}
+
+fn main() {
+  let b = Box { items: [1, 2, 3] }
+  write_first(b)
+}
+"#,
+    )
+    .assert_infer_code("immutable_arg_to_mut_param");
+}
+
+#[test]
+fn mut_enum_variant_carrying_slice_requires_mut_arg() {
+    infer(
+        r#"
+enum Payload { Items(Slice<int>), Empty }
+
+fn touch(mut p: Payload) {
+  let _ = p
+}
+
+fn main() {
+  let p = Payload.Items([1, 2, 3])
+  touch(p)
+}
+"#,
+    )
+    .assert_infer_code("immutable_arg_to_mut_param");
+}
+
+#[test]
+fn mut_ref_param_does_not_require_mut_arg() {
+    infer(
+        r#"
+fn bump(mut r: Ref<int>) {
+  r.* = r.* + 1
+}
+
+fn main() {
+  let x = 10
+  bump(&x)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_channel_param_does_not_require_mut_arg() {
+    infer(
+        r#"
+fn send_one(mut ch: Channel<int>) {
+  ch.send(1)
+}
+
+fn main() {
+  let ch = Channel.new<int>()
+  send_one(ch)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_struct_with_only_ref_field_does_not_require_mut_arg() {
+    infer(
+        r#"
+struct Wrap { r: Ref<int> }
+
+fn touch(mut w: Wrap) {
+  let _ = w
+}
+
+fn main() {
+  let x = 10
+  let w = Wrap { r: &x }
+  touch(w)
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn mut_generic_struct_with_slice_requires_mut_arg() {
+    infer(
+        r#"
+struct Box<T> { item: T }
+
+fn write_first(mut b: Box<Slice<int>>) {
+  b.item[0] = 99
+}
+
+fn main() {
+  let b: Box<Slice<int>> = Box { item: [1, 2, 3] }
+  write_first(b)
+}
+"#,
+    )
+    .assert_infer_code("immutable_arg_to_mut_param");
+}
+
+#[test]
+fn mut_generic_struct_with_int_does_not_require_mut_arg() {
+    infer(
+        r#"
+struct Box<T> { item: T }
+
+fn replace(mut b: Box<int>) {
+  b = Box { item: 0 }
+}
+
+fn main() {
+  let b: Box<int> = Box { item: 42 }
+  replace(b)
+}
+"#,
+    )
+    .assert_no_errors();
+}

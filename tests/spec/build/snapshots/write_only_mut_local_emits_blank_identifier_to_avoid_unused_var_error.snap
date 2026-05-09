@@ -1,0 +1,10 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+func main() {
+	_ = 0
+	_ = 1
+}

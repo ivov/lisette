@@ -1,0 +1,14 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+func index_write(items []int) {
+	items[0] = 99
+}
+
+func main() {
+	data := []int{1, 2, 3}
+	index_write(data)
+}

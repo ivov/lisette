@@ -2,11 +2,11 @@
 source: tests/ui/errors/mod.rs
 ---
   [error] Immutable argument passed to `mut` parameter
-   ╭─[test.lis:8:9]
- 7 │   let data = [3, 1, 2]
- 8 │   touch(data...)
-   ·         ──┬─
-   ·           ╰── expected mutable, found immutable
- 9 │ }
-   ╰────
-  help: Bindings in Lisette are immutable by default. Use `let mut data = ...` to allow mutation, or make the parameter immutable by removing `mut` from the function signature · code: [infer.immutable_arg_to_mut_param]
+    ╭─[test.lis:10:9]
+  9 │   let data = [xs, ys]
+ 10 │   touch(data...)
+    ·         ──┬─
+    ·           ╰── expected mutable, found immutable
+ 11 │ }
+    ╰────
+  help: `touch()` may mutate `data`, so declare it mutable using `let mut data = ...` · code: [infer.immutable_arg_to_mut_param]

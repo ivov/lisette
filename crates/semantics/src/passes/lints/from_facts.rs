@@ -97,8 +97,9 @@ fn collect_bindings(facts: &Facts, unused: &mut UnusedInfo, out: &mut Vec<Lisett
     for b in facts.bindings.values() {
         let is_anon = b.name.starts_with('_');
         let written_but_not_read = b.kind.is_mutable() && b.mutated && !b.used && !is_anon;
+        let is_write_only_param = written_but_not_read && b.kind.is_param();
 
-        if !b.used {
+        if !b.used && !is_write_only_param {
             if !is_anon && b.kind.is_param() && !b.is_typedef && b.name != "self" {
                 out.push(diagnostics::lint::unused_parameter(&b.span, &b.name));
             } else if !written_but_not_read

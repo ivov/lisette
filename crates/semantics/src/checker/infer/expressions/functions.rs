@@ -9,6 +9,7 @@ use syntax::types::{
 };
 
 use super::super::TaskState;
+use super::super::carry_mut::can_carry_mutation_across_fn_boundary;
 use super::super::unify::Dispatched;
 use super::primitives::contains_deref;
 use crate::checker::scopes::UseContext;
@@ -382,7 +383,13 @@ impl TaskState<'_> {
 
         let new_args = self.infer_call_arguments(store, args, &effective_param_types);
         self.check_call_arity(&param_types, &new_args, &callee_expression, &span);
-        self.check_mut_param_arguments(&new_args, &param_mutability, &callee_expression);
+        self.check_mut_param_arguments(
+            store,
+            &new_args,
+            &param_types,
+            &param_mutability,
+            &callee_expression,
+        );
         self.check_range_to_for_variadic(&new_args, &variadic_elem_ty);
 
         if let Some(idx) = substring_range_idx
@@ -397,13 +404,13 @@ impl TaskState<'_> {
                     let var = self.new_type_var();
                     self.type_slice(var)
                 } else {
-                    self.type_slice(elem_ty)
+                    self.type_slice(elem_ty.clone())
                 };
                 let inferred =
                     self.with_value_context(|s| s.infer_expression(store, spread_expr, &expected));
                 if param_mutability.last().copied().unwrap_or(false) {
-                    let is_external = self.is_external_callee(&callee_expression);
-                    self.check_arg_against_mut_param(&inferred, is_external);
+                    let callee_label = callee_label(&callee_expression);
+                    self.check_arg_against_mut_param(store, &inferred, &elem_ty, &callee_label);
                 }
                 inferred
             }
@@ -1292,21 +1299,6 @@ impl TaskState<'_> {
         }
     }
 
-    fn is_external_callee(&self, expression: &Expression) -> bool {
-        if let Expression::DotAccess {
-            expression: base, ..
-        } = expression
-            && let Expression::Identifier { value, .. } = base.as_ref()
-        {
-            return self
-                .imports
-                .prefix_to_module
-                .get(value.as_ref())
-                .is_some_and(|module_id| module_id.starts_with("go:"));
-        }
-        false
-    }
-
     /// Check that native mutating methods (append, extend,
     /// delete) are called on mutable receivers. The emitter rewrites these into
     /// mutations, so the checker must enforce `mut` on the binding.
@@ -1390,19 +1382,34 @@ impl TaskState<'_> {
 
     fn check_mut_param_arguments(
         &mut self,
+        store: &Store,
         args: &[Expression],
+        param_types: &[Type],
         param_mutability: &[bool],
         callee: &Expression,
     ) {
-        let is_external = self.is_external_callee(callee);
+        let callee_label = callee_label(callee);
         for (i, arg) in args.iter().enumerate() {
-            if param_mutability.get(i).copied().unwrap_or(false) {
-                self.check_arg_against_mut_param(arg, is_external);
+            if !param_mutability.get(i).copied().unwrap_or(false) {
+                continue;
             }
+            let Some(param_ty) = param_types.get(i) else {
+                continue;
+            };
+            self.check_arg_against_mut_param(store, arg, param_ty, &callee_label);
         }
     }
 
-    fn check_arg_against_mut_param(&mut self, arg: &Expression, is_external: bool) {
+    fn check_arg_against_mut_param(
+        &mut self,
+        store: &Store,
+        arg: &Expression,
+        param_ty: &Type,
+        callee_label: &str,
+    ) {
+        if !can_carry_mutation_across_fn_boundary(param_ty, &self.env, store) {
+            return;
+        }
         let Some(var_name) = arg.get_var_name() else {
             return;
         };
@@ -1410,8 +1417,8 @@ impl TaskState<'_> {
             self.sink
                 .push(diagnostics::infer::immutable_argument_to_mut_param(
                     &var_name,
+                    callee_label,
                     arg.get_span(),
-                    is_external,
                 ));
         }
         if let Some(binding_id) = self.scopes.lookup_binding_id(&var_name) {
@@ -1464,5 +1471,18 @@ impl TaskState<'_> {
                 .get_name()
                 .is_some_and(|n| n == "Range")
         })
+    }
+}
+
+fn callee_label(expr: &Expression) -> String {
+    match expr {
+        Expression::Identifier { value, .. } => format!("`{}()`", value),
+        Expression::DotAccess {
+            expression, member, ..
+        } => match expression.as_ref() {
+            Expression::Identifier { value, .. } => format!("`{}.{}()`", value, member),
+            _ => "the function".to_string(),
+        },
+        _ => "the function".to_string(),
     }
 }

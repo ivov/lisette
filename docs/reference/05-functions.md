@@ -96,19 +96,26 @@ fn sorted<T: Ordered>(xs: Slice<T>) -> Slice<T> { ... }
 
 ## Mutable parameters
 
-Parameters are immutable by default. If a function mutates a parameter (e.g. sorting a slice in place), mark it with `mut`:
+By default, parameters disallow rebinding inside the function body. Mark them `mut` to allow rebinding.
+
+Additionally, if the function writes through the parameter in a way observable to the caller, marking the parameter `mut` requires the call-site binding to be `mut` as well.
 
 ```rust
 fn sort_in_place(mut items: Slice<int>) {
   // ...
 }
 
-let mut mutable_nums = [3, 1, 2]
-sort_in_place(mutable_nums)  // ok
+let mut nums = [3, 1, 2] // arg mutable
+sort_in_place(nums)  // param mutable, ok
 
-let immutable_nums = [3, 1, 2]
-sort_in_place(immutable_nums)  // error
+let nums = [3, 1, 2] // arg immutable
+sort_in_place(nums)  // param immutable, error
 ```
+
+This additional rule applies to `Slice<T>`, `Map<K, V>`, and any struct, tuple, or enum that recursively contains one. This rule does not apply to:
+
+- Values that Go passes by copy, e.g. `int`, `string`, `bool`, `float64`, plain structs, tuples.
+- `Ref<T>` and `Channel<T>`. The purpose of pointers and channels is to share or transmit data, so mutation is implied.
 
 ## Lambdas
 

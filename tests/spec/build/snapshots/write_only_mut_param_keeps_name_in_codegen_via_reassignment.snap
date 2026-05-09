@@ -1,0 +1,14 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+func reassign_only(items []int) {
+	items = []int{99, 99, 99}
+}
+
+func main() {
+	data := []int{1, 2, 3}
+	reassign_only(data)
+}

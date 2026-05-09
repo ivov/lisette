@@ -7083,12 +7083,14 @@ fn test(parts: Slice<string>) {
 #[test]
 fn infer_immutable_spread_to_mut_variadic_param() {
     let input = r#"
-fn touch(mut items: VarArgs<int>) {
+fn touch(mut items: VarArgs<Slice<int>>) {
   let _ = items
 }
 
 fn main() {
-  let data = [3, 1, 2]
+  let xs = [1, 2]
+  let ys = [3, 4]
+  let data = [xs, ys]
   touch(data...)
 }
 "#;
@@ -7098,15 +7100,15 @@ fn main() {
 #[test]
 fn infer_immutable_args_to_mut_variadic_param() {
     let input = r#"
-fn touch(x: int, mut ys: VarArgs<int>) -> int {
+fn touch(x: int, mut ys: VarArgs<Slice<int>>) -> int {
   let _ = ys
   x
 }
 
 fn main() {
   let a = 1
-  let b = 2
-  let c = 3
+  let b = [1, 2]
+  let c = [3, 4]
   let _ = touch(a, b, c)
 }
 "#;

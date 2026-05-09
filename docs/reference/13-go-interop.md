@@ -233,26 +233,14 @@ let new_age: Option<int> = Some(30)
 db.Exec("UPDATE users SET age = ? WHERE id = ?", new_age, id)?
 ```
 
-Go functions that mutate a parameter declare it with `mut`
+Go functions that mutate their parameters in a way observable to the caller must declare so with `mut`.
 
 ```rust
 // sort.d.lis
 pub fn Ints(mut x: Slice<int>)
 ```
 
-The compiler enforces that callers pass a mutable binding:
-
-```rust
-import "go:sort"
-
-let mut nums = [3, 1, 2]
-sort.Ints(nums)   // ok
-
-let frozen = [3, 1, 2]
-sort.Ints(frozen)  // error
-```
-
-Run e.g. `lis doc go:os` to view the declaration file for a Go stdlib package or `lis doc go:os.File` to view the declaration file for a Go stdlib type.
+📚 See [`05-functions.md`](../reference/05-functions.md#mutable-parameters)
 
 ## Panic recovery
 

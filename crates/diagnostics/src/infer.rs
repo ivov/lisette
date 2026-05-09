@@ -2542,21 +2542,12 @@ pub fn reference_through_newtype(span: Span) -> LisetteDiagnostic {
 
 pub fn immutable_argument_to_mut_param(
     var_name: &str,
+    callee_label: &str,
     span: Span,
-    is_external: bool,
 ) -> LisetteDiagnostic {
-    let help = if is_external {
-        format!(
-            "Bindings in Lisette are immutable by default. Use `let mut {} = ...` to allow mutation",
-            var_name
-        )
-    } else {
-        format!(
-            "Bindings in Lisette are immutable by default. Use `let mut {} = ...` to allow mutation, \
-             or make the parameter immutable by removing `mut` from the function signature",
-            var_name
-        )
-    };
+    let help = format!(
+        "{callee_label} may mutate `{var_name}`, so declare it mutable using `let mut {var_name} = ...`."
+    );
     LisetteDiagnostic::error("Immutable argument passed to `mut` parameter")
         .with_infer_code("immutable_arg_to_mut_param")
         .with_span_label(&span, "expected mutable, found immutable")

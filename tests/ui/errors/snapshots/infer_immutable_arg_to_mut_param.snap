@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·          ╰── expected mutable, found immutable
  9 │ }
    ╰────
-  help: Bindings in Lisette are immutable by default. Use `let mut data = ...` to allow mutation, or make the parameter immutable by removing `mut` from the function signature · code: [infer.immutable_arg_to_mut_param]
+  help: `sort()` may mutate `data`, so declare it mutable using `let mut data = ...` · code: [infer.immutable_arg_to_mut_param]

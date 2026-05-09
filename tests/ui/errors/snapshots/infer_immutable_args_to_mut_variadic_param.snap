@@ -3,10 +3,10 @@ source: tests/ui/errors/mod.rs
 ---
   [error] Immutable argument passed to `mut` parameter
     ╭─[test.lis:11:20]
- 10 │   let c = 3
+ 10 │   let c = [3, 4]
  11 │   let _ = touch(a, b, c)
     ·                    ┬
     ·                    ╰── expected mutable, found immutable
  12 │ }
     ╰────
-  help: Bindings in Lisette are immutable by default. Use `let mut b = ...` to allow mutation, or make the parameter immutable by removing `mut` from the function signature · code: [infer.immutable_arg_to_mut_param]
+  help: `touch()` may mutate `b`, so declare it mutable using `let mut b = ...` · code: [infer.immutable_arg_to_mut_param]

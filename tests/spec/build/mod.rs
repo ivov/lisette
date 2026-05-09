@@ -4938,3 +4938,65 @@ fn go_import_collision_silent_when_aliases_differ() {
         diagnostics.iter().map(|d| d.code_str()).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn write_only_mut_param_keeps_name_in_codegen_via_reassignment() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn reassign_only(mut items: Slice<int>) {
+  items = [99, 99, 99]
+}
+
+fn main() {
+  let mut data = [1, 2, 3]
+  reassign_only(data)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn write_only_mut_local_emits_blank_identifier_to_avoid_unused_var_error() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn main() {
+  let mut x = 0
+  x = 1
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn write_only_mut_param_keeps_name_in_codegen_via_index_write() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+fn index_write(mut items: Slice<int>) {
+  items[0] = 99
+}
+
+fn main() {
+  let mut data = [1, 2, 3]
+  index_write(data)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
