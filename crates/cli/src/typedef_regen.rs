@@ -1,142 +1,83 @@
-use std::fs;
-use std::fs::File;
-use std::path::Path;
+use deps::{BindgenFailure, TypedefLocator, TypedefLocatorResult};
+use rustc_hash::FxHashSet as HashSet;
 
-use fs2::FileExt;
+use crate::output::print_warning;
+use crate::workspace::extract_go_imports;
 
-use crate::go_cli;
-use crate::output::{print_progress, print_warning};
-use crate::workspace::GoWorkspace;
-use crate::{cli_error, error};
-use deps::{GoModule, Manifest, TypedefLocator};
-use stdlib::Target;
-
-/// Generate any Go typedefs declared in the manifest but missing from the cache:
-/// `<project>/target/.lisette/typedefs/lis@v{version}/<target>/{module}@{version}/*.d.lis`
-pub fn generate_missing_typedefs(project_root: &Path, manifest: &Manifest) -> Result<(), i32> {
-    let go_deps = manifest.go_deps();
-    if go_deps.is_empty() {
-        return Ok(());
-    }
-
-    let typedef_cache_dir = deps::typedef_cache_dir(project_root);
-    let target = Target::host();
-
-    let missing_modules: Vec<(String, String)> = go_deps
-        .iter()
-        .filter(|(module_path, dep)| {
-            !module_dir_populated(&typedef_cache_dir, target, module_path, &dep.version)
-        })
-        .map(|(module_path, dep)| (module_path.clone(), dep.version.clone()))
-        .collect();
-
-    if missing_modules.is_empty() {
-        return Ok(());
-    }
-
-    go_cli::require_go()?;
-
-    let project_target_dir = project_root.join("target");
-    if project_target_dir.is_file() {
-        cli_error!(
-            "Failed to regenerate Go typedefs",
-            "`target/` exists but is a file, not a directory",
-            "Remove or move `target/` and retry"
-        );
-        return Err(1);
-    }
-    if let Err(e) = fs::create_dir_all(&project_target_dir) {
-        error!(
-            "failed to regenerate Go typedefs",
-            format!("Failed to create target directory: {}", e)
-        );
-        return Err(1);
-    }
-
-    if let Err(e) = fs::create_dir_all(&typedef_cache_dir) {
-        error!(
-            "failed to regenerate Go typedefs",
-            format!("Failed to create typedef cache directory: {}", e)
-        );
-        return Err(1);
-    }
-
-    let _lock = acquire_regen_lock(&typedef_cache_dir)?;
-
-    // Another process may have regenerated everything while we were waiting.
-    let still_missing: Vec<(String, String)> = missing_modules
-        .into_iter()
-        .filter(|(module_path, version)| {
-            !module_dir_populated(&typedef_cache_dir, target, module_path, version)
-        })
-        .collect();
-
-    if still_missing.is_empty() {
-        return Ok(());
-    }
-
-    let locator = TypedefLocator::new(go_deps, Some(project_root.to_path_buf()), target);
-    if let Err(msg) = go_cli::write_go_mod(&project_target_dir, &manifest.project.name, &locator) {
-        error!("failed to write target/go.mod", msg);
-        return Err(1);
-    }
-
-    let workspace = GoWorkspace::new(&project_target_dir, &typedef_cache_dir, target);
-
-    let lis_version = env!("CARGO_PKG_VERSION");
-    print_progress(&format!(
-        "Regenerating Go typedefs for lis v{}",
-        lis_version
-    ));
-
-    for (module_path, version) in &still_missing {
-        print_progress(&format!("Regenerating {}@{}", module_path, version));
-
-        let module = GoModule {
-            path: module_path,
-            version,
-        };
-        if let Err(msg) = workspace.reconcile(module) {
-            print_warning(&format!("Failed to regenerate {}: {}", module_path, msg));
+/// Generate the typedef for every non-blank `go:` import in source, then
+/// recurse into each typedef's own `go:` imports. Returns `Err(1)` if any
+/// declared import fails; undeclared and unknown-stdlib imports are left
+/// to the type-checker.
+pub fn prewarm_typedef_cache(
+    source_imports: &[String],
+    locator: &TypedefLocator,
+) -> Result<(), i32> {
+    let mut visited: HashSet<String> = HashSet::default();
+    let mut queue: Vec<String> = Vec::with_capacity(source_imports.len());
+    for pkg in source_imports {
+        if visited.insert(pkg.clone()) {
+            queue.push(pkg.clone());
         }
     }
 
-    Ok(())
-}
+    let mut had_failure = false;
 
-fn module_dir_populated(
-    cache_dir: &Path,
-    target: Target,
-    module_path: &str,
-    version: &str,
-) -> bool {
-    let module_dir = cache_dir
-        .join(target.cache_segment())
-        .join(format!("{}@{}", module_path, version));
-    match fs::read_dir(&module_dir) {
-        Ok(mut entries) => entries.next().is_some(),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
-        Err(_) => false,
-    }
-}
-
-fn acquire_regen_lock(typedef_cache_dir: &Path) -> Result<File, i32> {
-    let lock_path = typedef_cache_dir.join(".lis-regen.lock");
-    let file = match File::create(&lock_path) {
-        Ok(f) => f,
-        Err(e) => {
-            error!(
-                "failed to create regen lock file",
-                format!("Failed to create `{}`: {}", lock_path.display(), e)
-            );
-            return Err(1);
+    while let Some(pkg) = queue.pop() {
+        match locator.find_typedef_content(&pkg) {
+            TypedefLocatorResult::Found { content, .. } => {
+                for imp in extract_go_imports(&content) {
+                    if visited.insert(imp.clone()) {
+                        queue.push(imp);
+                    }
+                }
+            }
+            TypedefLocatorResult::UnknownStdlib | TypedefLocatorResult::UndeclaredImport => {
+                // Type-checker handles these.
+            }
+            TypedefLocatorResult::MissingTypedef { module, version } => {
+                print_warning(&format!(
+                    "missing typedef for {}",
+                    pkg_label(&pkg, &module, &version)
+                ));
+                had_failure = true;
+            }
+            TypedefLocatorResult::UnreadableTypedef { path, error } => {
+                print_warning(&format!(
+                    "unreadable typedef at `{}`: {}",
+                    path.display(),
+                    error
+                ));
+                had_failure = true;
+            }
+            TypedefLocatorResult::BindgenFailed {
+                kind,
+                module,
+                version,
+                ..
+            } => {
+                match kind {
+                    BindgenFailure::GoToolchainMissing => {
+                        print_warning(&format!(
+                            "cannot bindgen {}: Go toolchain not installed",
+                            pkg_label(&pkg, &module, &version)
+                        ));
+                    }
+                    BindgenFailure::InvocationFailed { stderr } => {
+                        print_warning(&format!(
+                            "bindgen failed for {}: {}",
+                            pkg_label(&pkg, &module, &version),
+                            stderr.trim()
+                        ));
+                    }
+                }
+                had_failure = true;
+            }
         }
-    };
-
-    if let Err(e) = file.lock_exclusive() {
-        error!("failed to acquire regen lock", format!("{}", e));
-        return Err(1);
     }
 
-    Ok(file)
+    if had_failure { Err(1) } else { Ok(()) }
+}
+
+fn pkg_label(pkg: &str, module: &str, version: &str) -> String {
+    format!("`{}` ({} {})", pkg, module, version)
 }

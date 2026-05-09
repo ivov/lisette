@@ -57,6 +57,16 @@ impl AnalysisSnapshot {
                 } else {
                     continue;
                 }
+            } else if let Some(typedef_path) = result.typedef_paths.get(file_id) {
+                // The synthetic `file.name` for go: typedefs does not match the
+                // on-disk filename — use the path the locator captured.
+                match Url::from_file_path(typedef_path) {
+                    Ok(uri) => uri,
+                    Err(_) => continue,
+                }
+            } else if file.module_id.starts_with("go:") {
+                // Stdlib go: typedef is embedded; nothing on disk to navigate to.
+                continue;
             } else {
                 let path = module_file_to_path(config, &file.module_id, &file.name);
                 match Url::from_file_path(&path) {

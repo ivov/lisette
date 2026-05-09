@@ -23,7 +23,7 @@ use crate::completion::{
     get_module_prefix, get_type_completions, resolve_variable_type,
 };
 use crate::definition::{
-    find_struct_field_span, lookup_definition_span, resolve_definition_span,
+    find_struct_field_span, is_go_typedef_span, lookup_definition_span, resolve_definition_span,
     resolve_dot_access_definition, resolve_enum_in_pattern, resolve_import_span,
     resolve_match_pattern_definition, resolve_struct_call_field, resolve_word_at_offset,
     word_at_offset,
@@ -385,6 +385,13 @@ impl LanguageServer for Backend {
         let Some(definition_span) = definition_span else {
             return Ok(None);
         };
+
+        // Stdlib go: typedefs are loaded from cache without registering a File,
+        // so their definitions carry Span::dummy(). Refuse to navigate rather
+        // than jump to (0,0) of whatever happens to be at file_id 0.
+        if definition_span.is_dummy() {
+            return Ok(None);
+        }
 
         if let Some(target_file) = snapshot.files().get(&definition_span.file_id) {
             let end = (definition_span.byte_offset as usize)
@@ -863,7 +870,10 @@ impl LanguageServer for Backend {
                 span,
                 ..
             } if !member.is_empty() => {
-                if resolve_dot_access_definition(expression, member, file, &snapshot).is_some() {
+                let resolved = resolve_dot_access_definition(expression, member, file, &snapshot);
+                if let Some(definition_span) = resolved
+                    && !is_go_typedef_span(&snapshot, &definition_span)
+                {
                     let member_span = syntax::ast::Span::new(
                         span.file_id,
                         span.byte_offset + span.byte_length - member.len() as u32,
@@ -977,7 +987,8 @@ impl LanguageServer for Backend {
 
                 syntax::ast::Expression::DotAccess {
                     expression, member, ..
-                } => resolve_dot_access_definition(expression, member, file, &snapshot),
+                } => resolve_dot_access_definition(expression, member, file, &snapshot)
+                    .filter(|s| !is_go_typedef_span(&snapshot, s)),
 
                 syntax::ast::Expression::Match { arms, .. } => {
                     resolve_match_pattern_definition(arms, offset, file, &snapshot)

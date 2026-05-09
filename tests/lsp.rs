@@ -554,6 +554,80 @@ async fn goto_definition_on_literal_returns_none() {
 }
 
 #[tokio::test]
+async fn goto_definition_on_stdlib_go_function_returns_none() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+
+    let source = "import \"go:fmt\"\n\nfn main() {\n  fmt.Println(\"hello\")\n}";
+    client.open(TEST_URI, source).await;
+
+    // Stdlib go: typedefs are embedded in the binary; no on-disk file exists.
+    // The handler must return None rather than navigate to (0,0) of the entry file.
+    let response = client.goto_definition(TEST_URI, 3, 6).await;
+    assert!(
+        response.is_none(),
+        "stdlib go: F12 should return None, got {:?}",
+        response
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_on_third_party_go_function_navigates_to_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    let manifest = format!(
+        "[project]\nname = \"test\"\nversion = \"0.0.1\"\n\n[toolchain]\nlis = \"{}\"\n\n[dependencies.go]\n\"github.com/example/lib\" = \"v1.0.0\"\n",
+        env!("CARGO_PKG_VERSION")
+    );
+    std::fs::write(root.join("lisette.toml"), manifest).unwrap();
+
+    // Pre-populate the typedef cache for `github.com/example/lib@v1.0.0`.
+    let pkg = deps::GoPackage {
+        module: deps::GoModule {
+            path: "github.com/example/lib",
+            version: "v1.0.0",
+        },
+        package: "github.com/example/lib",
+    };
+    let cache_dir = deps::typedef_cache_dir(root);
+    let typedef_path = pkg.typedef_path(&cache_dir, stdlib::Target::host());
+    std::fs::create_dir_all(typedef_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &typedef_path,
+        "// Package: lib\n\npub fn DoStuff() -> int\n",
+    )
+    .unwrap();
+
+    let src = root.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let main_content =
+        "import \"go:github.com/example/lib\"\n\nfn main() {\n  let _ = lib.DoStuff()\n}";
+    let main_path = src.join("main.lis");
+    std::fs::write(&main_path, main_content).unwrap();
+
+    let mut client = TestClient::new().await;
+    client.initialize_with_root(root).await;
+
+    let main_uri = Url::from_file_path(&main_path).unwrap().to_string();
+    client.open(&main_uri, main_content).await;
+
+    // Cursor on `DoStuff`.
+    let response = client.goto_definition(&main_uri, 3, 14).await;
+    let location = definition_location(
+        &response.expect("F12 on third-party go: function should return a location"),
+    )
+    .expect("response should contain a location");
+
+    let typedef_uri = Url::from_file_path(&typedef_path).unwrap();
+    assert_eq!(location.uri, typedef_uri);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn completion_empty_file() {
     let mut client = TestClient::new().await;
     client.initialize().await;

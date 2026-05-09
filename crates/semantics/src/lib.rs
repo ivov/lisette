@@ -3,6 +3,7 @@ pub mod cache;
 pub mod call_classification;
 pub mod checker;
 pub mod context;
+pub mod diagnostics;
 pub mod facts;
 pub mod loader;
 pub mod module_graph;

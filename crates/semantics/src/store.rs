@@ -1,5 +1,7 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
+
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ast::{EnumVariant, Expression, StructFieldDefinition};
 use syntax::program::{
@@ -18,6 +20,9 @@ pub struct Store {
     /// Go module ID -> Go package name, from the typedef `// Package:` directive.
     /// Present only when the package name differs from the final path segment.
     pub go_package_names: HashMap<String, String>,
+    /// File ID -> on-disk path of the `.d.lis` typedef. Lets the LSP map go: typedef
+    /// file IDs to the actual cache path so go-to-definition can navigate there.
+    pub typedef_paths: HashMap<u32, PathBuf>,
     visited_modules: HashSet<String>,
     /// File ID counter. Starts at 2 because 0 is reserved for entry, 1 for prelude.
     next_file_id: AtomicU32,
@@ -48,6 +53,7 @@ impl Store {
             modules,
             module_ids,
             go_package_names: Default::default(),
+            typedef_paths: Default::default(),
             visited_modules: Default::default(),
             next_file_id: AtomicU32::new(2), // 0 = entrypoint, 1 = prelude
         }

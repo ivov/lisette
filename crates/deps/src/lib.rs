@@ -10,7 +10,10 @@ pub use project_manifest::{
     check_toolchain_version, parse_manifest, remove_go_dep, resolve_empty_via,
     trim_dead_via_parents, upsert_go_dep, validate_project_name,
 };
-pub use typedef_locator::{TypedefLocator, TypedefLocatorResult, TypedefOrigin};
+pub use typedef_locator::{
+    Bindgen, BindgenFailure, BindgenGuard, BindgenSession, BindgenSetup, DeclarationStatus,
+    TypedefLocator, TypedefLocatorResult, TypedefOrigin,
+};
 
 pub fn is_third_party(pkg: &str) -> bool {
     pkg.split('/')

@@ -119,6 +119,42 @@ pub fn unreadable_go_typedef(path: &std::path::Path, error: &str, span: Span) ->
         .with_help(format!("Failed to read `{}`: {}", path.display(), error,))
 }
 
+pub fn go_toolchain_missing(go_pkg: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!(
+        "Cannot generate Go typedef for `{}`: `go` is not installed",
+        go_pkg
+    ))
+    .with_resolve_code("go_toolchain_missing")
+    .with_span_label(&span, "needs the Go toolchain")
+    .with_help("Install Go from https://go.dev/dl/")
+}
+
+pub fn bindgen_failed(
+    go_pkg: &str,
+    module: &str,
+    version: &str,
+    stderr: &str,
+    span: Span,
+) -> LisetteDiagnostic {
+    let trimmed = stderr.trim();
+    let stderr_block = if trimmed.is_empty() {
+        String::new()
+    } else {
+        format!("\n\n{}", trimmed)
+    };
+
+    LisetteDiagnostic::error(format!(
+        "Failed to generate Go typedef for `{}` ({} {})",
+        go_pkg, module, version
+    ))
+    .with_resolve_code("bindgen_failed")
+    .with_span_label(&span, "bindgen failed for this import")
+    .with_help(format!(
+        "Re-run with `lis bindgen {}` to inspect the failure in isolation.{}",
+        go_pkg, stderr_block
+    ))
+}
+
 pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
     let modules: Vec<_> = path[..path.len() - 1].to_vec();
 

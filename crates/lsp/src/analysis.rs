@@ -109,6 +109,21 @@ impl SharedState {
             }
         };
 
+        let (locator, session, bindgen_error) =
+            if config.standalone_mode || manifest_error.is_some() {
+                (locator, None, None)
+            } else if let Some(setup) = self.bindgen_setup.as_ref() {
+                match setup.for_project(&config.root, locator.target()) {
+                    Ok(session) => {
+                        let with_runner = locator.clone().with_bindgen(session.bindgen.clone());
+                        (with_runner, Some(session), None)
+                    }
+                    Err(msg) => (locator, None, Some(msg)),
+                }
+            } else {
+                (locator, None, None)
+            };
+
         let (mut result, facts) = analyze(AnalyzeInput {
             config: SemanticConfig {
                 run_lints: !has_parse_errors,
@@ -139,6 +154,19 @@ impl SharedState {
                 .errors
                 .push(LisetteDiagnostic::error(msg).with_resolve_code("manifest_error"));
         }
+
+        if let Some(msg) = bindgen_error {
+            result.errors.push(
+                LisetteDiagnostic::error(format!(
+                    "Could not start bindgen for this project: {}",
+                    msg
+                ))
+                .with_resolve_code("bindgen_setup_failed"),
+            );
+        }
+
+        // Release the target lock before the lock-free snapshot construction.
+        drop(session);
 
         Ok(AnalysisSnapshot::new(
             result,

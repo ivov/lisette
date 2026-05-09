@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 
-use deps::{GoModule, GoPackage};
+use deps::{Bindgen, BindgenFailure, BindgenSession, BindgenSetup, GoModule, GoPackage};
 use serde::Deserialize;
-use syntax::ast::Expression;
+use syntax::ast::{Expression, ImportAlias};
 use syntax::parse::Parser;
 
 const BINDGEN_GO_MODULE: &str = "github.com/ivov/lisette/bindgen";
@@ -264,87 +266,137 @@ impl<'a> GoWorkspace<'a> {
             .map_err(|e| format!("Bindgen produced unparseable manifest: {}", e))
     }
 
-    /// Ensure typedefs exist in cache for every public package in a Go module.
-    ///
-    /// Returns the list of packages in the module.
-    pub fn reconcile(&self, module: GoModule) -> Result<Vec<String>, String> {
+    /// Reconcile a single package; returns stubbed packages so callers can warn.
+    pub fn reconcile_package(
+        &self,
+        module: GoModule,
+        package: &str,
+    ) -> Result<Vec<String>, String> {
         self.go_get(module)?;
 
-        let packages = self.list_packages(module.path)?;
-
-        let uncached: Vec<String> = packages
-            .iter()
-            .filter(|pkg_path| {
-                let pkg = GoPackage {
-                    module,
-                    package: pkg_path,
-                };
-                !pkg.typedef_path(self.typedef_cache_dir, self.target)
-                    .exists()
-            })
-            .cloned()
-            .collect();
-
-        if uncached.is_empty() {
-            return Ok(packages);
-        }
-
-        let manifest = self.run_bindgen_batch(&uncached)?;
-
+        let manifest = self.run_bindgen_batch(&[package.to_string()])?;
         let outcome = self.apply_batch_manifest(&manifest, module);
-
-        for stubbed in &outcome.stubbed {
-            crate::output::print_warning(&format!(
-                "{}: type-check failed; emitted as unloadable stub",
-                stubbed
-            ));
-        }
 
         if !outcome.failures.is_empty() {
             return Err(outcome.failures.join("\n"));
         }
 
-        Ok(packages)
+        Ok(outcome.stubbed)
     }
 
-    /// Find the third-party Go modules this module's typedefs depend on.
-    pub fn find_third_party_deps(
-        &self,
-        module: GoModule,
-        module_packages: &[String],
-    ) -> Result<Vec<String>, String> {
-        let mut third_party_deps = Vec::new();
-        let mut seen: HashSet<String> = HashSet::new();
+    /// Return every `go:` import listed in the cached `.d.lis`.
+    pub fn imports_of(&self, module: GoModule, package: &str) -> Result<Vec<String>, String> {
+        let pkg = GoPackage { module, package };
+        let path = pkg.typedef_path(self.typedef_cache_dir, self.target);
+        let content = fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read cached typedef `{}`: {}", path.display(), e))?;
+        Ok(extract_go_imports(&content))
+    }
 
-        for pkg_path in module_packages {
-            let pkg = GoPackage {
-                module,
-                package: pkg_path,
-            };
-            let pkg_typedef_path = pkg.typedef_path(self.typedef_cache_dir, self.target);
+    /// Return every third-party module any public subpackage of `module_path`
+    /// imports, plus any non-benign package errors `go list -e -json` reported.
+    pub fn find_third_party_modules(&self, module_path: &str) -> Result<ListedModules, String> {
+        let pattern = format!("{}/...", module_path);
+        let stdout = self.run_go(&["list", "-mod=mod", "-e", "-json", &pattern])?;
 
-            let typedef = fs::read_to_string(&pkg_typedef_path)
-                .map_err(|e| format!("Failed to read cached typedef for `{}`: {}", pkg_path, e))?;
+        let mut import_set: HashSet<String> = HashSet::new();
+        let mut package_errors: Vec<PackageError> = Vec::new();
 
-            for import_path in extract_third_party_imports(&typedef) {
-                let containing = self.find_containing_module(&import_path).map_err(|e| {
-                    format!(
-                        "Failed to resolve transitive import `{}` from `{}`: {}",
-                        import_path, pkg_path, e
-                    )
-                })?;
-
-                if containing.path == module.path || seen.contains(&containing.path) {
-                    continue;
+        let stream = serde_json::Deserializer::from_str(&stdout).into_iter::<serde_json::Value>();
+        for entry in stream {
+            let value = match entry {
+                Ok(v) => v,
+                Err(e) => {
+                    return Err(format!(
+                        "Failed to parse `go list -json {}/...` output: {}",
+                        module_path, e
+                    ));
                 }
+            };
 
-                seen.insert(containing.path.clone());
-                third_party_deps.push(containing.path);
+            let pkg_path = value["ImportPath"].as_str().unwrap_or("").to_string();
+            let relative = pkg_path.strip_prefix(module_path).unwrap_or(&pkg_path);
+            if relative.split('/').any(|seg| seg == "internal") {
+                continue;
+            }
+
+            if let Some(err) = value["Error"]["Err"].as_str()
+                && !is_benign_package_error(err)
+            {
+                package_errors.push(PackageError {
+                    package: pkg_path.clone(),
+                    message: err.to_string(),
+                });
+            }
+
+            if let Some(deps_errors) = value["DepsErrors"].as_array() {
+                for de in deps_errors {
+                    if let Some(err) = de["Err"].as_str()
+                        && !is_benign_package_error(err)
+                    {
+                        package_errors.push(PackageError {
+                            package: pkg_path.clone(),
+                            message: err.to_string(),
+                        });
+                    }
+                }
+            }
+
+            let Some(imports) = value["Imports"].as_array() else {
+                continue;
+            };
+            for imp in imports {
+                if let Some(s) = imp.as_str() {
+                    import_set.insert(s.to_string());
+                }
             }
         }
 
-        Ok(third_party_deps)
+        let mut third_party: Vec<String> = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+
+        for import in &import_set {
+            if !deps::is_third_party(import) {
+                continue;
+            }
+            let containing = match self.find_containing_module(import) {
+                Ok(info) => info,
+                Err(msg) => {
+                    crate::output::print_warning(&format!(
+                        "could not resolve transitive import `{}` from `{}`: {}; declare it manually with `lis add {}` if your code references it",
+                        import, module_path, msg, import
+                    ));
+                    continue;
+                }
+            };
+            if containing.path == module_path {
+                continue;
+            }
+            if seen.insert(containing.path.clone()) {
+                third_party.push(containing.path);
+            }
+        }
+
+        third_party.sort();
+        Ok(ListedModules {
+            modules: third_party,
+            package_errors,
+        })
     }
+}
+
+pub struct ListedModules {
+    pub modules: Vec<String>,
+    pub package_errors: Vec<PackageError>,
+}
+
+pub struct PackageError {
+    pub package: String,
+    pub message: String,
+}
+
+fn is_benign_package_error(message: &str) -> bool {
+    message.contains("build constraints exclude all Go files") || message.contains("no Go files in")
 }
 
 /// Translate raw `go` stderr into a one-line message for the common failure modes.
@@ -475,9 +527,10 @@ fn translate_go_error(args: &[&str], stderr: &str) -> String {
         return "`-insecure` is no longer a valid Go flag; remove it from `GOFLAGS` or set `GOINSECURE` instead".to_string();
     }
     if stderr.contains("unrecognized import path") {
+        let offender = extract_unrecognized_path(stderr).unwrap_or(module.to_string());
         return format!(
             "`{}` is not a recognized Go module path; the host does not serve `go-import` metadata",
-            module
+            offender
         );
     }
     if stderr.contains("updates to go.mod needed") {
@@ -534,6 +587,25 @@ fn extract_path_mismatch(stderr: &str) -> Option<(String, String)> {
         return None;
     }
     Some((declared, required))
+}
+
+/// Pull `X` out of `unrecognized import path "X"` (Go's quoted form) or
+/// `X: unrecognized import path` (the colon-prefixed form).
+fn extract_unrecognized_path(stderr: &str) -> Option<String> {
+    if let Some(rest) = stderr.split("unrecognized import path \"").nth(1)
+        && let Some(path) = rest.split('"').next()
+        && !path.is_empty()
+    {
+        return Some(path.to_string());
+    }
+    let line = stderr
+        .lines()
+        .find(|l| l.contains(": unrecognized import path"))?;
+    let path = line.split(": unrecognized import path").next()?.trim();
+    if path.is_empty() {
+        return None;
+    }
+    Some(path.trim_start_matches("go: ").to_string())
 }
 
 /// Pull `(found_module, missing_package)` out of a Go missing-subpackage error:
@@ -604,7 +676,7 @@ impl GoWorkspace<'_> {
                 continue;
             }
 
-            if let Err(e) = fs::write(&pkg_typedef_path, &entry.content) {
+            if let Err(e) = atomic_write(&pkg_typedef_path, &entry.content) {
                 outcome.failures.push(format!(
                     "Failed to cache typedef for `{}`: {}",
                     entry.package, e
@@ -621,6 +693,25 @@ impl GoWorkspace<'_> {
     }
 }
 
+fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
+    let mut tmp_os = path.as_os_str().to_owned();
+    tmp_os.push(".tmp");
+    let tmp_path = std::path::PathBuf::from(tmp_os);
+
+    fs::write(&tmp_path, content)
+        .map_err(|e| format!("Failed to write `{}`: {}", tmp_path.display(), e))?;
+    fs::rename(&tmp_path, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp_path);
+        format!(
+            "Failed to rename `{}` to `{}`: {}",
+            tmp_path.display(),
+            path.display(),
+            e
+        )
+    })?;
+    Ok(())
+}
+
 fn validate_typedef_parses(pkg_path: &str, typedef: &str) -> Result<(), String> {
     let parse = Parser::lex_and_parse_file(typedef, 0);
     if !parse.failed() {
@@ -634,24 +725,121 @@ fn validate_typedef_parses(pkg_path: &str, typedef: &str) -> Result<(), String> 
     ))
 }
 
-fn extract_third_party_imports(typedef: &str) -> Vec<String> {
+/// Every non-blank `go:` import in a typedef. Blank-aliased imports are
+/// skipped since callers must not bindgen link-only packages.
+pub(crate) fn extract_go_imports(typedef: &str) -> Vec<String> {
     let parse_result = Parser::lex_and_parse_file(typedef, 0);
 
     parse_result
         .ast
         .iter()
         .filter_map(|expr| match expr {
-            Expression::ModuleImport { name, .. } => {
-                let pkg = name.strip_prefix("go:")?;
-                if deps::is_third_party(pkg) {
-                    Some(pkg.to_string())
-                } else {
-                    None
+            Expression::ModuleImport { name, alias, .. } => {
+                if matches!(alias, Some(ImportAlias::Blank(_))) {
+                    return None;
                 }
+                Some(name.strip_prefix("go:")?.to_string())
             }
             _ => None,
         })
         .collect()
+}
+
+/// `Bindgen` impl backed by a `GoWorkspace`. The internal `Mutex<()>`
+/// serializes intra-process threads; the target flock serializes processes.
+#[derive(Debug)]
+pub struct WorkspaceBindgen {
+    target_dir: PathBuf,
+    typedef_cache_dir: PathBuf,
+    target: stdlib::Target,
+    mutex: Mutex<()>,
+    go_present: OnceLock<bool>,
+    progress_emitted: AtomicBool,
+}
+
+impl WorkspaceBindgen {
+    pub fn new(target_dir: PathBuf, typedef_cache_dir: PathBuf, target: stdlib::Target) -> Self {
+        Self {
+            target_dir,
+            typedef_cache_dir,
+            target,
+            mutex: Mutex::new(()),
+            go_present: OnceLock::new(),
+            progress_emitted: AtomicBool::new(false),
+        }
+    }
+
+    pub fn progress_emitted(&self) -> bool {
+        self.progress_emitted.load(Ordering::Relaxed)
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct WorkspaceBindgenSetup;
+
+impl BindgenSetup for WorkspaceBindgenSetup {
+    fn for_project(
+        &self,
+        project_root: &Path,
+        target: stdlib::Target,
+    ) -> Result<BindgenSession, String> {
+        let (manifest, _) = deps::TypedefLocator::from_project_with_manifest(project_root)?;
+
+        let target_dir = project_root.join("target");
+        if target_dir.is_file() {
+            return Err(format!(
+                "`{}` exists but is a file, not a directory",
+                target_dir.display()
+            ));
+        }
+        fs::create_dir_all(&target_dir)
+            .map_err(|e| format!("Failed to create `{}`: {}", target_dir.display(), e))?;
+
+        let lock = crate::lock::acquire_target_lock_quiet(&target_dir)?;
+
+        let manifest_locator =
+            deps::TypedefLocator::new(manifest.go_deps(), Some(project_root.to_path_buf()), target);
+        crate::go_cli::write_go_mod(&target_dir, &manifest.project.name, &manifest_locator)?;
+
+        let typedef_cache_dir = deps::typedef_cache_dir(project_root);
+        let bindgen: std::sync::Arc<dyn Bindgen> =
+            std::sync::Arc::new(WorkspaceBindgen::new(target_dir, typedef_cache_dir, target));
+
+        Ok(BindgenSession::new(bindgen, Box::new(lock)))
+    }
+}
+
+impl Bindgen for WorkspaceBindgen {
+    fn run(&self, pkg: &GoPackage<'_>) -> Result<(), BindgenFailure> {
+        let _guard = self
+            .mutex
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let typedef_path = pkg.typedef_path(&self.typedef_cache_dir, self.target);
+        if typedef_path.exists() {
+            return Ok(());
+        }
+
+        if !*self.go_present.get_or_init(crate::go_cli::is_go_present) {
+            return Err(BindgenFailure::GoToolchainMissing);
+        }
+
+        crate::output::print_progress(&format!("Generating typedef for {}", pkg.package));
+        self.progress_emitted.store(true, Ordering::Relaxed);
+
+        let workspace = GoWorkspace::new(&self.target_dir, &self.typedef_cache_dir, self.target);
+
+        let module = GoModule {
+            path: pkg.module.path,
+            version: pkg.module.version,
+        };
+
+        match workspace.reconcile_package(module, pkg.package) {
+            Ok(_stubs) => Ok(()),
+            Err(stderr) => Err(BindgenFailure::InvocationFailed { stderr }),
+        }
+    }
 }
 
 #[cfg(debug_assertions)]

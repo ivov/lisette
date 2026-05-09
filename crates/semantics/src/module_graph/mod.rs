@@ -2,10 +2,11 @@ pub mod kahn;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use deps::{TypedefLocator, TypedefLocatorResult};
-use syntax::ast::Span;
+use deps::TypedefLocator;
+use syntax::ast::{ImportAlias, Span};
 use syntax::program::File;
 
+use crate::diagnostics::{emit_for_declaration_status, emit_for_locator_result};
 use crate::loader::Loader;
 use crate::store::Store;
 use diagnostics::LocalSink;
@@ -20,6 +21,8 @@ pub struct ModuleGraphResult {
     /// Direct dependencies of each module (module_id -> set of dependency module_ids).
     /// Used for transitive cache invalidation.
     pub edges: HashMap<ModuleId, HashSet<ModuleId>>,
+    /// `go:` modules that are only ever blank-imported in the visited file set.
+    pub link_only_modules: HashSet<ModuleId>,
 }
 
 pub fn build_module_graph(
@@ -35,6 +38,7 @@ pub fn build_module_graph(
     let mut visited = HashSet::default();
     let mut files: HashMap<ModuleId, Vec<File>> = HashMap::default();
     let mut import_spans: HashMap<ModuleId, Span> = HashMap::default();
+    let mut blank_tracker = BlankTracker::default();
 
     while let Some(module_id) = to_visit.pop() {
         if visited.contains(&module_id) {
@@ -42,8 +46,15 @@ pub fn build_module_graph(
         }
         visited.insert(module_id.clone());
 
-        let (imports_with_spans, module_files) =
-            collect_imports(&module_id, store, loader, sink, standalone_mode, locator);
+        let (imports_with_spans, module_files) = collect_imports(
+            &module_id,
+            store,
+            loader,
+            sink,
+            standalone_mode,
+            locator,
+            &mut blank_tracker,
+        );
 
         let module_exists = !module_files.is_empty()
             || store.has(&module_id)
@@ -94,6 +105,34 @@ pub fn build_module_graph(
         cycles,
         files,
         edges,
+        link_only_modules: blank_tracker.into_link_only_modules(),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SeenLookup {
+    OkBlank,
+    OkNonBlank,
+    Errored,
+}
+
+#[derive(Default)]
+struct BlankTracker {
+    blank: HashSet<ModuleId>,
+    non_blank: HashSet<ModuleId>,
+}
+
+impl BlankTracker {
+    fn record_blank(&mut self, module_id: &str) {
+        self.blank.insert(module_id.to_string());
+    }
+
+    fn record_non_blank(&mut self, module_id: &str) {
+        self.non_blank.insert(module_id.to_string());
+    }
+
+    fn into_link_only_modules(self) -> HashSet<ModuleId> {
+        self.blank.difference(&self.non_blank).cloned().collect()
     }
 }
 
@@ -136,8 +175,10 @@ fn collect_imports(
     sink: &LocalSink,
     standalone_mode: bool,
     locator: &TypedefLocator,
+    blank_tracker: &mut BlankTracker,
 ) -> (HashMap<ModuleId, Span>, Vec<File>) {
     let mut imports = HashMap::default();
+    let mut seen_go_imports: HashMap<String, SeenLookup> = HashMap::default();
 
     let (files, file_imports): (Vec<File>, Vec<_>) =
         if let Some(module) = store.get_module(module_id) {
@@ -162,60 +203,72 @@ fn collect_imports(
         }
 
         if let Some(go_pkg) = file_import.name.strip_prefix("go:") {
-            match locator.find_typedef_content(go_pkg) {
-                TypedefLocatorResult::Found { .. } => {
-                    imports.insert(file_import.name.to_string(), file_import.name_span);
-                }
-                TypedefLocatorResult::UnknownStdlib => {
-                    if let Some(targets) = stdlib::get_go_stdlib_package_targets(go_pkg) {
-                        let target = locator.target();
-                        sink.push(diagnostics::module_graph::go_stdlib_unavailable_on_target(
-                            go_pkg,
-                            &target.to_string(),
-                            &stdlib::format_targets(targets),
-                            file_import.name_span,
-                        ));
+            let is_blank = matches!(file_import.alias, Some(ImportAlias::Blank(_)));
+
+            let prior = seen_go_imports.get(file_import.name.as_str()).copied();
+            let needs_lookup = match (prior, is_blank) {
+                (None, _) => true,
+                (Some(SeenLookup::Errored), _) => false,
+                (Some(SeenLookup::OkNonBlank), _) => false,
+                (Some(SeenLookup::OkBlank), true) => false,
+                (Some(SeenLookup::OkBlank), false) => true,
+            };
+
+            if !needs_lookup {
+                if matches!(prior, Some(SeenLookup::OkBlank | SeenLookup::OkNonBlank)) {
+                    let module_key = file_import.name.to_string();
+                    if is_blank {
+                        blank_tracker.record_blank(&module_key);
                     } else {
-                        sink.push(diagnostics::module_graph::module_not_found(
-                            &file_import.name,
-                            file_import.name_span,
-                            false,
-                            standalone_mode,
-                            None,
-                        ));
+                        blank_tracker.record_non_blank(&module_key);
                     }
+                    imports.insert(module_key, file_import.name_span);
                 }
-                TypedefLocatorResult::UndeclaredImport => {
-                    if standalone_mode {
-                        sink.push(diagnostics::module_graph::module_not_found(
-                            &file_import.name,
-                            file_import.name_span,
-                            false,
-                            true,
-                            None,
-                        ));
-                    } else {
-                        sink.push(diagnostics::module_graph::undeclared_go_import(
-                            go_pkg,
-                            file_import.name_span,
-                        ));
-                    }
+                continue;
+            }
+
+            let ok = if is_blank {
+                let status = locator.validate_declaration(go_pkg);
+                emit_for_declaration_status(
+                    &status,
+                    &file_import.name,
+                    go_pkg,
+                    file_import.name_span,
+                    locator.target(),
+                    standalone_mode,
+                    sink,
+                )
+            } else {
+                let result = locator.find_typedef_content(go_pkg);
+                emit_for_locator_result(
+                    &result,
+                    &file_import.name,
+                    go_pkg,
+                    Some(file_import.name_span),
+                    locator.target(),
+                    standalone_mode,
+                    sink,
+                )
+            };
+
+            seen_go_imports.insert(
+                file_import.name.to_string(),
+                if !ok {
+                    SeenLookup::Errored
+                } else if is_blank {
+                    SeenLookup::OkBlank
+                } else {
+                    SeenLookup::OkNonBlank
+                },
+            );
+            if ok {
+                let module_key = file_import.name.to_string();
+                if is_blank {
+                    blank_tracker.record_blank(&module_key);
+                } else {
+                    blank_tracker.record_non_blank(&module_key);
                 }
-                TypedefLocatorResult::MissingTypedef { module, version } => {
-                    sink.push(diagnostics::module_graph::missing_go_typedef(
-                        go_pkg,
-                        &module,
-                        &version,
-                        file_import.name_span,
-                    ));
-                }
-                TypedefLocatorResult::UnreadableTypedef { path, error } => {
-                    sink.push(diagnostics::module_graph::unreadable_go_typedef(
-                        &path,
-                        &error,
-                        file_import.name_span,
-                    ));
-                }
+                imports.insert(module_key, file_import.name_span);
             }
             continue;
         }

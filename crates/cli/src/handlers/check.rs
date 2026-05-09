@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap as HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
 use deps::TypedefLocator;
@@ -9,7 +10,8 @@ use lisette::fs::LocalFileSystem;
 use lisette::pipeline::{CompileConfig, CompilePhase, CompileResult, compile};
 
 use crate::cli_error;
-use crate::typedef_regen::generate_missing_typedefs;
+use crate::lock::acquire_target_lock;
+use crate::workspace::WorkspaceBindgen;
 
 pub fn check(path: Option<String>, errors_only: bool, warnings_only: bool) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
@@ -70,11 +72,41 @@ fn check_project(project_path: &Path, filter: &Filter) -> i32 {
         }
     };
 
-    if let Err(code) = generate_missing_typedefs(project_path, &manifest) {
-        return code;
+    let target_dir = project_path.join("target");
+    if let Err(e) = fs::create_dir_all(&target_dir) {
+        cli_error!(
+            "Failed to check project",
+            format!("Failed to create target directory: {}", e),
+            "Check directory permissions"
+        );
+        return 1;
     }
 
-    check_single_file(&src_main, filter, true, locator)
+    let target_lock = match acquire_target_lock(&target_dir) {
+        Ok(f) => f,
+        Err(code) => return code,
+    };
+
+    if let Err(e) = crate::go_cli::write_go_mod(&target_dir, &manifest.project.name, &locator) {
+        cli_error!(
+            "Failed to check project",
+            e,
+            "Check file permissions on `target/go.mod`"
+        );
+        return 1;
+    }
+
+    let typedef_cache_dir = deps::typedef_cache_dir(project_path);
+    let bindgen = Arc::new(WorkspaceBindgen::new(
+        target_dir,
+        typedef_cache_dir,
+        locator.target(),
+    ));
+    let locator = locator.with_bindgen(bindgen);
+
+    let result = check_single_file(&src_main, filter, true, locator);
+    drop(target_lock);
+    result
 }
 
 fn check_single_file(
@@ -84,6 +116,7 @@ fn check_single_file(
     locator: TypedefLocator,
 ) -> i32 {
     let start = Instant::now();
+    eprintln!();
     let Some((result, source, filename)) = compile_single_file(file_path, load_siblings, locator)
     else {
         return 1; // Read error already reported by compile_single_file
@@ -180,6 +213,7 @@ fn check_loose_dir(dir: &Path, filter: &Filter) -> i32 {
     let mut read_failures = 0;
 
     let start = Instant::now();
+    eprintln!();
 
     for dir_files in dirs.values() {
         let mut compiled = None;

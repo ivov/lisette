@@ -11,7 +11,7 @@ pub mod pattern;
 pub mod render;
 
 pub use diagnostic::{IndexedSource, LisetteDiagnostic, Report};
-pub use result::{SemanticResult, TypedefSource};
+pub use result::SemanticResult;
 pub use sink::LocalSink;
 
 pub use lint::{IssueKind, UnusedExpressionKind};

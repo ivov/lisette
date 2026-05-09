@@ -303,15 +303,18 @@ fn print_tree_node(
     }
 }
 
-pub fn print_sync_summary(trimmed: &[deps::TrimmedVia], promoted: &[String], removed: &[String]) {
-    eprintln!();
+pub fn print_sync_summary(
+    trimmed: &[deps::TrimmedVia],
+    promoted: &[String],
+    removed: &[String],
+    leading_blank: bool,
+) {
+    if leading_blank {
+        eprintln!();
+    }
 
     if trimmed.is_empty() && promoted.is_empty() && removed.is_empty() {
-        if use_color() {
-            eprintln!("  {} Manifest already in sync", "✓".green());
-        } else {
-            eprintln!("  ✓ Manifest already in sync");
-        }
+        eprintln!("  ✓ Manifest already in sync");
         return;
     }
 

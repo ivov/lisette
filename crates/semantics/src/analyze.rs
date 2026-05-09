@@ -2,7 +2,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use diagnostics::{LocalSink, SemanticResult, TypedefSource};
+use diagnostics::{LocalSink, SemanticResult};
 use syntax::ast::Expression;
 use syntax::program::{File, ModuleInfo, MutationInfo, UnusedInfo};
 
@@ -15,6 +15,7 @@ use crate::cache::{
     save_module_cache, try_load_cache,
 };
 use crate::checker::TaskState;
+use crate::diagnostics::emit_for_locator_result;
 use crate::facts::{BindingIdAllocator, Facts};
 use crate::loader::Loader;
 use crate::module_graph::build_module_graph;
@@ -132,6 +133,10 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
 
         for module_id in order {
             if let Some(go_pkg) = module_id.strip_prefix("go:") {
+                if graph_result.link_only_modules.contains(&module_id) {
+                    continue;
+                }
+
                 if deps::is_stdlib(go_pkg)
                     && let Some(ref cache) = go_cache
                 {
@@ -141,16 +146,27 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                     }
                 }
 
-                if let deps::TypedefLocatorResult::Found {
-                    content: source, ..
-                } = input.locator.find_typedef_content(go_pkg)
-                {
-                    checker.parse_and_register_go_module(
-                        &mut store,
-                        &module_id,
-                        &source,
-                        &input.locator,
-                    );
+                match input.locator.find_typedef_content(go_pkg) {
+                    deps::TypedefLocatorResult::Found { content, origin } => {
+                        checker.parse_and_register_go_module(
+                            &mut store,
+                            &module_id,
+                            content.as_ref(),
+                            origin.into_cache_path(),
+                            &input.locator,
+                        );
+                    }
+                    other => {
+                        emit_for_locator_result(
+                            &other,
+                            &module_id,
+                            go_pkg,
+                            None,
+                            input.locator.target(),
+                            input.config.standalone_mode,
+                            &sink,
+                        );
+                    }
                 }
                 continue;
             }
@@ -291,23 +307,17 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     let mut files = HashMap::default();
     let mut definitions = HashMap::default();
     let mut modules = HashMap::default();
-    let mut typedef_sources = HashMap::default();
 
     for (mod_id, module) in store.modules {
         let is_internal = module.is_internal();
 
         definitions.extend(module.definitions);
 
+        // Internal modules (prelude, **nominal, go:...) stay out of `modules`
+        // so emit and lints skip them; their typedef files still join `files`
+        // so the LSP can map typedef file IDs to URIs for go-to-definition.
         if is_internal {
-            typedef_sources.extend(module.typedefs.into_iter().map(|(id, file)| {
-                (
-                    id,
-                    TypedefSource {
-                        source: file.source,
-                        filename: file.name,
-                    },
-                )
-            }));
+            files.extend(module.typedefs);
             continue;
         }
 
@@ -336,7 +346,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         mutations,
         cached_modules,
         ufcs_methods,
-        typedef_sources,
+        typedef_paths: store.typedef_paths,
         go_package_names: store.go_package_names,
     };
 

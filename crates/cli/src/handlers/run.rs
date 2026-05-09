@@ -170,12 +170,26 @@ pub fn run(target: Option<String>, args: Vec<String>, debug: bool) -> i32 {
 }
 
 fn run_project(path: &str, args: Vec<String>, debug: bool) -> i32 {
-    let build_result = crate::handlers::build(Some(path.to_string()), debug, true);
+    let project_path = Path::new(path);
+
+    let prep = match super::build::prepare_project_build(project_path) {
+        Ok(p) => p,
+        Err(code) => return code,
+    };
+
+    // Held across the user program's lifetime so a concurrent `lis check`/
+    // `build`/`sync`/LSP cannot rewrite `target/` mid-`go run` compile.
+    let _target_lock = match crate::lock::acquire_target_lock(&prep.target_dir) {
+        Ok(f) => f,
+        Err(code) => return code,
+    };
+
+    let target_dir = prep.target_dir.clone();
+    let build_result = super::build::build_locked(&prep, debug, true);
     if build_result != 0 {
         return build_result;
     }
 
-    let target_dir = Path::new(path).join("target");
     run_with_invocation_cwd(
         &target_dir,
         &args,

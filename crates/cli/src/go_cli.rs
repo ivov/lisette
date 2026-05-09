@@ -43,6 +43,10 @@ pub fn require_go() -> Result<(), i32> {
     }
 }
 
+pub fn is_go_present() -> bool {
+    !matches!(go_status(), GoStatus::Absent)
+}
+
 pub fn go_mod_version() -> String {
     let parts: Vec<&str> = GO_VERSION.split('.').collect();
     format!(

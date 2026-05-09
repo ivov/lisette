@@ -69,7 +69,7 @@ impl TestClient {
         let (server_read, server_write) = tokio::io::split(server);
         let (client_read, client_write) = tokio::io::split(client);
 
-        let (service, socket) = LspService::new(Backend::new);
+        let (service, socket) = LspService::new(|client| Backend::new(client, None));
         tokio::spawn(Server::new(server_read, server_write, socket).serve(service));
 
         Self {

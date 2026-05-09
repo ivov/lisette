@@ -81,7 +81,7 @@ pub fn compile(
 
     let user_file_count = semantic_result.files.len();
 
-    let mut sources: HashMap<u32, SourceInfo> = semantic_result
+    let sources: HashMap<u32, SourceInfo> = semantic_result
         .files
         .iter()
         .map(|(file_id, file)| {
@@ -94,13 +94,6 @@ pub fn compile(
             )
         })
         .collect();
-
-    for (file_id, typedef) in &semantic_result.typedef_sources {
-        sources.entry(*file_id).or_insert_with(|| SourceInfo {
-            source: typedef.source.clone(),
-            filename: typedef.filename.clone(),
-        });
-    }
 
     let failed = semantic_result.failed();
     let mut errors = semantic_result.errors.clone();

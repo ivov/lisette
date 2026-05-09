@@ -125,9 +125,6 @@ pub(crate) fn resolve_dot_access_definition(
         } else if let Some(module_name) =
             find_module_by_alias(file, root_identifier, &snapshot.result.go_package_names)
         {
-            if module_name.starts_with("go:") {
-                return None;
-            }
             let qualified = dotted_path
                 .strip_prefix(root_identifier)
                 .map(|rest| format!("{}{}", module_name, rest))
@@ -148,9 +145,6 @@ pub(crate) fn resolve_dot_access_definition(
         if let Some(module_name) =
             find_module_by_alias(file, value.as_str(), &snapshot.result.go_package_names)
         {
-            if module_name.starts_with("go:") {
-                return None;
-            }
             let qualified = format!("{}.{}", module_name, member);
             snapshot
                 .definitions()
@@ -164,6 +158,15 @@ pub(crate) fn resolve_dot_access_definition(
     };
 
     result.or_else(resolve_by_type)
+}
+
+/// True when the span points into a generated `go:` typedef file. Used by rename
+/// to refuse edits to typedefs, which would diverge from the regenerated content.
+pub(crate) fn is_go_typedef_span(snapshot: &AnalysisSnapshot, span: &syntax::ast::Span) -> bool {
+    snapshot
+        .files()
+        .get(&span.file_id)
+        .is_some_and(|f| f.module_id.starts_with("go:"))
 }
 
 /// Resolve an import alias to the import statement's span.

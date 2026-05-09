@@ -3,6 +3,8 @@ mod convert;
 mod methods;
 mod types;
 
+use std::path::PathBuf;
+
 use rustc_hash::FxHashMap as HashMap;
 
 use deps::TypedefLocator;
@@ -107,12 +109,14 @@ impl TaskState<'_> {
 
     /// Register a Go module (stdlib or third-party). Unlike regular modules,
     /// Go modules export everything as public and do not put their own module
-    /// in scope (no self-references like `MyModule.Type`).
+    /// in scope (no self-references like `MyModule.Type`). `cache_path` is the
+    /// on-disk typedef location, or `None` for embedded stdlib typedefs.
     pub fn parse_and_register_go_module(
         &mut self,
         store: &mut Store,
         module_id: &str,
         source: &str,
+        cache_path: Option<PathBuf>,
         locator: &TypedefLocator,
     ) {
         if store.is_visited(module_id) {
@@ -152,16 +156,44 @@ impl TaskState<'_> {
 
         for import in &imports {
             if let Some(go_pkg) = import.name.strip_prefix("go:") {
+                if matches!(import.alias, Some(syntax::ast::ImportAlias::Blank(_))) {
+                    continue;
+                }
+
                 let import_module_id = format!("go:{}", go_pkg);
-                if let deps::TypedefLocatorResult::Found {
-                    content: source, ..
-                } = locator.find_typedef_content(go_pkg)
-                {
-                    self.parse_and_register_go_module(store, &import_module_id, &source, locator);
+
+                if store.is_visited(&import_module_id) {
+                    continue;
+                }
+
+                match locator.find_typedef_content(go_pkg) {
+                    deps::TypedefLocatorResult::Found { content, origin } => {
+                        self.parse_and_register_go_module(
+                            store,
+                            &import_module_id,
+                            content.as_ref(),
+                            origin.into_cache_path(),
+                            locator,
+                        );
+                    }
+                    other => {
+                        crate::diagnostics::emit_for_locator_result(
+                            &other,
+                            &import.name,
+                            go_pkg,
+                            Some(import.name_span),
+                            locator.target(),
+                            false,
+                            self.sink,
+                        );
+                    }
                 }
             }
         }
 
+        if let Some(path) = cache_path {
+            store.typedef_paths.insert(file_id, path);
+        }
         store.store_file(module_id, file);
 
         self.with_file_context(

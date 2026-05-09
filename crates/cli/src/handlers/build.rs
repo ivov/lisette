@@ -1,26 +1,38 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::cli_error;
 use crate::go_cli;
-use crate::typedef_regen::generate_missing_typedefs;
+use crate::lock::acquire_target_lock;
+use crate::workspace::WorkspaceBindgen;
 use diagnostics::render::{self, Filter};
 use lisette::fs::{LocalFileSystem, prune_orphan_go_files};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
 
 pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
-    if let Err(code) = crate::go_cli::require_go() {
-        return code;
-    }
-
-    let start = Instant::now();
-
     let project_root = path.unwrap_or_else(|| ".".to_string());
     let project_path = Path::new(&project_root);
 
+    let prep = match prepare_project_build(project_path) {
+        Ok(p) => p,
+        Err(code) => return code,
+    };
+
+    let _target_lock = match acquire_target_lock(&prep.target_dir) {
+        Ok(f) => f,
+        Err(code) => return code,
+    };
+
+    build_locked(&prep, debug, quiet)
+}
+
+pub(super) fn prepare_project_build(project_path: &Path) -> Result<BuildPrep, i32> {
+    crate::go_cli::require_go()?;
+
     if !validate_project(project_path) {
-        return 1;
+        return Err(1);
     }
 
     let (manifest, locator) = match deps::TypedefLocator::from_project_with_manifest(project_path) {
@@ -31,17 +43,60 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
                 msg,
                 "Run `lis new <name>` to create a project, or fix `lisette.toml`"
             );
-            return 1;
+            return Err(1);
         }
     };
 
-    if let Err(code) = generate_missing_typedefs(project_path, &manifest) {
-        return code;
+    let target_dir = project_path.join("target");
+    if let Err(e) = fs::create_dir_all(&target_dir) {
+        cli_error!(
+            "Failed to compile Lisette project to Go",
+            format!("Failed to create `target` directory: {}", e),
+            "Check directory permissions"
+        );
+        return Err(1);
     }
 
-    let main_lis = project_path.join("src/main.lis");
-    let go_module_name = &manifest.project.name;
-    let version = &manifest.project.version;
+    Ok(BuildPrep {
+        project_path: project_path.to_path_buf(),
+        target_dir,
+        manifest,
+        locator,
+    })
+}
+
+pub(super) struct BuildPrep {
+    pub project_path: PathBuf,
+    pub target_dir: PathBuf,
+    pub manifest: deps::Manifest,
+    pub locator: deps::TypedefLocator,
+}
+
+pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
+    let start = Instant::now();
+
+    if let Err(e) =
+        go_cli::write_go_mod(&prep.target_dir, &prep.manifest.project.name, &prep.locator)
+    {
+        cli_error!(
+            "Failed to compile Lisette project to Go",
+            e,
+            "Check file permissions on `target/go.mod`"
+        );
+        return 1;
+    }
+
+    let typedef_cache_dir = deps::typedef_cache_dir(&prep.project_path);
+    let bindgen = Arc::new(WorkspaceBindgen::new(
+        prep.target_dir.clone(),
+        typedef_cache_dir,
+        prep.locator.target(),
+    ));
+    let locator = prep.locator.clone().with_bindgen(bindgen);
+
+    let main_lis = prep.project_path.join("src/main.lis");
+    let go_module_name = &prep.manifest.project.name;
+    let version = &prep.manifest.project.version;
 
     let main_lis_source = match fs::read_to_string(&main_lis) {
         Ok(s) => s,
@@ -84,7 +139,7 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
         standalone_mode: false,
         load_siblings: true,
         debug,
-        project_root: Some(project_path.to_path_buf()),
+        project_root: Some(prep.project_path.clone()),
         locator: locator.clone(),
     };
 
@@ -118,28 +173,9 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
         return 1;
     }
 
-    let target_dir = project_path.join("target");
-    if let Err(e) = fs::create_dir_all(&target_dir) {
-        cli_error!(
-            "Failed to compile Lisette project to Go",
-            format!("Failed to create `target` directory: {}", e),
-            "Check directory permissions"
-        );
-        return 1;
-    }
-
-    if let Err(e) = go_cli::write_go_mod(&target_dir, &compile_config.go_module, &locator) {
-        cli_error!(
-            "Failed to compile Lisette project to Go",
-            e,
-            "Check file permissions"
-        );
-        return 1;
-    }
-
     let heading = "Failed to compile Lisette project to Go";
 
-    if let Err(code) = go_cli::write_go_outputs(&target_dir, &result.output, heading) {
+    if let Err(code) = go_cli::write_go_outputs(&prep.target_dir, &result.output, heading) {
         return code;
     }
 
@@ -148,7 +184,7 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
         .iter()
         .map(|file| file.name.as_str())
         .collect();
-    if let Err(e) = prune_orphan_go_files(&target_dir, &produced) {
+    if let Err(e) = prune_orphan_go_files(&prep.target_dir, &produced) {
         cli_error!(
             "Failed to compile Lisette project to Go",
             format!("Failed to prune stale Go files: {}", e),
@@ -157,7 +193,7 @@ pub fn build(path: Option<String>, debug: bool, quiet: bool) -> i32 {
         return 1;
     }
 
-    if let Err(code) = go_cli::finalize_go_dir(&target_dir, heading, locator.target()) {
+    if let Err(code) = go_cli::finalize_go_dir(&prep.target_dir, heading, locator.target()) {
         return code;
     }
 

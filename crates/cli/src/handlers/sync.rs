@@ -1,13 +1,18 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use syntax::ast::Expression;
+use stdlib::Target;
+use syntax::ast::{Expression, ImportAlias};
 use syntax::parse::Parser;
 
 use lisette::fs::collect_lis_filepaths_recursive;
 
+use crate::go_cli;
 use crate::handlers::add::find_project_root;
-use crate::lock::acquire_mutation_lock;
+use crate::lock::{acquire_mutation_lock, acquire_target_lock};
 use crate::output::{print_preview_notice, print_sync_summary};
+use crate::typedef_regen::prewarm_typedef_cache;
+use crate::workspace::WorkspaceBindgen;
 use crate::{cli_error, error};
 
 pub fn sync() -> i32 {
@@ -77,12 +82,16 @@ pub fn sync() -> i32 {
         return 1;
     }
 
-    let _lock = match acquire_mutation_lock(&target_dir) {
+    let _mutation_lock = match acquire_mutation_lock(&target_dir) {
+        Ok(f) => f,
+        Err(code) => return code,
+    };
+    let _target_lock = match acquire_target_lock(&target_dir) {
         Ok(f) => f,
         Err(code) => return code,
     };
 
-    let imported_pkgs = match scan_source_imports(&project_root.join("src")) {
+    let scanned = match scan_source_imports(&project_root.join("src")) {
         Ok(pkgs) => pkgs,
         Err(SourceScanError::Parse { path, message }) => {
             cli_error!(
@@ -101,6 +110,31 @@ pub fn sync() -> i32 {
         }
     };
 
+    let mut bindgen_runner: Option<Arc<WorkspaceBindgen>> = None;
+    let prewarm_result = if !scanned.non_blank.is_empty() {
+        let target = Target::host();
+
+        let locator =
+            deps::TypedefLocator::new(manifest.go_deps(), Some(project_root.clone()), target);
+        if let Err(msg) = go_cli::write_go_mod(&target_dir, &manifest.project.name, &locator) {
+            error!("failed to write target/go.mod", msg);
+            return 1;
+        }
+
+        let typedef_cache_dir = deps::typedef_cache_dir(&project_root);
+        let runner = Arc::new(WorkspaceBindgen::new(
+            target_dir.clone(),
+            typedef_cache_dir,
+            target,
+        ));
+        let locator = locator.with_bindgen(runner.clone());
+        bindgen_runner = Some(runner);
+
+        prewarm_typedef_cache(&scanned.non_blank, &locator)
+    } else {
+        Ok(())
+    };
+
     let trimmed = match deps::trim_dead_via_parents(&project_root) {
         Ok(t) => t,
         Err(msg) => {
@@ -109,7 +143,7 @@ pub fn sync() -> i32 {
         }
     };
 
-    let report = match deps::resolve_empty_via(&project_root, &imported_pkgs) {
+    let report = match deps::resolve_empty_via(&project_root, &scanned.all) {
         Ok(r) => r,
         Err(msg) => {
             error!("failed to update manifest", msg);
@@ -117,9 +151,12 @@ pub fn sync() -> i32 {
         }
     };
 
-    print_sync_summary(&trimmed, &report.promoted, &report.removed);
+    let needs_separator = bindgen_runner
+        .as_ref()
+        .is_some_and(|r| r.progress_emitted());
+    print_sync_summary(&trimmed, &report.promoted, &report.removed, needs_separator);
 
-    0
+    prewarm_result.err().unwrap_or(0)
 }
 
 enum SourceScanError {
@@ -133,12 +170,19 @@ enum SourceScanError {
     },
 }
 
-/// Collect every third-party Go package path imported via `import "go:..."`
-/// across `src/**/*.lis`. Aborts on the first parse or read error.
-fn scan_source_imports(src_dir: &Path) -> Result<Vec<String>, SourceScanError> {
-    let mut imports = Vec::new();
+struct ScannedImports {
+    /// All third-party `go:` imports (blank-imports keep modules referenced).
+    all: Vec<String>,
+    /// Third-party `go:` imports excluding `_`-aliased blank ones.
+    non_blank: Vec<String>,
+}
+
+/// Collect every third-party `go:` import across `src/**/*.lis`.
+fn scan_source_imports(src_dir: &Path) -> Result<ScannedImports, SourceScanError> {
+    let mut all = Vec::new();
+    let mut non_blank = Vec::new();
     if !src_dir.is_dir() {
-        return Ok(imports);
+        return Ok(ScannedImports { all, non_blank });
     }
 
     for path in collect_lis_filepaths_recursive(src_dir) {
@@ -154,14 +198,17 @@ fn scan_source_imports(src_dir: &Path) -> Result<Vec<String>, SourceScanError> {
             });
         }
         for expr in &parse_result.ast {
-            if let Expression::ModuleImport { name, .. } = expr
+            if let Expression::ModuleImport { name, alias, .. } = expr
                 && let Some(pkg) = name.strip_prefix("go:")
                 && deps::is_third_party(pkg)
             {
-                imports.push(pkg.to_string());
+                all.push(pkg.to_string());
+                if !matches!(alias, Some(ImportAlias::Blank(_))) {
+                    non_blank.push(pkg.to_string());
+                }
             }
         }
     }
 
-    Ok(imports)
+    Ok(ScannedImports { all, non_blank })
 }

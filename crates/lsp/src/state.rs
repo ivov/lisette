@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
 use dashmap::DashMap;
+use deps::BindgenSetup;
 use tokio::task::AbortHandle;
 use tower_lsp::Client;
 use tower_lsp::lsp_types::Url;
@@ -21,6 +22,7 @@ pub struct SharedState {
     pub(crate) last_valid_snapshot: DashMap<Url, Arc<AnalysisSnapshot>>,
     pub(crate) pending_diagnostics: DashMap<Url, (u64, AbortHandle)>,
     pub(crate) diagnostics_generation: AtomicU64,
+    pub(crate) bindgen_setup: Option<Arc<dyn BindgenSetup>>,
 }
 
 pub struct Backend {
@@ -46,7 +48,7 @@ pub(crate) struct DocumentState {
 }
 
 impl Backend {
-    pub fn new(client: Client) -> Self {
+    pub fn new(client: Client, bindgen_setup: Option<Arc<dyn BindgenSetup>>) -> Self {
         let placeholder_config = ProjectConfig {
             root: PathBuf::from("."),
             standalone_mode: true,
@@ -62,6 +64,7 @@ impl Backend {
                 last_valid_snapshot: DashMap::new(),
                 pending_diagnostics: DashMap::new(),
                 diagnostics_generation: AtomicU64::new(0),
+                bindgen_setup,
             }),
         }
     }

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use syntax::ParseError;
@@ -5,11 +7,6 @@ use syntax::program::{Definition, EmitInput, File, ModuleInfo, MutationInfo, Unu
 use syntax::types::Symbol;
 
 use crate::LisetteDiagnostic;
-
-pub struct TypedefSource {
-    pub source: String,
-    pub filename: String,
-}
 
 pub struct SemanticResult {
     pub files: HashMap<u32, File>,
@@ -22,7 +19,10 @@ pub struct SemanticResult {
     pub mutations: MutationInfo,
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
-    pub typedef_sources: HashMap<u32, TypedefSource>,
+    /// File ID -> on-disk path of the `.d.lis` typedef. Populated for third-party
+    /// go: typedefs read from `target/.lisette/typedefs/...`; absent for embedded
+    /// stdlib typedefs.
+    pub typedef_paths: HashMap<u32, PathBuf>,
     pub go_package_names: HashMap<String, String>,
 }
 
@@ -39,7 +39,7 @@ impl SemanticResult {
             mutations: MutationInfo::default(),
             cached_modules: HashSet::default(),
             ufcs_methods: HashSet::default(),
-            typedef_sources: HashMap::default(),
+            typedef_paths: HashMap::default(),
             go_package_names: HashMap::default(),
         }
     }
