@@ -2,10 +2,12 @@ mod extract;
 mod reference_graph;
 mod visibility_constraints;
 
+use rayon::prelude::*;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::context::AnalysisContext;
 use crate::facts::Facts;
+use crate::passes::PARALLEL_THRESHOLD;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use syntax::ast::{AttributeArg, Expression, ImportAlias, Span, Visibility};
@@ -39,28 +41,71 @@ pub(crate) fn run(
     let go_package_names = &store.go_package_names;
     let config = LintConfig::default();
 
-    for module in store.modules.values() {
-        if module.is_internal() {
-            continue;
+    let mut modules: Vec<&Module> = store
+        .modules
+        .values()
+        .filter(|m| !m.is_internal())
+        .collect();
+    modules.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+
+    if modules.len() < PARALLEL_THRESHOLD {
+        for module in &modules {
+            apply_ref_lints(module, go_package_names, &config, facts, unused, sink);
         }
-        let result = run_ref_lints(module, &module.files, go_package_names, &config, facts);
-        if !result.unused_import_aliases.is_empty() {
-            unused.imports_by_module.insert(
-                module.id.clone().into(),
-                result
-                    .unused_import_aliases
-                    .into_iter()
-                    .map(|s| s.into())
-                    .collect(),
-            );
-        }
-        for span in result.unused_definition_spans {
-            unused.mark_definition_unused(span);
-        }
-        let mut diagnostics = result.diagnostics;
-        diagnostics.sort_by(LisetteDiagnostic::sort_key);
-        sink.extend(diagnostics);
+        return;
     }
+
+    type WorkerOutput = (LocalSink, UnusedInfo);
+    let outputs: Vec<WorkerOutput> = modules
+        .par_iter()
+        .map(|module| {
+            let local_sink = LocalSink::new();
+            let mut local_unused = UnusedInfo::default();
+            apply_ref_lints(
+                module,
+                go_package_names,
+                &config,
+                facts,
+                &mut local_unused,
+                &local_sink,
+            );
+            (local_sink, local_unused)
+        })
+        .collect();
+
+    let mut worker_sinks = Vec::with_capacity(outputs.len());
+    for (worker_sink, worker_unused) in outputs {
+        worker_sinks.push(worker_sink);
+        unused.merge(worker_unused);
+    }
+    sink.extend(LocalSink::merge(worker_sinks));
+}
+
+fn apply_ref_lints(
+    module: &Module,
+    go_package_names: &HashMap<String, String>,
+    config: &LintConfig,
+    facts: &Facts,
+    unused: &mut UnusedInfo,
+    sink: &LocalSink,
+) {
+    let result = run_ref_lints(module, &module.files, go_package_names, config, facts);
+    if !result.unused_import_aliases.is_empty() {
+        unused.imports_by_module.insert(
+            module.id.clone().into(),
+            result
+                .unused_import_aliases
+                .into_iter()
+                .map(|s| s.into())
+                .collect(),
+        );
+    }
+    for span in result.unused_definition_spans {
+        unused.mark_definition_unused(span);
+    }
+    let mut diagnostics = result.diagnostics;
+    diagnostics.sort_by(LisetteDiagnostic::sort_key);
+    sink.extend(diagnostics);
 }
 
 fn run_ref_lints(

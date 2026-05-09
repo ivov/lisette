@@ -149,39 +149,9 @@ impl Facts {
         self.dead_code.push(DeadCodeFact { span, cause });
     }
 
-    pub fn add_unused_expression(&mut self, span: Span, kind: UnusedExpressionKind) {
-        self.unused_expressions
-            .push(UnusedExpressionFact { span, kind });
-    }
-
-    pub fn add_discarded_tail(
-        &mut self,
-        span: Span,
-        return_type: String,
-        expected_span: Span,
-        expected_type: String,
-    ) {
-        self.discarded_tail_expressions.push(DiscardedTailFact {
-            span,
-            return_type,
-            expected_span,
-            expected_type,
-        });
-    }
-
     pub fn add_overused_reference(&mut self, span: Span, name: Option<String>) {
         self.overused_references
             .push(OverusedReferenceFact { span, name });
-    }
-
-    pub fn add_unused_type_param(&mut self, name: String, span: Span) {
-        self.unused_type_params
-            .push(UnusedTypeParamFact { name, span });
-    }
-
-    pub fn add_type_param_only_in_bound(&mut self, name: String, span: Span) {
-        self.type_params_only_in_bound
-            .push(TypeParamOnlyInBoundFact { name, span });
     }
 
     pub fn add_always_failing_try_block(&mut self, span: Span) {
@@ -211,6 +181,21 @@ impl Facts {
             .entry((module_id, method_name))
             .or_default()
             .push(usage_span);
+    }
+
+    pub fn absorb_local_facts(&mut self, local: LocalFacts) {
+        let LocalFacts {
+            unused_expressions,
+            discarded_tail_expressions,
+            unused_type_params,
+            type_params_only_in_bound,
+        } = local;
+        self.unused_expressions.extend(unused_expressions);
+        self.discarded_tail_expressions
+            .extend(discarded_tail_expressions);
+        self.unused_type_params.extend(unused_type_params);
+        self.type_params_only_in_bound
+            .extend(type_params_only_in_bound);
     }
 
     pub fn merge(&mut self, other: Facts) {
@@ -275,6 +260,46 @@ impl Facts {
                 .or_default()
                 .extend(spans);
         }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct LocalFacts {
+    pub unused_expressions: Vec<UnusedExpressionFact>,
+    pub discarded_tail_expressions: Vec<DiscardedTailFact>,
+    pub unused_type_params: Vec<UnusedTypeParamFact>,
+    pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
+}
+
+impl LocalFacts {
+    pub fn add_unused_expression(&mut self, span: Span, kind: UnusedExpressionKind) {
+        self.unused_expressions
+            .push(UnusedExpressionFact { span, kind });
+    }
+
+    pub fn add_discarded_tail(
+        &mut self,
+        span: Span,
+        return_type: String,
+        expected_span: Span,
+        expected_type: String,
+    ) {
+        self.discarded_tail_expressions.push(DiscardedTailFact {
+            span,
+            return_type,
+            expected_span,
+            expected_type,
+        });
+    }
+
+    pub fn add_unused_type_param(&mut self, name: String, span: Span) {
+        self.unused_type_params
+            .push(UnusedTypeParamFact { name, span });
+    }
+
+    pub fn add_type_param_only_in_bound(&mut self, name: String, span: Span) {
+        self.type_params_only_in_bound
+            .push(TypeParamOnlyInBoundFact { name, span });
     }
 }
 
@@ -417,6 +442,25 @@ mod tests {
 
         a.merge(b);
         assert_eq!(a.or_pattern_error_spans.len(), 2);
+    }
+
+    #[test]
+    fn absorb_local_facts_extends_all_four_streams() {
+        let allocator = Arc::new(BindingIdAllocator::new());
+        let mut facts = Facts::new(allocator);
+
+        let mut local = LocalFacts::default();
+        local.add_unused_expression(span(0), UnusedExpressionKind::Value);
+        local.add_discarded_tail(span(1), "Int".into(), span(2), "Unit".into());
+        local.add_unused_type_param("T".into(), span(3));
+        local.add_type_param_only_in_bound("U".into(), span(4));
+
+        facts.absorb_local_facts(local);
+
+        assert_eq!(facts.unused_expressions.len(), 1);
+        assert_eq!(facts.discarded_tail_expressions.len(), 1);
+        assert_eq!(facts.unused_type_params.len(), 1);
+        assert_eq!(facts.type_params_only_in_bound.len(), 1);
     }
 
     #[test]

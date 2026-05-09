@@ -1,25 +1,49 @@
 use diagnostics::LocalSink;
+use rayon::prelude::*;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, Span, StructFieldAssignment, StructSpread};
-use syntax::program::DefinitionBody;
+use syntax::program::{DefinitionBody, File, Module};
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use crate::checker::infer::expressions::struct_call::has_zero;
 use crate::context::AnalysisContext;
+use crate::passes::PARALLEL_THRESHOLD;
 use crate::store::Store;
 
 const ZERO_FIELD_THRESHOLD: usize = 3;
 
 pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
     let store = analysis.store;
-    for module in store.modules.values() {
-        if module.is_internal() {
-            continue;
-        }
-        for file in module.files.values() {
+
+    let mut work: Vec<(&Module, &File)> = store
+        .modules
+        .values()
+        .filter(|m| !m.is_internal())
+        .flat_map(|m| m.files.values().map(move |f| (m, f)))
+        .collect();
+    work.sort_unstable_by(|a, b| {
+        a.0.id
+            .cmp(&b.0.id)
+            .then_with(|| a.1.name.cmp(&b.1.name))
+            .then_with(|| a.1.id.cmp(&b.1.id))
+    });
+
+    if work.len() < PARALLEL_THRESHOLD {
+        for (module, file) in &work {
             run_per_file(&file.items, &file.source, &module.id, store, sink);
         }
+        return;
     }
+
+    let worker_sinks: Vec<LocalSink> = work
+        .par_iter()
+        .map(|(module, file)| {
+            let local_sink = LocalSink::new();
+            run_per_file(&file.items, &file.source, &module.id, store, &local_sink);
+            local_sink
+        })
+        .collect();
+    sink.extend(LocalSink::merge(worker_sinks));
 }
 
 fn run_per_file(

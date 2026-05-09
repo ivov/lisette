@@ -11,6 +11,8 @@ mod lints;
 
 pub use lints::Lint;
 
+pub(crate) const PARALLEL_THRESHOLD: usize = 4;
+
 pub fn run(
     analysis: &AnalysisContext,
     facts: &mut Facts,

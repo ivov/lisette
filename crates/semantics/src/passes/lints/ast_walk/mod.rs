@@ -7,25 +7,50 @@ use std::cell::RefCell;
 
 use super::from_facts::LintContext;
 use crate::context::AnalysisContext;
+use crate::passes::PARALLEL_THRESHOLD;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
+use rayon::prelude::*;
+use syntax::program::Module;
 
 pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
     let store = analysis.store;
-    for module in store.modules.values() {
-        if module.is_internal() {
-            continue;
+
+    let mut modules: Vec<&Module> = store
+        .modules
+        .values()
+        .filter(|m| !m.is_internal())
+        .collect();
+    modules.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+
+    if modules.len() < PARALLEL_THRESHOLD {
+        for module in &modules {
+            run_module(module, sink);
         }
-        for file in module.files.values() {
-            let ctx = LintContext {
-                ast: &file.items,
-                is_d_lis: file.is_d_lis(),
-                files: &module.files,
-            };
-            let mut diagnostics = AstLintGroup.check(&ctx);
-            diagnostics.sort_by(LisetteDiagnostic::sort_key);
-            sink.extend(diagnostics);
-        }
+        return;
+    }
+
+    let worker_sinks: Vec<LocalSink> = modules
+        .par_iter()
+        .map(|module| {
+            let local_sink = LocalSink::new();
+            run_module(module, &local_sink);
+            local_sink
+        })
+        .collect();
+    sink.extend(LocalSink::merge(worker_sinks));
+}
+
+fn run_module(module: &Module, sink: &LocalSink) {
+    for file in module.files.values() {
+        let ctx = LintContext {
+            ast: &file.items,
+            is_d_lis: file.is_d_lis(),
+            files: &module.files,
+        };
+        let mut diagnostics = AstLintGroup.check(&ctx);
+        diagnostics.sort_by(LisetteDiagnostic::sort_key);
+        sink.extend(diagnostics);
     }
 }
 

@@ -1,25 +1,25 @@
 //! Generic-parameter fact producers for the lint layer.
 //!
-//! Records facts on `Facts`; rendering happens later in `lints::from_facts`.
+//! Records facts via `LocalFacts`; rendering happens later in `lints::from_facts`.
 
 use ecow::EcoString;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Annotation, Binding, Expression, Generic};
 use syntax::types::Type;
 
-use crate::facts::Facts;
+use crate::facts::LocalFacts;
 
-pub(crate) fn run(typed_ast: &[Expression], facts: &mut Facts) {
+pub(crate) fn run(typed_ast: &[Expression], local: &mut LocalFacts) {
     for item in typed_ast {
-        visit_expression(item, facts);
+        visit_expression(item, local);
     }
 }
 
-fn visit_expression(expression: &Expression, facts: &mut Facts) {
+fn visit_expression(expression: &Expression, local: &mut LocalFacts) {
     match expression {
         Expression::ImplBlock { methods, .. } => {
             for method in methods {
-                visit_expression(method, facts);
+                visit_expression(method, local);
             }
             return;
         }
@@ -29,14 +29,14 @@ fn visit_expression(expression: &Expression, facts: &mut Facts) {
             return_type,
             ..
         } => {
-            check_unused_type_parameters(generics, params, return_type, facts);
-            check_type_params_only_in_bound(generics, params, return_type, facts);
+            check_unused_type_parameters(generics, params, return_type, local);
+            check_type_params_only_in_bound(generics, params, return_type, local);
         }
         _ => {}
     }
 
     for child in expression.children() {
-        visit_expression(child, facts);
+        visit_expression(child, local);
     }
 }
 
@@ -44,7 +44,7 @@ fn check_unused_type_parameters(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
-    facts: &mut Facts,
+    local: &mut LocalFacts,
 ) {
     if generics.is_empty() {
         return;
@@ -67,7 +67,7 @@ fn check_unused_type_parameters(
         }
 
         if remaining.contains(&generic.name) {
-            facts.add_unused_type_param(generic.name.to_string(), generic.span);
+            local.add_unused_type_param(generic.name.to_string(), generic.span);
         }
     }
 }
@@ -76,7 +76,7 @@ fn check_type_params_only_in_bound(
     generics: &[Generic],
     params: &[Binding],
     return_type: &Type,
-    facts: &mut Facts,
+    local: &mut LocalFacts,
 ) {
     if generics.is_empty() {
         return;
@@ -94,7 +94,7 @@ fn check_type_params_only_in_bound(
         if generic.name.starts_with('_') || !only_in_bound.contains(&generic.name) {
             continue;
         }
-        facts.add_type_param_only_in_bound(generic.name.to_string(), generic.span);
+        local.add_type_param_only_in_bound(generic.name.to_string(), generic.span);
     }
 }
 

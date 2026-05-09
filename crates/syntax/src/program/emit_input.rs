@@ -48,6 +48,22 @@ impl UnusedInfo {
     pub fn is_unused_definition(&self, span: &Span) -> bool {
         self.definitions.contains(span)
     }
+
+    pub fn merge(&mut self, other: UnusedInfo) {
+        let UnusedInfo {
+            bindings,
+            definitions,
+            imports_by_module,
+        } = other;
+        self.bindings.extend(bindings);
+        self.definitions.extend(definitions);
+        for (module, imports) in imports_by_module {
+            self.imports_by_module
+                .entry(module)
+                .or_default()
+                .extend(imports);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -75,4 +91,37 @@ pub struct EmitInput {
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
     pub go_package_names: HashMap<String, String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn span(offset: u32) -> Span {
+        Span::new(0, offset, 1)
+    }
+
+    #[test]
+    fn merge_extends_bindings_definitions_and_imports() {
+        let mut a = UnusedInfo::default();
+        a.mark_binding_unused(span(0));
+        a.mark_definition_unused(span(1));
+        a.imports_by_module
+            .insert("m1".into(), HashSet::from_iter(["x".into()]));
+
+        let mut b = UnusedInfo::default();
+        b.mark_binding_unused(span(2));
+        b.mark_definition_unused(span(3));
+        b.imports_by_module
+            .insert("m1".into(), HashSet::from_iter(["y".into()]));
+        b.imports_by_module
+            .insert("m2".into(), HashSet::from_iter(["z".into()]));
+
+        a.merge(b);
+
+        assert_eq!(a.bindings.len(), 2);
+        assert_eq!(a.definitions.len(), 2);
+        assert_eq!(a.imports_by_module["m1"].len(), 2);
+        assert_eq!(a.imports_by_module["m2"].len(), 1);
+    }
 }
