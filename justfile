@@ -33,6 +33,7 @@ test-accept:
     cargo insta accept --all
 
 test-e2e-smoke:
+    cargo build -p lisette
     cargo test -p tests --test suite e2e_smoke
 
 test-e2e-suite:
