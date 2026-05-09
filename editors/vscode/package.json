@@ -2,7 +2,7 @@
   "name": "lisette",
   "displayName": "Lisette",
   "description": "Language support for Lisette",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "ivov",
   "license": "MIT",
   "repository": "https://github.com/ivov/lisette",
@@ -45,8 +45,8 @@
     "compile": "pnpm run typecheck && node esbuild.js",
     "typecheck": "tsc --noEmit",
     "vscode:prepublish": "pnpm run typecheck && node esbuild.js --production",
-    "publish": "vsce publish",
-    "package": "vsce package"
+    "publish": "vsce publish --no-dependencies",
+    "package": "vsce package --no-dependencies"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
