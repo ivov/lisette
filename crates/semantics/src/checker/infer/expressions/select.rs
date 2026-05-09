@@ -4,7 +4,7 @@ use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, Sp
 use syntax::types::{Type, unqualified_name};
 
 use super::super::TaskState;
-use crate::validators::temp_producing::is_temp_producing;
+use crate::passes::checks::temp_producing::is_temp_producing;
 
 impl TaskState<'_> {
     pub(super) fn infer_select(

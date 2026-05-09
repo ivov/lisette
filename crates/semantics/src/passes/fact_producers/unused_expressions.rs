@@ -11,7 +11,7 @@ struct TailContext<'a> {
     expected_ty: &'a Type,
 }
 
-pub(super) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, facts: &mut Facts) {
+pub(crate) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, facts: &mut Facts) {
     for item in typed_ast {
         visit_expression(item, None, module_id, store, facts);
     }

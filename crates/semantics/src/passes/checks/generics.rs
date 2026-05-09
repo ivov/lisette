@@ -1,36 +1,18 @@
-//! Generic-parameter shape checks.
+//! Hard errors over generic-parameter shapes.
 //!
-//! - **Unused type parameters** — a generic declared on a function that never
-//!   appears in its signature is likely a typo; record as a fact for the
-//!   lint layer.
-//! - **Type parameters only in a bound** — a generic that appears only inside
-//!   `T: SomeTrait` but never in a parameter or the return type cannot be
-//!   inferred from a call site; record as a fact.
-//! - **Unconstrained bounded generics at call sites** — at a call, any bound
-//!   whose generic position is still an unbound `Type::Var` after freeze
-//!   means the caller failed to constrain it; emit a hard error.
-//! - **Missing bounds on generic return types** — a function returning a
-//!   nominal type whose methods require bounds on a type parameter must
-//!   declare those bounds on its own generic; emit a hard error.
+//! Lint-style fact production for unused/bound-only type params lives in
+//! `passes::fact_producers::generics`.
 
 use diagnostics::LocalSink;
-use ecow::EcoString;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
-use syntax::ast::{Annotation, Binding, Expression, Generic, Span};
+use rustc_hash::FxHashMap as HashMap;
+use syntax::ast::{Annotation, Expression, Generic, Span};
 use syntax::types::{Bound, Symbol, Type};
 
-use crate::facts::Facts;
 use crate::store::Store;
 
-pub(super) fn run(
-    typed_ast: &[Expression],
-    module_id: &str,
-    store: &Store,
-    facts: &mut Facts,
-    sink: &LocalSink,
-) {
+pub(crate) fn run(typed_ast: &[Expression], module_id: &str, store: &Store, sink: &LocalSink) {
     for item in typed_ast {
-        visit_expression(item, None, module_id, store, facts, sink);
+        visit_expression(item, None, module_id, store, sink);
     }
 }
 
@@ -39,7 +21,6 @@ fn visit_expression(
     enclosing_impl_generics: Option<&[Generic]>,
     module_id: &str,
     store: &Store,
-    facts: &mut Facts,
     sink: &LocalSink,
 ) {
     match expression {
@@ -47,20 +28,17 @@ fn visit_expression(
             methods, generics, ..
         } => {
             for method in methods {
-                visit_expression(method, Some(generics), module_id, store, facts, sink);
+                visit_expression(method, Some(generics), module_id, store, sink);
             }
             return;
         }
         Expression::Function {
             name,
             generics,
-            params,
             return_annotation,
             return_type,
             ..
         } => {
-            check_unused_type_parameters(generics, params, return_type, facts);
-            check_type_params_only_in_bound(generics, params, return_type, facts);
             check_constrained_return_type(
                 return_type,
                 generics,
@@ -87,126 +65,7 @@ fn visit_expression(
     }
 
     for child in expression.children() {
-        visit_expression(
-            child,
-            enclosing_impl_generics,
-            module_id,
-            store,
-            facts,
-            sink,
-        );
-    }
-}
-
-fn check_unused_type_parameters(
-    generics: &[Generic],
-    params: &[Binding],
-    return_type: &Type,
-    facts: &mut Facts,
-) {
-    if generics.is_empty() {
-        return;
-    }
-
-    let mut remaining: HashSet<EcoString> = generics.iter().map(|g| g.name.clone()).collect();
-    for param in params {
-        param.ty.remove_found_type_names(&mut remaining);
-    }
-    return_type.remove_found_type_names(&mut remaining);
-    for generic in generics {
-        for bound in &generic.bounds {
-            annotation_remove_names(bound, &mut remaining);
-        }
-    }
-
-    for generic in generics {
-        if generic.name.starts_with('_') {
-            continue;
-        }
-
-        if remaining.contains(&generic.name) {
-            facts.add_unused_type_param(generic.name.to_string(), generic.span);
-        }
-    }
-}
-
-fn check_type_params_only_in_bound(
-    generics: &[Generic],
-    params: &[Binding],
-    return_type: &Type,
-    facts: &mut Facts,
-) {
-    if generics.is_empty() {
-        return;
-    }
-    if generics.iter().all(|g| g.bounds.is_empty()) {
-        return;
-    }
-
-    let only_in_bound = collect_type_params_only_in_bound(generics, params, return_type);
-    if only_in_bound.is_empty() {
-        return;
-    }
-
-    for generic in generics {
-        if generic.name.starts_with('_') || !only_in_bound.contains(&generic.name) {
-            continue;
-        }
-        facts.add_type_param_only_in_bound(generic.name.to_string(), generic.span);
-    }
-}
-
-fn collect_type_params_only_in_bound(
-    generics: &[Generic],
-    params: &[Binding],
-    return_type: &Type,
-) -> HashSet<EcoString> {
-    let mut unseen_outside_bound_rhs: HashSet<EcoString> =
-        generics.iter().map(|g| g.name.clone()).collect();
-    for param in params {
-        param
-            .ty
-            .remove_found_type_names(&mut unseen_outside_bound_rhs);
-    }
-    return_type.remove_found_type_names(&mut unseen_outside_bound_rhs);
-
-    let mut unseen_anywhere = unseen_outside_bound_rhs.clone();
-    for generic in generics {
-        for bound in &generic.bounds {
-            annotation_remove_names(bound, &mut unseen_anywhere);
-        }
-    }
-
-    unseen_outside_bound_rhs
-        .into_iter()
-        .filter(|name| !unseen_anywhere.contains(name))
-        .collect()
-}
-
-fn annotation_remove_names(annotation: &Annotation, names: &mut HashSet<EcoString>) {
-    match annotation {
-        Annotation::Constructor { name, params, .. } => {
-            names.remove(name.as_str());
-            for p in params {
-                annotation_remove_names(p, names);
-            }
-        }
-        Annotation::Function {
-            params,
-            return_type,
-            ..
-        } => {
-            for p in params {
-                annotation_remove_names(p, names);
-            }
-            annotation_remove_names(return_type, names);
-        }
-        Annotation::Tuple { elements, .. } => {
-            for e in elements {
-                annotation_remove_names(e, names);
-            }
-        }
-        Annotation::Unknown | Annotation::Opaque { .. } => {}
+        visit_expression(child, enclosing_impl_generics, module_id, store, sink);
     }
 }
 

@@ -13,7 +13,7 @@ pub use inhabitance::is_inhabited;
 pub use maranget::check_exhaustiveness;
 pub use normalize::{NormalizationContext, normalize_typed_pattern};
 pub use types::*;
-pub use witness::{format_pattern, format_witness};
+pub use witness::format_witness;
 
 pub use self::PatternAnalysisContext as Context;
 

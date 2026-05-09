@@ -705,7 +705,7 @@ fn type_name(ty: &Type) -> Option<String> {
     }
 }
 
-pub(super) fn is_upper(s: &str) -> bool {
+pub(crate) fn is_upper(s: &str) -> bool {
     s.chars().next().is_some_and(|c| c.is_uppercase())
 }
 

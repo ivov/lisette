@@ -4,7 +4,7 @@ use syntax::program::{Definition, DefinitionBody, Visibility};
 
 use crate::store::Store;
 
-pub(super) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
+pub(crate) fn run_module(module_id: &str, store: &Store, sink: &LocalSink) {
     let Some(module) = store.get_module(module_id) else {
         return;
     };

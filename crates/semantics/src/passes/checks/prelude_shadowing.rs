@@ -3,7 +3,7 @@ use syntax::ast::Expression;
 
 use crate::store::Store;
 
-pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
+pub(crate) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
     let Some(prelude_module) = store.get_module("prelude") else {
         return;
     };

@@ -28,7 +28,14 @@ impl BindingIdAllocator {
 #[derive(Debug)]
 pub struct Facts {
     allocator: Arc<BindingIdAllocator>,
+
+    // LSP-consumed; reshaping these affects crates/lsp/.
     pub bindings: HashMap<BindingId, BindingFact>,
+    pub usages: Vec<Usage>,
+    usage_set: HashSet<(Span, Span)>,
+
+    // Lint-support facts: read by reference by passes::lints (mostly
+    // from_facts; interface_satisfied_methods by ref_graph).
     pub dead_code: Vec<DeadCodeFact>,
     pub pattern_issues: Vec<PatternIssue>,
     pub unused_expressions: Vec<UnusedExpressionFact>,
@@ -38,17 +45,15 @@ pub struct Facts {
     pub type_params_only_in_bound: Vec<TypeParamOnlyInBoundFact>,
     pub always_failing_try_blocks: Vec<Span>,
     pub expression_only_fstrings: Vec<Span>,
+    pub interface_satisfied_methods: HashMap<(String, String), Vec<Span>>,
+
+    // Drained by passes::deferred via mem::take.
     pub generic_call_checks: Vec<GenericCallCheck>,
     pub empty_collection_checks: Vec<EmptyCollectionCheck>,
     pub statement_tail_checks: Vec<StatementTailCheck>,
-    /// Spans of or-patterns with binding errors, used to suppress contradictory lints.
+
+    /// Suppresses contradictory lints from or-patterns whose binding sets disagree.
     pub or_pattern_error_spans: HashSet<Span>,
-    /// Tracks usage locations for find-references in LSP
-    pub usages: Vec<Usage>,
-    usage_set: HashSet<(Span, Span)>,
-    /// Tracks methods used via interface satisfaction during type checking.
-    /// Maps (module_id, method_name) -> usage locations
-    pub interface_satisfied_methods: HashMap<(String, String), Vec<Span>>,
 }
 
 #[derive(Debug, Clone)]

@@ -17,7 +17,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Binding, Expression, Pattern, SelectArm, SelectArmPattern};
 
-pub(super) fn run(typed_ast: &[Expression], sink: &LocalSink) {
+pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, sink);
     }

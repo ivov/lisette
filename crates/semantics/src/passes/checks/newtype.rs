@@ -8,7 +8,7 @@ use syntax::types::{Type, unqualified_name};
 
 use crate::store::Store;
 
-pub(super) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
+pub(crate) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, store, sink);
     }

@@ -92,7 +92,7 @@ pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
         if !checker.failed() {
             let analysis = semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
             let mut unused = syntax::program::UnusedInfo::default();
-            semantics::validators::run(
+            semantics::passes::run(
                 &analysis,
                 &mut checker.facts,
                 checker.sink,

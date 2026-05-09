@@ -6,9 +6,9 @@ pub mod context;
 pub mod facts;
 pub mod loader;
 pub mod module_graph;
+pub mod passes;
 pub mod prelude;
 pub mod store;
-pub mod validators;
 
 use syntax::ast::Expression;
 

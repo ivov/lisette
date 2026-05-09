@@ -10,7 +10,7 @@ use syntax::ast::{Binding, Expression, MatchArm, Pattern, SelectArm, SelectArmPa
 
 use crate::checker::infer::expressions::patterns::collect_pattern_bindings;
 
-pub(super) fn run(typed_ast: &[Expression], sink: &LocalSink) {
+pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, sink);
     }

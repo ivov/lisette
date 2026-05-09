@@ -19,9 +19,9 @@ use crate::checker::TaskState;
 use crate::facts::{BindingIdAllocator, Facts};
 use crate::loader::Loader;
 use crate::module_graph::build_module_graph;
+use crate::passes;
 use crate::prelude::parse_and_register_prelude;
 use crate::store::{ENTRY_MODULE_ID, Store};
-use crate::validators;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompilePhase {
@@ -285,7 +285,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
 
     let mut unused = UnusedInfo::default();
     if !has_pre_check_errors {
-        validators::run(
+        passes::run(
             &analysis,
             &mut facts,
             &sink,
@@ -301,7 +301,11 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         }
     }
 
-    let (errors, lints): (Vec<_>, Vec<_>) = sink.take().into_iter().partition(|d| d.is_error());
+    // Canonicalize diagnostic order so the output is stable regardless of
+    // phase ordering, FxHashMap iteration, or parallel inference scheduling.
+    let mut all_diagnostics = sink.take();
+    all_diagnostics.sort_by(diagnostics::LisetteDiagnostic::sort_key);
+    let (errors, lints): (Vec<_>, Vec<_>) = all_diagnostics.into_iter().partition(|d| d.is_error());
 
     if cache_enabled && let Some(ref project_root) = input.project_root {
         let has_errors = errors.iter().any(|e| e.is_error());

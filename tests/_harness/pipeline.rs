@@ -188,7 +188,7 @@ impl CompiledTest {
                 semantics::checker::freeze::FreezeFolder::new(&checker.env).freeze_items(typed_ast);
 
             if !checker.failed() {
-                // Overwrite the stored file with the typed AST so validators::run
+                // Overwrite the stored file with the typed AST so passes::run
                 // sees post-inference items when iterating store.modules.
                 store.store_file(
                     TEST_MODULE_ID,
@@ -203,7 +203,7 @@ impl CompiledTest {
                 let analysis =
                     semantics::context::AnalysisContext::new(&store, &checker.ufcs_methods);
                 let mut harness_unused = UnusedInfo::default();
-                semantics::validators::run(
+                semantics::passes::run(
                     &analysis,
                     &mut checker.facts,
                     checker.sink,

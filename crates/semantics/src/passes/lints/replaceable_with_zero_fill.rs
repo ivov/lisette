@@ -5,11 +5,24 @@ use syntax::program::DefinitionBody;
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use crate::checker::infer::expressions::struct_call::has_zero;
+use crate::context::AnalysisContext;
 use crate::store::Store;
 
 const ZERO_FIELD_THRESHOLD: usize = 3;
 
-pub(super) fn run(
+pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
+    let store = analysis.store;
+    for module in store.modules.values() {
+        if module.is_internal() {
+            continue;
+        }
+        for file in module.files.values() {
+            run_per_file(&file.items, &file.source, &module.id, store, sink);
+        }
+    }
+}
+
+fn run_per_file(
     typed_ast: &[Expression],
     source: &str,
     module_id: &str,

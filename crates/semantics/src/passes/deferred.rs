@@ -2,7 +2,7 @@ use diagnostics::LocalSink;
 
 use crate::facts::Facts;
 
-pub(super) fn run(facts: &mut Facts, sink: &LocalSink) {
+pub(crate) fn run(facts: &mut Facts, sink: &LocalSink) {
     for check in std::mem::take(&mut facts.generic_call_checks) {
         if check.return_ty.has_unbound_variables() {
             sink.push(diagnostics::infer::cannot_infer_type_argument(check.span));

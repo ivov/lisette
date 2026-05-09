@@ -1,15 +1,11 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use crate::context::AnalysisContext;
 use crate::facts::Facts;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use syntax::ast::Expression;
 use syntax::program::File;
-use syntax::program::Module;
 use syntax::program::UnusedInfo;
-
-use super::ast_lints::AstLintGroup;
 
 pub struct LintContext<'a> {
     pub ast: &'a [Expression],
@@ -79,89 +75,7 @@ impl LintConfig {
     }
 }
 
-pub fn lint_all_modules(
-    analysis: &AnalysisContext,
-    facts: &Facts,
-    sink: &LocalSink,
-    unused: &mut UnusedInfo,
-) {
-    let store = analysis.store;
-    let go_package_names = &store.go_package_names;
-    let config = LintConfig::default();
-
-    for module in store.modules.values() {
-        if module.is_internal() {
-            continue;
-        }
-        lint_module(
-            module,
-            store,
-            go_package_names,
-            facts,
-            &config,
-            sink,
-            unused,
-        );
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn lint_module(
-    module: &Module,
-    store: &crate::store::Store,
-    go_package_names: &HashMap<String, String>,
-    facts: &Facts,
-    config: &LintConfig,
-    sink: &LocalSink,
-    unused: &mut UnusedInfo,
-) {
-    let mut diagnostics: Vec<LisetteDiagnostic> = Vec::new();
-
-    // AST diagnostics extended first so the stable sort keeps them ahead of
-    // reference-graph diagnostics on offset ties.
-    for file in module.files.values() {
-        let ctx = LintContext {
-            ast: &file.items,
-            is_d_lis: file.is_d_lis(),
-            files: &module.files,
-        };
-        diagnostics.extend(AstLintGroup.check(&ctx));
-    }
-
-    let zero_fill_sink = diagnostics::LocalSink::new();
-    for file in module.files.values() {
-        super::replaceable_with_zero_fill::run(
-            &file.items,
-            &file.source,
-            &module.id,
-            store,
-            &zero_fill_sink,
-        );
-    }
-    diagnostics.extend(zero_fill_sink.take());
-
-    let ref_result =
-        super::ref_lints::run_ref_lints(module, &module.files, go_package_names, config, facts);
-    if !ref_result.unused_import_aliases.is_empty() {
-        unused.imports_by_module.insert(
-            module.id.clone().into(),
-            ref_result
-                .unused_import_aliases
-                .into_iter()
-                .map(|s| s.into())
-                .collect(),
-        );
-    }
-    for span in ref_result.unused_definition_spans {
-        unused.mark_definition_unused(span);
-    }
-    diagnostics.extend(ref_result.diagnostics);
-
-    diagnostics.sort_by(LisetteDiagnostic::sort_key);
-    sink.extend(diagnostics);
-}
-
-pub fn lint_all_facts(facts: &Facts, unused: &mut UnusedInfo, sink: &LocalSink) {
+pub(crate) fn run(facts: &Facts, unused: &mut UnusedInfo, sink: &LocalSink) {
     let mut diagnostics: Vec<LisetteDiagnostic> = Vec::new();
 
     collect_bindings(facts, unused, &mut diagnostics);

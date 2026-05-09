@@ -5,8 +5,29 @@ mod visitor;
 
 use std::cell::RefCell;
 
-use super::lints::LintContext;
+use super::from_facts::LintContext;
+use crate::context::AnalysisContext;
 use diagnostics::LisetteDiagnostic;
+use diagnostics::LocalSink;
+
+pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
+    let store = analysis.store;
+    for module in store.modules.values() {
+        if module.is_internal() {
+            continue;
+        }
+        for file in module.files.values() {
+            let ctx = LintContext {
+                ast: &file.items,
+                is_d_lis: file.is_d_lis(),
+                files: &module.files,
+            };
+            let mut diagnostics = AstLintGroup.check(&ctx);
+            diagnostics.sort_by(LisetteDiagnostic::sort_key);
+            sink.extend(diagnostics);
+        }
+    }
+}
 
 use attributes::{check_attributes, check_struct_attributes};
 use checks::{

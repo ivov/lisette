@@ -4,15 +4,18 @@ mod visibility_constraints;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
+use crate::context::AnalysisContext;
 use crate::facts::Facts;
 use diagnostics::LisetteDiagnostic;
+use diagnostics::LocalSink;
 use syntax::ast::{AttributeArg, Expression, ImportAlias, Span, Visibility};
 use syntax::program::Module;
+use syntax::program::UnusedInfo;
 use syntax::program::{File, FileImport};
 
 use super::Lint as LintEnum;
-use super::ast_lints::attributes::SERIALIZATION_KEYS;
-use super::lints::LintConfig;
+use super::ast_walk::attributes::SERIALIZATION_KEYS;
+use super::from_facts::LintConfig;
 use extract::{AliasMap, extract_references, is_upper};
 use reference_graph::{
     EnumVariantId, EnumVariantInfo, ItemKind, ModuleItemId, ReferenceGraph, StructFieldId,
@@ -20,13 +23,47 @@ use reference_graph::{
 };
 use visibility_constraints::check_visibility_constraints;
 
-pub struct RefLintResult {
-    pub diagnostics: Vec<LisetteDiagnostic>,
-    pub unused_import_aliases: HashSet<String>,
-    pub unused_definition_spans: Vec<Span>,
+struct RefLintResult {
+    diagnostics: Vec<LisetteDiagnostic>,
+    unused_import_aliases: HashSet<String>,
+    unused_definition_spans: Vec<Span>,
 }
 
-pub fn run_ref_lints(
+pub(crate) fn run(
+    analysis: &AnalysisContext,
+    facts: &Facts,
+    unused: &mut UnusedInfo,
+    sink: &LocalSink,
+) {
+    let store = analysis.store;
+    let go_package_names = &store.go_package_names;
+    let config = LintConfig::default();
+
+    for module in store.modules.values() {
+        if module.is_internal() {
+            continue;
+        }
+        let result = run_ref_lints(module, &module.files, go_package_names, &config, facts);
+        if !result.unused_import_aliases.is_empty() {
+            unused.imports_by_module.insert(
+                module.id.clone().into(),
+                result
+                    .unused_import_aliases
+                    .into_iter()
+                    .map(|s| s.into())
+                    .collect(),
+            );
+        }
+        for span in result.unused_definition_spans {
+            unused.mark_definition_unused(span);
+        }
+        let mut diagnostics = result.diagnostics;
+        diagnostics.sort_by(LisetteDiagnostic::sort_key);
+        sink.extend(diagnostics);
+    }
+}
+
+fn run_ref_lints(
     module: &Module,
     files: &HashMap<u32, File>,
     go_package_names: &HashMap<String, String>,

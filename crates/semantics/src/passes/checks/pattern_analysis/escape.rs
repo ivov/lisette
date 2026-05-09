@@ -1,6 +1,6 @@
 use syntax::ast::Literal;
 
-pub(super) fn runtime_bytes(literal: &Literal) -> Option<Vec<u8>> {
+pub(crate) fn runtime_bytes(literal: &Literal) -> Option<Vec<u8>> {
     if let Literal::String { value, raw } = literal {
         Some(decode(value, *raw))
     } else {
@@ -8,7 +8,7 @@ pub(super) fn runtime_bytes(literal: &Literal) -> Option<Vec<u8>> {
     }
 }
 
-pub(super) fn equals_target(
+pub(crate) fn equals_target(
     candidate: &Literal,
     target: &Literal,
     target_bytes: Option<&[u8]>,

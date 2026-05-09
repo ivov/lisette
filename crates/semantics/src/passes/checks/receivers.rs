@@ -7,7 +7,7 @@ use diagnostics::LocalSink;
 use syntax::ast::{Expression, Pattern};
 use syntax::types::Type;
 
-pub(super) fn run(typed_ast: &[Expression], sink: &LocalSink) {
+pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
     for item in typed_ast {
         visit_expression(item, sink);
     }
