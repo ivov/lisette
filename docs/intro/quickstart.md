@@ -153,11 +153,13 @@ Commands:
     run, r     Compile and run a project
     format, f  Format a project
     check, c   Validate a project
-    doc        Browse symbols and packages
+    add        Add a third-party Go dependency
+    sync       Reconcile project manifest
 
 Extras:
     version    Print compiler version
     help       Show help for a command
+    doc        Browse symbols and packages
     learn      Create a new sample project
     complete   Shell completion scripts
     lsp        Start the language server

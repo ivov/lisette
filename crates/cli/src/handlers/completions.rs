@@ -36,7 +36,7 @@ fn bash_completions() -> &'static str {
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
-    commands="new build run format check learn doc help complete version"
+    commands="new build run format check add sync learn doc help complete version"
 
     case "$prev" in
         lis)
@@ -89,6 +89,8 @@ _lis() {
         'run:Compile and run a project'
         'format:Format a file or project'
         'check:Validate a file or project'
+        'add:Add a third-party Go dependency'
+        'sync:Reconcile project manifest with imports'
         'learn:Generate a sample project'
         'doc:Explore prelude and Go stdlib'
         'help:Print help message'
@@ -147,6 +149,8 @@ complete -c lis -n __fish_use_subcommand -a build -d 'Compile a project'
 complete -c lis -n __fish_use_subcommand -a run -d 'Compile and run a project'
 complete -c lis -n __fish_use_subcommand -a format -d 'Format a file or project'
 complete -c lis -n __fish_use_subcommand -a check -d 'Validate a file or project'
+complete -c lis -n __fish_use_subcommand -a add -d 'Add a third-party Go dependency'
+complete -c lis -n __fish_use_subcommand -a sync -d 'Reconcile project manifest with imports'
 complete -c lis -n __fish_use_subcommand -a learn -d 'Generate a sample project'
 complete -c lis -n __fish_use_subcommand -a doc -d 'Explore prelude and Go stdlib'
 complete -c lis -n __fish_use_subcommand -a help -d 'Print help message'
@@ -160,6 +164,6 @@ complete -c lis -n '__fish_seen_subcommand_from check' -l errors-only -d 'Show o
 complete -c lis -n '__fish_seen_subcommand_from check' -l warnings-only -d 'Show only warnings'
 complete -c lis -n '__fish_seen_subcommand_from doc' -s s -l search -d 'Search across prelude and Go stdlib'
 complete -c lis -n '__fish_seen_subcommand_from complete' -a 'bash zsh fish' -d 'Shell type'
-complete -c lis -n '__fish_seen_subcommand_from help' -a 'new build run format check learn doc help complete version' -d 'Command'
+complete -c lis -n '__fish_seen_subcommand_from help' -a 'new build run format check add sync learn doc help complete version' -d 'Command'
 "#
 }

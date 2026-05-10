@@ -1,6 +1,6 @@
 # Go Interop
 
-Lisette can import from the Go standard library. Third-party packages will be supported in future.
+Lisette can import from the Go stdlib and from [third-party modules](#third-party-go-dependencies).
 
 ## Importing Go packages
 
@@ -19,11 +19,11 @@ fn main() {
 }
 ```
 
-The `go:` prefix distinguishes Go packages from project modules.
+The `go:` prefix distinguishes Go packages from your own project's modules.
 
 ```rust
 import "go:fmt"       // Go stdlib
-import "handlers"     // project module
+import "handlers"     // project module (dir)
 ```
 
 To import a Go package for its side effects only, use a blank import:
@@ -58,7 +58,7 @@ Compound types are different:
 | `VarArgs<T>`    | `...T` (call-site only)      |
 | `Unknown`       | `any` or `interface{}`       |
 
-Fixed-size arrays `[N]T` are not yet representable in Lisette. In return position they lower to `Slice<T>`. In any other position (e.g. parameters, struct fields, map keys, slice or map elements), bindgen currently skips the declaration. This may change in future.
+Fixed-size arrays `[N]T` are not yet representable in Lisette. In return position they lower to `Slice<T>`. In any other position (e.g. parameters, struct fields, map keys, slice or map elements), the declaration is currently skipped.
 
 ### Named numeric types
 
@@ -132,9 +132,9 @@ claims["iat"] = 1714665600
 let token = jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims(claims))
 ```
 
-## Declaration files
+## Type definition files
 
-Declaration files `.d.lis` describe Go packages in Lisette syntax.
+Type definition files `.d.lis` describe Go packages in Lisette syntax.
 
 For example, `Open` in the `os` package in the Go standard library:
 
@@ -272,6 +272,67 @@ task {
 ```
 
 Run `lis doc PanicValue` for available methods.
+
+## Third-party Go dependencies
+
+> [!IMPORTANT]
+> Dependency management is in early preview. 
+> Bug reports and feedback are welcome.
+
+A Lisette project can depend on a third-party Go module.
+
+To add a third-party dependency:
+
+```sh
+lis add google/uuid              # latest version
+lis add google/uuid@v1.6.0       # exact version
+lis add google/uuid@2d3c2a9      # exact commit hash or branch
+lis add go.uber.org/zap          # full path for non-GitHub host
+```
+
+Example output:
+
+```
+✓ Added go.uber.org/zap v1.28.0
+  └─ go.uber.org/multierr v1.10.0
+```
+
+`lis add` will:
+
+1. download the Go module to `~/go/pkg/mod`,
+2. generate [typedefs](#type-definition-files) at `target/.lisette/typedefs`, and
+3. declare the module and its transitives in the `lisette.toml` manifest.
+
+```toml
+[dependencies.go]
+"go.uber.org/zap" = "v1.28.0"
+"go.uber.org/multierr" = { version = "v1.10.0", via = ["go.uber.org/zap"] }
+```
+
+To import a third-party dependency:
+
+```rs
+import "go:github.com/google/uuid"
+
+fn main() {
+  let id = uuid.New()
+}
+```
+
+`lis add` generates typedefs for the target package, plus every package reached by following its imports across modules. For efficiency, typedefs are skipped for sibling subpackages and packages from transitive modules that no import reaches - these are generated on demand as you write imports in your project.
+
+To tidy the manifest:
+
+```sh
+lis sync
+```
+
+This will reconcile your project's manifest against state on disk, removing orphaned transitives from the manifest, and generating typedefs for every import.
+
+To remove a dependency:
+
+- Delete the entry from `lisette.toml`
+- Run `lis sync`
 
 <br>
 

@@ -10,7 +10,7 @@ use lisette::fs::collect_lis_filepaths_recursive;
 use crate::go_cli;
 use crate::handlers::add::find_project_root;
 use crate::lock::{acquire_mutation_lock, acquire_target_lock};
-use crate::output::{print_preview_notice, print_sync_summary};
+use crate::output::print_sync_summary;
 use crate::typedef_regen::prewarm_typedef_cache;
 use crate::workspace::WorkspaceBindgen;
 use crate::{cli_error, error};
@@ -62,8 +62,6 @@ pub fn sync() -> i32 {
         );
         return 1;
     }
-
-    print_preview_notice("lis sync");
 
     let target_dir = project_root.join("target");
     if target_dir.is_file() {

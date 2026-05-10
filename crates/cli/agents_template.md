@@ -192,6 +192,8 @@ Full reference: https://github.com/ivov/lisette/tree/main/docs/reference
 - `lis build` — compile to `target/`
 - `lis check` — type check only
 - `lis format` — format code
+- `lis add google/uuid` - add a third-party Go dependency
+- `lis sync` - reconcile `lisette.toml` with imports
 - `lis doc Slice` — show a prelude type and its methods
 - `lis doc Option.map` — show a single method
 - `lis doc go:os` — browse a Go stdlib package

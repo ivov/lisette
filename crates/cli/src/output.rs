@@ -176,20 +176,15 @@ pub fn capitalize_first(s: &str) -> String {
     }
 }
 
-pub fn print_preview_notice(command: &str) {
+pub fn print_preview_notice() {
     eprintln!();
     if use_color() {
         eprintln!(
-            "  ! You are running an unfinished feature: {}",
-            command.bright_magenta()
-        );
-        eprintln!(
-            "  ! Support for third-party Go dependencies is {}",
-            "not yet stable".yellow().underline()
+            "  ! Support for third-party Go dependencies is in {}",
+            "early preview".yellow().underline()
         );
     } else {
-        eprintln!("  ! You are running an unfinished feature: {}", command);
-        eprintln!("  ! Support for third-party Go dependencies is experimental");
+        eprintln!("  ! Support for third-party Go dependencies is in early preview");
     }
     eprintln!("  ! Bug reports are welcome: https://github.com/ivov/lisette/issues");
     eprintln!();

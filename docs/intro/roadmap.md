@@ -8,7 +8,6 @@ Status:
 
 Planned work:
 
-- Support third-party packages
 - Implement a test runner
 - Introduce bitwise operators
 - Make diagnostics configurable

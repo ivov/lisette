@@ -77,7 +77,7 @@ pub fn add(dep_string: &str) -> i32 {
             cli_error!(
                 "Invalid dependency",
                 msg,
-                "Example: `lis add github.com/gorilla/mux@v1.8.0`"
+                "Example: `lis add google/uuid@v1.6.0`"
             );
             return 1;
         }
@@ -451,7 +451,7 @@ fn setup_project(
         return Err(1);
     }
 
-    print_preview_notice("lis add");
+    print_preview_notice();
 
     let project_target_dir = project_root.join("target");
     if project_target_dir.is_file() {

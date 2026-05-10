@@ -17,11 +17,13 @@ Commands:
     `run`, `r`     Compile and run a project
     `format`, `f`  Format a project
     `check`, `c`   Validate a project
-    `doc`        Browse symbols and packages
+    `add`        Add a third-party Go dependency
+    `sync`       Reconcile project manifest
 
 Extras:
     `version`    Print compiler version
     `help`       Show help for a command
+    `doc`        Browse symbols and packages
     `learn`      Create a new sample project
     `complete`   Shell completion scripts
     `lsp`        Start the language server",
@@ -38,7 +40,7 @@ Usage:
     `lis help` <command>
 
 Commands:
-    `new`, `build`, `run`, `format`, `check`, `doc`
+    `new`, `build`, `run`, `format`, `check`, `add`, `sync`, `doc`
 
 Extras:
     `version`, `help`, `learn`, `complete`, `lsp`",
@@ -130,6 +132,32 @@ Examples:
     `lis check`                          Check project in current dir
     `lis check` {path/to/project/dir:g}      Check project in specific dir
     `lis check` {script.lis:g}               Check single file",
+        ),
+
+        "add" => print_help(
+            "`lis add` <dependency>
+
+Add a third-party Go dependency to your Lisette project. Will download the
+Go module, record the module and its transitives in `lisette.toml`, and
+generate typedefs for the target module and any imported packages.
+
+Arguments:
+    <dependency>    Go module path with optional `@version` (default: latest)
+
+Examples:
+    `lis add` {google/uuid:g}                   Latest version
+    `lis add` {google/uuid@v1.6.0:g}            Exact version
+    `lis add` {google/uuid@2d3c2a9:g}           Exact commit hash or branch
+    `lis add` {go.uber.org/zap:g}               Full path for non-GitHub host",
+        ),
+
+        "sync" => print_help(
+            "`lis sync`
+
+Tidy `lisette.toml` against the `go:` imports in `src/`, similar to
+`go mod tidy`. Will drop dependency entries no longer reached by any import, and
+generate typedefs for every imported package. Run this after removing imports,
+deleting source files, or pulling new code.",
         ),
 
         "lsp" => print_help(
