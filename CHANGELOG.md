@@ -1,6 +1,34 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.2](https://github.com/ivov/lisette/compare/lisette-v0.2.1...lisette-v0.2.2) - 2026-05-10
+
+- feat: third-party Go dependencies [#374](https://github.com/ivov/lisette/pull/374) [`5276b12`](https://github.com/ivov/lisette/commit/5276b12f3897f2a33bca1eab0dab2947d27a443a)
+- perf: parallelize codegen [#376](https://github.com/ivov/lisette/pull/376) [`17085bb`](https://github.com/ivov/lisette/commit/17085bbefb8b18a03b3b193e9f87aa4196e3fe05)
+- chore: update vscode extension publish instructions [#375](https://github.com/ivov/lisette/pull/375) [`e050f20`](https://github.com/ivov/lisette/commit/e050f20f6f42cf7b58b9b48b47dcf7527cfe2eb9)
+- chore: update vscode extension to 0.2.0 [#373](https://github.com/ivov/lisette/pull/373) [`162d62b`](https://github.com/ivov/lisette/commit/162d62b3001e94cfbec0ce00323d342c7ea8d4fd)
+- perf: lazy third-party typedefs [#372](https://github.com/ivov/lisette/pull/372) [`5b4a849`](https://github.com/ivov/lisette/commit/5b4a84938722002b4f3dacee6e6f7b8bf926a253)
+- fix: mut param correctness [#371](https://github.com/ivov/lisette/pull/371) [`4bb4369`](https://github.com/ivov/lisette/commit/4bb4369cb927d78396b166f461b663b97aa6fa02)
+- ci: speed up e2e smoke project [#368](https://github.com/ivov/lisette/pull/368) [`a44fe7e`](https://github.com/ivov/lisette/commit/a44fe7e0bb7c4e042d9f749b197c7ae89f9121c2)
+- perf: parallelize post-inference checks [#366](https://github.com/ivov/lisette/pull/366) [`3172bf1`](https://github.com/ivov/lisette/commit/3172bf123b16a55689d49a3b03d9f2b0e227f813)
+- refactor: structure post-inference passes by role [#365](https://github.com/ivov/lisette/pull/365) [`0c1f2f5`](https://github.com/ivov/lisette/commit/0c1f2f5f0a5a2ff2320453b031c59702e847bf43)
+- perf: parallelize inference [#364](https://github.com/ivov/lisette/pull/364) [`62e6798`](https://github.com/ivov/lisette/commit/62e6798f1de61c351ef2d9734aaeed9d03b27a26)
+- refactor: make inference borrow the store immutably [#363](https://github.com/ivov/lisette/pull/363) [`d12a0d0`](https://github.com/ivov/lisette/commit/d12a0d04f701cac8ae2848152cc348e1740b78c6)
+- fix: honor allow_unused_value config on bindgen methods [#361](https://github.com/ivov/lisette/pull/361) [`3ae673c`](https://github.com/ivov/lisette/commit/3ae673cf80ff71ab1615e0862fff6762bb97bf9f)
+- fix: skip foreign-typed const in bindgen enum detection [#360](https://github.com/ivov/lisette/pull/360) [`c6b19d0`](https://github.com/ivov/lisette/commit/c6b19d000c1cb42b50ead2860fcbfb7ba337e739)
+- ci: cut redundancy and speed up PR checks [#357](https://github.com/ivov/lisette/pull/357) [`891a835`](https://github.com/ivov/lisette/commit/891a835949ee8cd5d0c917fb1acd932bc1e2c61c)
+- refactor: extend fn-as-lambda diagnostic to expressions [#359](https://github.com/ivov/lisette/pull/359) [`208d034`](https://github.com/ivov/lisette/commit/208d0344bd44b410ae00513b8db1ccc301a411a8)
+- fix: emit recursive fn-type aliases as opaque types [#358](https://github.com/ivov/lisette/pull/358) [`be7cc99`](https://github.com/ivov/lisette/commit/be7cc9948b56656fd99bc13f9e24f0decaa6fbd1)
+- feat: add allow_unused_value bindgen override for fluent APIs [#356](https://github.com/ivov/lisette/pull/356) [`1f18bcf`](https://github.com/ivov/lisette/commit/1f18bcff52cb654e39f38a0924cc800640b55005)
+- refactor: improve ref qualifier misuse diagnostic [#355](https://github.com/ivov/lisette/pull/355) [`ecb4245`](https://github.com/ivov/lisette/commit/ecb42458dd83001565e8ac24f634639aa28abdd2)
+- fix: salvage bindgen aliases to internal-package types [#354](https://github.com/ivov/lisette/pull/354) [`76ce06e`](https://github.com/ivov/lisette/commit/76ce06e7a294b40b04b1e2af01bdfce423c3394e)
+- fix: emit never-bodied lambda as func() into unknown arg [#353](https://github.com/ivov/lisette/pull/353) [`7e357ce`](https://github.com/ivov/lisette/commit/7e357ceaed320bb8e3803a2a70f528f1c307c5e7)
+- refactor: improve function type mismatch diagnostic [#352](https://github.com/ivov/lisette/pull/352) [`d19b9f5`](https://github.com/ivov/lisette/commit/d19b9f583b31f6d8f5f18921ab88496f2d003060)
+- fix: exempt tag-attributed fields from unused_struct_field lint [#351](https://github.com/ivov/lisette/pull/351) [`cc4a0ac`](https://github.com/ivov/lisette/commit/cc4a0acc5e854438c522c374f9ecbe5279aabb5a)
+- chore: upgrade to go 1.25.10 [#350](https://github.com/ivov/lisette/pull/350) [`f8763e9`](https://github.com/ivov/lisette/commit/f8763e9b9145c890caf364782816e097532207df)
+- fix: preserve generic arity on skipped opaque type placeholders [#349](https://github.com/ivov/lisette/pull/349) [`6adc0b8`](https://github.com/ivov/lisette/commit/6adc0b8e8ef082f167242e233eb12a2dc3fee7d5)
+- fix: preserve bindgen docs on funcs returning a local type [#347](https://github.com/ivov/lisette/pull/347) [`29e953b`](https://github.com/ivov/lisette/commit/29e953b9852d9836d1b95c4745d07d3ff6bed302)
+- fix: bridge Option<T> on scalar args to *scalar at callsites [#346](https://github.com/ivov/lisette/pull/346) [`321abdc`](https://github.com/ivov/lisette/commit/321abdc856ff9bef746cd29a35efd0d74a60868a)
 ## [0.2.1](https://github.com/ivov/lisette/compare/lisette-v0.2.0...lisette-v0.2.1) - 2026-05-07
 
 - fix: snapshot bytes-loop receiver to survive body reassignment [#344](https://github.com/ivov/lisette/pull/344) [`1eda7c8`](https://github.com/ivov/lisette/commit/1eda7c83360ca712eabfe0ec081878ea647c5d94)
