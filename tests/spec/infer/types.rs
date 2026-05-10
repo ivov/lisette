@@ -4318,3 +4318,81 @@ fn main() {
     );
     infer_module("main", fs).assert_no_errors();
 }
+
+#[test]
+fn struct_field_forward_references_fn_alias() {
+    infer(
+        r#"
+struct Cmd {
+  pub v: Option<Validator>,
+}
+
+type Validator = fn(int) -> Result<(), error>
+
+fn check(_x: int) -> Result<(), error> {
+  Ok(())
+}
+
+fn main() {
+  let _c = Cmd { v: Some(check) }
+  let _ = _c.v
+}
+"#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
+fn imported_struct_field_forward_references_fn_alias() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "cli",
+        "lib.d.lis",
+        r#"
+pub struct Command {
+  pub Args: Option<PositionalArgs>,
+}
+
+pub type PositionalArgs = fn(Ref<Command>, Slice<string>) -> Result<(), error>
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "cli"
+
+fn validate(_cmd: Ref<cli.Command>, _args: Slice<string>) -> Result<(), error> {
+  Ok(())
+}
+
+fn main() {
+  let _c = cli.Command { Args: Some(validate) }
+  let _ = _c.Args
+}
+"#,
+    );
+    infer_module("main", fs).assert_no_errors();
+}
+
+#[test]
+fn struct_field_via_two_alias_hops_to_fn() {
+    infer(
+        r#"
+type Inner = fn(int) -> int
+type Outer = Inner
+
+struct Wrap {
+  pub f: Option<Outer>,
+}
+
+fn dbl(x: int) -> int { x * 2 }
+
+fn main() {
+  let _w = Wrap { f: Some(dbl) }
+  let _ = _w.f
+}
+"#,
+    )
+    .assert_no_errors();
+}

@@ -1,0 +1,39 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+assertion_line: 178
+description: "input: \ntype Handler = fn(int) -> int\n\nfn double(x: int) -> int {\n  x * 2\n}\n\nstruct Box<T> {\n  pub v: T,\n}\n\nstruct Wrap {\n  pub b: Box<Handler>,\n}\n\nfn make_box<T>(x: T) -> Box<T> {\n  Box { v: x }\n}\n\nfn main() {\n  let _w = Wrap { b: make_box(double) }\n  let _ = _w.b\n}\n"
+---
+package main
+
+import "fmt"
+
+type Handler func(int) int
+
+func double(x int) int {
+	return x * 2
+}
+
+type Box[T any] struct {
+	V T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { v: %v }", b.V)
+}
+
+type Wrap struct {
+	B Box[Handler]
+}
+
+func (w Wrap) String() string {
+	return fmt.Sprintf("Wrap { b: %v }", w.B)
+}
+
+func make_box[T any](x T) Box[T] {
+	return Box[T]{V: x}
+}
+
+func main() {
+	_w := Wrap{B: make_box[Handler](double)}
+	_ = _w.B
+}

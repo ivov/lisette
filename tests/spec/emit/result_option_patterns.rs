@@ -129,6 +129,56 @@ fn test() -> Option<Slice<int>> {
 }
 
 #[test]
+fn some_with_named_function_alias_arg() {
+    let input = r#"
+type Handler = fn(int) -> int
+
+fn double(x: int) -> int {
+  x * 2
+}
+
+struct Wrapper {
+  pub f: Option<Handler>,
+}
+
+fn main() {
+  let _w = Wrapper { f: Some(double) }
+  let _ = _w.f
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn generic_call_with_named_function_alias_arg() {
+    let input = r#"
+type Handler = fn(int) -> int
+
+fn double(x: int) -> int {
+  x * 2
+}
+
+struct Box<T> {
+  pub v: T,
+}
+
+struct Wrap {
+  pub b: Box<Handler>,
+}
+
+fn make_box<T>(x: T) -> Box<T> {
+  Box { v: x }
+}
+
+fn main() {
+  let _w = Wrap { b: make_box(double) }
+  let _ = _w.b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn result_with_struct() {
     let input = r#"
 struct Point { x: int, y: int }

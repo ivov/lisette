@@ -42,13 +42,10 @@ impl Emitter<'_> {
             .map(|f| f.ty.clone())
     }
 
-    pub(crate) fn is_go_function_alias(&self, ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty else {
+    pub(crate) fn is_function_alias(&self, ty: &Type) -> bool {
+        let Type::Nominal { .. } = ty else {
             return false;
         };
-        if !id.starts_with(GO_IMPORT_PREFIX) {
-            return false;
-        }
         self.resolve_to_function_type(ty).is_some()
     }
 

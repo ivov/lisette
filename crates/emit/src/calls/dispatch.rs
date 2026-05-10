@@ -11,10 +11,13 @@ use syntax::program::{CallKind, Definition, DefinitionBody};
 use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute, unqualified_name};
 
 impl Emitter<'_> {
-    /// True when Go's untyped-literal default (`int`/`float64`/`complex128`)
-    /// would mismatch this type, requiring explicit type args at the call site.
-    /// Walks alias chains via the definition map so multi-hop aliases resolve.
+    /// True when Go's inference would lose this alias: function aliases (infer
+    /// as `func(...)`) and non-default numeric aliases (untyped literals default
+    /// to `int`/`float64`/`complex128`).
     pub(crate) fn needs_explicit_args_for_go_inference(&self, ty: &Type) -> bool {
+        if self.is_function_alias(ty) {
+            return true;
+        }
         let mut current = ty.clone();
         let mut seen: HashSet<Symbol> = HashSet::default();
         while let Type::Nominal { id, params, .. } = &current {
@@ -545,7 +548,7 @@ impl Emitter<'_> {
         }
         params
             .iter()
-            .any(|p| self.as_interface(p).is_some() || self.is_go_function_alias(p))
+            .any(|p| self.as_interface(p).is_some() || self.is_function_alias(p))
             .then(|| self.format_type_args(params))
     }
 

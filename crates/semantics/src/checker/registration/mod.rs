@@ -471,6 +471,21 @@ impl TaskState<'_> {
 
     pub fn register_type_definitions(&mut self, store: &mut Store, items: &[Expression]) {
         for item in items {
+            if let Expression::TypeAlias {
+                name,
+                name_span,
+                generics,
+                annotation,
+                span,
+                doc,
+                ..
+            } = item
+            {
+                self.populate_type_alias(store, name, name_span, generics, annotation, span, doc);
+            }
+        }
+
+        for item in items {
             match item {
                 Expression::Enum {
                     name,
@@ -527,16 +542,6 @@ impl TaskState<'_> {
                     span,
                     doc,
                 ),
-                Expression::TypeAlias {
-                    name,
-                    name_span,
-                    generics,
-                    annotation,
-                    span,
-                    doc,
-                    ..
-                } => self
-                    .populate_type_alias(store, name, name_span, generics, annotation, span, doc),
                 _ => (),
             }
         }
