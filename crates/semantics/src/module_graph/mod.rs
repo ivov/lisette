@@ -138,7 +138,7 @@ impl BlankTracker {
 
 fn parse_module_files(
     module_id: &ModuleId,
-    store: &mut Store,
+    store: &Store,
     loader: Option<&dyn Loader>,
     sink: &LocalSink,
 ) -> Vec<File> {
@@ -153,16 +153,10 @@ fn parse_module_files(
             ));
             continue;
         }
-        // Ensure the module exists in the store before adding the first file
-        if files.is_empty() {
-            store.add_module(module_id);
-        }
         let file_id = store.new_file_id();
         let result = syntax::build_ast(&source, file_id);
         sink.extend_parse_errors(result.errors);
         let file = File::new(module_id, &filename, &source, result.ast, file_id);
-        // Register the file immediately so diagnostic rendering works
-        store.store_file(module_id, file.clone());
         files.push(file);
     }
     files
