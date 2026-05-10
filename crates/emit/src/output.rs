@@ -21,6 +21,10 @@ impl OutputFile {
         self.gofmt(&unformatted).unwrap_or(unformatted)
     }
 
+    pub fn to_go_unformatted(&self) -> String {
+        self.render_unformatted()
+    }
+
     fn render_unformatted(&self) -> String {
         let mut output = OutputCollector::new();
 

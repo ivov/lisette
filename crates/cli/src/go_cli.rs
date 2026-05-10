@@ -163,7 +163,7 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
 pub fn write_go_outputs(dir: &Path, files: &[OutputFile], heading: &str) -> Result<(), i32> {
     for file in files {
         let go_file_path = dir.join(&file.name);
-        let go_code = file.to_go();
+        let go_code = file.to_go_unformatted();
 
         if let Some(parent) = go_file_path.parent()
             && let Err(e) = fs::create_dir_all(parent)
