@@ -57,13 +57,8 @@ pnpm run package
 code --install-extension lisette-0.1.0.vsix
 ```
 
-First time:
+To publish:
 
-1. Create a publisher at https://marketplace.visualstudio.com/manage
-2. Generate a Personal Access Token (PAT) from Azure DevOps
-3. `pnpm dlx @vscode/vsce login {publisher_name}`
-
-Updating:
-
-1. Bump `version` in `package.json` and commit
+1. Bump `version` in `package.json`
 2. `pnpm run publish`
+3. `npx ovsx publish lisette-<version>.vsix --pat $OVSX_PAT`
