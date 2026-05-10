@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
@@ -194,14 +196,15 @@ impl Emitter<'_> {
 
         let should_return = has_return;
 
-        let saved_return_context = self.current_return_context.clone();
-        if let Type::Function { return_type, .. } = ty {
-            self.current_return_context = Some(if suppress_lowering {
+        let saved_return_context = if let Type::Function { return_type, .. } = ty {
+            self.current_return_context.replace(if suppress_lowering {
                 crate::ReturnContext::tagged(return_type.as_ref().clone())
             } else {
                 crate::ReturnContext::new(return_type.as_ref().clone())
-            });
-        }
+            })
+        } else {
+            self.current_return_context.clone()
+        };
         let saved_suppress = std::mem::replace(&mut self.suppress_go_fn_short_circuit, false);
         let saved_flows = std::mem::replace(&mut self.arg_flows_to_unknown, false);
 
@@ -266,23 +269,26 @@ impl Emitter<'_> {
 
         let directive = self.maybe_line_directive(&function_definition.name_span);
 
-        let saved_return_context = self.current_return_context.clone();
-        self.current_return_context = Some(crate::ReturnContext::new(
-            function_definition.return_type.clone(),
-        ));
+        let saved_return_context = self
+            .current_return_context
+            .replace(crate::ReturnContext::new(
+                function_definition.return_type.clone(),
+            ));
 
         let (function_definition, receiver) =
             self.change_go_builtin_methods(function_definition, receiver);
+        let function_definition: &FunctionDefinition = &function_definition;
 
         let (params_to_process, receiver_override) =
-            self.extract_receiver(&function_definition, receiver.is_some());
+            self.extract_receiver(function_definition, receiver.is_some());
 
-        let mut parts = vec!["func".to_string()];
+        let mut signature = String::from("func");
 
         let (_, receiver_part) =
-            self.emit_receiver_part(params_to_process, &receiver, receiver_override.as_ref());
+            self.emit_receiver_part(params_to_process, &receiver, receiver_override);
         if let Some(part) = receiver_part {
-            parts.push(part);
+            signature.push(' ');
+            signature.push_str(&part);
         }
 
         let function_name = if is_public {
@@ -298,7 +304,8 @@ impl Emitter<'_> {
         } else {
             go_name::escape_reserved(&function_definition.name).into_owned()
         };
-        parts.push(function_name);
+        signature.push(' ');
+        signature.push_str(&function_name);
 
         let generic_names: Vec<&str> = function_definition
             .generics
@@ -321,14 +328,16 @@ impl Emitter<'_> {
         let generics_str =
             self.generics_to_string_with_map_keys(&function_definition.generics, &map_key_generics);
         if !generics_str.is_empty() {
-            parts.push(generics_str);
+            signature.push(' ');
+            signature.push_str(&generics_str);
         }
 
         let saved_absorbed =
             self.detect_absorbed_ref_generics(params_to_process, &function_definition.generics);
 
         let (params_string, deferred_patterns) = self.emit_function_params(params_to_process);
-        parts.push(params_string);
+        signature.push(' ');
+        signature.push_str(&params_string);
 
         let return_ty = if function_definition.return_type.is_unit() {
             String::new()
@@ -340,10 +349,9 @@ impl Emitter<'_> {
         };
 
         if !return_ty.is_empty() {
-            parts.push(return_ty);
+            signature.push(' ');
+            signature.push_str(&return_ty);
         }
-
-        let signature = parts.join(" ");
 
         let mut body = String::new();
 
@@ -369,18 +377,18 @@ impl Emitter<'_> {
         }
     }
 
-    fn change_go_builtin_methods(
+    fn change_go_builtin_methods<'a>(
         &mut self,
-        function_definition: &FunctionDefinition,
+        function_definition: &'a FunctionDefinition,
         receiver: Option<(String, Type)>,
-    ) -> (FunctionDefinition, Option<(String, Type)>) {
+    ) -> (Cow<'a, FunctionDefinition>, Option<(String, Type)>) {
         let Some((receiver_name, receiver_type)) = receiver else {
-            return (function_definition.clone(), None);
+            return (Cow::Borrowed(function_definition), None);
         };
 
         let Some(native) = NativeGoType::from_type(&receiver_type) else {
             return (
-                function_definition.clone(),
+                Cow::Borrowed(function_definition),
                 Some((receiver_name, receiver_type)),
             );
         };
@@ -401,7 +409,7 @@ impl Emitter<'_> {
         };
 
         new_function_definition.params.insert(0, self_binding);
-        (new_function_definition, None)
+        (Cow::Owned(new_function_definition), None)
     }
 
     fn emit_receiver_part(
@@ -414,25 +422,21 @@ impl Emitter<'_> {
             return (None, None);
         };
 
-        let param_names: Vec<String> = params_to_process
-            .iter()
-            .filter_map(|param| {
-                if let Pattern::Identifier { identifier, .. } = &param.pattern {
-                    Some(identifier.to_string())
-                } else {
-                    None
-                }
+        let collides = |candidate: &str| {
+            params_to_process.iter().any(|param| match &param.pattern {
+                Pattern::Identifier { identifier, .. } => identifier == candidate,
+                _ => false,
             })
-            .collect();
+        };
 
         let actual_ty = receiver_override.unwrap_or(receiver_ty);
         let ty_string = self.go_type_as_string(actual_ty);
         let mut receiver_var = receiver_name(&ty_string);
 
-        if param_names.contains(&receiver_var) {
+        if collides(&receiver_var) {
             receiver_var = format!("{}{}", receiver_var, receiver_var);
             let mut counter = 2;
-            while param_names.contains(&receiver_var) {
+            while collides(&receiver_var) {
                 receiver_var = format!("{}{}", receiver_name(&ty_string), counter);
                 counter += 1;
             }
@@ -453,8 +457,7 @@ impl Emitter<'_> {
         params: &[Binding],
         generics: &[Generic],
     ) -> HashSet<String> {
-        let saved = self.module.absorbed_ref_generics.clone();
-        self.module.absorbed_ref_generics.clear();
+        let saved = std::mem::take(&mut self.module.absorbed_ref_generics);
         let bounded_generics: HashSet<&str> = generics
             .iter()
             .filter(|g| !g.bounds.is_empty())
@@ -477,7 +480,7 @@ impl Emitter<'_> {
         params_to_process: &[Binding],
     ) -> (String, Vec<(String, Pattern, Option<TypedPattern>)>) {
         let mut deferred_patterns = Vec::new();
-        let mut params = Vec::new();
+        let mut params = Vec::with_capacity(params_to_process.len());
         for param in params_to_process {
             let name = match &param.pattern {
                 Pattern::Identifier { identifier, .. } => {
@@ -500,18 +503,16 @@ impl Emitter<'_> {
                 }
             };
 
-            let param_type = {
-                if param.ty.is_ref()
-                    && let Some(inner) = param.ty.inner()
-                    && let Type::Parameter(name) = &inner
-                    && self.module.absorbed_ref_generics.contains(name.as_ref())
-                {
-                    inner
-                } else {
-                    param.ty.clone()
-                }
+            let param_type: &Type = if param.ty.is_ref()
+                && let Some(inner) = param.ty.inner_ref()
+                && let Type::Parameter(name) = inner
+                && self.module.absorbed_ref_generics.contains(name.as_ref())
+            {
+                inner
+            } else {
+                &param.ty
             };
-            params.push((name, self.go_type_as_string(&param_type)));
+            params.push((name, self.go_type_as_string(param_type)));
         }
         (format!("({})", group_params(&params)), deferred_patterns)
     }
@@ -520,7 +521,7 @@ impl Emitter<'_> {
         &mut self,
         function_definition: &'a FunctionDefinition,
         has_receiver: bool,
-    ) -> (&'a [Binding], Option<Type>) {
+    ) -> (&'a [Binding], Option<&'a Type>) {
         let default = (&function_definition.params[..], None);
 
         if !has_receiver || function_definition.params.is_empty() {
@@ -538,6 +539,6 @@ impl Emitter<'_> {
         let receiver_ty = &function_definition.params[0].ty;
         let _ty_str = self.go_type_as_string(receiver_ty);
 
-        (&function_definition.params[1..], Some(receiver_ty.clone()))
+        (&function_definition.params[1..], Some(receiver_ty))
     }
 }

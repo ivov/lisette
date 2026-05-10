@@ -1250,6 +1250,10 @@ impl Type {
             .and_then(|args| args.first().cloned())
     }
 
+    pub fn inner_ref(&self) -> Option<&Type> {
+        self.get_type_params().and_then(|args| args.first())
+    }
+
     pub fn ok_type(&self) -> Type {
         debug_assert!(
             self.is_result() || self.is_option() || self.is_partial(),

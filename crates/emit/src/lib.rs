@@ -225,8 +225,8 @@ struct EmitContext<'a> {
     mutations: &'a MutationInfo,
     ufcs_methods: &'a HashSet<(String, String)>,
     go_package_names: &'a HashMap<String, String>,
-    entry_module: ModuleId,
-    go_module: String,
+    entry_module: &'a str,
+    go_module: &'a str,
     options: EmitOptions,
     /// file_id -> byte offset to line lookup.
     line_indexes: Arc<HashMap<u32, LineIndex>>,
@@ -359,7 +359,11 @@ impl ReturnContext {
 }
 
 impl<'a> Emitter<'a> {
-    pub fn emit(analysis: &'a EmitInput, go_module: &str, options: EmitOptions) -> Vec<OutputFile> {
+    pub fn emit(
+        analysis: &'a EmitInput,
+        go_module: &'a str,
+        options: EmitOptions,
+    ) -> Vec<OutputFile> {
         let line_indexes: Arc<HashMap<u32, LineIndex>> = Arc::new(if options.debug {
             analysis
                 .files
@@ -428,8 +432,8 @@ impl<'a> Emitter<'a> {
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
             go_package_names: config.go_package_names,
-            entry_module: config.module_id.to_string(),
-            go_module: config.go_module.to_string(),
+            entry_module: config.module_id,
+            go_module: config.go_module,
             options: EmitOptions { debug },
             line_indexes,
         };
@@ -704,7 +708,7 @@ impl<'a> Emitter<'a> {
             let unused_imports =
                 Self::unused_imports_for_current_module(self.ctx.unused, &self.current_module);
             let mut import_builder = ImportBuilder::new(
-                &self.ctx.go_module,
+                self.ctx.go_module,
                 unused_imports,
                 self.ctx.go_package_names,
             );
@@ -750,9 +754,9 @@ impl<'a> Emitter<'a> {
     }
 }
 
-fn emit_module(
-    analysis: &EmitInput,
-    go_module: &str,
+fn emit_module<'a>(
+    analysis: &'a EmitInput,
+    go_module: &'a str,
     options: &EmitOptions,
     line_indexes: &Arc<HashMap<u32, LineIndex>>,
     globals: &Arc<GlobalEmitData>,
@@ -765,8 +769,8 @@ fn emit_module(
         mutations: &analysis.mutations,
         ufcs_methods: &analysis.ufcs_methods,
         go_package_names: &analysis.go_package_names,
-        entry_module: analysis.entry_module_id.to_string(),
-        go_module: go_module.to_string(),
+        entry_module: &analysis.entry_module_id,
+        go_module,
         options: options.clone(),
         line_indexes: line_indexes.clone(),
     };

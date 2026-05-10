@@ -91,25 +91,31 @@ pub(crate) fn group_params(params: &[(String, String)]) -> String {
     if params.is_empty() {
         return String::new();
     }
-    if params.len() == 1 {
-        return format!("{} {}", params[0].0, params[0].1);
-    }
-    let mut parts: Vec<String> = Vec::new();
-    let mut names: Vec<&str> = vec![&params[0].0];
-    let mut current_ty = &params[0].1;
 
-    for param in &params[1..] {
-        if param.1 == *current_ty {
-            names.push(&param.0);
-        } else {
-            parts.push(format!("{} {}", names.join(", "), current_ty));
-            names.clear();
-            names.push(&param.0);
-            current_ty = &param.1;
+    fn push_group(out: &mut String, params: &[(String, String)], start: usize, end: usize) {
+        if start > 0 {
+            out.push_str(", ");
+        }
+        for (i, (name, _)) in params[start..end].iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            out.push_str(name);
+        }
+        out.push(' ');
+        out.push_str(&params[start].1);
+    }
+
+    let mut out = String::new();
+    let mut group_start = 0;
+    for i in 1..params.len() {
+        if params[i].1 != params[group_start].1 {
+            push_group(&mut out, params, group_start, i);
+            group_start = i;
         }
     }
-    parts.push(format!("{} {}", names.join(", "), current_ty));
-    parts.join(", ")
+    push_group(&mut out, params, group_start, params.len());
+    out
 }
 
 /// Try to negate a simple comparison by flipping its operator.

@@ -75,7 +75,7 @@ impl OutputFile {
 
 #[derive(Default)]
 pub(crate) struct OutputCollector {
-    output: Vec<String>,
+    output: String,
 }
 
 impl OutputCollector {
@@ -83,16 +83,22 @@ impl OutputCollector {
         Self::default()
     }
 
-    pub(crate) fn render(&self) -> String {
-        self.output.join("\n")
+    pub(crate) fn render(self) -> String {
+        self.output
     }
 
-    pub(crate) fn collect(&mut self, line: impl Into<String>) {
-        self.output.push(line.into());
+    pub(crate) fn collect(&mut self, line: impl AsRef<str>) {
+        if !self.output.is_empty() {
+            self.output.push('\n');
+        }
+        self.output.push_str(line.as_ref());
     }
 
-    pub(crate) fn collect_with_blank(&mut self, line: impl Into<String>) {
-        self.output.push(line.into());
-        self.output.push(String::new());
+    pub(crate) fn collect_with_blank(&mut self, line: impl AsRef<str>) {
+        if !self.output.is_empty() {
+            self.output.push('\n');
+        }
+        self.output.push_str(line.as_ref());
+        self.output.push('\n');
     }
 }

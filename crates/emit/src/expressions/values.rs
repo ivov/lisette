@@ -13,26 +13,20 @@ use syntax::types::Type;
 
 impl Emitter<'_> {
     pub(crate) fn emit_doc(&self, doc: &Option<String>) -> String {
-        match doc {
-            Some(text) => {
-                let lines: Vec<String> = text
-                    .lines()
-                    .map(|line| {
-                        if line.is_empty() {
-                            "//".to_string()
-                        } else {
-                            format!("// {}", line)
-                        }
-                    })
-                    .collect();
-                if lines.is_empty() {
-                    String::new()
-                } else {
-                    format!("{}\n", lines.join("\n"))
-                }
+        let Some(text) = doc else {
+            return String::new();
+        };
+        let mut out = String::with_capacity(text.len() + 4);
+        for line in text.lines() {
+            if line.is_empty() {
+                out.push_str("//");
+            } else {
+                out.push_str("// ");
+                out.push_str(line);
             }
-            None => String::new(),
+            out.push('\n');
         }
+        out
     }
 
     pub(crate) fn emit_top_item(&mut self, item: &Expression) -> String {
@@ -48,10 +42,9 @@ impl Emitter<'_> {
                 }
                 let is_public = matches!(visibility, Visibility::Public);
                 let function = item.to_function_definition();
-                let doc_comment = self.emit_doc(doc);
-
-                let code = self.emit_function(&function, None, is_public);
-                format!("{}{}", doc_comment, code)
+                let mut out = self.emit_doc(doc);
+                out.push_str(&self.emit_function(&function, None, is_public));
+                out
             }
             Expression::Struct {
                 doc,
@@ -62,9 +55,11 @@ impl Emitter<'_> {
                 kind,
                 ..
             } => {
-                let doc_comment = self.emit_doc(doc);
-                let code = self.emit_struct_definition(name, generics, fields, kind, attributes);
-                format!("{}{}", doc_comment, code)
+                let mut out = self.emit_doc(doc);
+                out.push_str(
+                    &self.emit_struct_definition(name, generics, fields, kind, attributes),
+                );
+                out
             }
             Expression::Enum {
                 doc,
@@ -73,11 +68,13 @@ impl Emitter<'_> {
                 generics,
                 ..
             } => {
-                let doc_comment = self.emit_doc(doc);
-                let code = self
-                    .emit_enum(name, generics, attributes)
-                    .unwrap_or_default();
-                format!("{}{}", doc_comment, code)
+                let mut out = self.emit_doc(doc);
+                out.push_str(
+                    &self
+                        .emit_enum(name, generics, attributes)
+                        .unwrap_or_default(),
+                );
+                out
             }
             Expression::ValueEnum { .. } => String::new(),
             Expression::TypeAlias {
@@ -87,9 +84,9 @@ impl Emitter<'_> {
                 ty,
                 ..
             } => {
-                let doc_comment = self.emit_doc(doc);
-                let code = self.emit_type_alias(name, generics, ty);
-                format!("{}{}", doc_comment, code)
+                let mut out = self.emit_doc(doc);
+                out.push_str(&self.emit_type_alias(name, generics, ty));
+                out
             }
             Expression::Interface {
                 doc,
@@ -100,11 +97,16 @@ impl Emitter<'_> {
                 visibility,
                 ..
             } => {
-                let doc_comment = self.emit_doc(doc);
                 let is_public = matches!(visibility, Visibility::Public);
-                let code =
-                    self.emit_interface(name, method_signatures, parents, generics, is_public);
-                format!("{}{}", doc_comment, code)
+                let mut out = self.emit_doc(doc);
+                out.push_str(&self.emit_interface(
+                    name,
+                    method_signatures,
+                    parents,
+                    generics,
+                    is_public,
+                ));
+                out
             }
             Expression::ImplBlock {
                 receiver_name,
@@ -120,9 +122,9 @@ impl Emitter<'_> {
                 ty,
                 ..
             } => {
-                let doc_comment = self.emit_doc(doc);
-                let code = self.emit_const(identifier, expression, ty);
-                format!("{}{}", doc_comment, code)
+                let mut out = self.emit_doc(doc);
+                out.push_str(&self.emit_const(identifier, expression, ty));
+                out
             }
             _ => String::new(),
         }
