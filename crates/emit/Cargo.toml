@@ -16,4 +16,5 @@ test = false
 syntax = { package = "lisette-syntax", version = "0.2.1", path = "../syntax" }
 diagnostics = { package = "lisette-diagnostics", version = "0.2.1", path = "../diagnostics" }
 ecow.workspace = true
+rayon.workspace = true
 rustc-hash.workspace = true

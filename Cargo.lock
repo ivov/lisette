@@ -564,6 +564,7 @@ dependencies = [
  "ecow",
  "lisette-diagnostics",
  "lisette-syntax",
+ "rayon",
  "rustc-hash",
 ]
 

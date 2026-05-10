@@ -360,8 +360,6 @@ impl ReturnContext {
 
 impl<'a> Emitter<'a> {
     pub fn emit(analysis: &'a EmitInput, go_module: &str, options: EmitOptions) -> Vec<OutputFile> {
-        let mut output = vec![];
-
         let line_indexes: Arc<HashMap<u32, LineIndex>> = Arc::new(if options.debug {
             analysis
                 .files
@@ -381,41 +379,35 @@ impl<'a> Emitter<'a> {
 
         let globals = Arc::new(GlobalEmitData::compute(&analysis.definitions));
 
-        for (module_id, module_info) in &analysis.modules {
-            if analysis.cached_modules.contains(module_id) {
-                continue;
-            }
+        let mut work: Vec<(&ModuleId, &syntax::program::ModuleInfo)> = analysis
+            .modules
+            .iter()
+            .filter(|(id, _)| !analysis.cached_modules.contains(*id))
+            .collect();
+        work.sort_unstable_by(|a, b| a.0.cmp(b.0));
 
-            let ctx = EmitContext {
-                definitions: &analysis.definitions,
-                unused: &analysis.unused,
-                mutations: &analysis.mutations,
-                ufcs_methods: &analysis.ufcs_methods,
-                go_package_names: &analysis.go_package_names,
-                entry_module: analysis.entry_module_id.to_string(),
-                go_module: go_module.to_string(),
-                options: options.clone(),
-                line_indexes: line_indexes.clone(),
-            };
-            let mut emitter = Self::new(ctx, globals.clone(), module_id);
+        const PARALLEL_THRESHOLD: usize = 4;
 
-            let files: Vec<_> = module_info
-                .file_ids
-                .iter()
-                .filter_map(|fid| analysis.files.get(fid))
-                .collect();
+        let emit_one = |&(module_id, module_info): &(&ModuleId, &syntax::program::ModuleInfo)| {
+            emit_module(
+                analysis,
+                go_module,
+                &options,
+                &line_indexes,
+                &globals,
+                module_id,
+                module_info,
+            )
+        };
 
-            let mut module_output = emitter.emit_files(&files, module_id);
+        let mut output: Vec<OutputFile> = if work.len() < PARALLEL_THRESHOLD {
+            work.iter().flat_map(emit_one).collect()
+        } else {
+            use rayon::prelude::*;
+            work.par_iter().flat_map_iter(emit_one).collect()
+        };
 
-            if module_id != &analysis.entry_module_id {
-                for file in &mut module_output {
-                    file.name = format!("{}/{}", module_info.path, file.name);
-                }
-            }
-
-            output.extend(module_output);
-        }
-
+        output.sort_by(|a, b| a.name.cmp(&b.name));
         output
     }
 
@@ -756,4 +748,43 @@ impl<'a> Emitter<'a> {
 
         output_files
     }
+}
+
+fn emit_module(
+    analysis: &EmitInput,
+    go_module: &str,
+    options: &EmitOptions,
+    line_indexes: &Arc<HashMap<u32, LineIndex>>,
+    globals: &Arc<GlobalEmitData>,
+    module_id: &str,
+    module_info: &syntax::program::ModuleInfo,
+) -> Vec<OutputFile> {
+    let ctx = EmitContext {
+        definitions: &analysis.definitions,
+        unused: &analysis.unused,
+        mutations: &analysis.mutations,
+        ufcs_methods: &analysis.ufcs_methods,
+        go_package_names: &analysis.go_package_names,
+        entry_module: analysis.entry_module_id.to_string(),
+        go_module: go_module.to_string(),
+        options: options.clone(),
+        line_indexes: line_indexes.clone(),
+    };
+    let mut emitter = Emitter::new(ctx, globals.clone(), module_id);
+
+    let files: Vec<_> = module_info
+        .file_ids
+        .iter()
+        .filter_map(|fid| analysis.files.get(fid))
+        .collect();
+
+    let mut module_output = emitter.emit_files(&files, module_id);
+
+    if module_id != analysis.entry_module_id.as_str() {
+        for file in &mut module_output {
+            file.name = format!("{}/{}", module_info.path, file.name);
+        }
+    }
+
+    module_output
 }

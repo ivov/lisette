@@ -5000,3 +5000,45 @@ fn main() {
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
 }
+
+#[test]
+fn emit_returns_files_alphabetically_sorted_through_rayon_path() {
+    use crate::_harness::build::compile_project_files;
+
+    let mut fs = MockFileSystem::new();
+    fs.add_file("alpha", "alpha.lis", "pub fn entry() -> int { 1 }\n");
+    fs.add_file("bravo", "bravo.lis", "pub fn entry() -> int { 2 }\n");
+    fs.add_file("charlie", "charlie.lis", "pub fn entry() -> int { 3 }\n");
+    fs.add_file("delta", "delta.lis", "pub fn entry() -> int { 4 }\n");
+    fs.add_file("echo", "echo.lis", "pub fn entry() -> int { 5 }\n");
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "alpha"
+import "bravo"
+import "charlie"
+import "delta"
+import "echo"
+
+fn main() {
+  let _ = alpha.entry() + bravo.entry() + charlie.entry() + delta.entry() + echo.entry()
+}
+"#,
+    );
+
+    let files = compile_project_files(fs, "github.com/user/myproject");
+    let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec![
+            "alpha/alpha.go",
+            "bravo/bravo.go",
+            "charlie/charlie.go",
+            "delta/delta.go",
+            "echo/echo.go",
+            "main.go",
+        ],
+        "Emitter::emit must return files alphabetically sorted by name",
+    );
+}

@@ -88,7 +88,7 @@ pub fn locator_with_go_dep(module_path: &str, version: &str) -> deps::TypedefLoc
     deps::TypedefLocator::new(go_deps, None, stdlib::Target::host())
 }
 
-pub fn compile_project(fs: MockFileSystem, go_module: &str) -> String {
+pub fn compile_project_files(fs: MockFileSystem, go_module: &str) -> Vec<emit::OutputFile> {
     let main_source = fs
         .scan_folder(ENTRY_MODULE_ID)
         .get("main.lis")
@@ -123,8 +123,15 @@ pub fn compile_project(fs: MockFileSystem, go_module: &str) -> String {
         analysis.errors
     );
 
-    let options = EmitOptions { debug: false };
-    let mut files = Emitter::emit(&analysis.into_emit_input(), go_module, options);
+    Emitter::emit(
+        &analysis.into_emit_input(),
+        go_module,
+        EmitOptions { debug: false },
+    )
+}
+
+pub fn compile_project(fs: MockFileSystem, go_module: &str) -> String {
+    let mut files = compile_project_files(fs, go_module);
     files.sort_by(|a, b| a.name.cmp(&b.name));
 
     use std::fmt::Write;
