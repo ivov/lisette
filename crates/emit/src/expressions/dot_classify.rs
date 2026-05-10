@@ -102,7 +102,11 @@ impl Emitter<'_> {
         let enum_name = unqualified_name(enum_id);
         let constructor_key = format!("{}.{}", enum_name, variant_name);
 
-        let make_fn_name = self.module.make_functions.get(&constructor_key)?.clone();
+        let make_fn_name = self
+            .globals
+            .make_function_names
+            .get(&constructor_key)?
+            .clone();
 
         let enum_module = go_name::module_of_type_id(enum_id);
         let needs_qualifier = enum_module != self.current_module;
@@ -166,7 +170,7 @@ impl Emitter<'_> {
 
         let enum_name = unqualified_name(enum_id);
         let key = format!("{}.{}", enum_name, variant_name);
-        let make_fn = self.module.make_functions.get(&key)?.clone();
+        let make_fn = self.globals.make_function_names.get(&key)?.clone();
         let type_args = self.format_type_args(params);
 
         if is_prelude {

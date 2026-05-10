@@ -1,7 +1,7 @@
 use crate::Emitter;
 use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
-use syntax::ast::{Attribute, EnumVariant, Generic};
+use syntax::ast::{Attribute, Generic};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
@@ -61,23 +61,6 @@ impl Emitter<'_> {
         }
 
         Some(result)
-    }
-
-    pub(crate) fn register_prelude_make_functions(&mut self) {
-        for prelude_type in crate::PreludeType::enum_types() {
-            for (constructor, make_fn) in prelude_type.make_function_entries() {
-                self.module.make_functions.insert(constructor, make_fn);
-            }
-        }
-    }
-
-    pub(crate) fn register_make_functions(&mut self, name: &str, variants: &[EnumVariant]) {
-        let go_type_name = go_name::escape_keyword(name);
-        for variant in variants {
-            let constructor = format!("{}.{}", name, variant.name);
-            let fn_name = format!("Make{}{}", go_type_name, variant.name);
-            self.module.make_functions.insert(constructor, fn_name);
-        }
     }
 
     pub(crate) fn create_make_function_code(

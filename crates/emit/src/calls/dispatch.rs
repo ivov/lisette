@@ -373,11 +373,11 @@ impl Emitter<'_> {
                 let variant = unqualified_name(value);
                 let enum_name = unqualified_name(&enum_id);
                 let qualified = format!("{}.{}", enum_name, variant);
-                if self.module.make_functions.contains_key(&qualified) {
+                if self.globals.make_function_names.contains_key(&qualified) {
                     return Some((enum_id, variant.to_string()));
                 }
                 if let Type::Function { params, .. } = ty.unwrap_forall() {
-                    for key in self.module.make_functions.keys() {
+                    for key in self.globals.make_function_names.keys() {
                         if let Some((e_name, v_name)) = key.split_once('.')
                             && e_name == enum_name
                             && let Some(layout) = self.module.enum_layouts.get(&enum_id)
@@ -401,7 +401,7 @@ impl Emitter<'_> {
                 } = expression.as_ref()
                 {
                     let qualified = format!("{}.{}", enum_name, member);
-                    if self.module.make_functions.contains_key(&qualified) {
+                    if self.globals.make_function_names.contains_key(&qualified) {
                         let enum_id = enum_id_from_type(ty)?;
                         return Some((enum_id, member.to_string()));
                     }
@@ -411,7 +411,7 @@ impl Emitter<'_> {
                 } = expression.as_ref()
                 {
                     let qualified = format!("{}.{}", type_name, member);
-                    if self.module.make_functions.contains_key(&qualified) {
+                    if self.globals.make_function_names.contains_key(&qualified) {
                         let enum_id = enum_id_from_type(ty)?;
                         return Some((enum_id, member.to_string()));
                     }

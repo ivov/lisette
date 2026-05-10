@@ -33,12 +33,180 @@ use std::sync::Arc;
 use ecow::EcoString;
 use imports::ImportBuilder;
 use syntax::ast::{Generic, Span};
-use syntax::program::{Definition, EmitInput, File, ModuleId, MutationInfo, UnusedInfo};
+use syntax::program::{
+    Definition, DefinitionBody, EmitInput, File, ModuleId, MutationInfo, UnusedInfo,
+};
 use syntax::types::{Symbol, Type};
 
 #[derive(Clone, Debug, Default)]
 pub struct EmitOptions {
     pub debug: bool,
+}
+
+#[derive(Default)]
+pub(crate) struct GlobalEmitData {
+    pub(crate) go_call_strategies: HashMap<String, GoCallStrategy>,
+    pub(crate) exported_method_names: HashSet<String>,
+    pub(crate) make_function_names: HashMap<String, String>,
+}
+
+impl GlobalEmitData {
+    fn compute(definitions: &HashMap<Symbol, Definition>) -> Self {
+        let mut globals = GlobalEmitData::default();
+
+        for prelude_type in PreludeType::enum_types() {
+            for (constructor, make_fn) in prelude_type.make_function_entries() {
+                globals.make_function_names.insert(constructor, make_fn);
+            }
+        }
+
+        for (key, definition) in definitions.iter() {
+            let is_go = go_name::is_go_import(key);
+
+            if is_go
+                && let Type::Function { return_type, .. } = match definition.ty() {
+                    Type::Forall { body, .. } => body.as_ref(),
+                    other => other,
+                }
+                && let Some(strategy) =
+                    classify_go_return_type(definitions, return_type, definition.go_hints())
+            {
+                globals.go_call_strategies.insert(key.to_string(), strategy);
+            }
+
+            match &definition.body {
+                DefinitionBody::Interface {
+                    definition: iface, ..
+                } if definition.visibility.is_public() => {
+                    for method_name in iface.methods.keys() {
+                        globals
+                            .exported_method_names
+                            .insert(method_name.to_string());
+                    }
+                }
+                DefinitionBody::Value { .. }
+                    if definition.visibility.is_public()
+                        && !is_go
+                        && !key.starts_with(go_name::PRELUDE_PREFIX)
+                        && key.chars().filter(|c| *c == '.').count() >= 2 =>
+                {
+                    let method_name = go_name::unqualified_name(key);
+                    globals
+                        .exported_method_names
+                        .insert(method_name.to_string());
+                }
+                _ => {}
+            }
+
+            if let Definition {
+                name: Some(name),
+                body: DefinitionBody::Enum { variants, .. },
+                ..
+            } = definition
+                && PreludeType::from_name(name).is_none()
+            {
+                for (constructor, make_fn) in user_enum_make_function_entries(name, variants) {
+                    globals.make_function_names.insert(constructor, make_fn);
+                }
+            }
+        }
+
+        globals
+    }
+}
+
+/// Make-function name registry entries for a user-declared enum, paralleling
+/// [`PreludeType::make_function_entries`].
+pub(crate) fn user_enum_make_function_entries<'a>(
+    name: &'a str,
+    variants: &'a [syntax::ast::EnumVariant],
+) -> impl Iterator<Item = (String, String)> + 'a {
+    let go_type_name = go_name::escape_keyword(name).into_owned();
+    variants.iter().map(move |variant| {
+        let constructor = format!("{}.{}", name, variant.name);
+        let make_fn = format!("Make{}{}", go_type_name, variant.name);
+        (constructor, make_fn)
+    })
+}
+
+pub(crate) fn classify_go_return_type(
+    definitions: &HashMap<Symbol, Definition>,
+    return_ty: &Type,
+    go_hints: &[String],
+) -> Option<GoCallStrategy> {
+    if return_ty.is_partial() {
+        return Some(GoCallStrategy::Partial);
+    }
+    if return_ty.is_result() {
+        return Some(GoCallStrategy::Result);
+    }
+    if return_ty.is_option() {
+        if let Some(value) = sentinel_hint(go_hints) {
+            return Some(GoCallStrategy::Sentinel { value });
+        }
+        if !is_nullable_option(definitions, return_ty) {
+            return Some(GoCallStrategy::CommaOk);
+        }
+        if go_hints.iter().any(|s| s == "comma_ok") {
+            return Some(GoCallStrategy::CommaOk);
+        }
+        return Some(GoCallStrategy::NullableReturn);
+    }
+    if let Some(arity) = return_ty.tuple_arity()
+        && arity >= 2
+    {
+        return Some(GoCallStrategy::Tuple { arity });
+    }
+    None
+}
+
+pub(crate) fn sentinel_hint(hints: &[String]) -> Option<i64> {
+    hints
+        .iter()
+        .any(|h| h == "sentinel_minus_one")
+        .then_some(-1)
+}
+
+pub(crate) fn is_nullable_option(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
+    ty.is_option() && is_nilable_go_type(definitions, &ty.ok_type())
+}
+
+pub(crate) fn is_nilable_go_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
+    ty.is_ref()
+        || as_interface(definitions, ty).is_some()
+        || resolve_to_function_type(definitions, ty).is_some()
+}
+
+pub(crate) fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<String> {
+    let Type::Nominal { id, .. } = peel_alias(definitions, ty) else {
+        return None;
+    };
+    matches!(
+        definitions.get(id.as_str()).map(|d| &d.body),
+        Some(DefinitionBody::Interface { .. })
+    )
+    .then(|| id.to_string())
+}
+
+pub(crate) fn resolve_to_function_type(
+    definitions: &HashMap<Symbol, Definition>,
+    ty: &Type,
+) -> Option<Type> {
+    fn as_function(ty: &Type) -> Option<Type> {
+        if matches!(ty, Type::Function { .. }) {
+            return Some(ty.clone());
+        }
+        ty.get_underlying()
+            .filter(|u| matches!(u, Type::Function { .. }))
+            .cloned()
+    }
+    as_function(ty).or_else(|| as_function(&peel_alias(definitions, ty)))
+}
+
+pub(crate) fn peel_alias(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Type {
+    syntax::types::peel_alias(ty, |id| {
+        definitions.get(id).is_some_and(Definition::is_type_alias)
+    })
 }
 
 pub struct TestEmitConfig<'a> {
@@ -65,15 +233,12 @@ struct EmitContext<'a> {
 }
 
 struct ModuleData {
-    make_functions: HashMap<String, String>,
     enum_layouts: HashMap<String, EnumLayout>,
     /// Fields that were exported due to serialization tags (e.g. `#[json]`).
     /// Key is "TypeId.field_name". Checked during field access to match
     /// the capitalization used in the struct definition.
     tag_exported_fields: HashSet<String>,
-    /// Method names that appear in any pub interface.
-    /// These must be capitalized in Go to satisfy the interface,
-    /// regardless of the concrete method's own visibility.
+    /// Local complement to `GlobalEmitData::exported_method_names`.
     exported_method_names: HashSet<String>,
     /// Bounds from constrained impl blocks, keyed by receiver name.
     /// Go requires type parameter constraints on the type definition itself,
@@ -93,8 +258,6 @@ struct ModuleData {
     /// T itself (not *T) to satisfy the interface. So we emit `item T` and let Go
     /// infer T = *ConcreteType. Ref<T> for these params should emit as just T.
     absorbed_ref_generics: HashSet<String>,
-    /// Pre-computed wrapping strategy per Go function.
-    go_call_strategies: HashMap<String, GoCallStrategy>,
     /// Lisette name → freshened Go name when `escape_reserved` would collide
     /// with a sibling top-level definition (e.g. `fn len` and `fn len_` both
     /// targeting `len_`). Consulted at definition and call sites.
@@ -127,6 +290,7 @@ impl ScopeState {
 
 pub struct Emitter<'a> {
     ctx: EmitContext<'a>,
+    globals: Arc<GlobalEmitData>,
     module: ModuleData,
     scope: ScopeState,
 
@@ -215,6 +379,8 @@ impl<'a> Emitter<'a> {
             HashMap::default()
         });
 
+        let globals = Arc::new(GlobalEmitData::compute(&analysis.definitions));
+
         for (module_id, module_info) in &analysis.modules {
             if analysis.cached_modules.contains(module_id) {
                 continue;
@@ -231,7 +397,7 @@ impl<'a> Emitter<'a> {
                 options: options.clone(),
                 line_indexes: line_indexes.clone(),
             };
-            let mut emitter = Self::new(ctx, module_id);
+            let mut emitter = Self::new(ctx, globals.clone(), module_id);
 
             let files: Vec<_> = module_info
                 .file_ids
@@ -275,14 +441,15 @@ impl<'a> Emitter<'a> {
             options: EmitOptions { debug },
             line_indexes,
         };
-        Self::new(ctx, config.module_id)
+        let globals = Arc::new(GlobalEmitData::compute(config.definitions));
+        Self::new(ctx, globals, config.module_id)
     }
 
-    fn new(ctx: EmitContext<'a>, current_module: &str) -> Self {
+    fn new(ctx: EmitContext<'a>, globals: Arc<GlobalEmitData>, current_module: &str) -> Self {
         Self {
             ctx,
+            globals,
             module: ModuleData {
-                make_functions: HashMap::default(),
                 enum_layouts: HashMap::default(),
                 tag_exported_fields: HashSet::default(),
                 exported_method_names: HashSet::default(),
@@ -291,7 +458,6 @@ impl<'a> Emitter<'a> {
                 module_aliases: HashMap::default(),
                 reverse_module_aliases: HashMap::default(),
                 absorbed_ref_generics: HashSet::default(),
-                go_call_strategies: HashMap::default(),
                 escape_remap: HashMap::default(),
             },
             scope: ScopeState {
@@ -505,12 +671,11 @@ impl<'a> Emitter<'a> {
     pub fn emit_files(&mut self, files: &[&File], module_id: &str) -> Vec<OutputFile> {
         self.current_module = module_id.to_string();
         self.collect_module_aliases(files);
-        self.collect_go_call_strategies();
-        self.collect_exported_method_names(files);
+        self.collect_local_exported_method_names(files);
         self.collect_impl_bounds(files);
         self.collect_enum_layouts();
         self.collect_escape_remap(files);
-        let mut make_functions_by_file = self.collect_make_functions();
+        let mut make_functions_by_file = self.collect_local_make_function_code();
 
         let mut output_files = Vec::new();
 

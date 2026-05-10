@@ -40,34 +40,7 @@ impl Emitter<'_> {
         return_ty: &Type,
         go_hints: &[String],
     ) -> Option<GoCallStrategy> {
-        if return_ty.is_partial() {
-            return Some(GoCallStrategy::Partial);
-        }
-
-        if return_ty.is_result() {
-            return Some(GoCallStrategy::Result);
-        }
-
-        if return_ty.is_option() {
-            if let Some(sentinel) = sentinel_hint(go_hints) {
-                return Some(GoCallStrategy::Sentinel { value: sentinel });
-            }
-            if !self.is_nullable_option(return_ty) {
-                return Some(GoCallStrategy::CommaOk);
-            }
-            if go_hints.iter().any(|s| s == "comma_ok") {
-                return Some(GoCallStrategy::CommaOk);
-            }
-            return Some(GoCallStrategy::NullableReturn);
-        }
-
-        if let Some(arity) = return_ty.tuple_arity()
-            && arity >= 2
-        {
-            return Some(GoCallStrategy::Tuple { arity });
-        }
-
-        None
+        crate::classify_go_return_type(self.ctx.definitions, return_ty, go_hints)
     }
 
     pub(crate) fn resolve_go_call_strategy(
@@ -93,7 +66,7 @@ impl Emitter<'_> {
             && Self::is_go_receiver(receiver_expression)
         {
             if let Some(qualified_name) = self.go_qualified_name(receiver_expression, member)
-                && let Some(strategy) = self.module.go_call_strategies.get(&qualified_name)
+                && let Some(strategy) = self.globals.go_call_strategies.get(&qualified_name)
             {
                 return Some(strategy.clone());
             }
@@ -257,11 +230,4 @@ impl Emitter<'_> {
         write_line!(output, "{} := {}", tuple_var, constructor);
         tuple_var
     }
-}
-
-fn sentinel_hint(hints: &[String]) -> Option<i64> {
-    hints
-        .iter()
-        .any(|h| h == "sentinel_minus_one")
-        .then_some(-1)
 }

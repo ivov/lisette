@@ -68,7 +68,7 @@ impl Emitter<'_> {
             return IdentifierKind::PublicFunction { capitalized };
         }
 
-        let mut make_fn = self.module.make_functions.get(&name);
+        let mut make_fn = self.globals.make_function_names.get(&name);
 
         if make_fn.is_none() {
             let enum_id = match ty {
@@ -86,7 +86,7 @@ impl Emitter<'_> {
             if let Some(id) = enum_id {
                 let enum_name = unqualified_name(id);
                 let qualified = format!("{}.{}", enum_name, value);
-                make_fn = self.module.make_functions.get(&qualified);
+                make_fn = self.globals.make_function_names.get(&qualified);
             }
         }
 

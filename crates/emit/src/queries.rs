@@ -88,7 +88,8 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn method_needs_export(&self, method_name: &str) -> bool {
-        self.module.exported_method_names.contains(method_name)
+        self.globals.exported_method_names.contains(method_name)
+            || self.module.exported_method_names.contains(method_name)
             || matches!(method_name, "string" | "goString" | "error")
     }
 
@@ -165,12 +166,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
-        syntax::types::peel_alias(ty, |id| {
-            self.ctx
-                .definitions
-                .get(id)
-                .is_some_and(Definition::is_type_alias)
-        })
+        crate::peel_alias(self.ctx.definitions, ty)
     }
 
     pub(crate) fn peel_alias_id(&self, id: &str) -> String {
@@ -202,18 +198,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {
-        let Type::Nominal { id, .. } = self.peel_alias(ty) else {
-            return None;
-        };
-
-        if matches!(
-            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
-            Some(DefinitionBody::Interface { .. })
-        ) {
-            Some(id.to_string())
-        } else {
-            None
-        }
+        crate::as_interface(self.ctx.definitions, ty)
     }
 
     pub(crate) fn is_go_imported_type(ty: &Type) -> bool {
@@ -227,13 +212,11 @@ impl Emitter<'_> {
     /// `*T`, Lisette/Go interfaces, and function aliases (Go's
     /// function types are themselves nilable).
     pub(crate) fn is_nilable_go_type(&self, ty: &Type) -> bool {
-        ty.is_ref()
-            || self.as_interface(ty).is_some()
-            || self.resolve_to_function_type(ty).is_some()
+        crate::is_nilable_go_type(self.ctx.definitions, ty)
     }
 
     pub(crate) fn is_nullable_option(&self, ty: &Type) -> bool {
-        ty.is_option() && self.is_nilable_go_type(&ty.ok_type())
+        crate::is_nullable_option(self.ctx.definitions, ty)
     }
 
     /// True for `Option<T>` where T is a concrete non-nilable Go value type
