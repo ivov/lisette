@@ -14,6 +14,5 @@ func get_nested(outer lisette.Option[lisette.Option[int]]) (int, bool) {
 	if inner.Tag != lisette.OptionSome {
 		return *new(int), false
 	}
-	val := inner.SomeVal
-	return val, true
+	return inner.SomeVal, true
 }

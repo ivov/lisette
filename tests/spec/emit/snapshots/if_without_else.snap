@@ -6,6 +6,5 @@ package main
 
 func test(x int) {
 	if x > 10 {
-		_ = 1
 	}
 }

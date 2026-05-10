@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn side_a() -> int { 1 }\n\nfn get_xs() -> Result<Slice<int>, error> { Ok([1, 2, 3]) }\n\nfn variadic(_first: int, _rest: VarArgs<int>) -> int { 0 }\n\nfn run() -> Result<int, error> {\n  Ok(variadic(side_a(), ..get_xs()?))\n}\n"
+description: "input: \nfn side_a() -> int { 1 }\n\nfn get_xs() -> Result<Slice<int>, error> { Ok([1, 2, 3]) }\n\nfn variadic(_first: int, _rest: VarArgs<int>) -> int { 0 }\n\nfn run() -> Result<int, error> {\n  Ok(variadic(side_a(), get_xs()?...))\n}\n"
 ---
 package main
 
@@ -30,6 +30,5 @@ func run() (int, error) {
 	if check_4.Tag != lisette.ResultOk {
 		return *new(int), check_4.ErrVal
 	}
-	result_5 := check_4.OkVal
-	return variadic(_arg_6, result_5...), nil
+	return variadic(_arg_6, check_4.OkVal...), nil
 }

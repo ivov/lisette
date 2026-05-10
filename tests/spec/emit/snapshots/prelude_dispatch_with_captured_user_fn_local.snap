@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/prelude.rs
-assertion_line: 808
 description: "input: \nfn doubler(x: int) -> Option<int> { Some(x * 2) }\nfn main() {\n  let g = doubler\n  let opt: Option<int> = Some(1)\n  let r = opt.and_then(g)\n  let _ = r\n}\n"
 ---
 package main

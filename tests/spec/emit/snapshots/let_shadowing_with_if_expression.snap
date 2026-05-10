@@ -5,7 +5,6 @@ description: "input: \nfn test(cond: bool) -> int {\n  let x = 1;\n  let x = if 
 package main
 
 func test(cond bool) int {
-	_ = 1
 	if cond {
 		return 2
 	}

@@ -22,8 +22,7 @@ match_1:
 			fmt.Printf("non-positive: %v\n", n)
 			break match_1
 		}
-		e := result.ErrVal
-		fmt.Printf("error: %v\n", e)
+		fmt.Printf("error: %v\n", result.ErrVal)
 		break match_1
 	}
 }

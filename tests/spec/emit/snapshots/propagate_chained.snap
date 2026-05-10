@@ -24,6 +24,5 @@ func test() lisette.Result[int, string] {
 	if check_2.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](check_2.ErrVal)
 	}
-	y := check_2.OkVal
-	return lisette.MakeResultOk[int, string](x + y)
+	return lisette.MakeResultOk[int, string](x + check_2.OkVal)
 }

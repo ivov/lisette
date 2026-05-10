@@ -6,7 +6,7 @@ use crate::types::coercion::Coercion;
 use crate::types::emitter::Position;
 use crate::utils::{DiscardGuard, requires_temp_var, try_flip_comparison};
 use crate::write_line;
-use syntax::ast::{Binding, Expression, Pattern};
+use syntax::ast::{Binding, Expression, Literal, Pattern};
 use syntax::types::Type;
 
 enum LetKind {
@@ -305,40 +305,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
 
     fn emit_temp_var_binding(&mut self, output: &mut String, identifier: &str) {
         if !self.emitter.is_declared(identifier) {
-            let resolved_ty = self.resolve_temp_var_decl_ty();
-            let ty = &resolved_ty;
-
-            // When a try/recover block's ok_ty is an unresolved variable, the
-            // var decl would be `Result[any, ...]`. Use the binding type if it
-            // has a resolved ok_ty, or fall back to the return context type.
-            let has_variable_ok_ty = matches!(
-                self.value,
-                Expression::TryBlock { .. } | Expression::RecoverBlock { .. }
-            ) && !ty.is_variable()
-                && ty.ok_type().is_variable();
-
-            let var_ty = if has_variable_ok_ty {
-                let binding_ty = &self.binding.ty;
-                if !binding_ty.is_variable() && !binding_ty.ok_type().is_variable() {
-                    self.emitter.go_type_as_string(binding_ty)
-                } else if let Some(ctx_ty) = self
-                    .emitter
-                    .current_return_context
-                    .as_ref()
-                    .map(|c| c.ty.clone())
-                {
-                    if Fallible::from_type(&ctx_ty).is_some() {
-                        self.emitter.go_type_as_string(&ctx_ty)
-                    } else {
-                        self.emitter.go_type_as_string(ty)
-                    }
-                } else {
-                    self.emitter.go_type_as_string(ty)
-                }
-            } else {
-                self.emitter.go_type_as_string(ty)
-            };
-            write_line!(output, "var {} {}", identifier, var_ty);
+            self.emit_var_decl_if_needed(output, identifier);
             self.emitter.try_declare(identifier);
         }
 
@@ -350,6 +317,46 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         self.emit_value_to_temp(output, identifier);
 
         self.emitter.assign_target_ty = saved_target_ty;
+    }
+
+    fn emit_var_decl_if_needed(&mut self, output: &mut String, identifier: &str) {
+        if identifier == "_" {
+            return;
+        }
+        let resolved_ty = self.resolve_temp_var_decl_ty();
+        let ty = &resolved_ty;
+
+        // When a try/recover block's ok_ty is an unresolved variable, the
+        // var decl would be `Result[any, ...]`. Use the binding type if it
+        // has a resolved ok_ty, or fall back to the return context type.
+        let has_variable_ok_ty = matches!(
+            self.value,
+            Expression::TryBlock { .. } | Expression::RecoverBlock { .. }
+        ) && !ty.is_variable()
+            && ty.ok_type().is_variable();
+
+        let var_ty = if has_variable_ok_ty {
+            let binding_ty = &self.binding.ty;
+            if !binding_ty.is_variable() && !binding_ty.ok_type().is_variable() {
+                self.emitter.go_type_as_string(binding_ty)
+            } else if let Some(ctx_ty) = self
+                .emitter
+                .current_return_context
+                .as_ref()
+                .map(|c| c.ty.clone())
+            {
+                if Fallible::from_type(&ctx_ty).is_some() {
+                    self.emitter.go_type_as_string(&ctx_ty)
+                } else {
+                    self.emitter.go_type_as_string(ty)
+                }
+            } else {
+                self.emitter.go_type_as_string(ty)
+            }
+        } else {
+            self.emitter.go_type_as_string(ty)
+        };
+        write_line!(output, "var {} {}", identifier, var_ty);
     }
 
     /// Emit the value-producing expression into the already-declared temp var
@@ -779,6 +786,25 @@ fn negate_condition(condition: &str) -> String {
     try_flip_comparison(condition).unwrap_or_else(|| format!("!({})", condition))
 }
 
+/// True when discarding `expression` is safe to omit — its value has no
+/// side effects. `FormatString` and `Slice` literals are excluded since they
+/// can hold sub-expressions that do.
+fn is_side_effect_free_discard(expression: &Expression) -> bool {
+    match expression {
+        Expression::Unit { .. } => true,
+        Expression::Literal { literal, .. } => matches!(
+            literal,
+            Literal::Integer { .. }
+                | Literal::Float { .. }
+                | Literal::Imaginary(_)
+                | Literal::Boolean(_)
+                | Literal::String { .. }
+                | Literal::Char(_)
+        ),
+        _ => false,
+    }
+}
+
 impl Emitter<'_> {
     pub(crate) fn emit_let(
         &mut self,
@@ -793,6 +819,10 @@ impl Emitter<'_> {
 
     pub(crate) fn emit_discard(&mut self, output: &mut String, value: &Expression) {
         let unwrapped = value.unwrap_parens();
+
+        if is_side_effect_free_discard(unwrapped) {
+            return;
+        }
 
         if let Expression::Propagate { expression, .. } = unwrapped {
             self.emit_propagate(output, expression, Some("_"));

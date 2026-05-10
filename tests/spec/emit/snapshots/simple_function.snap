@@ -4,6 +4,4 @@ description: "input: \nfn foo() {\n  let x = 42;\n}\n"
 ---
 package main
 
-func foo() {
-	_ = 42
-}
+func foo() {}

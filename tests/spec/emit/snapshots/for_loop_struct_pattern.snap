@@ -18,9 +18,7 @@ func (p Point) String() string {
 func test(points []Point) int {
 	sum := 0
 	for _, item_1 := range points {
-		x := item_1.x
-		y := item_1.y
-		sum = sum + x + y
+		sum = sum + item_1.x + item_1.y
 	}
 	return sum
 }

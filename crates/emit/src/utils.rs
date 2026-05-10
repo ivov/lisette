@@ -28,18 +28,22 @@ pub(crate) fn receiver_name(type_name: &str) -> String {
 pub(crate) fn output_references_var(output: &str, var: &str) -> bool {
     let masked = mask_go_string_literals(output);
     let bytes = masked.as_bytes();
-    masked.match_indices(var).any(|(abs, _)| {
-        let before_ok = abs == 0 || {
-            let c = bytes[abs - 1];
-            !c.is_ascii_alphanumeric() && c != b'_'
-        };
-        let after = abs + var.len();
-        let after_ok = after >= bytes.len() || {
-            let c = bytes[after];
-            !c.is_ascii_alphanumeric() && c != b'_'
-        };
-        before_ok && after_ok
-    })
+    masked
+        .match_indices(var)
+        .any(|(abs, _)| is_at_token_boundary(bytes, abs, var.len()))
+}
+
+fn is_at_token_boundary(bytes: &[u8], pos: usize, token_len: usize) -> bool {
+    let before_ok = pos == 0 || {
+        let c = bytes[pos - 1];
+        !c.is_ascii_alphanumeric() && c != b'_'
+    };
+    let after = pos + token_len;
+    let after_ok = after >= bytes.len() || {
+        let c = bytes[after];
+        !c.is_ascii_alphanumeric() && c != b'_'
+    };
+    before_ok && after_ok
 }
 
 /// Replace Go string/rune/raw-string contents with spaces, preserving byte
@@ -267,37 +271,43 @@ pub(crate) fn optimize_function_body(output: &mut String) {
 /// Only collapses when VAR appears nowhere else in the region (true single-use).
 /// Pattern bindings are always pure field accesses, so reordering is safe.
 pub(crate) fn inline_trivial_bindings(output: &mut String, pre_len: usize) {
-    let region = &output[pre_len..];
-    let lines: Vec<&str> = region.lines().collect();
+    // Loop to fixpoint: collapsing one binding can expose another (e.g.
+    // `y := pair.Second` collapsing into the return line then makes
+    // `x := pair.First; return x + …` collapsible too).
+    loop {
+        let region = &output[pre_len..];
+        let lines: Vec<&str> = region.lines().collect();
 
-    let mut result = String::with_capacity(region.len());
-    let mut i = 0;
-    let mut changed = false;
+        let mut result = String::with_capacity(region.len());
+        let mut i = 0;
+        let mut changed = false;
 
-    while i < lines.len() {
-        if i + 1 < lines.len()
-            && let Some((var, expression)) = parse_binding(lines[i])
-            && let Some(collapsed) = try_inline_binding(lines[i + 1], var, expression)
-        {
-            let used_elsewhere = lines
-                .iter()
-                .enumerate()
-                .any(|(j, line)| j != i && j != i + 1 && output_references_var(line, var));
+        while i < lines.len() {
+            if i + 1 < lines.len()
+                && let Some((var, expression)) = parse_binding(lines[i])
+                && let Some(collapsed) = try_inline_binding(lines[i + 1], var, expression)
+            {
+                let used_elsewhere = lines
+                    .iter()
+                    .enumerate()
+                    .any(|(j, line)| j != i && j != i + 1 && output_references_var(line, var));
 
-            if !used_elsewhere {
-                result.push_str(&collapsed);
-                result.push('\n');
-                i += 2;
-                changed = true;
-                continue;
+                if !used_elsewhere {
+                    result.push_str(&collapsed);
+                    result.push('\n');
+                    i += 2;
+                    changed = true;
+                    continue;
+                }
             }
+            result.push_str(lines[i]);
+            result.push('\n');
+            i += 1;
         }
-        result.push_str(lines[i]);
-        result.push('\n');
-        i += 1;
-    }
 
-    if changed {
+        if !changed {
+            break;
+        }
         output.truncate(pre_len);
         output.push_str(&result);
     }
@@ -495,7 +505,57 @@ fn try_inline_binding(next_line: &str, var: &str, expression: &str) -> Option<St
             return Some(format!("{} = {}", target, expression));
         }
     }
+    // Skip `for` headers: Lisette emits capture temps (`_bound_N`) precisely
+    // to evaluate the bound once; inlining would re-evaluate per iteration.
+    // Skip `&VAR` use sites: substituting a function reference (`&add1`,
+    // `&pkg.Fn`, `&s.method`) is invalid Go — VAR must be an addressable local.
+    if is_pure_dot_path(expression)
+        && !next_line.trim_start().starts_with("for ")
+        && let Some(pos) = single_token_position(next_line, var)
+        && !(pos > 0 && next_line.as_bytes()[pos - 1] == b'&')
+    {
+        return Some(format!(
+            "{}{}{}",
+            &next_line[..pos],
+            expression,
+            &next_line[pos + var.len()..]
+        ));
+    }
     None
+}
+
+/// True for `IDENT` or `IDENT(.IDENT)*` — no parens, brackets, or operators.
+fn is_pure_dot_path(s: &str) -> bool {
+    let mut want_ident_start = true;
+    for c in s.chars() {
+        if want_ident_start {
+            if !(c.is_ascii_alphabetic() || c == '_') {
+                return false;
+            }
+            want_ident_start = false;
+        } else if c == '.' {
+            want_ident_start = true;
+        } else if !(c.is_ascii_alphanumeric() || c == '_') {
+            return false;
+        }
+    }
+    !want_ident_start
+}
+
+/// Byte offset of `token` if it appears exactly once as a complete identifier
+/// in `line`, ignoring string-literal contents.
+fn single_token_position(line: &str, token: &str) -> Option<usize> {
+    let masked = mask_go_string_literals(line);
+    let bytes = masked.as_bytes();
+    let mut iter = masked
+        .match_indices(token)
+        .filter(|(abs, _)| is_at_token_boundary(bytes, *abs, token.len()))
+        .map(|(abs, _)| abs);
+    let first = iter.next()?;
+    if iter.next().is_some() {
+        return None;
+    }
+    Some(first)
 }
 
 /// Whether the body `lines[start..end]` declares a `var :=` whose name is also

@@ -5,7 +5,6 @@ description: "input: \nfn test() -> int {\n  let x = 10;\n  let x = \"now a stri
 package main
 
 func test() int {
-	_ = 10
 	x := "now a string"
 	return len(x)
 }

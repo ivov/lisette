@@ -31,8 +31,7 @@ func (c Carrier) String() string {
 }
 
 func bump(c Carrier) int {
-	p := c.P
-	*p = 1
+	*c.P = 1
 	return 9
 }
 

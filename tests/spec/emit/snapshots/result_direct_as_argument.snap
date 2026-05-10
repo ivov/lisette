@@ -18,8 +18,7 @@ func divide(a, b int) lisette.Result[int, string] {
 
 func describe(r lisette.Result[int, string]) string {
 	if r.Tag == lisette.ResultOk {
-		v := r.OkVal
-		return fmt.Sprint(v)
+		return fmt.Sprint(r.OkVal)
 	}
 	return r.ErrVal
 }

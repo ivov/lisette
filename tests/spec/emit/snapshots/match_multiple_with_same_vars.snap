@@ -10,18 +10,12 @@ func test() int {
 	pair := lisette.MakeTuple2(10, 20)
 	var first int
 	{
-		a := pair.First
-		b := pair.Second
-		first = a + b
+		first = pair.First + pair.Second
 	}
 	nested := lisette.MakeTuple2(lisette.MakeTuple2(1, 2), lisette.MakeTuple2(3, 4))
 	var second int
 	{
-		a := nested.First.First
-		b := nested.First.Second
-		c := nested.Second.First
-		d := nested.Second.Second
-		second = a + b + c + d
+		second = nested.First.First + nested.First.Second + nested.Second.First + nested.Second.Second
 	}
 	return first + second
 }

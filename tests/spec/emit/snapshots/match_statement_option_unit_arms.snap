@@ -17,8 +17,7 @@ func maybe(b bool) (int, bool) {
 
 func test() {
 	option_2 := lisette.OptionFromCommaOk[int](maybe(true))
-	subject_1 := option_2
-	if subject_1.Tag == lisette.OptionSome {
+	if option_2.Tag == lisette.OptionSome {
 		noop()
 	} else {
 		noop()

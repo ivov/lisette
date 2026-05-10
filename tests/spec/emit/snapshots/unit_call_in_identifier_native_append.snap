@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/expressions.rs
-assertion_line: 3463
 description: "input: \nfn noop() {}\n\nfn main() {\n  let xs: Slice<()> = []\n  let y = Slice.append(xs, noop())\n  let _ = y\n}\n"
 ---
 package main

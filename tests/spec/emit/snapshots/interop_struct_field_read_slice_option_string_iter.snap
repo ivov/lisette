@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-assertion_line: 1337
 description: "input: \nimport \"go:example.com/aws\"\n\nfn main() {\n  let b = aws.Bucket { .. }\n  for tag in b.Tags {\n    match tag {\n      Some(v) => { let _ = v },\n      None => {},\n    }\n  }\n}\n"
 ---
 package main
@@ -12,8 +11,7 @@ import (
 
 func main() {
 	b := aws.Bucket{}
-	raw_1 := b.Tags
-	src_2 := raw_1
+	src_2 := b.Tags
 	wrapped_3 := make([]lisette.Option[string], len(src_2))
 	for i_4, v_5 := range src_2 {
 		if v_5 != nil {

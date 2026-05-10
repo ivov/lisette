@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/prelude.rs
-assertion_line: 794
 description: "input: \nfn main() {\n  let g = Some\n  let opt: Option<int> = Some(1)\n  let r = opt.and_then(g)\n  let _ = r\n}\n"
 ---
 package main

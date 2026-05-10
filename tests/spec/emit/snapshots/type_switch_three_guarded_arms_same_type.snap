@@ -9,16 +9,13 @@ import "example.com/events"
 func handle(e events.Event) int {
 	switch e := e.(type) {
 	case events.Click:
-		x := e.X
-		if x > 100 {
+		if e.X > 100 {
 			return 3
 		}
-		x_1 := e.X
-		if x_1 > 50 {
+		if e.X > 50 {
 			return 2
 		}
-		x_2 := e.X
-		if x_2 > 0 {
+		if e.X > 0 {
 			return 1
 		}
 		return 0

@@ -19,6 +19,5 @@ func Box_new(x int) Box {
 }
 
 func main() {
-	f := Box_new
-	_ = f(1)
+	_ = Box_new(1)
 }

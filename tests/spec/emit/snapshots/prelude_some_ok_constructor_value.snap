@@ -15,6 +15,5 @@ func main() {
 		}
 		return *new(int), false
 	}
-	option_3 := lisette.OptionFromCommaOk[int](f(42))
-	_ = option_3
+	_ = lisette.OptionFromCommaOk[int](f(42))
 }

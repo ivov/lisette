@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/expressions.rs
-assertion_line: 3491
 description: "input: \nfn noop() {}\n\nfn main() {\n  let mut m = Map.new<(), int>()\n  m[()] = 7\n  let x = m[noop()]\n  let _ = x\n}\n"
 ---
 package main

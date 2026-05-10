@@ -19,6 +19,5 @@ func (b Box) Add(y int) int {
 }
 
 func main() {
-	f := Box.Add
-	_ = f(Box{x: 1}, 2)
+	_ = Box.Add(Box{x: 1}, 2)
 }

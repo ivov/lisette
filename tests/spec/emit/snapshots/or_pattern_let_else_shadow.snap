@@ -46,7 +46,6 @@ func (e E) String() string {
 }
 
 func test(e E) int {
-	_ = 1
 	var x int
 	if e.Tag == EA {
 		x = e.A

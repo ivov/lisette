@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/expressions.rs
-assertion_line: 1274
 description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let x = 1\n  fmt.Println(x)\n  const x = 2\n  fmt.Println(x)\n}\n"
 ---
 package main

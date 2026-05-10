@@ -8,10 +8,6 @@ func main() {
 	ch := make(chan int)
 	select {
 	case _, ok := <-ch:
-		if ok {
-			_ = 0
-		} else {
-			_ = 1
-		}
+		_ = ok
 	}
 }

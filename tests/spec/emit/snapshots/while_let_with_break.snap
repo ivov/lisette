@@ -10,8 +10,7 @@ func test(opt lisette.Option[int]) {
 	current := opt
 	for {
 		if current.Tag == lisette.OptionSome {
-			x := current.SomeVal
-			if x > 100 {
+			if current.SomeVal > 100 {
 				break
 			}
 			current = lisette.MakeOptionNone[int]()

@@ -44,6 +44,5 @@ func test() int {
 	if t.Tag == TransformIdentity {
 		return 0
 	}
-	f := t.Apply
-	return f(41)
+	return t.Apply(41)
 }

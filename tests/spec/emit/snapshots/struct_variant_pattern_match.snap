@@ -40,9 +40,7 @@ func (m Message) String() string {
 
 func handle(m Message) int {
 	if m.Tag == MessageMove {
-		x := m.X
-		y := m.Y
-		return x + y
+		return m.X + m.Y
 	}
 	return 0
 }

@@ -8,8 +8,6 @@ func main() {
 	ch := make(chan int)
 	select {
 	case ch <- 1:
-		_ = 0
 	default:
-		_ = 1
 	}
 }

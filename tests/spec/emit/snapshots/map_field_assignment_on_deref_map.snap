@@ -22,6 +22,5 @@ func main() {
 	r := &m
 	entry := (*r)["k"]
 	entry.x = 1
-	base_1 := r
-	(*base_1)["k"] = entry
+	(*r)["k"] = entry
 }

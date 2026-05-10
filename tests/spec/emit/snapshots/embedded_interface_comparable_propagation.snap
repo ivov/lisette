@@ -12,6 +12,4 @@ type B[K comparable] interface {
 	A[K]
 }
 
-func main() {
-	_ = 0
-}
+func main() {}

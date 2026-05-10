@@ -12,11 +12,9 @@ import (
 func test() {
 	result := lisette.MakeResultOk[int, string](42)
 	if result.Tag == lisette.ResultOk {
-		n := result.OkVal
-		fmt.Printf("success: %v\n", n)
+		fmt.Printf("success: %v\n", result.OkVal)
 	} else {
-		e := result.ErrVal
-		fmt.Printf("error: %v\n", e)
+		fmt.Printf("error: %v\n", result.ErrVal)
 	}
 	fmt.Print("done\n")
 }

@@ -30,6 +30,5 @@ func main() {
 		X: 1,
 		Y: 2,
 	}
-	g := lib.Point.Sum
-	_ = g(p)
+	_ = lib.Point.Sum(p)
 }

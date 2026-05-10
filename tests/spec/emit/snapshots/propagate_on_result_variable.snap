@@ -11,6 +11,5 @@ func test() lisette.Result[int, string] {
 	if r.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](r.ErrVal)
 	}
-	x := r.OkVal
-	return lisette.MakeResultOk[int, string](x + 1)
+	return lisette.MakeResultOk[int, string](r.OkVal + 1)
 }

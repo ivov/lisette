@@ -11,8 +11,7 @@ func main() {
 	match_1:
 		for {
 			{
-				d := i
-				if d < 5 {
+				if i < 5 {
 					fmt.Println("low")
 					break match_1
 				}

@@ -13,8 +13,7 @@ func handle(e events.Event, threshold int) int {
 		if x > threshold {
 			return x
 		}
-		x_1 := e.X
-		return x_1 + 1
+		return e.X + 1
 	default:
 		return 0
 	}

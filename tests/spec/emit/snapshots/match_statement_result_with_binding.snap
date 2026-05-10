@@ -18,8 +18,7 @@ func divide(a, b int) lisette.Result[int, string] {
 func test() {
 	subject_1 := divide(10, 2)
 	if subject_1.Tag == lisette.ResultOk {
-		v := subject_1.OkVal
-		use_value(v)
+		use_value(subject_1.OkVal)
 	} else {
 		use_value(0)
 	}

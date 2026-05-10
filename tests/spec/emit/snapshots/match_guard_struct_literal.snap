@@ -26,10 +26,8 @@ match_1:
 			x: 1,
 			y: 2,
 		}) {
-			_ = 1
 			break match_1
 		}
-		_ = 2
 		break match_1
 	}
 }

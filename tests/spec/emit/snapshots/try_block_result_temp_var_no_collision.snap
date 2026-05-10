@@ -7,14 +7,12 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func foo() lisette.Result[int, string] {
-	var _ lisette.Result[int, any]
 	tryResult_1 := func() lisette.Result[int, any] {
 		check_2 := lisette.MakeResultOk[int, any](1)
 		if check_2.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[int, any](check_2.ErrVal)
 		}
-		result_3 := check_2.OkVal
-		return lisette.MakeResultOk[int, any](result_3)
+		return lisette.MakeResultOk[int, any](check_2.OkVal)
 	}()
 	_ = tryResult_1
 	_ = 7

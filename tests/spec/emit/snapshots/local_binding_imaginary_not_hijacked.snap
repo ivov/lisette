@@ -9,6 +9,5 @@ func id(x int) int {
 }
 
 func test() int {
-	imaginary := id
-	return imaginary(1)
+	return id(1)
 }

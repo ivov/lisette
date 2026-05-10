@@ -5,7 +5,6 @@ source: tests/spec/build/mod.rs
 package main
 
 func process(_, used_param int) int {
-	_ = 42
 	return used_param * 2
 }
 

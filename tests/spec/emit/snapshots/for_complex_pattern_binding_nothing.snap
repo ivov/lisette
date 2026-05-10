@@ -17,6 +17,5 @@ func (f Foo) String() string {
 func main() {
 	items := []Foo{Foo{x: 1}, Foo{x: 2}}
 	for range items {
-		_ = 0
 	}
 }

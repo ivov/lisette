@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-assertion_line: 1314
 description: "input: \nimport \"go:example.com/aws\"\nimport \"go:fmt\"\n\nfn main() {\n  let buckets: Slice<aws.Bucket> = []\n  for bucket in buckets {\n    match bucket.Name {\n      Some(name) => fmt.Println(name),\n      None => {},\n    }\n  }\n}\n"
 ---
 package main
@@ -14,12 +13,10 @@ import (
 func main() {
 	buckets := []aws.Bucket{}
 	for _, bucket := range buckets {
-		raw_2 := bucket.Name
-		option_3 := lisette.OptionFromPointer[string](raw_2)
+		option_3 := lisette.OptionFromPointer[string](bucket.Name)
 		subject_1 := option_3
 		if subject_1.Tag == lisette.OptionSome {
-			name := subject_1.SomeVal
-			fmt.Println(name)
+			fmt.Println(subject_1.SomeVal)
 		}
 	}
 }

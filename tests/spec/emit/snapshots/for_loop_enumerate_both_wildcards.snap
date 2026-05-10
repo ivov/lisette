@@ -6,6 +6,5 @@ package main
 
 func test(items []int) {
 	for range items {
-		_ = 1
 	}
 }

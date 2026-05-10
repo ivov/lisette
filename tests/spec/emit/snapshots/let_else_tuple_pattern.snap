@@ -10,7 +10,5 @@ func test(opt lisette.Option[lisette.Tuple2[int, int]]) int {
 	if opt.Tag != lisette.OptionSome {
 		return 0
 	}
-	a := opt.SomeVal.First
-	b := opt.SomeVal.Second
-	return a + b
+	return opt.SomeVal.First + opt.SomeVal.Second
 }

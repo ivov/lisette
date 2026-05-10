@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-assertion_line: 149
 description: "input: \ntype Handler = fn(int) -> int\n\nfn double(x: int) -> int {\n  x * 2\n}\n\nstruct Wrapper {\n  pub f: Option<Handler>,\n}\n\nfn main() {\n  let _w = Wrapper { f: Some(double) }\n  let _ = _w.f\n}\n"
 ---
 package main

@@ -11,7 +11,6 @@ func main() {
 	if opt.Tag == lisette.OptionSome {
 		_ = opt.SomeVal
 	} else {
-		_ = 0
 	}
 	_ = 7
 }

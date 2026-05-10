@@ -13,7 +13,6 @@ func g() int {
 }
 
 func test() {
-	_ = 0
 	_ = f()
 	_ = g()
 }
