@@ -543,6 +543,12 @@ impl Emitter<'_> {
             return false;
         };
 
+        if Self::is_go_never(expression) {
+            let call_str = self.emit_call(output, expression, None);
+            write_line!(output, "{}", call_str);
+            return true;
+        }
+
         self.flags.needs_stdlib = true;
 
         let force_tagged = self

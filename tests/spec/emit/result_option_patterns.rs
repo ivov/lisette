@@ -1343,6 +1343,16 @@ fn test() -> Option<int> {
 }
 
 #[test]
+fn tail_panic_in_result_returning_function() {
+    let input = r#"
+fn forbidden() -> Result<int, error> {
+  panic("boom")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_try_in_if_arm_with_never_tail() {
     let input = r#"
 fn die() -> Never { panic("dead") }
