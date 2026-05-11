@@ -447,8 +447,8 @@ pub interface Type {
   fn Key() -> Type
   fn Kind() -> Kind
   fn Len() -> int
-  fn Method(arg0: int) -> Method
-  fn MethodByName(arg0: string) -> Option<Method>
+  fn Method(n: int) -> Method
+  fn MethodByName(s: string) -> Option<Method>
   fn Name() -> string
   fn NumField() -> int
   fn NumIn() -> int

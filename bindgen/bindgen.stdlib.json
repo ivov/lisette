@@ -160,14 +160,14 @@
         },
         "encoding/binary": {
           "Append": ["buf"],
-          "AppendByteOrder.AppendUint16": ["arg0"],
-          "AppendByteOrder.AppendUint32": ["arg0"],
-          "AppendByteOrder.AppendUint64": ["arg0"],
+          "AppendByteOrder.AppendUint16": ["b"],
+          "AppendByteOrder.AppendUint32": ["b"],
+          "AppendByteOrder.AppendUint64": ["b"],
           "AppendUvarint": ["buf"],
           "AppendVarint": ["buf"],
-          "ByteOrder.PutUint16": ["arg0"],
-          "ByteOrder.PutUint32": ["arg0"],
-          "ByteOrder.PutUint64": ["arg0"],
+          "ByteOrder.PutUint16": ["b"],
+          "ByteOrder.PutUint32": ["b"],
+          "ByteOrder.PutUint64": ["b"],
           "Encode": ["buf"],
           "PutUvarint": ["buf"],
           "PutVarint": ["buf"]
@@ -215,8 +215,8 @@
           "SectionReader.ReadAt": ["p"]
         },
         "io/fs": {
-          "File.Read": ["arg0"],
-          "ReadDirFile.Read": ["arg0"]
+          "File.Read": ["b"],
+          "ReadDirFile.Read": ["b"]
         },
         "log/slog": {
           "Level.AppendText": ["b"],

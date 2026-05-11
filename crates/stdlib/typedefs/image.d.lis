@@ -696,7 +696,7 @@ impl Uniform {
 
   fn ColorModel(self: Ref<Uniform>) -> color.Model
 
-  fn Convert(self: Ref<Uniform>, arg0: color.Color) -> color.Color
+  fn Convert(self: Ref<Uniform>, color: color.Color) -> color.Color
 
   /// Opaque scans the entire image and reports whether it is fully opaque.
   fn Opaque(self: Ref<Uniform>) -> bool

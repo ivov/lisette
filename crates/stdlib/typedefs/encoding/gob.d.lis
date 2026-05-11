@@ -52,7 +52,7 @@ pub type Encoder
 /// GobDecoder is the interface describing data that provides its own
 /// routine for decoding transmitted values sent by a GobEncoder.
 pub interface GobDecoder {
-  fn GobDecode(arg0: Slice<byte>) -> Result<(), error>
+  fn GobDecode(b: Slice<byte>) -> Result<(), error>
 }
 
 /// GobEncoder is the interface describing data that provides its own

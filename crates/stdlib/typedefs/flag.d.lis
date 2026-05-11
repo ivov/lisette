@@ -214,7 +214,7 @@ pub struct FlagSet {
 /// by this package satisfy the [Getter] interface, except the type used by [Func].
 pub interface Getter {
   fn Get() -> Unknown
-  fn Set(arg0: string) -> Result<(), error>
+  fn Set(s: string) -> Result<(), error>
   fn String() -> string
 }
 
@@ -229,7 +229,7 @@ pub interface Getter {
 /// The flag package may call the [String] method with a zero-valued receiver,
 /// such as a nil pointer.
 pub interface Value {
-  fn Set(arg0: string) -> Result<(), error>
+  fn Set(s: string) -> Result<(), error>
   fn String() -> string
 }
 

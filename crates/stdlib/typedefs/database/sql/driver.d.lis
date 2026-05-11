@@ -55,7 +55,7 @@ pub interface ConnPrepareContext {
 /// If a Connector implements [io.Closer], the [database/sql.DB.Close]
 /// method will call the Close method and return error (if any).
 pub interface Connector {
-  fn Connect(arg0: context.Context) -> Result<Conn, error>
+  fn Connect(ctx: context.Context) -> Result<Conn, error>
   fn Driver() -> Driver
 }
 
@@ -135,7 +135,7 @@ pub struct NamedValue {
 /// path is used for the argument. Drivers may wish to return [ErrSkip] after
 /// they have exhausted their own special cases.
 pub interface NamedValueChecker {
-  fn CheckNamedValue(arg0: Ref<NamedValue>) -> Result<(), error>
+  fn CheckNamedValue(namedValue: Ref<NamedValue>) -> Result<(), error>
 }
 
 /// NotNull is a type that implements [ValueConverter] by disallowing nil

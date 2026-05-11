@@ -105,9 +105,9 @@ pub fn Write(w: io.Writer, order: ByteOrder, data: Unknown) -> Result<(), error>
 /// 
 /// It is implemented by [LittleEndian], [BigEndian], and [NativeEndian].
 pub interface AppendByteOrder {
-  fn AppendUint16(mut arg0: Slice<byte>, arg1: uint16) -> Slice<byte>
-  fn AppendUint32(mut arg0: Slice<byte>, arg1: uint32) -> Slice<byte>
-  fn AppendUint64(mut arg0: Slice<byte>, arg1: uint64) -> Slice<byte>
+  fn AppendUint16(mut b: Slice<byte>, n: uint16) -> Slice<byte>
+  fn AppendUint32(mut b: Slice<byte>, n: uint32) -> Slice<byte>
+  fn AppendUint64(mut b: Slice<byte>, n: uint64) -> Slice<byte>
   fn String() -> string
 }
 
@@ -116,13 +116,13 @@ pub interface AppendByteOrder {
 /// 
 /// It is implemented by [LittleEndian], [BigEndian], and [NativeEndian].
 pub interface ByteOrder {
-  fn PutUint16(mut arg0: Slice<byte>, arg1: uint16)
-  fn PutUint32(mut arg0: Slice<byte>, arg1: uint32)
-  fn PutUint64(mut arg0: Slice<byte>, arg1: uint64)
+  fn PutUint16(mut b: Slice<byte>, n: uint16)
+  fn PutUint32(mut b: Slice<byte>, n: uint32)
+  fn PutUint64(mut b: Slice<byte>, n: uint64)
   fn String() -> string
-  fn Uint16(arg0: Slice<byte>) -> uint16
-  fn Uint32(arg0: Slice<byte>) -> uint32
-  fn Uint64(arg0: Slice<byte>) -> uint64
+  fn Uint16(b: Slice<byte>) -> uint16
+  fn Uint32(b: Slice<byte>) -> uint32
+  fn Uint64(b: Slice<byte>) -> uint64
 }
 
 /// MaxVarintLenN is the maximum length of a varint-encoded N-bit integer.

@@ -80,7 +80,7 @@ pub type Salutation = Greeter
 
 /// Generic interface - emits as opaque type with type params
 pub interface Transformer<T> {
-  fn Transform(arg0: T) -> T
+  fn Transform(t: T) -> T
 }
 
 impl<K: Comparable, V> ConstrainedPair<K, V> {

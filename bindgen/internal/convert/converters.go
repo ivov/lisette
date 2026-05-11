@@ -121,13 +121,16 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	nilableParams := c.cfg.NilableParams(c.currentPkgPath, result.Name)
 
 	params := signature.Params()
+	usedNames := collectNamedParams(params)
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
 		name := param.Name()
 		if name == "" {
-			name = fmt.Sprintf("arg%d", i)
+			isVariadic := signature.Variadic() && i == params.Len()-1
+			name = deriveParamName(param.Type(), i, isVariadic, usedNames)
+		} else {
+			name = sanitizeParamName(name)
 		}
-		name = sanitizeParamName(name)
 
 		paramType := convertParamType(param.Type(), name, nilableParams, c)
 		if paramType.SkipReason != nil {
@@ -278,13 +281,16 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	nilableParams := c.cfg.NilableParams(c.currentPkgPath, qualifiedName)
 
 	params := signature.Params()
+	usedNames := collectNamedParams(params)
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
 		name := param.Name()
 		if name == "" {
-			name = fmt.Sprintf("arg%d", i)
+			isVariadic := signature.Variadic() && i == params.Len()-1
+			name = deriveParamName(param.Type(), i, isVariadic, usedNames)
+		} else {
+			name = sanitizeParamName(name)
 		}
-		name = sanitizeParamName(name)
 
 		paramType := convertParamType(param.Type(), name, nilableParams, c)
 		if paramType.SkipReason != nil {
@@ -1354,13 +1360,17 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		nilableParams := c.cfg.NilableParams(c.currentPkgPath, qualifiedName)
 
 		var params []FunctionParameter
-		for j := 0; j < signature.Params().Len(); j++ {
-			param := signature.Params().At(j)
+		sigParams := signature.Params()
+		usedNames := collectNamedParams(sigParams)
+		for j := 0; j < sigParams.Len(); j++ {
+			param := sigParams.At(j)
 			name := param.Name()
 			if name == "" {
-				name = fmt.Sprintf("arg%d", j)
+				isVariadic := signature.Variadic() && j == sigParams.Len()-1
+				name = deriveParamName(param.Type(), j, isVariadic, usedNames)
+			} else {
+				name = sanitizeParamName(name)
 			}
-			name = sanitizeParamName(name)
 
 			paramType := convertParamType(param.Type(), name, nilableParams, c)
 			if paramType.SkipReason != nil {
@@ -1368,7 +1378,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 			}
 
 			typeStr := paramType.LisetteType
-			if signature.Variadic() && j == signature.Params().Len()-1 {
+			if signature.Variadic() && j == sigParams.Len()-1 {
 				typeStr = sliceToVarArgs(typeStr)
 			}
 

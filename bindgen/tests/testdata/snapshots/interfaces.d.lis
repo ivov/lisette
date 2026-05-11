@@ -47,8 +47,8 @@ pub interface ReadWriteSeeker {
 }
 
 pub interface ReadWriter {
-  fn Read(mut arg0: Slice<byte>) -> Partial<int, error>
-  fn Write(arg0: Slice<byte>) -> Partial<int, error>
+  fn Read(mut b: Slice<byte>) -> Partial<int, error>
+  fn Write(b: Slice<byte>) -> Partial<int, error>
 }
 
 /// Error-like but with extra method - not an error

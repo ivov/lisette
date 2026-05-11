@@ -36,5 +36,5 @@ impl Counter {
   /// Variadic method - tests convertMethod variadic path
   fn Log(self: Ref<Counter>, format: string, args: VarArgs<Unknown>)
   /// Method with unnamed params - tests convertMethod unnamed param path
-  fn Process(self: Ref<Counter>, arg0: string, arg1: int)
+  fn Process(self: Ref<Counter>, s: string, n: int)
 }

@@ -739,7 +739,7 @@ pub struct HTTP2Config {
 /// the client sees an interrupted response but the server doesn't log
 /// an error, panic with the value [ErrAbortHandler].
 pub interface Handler {
-  fn ServeHTTP(arg0: ResponseWriter, arg1: Ref<Request>)
+  fn ServeHTTP(responseWriter: ResponseWriter, request: Ref<Request>)
 }
 
 /// The HandlerFunc type is an adapter to allow the use of
@@ -868,7 +868,7 @@ pub type ResponseController
 /// A ResponseWriter may not be used after [Handler.ServeHTTP] has returned.
 pub interface ResponseWriter {
   fn Header() -> Header
-  fn Write(arg0: Slice<byte>) -> Partial<int, error>
+  fn Write(b: Slice<byte>) -> Partial<int, error>
   fn WriteHeader(statusCode: int)
 }
 
@@ -878,7 +878,7 @@ pub interface ResponseWriter {
 /// A RoundTripper must be safe for concurrent use by multiple
 /// goroutines.
 pub interface RoundTripper {
-  fn RoundTrip(arg0: Ref<Request>) -> Result<Ref<Response>, error>
+  fn RoundTrip(request: Ref<Request>) -> Result<Ref<Response>, error>
 }
 
 /// SameSite allows a server to define a cookie attribute making it impossible for

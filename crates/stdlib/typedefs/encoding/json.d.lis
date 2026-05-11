@@ -363,7 +363,7 @@ pub struct UnmarshalTypeError {
 /// a JSON value. UnmarshalJSON must copy the JSON data
 /// if it wishes to retain the data after returning.
 pub interface Unmarshaler {
-  fn UnmarshalJSON(arg0: Slice<byte>) -> Result<(), error>
+  fn UnmarshalJSON(b: Slice<byte>) -> Result<(), error>
 }
 
 /// An UnsupportedTypeError is returned by [Marshal] when attempting

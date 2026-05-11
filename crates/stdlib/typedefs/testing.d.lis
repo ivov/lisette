@@ -227,7 +227,7 @@ pub type T
 pub interface TB {
   fn Attr(key: string, value: string)
   fn Chdir(dir: string)
-  fn Cleanup(arg0: fn() -> ())
+  fn Cleanup(f: fn() -> ())
   fn Context() -> context.Context
   fn Error(args: VarArgs<Unknown>)
   fn Errorf(format: string, args: VarArgs<Unknown>)

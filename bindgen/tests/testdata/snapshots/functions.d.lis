@@ -4,7 +4,7 @@
 // Lisette: 0.0.0
 
 /// Function with unnamed params - tests convertFunc unnamed param path
-pub fn Callback(arg0: int, arg1: string) -> bool
+pub fn Callback(n: int, s: string) -> bool
 
 /// Comma-ok with pointer inner type - produces tuple to avoid
 /// ambiguity with single-pointer returns that also produce Option<Ref<T>>
