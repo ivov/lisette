@@ -30,9 +30,13 @@ impl Emitter<'_> {
             if var_name != "_" {
                 let inner_ty = fallible.ok_ty();
                 let zero = self.zero_value(inner_ty);
-                let go_ty = self.go_type_as_string(inner_ty);
-                write_line!(output, "var {} {} = {}", var_name, go_ty, zero);
-                self.declare(var_name);
+                if self.is_declared(var_name) {
+                    write_line!(output, "{} = {}", var_name, zero);
+                } else {
+                    let go_ty = self.go_type_as_string(inner_ty);
+                    write_line!(output, "var {} {} = {}", var_name, go_ty, zero);
+                    self.declare(var_name);
+                }
             }
             return result;
         }
@@ -50,11 +54,14 @@ impl Emitter<'_> {
             self.capture_check_var(output, &expression_string)
         };
 
-        let result_var = result_var_name.map(|s| s.to_string()).unwrap_or_else(|| {
-            let v = self.fresh_var(Some("result"));
-            self.declare(&v);
-            v
-        });
+        let (result_var, result_var_pre_declared) = match result_var_name {
+            Some(name) => (name.to_string(), self.is_declared(name)),
+            None => {
+                let v = self.fresh_var(Some("result"));
+                self.declare(&v);
+                (v, false)
+            }
+        };
 
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
 
@@ -94,10 +101,12 @@ impl Emitter<'_> {
         }
 
         if result_var != "_" {
+            let op = if result_var_pre_declared { "=" } else { ":=" };
             write_line!(
                 output,
-                "{} := {}.{}",
+                "{} {} {}.{}",
                 result_var,
+                op,
                 check_var,
                 fallible.ok_field()
             );

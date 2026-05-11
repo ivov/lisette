@@ -3317,3 +3317,25 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn else_if_condition_setup_emitted_in_else_scope() {
+    let input = r#"
+fn track(flag: Ref<bool>) -> Result<int, error> {
+  flag.* = true
+  Ok(1)
+}
+
+fn test() {
+  let mut ran = false
+  if true {
+    let _ = 1
+  } else if track(&ran).is_ok() {
+    let _ = 2
+  } else {
+    let _ = 3
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

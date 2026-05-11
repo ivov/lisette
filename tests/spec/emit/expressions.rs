@@ -3965,3 +3965,67 @@ fn test(x: int) {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn newtype_return_from_underlying_variable_casts() {
+    let input = r#"
+struct UserId(int)
+
+fn make(i: int) -> UserId {
+  i
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_typed_let_from_underlying_call_casts() {
+    let input = r#"
+struct UserId(int)
+
+fn raw() -> int { 1 }
+
+fn take(u: UserId) {
+  let _ = u
+}
+
+fn test() {
+  let id: UserId = raw()
+  take(id)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_assignment_from_underlying_value_casts() {
+    let input = r#"
+struct UserId(int)
+
+fn raw() -> int { 1 }
+
+fn take(u: UserId) {
+  let _ = u
+}
+
+fn test() {
+  let mut id = UserId(0)
+  id = raw()
+  take(id)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_struct_field_from_underlying_value_casts() {
+    let input = r#"
+struct UserId(int)
+struct Box { v: UserId }
+
+fn test(i: int) -> Box {
+  Box { v: i }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

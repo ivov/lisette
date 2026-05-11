@@ -277,15 +277,24 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         }
     }
 
+    fn binding_widens_to_interface(&self) -> bool {
+        let binding_ty = &self.binding.ty;
+        let value_ty = self.value.get_type();
+        self.emitter.as_interface(binding_ty).is_some() && *binding_ty != value_ty
+    }
+
     /// Pick the Go type for a `var X T` temp. Diverging values use the
     /// binding type so dead `return x` paths still typecheck; tuple
     /// branching values widen slots to match the assignment site.
     fn resolve_temp_var_decl_ty(&mut self) -> Type {
         let value_ty = self.value.get_type();
+        let binding_ty = &self.binding.ty;
+        if !value_ty.is_unit() && !value_ty.is_never() && self.binding_widens_to_interface() {
+            return binding_ty.clone();
+        }
         let base = if value_ty.is_unit() || value_ty.is_never() {
-            let binding_ty = &self.binding.ty;
             if !binding_ty.is_unit() && !binding_ty.is_variable() {
-                self.binding.ty.clone()
+                binding_ty.clone()
             } else {
                 value_ty
             }
@@ -429,6 +438,12 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         } else {
             go_identifier
         };
+
+        if self.binding_widens_to_interface() {
+            let var_ty = self.emitter.go_type_as_string(&self.binding.ty);
+            write_line!(output, "var {} {}", go_identifier, var_ty);
+            self.emitter.declare(&go_identifier);
+        }
 
         self.emitter
             .emit_propagate_to_let(output, &go_identifier, self.value);

@@ -42,8 +42,19 @@ impl Emitter<'_> {
             ..
         } = alternative
         {
-            let condition_string = self.emit_condition_operand(output, condition);
+            let mut condition_buffer = String::new();
+            let condition_string = self.emit_condition_operand(&mut condition_buffer, condition);
             let condition_string = wrap_if_struct_literal(condition_string);
+            if !condition_buffer.is_empty() {
+                self.emit_else_if_with_setup(
+                    output,
+                    &condition_buffer,
+                    &condition_string,
+                    consequence,
+                    next_alternative,
+                );
+                return;
+            }
             write_line!(output, "}} else if {} {{", condition_string);
             self.enter_scope();
             self.emit_in_position(output, consequence);
@@ -59,6 +70,26 @@ impl Emitter<'_> {
             self.exit_scope();
             output.push_str("}\n");
         }
+    }
+
+    fn emit_else_if_with_setup(
+        &mut self,
+        output: &mut String,
+        condition_setup: &str,
+        condition_string: &str,
+        consequence: &Expression,
+        next_alternative: &Expression,
+    ) {
+        output.push_str("} else {\n");
+        self.enter_scope();
+        output.push_str(condition_setup);
+        write_line!(output, "if {} {{", condition_string);
+        self.enter_scope();
+        self.emit_in_position(output, consequence);
+        self.exit_scope();
+        self.emit_else_chain(output, next_alternative);
+        self.exit_scope();
+        output.push_str("}\n");
     }
 
     /// Emit an if/else-if branch header for pattern matching chains.

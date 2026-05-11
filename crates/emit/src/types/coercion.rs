@@ -15,6 +15,9 @@ pub(crate) struct Coercion {
 pub(crate) enum CoercionKind {
     Identity,
     WrapAsInterface(AdapterPlan),
+    WrapNewtype {
+        ty: Type,
+    },
     UnwrapNullableOption {
         ty: Type,
     },
@@ -44,6 +47,8 @@ impl Coercion {
     pub(crate) fn resolve(emitter: &Emitter, from: &Type, to: &Type) -> Self {
         let kind = if let Some(plan) = emitter.needs_adapter(from, to) {
             CoercionKind::WrapAsInterface(plan)
+        } else if needs_newtype_wrap(emitter, from, to) {
+            CoercionKind::WrapNewtype { ty: to.clone() }
         } else {
             CoercionKind::Identity
         };
@@ -135,6 +140,10 @@ impl Coercion {
                 let adapter_name = emitter.ensure_adapter_type(plan);
                 format!("{}{{inner: {}}}", adapter_name, value)
             }
+            CoercionKind::WrapNewtype { ty } => {
+                let type_name = emitter.go_type_as_string(&ty);
+                format!("{}({})", type_name, value)
+            }
             CoercionKind::UnwrapNullableOption { ty } => {
                 emitter.emit_option_unwrap_to_nullable(output, &value, &ty)
             }
@@ -180,6 +189,16 @@ impl Emitter<'_> {
         let coercion = Coercion::resolve(self, &expression.get_type(), target);
         coercion.apply(self, output, emitted)
     }
+}
+
+fn needs_newtype_wrap(emitter: &Emitter, from: &Type, to: &Type) -> bool {
+    if from == to {
+        return false;
+    }
+    let Some(underlying) = emitter.get_newtype_underlying(to) else {
+        return false;
+    };
+    underlying == *from
 }
 
 fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {

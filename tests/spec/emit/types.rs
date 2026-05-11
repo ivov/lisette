@@ -1909,6 +1909,55 @@ fn test() {
 }
 
 #[test]
+fn typed_let_loop_interface_declares_annotated_type() {
+    let input = r#"
+interface Printable {
+  fn text(self) -> string
+}
+
+struct A {}
+struct B {}
+
+impl A { fn text(self) -> string { "a" } }
+impl B { fn text(self) -> string { "b" } }
+
+fn test() {
+  let mut p: Printable = loop {
+    break A {}
+  }
+  p = B {}
+  let _ = p
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn typed_let_propagate_interface_declares_annotated_type() {
+    let input = r#"
+interface Printable {
+  fn text(self) -> string
+}
+
+struct A {}
+struct B {}
+
+impl A { fn text(self) -> string { "a" } }
+impl B { fn text(self) -> string { "b" } }
+
+fn make_a() -> Result<A, string> { Ok(A {}) }
+
+fn run() -> Result<(), string> {
+  let mut p: Printable = make_a()?
+  p = B {}
+  let _ = p
+  Ok(())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn json_tagged_struct_field_access() {
     let input = r#"
 #[json]
