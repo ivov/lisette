@@ -4,7 +4,7 @@ use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::write_line;
 use ecow::EcoString;
 use syntax::program::{Definition, DefinitionBody, Interface};
-use syntax::types::{Type, unqualified_name};
+use syntax::types::{Type, build_substitution_map, substitute, unqualified_name};
 pub(crate) struct AdapterPlan {
     pub(crate) concrete_id: EcoString,
     pub(crate) interface_id: EcoString,
@@ -107,7 +107,12 @@ impl Emitter<'_> {
         };
 
         let source_stripped = source_ty.strip_refs();
-        let Type::Nominal { id: source_id, .. } = &source_stripped else {
+        let Type::Nominal {
+            id: source_id,
+            params: source_params,
+            ..
+        } = &source_stripped
+        else {
             return None;
         };
         if source_id.starts_with(GO_IMPORT_PREFIX) {
@@ -116,6 +121,7 @@ impl Emitter<'_> {
         let Some(Definition {
             body:
                 DefinitionBody::Struct {
+                    generics: struct_generics,
                     methods: struct_methods,
                     ..
                 },
@@ -124,6 +130,8 @@ impl Emitter<'_> {
         else {
             return None;
         };
+
+        let subst_map = build_substitution_map(struct_generics, source_params);
 
         let all_interface_methods = self.collect_all_interface_methods(target_id, definition);
         let mut methods = Vec::with_capacity(all_interface_methods.len());
@@ -142,9 +150,12 @@ impl Emitter<'_> {
             let method_params: Vec<Type> = if params.is_empty() {
                 Vec::new()
             } else {
-                params[1..].to_vec()
+                params[1..]
+                    .iter()
+                    .map(|p| substitute(p, &subst_map))
+                    .collect()
             };
-            let return_ty = (**return_type).clone();
+            let return_ty = substitute(return_type, &subst_map);
 
             // Compute the natural shape once and shift it for the interface
             // side if a `#[go(...)]` hint applies, instead of re-walking
@@ -249,11 +260,27 @@ impl Emitter<'_> {
             depth += 1;
             t = t.inner().expect("Ref<T> must have inner").clone();
         }
-        if depth == 0 {
-            concrete_id.clone()
-        } else {
-            EcoString::from("*".repeat(depth) + concrete_id.as_str())
-        }
+        let params = match &t {
+            Type::Nominal { params, .. } if !params.is_empty() => Some(params),
+            _ => None,
+        };
+        let params_suffix = params
+            .map(|ps| {
+                let joined = ps
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("<{joined}>")
+            })
+            .unwrap_or_default();
+
+        EcoString::from(format!(
+            "{}{}{}",
+            "*".repeat(depth),
+            concrete_id.as_str(),
+            params_suffix
+        ))
     }
 
     pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {

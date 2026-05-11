@@ -4837,6 +4837,48 @@ fn main() {
 }
 
 #[test]
+fn generic_struct_adapter_substitutes_and_deduplicates_per_instantiation() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct Entry<T> {
+  value: T,
+}
+
+pub interface Cache<T> {
+  #[go(comma_ok)]
+  fn get(key: string) -> Option<Ref<Entry<T>>>
+}
+
+struct MyCache<T> {
+  entry: Entry<T>,
+}
+
+impl<T> MyCache<T> {
+  fn get(self, _key: string) -> Option<Ref<Entry<T>>> {
+    None
+  }
+}
+
+fn use_int(_c: Cache<int>) {}
+fn use_string(_c: Cache<string>) {}
+
+fn main() {
+  let ci = MyCache { entry: Entry { value: 1 } }
+  let cs = MyCache { entry: Entry { value: "x" } }
+  use_int(ci as Cache<int>)
+  use_string(cs as Cache<string>)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn result_with_pointer_error_lowers_to_native_tuple() {
     let mut fs = MockFileSystem::new();
 
