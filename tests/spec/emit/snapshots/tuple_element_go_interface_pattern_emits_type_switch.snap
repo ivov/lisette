@@ -1,0 +1,19 @@
+---
+source: tests/spec/emit/patterns.rs
+assertion_line: 1203
+description: "input: \nimport \"go:example.com/events\"\n\nfn describe(pair: (events.Event, int)) -> int {\n  match pair {\n    (events.Token(s), _) => s.length(),\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/events"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func describe(pair lisette.Tuple2[events.Event, int]) int {
+	if func() bool { _, ok := pair.First.(events.Token); return ok }() {
+		s := string(pair.First.(events.Token))
+		return len(s)
+	}
+	return 0
+}

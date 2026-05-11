@@ -1160,3 +1160,64 @@ fn test() -> string {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn newtype_pattern_on_go_interface_emits_type_switch() {
+    let input = r#"
+import "go:example.com/events"
+
+fn describe(e: events.Event) -> int {
+  match e {
+    events.Token(s) => s.length(),
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Token(string)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}
+
+#[test]
+fn tuple_element_go_interface_pattern_emits_type_switch() {
+    let input = r#"
+import "go:example.com/events"
+
+fn describe(pair: (events.Event, int)) -> int {
+  match pair {
+    (events.Token(s), _) => s.length(),
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Token(string)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}
+
+#[test]
+fn struct_field_go_interface_pattern_emits_type_switch() {
+    let input = r#"
+import "go:example.com/events"
+
+struct Box {
+  e: events.Event,
+}
+
+fn describe(b: Box) -> int {
+  match b {
+    Box { e: events.Token(s) } => s.length(),
+    _ => 0,
+  }
+}
+"#;
+    let typedef = r#"
+pub interface Event {}
+pub struct Token(string)
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
+}

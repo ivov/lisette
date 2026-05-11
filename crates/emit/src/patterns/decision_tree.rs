@@ -22,6 +22,10 @@ pub(crate) enum PathSegment {
     Deref,
     /// `GoType(expression)` — newtype cast to underlying Go type
     NewtypeCast(String),
+    /// `expression.(GoType)` — Go interface type assertion. Inserted when a
+    /// concrete pattern targets a Go interface at a non-root path, so child
+    /// paths reach the asserted concrete value rather than the interface.
+    AssertedAs(String),
 }
 
 /// A path from the match subject to a nested value, built up during compilation.
@@ -34,6 +38,11 @@ impl AccessPath {
     /// The root path (the match subject itself).
     pub(crate) fn root() -> Self {
         Self { segments: vec![] }
+    }
+
+    /// True if this is the root path (no segments).
+    pub(crate) fn is_root(&self) -> bool {
+        self.segments.is_empty()
     }
 
     /// Append a segment, returning a new path (non-mutating).
@@ -65,6 +74,9 @@ impl AccessPath {
                     } else {
                         format!("{}({})", ty, result)
                     }
+                }
+                PathSegment::AssertedAs(ty) => {
+                    result = format!("{}.({})", result, ty);
                 }
             }
         }
@@ -152,9 +164,20 @@ impl Check {
                     joined
                 }
             }
-            // Type assertions are emitted via type switches, not boolean conditions.
-            // This path is only reached when a guard prevents switch compilation.
-            Check::TypeAssert { .. } => "false".to_string(),
+            // Type assertions at a root path are emitted via type switches; at
+            // nested paths, render as a boolean using Go's comma-ok form inside
+            // an immediately-invoked function literal.
+            Check::TypeAssert { path, go_type } => {
+                if path.is_root() {
+                    "false".to_string()
+                } else {
+                    format!(
+                        "func() bool {{ _, ok := {}.({}); return ok }}()",
+                        path.render(subject),
+                        go_type,
+                    )
+                }
+            }
         }
     }
 
@@ -366,6 +389,9 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
     } else if first_check.as_literal().is_some() {
         (SwitchKind::Value, first_check.path()?.clone())
     } else if let Some((_, path)) = first_check.as_type_switch_case() {
+        if !path.is_root() {
+            return None;
+        }
         (SwitchKind::TypeSwitch, path.clone())
     } else {
         return None;
@@ -565,7 +591,7 @@ fn collect_checks_and_bindings(
         }
 
         Pattern::EnumVariant { .. } => {
-            collect_enum_variant_checks(emitter, path, pattern, typed, collector);
+            collect_enum_variant_checks(emitter, path, pattern, typed, path_ty, collector);
         }
 
         Pattern::Struct { .. } => {
@@ -578,6 +604,12 @@ fn collect_checks_and_bindings(
                 _ => vec![None; elements.len()],
             };
 
+            let stripped_path_ty = path_ty.map(Type::strip_refs);
+            let element_tys: Option<&[Type]> = match &stripped_path_ty {
+                Some(Type::Tuple(tys)) => Some(tys.as_slice()),
+                _ => None,
+            };
+
             for (i, element) in elements.iter().enumerate() {
                 let field_name = TUPLE_FIELDS.get(i).expect("oversize tuple arity");
                 let field_path = path.push(PathSegment::Field(field_name.to_string()));
@@ -586,7 +618,7 @@ fn collect_checks_and_bindings(
                     &field_path,
                     element,
                     typed_elements.get(i).copied().flatten(),
-                    None,
+                    element_tys.and_then(|tys| tys.get(i)),
                     collector,
                 );
             }
@@ -739,12 +771,38 @@ fn compute_struct_field_path(
     parent_path.push(PathSegment::Field(go_field_name))
 }
 
+/// When a concrete pattern targets a Go-interface scrutinee, push a TypeAssert
+/// check and return the path child patterns should read from. At root, child
+/// paths stay as-is and the type switch shadows the subject; at nested paths,
+/// child paths gain an `AssertedAs` segment so they reach the asserted value.
+fn interface_assert_child_path(
+    emitter: &mut Emitter,
+    path: &AccessPath,
+    pattern_ty: &Type,
+    path_ty: Option<&Type>,
+    collector: &mut PatternCollector,
+) -> Option<AccessPath> {
+    path_ty.filter(|st| emitter.as_interface(st).is_some())?;
+    let go_type = emitter.go_type_as_string(pattern_ty);
+    let child_path = if path.is_root() {
+        path.clone()
+    } else {
+        path.push(PathSegment::AssertedAs(go_type.clone()))
+    };
+    collector.checks.push(Check::TypeAssert {
+        path: path.clone(),
+        go_type,
+    });
+    Some(child_path)
+}
+
 /// Collect checks and bindings for an enum variant pattern (tuple or tagged).
 fn collect_enum_variant_checks(
     emitter: &mut Emitter,
     path: &AccessPath,
     pattern: &Pattern,
     typed: Option<&TypedPattern>,
+    path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) {
     let Pattern::EnumVariant {
@@ -775,10 +833,12 @@ fn collect_enum_variant_checks(
     };
 
     if emitter.is_tuple_struct_type(ty) {
+        let child_path = interface_assert_child_path(emitter, path, ty, path_ty, collector)
+            .unwrap_or_else(|| path.clone());
         if emitter.is_newtype_struct(ty) {
-            collect_newtype_checks(emitter, path, &variant_data, collector);
+            collect_newtype_checks(emitter, &child_path, &variant_data, collector);
         } else {
-            collect_tuple_struct_checks(emitter, path, fields, &typed_children, collector);
+            collect_tuple_struct_checks(emitter, &child_path, fields, &typed_children, collector);
         }
         return;
     }
@@ -980,13 +1040,10 @@ fn collect_struct_checks(
         return;
     };
 
-    let enum_info = if path_ty.is_some_and(|st| emitter.as_interface(st).is_some()) {
-        let go_type = emitter.go_type_as_string(ty);
-        collector.checks.push(Check::TypeAssert {
-            path: path.clone(),
-            go_type,
-        });
-        None
+    let (enum_info, child_path) = if let Some(asserted) =
+        interface_assert_child_path(emitter, path, ty, path_ty, collector)
+    {
+        (None, asserted)
     } else {
         let enum_info = detect_enum_info(emitter, ty, identifier, typed);
         if enum_info.is_some() {
@@ -1002,7 +1059,7 @@ fn collect_struct_checks(
                 needs_stdlib: resolved.needs_stdlib,
             });
         }
-        enum_info
+        (enum_info, path.clone())
     };
 
     let typed_fields_map: Option<Vec<(&str, Option<&TypedPattern>)>> = match typed {
@@ -1023,6 +1080,18 @@ fn collect_struct_checks(
         _ => None,
     };
 
+    let field_tys: Vec<(&str, &Type)> = match typed {
+        Some(TypedPattern::Struct { struct_fields, .. }) => struct_fields
+            .iter()
+            .map(|f| (f.name.as_str(), &f.ty))
+            .collect(),
+        Some(TypedPattern::EnumStructVariant { variant_fields, .. }) => variant_fields
+            .iter()
+            .map(|f| (f.name.as_str(), &f.ty))
+            .collect(),
+        _ => Vec::new(),
+    };
+
     for field in fields {
         let typed_child = typed_fields_map
             .as_ref()
@@ -1031,18 +1100,22 @@ fn collect_struct_checks(
 
         let field_path = compute_struct_field_path(
             emitter,
-            path,
+            &child_path,
             field,
             ty,
             enum_info.as_ref(),
             typed_variant_fields,
         );
+        let field_ty = field_tys
+            .iter()
+            .find(|(name, _)| *name == field.name)
+            .map(|(_, ty)| *ty);
         collect_checks_and_bindings(
             emitter,
             &field_path,
             &field.value,
             typed_child,
-            None,
+            field_ty,
             collector,
         );
     }
