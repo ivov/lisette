@@ -377,7 +377,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 
 // isFluentBuilderCandidate gates AST inspection. Clone/Copy return new values despite the fluent shape.
 func isFluentBuilderCandidate(result *ConvertResult, exp extract.SymbolExport, sig *types.Signature) bool {
-	if result.Receiver == nil || !result.Receiver.IsPointer || exp.IsPromoted {
+	if result.Receiver == nil || !result.Receiver.IsPointer {
 		return false
 	}
 	if result.Name == "Clone" || result.Name == "Copy" {

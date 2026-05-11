@@ -23,8 +23,14 @@ pub struct Coord {
   pub Y: int,
 }
 
+pub struct Engine {
+  pub Inner: Inner,
+}
+
 /// Pointer receiver returning a *different* concrete type — must not be marked.
 pub type Group
+
+pub type Inner
 
 /// Copy-and-modify pattern (slog.Logger.With shape) — must not be marked.
 /// Body assigns to a local and returns the local.
@@ -79,6 +85,22 @@ impl Config {
 
 impl Coord {
   fn Translate(self, dx: int, dy: int) -> Coord
+}
+
+impl Engine {
+  #[allow(unused_value)]
+  fn Get(self: Ref<Engine>, path: string) -> Router
+  fn NewGroup(self: Ref<Engine>) -> Ref<Group>
+  #[allow(unused_value)]
+  fn Post(self: Ref<Engine>, path: string) -> Router
+}
+
+impl Inner {
+  #[allow(unused_value)]
+  fn Get(self: Ref<Inner>, path: string) -> Router
+  fn NewGroup(self: Ref<Inner>) -> Ref<Group>
+  #[allow(unused_value)]
+  fn Post(self: Ref<Inner>, path: string) -> Router
 }
 
 impl Logger {
