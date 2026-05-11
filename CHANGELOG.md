@@ -1,6 +1,16 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.3](https://github.com/ivov/lisette/compare/lisette-v0.2.2...lisette-v0.2.3) - 2026-05-11
+
+- fix: detect fluent builders on promoted methods [#388](https://github.com/ivov/lisette/pull/388) [`50190aa`](https://github.com/ivov/lisette/commit/50190aa4a29c1dc45159d4a627296cfb4dacf646)
+- ci: auto-publish vsix to marketplace and open-vsx registry [#387](https://github.com/ivov/lisette/pull/387) [`49ec00a`](https://github.com/ivov/lisette/commit/49ec00a326716b23900e38590bec2b43986c393c)
+- refactor: improve diagnostics for keyword-named bindings [#386](https://github.com/ivov/lisette/pull/386) [`7dff8db`](https://github.com/ivov/lisette/commit/7dff8dbe8d88faa9793d18470876bf0674f75be8)
+- fix: derive bindgen param names from types [#385](https://github.com/ivov/lisette/pull/385) [`40ff880`](https://github.com/ivov/lisette/commit/40ff880da2cb0756910699a72be6d71ed7f9ef0f)
+- perf: parallelize module-graph parsing [#384](https://github.com/ivov/lisette/pull/384) [`89d0b74`](https://github.com/ivov/lisette/commit/89d0b74f70214f8f7b0990d3c38df69066146758)
+- refactor: trim dead temps and discards from emitted Go [#383](https://github.com/ivov/lisette/pull/383) [`69179a9`](https://github.com/ivov/lisette/commit/69179a98a55b1438a51959d4e0d82c8e1fca1b74)
+- perf: skip per-file gofmt during build [#381](https://github.com/ivov/lisette/pull/381) [`3f7a395`](https://github.com/ivov/lisette/commit/3f7a395a77c2dab18cda281997a873ec43eeb65f)
+- fix: support Option<T> when T is a fn type alias [#379](https://github.com/ivov/lisette/pull/379) [`417a247`](https://github.com/ivov/lisette/commit/417a24717d77ad40ba504c7783bb188742217ab3)
 ## [0.2.2](https://github.com/ivov/lisette/compare/lisette-v0.2.1...lisette-v0.2.2) - 2026-05-10
 
 - feat: third-party Go dependencies [#374](https://github.com/ivov/lisette/pull/374) [`5276b12`](https://github.com/ivov/lisette/commit/5276b12f3897f2a33bca1eab0dab2947d27a443a)
