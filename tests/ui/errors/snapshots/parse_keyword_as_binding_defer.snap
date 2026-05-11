@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Reserved keyword
+   ╭─[test.lis:3:7]
+ 2 │ fn main() {
+ 3 │   let defer = 1
+   ·       ──┬──
+   ·         ╰── reserved keyword
+ 4 │ }
+   ╰────
+  help: Rename this binding. `defer` is a keyword reserved for scheduling cleanup · code: [parse.keyword_as_binding]

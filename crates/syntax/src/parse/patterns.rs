@@ -64,9 +64,36 @@ impl<'source> Parser<'source> {
         if self.current_token().kind.is_keyword() {
             let keyword = self.current_token().text.to_string();
             let span = self.span_from_token(start);
+            let help = match keyword.as_str() {
+                "task" => {
+                    "Rename this binding. `task` is a keyword reserved for spawning concurrent work"
+                        .to_string()
+                }
+                "type" => {
+                    "Rename this binding. `type` is a keyword reserved for declaring named types"
+                        .to_string()
+                }
+                "select" => {
+                    "Rename this binding. `select` is a keyword reserved for waiting on multiple channel operations"
+                        .to_string()
+                }
+                "match" => {
+                    "Rename this binding. `match` is a keyword reserved for pattern matching"
+                        .to_string()
+                }
+                "recover" => {
+                    "Rename this binding. `recover` is a keyword reserved for catching panics"
+                        .to_string()
+                }
+                "defer" => {
+                    "Rename this binding. `defer` is a keyword reserved for scheduling cleanup"
+                        .to_string()
+                }
+                _ => format!("Rename binding `{}`", keyword),
+            };
             let error = ParseError::new("Reserved keyword", span, "reserved keyword")
                 .with_parse_code("keyword_as_binding")
-                .with_help(format!("Rename binding `{}`", keyword));
+                .with_help(help);
             self.errors.push(error);
             self.next();
             return Pattern::Identifier {

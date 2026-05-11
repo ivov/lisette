@@ -4042,6 +4042,56 @@ fn walk_dir(root: string, fn: string) {}
 }
 
 #[test]
+fn parse_keyword_as_binding_task() {
+    let input = r#"
+fn main() {
+  let task = || {}
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_keyword_as_binding_select() {
+    let input = r#"
+fn main() {
+  let select = "SELECT * FROM users"
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_keyword_as_binding_match_kw() {
+    let input = r#"
+fn main() {
+  let match = 1
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_keyword_as_binding_recover() {
+    let input = r#"
+fn main() {
+  let recover = 1
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_keyword_as_binding_defer() {
+    let input = r#"
+fn main() {
+  let defer = 1
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_keyword_as_binding_in_for_loop() {
     let input = r#"
 fn main() {
