@@ -4,7 +4,7 @@ use crate::Emitter;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
 use crate::types::coercion::Coercion;
-use crate::utils::Staged;
+use crate::utils::{Staged, mask_go_string_literals};
 use crate::write_line;
 use syntax::ast::{Annotation, Expression, UnaryOperator};
 use syntax::types::Type;
@@ -73,11 +73,32 @@ fn collapse_fmt_print(function_string: &str, args_strings: &[String], call_str: 
     if let Some(inner) = arg
         .strip_prefix("fmt.Sprint(")
         .and_then(|s| s.strip_suffix(')'))
+        && is_single_top_level_arg(inner)
     {
         return format!("{}({})", function_string, inner);
     }
 
     call_str
+}
+
+/// True when `args` has no comma at top-level paren depth — i.e. represents a
+/// single argument. Commas inside nested parens/brackets/braces or inside
+/// string literals do not split.
+fn is_single_top_level_arg(args: &str) -> bool {
+    if args.is_empty() {
+        return false;
+    }
+    let masked = mask_go_string_literals(args);
+    let mut depth: i32 = 0;
+    for &b in masked.as_bytes() {
+        match b {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth -= 1,
+            b',' if depth == 0 => return false,
+            _ => {}
+        }
+    }
+    true
 }
 
 impl Emitter<'_> {

@@ -39,14 +39,15 @@ func (r Res) String() string {
 }
 
 func test(r Res, threshold int) int {
-	if r.Tag == ResOk {
-		x := r.Ok
+	subject_1 := r
+	if subject_1.Tag == ResOk {
+		x := subject_1.Ok
 		if x > threshold {
 			return 100
 		}
 	}
-	if r.Tag == ResErr {
-		x := r.Err
+	if subject_1.Tag == ResErr {
+		x := subject_1.Err
 		if x > threshold {
 			return 100
 		}

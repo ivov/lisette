@@ -49,14 +49,15 @@ func (e E) String() string {
 }
 
 func eval(e E) int {
-	if e.Tag == EA {
-		x := e.A.First
+	subject_1 := e
+	if subject_1.Tag == EA {
+		x := subject_1.A.First
 		if x > 0 {
 			return x
 		}
 	}
-	if e.Tag == EB {
-		x := e.B.First
+	if subject_1.Tag == EB {
+		x := subject_1.B.First
 		if x > 0 {
 			return x
 		}

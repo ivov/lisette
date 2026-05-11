@@ -279,7 +279,8 @@ impl Emitter<'_> {
         );
         let guard = DiscardGuard::new(output, receiver_var);
         if let Some((pattern, typed)) = inner_pattern {
-            let (checks, bindings) = decision_tree::collect_pattern_info(self, pattern, typed);
+            let (checks, bindings) =
+                decision_tree::collect_pattern_info(self, pattern, typed, None);
             if checks.is_empty() {
                 decision_tree::emit_tree_bindings(self, output, &bindings, receiver_var);
                 self.emit_in_position(output, ctx.body);
@@ -367,6 +368,7 @@ impl Emitter<'_> {
                         &receiver_var,
                         effective_pattern,
                         inner_typed,
+                        None,
                     );
                 }
             }
@@ -536,7 +538,7 @@ impl Emitter<'_> {
             }
             let inner_typed = Self::unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
             let (checks, bindings) =
-                decision_tree::collect_pattern_info(this, receiver_var_pattern, inner_typed);
+                decision_tree::collect_pattern_info(this, receiver_var_pattern, inner_typed, None);
             if checks.is_empty() {
                 decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
                 this.emit_in_position(output, &some_arm.expression);

@@ -490,6 +490,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
     ///
     /// This creates a temp variable and destructures from it.
     fn emit_complex_pattern(&mut self, output: &mut String) {
+        let value_ty = self.value.get_type();
         if let Expression::Identifier { value, .. } = self.value
             && !value.contains('.')
         {
@@ -500,12 +501,19 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
                 .get(value)
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| crate::escape_reserved(value).into_owned());
-            let (_checks, bindings) = decision_tree::collect_pattern_info(
+            let (mut checks, bindings) = decision_tree::collect_pattern_info(
                 self.emitter,
                 &self.binding.pattern,
                 self.binding.typed_pattern.as_ref(),
+                Some(&value_ty),
             );
-            decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &go_name);
+            let subject = decision_tree::apply_root_type_assertion(
+                self.emitter,
+                output,
+                &mut checks,
+                &go_name,
+            );
+            decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &subject);
             return;
         }
 
@@ -515,12 +523,15 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         write_line!(output, "{} := {}", temp_var, value_expression);
 
         let guard = DiscardGuard::new(output, &temp_var);
-        let (_checks, bindings) = decision_tree::collect_pattern_info(
+        let (mut checks, bindings) = decision_tree::collect_pattern_info(
             self.emitter,
             &self.binding.pattern,
             self.binding.typed_pattern.as_ref(),
+            Some(&value_ty),
         );
-        decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &temp_var);
+        let subject =
+            decision_tree::apply_root_type_assertion(self.emitter, output, &mut checks, &temp_var);
+        decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &subject);
         guard.finish(output);
     }
 
@@ -570,27 +581,58 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             return;
         }
 
-        let (checks, bindings) = decision_tree::collect_pattern_info(
+        let value_ty = self.value.get_type();
+        let (mut checks, bindings) = decision_tree::collect_pattern_info(
             self.emitter,
             &self.binding.pattern,
             self.binding.typed_pattern.as_ref(),
+            Some(&value_ty),
         );
 
-        if checks.is_empty() {
-            decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &subject_var);
-        } else {
-            let condition = decision_tree::render_condition(&checks, &subject_var);
-            let guard = if checks.len() == 1 {
-                negate_condition(&condition)
-            } else {
-                format!("!({})", condition)
+        let assert_go_type = decision_tree::take_root_type_assertion(&mut checks);
+        let (effective_subject, assert_ok_var): (std::borrow::Cow<'_, str>, _) =
+            match assert_go_type {
+                Some(go_type) => {
+                    let asserted = self.emitter.fresh_var(Some("asserted"));
+                    self.emitter.declare(&asserted);
+                    let ok = self.emitter.fresh_var(Some("ok"));
+                    self.emitter.declare(&ok);
+                    write_line!(
+                        output,
+                        "{}, {} := {}.({})",
+                        asserted,
+                        ok,
+                        subject_var,
+                        go_type,
+                    );
+                    (std::borrow::Cow::Owned(asserted), Some(ok))
+                }
+                None => (std::borrow::Cow::Borrowed(subject_var.as_str()), None),
             };
-            let guard = wrap_if_struct_literal(guard);
+
+        if checks.is_empty() && assert_ok_var.is_none() {
+            decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &effective_subject);
+        } else {
+            let mut guard_parts: Vec<String> = Vec::new();
+            if let Some(ref ok) = assert_ok_var {
+                guard_parts.push(format!("!{}", ok));
+            }
+            if !checks.is_empty() {
+                let condition = decision_tree::render_condition(&checks, &effective_subject);
+                let single = checks.len() == 1;
+                let negated = if single {
+                    negate_condition(&condition)
+                } else {
+                    format!("!({})", condition)
+                };
+                guard_parts.push(wrap_if_struct_literal(negated));
+            }
+            let guard = guard_parts.join(" || ");
             write_line!(output, "if {} {{", guard);
             self.emitter.emit_block(output, else_block);
             output.push_str("}\n");
 
-            decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &subject_var);
+            decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &effective_subject);
         }
 
         if let Some(guard) = subject_guard {
@@ -619,7 +661,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
 
         let collected: Vec<_> = patterns
             .iter()
-            .map(|alt| decision_tree::collect_pattern_info(self.emitter, alt, None))
+            .map(|alt| decision_tree::collect_pattern_info(self.emitter, alt, None, None))
             .collect();
 
         let irrefutable_idx = collected.iter().position(|(checks, _)| checks.is_empty());

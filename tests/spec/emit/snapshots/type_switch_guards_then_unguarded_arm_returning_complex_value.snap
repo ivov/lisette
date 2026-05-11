@@ -7,17 +7,18 @@ package main
 import "example.com/events"
 
 func handle(e events.Event) (int, bool) {
-	switch e := e.(type) {
+	subject_1 := e
+	switch subject_1 := subject_1.(type) {
 	case events.Click:
-		x := e.X
+		x := subject_1.X
 		if x > 100 {
 			return x * 10, true
 		}
-		x_1 := e.X
-		if x_1 > 0 {
-			return x_1, true
+		x_2 := subject_1.X
+		if x_2 > 0 {
+			return x_2, true
 		}
-		return -e.X, true
+		return -subject_1.X, true
 	default:
 		return *new(int), false
 	}

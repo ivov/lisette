@@ -134,7 +134,7 @@ impl Emitter<'_> {
         {
             let mut alternatives: Vec<_> = patterns
                 .iter()
-                .map(|alt| decision_tree::collect_pattern_info(self, alt, None))
+                .map(|alt| decision_tree::collect_pattern_info(self, alt, None, None))
                 .collect();
 
             let unused_names: rustc_hash::FxHashSet<String> = alternatives
@@ -164,7 +164,8 @@ impl Emitter<'_> {
             return;
         }
 
-        let (checks, bindings) = decision_tree::collect_pattern_info(self, pattern, typed_pattern);
+        let (checks, bindings) =
+            decision_tree::collect_pattern_info(self, pattern, typed_pattern, None);
         let condition = decision_tree::render_condition(&checks, &subject_var);
         write_line!(output, "if {} {{", condition);
         self.enter_scope();

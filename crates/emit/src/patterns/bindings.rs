@@ -9,7 +9,9 @@ use syntax::types::{Type, unqualified_name};
 use crate::Emitter;
 use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
 use crate::names::generics;
-use crate::patterns::decision_tree::{collect_pattern_info, emit_tree_bindings};
+use crate::patterns::decision_tree::{
+    apply_root_type_assertion, collect_pattern_info, emit_tree_bindings,
+};
 use crate::write_line;
 
 /// Shared access to a named, typed field — implemented for both
@@ -78,9 +80,11 @@ impl Emitter<'_> {
         subject: &str,
         pattern: &Pattern,
         typed: Option<&TypedPattern>,
+        subject_ty: Option<&Type>,
     ) {
-        let (_, bindings) = collect_pattern_info(self, pattern, typed);
-        emit_tree_bindings(self, output, &bindings, subject);
+        let (mut checks, bindings) = collect_pattern_info(self, pattern, typed, subject_ty);
+        let effective = apply_root_type_assertion(self, output, &mut checks, subject);
+        emit_tree_bindings(self, output, &bindings, &effective);
     }
 
     pub(crate) fn fresh_var(&mut self, hint: Option<&str>) -> String {

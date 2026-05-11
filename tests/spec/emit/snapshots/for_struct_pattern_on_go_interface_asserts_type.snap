@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nimport \"go:example.com/shapes\"\n\nfn sum(items: Slice<shapes.Shape>) -> int {\n  let mut total = 0\n  for shapes.Rect { W: w, H: h } in items {\n    total = total + w * h\n  }\n  total\n}\n"
+---
+package main
+
+import "example.com/shapes"
+
+func sum(items []shapes.Shape) int {
+	total := 0
+	for _, item_1 := range items {
+		asserted_2 := item_1.(shapes.Rect)
+		total += asserted_2.W * asserted_2.H
+	}
+	return total
+}

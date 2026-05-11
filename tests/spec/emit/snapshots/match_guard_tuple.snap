@@ -7,16 +7,17 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(pair lisette.Tuple2[int, int]) string {
+	subject_1 := pair
 	{
-		x := pair.First
-		y := pair.Second
+		x := subject_1.First
+		y := subject_1.Second
 		if x == y {
 			return "equal"
 		}
 	}
 	{
-		x := pair.First
-		y := pair.Second
+		x := subject_1.First
+		y := subject_1.Second
 		if x > y {
 			return "greater"
 		}

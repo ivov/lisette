@@ -126,7 +126,10 @@ impl Emitter<'_> {
         subject: &Expression,
         arms: &[MatchArm],
     ) -> String {
-        if let Expression::Identifier { value, .. } = subject {
+        let any_guard = arms.iter().any(|arm| arm.has_guard());
+        if let Expression::Identifier { value, .. } = subject
+            && !any_guard
+        {
             let name = value.to_string();
             let has_collision = arms
                 .iter()

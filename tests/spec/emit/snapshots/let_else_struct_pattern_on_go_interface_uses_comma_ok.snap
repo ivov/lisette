@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nimport \"go:example.com/shapes\"\n\nfn try_area(s: shapes.Shape) -> int {\n  let shapes.Rect { W: w, H: h } = s else { return -1 }\n  w * h\n}\n"
+---
+package main
+
+import "example.com/shapes"
+
+func try_area(s shapes.Shape) int {
+	asserted_1, ok_2 := s.(shapes.Rect)
+	if !ok_2 {
+		return -1
+	}
+	return asserted_1.W * asserted_1.H
+}

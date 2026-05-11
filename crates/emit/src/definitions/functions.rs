@@ -11,6 +11,9 @@ use syntax::ast::{
 };
 use syntax::types::Type;
 
+/// Owned param-destructure record: temp var, pattern, typed pattern, param type.
+type DeferredParamDestructure = (String, Pattern, Option<TypedPattern>, Type);
+
 impl Emitter<'_> {
     pub(crate) fn emit_function_body(
         &mut self,
@@ -149,7 +152,8 @@ impl Emitter<'_> {
 
         self.scope.bindings.save();
 
-        let mut destructure_bindings: Vec<(String, &Pattern, Option<&TypedPattern>)> = vec![];
+        let mut destructure_bindings: Vec<(String, &Pattern, Option<&TypedPattern>, &Type)> =
+            vec![];
 
         let param_pairs: Vec<(String, String)> = params
             .iter()
@@ -170,6 +174,7 @@ impl Emitter<'_> {
                         temp_name.clone(),
                         &p.pattern,
                         p.typed_pattern.as_ref(),
+                        &p.ty,
                     ));
                     temp_name
                 };
@@ -218,8 +223,14 @@ impl Emitter<'_> {
 
         let mut body_string = String::new();
 
-        for (temp_name, pattern, typed) in &destructure_bindings {
-            self.emit_pattern_bindings(&mut body_string, temp_name, pattern, *typed);
+        for (temp_name, pattern, typed, param_ty) in &destructure_bindings {
+            self.emit_pattern_bindings(
+                &mut body_string,
+                temp_name,
+                pattern,
+                *typed,
+                Some(param_ty),
+            );
         }
 
         self.emit_function_body(&mut body_string, body, should_return);
@@ -358,8 +369,14 @@ impl Emitter<'_> {
 
         let mut body = String::new();
 
-        for (var_name, pattern, typed) in deferred_patterns {
-            self.emit_pattern_bindings(&mut body, &var_name, &pattern, typed.as_ref());
+        for (var_name, pattern, typed, param_ty) in deferred_patterns {
+            self.emit_pattern_bindings(
+                &mut body,
+                &var_name,
+                &pattern,
+                typed.as_ref(),
+                Some(&param_ty),
+            );
         }
 
         self.emit_function_body(
@@ -486,7 +503,7 @@ impl Emitter<'_> {
     fn emit_function_params(
         &mut self,
         params_to_process: &[Binding],
-    ) -> (String, Vec<(String, Pattern, Option<TypedPattern>)>) {
+    ) -> (String, Vec<DeferredParamDestructure>) {
         let mut deferred_patterns = Vec::new();
         let mut params = Vec::new();
         for param in params_to_process {
@@ -506,6 +523,7 @@ impl Emitter<'_> {
                         var.clone(),
                         param.pattern.clone(),
                         param.typed_pattern.clone(),
+                        param.ty.clone(),
                     ));
                     var
                 }

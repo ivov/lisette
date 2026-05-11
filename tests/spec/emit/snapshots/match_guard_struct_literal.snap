@@ -20,14 +20,15 @@ func main() {
 		x: 1,
 		y: 2,
 	}
-match_1:
+	_ = p
+match_2:
 	for {
 		if (p == Point{
 			x: 1,
 			y: 2,
 		}) {
-			break match_1
+			break match_2
 		}
-		break match_1
+		break match_2
 	}
 }

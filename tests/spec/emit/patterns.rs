@@ -1221,3 +1221,73 @@ pub struct Token(string)
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/events", typedef)]);
 }
+
+#[test]
+fn let_struct_pattern_on_go_interface_asserts_type() {
+    let input = r#"
+import "go:example.com/shapes"
+
+fn area(s: shapes.Shape) -> int {
+  let shapes.Rect { W: w, H: h } = s
+  w * h
+}
+"#;
+    let typedef = r#"
+pub interface Shape {}
+pub struct Rect { pub W: int, pub H: int }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/shapes", typedef)]);
+}
+
+#[test]
+fn let_else_struct_pattern_on_go_interface_uses_comma_ok() {
+    let input = r#"
+import "go:example.com/shapes"
+
+fn try_area(s: shapes.Shape) -> int {
+  let shapes.Rect { W: w, H: h } = s else { return -1 }
+  w * h
+}
+"#;
+    let typedef = r#"
+pub interface Shape {}
+pub struct Rect { pub W: int, pub H: int }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/shapes", typedef)]);
+}
+
+#[test]
+fn param_struct_pattern_on_go_interface_asserts_type() {
+    let input = r#"
+import "go:example.com/shapes"
+
+fn area(shapes.Rect { W: w, H: h }: shapes.Shape) -> int {
+  w * h
+}
+"#;
+    let typedef = r#"
+pub interface Shape {}
+pub struct Rect { pub W: int, pub H: int }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/shapes", typedef)]);
+}
+
+#[test]
+fn for_struct_pattern_on_go_interface_asserts_type() {
+    let input = r#"
+import "go:example.com/shapes"
+
+fn sum(items: Slice<shapes.Shape>) -> int {
+  let mut total = 0
+  for shapes.Rect { W: w, H: h } in items {
+    total = total + w * h
+  }
+  total
+}
+"#;
+    let typedef = r#"
+pub interface Shape {}
+pub struct Rect { pub W: int, pub H: int }
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/shapes", typedef)]);
+}

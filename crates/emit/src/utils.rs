@@ -48,7 +48,7 @@ fn is_at_token_boundary(bytes: &[u8], pos: usize, token_len: usize) -> bool {
 
 /// Replace Go string/rune/raw-string contents with spaces, preserving byte
 /// positions. Borrows when no quote is present.
-fn mask_go_string_literals(go_text: &str) -> Cow<'_, str> {
+pub(crate) fn mask_go_string_literals(go_text: &str) -> Cow<'_, str> {
     if !go_text.bytes().any(|b| matches!(b, b'"' | b'\'' | b'`')) {
         return Cow::Borrowed(go_text);
     }
@@ -118,27 +118,73 @@ pub(crate) fn group_params(params: &[(String, String)]) -> String {
 
 /// Try to negate a simple comparison by flipping its operator.
 /// Returns `None` for compound expressions (`&&`/`||`) or non-comparisons.
+/// Only considers operators at the outermost paren depth that contains any
+/// token character, so a comparison inside a call argument or other inner
+/// parenthesized context is not mistaken for the expression being negated.
 /// Used by unary-not emission and let-else condition negation.
 pub(crate) fn try_flip_comparison(expression: &str) -> Option<String> {
-    let masked = mask_go_string_literals(expression);
-    if masked.contains(" && ") || masked.contains(" || ") {
-        return None;
-    }
-    for (op, flipped) in [
+    const FLIPS: &[(&str, &str)] = &[
         (" == ", " != "),
         (" != ", " == "),
         (" <= ", " > "),
         (" >= ", " < "),
         (" < ", " >= "),
         (" > ", " <= "),
-    ] {
-        if let Some(position) = masked.find(op) {
-            let lhs = &expression[..position];
-            let rhs = &expression[position + op.len()..];
-            return Some(format!("{}{}{}", lhs, flipped, rhs));
+    ];
+
+    let masked = mask_go_string_literals(expression);
+    let bytes = masked.as_bytes();
+
+    // The main operator may sit inside outer parens (e.g. `("x" == s)`), so
+    // pick the smallest depth where a non-paren, non-whitespace byte appears
+    // and look for operators at exactly that depth.
+    let mut depth: i32 = 0;
+    let mut target: Option<i32> = None;
+    for &b in bytes {
+        match b {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth -= 1,
+            b' ' | b'\t' | b'\n' | b'\r' => {}
+            _ => target = Some(target.map_or(depth, |d| d.min(depth))),
         }
     }
-    None
+    let target = target.unwrap_or(0);
+
+    let mut depth: i32 = 0;
+    let mut found: Option<(usize, usize, &str)> = None;
+    for i in 0..bytes.len() {
+        match bytes[i] {
+            b'(' | b'[' | b'{' => {
+                depth += 1;
+                continue;
+            }
+            b')' | b']' | b'}' => {
+                depth -= 1;
+                continue;
+            }
+            _ => {}
+        }
+        if depth != target {
+            continue;
+        }
+        let rest = &bytes[i..];
+        if rest.starts_with(b" && ") || rest.starts_with(b" || ") {
+            return None;
+        }
+        if found.is_none() {
+            for (op, flipped) in FLIPS {
+                if rest.starts_with(op.as_bytes()) {
+                    found = Some((i, op.len(), flipped));
+                    break;
+                }
+            }
+        }
+    }
+
+    let (position, op_len, flipped) = found?;
+    let lhs = &expression[..position];
+    let rhs = &expression[position + op_len..];
+    Some(format!("{}{}{}", lhs, flipped, rhs))
 }
 
 pub(crate) fn requires_temp_var(expression: &Expression) -> bool {

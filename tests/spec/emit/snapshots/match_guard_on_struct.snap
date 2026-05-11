@@ -16,16 +16,17 @@ func (p Point) String() string {
 }
 
 func test(p Point) string {
+	subject_1 := p
 	{
-		x := p.x
-		y := p.y
+		x := subject_1.x
+		y := subject_1.y
 		if x == y {
 			return "diagonal"
 		}
 	}
 	{
-		x := p.x
-		y := p.y
+		x := subject_1.x
+		y := subject_1.y
 		if x > y {
 			return "above"
 		}

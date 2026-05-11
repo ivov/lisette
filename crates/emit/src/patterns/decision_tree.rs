@@ -1264,11 +1264,12 @@ pub(super) fn compile_expanded_arms<'a>(
 }
 
 /// Collect checks and bindings from a single pattern for use outside match
-/// emission (let-else, while-let, for-loop, complex let).
+/// emission (let-else, while-let, for-loop, complex let, function param).
 pub(crate) fn collect_pattern_info(
     emitter: &mut Emitter,
     pattern: &Pattern,
     typed: Option<&TypedPattern>,
+    path_ty: Option<&Type>,
 ) -> (Vec<Check>, Vec<PatternBinding>) {
     let mut collector = PatternCollector::new();
     collect_checks_and_bindings(
@@ -1276,10 +1277,45 @@ pub(crate) fn collect_pattern_info(
         &AccessPath::root(),
         pattern,
         typed,
-        None,
+        path_ty,
         &mut collector,
     );
     (collector.checks, collector.bindings)
+}
+
+/// Pop a root-path `Check::TypeAssert` from `checks`. Most non-match callers
+/// want [`apply_root_type_assertion`] which handles the `asserted := s.(T)`
+/// emission; this lower-level form is for let-else, which folds the assertion
+/// into a comma-ok form.
+pub(crate) fn take_root_type_assertion(checks: &mut Vec<Check>) -> Option<String> {
+    let position = checks
+        .iter()
+        .position(|c| matches!(c, Check::TypeAssert { path, .. } if path.is_root()))?;
+    match checks.remove(position) {
+        Check::TypeAssert { go_type, .. } => Some(go_type),
+        _ => unreachable!(),
+    }
+}
+
+/// If `checks` contains a root `Check::TypeAssert` (concrete pattern against a
+/// Go-interface scrutinee), pop it, emit `asserted := subject.(T)`, and return
+/// the new subject. Otherwise borrow `subject` unchanged. Used by every
+/// non-match destructure path; let-else has its own comma-ok lowering.
+pub(crate) fn apply_root_type_assertion<'s>(
+    emitter: &mut Emitter,
+    output: &mut String,
+    checks: &mut Vec<Check>,
+    subject: &'s str,
+) -> std::borrow::Cow<'s, str> {
+    match take_root_type_assertion(checks) {
+        Some(go_type) => {
+            let var = emitter.fresh_var(Some("asserted"));
+            emitter.declare(&var);
+            write_line!(output, "{} := {}.({})", var, subject, go_type);
+            std::borrow::Cow::Owned(var)
+        }
+        None => std::borrow::Cow::Borrowed(subject),
+    }
 }
 
 /// Render checks as a Go condition string.

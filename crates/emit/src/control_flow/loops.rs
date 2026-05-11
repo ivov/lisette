@@ -171,9 +171,9 @@ impl Emitter<'_> {
             );
             let key_guard = DiscardGuard::new(output, &key_var);
             let value_guard = DiscardGuard::new(output, &value_var);
-            let (_, key_bindings) = decision_tree::collect_pattern_info(self, first, None);
+            let (_, key_bindings) = decision_tree::collect_pattern_info(self, first, None, None);
             decision_tree::emit_tree_bindings(self, output, &key_bindings, &key_var);
-            let (_, value_bindings) = decision_tree::collect_pattern_info(self, second, None);
+            let (_, value_bindings) = decision_tree::collect_pattern_info(self, second, None, None);
             decision_tree::emit_tree_bindings(self, output, &value_bindings, &value_var);
             self.emit_block(output, body);
             key_guard.finish(output);
@@ -214,10 +214,11 @@ impl Emitter<'_> {
         is_channel: bool,
         body: &Expression,
     ) {
-        let (_, bindings) = decision_tree::collect_pattern_info(
+        let (mut checks, bindings) = decision_tree::collect_pattern_info(
             self,
             &binding.pattern,
             binding.typed_pattern.as_ref(),
+            Some(&binding.ty),
         );
         if bindings.is_empty() {
             write_line!(output, "for range {} {{", iter_expression);
@@ -237,7 +238,9 @@ impl Emitter<'_> {
             );
         }
         let guard = DiscardGuard::new(output, &item_var);
-        decision_tree::emit_tree_bindings(self, output, &bindings, &item_var);
+        let effective_item =
+            decision_tree::apply_root_type_assertion(self, output, &mut checks, &item_var);
+        decision_tree::emit_tree_bindings(self, output, &bindings, &effective_item);
         self.emit_block(output, body);
         guard.finish(output);
         output.push_str("}\n");

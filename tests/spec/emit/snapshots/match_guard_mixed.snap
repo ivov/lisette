@@ -7,8 +7,9 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(opt lisette.Option[int]) string {
-	if opt.Tag == lisette.OptionSome {
-		if opt.SomeVal > 0 {
+	subject_1 := opt
+	if subject_1.Tag == lisette.OptionSome {
+		if subject_1.SomeVal > 0 {
 			return "positive"
 		}
 		return "non-positive"

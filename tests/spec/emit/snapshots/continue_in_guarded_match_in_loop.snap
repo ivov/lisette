@@ -8,13 +8,14 @@ func sum_positives(items []int) int {
 	sum := 0
 loop_1:
 	for _, item := range items {
-	match_2:
+		subject_2 := item
+	match_3:
 		for {
 			{
-				n := item
+				n := subject_2
 				if n > 0 {
 					sum += n
-					break match_2
+					break match_3
 				}
 			}
 			continue loop_1

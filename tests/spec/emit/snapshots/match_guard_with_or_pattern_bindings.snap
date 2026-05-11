@@ -47,20 +47,21 @@ func (e E) String() string {
 }
 
 func test(e E) int {
-	if e.Tag == EC {
-		x := e.C
+	subject_1 := e
+	if subject_1.Tag == EC {
+		x := subject_1.C
 		if x > 0 {
 			return x * 100
 		}
 	}
-	if e.Tag == EA {
-		x := e.A
+	if subject_1.Tag == EA {
+		x := subject_1.A
 		return x
 	}
-	if e.Tag == EB {
-		x := e.B
+	if subject_1.Tag == EB {
+		x := subject_1.B
 		return x
 	}
-	x := e.C
+	x := subject_1.C
 	return x
 }

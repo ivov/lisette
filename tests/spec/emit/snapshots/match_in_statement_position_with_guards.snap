@@ -11,18 +11,19 @@ import (
 
 func test() {
 	result := lisette.MakeResultOk[int, string](42)
-match_1:
+	subject_1 := result
+match_2:
 	for {
-		if result.Tag == lisette.ResultOk {
-			n := result.OkVal
+		if subject_1.Tag == lisette.ResultOk {
+			n := subject_1.OkVal
 			if n > 0 {
 				fmt.Printf("positive: %v\n", n)
-				break match_1
+				break match_2
 			}
 			fmt.Printf("non-positive: %v\n", n)
-			break match_1
+			break match_2
 		}
-		fmt.Printf("error: %v\n", result.ErrVal)
-		break match_1
+		fmt.Printf("error: %v\n", subject_1.ErrVal)
+		break match_2
 	}
 }

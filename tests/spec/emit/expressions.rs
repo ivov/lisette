@@ -215,6 +215,18 @@ fn test(s: string) -> bool {
 }
 
 #[test]
+fn unary_not_does_not_flip_comparison_inside_call_argument() {
+    let input = r#"
+fn always_false(b: bool) -> bool { false }
+
+fn test(x: int, y: int) -> bool {
+  !always_false(x == y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn parenthesized_expression() {
     let input = r#"
 fn test() -> int {
@@ -3925,6 +3937,30 @@ fn make_int() -> int { 2 }
 
 fn test() -> int {
   takes_two(1, &make_int())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fmt_println_does_not_collapse_multi_arg_sprint() {
+    let input = r#"
+import "go:fmt"
+
+fn test() {
+  fmt.Println(fmt.Sprint("a", "b"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fmt_println_still_collapses_single_arg_sprint() {
+    let input = r#"
+import "go:fmt"
+
+fn test(x: int) {
+  fmt.Println(fmt.Sprint(x))
 }
 "#;
     assert_emit_snapshot!(input);

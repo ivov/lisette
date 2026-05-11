@@ -2930,6 +2930,26 @@ fn test() {
 }
 
 #[test]
+fn match_guard_cannot_mutate_inlined_identifier_subject() {
+    let input = r#"
+fn bump_false(r: Ref<int>) -> bool {
+  r.* = 1
+  false
+}
+
+fn test() -> int {
+  let mut x = 0
+  match x {
+    0 if bump_false(&x) => -1,
+    1 => 1,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_in_recover_unused_subject() {
     let input = r#"
 struct P { v: int }

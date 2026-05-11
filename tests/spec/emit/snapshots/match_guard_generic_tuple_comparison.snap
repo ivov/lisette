@@ -16,8 +16,9 @@ func (w W[T]) String() string {
 
 func test() int {
 	w := W[int]{F0: 1}
+	subject_1 := w
 	{
-		if w == (W[int]{F0: 2}) {
+		if subject_1 == (W[int]{F0: 2}) {
 			return 0
 		}
 	}

@@ -7,9 +7,10 @@ package main
 import "example.com/events"
 
 func handle(e events.Event, active bool) int {
-	switch e := e.(type) {
+	subject_1 := e
+	switch subject_1 := subject_1.(type) {
 	case events.Click:
-		if e.X == 5 {
+		if subject_1.X == 5 {
 			if active {
 				return 1
 			}

@@ -47,18 +47,19 @@ func (e E) String() string {
 
 func test() {
 	e := MakeEC()
-match_1:
+	subject_1 := e
+match_2:
 	for {
-		if e.Tag == EA {
+		if subject_1.Tag == EA {
 			if false {
-				break match_1
+				break match_2
 			}
 		}
-		if e.Tag == EB {
+		if subject_1.Tag == EB {
 			if false {
-				break match_1
+				break match_2
 			}
 		}
-		break match_1
+		break match_2
 	}
 }
