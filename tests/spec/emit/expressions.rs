@@ -491,6 +491,71 @@ fn main() {
 }
 
 #[test]
+fn const_eligibility_does_not_leak_across_shadow() {
+    let input = r#"
+import "go:fmt"
+
+fn make() -> int {
+  2
+}
+
+fn main() {
+  const x = 1
+  let x = make()
+  const y = x
+  fmt.Println(y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn const_eligibility_does_not_leak_out_of_block() {
+    let input = r#"
+import "go:fmt"
+
+fn make() -> int {
+  2
+}
+
+fn main() {
+  {
+    const x = 1
+    fmt.Println(x)
+  }
+  let x = make()
+  const y = x
+  fmt.Println(y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn const_eligibility_does_not_leak_across_functions() {
+    let input = r#"
+import "go:fmt"
+
+fn make() -> int {
+  2
+}
+
+fn a() {
+  const x = 1
+  fmt.Println(x)
+}
+
+fn main() {
+  a()
+  let x = make()
+  const y = x
+  fmt.Println(y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn format_string_simple() {
     let input = r#"
 import "go:fmt"

@@ -275,8 +275,8 @@ struct ScopeState {
     loop_stack: Vec<LoopContext>,
     /// Go variable names currently used as block-to-var assign targets.
     assign_targets: HashSet<String>,
-    /// Go identifiers emitted as `const` (not `var`).
-    go_const_bindings: HashSet<String>,
+    /// Per-scope stack so const eligibility does not leak across siblings.
+    go_const_bindings: Vec<HashSet<String>>,
 }
 
 impl ScopeState {
@@ -285,6 +285,13 @@ impl ScopeState {
         self.bindings.reset();
         self.declared.clear();
         self.declared.push(HashSet::default());
+        self.go_const_bindings.truncate(1);
+    }
+}
+
+fn pop_keep_base<T>(stack: &mut Vec<T>) {
+    if stack.len() > 1 {
+        stack.pop();
     }
 }
 
@@ -459,7 +466,7 @@ impl<'a> Emitter<'a> {
                 scope_depth: 0,
                 loop_stack: Vec::new(),
                 assign_targets: HashSet::default(),
-                go_const_bindings: HashSet::default(),
+                go_const_bindings: vec![HashSet::default()],
             },
             current_module: current_module.to_string(),
             synthesized_adapter_types: HashMap::default(),
@@ -610,18 +617,39 @@ impl<'a> Emitter<'a> {
         self.scope.scope_depth += 1;
         self.scope.bindings.save();
         self.scope.declared.push(HashSet::default());
+        self.scope.go_const_bindings.push(HashSet::default());
     }
 
     pub(crate) fn exit_scope(&mut self) {
         self.scope.scope_depth = self.scope.scope_depth.saturating_sub(1);
         self.scope.bindings.restore();
-        if self.scope.declared.len() > 1 {
-            self.scope.declared.pop();
-        }
+        pop_keep_base(&mut self.scope.declared);
+        pop_keep_base(&mut self.scope.go_const_bindings);
     }
 
     pub(crate) fn current_module(&self) -> &str {
         &self.current_module
+    }
+
+    pub(crate) fn push_const_frame(&mut self) {
+        self.scope.go_const_bindings.push(HashSet::default());
+    }
+
+    pub(crate) fn pop_const_frame(&mut self) {
+        pop_keep_base(&mut self.scope.go_const_bindings);
+    }
+
+    pub(crate) fn record_go_const(&mut self, go_identifier: String) {
+        if let Some(top) = self.scope.go_const_bindings.last_mut() {
+            top.insert(go_identifier);
+        }
+    }
+
+    pub(crate) fn is_go_const_binding(&self, go_identifier: &str) -> bool {
+        self.scope
+            .go_const_bindings
+            .iter()
+            .any(|frame| frame.contains(go_identifier))
     }
 
     pub(crate) fn module_alias_for_type(&self, ty: &Type) -> Option<String> {

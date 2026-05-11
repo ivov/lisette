@@ -92,7 +92,7 @@ impl Emitter<'_> {
             &expression_string
         };
         let keyword = if self.is_go_const_eligible(expression) {
-            self.scope.go_const_bindings.insert(go_identifier.clone());
+            self.record_go_const(go_identifier.clone());
             "const"
         } else {
             "var"
@@ -112,7 +112,12 @@ impl Emitter<'_> {
                     | Literal::Char(_)
             ),
             Expression::Identifier { value, .. } => {
-                self.scope.go_const_bindings.contains(value.as_str())
+                let resolved = self
+                    .scope
+                    .bindings
+                    .get(value.as_str())
+                    .unwrap_or(value.as_str());
+                self.is_go_const_binding(resolved)
             }
             Expression::Binary { left, right, .. } => {
                 self.is_go_const_eligible(left) && self.is_go_const_eligible(right)

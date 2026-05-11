@@ -18,6 +18,17 @@ impl Emitter<'_> {
         body: &Expression,
         should_return: bool,
     ) {
+        self.push_const_frame();
+        self.emit_function_body_inner(output, body, should_return);
+        self.pop_const_frame();
+    }
+
+    fn emit_function_body_inner(
+        &mut self,
+        output: &mut String,
+        body: &Expression,
+        should_return: bool,
+    ) {
         let items: &[Expression] = if let Expression::Block { items, .. } = body {
             items
         } else {
