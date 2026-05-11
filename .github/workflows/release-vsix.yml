@@ -1,0 +1,65 @@
+name: Publish VS Code extension
+
+on:
+  push:
+    branches: [main]
+    paths: ["editors/vscode/package.json"]
+
+concurrency:
+  group: vscode-extension-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect version change
+        id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          CURR=$(jq -r .version editors/vscode/package.json)
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            PREV=""
+          else
+            PREV=$(git show "$BEFORE:editors/vscode/package.json" 2>/dev/null | jq -r .version || echo "")
+          fi
+          echo "prev=$PREV" >> "$GITHUB_OUTPUT"
+          echo "curr=$CURR" >> "$GITHUB_OUTPUT"
+          if [ "$PREV" = "$CURR" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # ratchet:pnpm/action-setup@v4
+        if: steps.detect.outputs.changed == 'true'
+        with:
+          version: 10
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
+        if: steps.detect.outputs.changed == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: editors/vscode/pnpm-lock.yaml
+
+      - name: Package and publish
+        if: steps.detect.outputs.changed == 'true'
+        working-directory: editors/vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm exec vsce package --no-dependencies -o lisette.vsix
+          pnpm exec vsce publish --packagePath lisette.vsix --skip-duplicate --pat "$VSCE_PAT"
+          pnpm exec ovsx publish lisette.vsix --skip-duplicate --pat "$OVSX_PAT"
