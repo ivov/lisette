@@ -142,9 +142,10 @@ pub fn self_type_not_supported(span: Span, impl_receiver: Option<&str>) -> Liset
 
 pub fn type_not_found(type_name: &str, annotation_span: Span) -> LisetteDiagnostic {
     let simple_name = type_name.rsplit('.').next().unwrap_or(type_name);
+    let qualifier_offset = (type_name.len() - simple_name.len()) as u32;
     let name_span = Span::new(
         annotation_span.file_id,
-        annotation_span.byte_offset,
+        annotation_span.byte_offset + qualifier_offset,
         simple_name.len() as u32,
     );
 
@@ -508,6 +509,11 @@ pub fn arity_mismatch(
     } else {
         "arguments"
     };
+    let actual_word = if actual_count == 1 {
+        "argument"
+    } else {
+        "arguments"
+    };
 
     LisetteDiagnostic::error("Wrong argument count")
         .with_infer_code("arg_count_mismatch")
@@ -516,7 +522,7 @@ pub fn arity_mismatch(
             format!("expected `({})`, found `({})`", expected_str, actual_str),
         )
         .with_help(format!(
-            "This {} expects {} {} but received {} arguments",
+            "This {} expects {} {} but received {} {}",
             if is_constructor {
                 "constructor"
             } else {
@@ -524,7 +530,8 @@ pub fn arity_mismatch(
             },
             expected_count,
             expected_word,
-            actual_count
+            actual_count,
+            actual_word
         ))
 }
 
@@ -558,6 +565,11 @@ pub fn generics_arity_mismatch(
     } else {
         "type parameters"
     };
+    let actual_word = if actual_count == 1 {
+        "type parameter"
+    } else {
+        "type parameters"
+    };
 
     let generics_span =
         if let (Some(first), Some(last)) = (actual_type_args.first(), actual_type_args.last()) {
@@ -580,8 +592,8 @@ pub fn generics_arity_mismatch(
             format!("expected `<{}>`, found `<{}>`", expected_str, actual_str),
         )
         .with_help(format!(
-            "This type expects {} {} but received {} type parameters",
-            expected_count, expected_word, actual_count
+            "This type expects {} {} but received {} {}",
+            expected_count, expected_word, actual_count, actual_word
         ))
 }
 
@@ -590,13 +602,23 @@ pub fn tuple_arity_mismatch(
     expected_arity: usize,
     span: Span,
 ) -> LisetteDiagnostic {
+    let expected_word = if expected_arity == 1 {
+        "element"
+    } else {
+        "elements"
+    };
+    let actual_word = if pattern_arity == 1 {
+        "element"
+    } else {
+        "elements"
+    };
     LisetteDiagnostic::error("Tuple arity mismatch")
         .with_infer_code("tuple_element_count_mismatch")
         .with_span_label(
             &span,
             format!(
-                "expected {} elements, found {} elements",
-                expected_arity, pattern_arity
+                "expected {} {}, found {} {}",
+                expected_arity, expected_word, pattern_arity, actual_word
             ),
         )
         .with_help("Adjust the pattern to match the number of elements in the tuple.")
@@ -604,7 +626,12 @@ pub fn tuple_arity_mismatch(
 
 pub fn struct_not_found(identifier: &str, span: Span) -> LisetteDiagnostic {
     let simple_name = identifier.rsplit('.').next().unwrap_or(identifier);
-    let name_span = Span::new(span.file_id, span.byte_offset, simple_name.len() as u32);
+    let qualifier_offset = (identifier.len() - simple_name.len()) as u32;
+    let name_span = Span::new(
+        span.file_id,
+        span.byte_offset + qualifier_offset,
+        simple_name.len() as u32,
+    );
 
     LisetteDiagnostic::error("Struct not found")
         .with_resolve_code("struct_not_found")
@@ -620,7 +647,12 @@ pub fn struct_missing_fields(
     let fields_list = missing.join(", ");
 
     let simple_name = struct_name.rsplit('.').next().unwrap_or(struct_name);
-    let name_span = Span::new(span.file_id, span.byte_offset, simple_name.len() as u32);
+    let qualifier_offset = (struct_name.len() - simple_name.len()) as u32;
+    let name_span = Span::new(
+        span.file_id,
+        span.byte_offset + qualifier_offset,
+        simple_name.len() as u32,
+    );
 
     LisetteDiagnostic::error(format!("Struct `{}` is missing fields", simple_name))
         .with_infer_code("missing_struct_fields")
@@ -649,7 +681,7 @@ pub fn pattern_missing_fields(missing: &[String], span: Span) -> LisetteDiagnost
 
 pub fn private_field_access(field_name: &str, struct_name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private field")
-        .with_resolve_code("private_field_spread")
+        .with_resolve_code("private_field_access")
         .with_span_label(&span, "private")
         .with_help(format!(
             "Cannot access private field `{}` of struct `{}`. Mark the field as `pub`.",
@@ -659,6 +691,7 @@ pub fn private_field_access(field_name: &str, struct_name: &str, span: Span) -> 
 
 pub fn private_method_access(method_name: &str, type_name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Private method")
+        .with_resolve_code("private_method_access")
         .with_span_label(&span, "private")
         .with_help(format!(
             "Cannot access private method `{}` of type `{}`. Mark the method as `pub`.",
@@ -878,7 +911,7 @@ pub fn binary_operator_type_mismatch(
 pub fn not_orderable(ty: &Type, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Type mismatch")
         .with_infer_code("type_mismatch")
-        .with_span_label(&span, format!("expected comparable, found `{}`", ty))
+        .with_span_label(&span, format!("expected orderable, found `{}`", ty))
         .with_help("Use comparison operators only with numeric, string, or boolean types")
 }
 
@@ -1005,13 +1038,6 @@ pub fn branch_type_mismatch(
             format!("this branch returns `{}`", alternative_ty),
         )
         .with_help("All branches must return the same type")
-}
-
-pub fn missing_else_branch(span: Span) -> LisetteDiagnostic {
-    LisetteDiagnostic::error("Missing `else` branch")
-        .with_infer_code("missing_else_branch")
-        .with_span_label(&span, "`else` branch required")
-        .with_help("Add an `else` branch")
 }
 
 pub fn let_else_must_diverge(span: Span) -> LisetteDiagnostic {
@@ -1169,7 +1195,7 @@ pub fn not_iterable(ty: &Type, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Not iterable")
         .with_infer_code("not_iterable")
         .with_span_label(&span, format!("`{}` is not iterable", ty))
-        .with_help("Use `Slice`, `Map`, `Range`, or `string`")
+        .with_help("Use `Slice`, `Map`, `Range`, `Channel`, or `string`")
 }
 
 pub fn tuple_literal_required_in_loop(span: Span) -> LisetteDiagnostic {
@@ -1269,7 +1295,7 @@ pub fn return_in_try_block(span: Span) -> LisetteDiagnostic {
         .with_infer_code("try_block_return")
         .with_span_label(&span, "not inside a function")
         .with_help(
-            "Use `return` inside a function, or use `Err(...)? ` to exit the `try` block early",
+            "Use `return` inside a function, or use `Err(...)?` to exit the `try` block early",
         )
 }
 
@@ -1277,16 +1303,14 @@ pub fn break_in_try_block(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`break` in `try` block")
         .with_infer_code("try_block_break")
         .with_span_label(&span, "not inside a loop")
-        .with_help("Use `break` inside a loop, or use `Err(...)? ` to exit the `try` block early")
+        .with_help("Use `break` inside a loop, or use `Err(...)?` to exit the `try` block early")
 }
 
 pub fn continue_in_try_block(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`continue` in `try` block")
         .with_infer_code("try_block_continue")
         .with_span_label(&span, "not inside a loop")
-        .with_help(
-            "Use `continue` inside a loop, or use `Err(...)? ` to exit the `try` block early",
-        )
+        .with_help("Use `continue` inside a loop, or use `Err(...)?` to exit the `try` block early")
 }
 
 pub fn recover_block_empty(span: Span) -> LisetteDiagnostic {
@@ -1349,17 +1373,17 @@ pub fn expected_channel_send(span: Span) -> LisetteDiagnostic {
         .with_help("Use `ch.send(value)` or `ch.receive()` in select arms")
 }
 
-pub fn bare_identifier_in_select_receive(span: &Span) -> LisetteDiagnostic {
+pub fn bare_identifier_in_select_receive(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid select case")
         .with_infer_code("bare_identifier_in_select_receive")
-        .with_span_label(span, "expected destructuring")
+        .with_span_label(&span, "expected destructuring")
         .with_help("`ch.receive()` returns an `Option`, so use `let Some(v) = ch.receive()` to bind the value")
 }
 
-pub fn none_pattern_in_select_receive(span: &Span) -> LisetteDiagnostic {
+pub fn none_pattern_in_select_receive(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Invalid select case")
         .with_infer_code("none_pattern_in_select_receive")
-        .with_span_label(span, "expected match")
+        .with_span_label(&span, "expected match")
         .with_help(
             "To detect channel close, use `match ch.receive() { Some(v) => ..., None => ... }`",
         )
@@ -1637,7 +1661,7 @@ pub fn interface_not_implemented(
                 .incompatible
                 .iter()
                 .map(|(name, expected, actual)| {
-                    format!("  - {}: found `{}`, expected `{}`", name, actual, expected)
+                    format!("  - {}: expected `{}`, found `{}`", name, expected, actual)
                 })
                 .collect();
             incompatible_sections.push((header, methods));
@@ -1748,7 +1772,7 @@ pub fn valueless_const_missing_annotation(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Missing const annotation")
         .with_infer_code("valueless_const_missing_annotation")
         .with_span_label(&span, "needs a type annotation")
-        .with_help("Value-less const declarations require a type annotation: `const MAX_SIZE: int`")
+        .with_help("Valueless const declarations require a type annotation: `const MAX_SIZE: int`")
 }
 
 pub fn variable_declaration_outside_typedef(span: Span) -> LisetteDiagnostic {
@@ -1838,11 +1862,11 @@ pub fn non_int_range_not_iterable(element_ty: &Type, span: Span) -> LisetteDiagn
         .with_help("Range iteration requires integer bounds")
 }
 
-pub fn only_slices_indexable_by_range(ty: &Type, span: &Span) -> LisetteDiagnostic {
+pub fn only_slices_indexable_by_range(ty: &Type, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Type mismatch")
         .with_infer_code("range_index_not_slice")
         .with_span_label(
-            span,
+            &span,
             format!("expected `Slice` or `string`, found `{}`", ty),
         )
         .with_help("Range indexing only works on `Slice` and `string`")

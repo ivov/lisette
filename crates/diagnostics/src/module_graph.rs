@@ -216,7 +216,7 @@ pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
     let help = if is_self_import {
         "Remove the self-import"
     } else {
-        "To break the cycle, remove one of imports or extract common dependencies into a separate module"
+        "To break the cycle, remove one of the imports or extract common dependencies into a separate module"
     };
 
     LisetteDiagnostic::error(format!("Import cycle detected\n\n{}", art))
