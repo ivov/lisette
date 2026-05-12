@@ -24,9 +24,7 @@ impl Emitter<'_> {
 
         let mut setup = String::new();
         let value_expr = self.emit_operand(&mut setup, expression);
-        let temp_var = self.fresh_var(Some(prefix));
-        self.declare(&temp_var);
-        write_line!(setup, "{} := {}", temp_var, value_expr);
+        let temp_var = self.hoist_tmp_value(&mut setup, prefix, &value_expr);
         Staged::new(setup, temp_var, expression)
     }
 
@@ -83,9 +81,7 @@ impl Emitter<'_> {
             && self.classify_direct_emission(return_type).is_some()
         {
             let mut setup = staged.setup;
-            let cb_var = self.fresh_var(Some("cb"));
-            self.declare(&cb_var);
-            write_line!(setup, "{} := {}", cb_var, staged.value);
+            let cb_var = self.hoist_tmp_value(&mut setup, "cb", &staged.value);
             let tagged = self.lower_arg_to_tagged(&mut setup, &cb_var, param_ty);
             return Staged::new(setup, tagged, expression);
         }
@@ -171,9 +167,7 @@ impl Emitter<'_> {
             output.push_str(&s.setup);
 
             if later_has_setup && s.needs_capture {
-                let tmp = self.fresh_var(Some(prefix));
-                self.declare(&tmp);
-                write_line!(output, "{} := {}", tmp, s.value);
+                let tmp = self.hoist_tmp_value(output, prefix, &s.value);
                 results.push(tmp);
             } else {
                 results.push(s.value.clone());

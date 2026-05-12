@@ -613,6 +613,20 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// Allocate a fresh Go temp, register it as declared, and emit
+    /// `tmp := value` into `output`.
+    pub(crate) fn hoist_tmp_value(
+        &mut self,
+        output: &mut String,
+        hint: &str,
+        value: &str,
+    ) -> String {
+        let tmp = self.fresh_var(Some(hint));
+        self.declare(&tmp);
+        utils::write_line!(output, "{} := {}", tmp, value);
+        tmp
+    }
+
     pub(crate) fn enter_scope(&mut self) {
         self.scope.scope_depth += 1;
         self.scope.bindings.save();

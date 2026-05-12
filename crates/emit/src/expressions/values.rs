@@ -477,9 +477,7 @@ impl Emitter<'_> {
             if !emitted.is_empty() {
                 write_line!(output, "{}", emitted);
             }
-            let tmp = self.fresh_var(Some("ref"));
-            self.declare(&tmp);
-            write_line!(output, "{} := struct{{}}{{}}", tmp);
+            let tmp = self.hoist_tmp_value(output, "ref", "struct{}{}");
             return format!("&{}", tmp);
         }
 
@@ -489,9 +487,7 @@ impl Emitter<'_> {
         } else if self.is_go_unaddressable(inner)
             || matches!(inner.get_type(), Type::Function { .. })
         {
-            let tmp = self.fresh_var(Some("ref"));
-            self.declare(&tmp);
-            write_line!(output, "{} := {}", tmp, emitted);
+            let tmp = self.hoist_tmp_value(output, "ref", &emitted);
             format!("&{}", tmp)
         } else {
             format!("&{}", emitted)

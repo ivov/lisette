@@ -7,7 +7,6 @@ use syntax::types::Type;
 use crate::Emitter;
 use crate::go_name;
 use crate::types::coercion::Coercion;
-use crate::write_line;
 
 impl Emitter<'_> {
     pub(crate) fn emit_dot_access(
@@ -167,9 +166,7 @@ impl Emitter<'_> {
             return None;
         }
         let raw_access = format!("{}.{}", expression_string, field);
-        let raw_var = self.fresh_var(Some("raw"));
-        self.declare(&raw_var);
-        write_line!(output, "{} := {}", raw_var, raw_access);
+        let raw_var = self.hoist_tmp_value(output, "raw", &raw_access);
         let coercion = Coercion::resolve_wrap_go_nullable(self, result_ty);
         Some(coercion.apply(self, output, raw_var))
     }
@@ -273,12 +270,7 @@ impl Emitter<'_> {
             _ if is_absorbed_ref => expression_string,
             (Some(ReceiverCoercion::AutoAddress), true) => expression_string,
             (Some(ReceiverCoercion::AutoAddress), false) => match expression.unwrap_parens() {
-                Expression::Call { .. } => {
-                    let tmp = self.fresh_var(Some("ref"));
-                    self.declare(&tmp);
-                    write_line!(output, "{} := {}", tmp, expression_string);
-                    tmp
-                }
+                Expression::Call { .. } => self.hoist_tmp_value(output, "ref", &expression_string),
                 Expression::StructCall { .. } => format!("(&{})", expression_string),
                 _ => expression_string,
             },

@@ -152,9 +152,7 @@ impl Emitter<'_> {
         call_str: &str,
         fallible: &Fallible,
     ) -> String {
-        let err_var = self.fresh_var(Some("ret"));
-        self.declare(&err_var);
-        write_line!(output, "{} := {}", err_var, call_str);
+        let err_var = self.hoist_tmp_value(output, "ret", call_str);
 
         let mut fe = FallibleEmitter::new(self, fallible);
         let result_ty_str = fe.full_type_string();
@@ -249,9 +247,7 @@ impl Emitter<'_> {
             AbiShape::PartialTuple => self.emit_partial_wrapping(output, call_str, result_ty),
             AbiShape::CommaOk => self.emit_comma_ok_wrapping(output, call_str, result_ty, false),
             AbiShape::NullableReturn => {
-                let raw_var = self.fresh_var(Some("raw"));
-                self.declare(&raw_var);
-                write_line!(output, "{} := {}", raw_var, call_str);
+                let raw_var = self.hoist_tmp_value(output, "raw", call_str);
                 self.emit_nil_check_option_wrap(output, &raw_var, result_ty)
             }
             AbiShape::ResultTuple | AbiShape::BareError => {
@@ -339,10 +335,7 @@ impl Emitter<'_> {
         }
 
         if is_order_sensitive(expression) {
-            let temp = self.fresh_var(Some("fn"));
-            self.declare(&temp);
-            write_line!(output, "{} := {}", temp, go_fn_str);
-            temp
+            self.hoist_tmp_value(output, "fn", &go_fn_str)
         } else {
             go_fn_str
         }
@@ -430,9 +423,7 @@ impl Emitter<'_> {
                 self.emit_comma_ok_wrapping(&mut body, &call_str, &return_type, true)
             }
             GoCallStrategy::NullableReturn => {
-                let raw_var = self.fresh_var(Some("raw"));
-                self.declare(&raw_var);
-                write_line!(body, "{} := {}", raw_var, call_str);
+                let raw_var = self.hoist_tmp_value(&mut body, "raw", &call_str);
                 self.emit_nil_check_option_wrap(&mut body, &raw_var, &return_type)
             }
             GoCallStrategy::Tuple { arity } => {
@@ -632,9 +623,7 @@ impl Emitter<'_> {
         let (param_strs, arg_names) = self.build_wrapper_params(params);
         let params_str = param_strs.join(", ");
 
-        let cb_var = self.fresh_var(Some("cb"));
-        self.declare(&cb_var);
-        write_line!(output, "{} := {}", cb_var, fn_value);
+        let cb_var = self.hoist_tmp_value(output, "cb", fn_value);
 
         let mut prelude = String::new();
         let inner_args: Vec<String> = arg_names

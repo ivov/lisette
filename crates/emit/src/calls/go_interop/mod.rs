@@ -3,7 +3,6 @@ mod wrappers;
 
 use crate::Emitter;
 use crate::names::go_name;
-use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -225,9 +224,6 @@ impl Emitter<'_> {
         tuple_ty: &Type,
     ) -> String {
         let constructor = self.build_tuple_literal(vars, tuple_ty);
-        let tuple_var = self.fresh_var(Some("tup"));
-        self.declare(&tuple_var);
-        write_line!(output, "{} := {}", tuple_var, constructor);
-        tuple_var
+        self.hoist_tmp_value(output, "tup", &constructor)
     }
 }

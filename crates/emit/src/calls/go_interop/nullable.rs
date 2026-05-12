@@ -36,9 +36,7 @@ impl Emitter<'_> {
         sentinel: i64,
     ) -> String {
         self.flags.needs_stdlib = true;
-        let raw = self.fresh_var(Some("ret"));
-        self.declare(&raw);
-        write_line!(output, "{} := {}", raw, call_str);
+        let raw = self.hoist_tmp_value(output, "ret", call_str);
         let inner_ty_str = self.go_type_as_string(&option_ty.ok_type());
         let option_var = self.fresh_var(Some("option"));
         self.declare(&option_var);
@@ -392,9 +390,7 @@ impl Emitter<'_> {
     ) -> String {
         let call_str = self.emit_call(output, call_expression, None);
 
-        let raw_var = self.fresh_var(Some("raw"));
-        self.declare(&raw_var);
-        write_line!(output, "{} := {}", raw_var, call_str);
+        let raw_var = self.hoist_tmp_value(output, "raw", &call_str);
 
         self.emit_nil_check_option_wrap(output, &raw_var, option_ty)
     }

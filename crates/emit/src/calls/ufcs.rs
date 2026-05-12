@@ -1,4 +1,3 @@
-use crate::write_line;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::Emitter;
@@ -121,9 +120,7 @@ impl Emitter<'_> {
         let receiver_arg = match coercion {
             Some(ReceiverCoercion::AutoAddress) => {
                 if matches!(receiver.unwrap_parens(), Expression::Call { .. }) {
-                    let tmp = self.fresh_var(Some("ref"));
-                    self.declare(&tmp);
-                    write_line!(output, "{} := {}", tmp, receiver_arg);
+                    let tmp = self.hoist_tmp_value(output, "ref", &receiver_arg);
                     format!("&{}", tmp)
                 } else {
                     format!("&{}", receiver_arg)

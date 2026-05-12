@@ -294,9 +294,7 @@ impl Emitter<'_> {
         if matches!(*field.value, Expression::Reference { .. }) || field.value.get_type().is_ref() {
             return value;
         }
-        let temp = self.fresh_var(Some("ptr"));
-        self.declare(&temp);
-        write_line!(output, "{} := {}", temp, value);
+        let temp = self.hoist_tmp_value(output, "ptr", &value);
         format!("&{}", temp)
     }
 
@@ -456,9 +454,7 @@ impl Emitter<'_> {
             .enumerate()
             .map(|(i, (name, value))| {
                 if field_side_effects.get(i).copied().unwrap_or(false) {
-                    let temp = self.fresh_var(Some("field"));
-                    self.declare(&temp);
-                    write_line!(output, "{} := {}", temp, value);
+                    let temp = self.hoist_tmp_value(output, "field", value);
                     (name.clone(), temp)
                 } else {
                     (name.clone(), value.clone())
@@ -467,10 +463,7 @@ impl Emitter<'_> {
             .collect();
 
         let base_string = self.emit_operand(output, base);
-        let tmp = self.fresh_var(Some("copy"));
-        self.declare(&tmp);
-
-        write_line!(output, "{} := {}", tmp, base_string);
+        let tmp = self.hoist_tmp_value(output, "copy", &base_string);
 
         for (name, value) in &fields {
             write_line!(output, "{}.{} = {}", tmp, name, value);

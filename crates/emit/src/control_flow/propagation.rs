@@ -45,13 +45,13 @@ impl Emitter<'_> {
         let check_var = if let Expression::Identifier { value, ty, .. } = expression {
             let go_name = self.emit_identifier(value, ty);
             if go_name.contains('(') {
-                self.capture_check_var(output, &go_name)
+                self.hoist_tmp_value(output, "check", &go_name)
             } else {
                 go_name
             }
         } else {
             let expression_string = self.emit_operand(output, expression);
-            self.capture_check_var(output, &expression_string)
+            self.hoist_tmp_value(output, "check", &expression_string)
         };
 
         let (result_var, result_var_pre_declared) = match result_var_name {
@@ -349,9 +349,7 @@ impl Emitter<'_> {
             .ty
             .clone();
         let value = self.emit_value(output, expression);
-        let temp = self.fresh_var(Some("tup"));
-        self.declare(&temp);
-        write_line!(output, "{} := {}", temp, value);
+        let temp = self.hoist_tmp_value(output, "tup", &value);
         self.emit_lowered_result_return(output, &temp, &return_ty, &AbiShape::Tuple { arity });
         true
     }
@@ -396,16 +394,6 @@ impl Emitter<'_> {
         let value = self.emit_value(output, expression);
         self.emit_lowered_result_return(output, &value, &return_ty, &AbiShape::PartialTuple);
         true
-    }
-
-    /// Assign the propagated expression to a fresh `check` temp so its
-    /// `.Tag`/`.ErrVal`/etc. can be read without re-evaluating the (possibly
-    /// effectful) underlying call.
-    fn capture_check_var(&mut self, output: &mut String, expression_string: &str) -> String {
-        let check_var = self.fresh_var(Some("check"));
-        self.declare(&check_var);
-        write_line!(output, "{} := {}", check_var, expression_string);
-        check_var
     }
 
     pub(crate) fn emit_option_result_assignment(
@@ -611,9 +599,7 @@ impl Emitter<'_> {
         if let Some(shape) = lowered {
             // The destructure references the value multiple times (`.Tag`,
             // `.OkVal`, `.ErrVal` etc.); hoist to avoid re-evaluating.
-            let temp = self.fresh_var(Some("v"));
-            self.declare(&temp);
-            write_line!(output, "{} := {}", temp, value);
+            let temp = self.hoist_tmp_value(output, "v", &value);
             self.emit_lowered_result_return(output, &temp, &return_ty, &shape);
         } else {
             write_line!(output, "return {}", value);
@@ -726,9 +712,7 @@ impl Emitter<'_> {
         }
         if let Some(shape) = lowered {
             let value = self.emit_value(output, expression);
-            let temp = self.fresh_var(Some("v"));
-            self.declare(&temp);
-            write_line!(output, "{} := {}", temp, value);
+            let temp = self.hoist_tmp_value(output, "v", &value);
             self.emit_lowered_result_return(output, &temp, return_ty, shape);
             return;
         }

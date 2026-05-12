@@ -1309,9 +1309,8 @@ pub(crate) fn apply_root_type_assertion<'s>(
 ) -> std::borrow::Cow<'s, str> {
     match take_root_type_assertion(checks) {
         Some(go_type) => {
-            let var = emitter.fresh_var(Some("asserted"));
-            emitter.declare(&var);
-            write_line!(output, "{} := {}.({})", var, subject, go_type);
+            let assertion = format!("{}.({})", subject, go_type);
+            let var = emitter.hoist_tmp_value(output, "asserted", &assertion);
             std::borrow::Cow::Owned(var)
         }
         None => std::borrow::Cow::Borrowed(subject),

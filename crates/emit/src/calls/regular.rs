@@ -5,7 +5,6 @@ use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
 use crate::types::coercion::Coercion;
 use crate::utils::{Staged, mask_go_string_literals};
-use crate::write_line;
 use syntax::ast::{Annotation, Expression, UnaryOperator};
 use syntax::types::Type;
 
@@ -206,9 +205,7 @@ impl Emitter<'_> {
         {
             return None;
         }
-        let temp = self.fresh_var(Some("arr"));
-        self.declare(&temp);
-        write_line!(output, "{} := {}", temp, call_str);
+        let temp = self.hoist_tmp_value(output, "arr", call_str);
         Some(format!("{}[:]", temp))
     }
 
@@ -341,9 +338,7 @@ impl Emitter<'_> {
             if matches!(arg, Expression::Reference { .. }) || arg.get_type().is_ref() {
                 return value;
             }
-            let temp = self.fresh_var(Some("ptr"));
-            self.declare(&temp);
-            write_line!(output, "{} := {}", temp, value);
+            let temp = self.hoist_tmp_value(output, "ptr", &value);
             return format!("&{}", temp);
         }
 

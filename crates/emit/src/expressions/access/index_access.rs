@@ -3,7 +3,6 @@ use syntax::types::peel_to_range_type;
 
 use crate::Emitter;
 use crate::utils::Staged;
-use crate::write_line;
 
 impl Emitter<'_> {
     pub(crate) fn emit_index_access(
@@ -105,16 +104,12 @@ impl Emitter<'_> {
         }
 
         if end_str.is_empty() {
-            let len_var = self.fresh_var(Some("len"));
-            self.declare(&len_var);
-            write_line!(output, "{} := len({})", len_var, base_str);
+            let len_var = self.hoist_tmp_value(output, "len", &format!("len({})", base_str));
             return format!("{}[{}:{}:{}]", base_str, start_str, len_var, len_var);
         }
 
         if end_str.contains('(') {
-            let end_var = self.fresh_var(Some("end"));
-            self.declare(&end_var);
-            write_line!(output, "{} := {}", end_var, end_str);
+            let end_var = self.hoist_tmp_value(output, "end", &end_str);
             return format!("{}[{}:{}:{}]", base_str, start_str, end_var, end_var);
         }
 
