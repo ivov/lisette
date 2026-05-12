@@ -517,19 +517,13 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
                 .get(value)
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| crate::escape_reserved(value).into_owned());
-            let (mut checks, bindings) = decision_tree::collect_pattern_info(
-                self.emitter,
+            self.emitter.emit_pattern_bindings(
+                output,
+                &go_name,
                 &self.binding.pattern,
                 self.binding.typed_pattern.as_ref(),
-                Some(&value_ty),
+                &value_ty,
             );
-            let subject = decision_tree::apply_root_type_assertion(
-                self.emitter,
-                output,
-                &mut checks,
-                &go_name,
-            );
-            decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &subject);
             return;
         }
 
@@ -539,15 +533,13 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         write_line!(output, "{} := {}", temp_var, value_expression);
 
         let guard = DiscardGuard::new(output, &temp_var);
-        let (mut checks, bindings) = decision_tree::collect_pattern_info(
-            self.emitter,
+        self.emitter.emit_pattern_bindings(
+            output,
+            &temp_var,
             &self.binding.pattern,
             self.binding.typed_pattern.as_ref(),
-            Some(&value_ty),
+            &value_ty,
         );
-        let subject =
-            decision_tree::apply_root_type_assertion(self.emitter, output, &mut checks, &temp_var);
-        decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &subject);
         guard.finish(output);
     }
 
@@ -602,7 +594,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             self.emitter,
             &self.binding.pattern,
             self.binding.typed_pattern.as_ref(),
-            Some(&value_ty),
+            &value_ty,
         );
 
         let assert_go_type = decision_tree::take_root_type_assertion(&mut checks);
@@ -675,9 +667,10 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
 
         let pattern_snapshot = self.emitter.scope.bindings.snapshot();
 
+        let value_ty = self.value.get_type();
         let collected: Vec<_> = patterns
             .iter()
-            .map(|alt| decision_tree::collect_pattern_info(self.emitter, alt, None, None))
+            .map(|alt| decision_tree::collect_pattern_info(self.emitter, alt, None, &value_ty))
             .collect();
 
         let irrefutable_idx = collected.iter().position(|(checks, _)| checks.is_empty());

@@ -4,6 +4,7 @@ use crate::patterns::decision_tree;
 use crate::utils::DiscardGuard;
 use crate::write_line;
 use syntax::ast::{Binding, Expression, Pattern};
+use syntax::types::Type;
 
 impl Emitter<'_> {
     /// Extract a loop variable from a pattern, binding the identifier if present.
@@ -100,7 +101,7 @@ impl Emitter<'_> {
                         n == "Map" || n == "OrderedMap" || n == "EnumeratedSlice"
                     }) =>
             {
-                self.emit_map_tuple_for_loop(output, elements, &iter_expression, body);
+                self.emit_map_tuple_for_loop(output, elements, &binding.ty, &iter_expression, body);
             }
             _ => {
                 self.emit_pattern_for_loop(output, binding, &iter_expression, is_channel, body);
@@ -146,11 +147,18 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         elements: &[Pattern],
+        binding_ty: &Type,
         iter_expression: &str,
         body: &Expression,
     ) {
         let first = &elements[0];
         let second = &elements[1];
+        let element_tys: &[Type] = match binding_ty {
+            Type::Tuple(tys) => tys.as_slice(),
+            _ => &[],
+        };
+        let first_ty = element_tys.first().unwrap_or(binding_ty);
+        let second_ty = element_tys.get(1).unwrap_or(binding_ty);
 
         let first_is_simple =
             matches!(first, Pattern::Identifier { .. } | Pattern::WildCard { .. });
@@ -171,9 +179,11 @@ impl Emitter<'_> {
             );
             let key_guard = DiscardGuard::new(output, &key_var);
             let value_guard = DiscardGuard::new(output, &value_var);
-            let (_, key_bindings) = decision_tree::collect_pattern_info(self, first, None, None);
+            let (_, key_bindings) =
+                decision_tree::collect_pattern_info(self, first, None, first_ty);
             decision_tree::emit_tree_bindings(self, output, &key_bindings, &key_var);
-            let (_, value_bindings) = decision_tree::collect_pattern_info(self, second, None, None);
+            let (_, value_bindings) =
+                decision_tree::collect_pattern_info(self, second, None, second_ty);
             decision_tree::emit_tree_bindings(self, output, &value_bindings, &value_var);
             self.emit_block(output, body);
             key_guard.finish(output);
@@ -218,7 +228,7 @@ impl Emitter<'_> {
             self,
             &binding.pattern,
             binding.typed_pattern.as_ref(),
-            Some(&binding.ty),
+            &binding.ty,
         );
         if bindings.is_empty() {
             write_line!(output, "for range {} {{", iter_expression);

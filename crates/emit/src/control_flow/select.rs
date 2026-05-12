@@ -17,6 +17,7 @@ struct SelectReceiveContext<'a> {
     body: &'a Expression,
     default_body: Option<&'a Expression>,
     retry_var: Option<&'a str>,
+    element_ty: syntax::types::Type,
 }
 
 struct SelectPrep {
@@ -53,8 +54,8 @@ impl Emitter<'_> {
                 SelectArmPattern::Receive {
                     binding,
                     typed_pattern,
+                    receive_expression,
                     body,
-                    ..
                 } => {
                     let (channel, retry_var) = if let Some(shadow) =
                         prep.channel_shadows.get(i).and_then(|s| s.as_ref())
@@ -68,6 +69,7 @@ impl Emitter<'_> {
                         body,
                         default_body,
                         retry_var,
+                        element_ty: receive_expression.get_type().ok_type(),
                     };
                     self.emit_receive_arm(output, binding, typed_pattern.as_ref(), &receiver_ctx);
                 }
@@ -76,10 +78,12 @@ impl Emitter<'_> {
                     self.emit_send_arm_case(output, parts, body);
                 }
                 SelectArmPattern::MatchReceive {
-                    arms: match_arms, ..
+                    arms: match_arms,
+                    receive_expression,
                 } => {
                     let channel = prep.channel_operands[i].as_ref().unwrap();
-                    self.emit_match_receive_arm(output, match_arms, channel);
+                    let element_ty = receive_expression.get_type().ok_type();
+                    self.emit_match_receive_arm(output, match_arms, channel, &element_ty);
                 }
                 SelectArmPattern::WildCard { body } => {
                     output.push_str("default:\n");
@@ -275,7 +279,7 @@ impl Emitter<'_> {
         let guard = DiscardGuard::new(output, receiver_var);
         if let Some((pattern, typed)) = inner_pattern {
             let (checks, bindings) =
-                decision_tree::collect_pattern_info(self, pattern, typed, None);
+                decision_tree::collect_pattern_info(self, pattern, typed, &ctx.element_ty);
             if checks.is_empty() {
                 decision_tree::emit_tree_bindings(self, output, &bindings, receiver_var);
                 self.emit_in_position(output, ctx.body);
@@ -363,7 +367,7 @@ impl Emitter<'_> {
                         &receiver_var,
                         effective_pattern,
                         inner_typed,
-                        None,
+                        &ctx.element_ty,
                     );
                 }
             }
@@ -434,6 +438,7 @@ impl Emitter<'_> {
         output: &mut String,
         match_arms: &[MatchArm],
         channel: &str,
+        element_ty: &syntax::types::Type,
     ) {
         self.scope.bindings.save();
 
@@ -468,6 +473,7 @@ impl Emitter<'_> {
             receiver_var_pattern,
             &case_var,
             needs_receiver_destructure,
+            element_ty,
         );
         let none_content = self.capture_scoped(output, |this, output| {
             Emitter::emit_none_arm_body(this, output, match_arms);
@@ -511,6 +517,7 @@ impl Emitter<'_> {
     /// Render the Some arm's body (including payload destructure when
     /// needed), returning the captured content so the caller can wrap it in
     /// an `if ok` guard alongside the None arm.
+    #[allow(clippy::too_many_arguments)]
     fn render_receive_some_arm(
         &mut self,
         output: &mut String,
@@ -519,6 +526,7 @@ impl Emitter<'_> {
         receiver_var_pattern: &Pattern,
         case_var: &str,
         needs_receiver_destructure: bool,
+        element_ty: &syntax::types::Type,
     ) -> Option<String> {
         self.capture_scoped(output, |this, output| {
             if !needs_receiver_destructure {
@@ -526,8 +534,12 @@ impl Emitter<'_> {
                 return;
             }
             let inner_typed = Self::unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
-            let (checks, bindings) =
-                decision_tree::collect_pattern_info(this, receiver_var_pattern, inner_typed, None);
+            let (checks, bindings) = decision_tree::collect_pattern_info(
+                this,
+                receiver_var_pattern,
+                inner_typed,
+                element_ty,
+            );
             if checks.is_empty() {
                 decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
                 this.emit_in_position(output, &some_arm.expression);

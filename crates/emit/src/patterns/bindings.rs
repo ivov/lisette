@@ -80,7 +80,7 @@ impl Emitter<'_> {
         subject: &str,
         pattern: &Pattern,
         typed: Option<&TypedPattern>,
-        subject_ty: Option<&Type>,
+        subject_ty: &Type,
     ) {
         let (mut checks, bindings) = collect_pattern_info(self, pattern, typed, subject_ty);
         let effective = apply_root_type_assertion(self, output, &mut checks, subject);
