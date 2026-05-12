@@ -220,10 +220,10 @@ impl Emitter<'_> {
     }
 
     fn emit_ok_check(&mut self, output: &mut String, ok_var: &str, ctx: &SelectReceiveContext) {
-        let pre = output.len();
-        self.emit_in_position(output, ctx.body);
-        let body_empty = output.len() == pre;
-
+        let (body_content, ()) = self.capture_emission(output, |this, buf| {
+            this.emit_in_position(buf, ctx.body);
+        });
+        let body_empty = body_content.is_empty();
         let has_else = ctx.retry_var.is_some() || ctx.default_body.is_some();
 
         if body_empty && has_else {
@@ -233,8 +233,6 @@ impl Emitter<'_> {
         } else if body_empty {
             // Both branches empty, omit if/else entirely
         } else {
-            let body_content = output[pre..].to_string();
-            output.truncate(pre);
             write_line!(output, "if {} {{", ok_var);
             output.push_str(&body_content);
             if has_else {
@@ -553,27 +551,6 @@ impl Emitter<'_> {
             Emitter::emit_none_arm_body(this, output, match_arms);
             output.push_str("}\n");
         })
-    }
-
-    /// Emit into a scoped buffer, returning the appended content (or `None`
-    /// if nothing was written). Used when the combine step needs to know
-    /// whether each arm produced any output before emitting the `if ok { ... }`
-    /// scaffolding around it.
-    fn capture_scoped<F>(&mut self, output: &mut String, f: F) -> Option<String>
-    where
-        F: FnOnce(&mut Self, &mut String),
-    {
-        let before = output.len();
-        self.enter_scope();
-        f(self, output);
-        self.exit_scope();
-        if output.len() > before {
-            let s = output[before..].to_string();
-            output.truncate(before);
-            Some(s)
-        } else {
-            None
-        }
     }
 
     /// Combine the rendered Some/None arm contents into `if ok { ... } else { ... }`

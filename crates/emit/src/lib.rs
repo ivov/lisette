@@ -627,6 +627,27 @@ impl<'a> Emitter<'a> {
         tmp
     }
 
+    pub(crate) fn capture_emission<F, R>(&mut self, output: &mut String, f: F) -> (String, R)
+    where
+        F: FnOnce(&mut Self, &mut String) -> R,
+    {
+        let before = output.len();
+        let value = f(self, output);
+        let captured = output[before..].to_string();
+        output.truncate(before);
+        (captured, value)
+    }
+
+    pub(crate) fn capture_scoped<F>(&mut self, output: &mut String, f: F) -> Option<String>
+    where
+        F: FnOnce(&mut Self, &mut String),
+    {
+        self.enter_scope();
+        let (captured, ()) = self.capture_emission(output, |this, buf| f(this, buf));
+        self.exit_scope();
+        (!captured.is_empty()).then_some(captured)
+    }
+
     pub(crate) fn enter_scope(&mut self) {
         self.scope.scope_depth += 1;
         self.scope.bindings.save();

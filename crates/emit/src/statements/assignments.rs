@@ -340,14 +340,12 @@ impl Emitter<'_> {
         needs_label: bool,
     ) {
         self.push_loop("_");
-        let pre_len = output.len();
-        let cond = self.emit_condition_operand(output, condition);
-        let has_setup = output.len() > pre_len;
-        if has_setup {
-            // Condition produced setup statements (temps) — they must
+        let (setup, cond) = self.capture_emission(output, |this, buf| {
+            this.emit_condition_operand(buf, condition)
+        });
+        if !setup.is_empty() {
+            // Condition produced setup statements (temps); they must
             // re-run each iteration, so move everything inside the loop.
-            let setup = output[pre_len..].to_string();
-            output.truncate(pre_len);
             let header = format!("for {{\n{}if !({}) {{ break }}\n", setup, cond);
             self.emit_labeled_loop(output, &header, body, needs_label);
         } else if matches!(

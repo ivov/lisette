@@ -42,13 +42,14 @@ impl Emitter<'_> {
             ..
         } = alternative
         {
-            let mut condition_buffer = String::new();
-            let condition_string = self.emit_condition_operand(&mut condition_buffer, condition);
+            let (setup, condition_string) = self.capture_emission(output, |this, buf| {
+                this.emit_condition_operand(buf, condition)
+            });
             let condition_string = wrap_if_struct_literal(condition_string);
-            if !condition_buffer.is_empty() {
+            if !setup.is_empty() {
                 self.emit_else_if_with_setup(
                     output,
-                    &condition_buffer,
+                    &setup,
                     &condition_string,
                     consequence,
                     next_alternative,
