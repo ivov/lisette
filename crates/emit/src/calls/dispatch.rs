@@ -4,11 +4,14 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use super::NativeCallContext;
 use crate::Emitter;
 use crate::names::go_name;
+use crate::types::coercion::Coercion;
 use crate::types::native::NativeGoType;
 use crate::utils::Staged;
 use syntax::ast::{Annotation, Expression, StructKind};
 use syntax::program::{CallKind, Definition, DefinitionBody};
-use syntax::types::{SimpleKind, SubstitutionMap, Symbol, Type, substitute, unqualified_name};
+use syntax::types::{
+    SimpleKind, SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
+};
 
 impl Emitter<'_> {
     /// True when Go's inference would lose this alias: function aliases (infer
@@ -445,7 +448,7 @@ impl Emitter<'_> {
 
         let return_ty = call_ty.cloned().unwrap_or(return_ty);
 
-        let Type::Nominal { id, .. } = &return_ty else {
+        let Type::Nominal { id, params, .. } = &return_ty else {
             return None;
         };
 
@@ -471,14 +474,31 @@ impl Emitter<'_> {
             return None;
         }
 
+        let field_tys: Vec<Type> = if generics.is_empty() {
+            fields.iter().map(|f| f.ty.clone()).collect()
+        } else {
+            let subst_map = build_substitution_map(generics, params);
+            fields
+                .iter()
+                .map(|f| substitute(&f.ty, &subst_map))
+                .collect()
+        };
+
         let go_ty = self.go_type_as_string(&return_ty);
         let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
         let values = self.sequence(output, stages, "_arg");
 
-        let field_pairs: Vec<(String, String)> = values
-            .into_iter()
+        let field_pairs: Vec<(String, String)> = field_tys
+            .iter()
+            .zip(args.iter())
+            .zip(values)
             .enumerate()
-            .map(|(i, value)| (format!("F{}", i), value))
+            .map(|(i, ((field_ty, arg), value))| {
+                let value_ty = arg.get_type();
+                let coercion = Coercion::resolve(self, &value_ty, field_ty);
+                let coerced = coercion.apply(self, output, value);
+                (format!("F{}", i), coerced)
+            })
             .collect();
 
         Some(self.emit_struct_literal(&go_ty, &field_pairs))

@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() {\n  let xs = [1, 2, 3]\n  task xs.contains(2)\n}\n"
+---
+package main
+
+import "slices"
+
+func test() {
+	xs := []int{1, 2, 3}
+	go slices.Contains(xs, 2)
+}

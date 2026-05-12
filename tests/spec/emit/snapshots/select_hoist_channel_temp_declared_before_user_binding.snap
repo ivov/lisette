@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn get_ch() -> Channel<int> {\n  Channel.buffered<int>(1)\n}\n\nfn test() -> int {\n  let result = select {\n    let Some(v) = get_ch().receive() => v,\n    _ => 0,\n  }\n  let ch_1 = result + 1\n  ch_1\n}\n"
+---
+package main
+
+func get_ch() chan int {
+	return make(chan int, 1)
+}
+
+func test() int {
+	var result int
+	ch_1 := get_ch()
+	for {
+		select {
+		case v, ok := <-ch_1:
+			if ok {
+				result = v
+			} else {
+				ch_1 = nil
+				continue
+			}
+		default:
+			result = 0
+		}
+		break
+	}
+	return result + 1
+}

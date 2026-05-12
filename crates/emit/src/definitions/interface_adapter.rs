@@ -26,20 +26,25 @@ impl Emitter<'_> {
         struct_ty: &Type,
         field_name: &str,
     ) -> Option<Type> {
-        let Type::Nominal { id, .. } = struct_ty.strip_refs() else {
+        let stripped = struct_ty.strip_refs();
+        let Type::Nominal { id, params, .. } = &stripped else {
             return None;
         };
         let Some(Definition {
-            body: DefinitionBody::Struct { fields, .. },
+            body: DefinitionBody::Struct {
+                fields, generics, ..
+            },
             ..
         }) = self.ctx.definitions.get(id.as_str())
         else {
             return None;
         };
-        fields
-            .iter()
-            .find(|f| f.name == field_name)
-            .map(|f| f.ty.clone())
+        let field_ty = fields.iter().find(|f| f.name == field_name)?.ty.clone();
+        if generics.is_empty() {
+            return Some(field_ty);
+        }
+        let subst_map = build_substitution_map(generics, params);
+        Some(substitute(&field_ty, &subst_map))
     }
 
     pub(crate) fn is_function_alias(&self, ty: &Type) -> bool {

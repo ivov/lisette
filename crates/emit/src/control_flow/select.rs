@@ -137,15 +137,12 @@ impl Emitter<'_> {
                     let channel_has_call = Self::channel_expression_has_call(receive_expression);
                     let ch = self.emit_channel_operand(output, receive_expression);
                     if Self::is_some_pattern(binding) && needs_retry_loop {
-                        let shadow = self.fresh_var(Some("ch"));
-                        write_line!(output, "{} := {}", shadow, ch);
+                        let shadow = self.hoist_temp(output, "ch", &ch);
                         channel_operands.push(Some(ch));
                         channel_shadows.push(Some(shadow));
                     } else {
                         let ch = if needs_retry_loop && channel_has_call {
-                            let tmp = self.fresh_var(Some("ch"));
-                            write_line!(output, "{} := {}", tmp, ch);
-                            tmp
+                            self.hoist_temp(output, "ch", &ch)
                         } else {
                             ch
                         };
@@ -160,9 +157,7 @@ impl Emitter<'_> {
                     let channel_has_call = Self::channel_expression_has_call(receive_expression);
                     let ch = self.emit_channel_operand(output, receive_expression);
                     let ch = if needs_retry_loop && channel_has_call {
-                        let tmp = self.fresh_var(Some("ch"));
-                        write_line!(output, "{} := {}", tmp, ch);
-                        tmp
+                        self.hoist_temp(output, "ch", &ch)
                     } else {
                         ch
                     };
@@ -391,18 +386,14 @@ impl Emitter<'_> {
                 ch = cancel_deref_of_address(ch);
             }
             if ch_has_call {
-                let tmp = self.fresh_var(Some("ch"));
-                write_line!(output, "{} := {}", tmp, ch);
-                ch = tmp;
+                ch = self.hoist_temp(output, "ch", &ch);
             }
             match member {
                 "send" if !args.is_empty() => {
                     let val_has_call = needs_hoist && contains_call(&args[0]);
                     let mut val = self.emit_composite_value(output, &args[0]);
                     if val_has_call {
-                        let tmp = self.fresh_var(Some("send_val"));
-                        write_line!(output, "{} := {}", tmp, val);
-                        val = tmp;
+                        val = self.hoist_temp(output, "send_val", &val);
                     }
                     SendArmParts::Send(ch, val)
                 }
@@ -416,12 +407,20 @@ impl Emitter<'_> {
                 ch = cancel_deref_of_address(ch);
             }
             if expression_has_call {
-                let tmp = self.fresh_var(Some("ch"));
-                write_line!(output, "{} := {}", tmp, ch);
-                ch = tmp;
+                ch = self.hoist_temp(output, "ch", &ch);
             }
             SendArmParts::Receive(ch)
         }
+    }
+
+    /// Hoist a value into a fresh `tmp := value` binding, registering the
+    /// temp as declared so later bindings in the same scope cannot reuse the
+    /// Go name with `:=` (which would error as "no new variables on left").
+    fn hoist_temp(&mut self, output: &mut String, hint: &str, value: &str) -> String {
+        let tmp = self.fresh_var(Some(hint));
+        write_line!(output, "{} := {}", tmp, value);
+        self.declare(&tmp);
+        tmp
     }
 
     /// Emit the `case` line and body for a pre-processed send arm.

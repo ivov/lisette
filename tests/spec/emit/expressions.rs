@@ -4029,3 +4029,39 @@ fn test(i: int) -> Box {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn unit_block_as_tuple_element_emits_struct_empty() {
+    let input = r#"
+import "go:fmt"
+
+fn side() {
+  fmt.Println("side")
+}
+
+fn test() -> int {
+  let t = ({ side() }, 1)
+  t.1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn typed_function_alias_from_named_function_declares_alias_type() {
+    let input = r#"
+type Handler = fn() -> int
+
+fn make_handler() -> int { 1 }
+
+fn use_ref(r: Ref<Handler>) -> int {
+  r.*()
+}
+
+fn test() -> int {
+  let h: Handler = make_handler
+  use_ref(&h)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

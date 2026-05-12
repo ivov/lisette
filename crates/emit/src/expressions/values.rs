@@ -9,6 +9,7 @@ use crate::types::emitter::Position;
 use crate::utils::Staged;
 use crate::write_line;
 use syntax::ast::{Expression, Visibility};
+use syntax::program::CallKind;
 use syntax::types::Type;
 
 impl Emitter<'_> {
@@ -210,7 +211,10 @@ impl Emitter<'_> {
         expression: &Expression,
     ) -> String {
         if expression.get_type().is_unit()
-            && matches!(expression.unwrap_parens(), Expression::Call { .. })
+            && matches!(
+                expression.unwrap_parens(),
+                Expression::Call { .. } | Expression::Block { .. }
+            )
         {
             let call_str = self.emit_value(output, expression);
             if !call_str.is_empty() {
@@ -636,13 +640,25 @@ impl Emitter<'_> {
                 emitter.emit_block(output, expression);
                 output.push_str("}()\n");
             });
-            String::new()
-        } else if let Some(call_str) = self.emit_go_call_discarded(output, expression) {
-            format!("{} {}", keyword, call_str)
-        } else {
-            let inner = self.emit_value(output, expression);
-            format!("{} {}", keyword, inner)
+            return String::new();
         }
+        if let Some(call_str) = self.emit_go_call_discarded(output, expression) {
+            return format!("{} {}", keyword, call_str);
+        }
+        let inner = self.emit_value(output, expression);
+        if needs_iife_for_async(expression, &inner) {
+            write_line!(output, "{} func() {{", keyword);
+            if !inner.is_empty() {
+                if expression.get_type().is_unit() {
+                    write_line!(output, "{}", inner);
+                } else {
+                    write_line!(output, "_ = {}", inner);
+                }
+            }
+            output.push_str("}()\n");
+            return String::new();
+        }
+        format!("{} {}", keyword, inner)
     }
 }
 
@@ -700,4 +716,35 @@ impl Emitter<'_> {
             _ => false,
         }
     }
+}
+
+fn needs_iife_for_async(expression: &Expression, emitted: &str) -> bool {
+    let Expression::Call { call_kind, .. } = expression.unwrap_parens() else {
+        return false;
+    };
+    if !matches!(
+        call_kind,
+        Some(CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_))
+    ) {
+        return false;
+    }
+    !is_valid_go_async_target(emitted)
+}
+
+fn is_valid_go_async_target(emitted: &str) -> bool {
+    let trimmed = emitted.trim();
+    if !trimmed.ends_with(')') {
+        return false;
+    }
+    let Some(open) = trimmed.find('(') else {
+        return false;
+    };
+    let callee = trimmed[..open].trim_end();
+    if callee.is_empty() || callee.starts_with('[') {
+        return false;
+    }
+    !matches!(
+        callee,
+        "len" | "cap" | "append" | "copy" | "new" | "make" | "complex" | "real" | "imag"
+    )
 }

@@ -253,10 +253,11 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             }
         }
 
-        if is_fn_alias_nominal(binding_ty)
-            && matches!(self.value.unwrap_parens(), Expression::Lambda { .. })
-        {
-            return true;
+        if is_fn_alias_nominal(binding_ty) {
+            let value_ty = self.value.get_type();
+            if matches!(value_ty.unwrap_forall(), Type::Function { .. }) {
+                return true;
+            }
         }
 
         let inner_value = unwrap_unary_negation(self.value);
@@ -763,22 +764,14 @@ fn unwrap_unary_negation(expression: &Expression) -> &Expression {
 }
 
 fn is_fn_alias_nominal(ty: &Type) -> bool {
-    let resolved = match ty {
-        Type::Forall { body, .. } => body.as_ref(),
-        other => other,
-    };
     let Type::Nominal {
         underlying_ty: Some(inner),
         ..
-    } = resolved
+    } = ty.unwrap_forall()
     else {
         return false;
     };
-    let inner = match inner.as_ref() {
-        Type::Forall { body, .. } => body.as_ref(),
-        other => other,
-    };
-    matches!(inner, Type::Function { .. })
+    matches!(inner.unwrap_forall(), Type::Function { .. })
 }
 
 /// Check if an expression contains a binding with the given name.

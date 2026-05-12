@@ -682,3 +682,61 @@ pub fn Find(s: string, substr: string) -> Option<int>
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/idx", typedef)]);
 }
+
+#[test]
+fn generic_named_field_struct_constructor_inserts_adapter() {
+    let input = r#"
+struct Entry { name: string }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Entry>>
+}
+
+struct MyCache {}
+
+impl MyCache {
+  fn Get(self, _key: string) -> Option<Ref<Entry>> {
+    None
+  }
+}
+
+struct Wrapper<T> {
+  cache: T,
+}
+
+fn main() {
+  let c = MyCache {}
+  let _: Wrapper<Cache> = Wrapper { cache: c }
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[]);
+}
+
+#[test]
+fn generic_tuple_struct_constructor_inserts_adapter() {
+    let input = r#"
+struct Entry { name: string }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Entry>>
+}
+
+struct MyCache {}
+
+impl MyCache {
+  fn Get(self, _key: string) -> Option<Ref<Entry>> {
+    None
+  }
+}
+
+struct Wrapper<T>(T)
+
+fn main() {
+  let c = MyCache {}
+  let _: Wrapper<Cache> = Wrapper<Cache>(c)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[]);
+}

@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \ntype Handler = fn() -> int\n\nfn make_handler() -> int { 1 }\n\nfn use_ref(r: Ref<Handler>) -> int {\n  r.*()\n}\n\nfn test() -> int {\n  let h: Handler = make_handler\n  use_ref(&h)\n}\n"
+---
+package main
+
+type Handler func() int
+
+func make_handler() int {
+	return 1
+}
+
+func use_ref(r *Handler) int {
+	return (*r)()
+}
+
+func test() int {
+	var h Handler = make_handler
+	return use_ref(&h)
+}

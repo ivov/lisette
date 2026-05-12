@@ -1,6 +1,7 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::go_name;
+use crate::utils::mask_go_string_literals;
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use ecow::EcoString;
 use syntax::ast::ImportAlias;
@@ -98,13 +99,14 @@ impl<'a> ImportBuilder<'a> {
     /// This handles cases where a cross-module type alias resolves to a native
     /// Go type, erasing the reference to the imported module.
     pub fn filter_unreferenced(&mut self, source: &str) {
+        let masked = mask_go_string_literals(source);
         self.imports.retain(|path, alias| {
             if alias == "_" {
                 return true;
             }
             let escaped = go_name::escape_reserved(effective_package_name(path, alias));
             let pattern = format!("{escaped}.");
-            source.contains(&pattern)
+            masked.contains(&pattern)
         });
     }
 

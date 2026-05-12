@@ -380,3 +380,20 @@ pub fn WithOption() -> Option
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/validator", typedef)]);
 }
+
+#[test]
+fn import_filter_ignores_package_alias_in_string_literal() {
+    let input = r#"
+import "go:fmt"
+import "go:example.com/lib"
+
+fn test() {
+  let s: lib.IntSlice = [1]
+  fmt.Println("lib.", s[0])
+}
+"#;
+    let typedef = r#"
+pub type IntSlice = Slice<int>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}
