@@ -440,6 +440,69 @@ func returnIsReceiverShaped(sig *types.Signature) bool {
 	return false
 }
 
+// FinalizeInterfaceBuilders carries the BuilderMethod flag from concrete methods to matching interface methods, when a concrete implementer is itself marked.
+func (c *Converter) FinalizeInterfaceBuilders(results []ConvertResult) {
+	if c.pkg == nil || c.pkg.Types == nil {
+		return
+	}
+
+	concreteBuilders := make(map[string]map[string]bool)
+	for _, r := range results {
+		if r.Kind != extract.ExportMethod || r.Receiver == nil || !r.BuilderMethod {
+			continue
+		}
+		methods, ok := concreteBuilders[r.Receiver.BaseTypeName]
+		if !ok {
+			methods = make(map[string]bool)
+			concreteBuilders[r.Receiver.BaseTypeName] = methods
+		}
+		methods[r.Name] = true
+	}
+	if len(concreteBuilders) == 0 {
+		return
+	}
+
+	scope := c.pkg.Types.Scope()
+	for i := range results {
+		result := &results[i]
+		if result.Kind != extract.ExportType || !result.IsInterface || len(result.InterfaceMethods) == 0 {
+			continue
+		}
+		ifaceObj := scope.Lookup(result.Name)
+		if ifaceObj == nil {
+			continue
+		}
+		ifaceNamed, ok := ifaceObj.Type().(*types.Named)
+		if !ok {
+			continue
+		}
+		iface, ok := ifaceNamed.Underlying().(*types.Interface)
+		if !ok {
+			continue
+		}
+		for mi := range result.InterfaceMethods {
+			methodName := result.InterfaceMethods[mi].Name
+			for concreteName, builderMethods := range concreteBuilders {
+				if !builderMethods[methodName] {
+					continue
+				}
+				concreteObj := scope.Lookup(concreteName)
+				if concreteObj == nil {
+					continue
+				}
+				concreteNamed, ok := concreteObj.Type().(*types.Named)
+				if !ok {
+					continue
+				}
+				if types.Implements(types.NewPointer(concreteNamed), iface) {
+					result.InterfaceMethods[mi].BuilderMethod = true
+					break
+				}
+			}
+		}
+	}
+}
+
 // isFluentMethod excludes trivial `return self` getters — real fluent setters either do work before returning or delegate via a method call on the receiver.
 func isFluentMethod(fn *ast.FuncDecl, recvName string) bool {
 	if fn == nil || fn.Body == nil || recvName == "" {

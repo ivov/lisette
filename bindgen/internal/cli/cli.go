@@ -156,6 +156,8 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 		results = append(results, converter.Convert(exp))
 	}
 
+	converter.FinalizeInterfaceBuilders(results)
+
 	valueEnums, constantTypes, valueEnumTypeNames := convert.DetectValueEnums(results, exports)
 
 	enumConstants := make(map[string][]convert.ConvertResult)

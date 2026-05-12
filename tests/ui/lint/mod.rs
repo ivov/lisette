@@ -3869,3 +3869,42 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn interface_method_allow_unused_value_suppresses_lint() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Router {
+  #[allow(unused_value)]
+  fn Get(self, path: string) -> Router
+}
+
+pub fn register(r: Router) {
+  r.Get("/ping")
+}
+
+fn main() {
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn interface_method_without_allow_warns_on_discard() {
+    assert_lint_snapshot!(
+        r#"
+pub interface Router {
+  fn Get(self, path: string) -> Router
+}
+
+pub fn register(r: Router) {
+  r.Get("/ping")
+}
+
+fn main() {
+  ()
+}
+"#
+    );
+}

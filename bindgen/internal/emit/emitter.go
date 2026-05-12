@@ -465,6 +465,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 				if m.ArrayReturn {
 					signature.WriteString("  #[go(array_return)]\n")
 				}
+				if m.BuilderMethod {
+					signature.WriteString("  #[allow(unused_value)]\n")
+				}
 				signature.WriteString("  fn ")
 				signature.WriteString(m.Name)
 				signature.WriteString("(")

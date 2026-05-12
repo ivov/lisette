@@ -1,0 +1,15 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Mismatch between return type and return value
+   ╭─[test.lis:7:3]
+ 5 │ 
+ 6 │ pub fn register(r: Router) {
+   ·                            ┬
+   ·                            ╰── has `()` as implicit return type
+ 7 │   r.Get("/ping")
+   ·   ───────┬──────
+   ·          ╰── returns `Router`
+ 8 │ }
+   ╰────
+  help: If the `()` return type is intended, discard the return value with `let _ = ...`. If the `Router` return value is intended, add `-> Router` to the function signature · code: [infer.mismatched_return_value]

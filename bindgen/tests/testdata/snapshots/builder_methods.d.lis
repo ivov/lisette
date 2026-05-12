@@ -38,7 +38,9 @@ pub type Logger
 
 /// Interface self-return on a real fluent setter (mutates state, returns self).
 pub interface Router {
+  #[allow(unused_value)]
   fn Get(path: string) -> Router
+  #[allow(unused_value)]
   fn Post(path: string) -> Router
 }
 

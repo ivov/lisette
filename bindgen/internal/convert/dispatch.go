@@ -68,11 +68,12 @@ type StructField struct {
 }
 
 type InterfaceMethod struct {
-	Name        string
-	Params      []FunctionParameter
-	ReturnType  string
-	CommaOk     bool
-	ArrayReturn bool
+	Name          string
+	Params        []FunctionParameter
+	ReturnType    string
+	CommaOk       bool
+	ArrayReturn   bool
+	BuilderMethod bool
 }
 
 // HasReturn reports whether this interface method has a non-unit return type.
