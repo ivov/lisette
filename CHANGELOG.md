@@ -1,6 +1,21 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.4](https://github.com/ivov/lisette/compare/lisette-v0.2.3...lisette-v0.2.4) - 2026-05-12
+
+- fix: honor allow attributes on interface methods [#402](https://github.com/ivov/lisette/pull/402) [`3e2e5c2`](https://github.com/ivov/lisette/commit/3e2e5c2ddba766bd8a81c4451877845c2c1909f2)
+- fix: shrink bindgen skip surface [#401](https://github.com/ivov/lisette/pull/401) [`56948a2`](https://github.com/ivov/lisette/commit/56948a23da241b967758b52ff8e8a3b268610ba7)
+- refactor: consolidate fallible lowering and coercion dispatch [#400](https://github.com/ivov/lisette/pull/400) [`32325a2`](https://github.com/ivov/lisette/commit/32325a20238b0ffeb5ee8ed41d9be7ba494a6d5b)
+- refactor: consolidate recurring emit patterns [#399](https://github.com/ivov/lisette/pull/399) [`a0a60ca`](https://github.com/ivov/lisette/commit/a0a60ca05251c62ff1a738956c16a5418a070742)
+- fix: reject member access on uninferred receiver [#398](https://github.com/ivov/lisette/pull/398) [`3a0c98c`](https://github.com/ivov/lisette/commit/3a0c98c9e6e292300bb509c543eeea14a44b2940)
+- refactor: polish diagnostics [#397](https://github.com/ivov/lisette/pull/397) [`941c61b`](https://github.com/ivov/lisette/commit/941c61b23ac7c2e95b7c8f962f1fdbcca1d8775e)
+- fix: solve more emit edge cases [#396](https://github.com/ivov/lisette/pull/396) [`c738613`](https://github.com/ivov/lisette/commit/c738613d6acc63c5c65c3cc4906bbcc4d26dd857)
+- fix: prevent emit corner cases [#395](https://github.com/ivov/lisette/pull/395) [`c656a66`](https://github.com/ivov/lisette/commit/c656a6651049fb358b8102023aeb7ca9db61cfe0)
+- fix: prevent silent emit miscompilations [#394](https://github.com/ivov/lisette/pull/394) [`f786d47`](https://github.com/ivov/lisette/commit/f786d47902399bdbb40f14443a627e6b3f68cc28)
+- fix: type-assert tuple/newtype patterns against go interfaces [#393](https://github.com/ivov/lisette/pull/393) [`f65d99a`](https://github.com/ivov/lisette/commit/f65d99a2ac9a1e312daec1867f77fe5205ecc24b)
+- fix: prevent go const eligibility from leaking across scopes [#392](https://github.com/ivov/lisette/pull/392) [`f3a09b8`](https://github.com/ivov/lisette/commit/f3a09b80f4b7a24bba39c3e879e30a12b9adf1f7)
+- fix: emit tail panic as statement in fallible function [#391](https://github.com/ivov/lisette/pull/391) [`5f77c90`](https://github.com/ivov/lisette/commit/5f77c90ffb73f18f723ba6fbded237880dfe85b0)
+- fix: monomorphize generic interface adapters per instantiation [#389](https://github.com/ivov/lisette/pull/389) [`563c642`](https://github.com/ivov/lisette/commit/563c642cc89d8b475555d629d3d11c242d70f333)
 ## [0.2.3](https://github.com/ivov/lisette/compare/lisette-v0.2.2...lisette-v0.2.3) - 2026-05-11
 
 - fix: detect fluent builders on promoted methods [#388](https://github.com/ivov/lisette/pull/388) [`50190aa`](https://github.com/ivov/lisette/commit/50190aa4a29c1dc45159d4a627296cfb4dacf646)
