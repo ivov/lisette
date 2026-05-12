@@ -24,10 +24,14 @@ type ConvertResult struct {
 	Variants         []EnumVariant     // for enums (via iota)
 	ConstValue       string            // for constants
 	SkipReason       *SkipReason
-	IsInterface      bool // true when this type should be emitted as `pub interface`
-	IsTypeAlias      bool // true for Go type aliases (type X = Y)
-	CommaOk          bool // true when return is from (T, bool) comma-ok with nilable T
-	ArrayReturn      bool // true when Go type is [N]T but Lisette type is Slice<T>
+	// SkipNote attaches a leading "SKIPPED returns-with"/"SKIPPED type-with"
+	// comment to a binding that still emits its signature. Used when the
+	// return type or declared type silently downgraded to Unknown.
+	SkipNote    *SkipReason
+	IsInterface bool // true when this type should be emitted as `pub interface`
+	IsTypeAlias bool // true for Go type aliases (type X = Y)
+	CommaOk     bool // true when return is from (T, bool) comma-ok with nilable T
+	ArrayReturn bool // true when Go type is [N]T but Lisette type is Slice<T>
 	// SentinelInt is set when this function returns int but the bindgen
 	// config declares a magic value (e.g. -1) for "not found". Bindgen
 	// rewrites the return type to Option<int> and emits the matching

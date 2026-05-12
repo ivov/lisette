@@ -159,6 +159,9 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	} else if returnType.SkipReason != nil {
 		result.ReturnType = "Unknown"
 	}
+	if returnType.SkipReason != nil {
+		result.SkipNote = returnType.SkipReason
+	}
 	result.CommaOk = returnType.CommaOk
 	result.ArrayReturn = returnType.ArrayReturn
 	c.applySentinelInt(result, result.Name)
@@ -318,6 +321,9 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		result.ReturnType = returnType.LisetteType
 	} else if returnType.SkipReason != nil {
 		result.ReturnType = "Unknown"
+	}
+	if returnType.SkipReason != nil {
+		result.SkipNote = returnType.SkipReason
 	}
 	result.CommaOk = returnType.CommaOk
 	result.ArrayReturn = returnType.ArrayReturn
@@ -502,6 +508,15 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		return
 	}
 
+	if basic, ok := exp.GoType.(*types.Basic); ok && basic.Kind() == types.UnsafePointer {
+		result.SkipReason = &SkipReason{
+			Code:           "unrepresentable-builtin",
+			Message:        "Lisette has no untyped pointer type",
+			EmitOpaqueType: true,
+		}
+		return
+	}
+
 	named, ok := exp.GoType.(*types.Named)
 	if !ok {
 		result.SkipReason = &SkipReason{Code: "not-named-type", Message: "expected named type"}
@@ -597,6 +612,7 @@ func (c *Converter) convertConstant(result *ConvertResult, exp extract.SymbolExp
 		if t.SkipReason.Code == "internal-package-ref" {
 			result.LisetteType = "Unknown"
 			result.ConstValue = ""
+			result.SkipNote = t.SkipReason
 			return
 		}
 		result.SkipReason = t.SkipReason
@@ -618,6 +634,7 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 	}
 	if t.SkipReason != nil {
 		result.LisetteType = "Unknown"
+		result.SkipNote = t.SkipReason
 	} else {
 		result.LisetteType = t.LisetteType
 	}

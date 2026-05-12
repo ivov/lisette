@@ -16,9 +16,13 @@ pub struct Offset(uint)
 
 pub struct SpecPriority(int)
 
+// SKIPPED type-with: internal-package-ref
+// references type from internal package "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/decorator_aliases/internal/inner"
 /// Re-exported consts whose declared type lives entirely in an internal
 /// package — should fall back to `Unknown` so the symbol stays usable
 /// as an opaque value passed into VarArgs<Unknown> parameters.
 pub const Focus: Unknown
 
+// SKIPPED type-with: internal-package-ref
+// references type from internal package "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/decorator_aliases/internal/inner"
 pub const Pending: Unknown

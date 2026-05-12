@@ -1517,8 +1517,8 @@ pub var ErrUseLastResponse: error
 /// Errors used by the HTTP server.
 pub var ErrWriteAfterFlush: error
 
-// SKIPPED: LocalAddrContextKey - anonymous-struct
-// anonymous struct types are not supported
+// SKIPPED: LocalAddrContextKey - opaque-unexported-struct
+// underlying type "contextKey" is unexported
 
 /// NoBody is an [io.ReadCloser] with no bytes. Read always returns EOF
 /// and Close always returns nil. It can be used in an outgoing client
@@ -1526,8 +1526,8 @@ pub var ErrWriteAfterFlush: error
 /// An alternative, however, is to simply set [Request.Body] to nil.
 pub var NoBody: ()
 
-// SKIPPED: ServerContextKey - anonymous-struct
-// anonymous struct types are not supported
+// SKIPPED: ServerContextKey - opaque-unexported-struct
+// underlying type "contextKey" is unexported
 
 impl Client {
   /// CloseIdleConnections closes any connections on its [Transport] which

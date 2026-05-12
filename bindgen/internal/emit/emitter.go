@@ -14,6 +14,11 @@ func writeSkippedFieldComment(w *strings.Builder, indent string, f convert.Struc
 	fmt.Fprintf(w, "%s// SKIPPED field %q: %s — %s\n", indent, f.Name, f.SkipReason.Code, f.SkipReason.Message)
 }
 
+func writeSkipNote(w *strings.Builder, indent, label string, reason *convert.SkipReason) {
+	fmt.Fprintf(w, "%s// SKIPPED %s: %s\n", indent, label, reason.Code)
+	fmt.Fprintf(w, "%s// %s\n", indent, reason.Message)
+}
+
 type stats struct {
 	functions int
 	methods   int
@@ -305,6 +310,9 @@ func (e *Emitter) String() string {
 }
 
 func (e *Emitter) emitFunction(result convert.ConvertResult) {
+	if result.SkipNote != nil {
+		writeSkipNote(&e.buf, "", "returns-with", result.SkipNote)
+	}
 	e.emitDocWithIndent(result.Doc, "")
 
 	if result.CommaOk {
@@ -383,6 +391,9 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
 		return
 	}
 
+	if result.SkipNote != nil {
+		writeSkipNote(&e.buf, "  ", "returns-with", result.SkipNote)
+	}
 	e.emitDocWithIndent(result.Doc, "  ")
 
 	if result.CommaOk {
@@ -585,6 +596,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 }
 
 func (e *Emitter) emitConst(result convert.ConvertResult) {
+	if result.SkipNote != nil {
+		writeSkipNote(&e.buf, "", "type-with", result.SkipNote)
+	}
 	e.emitDocWithIndent(result.Doc, "")
 
 	if result.ConstValue != "" {
@@ -627,6 +641,9 @@ func (e *Emitter) isInferredNamedType(typeStr string) bool {
 }
 
 func (e *Emitter) emitVariable(result convert.ConvertResult) {
+	if result.SkipNote != nil {
+		writeSkipNote(&e.buf, "", "type-with", result.SkipNote)
+	}
 	e.emitDocWithIndent(result.Doc, "")
 	fmt.Fprintf(&e.buf, "pub var %s: %s\n\n", result.Name, result.LisetteType)
 }

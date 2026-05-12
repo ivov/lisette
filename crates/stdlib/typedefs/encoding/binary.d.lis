@@ -138,5 +138,5 @@ pub var BigEndian: ()
 
 pub var LittleEndian: ()
 
-// SKIPPED: NativeEndian - anonymous-struct
-// anonymous struct types are not supported
+// SKIPPED: NativeEndian - opaque-unexported-struct
+// underlying type "nativeEndian" is unexported

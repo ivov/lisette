@@ -3,12 +3,16 @@
 // Go: 0.0.0
 // Lisette: 0.0.0
 
+// SKIPPED returns-with: anonymous-struct
+// anonymous struct types are not supported
 /// Skip in Option return - tests analyzeReturns Option skip path
 pub fn BadOptionReturn() -> Option<Unknown>
 
 // SKIPPED: BadParam - anonymous-struct
 // anonymous struct types are not supported
 
+// SKIPPED returns-with: anonymous-struct
+// anonymous struct types are not supported
 /// Skip in Result return - tests analyzeReturns Result skip path
 pub fn BadResultReturn() -> Result<Unknown, error>
 
@@ -16,8 +20,7 @@ pub fn BadUnsafeFunc(p: Unknown)
 
 pub fn MakeOpaqueFunc() -> OpaqueFunc
 
-// SKIPPED: SkippedMin - constraint:comparable
-// type constraint T cannot be represented
+pub fn SkippedMin<T: Ordered>(a: T, b: T) -> T
 
 // SKIPPED: TakesAliasArray - array-currently-not-representable
 // fixed-size array cannot currently be represented in Lisette
@@ -79,14 +82,14 @@ pub struct HasUnsafe {
 // SKIPPED field "ChanAnon": anonymous-struct — anonymous struct types are not supported
 pub type NestedAnon
 
-// SKIPPED: OpaqueFunc - anonymous-struct
-// anonymous struct types are not supported
+// SKIPPED: OpaqueFunc - opaque-unexported-struct
+// underlying type "hasPrivate" is unexported
 pub type OpaqueFunc
 
 /// Should be skipped: constrained generic (non-any)
 pub type Ordered
 
-// SKIPPED field "Field": anonymous-struct — anonymous struct types are not supported
+// SKIPPED field "Field": opaque-unexported-struct — underlying type "hasPrivate" is unexported
 pub type Public
 
 /// Should NOT skip: normal struct

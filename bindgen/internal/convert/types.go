@@ -215,6 +215,8 @@ func basicToLisette(t *types.Basic) string {
 		return "complex128"
 	case types.String:
 		return "string"
+	case types.UnsafePointer:
+		return "Unknown"
 	default:
 		return "Unknown"
 	}
@@ -253,13 +255,6 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 	obj := t.Obj()
 	pkg := obj.Pkg()
 
-	if pkg != nil && pkg.Path() == "unsafe" && obj.Name() == "Pointer" {
-		return TypeResult{SkipReason: &SkipReason{
-			Code:    "unsafe.Pointer",
-			Message: "unsafe.Pointer cannot be represented",
-		}}
-	}
-
 	if obj.Name() == "error" && pkg == nil {
 		return TypeResult{LisetteType: "error"}
 	}
@@ -285,6 +280,12 @@ func namedToLisette(t *types.Named, seen map[types.Type]bool, conv *Converter) T
 		}
 		if namedImplementsError(t) {
 			return TypeResult{LisetteType: "error"}
+		}
+		if s, ok := t.Underlying().(*types.Struct); ok && s.NumFields() > 0 {
+			return TypeResult{SkipReason: &SkipReason{
+				Code:    "opaque-unexported-struct",
+				Message: fmt.Sprintf("underlying type %q is unexported", obj.Name()),
+			}}
 		}
 		return toLisetteRecursive(t.Underlying(), seen, conv)
 	}

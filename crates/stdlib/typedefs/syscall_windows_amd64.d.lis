@@ -615,6 +615,8 @@ pub fn CloseOnExec(fd: Handle)
 
 pub fn Closesocket(s: Handle) -> Result<(), error>
 
+// SKIPPED returns-with: array-currently-not-representable
+// fixed-size array cannot currently be represented in Lisette
 pub fn CommandLineToArgv(cmd: Ref<uint16>, argc: Ref<int32>) -> Result<Unknown, error>
 
 pub fn ComputerName() -> Result<string, error>

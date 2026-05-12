@@ -32,8 +32,8 @@ pub fn MapEqualFunc<K: Comparable, V1, V2>(m1: Map<K, V1>, m2: Map<K, V2>, eq: f
 /// Comparable constraint
 pub fn Max<T: Comparable>(a: T, b: T) -> T
 
-// SKIPPED: Min - constraint:comparable
-// type constraint T cannot be represented
+/// Function with ordered constraint
+pub fn Min<T: Ordered>(a: T, b: T) -> T
 
 /// cmp.Ordered constraint (named-identity recognizer)
 pub fn MinOrdered<T: cmp.Ordered>(a: T, b: T) -> T
