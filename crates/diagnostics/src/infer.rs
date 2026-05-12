@@ -738,6 +738,22 @@ pub fn field_no_zero(
         .with_help(main)
 }
 
+pub fn unresolved_receiver_type(member: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot infer receiver type")
+        .with_infer_code("unresolved_receiver_type")
+        .with_span_label(
+            &span,
+            format!(
+                "cannot resolve `.{}` because the receiver type is unknown",
+                member
+            ),
+        )
+        .with_help(
+            "Annotate the receiver's binding, e.g. `let x: SomeType = ...` or \
+             `|param: SomeType| ...`.",
+        )
+}
+
 pub fn member_not_found(
     ty: &Type,
     field: &str,

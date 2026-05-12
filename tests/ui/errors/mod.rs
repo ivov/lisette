@@ -1458,6 +1458,30 @@ fn test(p: Partial<int, error>) -> int {
 }
 
 #[test]
+fn infer_unresolved_receiver_in_lambda_to_unknown_varargs() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Println(|c| c.foo)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unresolved_receiver_in_lambda_method_call() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Println(|c| c.Next())
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_struct_missing_fields() {
     let input = r#"
 struct Person {

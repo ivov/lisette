@@ -215,7 +215,14 @@ impl TaskState<'_> {
             expected_ty,
         };
 
-        if resolved_expression_ty.is_error() || resolved_expression_ty.is_variable() {
+        if resolved_expression_ty.is_error() {
+            self.unify(store, expected_ty, &Type::Error, &span);
+            return args.build_dot_access(Type::Error, None, None);
+        }
+
+        if resolved_expression_ty.is_variable() {
+            self.sink
+                .push(diagnostics::infer::unresolved_receiver_type(&member, span));
             self.unify(store, expected_ty, &Type::Error, &span);
             return args.build_dot_access(Type::Error, None, None);
         }
