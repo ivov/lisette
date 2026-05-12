@@ -464,10 +464,7 @@ impl Emitter<'_> {
                     return;
                 }
                 let expression_string = self.emit_value(output, last);
-                let return_ty = self
-                    .current_return_context
-                    .as_ref()
-                    .map(|ctx| ctx.ty.clone());
+                let return_ty = self.return_lowering.ty().cloned();
                 let expression_string =
                     self.apply_type_coercion(output, return_ty.as_ref(), last, expression_string);
                 write_line!(output, "return {}", expression_string);

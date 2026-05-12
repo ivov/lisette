@@ -254,11 +254,7 @@ impl Emitter<'_> {
 
     /// Lowered shape of the enclosing function's return type, if any.
     pub(crate) fn current_lowered_abi(&self) -> Option<AbiShape> {
-        let ctx = self.current_return_context.as_ref()?;
-        if ctx.force_tagged {
-            return None;
-        }
-        self.classify_direct_emission(&ctx.ty)
+        self.return_lowering.shape()
     }
 
     /// Annotation-side mirror of `is_nullable_option`'s inner check.

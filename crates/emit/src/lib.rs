@@ -314,7 +314,7 @@ pub struct Emitter<'a> {
     // These are implicit arguments — ideally parameters, but
     // plumbing through deep call chains is impractical.
     position: Position,
-    current_return_context: Option<ReturnContext>,
+    return_lowering: ReturnLowering,
     /// Target type for Option/Result assignment (interface coercion).
     assign_target_ty: Option<Type>,
     /// Generic function identifiers should NOT add type args when used as callees
@@ -340,27 +340,49 @@ pub struct Emitter<'a> {
     arg_flows_to_unknown: bool,
 }
 
-/// `force_tagged` is set inside try-block IIFEs whose outer signature is
-/// the unwrapped `Result`; their body must return the tagged form even
-/// when `ty` would normally lower.
 #[derive(Clone)]
-pub(crate) struct ReturnContext {
-    pub(crate) ty: Type,
-    pub(crate) force_tagged: bool,
+pub(crate) struct FnLoweringPlan {
+    return_ty: Type,
+    shape: Option<types::abi::AbiShape>,
 }
 
-impl ReturnContext {
-    pub(crate) fn new(ty: Type) -> Self {
+impl FnLoweringPlan {
+    pub(crate) fn for_fn(emitter: &Emitter<'_>, return_ty: Type) -> Self {
+        let shape = emitter.classify_direct_emission(&return_ty);
+        Self { return_ty, shape }
+    }
+
+    pub(crate) fn for_tagged_lambda(return_ty: Type) -> Self {
         Self {
-            ty,
-            force_tagged: false,
+            return_ty,
+            shape: None,
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+pub(crate) enum ReturnLowering {
+    #[default]
+    None,
+    Function(FnLoweringPlan),
+    /// `try { ... }` IIFE: body must return the tagged Result/Option even
+    /// when the outer function's return type would normally lower.
+    TaggedBlock(Type),
+}
+
+impl ReturnLowering {
+    pub(crate) fn ty(&self) -> Option<&Type> {
+        match self {
+            Self::None => None,
+            Self::Function(plan) => Some(&plan.return_ty),
+            Self::TaggedBlock(ty) => Some(ty),
         }
     }
 
-    pub(crate) fn tagged(ty: Type) -> Self {
-        Self {
-            ty,
-            force_tagged: true,
+    pub(crate) fn shape(&self) -> Option<types::abi::AbiShape> {
+        match self {
+            Self::Function(plan) => plan.shape.clone(),
+            _ => None,
         }
     }
 }
@@ -474,7 +496,7 @@ impl<'a> Emitter<'a> {
             flags: EmitFlags::default(),
             ensure_imported: HashSet::default(),
             position: Position::Expression,
-            current_return_context: None,
+            return_lowering: ReturnLowering::default(),
             assign_target_ty: None,
             emitting_call_callee: false,
             in_condition: false,
@@ -529,6 +551,16 @@ impl<'a> Emitter<'a> {
         let saved = std::mem::replace(&mut self.position, position);
         let result = f(self);
         self.position = saved;
+        result
+    }
+
+    pub(crate) fn with_return_lowering<F, R>(&mut self, lowering: ReturnLowering, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = std::mem::replace(&mut self.return_lowering, lowering);
+        let result = f(self);
+        self.return_lowering = saved;
         result
     }
 

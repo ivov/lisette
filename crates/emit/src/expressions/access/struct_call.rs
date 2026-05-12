@@ -7,7 +7,7 @@ use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 use crate::Emitter;
 use crate::definitions::enum_layout;
 use crate::go_name;
-use crate::types::coercion::Coercion;
+use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::utils::{Staged, observable_after_mutation};
 use crate::write_line;
 
@@ -69,12 +69,14 @@ impl Emitter<'_> {
             let value_ty = f.value.get_type();
             let field_ty = self.lookup_struct_field_ty(ty, &f.name);
             if is_go_struct {
+                let target_ty = field_ty.as_ref().unwrap_or(&value_ty);
                 let coercion =
-                    Coercion::resolve_unwrap_go_nullable(self, &value_ty, field_ty.as_ref());
+                    Coercion::resolve(self, &value_ty, target_ty, CoercionDirection::ToGoBoundary);
                 value = coercion.apply(self, output, value);
             }
             if let Some(field_ty) = field_ty.as_ref() {
-                let coercion = Coercion::resolve(self, &value_ty, field_ty);
+                let coercion =
+                    Coercion::resolve(self, &value_ty, field_ty, CoercionDirection::Internal);
                 value = coercion.apply(self, output, value);
             }
             field_names.push(field_name);

@@ -4,7 +4,7 @@ use syntax::program::DefinitionBody;
 
 use crate::Emitter;
 use crate::is_order_sensitive;
-use crate::types::coercion::Coercion;
+use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::types::emitter::Position;
 use crate::utils::Staged;
 use crate::write_line;
@@ -397,7 +397,12 @@ impl Emitter<'_> {
         for (i, (expr, emitted)) in elements.iter().zip(elem_expressions).enumerate() {
             let value = match slot_types.get(i) {
                 Some(slot) => {
-                    let coercion = Coercion::resolve(self, &expr.get_type(), slot);
+                    let coercion = Coercion::resolve(
+                        self,
+                        &expr.get_type(),
+                        slot,
+                        CoercionDirection::Internal,
+                    );
                     coercion.apply(self, output, emitted)
                 }
                 None => emitted,
@@ -462,7 +467,7 @@ impl Emitter<'_> {
             )
         {
             let source_ty = expression.get_type();
-            let coercion = Coercion::resolve(self, &source_ty, ty);
+            let coercion = Coercion::resolve(self, &source_ty, ty, CoercionDirection::Internal);
             return coercion.apply(self, output, inner);
         }
 
@@ -535,7 +540,8 @@ impl Emitter<'_> {
             && Self::is_go_imported_type(&receiver.get_type())
             && self.is_go_nullable(ty)
         {
-            let coercion = Coercion::resolve_unwrap_go_nullable(self, &value.get_type(), Some(ty));
+            let coercion =
+                Coercion::resolve(self, &value.get_type(), ty, CoercionDirection::ToGoBoundary);
             let unwrapped = coercion.apply(self, output, rhs_staged.value);
             write_line!(output, "{} = {}", target_str, unwrapped);
         } else {

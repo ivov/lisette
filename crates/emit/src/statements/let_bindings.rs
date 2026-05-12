@@ -2,12 +2,12 @@ use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::control_flow::fallible::Fallible;
 use crate::patterns::decision_tree;
-use crate::types::coercion::Coercion;
+use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::types::emitter::Position;
 use crate::utils::{DiscardGuard, requires_temp_var, try_flip_comparison};
 use crate::write_line;
-use syntax::ast::{Binding, Expression, Literal, Pattern};
-use syntax::types::Type;
+use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
+use syntax::types::{Type, peel_to_range_type};
 
 enum LetKind {
     /// Simple identifier binding: `let x = expression`
@@ -207,10 +207,15 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         raw_go_name: &str,
     ) {
         let value_expression = self.emitter.emit_value(output, self.value);
-        let coercion = Coercion::resolve(self.emitter, &self.value.get_type(), &self.binding.ty);
+        let coercion = Coercion::resolve(
+            self.emitter,
+            &self.value.get_type(),
+            &self.binding.ty,
+            CoercionDirection::Internal,
+        );
         let value_expression = coercion.apply(self.emitter, output, value_expression);
-        let clone = Coercion::resolve_subslice_clone(self.value, self.mutable);
-        let value_expression = clone.apply(self.emitter, output, value_expression);
+        let value_expression =
+            maybe_clone_subslice(self.emitter, self.value, self.mutable, value_expression);
 
         let go_identifier = self.emitter.scope.bindings.add(identifier, raw_go_name);
         let is_new = self.emitter.try_declare(&go_identifier);
@@ -349,12 +354,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             let binding_ty = &self.binding.ty;
             if !binding_ty.is_variable() && !binding_ty.ok_type().is_variable() {
                 self.emitter.go_type_as_string(binding_ty)
-            } else if let Some(ctx_ty) = self
-                .emitter
-                .current_return_context
-                .as_ref()
-                .map(|c| c.ty.clone())
-            {
+            } else if let Some(ctx_ty) = self.emitter.return_lowering.ty().cloned() {
                 if Fallible::from_type(&ctx_ty).is_some() {
                     self.emitter.go_type_as_string(&ctx_ty)
                 } else {
@@ -909,4 +909,51 @@ impl Emitter<'_> {
         let value_expression = self.emit_operand(output, value);
         write_line!(output, "_ = {}", value_expression);
     }
+}
+
+/// `let mut x = arr[range]` would otherwise alias the backing array.
+fn maybe_clone_subslice(
+    emitter: &mut Emitter<'_>,
+    value: &Expression,
+    mutable: bool,
+    expression: String,
+) -> String {
+    if !is_mutable_subslice(value, mutable) {
+        return expression;
+    }
+    emitter.flags.needs_slices = true;
+    format!("slices.Clone({})", expression)
+}
+
+fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
+    if !mutable {
+        return false;
+    }
+    let value = value.unwrap_parens();
+    let Expression::IndexedAccess {
+        expression, index, ..
+    } = value
+    else {
+        return false;
+    };
+
+    let is_range_index = matches!(**index, Expression::Range { .. })
+        || peel_to_range_type(&index.get_type()).is_some();
+
+    if !is_range_index {
+        return false;
+    }
+
+    let collection_ty = match expression.as_ref() {
+        Expression::Unary {
+            operator: UnaryOperator::Deref,
+            expression: inner,
+            ..
+        } => {
+            let inner_ty = inner.get_type();
+            inner_ty.inner().unwrap_or(inner_ty)
+        }
+        other => other.get_type(),
+    };
+    collection_ty.has_name("Slice")
 }

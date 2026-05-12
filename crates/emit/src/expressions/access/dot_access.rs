@@ -6,7 +6,7 @@ use syntax::types::Type;
 
 use crate::Emitter;
 use crate::go_name;
-use crate::types::coercion::Coercion;
+use crate::types::coercion::{Coercion, CoercionDirection};
 
 impl Emitter<'_> {
     pub(crate) fn emit_dot_access(
@@ -167,7 +167,12 @@ impl Emitter<'_> {
         }
         let raw_access = format!("{}.{}", expression_string, field);
         let raw_var = self.hoist_tmp_value(output, "raw", &raw_access);
-        let coercion = Coercion::resolve_wrap_go_nullable(self, result_ty);
+        let coercion = Coercion::resolve(
+            self,
+            result_ty,
+            result_ty,
+            CoercionDirection::FromGoBoundary,
+        );
         Some(coercion.apply(self, output, raw_var))
     }
 

@@ -4,7 +4,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use super::NativeCallContext;
 use crate::Emitter;
 use crate::names::go_name;
-use crate::types::coercion::Coercion;
+use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::types::native::NativeGoType;
 use crate::utils::Staged;
 use syntax::ast::{Annotation, Expression, StructKind};
@@ -495,7 +495,8 @@ impl Emitter<'_> {
             .enumerate()
             .map(|(i, ((field_ty, arg), value))| {
                 let value_ty = arg.get_type();
-                let coercion = Coercion::resolve(self, &value_ty, field_ty);
+                let coercion =
+                    Coercion::resolve(self, &value_ty, field_ty, CoercionDirection::Internal);
                 let coerced = coercion.apply(self, output, value);
                 (format!("F{}", i), coerced)
             })

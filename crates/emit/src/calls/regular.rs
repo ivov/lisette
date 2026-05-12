@@ -3,7 +3,7 @@ use rustc_hash::FxHashSet as HashSet;
 use crate::Emitter;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
-use crate::types::coercion::Coercion;
+use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::utils::{Staged, mask_go_string_literals};
 use syntax::ast::{Annotation, Expression, UnaryOperator};
 use syntax::types::Type;
@@ -353,7 +353,8 @@ impl Emitter<'_> {
         self.arg_flows_to_unknown = saved_flows;
         match effective_param_ty {
             Some(target) => {
-                let coercion = Coercion::resolve(self, &arg.get_type(), target);
+                let coercion =
+                    Coercion::resolve(self, &arg.get_type(), target, CoercionDirection::Internal);
                 coercion.apply(self, output, value)
             }
             None => value,
@@ -421,18 +422,17 @@ impl Emitter<'_> {
     ) -> Option<String> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
-        if self.is_nullable_option(param_ty) && self.is_nullable_option(&arg_ty) {
-            return Some(self.emit_unwrap_go_nullable_arg(output, arg, &arg_ty));
+        let shapes_match = (self.is_nullable_option(param_ty) && self.is_nullable_option(&arg_ty))
+            || (self.is_non_nilable_option(param_ty) && self.is_non_nilable_option(&arg_ty));
+        if !shapes_match {
+            return None;
         }
-        if self.is_non_nilable_option(param_ty) && self.is_non_nilable_option(&arg_ty) {
-            if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
-                return Some("nil".to_string());
-            }
-            let value = self.emit_value(output, arg);
-            let coercion = Coercion::resolve_unwrap_go_nullable(self, &arg_ty, Some(param_ty));
-            return Some(coercion.apply(self, output, value));
+        if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
+            return Some("nil".to_string());
         }
-        None
+        let value = self.emit_value(output, arg);
+        let coercion = Coercion::resolve(self, &arg_ty, param_ty, CoercionDirection::ToGoBoundary);
+        Some(coercion.apply(self, output, value))
     }
 
     fn try_emit_nullable_coercion(
@@ -477,7 +477,7 @@ impl Emitter<'_> {
             return "nil".to_string();
         }
         let value = self.emit_value(output, arg);
-        let coercion = Coercion::resolve_unwrap_go_nullable(self, arg_ty, None);
+        let coercion = Coercion::resolve(self, arg_ty, arg_ty, CoercionDirection::ToGoBoundary);
         coercion.apply(self, output, value)
     }
 }

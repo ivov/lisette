@@ -1,136 +1,47 @@
-use syntax::ast::{Expression, UnaryOperator};
-use syntax::types::{Type, peel_to_range_type};
+use syntax::ast::Expression;
+use syntax::types::Type;
 
 use crate::Emitter;
 use crate::definitions::interface_adapter::AdapterPlan;
 
 pub(crate) struct Coercion {
-    #[allow(dead_code)]
-    from: Type,
-    #[allow(dead_code)]
-    to: Type,
     kind: CoercionKind,
 }
 
 pub(crate) enum CoercionKind {
     Identity,
     WrapAsInterface(AdapterPlan),
-    WrapNewtype {
-        ty: Type,
-    },
-    UnwrapNullableOption {
-        ty: Type,
-    },
-    UnwrapPointerOption {
-        ty: Type,
-    },
-    UnwrapNullableCollection {
-        ty: Type,
-        elem_option_ty: Type,
-    },
-    WrapNullableOption {
-        ty: Type,
-    },
-    WrapPointerOption {
-        ty: Type,
-    },
-    WrapNullableCollection {
-        ty: Type,
-        elem_option_ty: Type,
-    },
-    /// Severs the backing-array alias on `let mut x = arr[range]` so writes
-    /// through `x` do not mutate `arr`.
-    CloneSubslice,
+    WrapNewtype { ty: Type },
+    UnwrapNullableOption { ty: Type },
+    UnwrapPointerOption { ty: Type },
+    UnwrapNullableCollection { ty: Type, elem_option_ty: Type },
+    WrapNullableOption { ty: Type },
+    WrapPointerOption { ty: Type },
+    WrapNullableCollection { ty: Type, elem_option_ty: Type },
+}
+
+/// Outbound and inbound Option-bridge cases look identical by type alone,
+/// so direction is picked at the call site rather than inferred.
+#[derive(Clone, Copy)]
+pub(crate) enum CoercionDirection {
+    Internal,
+    ToGoBoundary,
+    FromGoBoundary,
 }
 
 impl Coercion {
-    pub(crate) fn resolve(emitter: &Emitter, from: &Type, to: &Type) -> Self {
-        let kind = if let Some(plan) = emitter.needs_adapter(from, to) {
-            CoercionKind::WrapAsInterface(plan)
-        } else if needs_newtype_wrap(emitter, from, to) {
-            CoercionKind::WrapNewtype { ty: to.clone() }
-        } else {
-            CoercionKind::Identity
-        };
-        Self {
-            from: from.clone(),
-            to: to.clone(),
-            kind,
-        }
-    }
-
-    pub(crate) fn resolve_unwrap_go_nullable(
+    pub(crate) fn resolve(
         emitter: &Emitter,
-        value_ty: &Type,
-        target_ty: Option<&Type>,
+        from: &Type,
+        to: &Type,
+        direction: CoercionDirection,
     ) -> Self {
-        if let Some(target_ty) = target_ty
-            && emitter.is_non_nilable_option(value_ty)
-            && emitter.is_non_nilable_option(target_ty)
-        {
-            return Self {
-                from: value_ty.clone(),
-                to: target_ty.clone(),
-                kind: CoercionKind::UnwrapPointerOption {
-                    ty: value_ty.clone(),
-                },
-            };
-        }
-        let kind = if emitter.is_nullable_option(value_ty) {
-            CoercionKind::UnwrapNullableOption {
-                ty: value_ty.clone(),
-            }
-        } else if let Some(elem_option_ty) = emitter.nullable_collection_element_ty(value_ty) {
-            CoercionKind::UnwrapNullableCollection {
-                ty: value_ty.clone(),
-                elem_option_ty,
-            }
-        } else {
-            CoercionKind::Identity
+        let kind = match direction {
+            CoercionDirection::Internal => resolve_internal(emitter, from, to),
+            CoercionDirection::ToGoBoundary => resolve_to_go(emitter, from, to),
+            CoercionDirection::FromGoBoundary => resolve_from_go(emitter, from),
         };
-        Self {
-            from: value_ty.clone(),
-            to: value_ty.clone(),
-            kind,
-        }
-    }
-
-    pub(crate) fn resolve_subslice_clone(value: &Expression, mutable: bool) -> Self {
-        let kind = if is_mutable_subslice(value, mutable) {
-            CoercionKind::CloneSubslice
-        } else {
-            CoercionKind::Identity
-        };
-        let ty = value.get_type();
-        Self {
-            from: ty.clone(),
-            to: ty,
-            kind,
-        }
-    }
-
-    pub(crate) fn resolve_wrap_go_nullable(emitter: &Emitter, value_ty: &Type) -> Self {
-        let kind = if emitter.is_nullable_option(value_ty) {
-            CoercionKind::WrapNullableOption {
-                ty: value_ty.clone(),
-            }
-        } else if emitter.is_non_nilable_option(value_ty) {
-            CoercionKind::WrapPointerOption {
-                ty: value_ty.clone(),
-            }
-        } else if let Some(elem_option_ty) = emitter.nullable_collection_element_ty(value_ty) {
-            CoercionKind::WrapNullableCollection {
-                ty: value_ty.clone(),
-                elem_option_ty,
-            }
-        } else {
-            CoercionKind::Identity
-        };
-        Self {
-            from: value_ty.clone(),
-            to: value_ty.clone(),
-            kind,
-        }
+        Self { kind }
     }
 
     pub(crate) fn apply(self, emitter: &mut Emitter, output: &mut String, value: String) -> String {
@@ -162,16 +73,7 @@ impl Coercion {
             CoercionKind::WrapNullableCollection { ty, elem_option_ty } => {
                 emitter.emit_collection_nullable_wrap(output, &value, &ty, &elem_option_ty)
             }
-            CoercionKind::CloneSubslice => {
-                emitter.flags.needs_slices = true;
-                format!("slices.Clone({})", value)
-            }
         }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn is_identity(&self) -> bool {
-        matches!(self.kind, CoercionKind::Identity)
     }
 }
 
@@ -186,8 +88,62 @@ impl Emitter<'_> {
         let Some(target) = target_ty else {
             return emitted;
         };
-        let coercion = Coercion::resolve(self, &expression.get_type(), target);
+        let coercion = Coercion::resolve(
+            self,
+            &expression.get_type(),
+            target,
+            CoercionDirection::Internal,
+        );
         coercion.apply(self, output, emitted)
+    }
+}
+
+fn resolve_internal(emitter: &Emitter, from: &Type, to: &Type) -> CoercionKind {
+    if let Some(plan) = emitter.needs_adapter(from, to) {
+        CoercionKind::WrapAsInterface(plan)
+    } else if needs_newtype_wrap(emitter, from, to) {
+        CoercionKind::WrapNewtype { ty: to.clone() }
+    } else {
+        CoercionKind::Identity
+    }
+}
+
+fn resolve_to_go(emitter: &Emitter, value_ty: &Type, target_ty: &Type) -> CoercionKind {
+    if emitter.is_non_nilable_option(value_ty) && emitter.is_non_nilable_option(target_ty) {
+        return CoercionKind::UnwrapPointerOption {
+            ty: value_ty.clone(),
+        };
+    }
+    if emitter.is_nullable_option(value_ty) {
+        CoercionKind::UnwrapNullableOption {
+            ty: value_ty.clone(),
+        }
+    } else if let Some(elem_option_ty) = emitter.nullable_collection_element_ty(value_ty) {
+        CoercionKind::UnwrapNullableCollection {
+            ty: value_ty.clone(),
+            elem_option_ty,
+        }
+    } else {
+        CoercionKind::Identity
+    }
+}
+
+fn resolve_from_go(emitter: &Emitter, value_ty: &Type) -> CoercionKind {
+    if emitter.is_nullable_option(value_ty) {
+        CoercionKind::WrapNullableOption {
+            ty: value_ty.clone(),
+        }
+    } else if emitter.is_non_nilable_option(value_ty) {
+        CoercionKind::WrapPointerOption {
+            ty: value_ty.clone(),
+        }
+    } else if let Some(elem_option_ty) = emitter.nullable_collection_element_ty(value_ty) {
+        CoercionKind::WrapNullableCollection {
+            ty: value_ty.clone(),
+            elem_option_ty,
+        }
+    } else {
+        CoercionKind::Identity
     }
 }
 
@@ -199,37 +155,4 @@ fn needs_newtype_wrap(emitter: &Emitter, from: &Type, to: &Type) -> bool {
         return false;
     };
     underlying == *from
-}
-
-fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
-    if !mutable {
-        return false;
-    }
-    let value = value.unwrap_parens();
-    let Expression::IndexedAccess {
-        expression, index, ..
-    } = value
-    else {
-        return false;
-    };
-
-    let is_range_index = matches!(**index, Expression::Range { .. })
-        || peel_to_range_type(&index.get_type()).is_some();
-
-    if !is_range_index {
-        return false;
-    }
-
-    let collection_ty = match expression.as_ref() {
-        Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } => {
-            let inner_ty = inner.get_type();
-            inner_ty.inner().unwrap_or(inner_ty)
-        }
-        other => other.get_type(),
-    };
-    collection_ty.has_name("Slice")
 }

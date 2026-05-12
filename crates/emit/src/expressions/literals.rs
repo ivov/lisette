@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
 use crate::Emitter;
-use crate::types::coercion::Coercion;
+use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::utils::Staged;
 use syntax::ast::{FormatStringPart, Literal};
 use syntax::types::Type;
@@ -59,7 +59,12 @@ impl Emitter<'_> {
 
                 let mut wrapped: Vec<String> = Vec::with_capacity(elements.len());
                 for (expr, emitted) in elems.iter().zip(elements) {
-                    let coercion = Coercion::resolve(self, &expr.get_type(), &elem_lisette_ty);
+                    let coercion = Coercion::resolve(
+                        self,
+                        &expr.get_type(),
+                        &elem_lisette_ty,
+                        CoercionDirection::Internal,
+                    );
                     wrapped.push(coercion.apply(self, output, emitted));
                 }
                 let elements = wrapped;

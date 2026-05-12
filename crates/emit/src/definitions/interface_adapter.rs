@@ -411,8 +411,8 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn resolve_tuple_slot_types(&mut self, inferred: Vec<Type>) -> Vec<Type> {
-        let return_slots = self.current_return_context.as_ref().and_then(|ctx| {
-            let Type::Tuple(slots) = &ctx.ty else {
+        let return_slots = self.return_lowering.ty().and_then(|ty| {
+            let Type::Tuple(slots) = ty else {
                 return None;
             };
             (slots.len() == inferred.len()).then(|| slots.clone())

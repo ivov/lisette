@@ -2,7 +2,7 @@ use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::is_order_sensitive;
 use crate::names::go_name;
-use crate::types::coercion::Coercion;
+use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::types::emitter::Position;
 use crate::write_line;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
@@ -280,12 +280,21 @@ impl Emitter<'_> {
         output.push_str(&rhs_staged.setup);
 
         if let Some(target_ty) = go_field_ty {
-            let coercion =
-                Coercion::resolve_unwrap_go_nullable(self, &value.get_type(), Some(&target_ty));
+            let coercion = Coercion::resolve(
+                self,
+                &value.get_type(),
+                &target_ty,
+                CoercionDirection::ToGoBoundary,
+            );
             let unwrapped = coercion.apply(self, output, rhs_staged.value);
             write_line!(output, "{} = {}", target_str, unwrapped);
         } else {
-            let coercion = Coercion::resolve(self, &value.get_type(), &target.get_type());
+            let coercion = Coercion::resolve(
+                self,
+                &value.get_type(),
+                &target.get_type(),
+                CoercionDirection::Internal,
+            );
             let adapted = coercion.apply(self, output, rhs_staged.value);
             write_line!(output, "{} = {}", target_str, adapted);
         }

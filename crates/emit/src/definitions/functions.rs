@@ -94,12 +94,9 @@ impl Emitter<'_> {
             && last.get_type().is_unit();
         if should_return
             && (is_statement_only || last_is_unit_expr)
-            && self
-                .current_return_context
-                .as_ref()
-                .is_some_and(|ctx| !ctx.ty.is_unit())
+            && self.return_lowering.ty().is_some_and(|ty| !ty.is_unit())
         {
-            let return_ty = self.current_return_context.as_ref().unwrap().ty.clone();
+            let return_ty = self.return_lowering.ty().cloned().unwrap();
             let zero = self.zero_value(&return_ty);
             write_line!(output, "return {}", zero);
         }
@@ -112,10 +109,7 @@ impl Emitter<'_> {
         self.with_position(Position::Tail, |this| {
             if !requires_temp_var(last) {
                 let expression = this.emit_value(output, last);
-                let return_ty = this
-                    .current_return_context
-                    .as_ref()
-                    .map(|ctx| ctx.ty.clone());
+                let return_ty = this.return_lowering.ty().cloned();
                 let expression =
                     this.apply_type_coercion(output, return_ty.as_ref(), last, expression);
                 output.push_str(&this.wrap_value(&expression));
@@ -210,14 +204,18 @@ impl Emitter<'_> {
 
         let should_return = has_return;
 
-        let saved_return_context = self.current_return_context.clone();
-        if let Type::Function { return_type, .. } = ty {
-            self.current_return_context = Some(if suppress_lowering {
-                crate::ReturnContext::tagged(return_type.as_ref().clone())
+        let new_lowering = if let Type::Function { return_type, .. } = ty {
+            let return_ty = return_type.as_ref().clone();
+            let plan = if suppress_lowering {
+                crate::FnLoweringPlan::for_tagged_lambda(return_ty)
             } else {
-                crate::ReturnContext::new(return_type.as_ref().clone())
-            });
-        }
+                crate::FnLoweringPlan::for_fn(self, return_ty)
+            };
+            crate::ReturnLowering::Function(plan)
+        } else {
+            self.return_lowering.clone()
+        };
+        let saved_return_lowering = std::mem::replace(&mut self.return_lowering, new_lowering);
         let saved_suppress = std::mem::replace(&mut self.suppress_go_fn_short_circuit, false);
         let saved_flows = std::mem::replace(&mut self.arg_flows_to_unknown, false);
 
@@ -234,7 +232,7 @@ impl Emitter<'_> {
         self.scope.scope_depth = saved_scope_depth;
         self.scope.bindings.restore();
 
-        self.current_return_context = saved_return_context;
+        self.return_lowering = saved_return_lowering;
         self.suppress_go_fn_short_circuit = saved_suppress;
         self.arg_flows_to_unknown = saved_flows;
 
@@ -282,10 +280,11 @@ impl Emitter<'_> {
 
         let directive = self.maybe_line_directive(&function_definition.name_span);
 
-        let saved_return_context = self.current_return_context.clone();
-        self.current_return_context = Some(crate::ReturnContext::new(
-            function_definition.return_type.clone(),
-        ));
+        let plan = crate::FnLoweringPlan::for_fn(self, function_definition.return_type.clone());
+        let saved_return_lowering = std::mem::replace(
+            &mut self.return_lowering,
+            crate::ReturnLowering::Function(plan),
+        );
 
         let (function_definition, receiver) =
             self.change_go_builtin_methods(function_definition, receiver);
@@ -374,7 +373,7 @@ impl Emitter<'_> {
         );
         optimize_function_body(&mut body);
 
-        self.current_return_context = saved_return_context;
+        self.return_lowering = saved_return_lowering;
         self.module.absorbed_ref_generics = saved_absorbed;
 
         let trimmed_body = body.trim_end();

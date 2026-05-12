@@ -66,11 +66,7 @@ impl Emitter<'_> {
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
 
         if let Some(shape) = self.current_lowered_abi() {
-            let return_ty = self
-                .current_return_context
-                .as_ref()
-                .map(|ctx| ctx.ty.clone())
-                .expect("lowered abi");
+            let return_ty = self.return_lowering.ty().cloned().expect("lowered abi");
             // Option propagation: failure carries no payload, so emit a
             // shape-specific `None` return rather than an err-return.
             let lowered_failure = if fallible.is_result() {
@@ -317,11 +313,10 @@ impl Emitter<'_> {
             && elements.len() == arity
         {
             let return_ty = self
-                .current_return_context
-                .as_ref()
-                .expect("lowered abi requires a return context")
-                .ty
-                .clone();
+                .return_lowering
+                .ty()
+                .cloned()
+                .expect("lowered abi requires a return context");
             let slot_tys = crate::types::abi::tuple_element_types(&self.peel_alias(&return_ty));
             let stages: Vec<Staged> = elements
                 .iter()
@@ -343,11 +338,10 @@ impl Emitter<'_> {
         }
 
         let return_ty = self
-            .current_return_context
-            .as_ref()
-            .expect("lowered abi requires a return context")
-            .ty
-            .clone();
+            .return_lowering
+            .ty()
+            .cloned()
+            .expect("lowered abi requires a return context");
         let value = self.emit_value(output, expression);
         let temp = self.hoist_tmp_value(output, "tup", &value);
         self.emit_lowered_result_return(output, &temp, &return_ty, &AbiShape::Tuple { arity });
@@ -356,11 +350,10 @@ impl Emitter<'_> {
 
     fn emit_lowered_partial_tail(&mut self, output: &mut String, expression: &Expression) -> bool {
         let return_ty = self
-            .current_return_context
-            .as_ref()
-            .expect("lowered abi requires a return context")
-            .ty
-            .clone();
+            .return_lowering
+            .ty()
+            .cloned()
+            .expect("lowered abi requires a return context");
 
         if let Expression::Call {
             expression: callee,
@@ -485,10 +478,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn emit_return(&mut self, output: &mut String, expression: &Expression) {
-        let is_unit = self
-            .current_return_context
-            .as_ref()
-            .is_some_and(|ctx| ctx.ty.is_unit());
+        let is_unit = self.return_lowering.ty().is_some_and(Type::is_unit);
 
         if is_unit {
             let is_pure = matches!(
@@ -506,10 +496,7 @@ impl Emitter<'_> {
         {
             let expression_string =
                 self.with_position(Position::Tail, |this| this.emit_value(output, expression));
-            let return_ty = self
-                .current_return_context
-                .as_ref()
-                .map(|ctx| ctx.ty.clone());
+            let return_ty = self.return_lowering.ty().cloned();
             let expression_string =
                 self.apply_type_coercion(output, return_ty.as_ref(), expression, expression_string);
             write_line!(output, "return {}", expression_string);
@@ -530,9 +517,9 @@ impl Emitter<'_> {
         let expression_ty = expression.get_type();
 
         let return_ty = self
-            .current_return_context
-            .as_ref()
-            .map(|ctx| ctx.ty.clone())
+            .return_lowering
+            .ty()
+            .cloned()
             .filter(|ty| Fallible::from_type(ty).is_some())
             .unwrap_or(expression_ty);
 
@@ -548,15 +535,7 @@ impl Emitter<'_> {
 
         self.flags.needs_stdlib = true;
 
-        let force_tagged = self
-            .current_return_context
-            .as_ref()
-            .is_some_and(|ctx| ctx.force_tagged);
-        let lowered = if force_tagged {
-            None
-        } else {
-            self.classify_direct_emission(&return_ty)
-        };
+        let lowered = self.current_lowered_abi();
 
         if let Expression::Identifier { .. } = expression
             && fallible.classify_constructor(expression) == Some(ConstructorKind::Failure)
@@ -820,15 +799,14 @@ impl Emitter<'_> {
         let closure_body_start = output.len();
 
         // The IIFE's signature is the tagged `Result`, so its body must too.
-        let saved_return_context = self
-            .current_return_context
-            .replace(crate::ReturnContext::tagged(effective_ty.clone()));
-
-        self.with_fresh_scope(|emitter| {
-            emitter.emit_try_body(output, items, &fallible);
-        });
-
-        self.current_return_context = saved_return_context;
+        self.with_return_lowering(
+            crate::ReturnLowering::TaggedBlock(effective_ty.clone()),
+            |this| {
+                this.with_fresh_scope(|emitter| {
+                    emitter.emit_try_body(output, items, &fallible);
+                });
+            },
+        );
 
         inline_trivial_bindings(output, closure_body_start);
         output.push_str("}()\n");
@@ -853,9 +831,9 @@ impl Emitter<'_> {
         if !needs_return_context {
             return ty.clone();
         }
-        self.current_return_context
-            .as_ref()
-            .map(|ctx| ctx.ty.clone())
+        self.return_lowering
+            .ty()
+            .cloned()
             .filter(|ty| Fallible::from_type(ty).is_some())
             .unwrap_or_else(|| ty.clone())
     }
@@ -986,15 +964,12 @@ impl Emitter<'_> {
             inner_ty_str
         );
 
-        let saved_return_context = self
-            .current_return_context
-            .replace(crate::ReturnContext::new(fallible.ok_ty().clone()));
-
-        self.with_fresh_scope(|emitter| {
-            emitter.emit_recover_body(output, items, &fallible);
+        let plan = crate::FnLoweringPlan::for_fn(self, fallible.ok_ty().clone());
+        self.with_return_lowering(crate::ReturnLowering::Function(plan), |this| {
+            this.with_fresh_scope(|emitter| {
+                emitter.emit_recover_body(output, items, &fallible);
+            });
         });
-
-        self.current_return_context = saved_return_context;
 
         output.push_str("})\n");
         result_var
