@@ -1,13 +1,10 @@
 use crate::Emitter;
 use crate::expressions::emission::EmittedExpression;
-use crate::names::go_name;
-use crate::patterns::decision_tree;
-use crate::patterns::decision_tree::compose_refutable_condition;
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::emitter::Destination;
 use crate::utils::output_ends_with_diverge;
 use crate::write_line;
-use syntax::ast::{Expression, Pattern, TypedPattern};
+use syntax::ast::Expression;
 
 impl Emitter<'_> {
     pub(crate) fn emit_if(
@@ -124,111 +121,7 @@ impl Emitter<'_> {
         self.enter_scope();
     }
 
-    pub(crate) fn emit_while_let(
-        &mut self,
-        output: &mut String,
-        pattern: &Pattern,
-        typed_pattern: Option<&TypedPattern>,
-        scrutinee: &Expression,
-        body: &Expression,
-        needs_label: bool,
-    ) {
-        self.maybe_set_loop_label(needs_label);
-        if let Some(label) = self.current_loop_label() {
-            write_line!(output, "{}:", label);
-        }
-        output.push_str("for {\n");
-
-        let inlined = if let Expression::Identifier { value, .. } = scrutinee {
-            let name = value.to_string();
-            let has_collision = Self::pattern_binds_name(pattern, &name);
-            if !has_collision && !name.contains('.') {
-                Some(
-                    self.scope
-                        .bindings
-                        .get(&name)
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| go_name::escape_reserved(&name).into_owned()),
-                )
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        let subject_var = inlined.unwrap_or_else(|| {
-            let var = self.fresh_var(Some("subject"));
-            let expression = self.emit_operand(output, scrutinee);
-            write_line!(output, "{} := {}", var, expression);
-            var
-        });
-
-        let scrutinee_ty = scrutinee.get_type();
-        if let Pattern::Or { patterns, .. } = pattern
-            && Self::pattern_has_bindings(pattern)
-        {
-            let mut alternatives: Vec<_> = patterns
-                .iter()
-                .map(|alt| decision_tree::collect_pattern_info(self, alt, None, &scrutinee_ty))
-                .collect();
-            for info in &alternatives {
-                self.apply_effects(&info.effects);
-            }
-
-            let unused_names: rustc_hash::FxHashSet<String> = alternatives
-                .iter()
-                .flat_map(|info| info.bindings.iter())
-                .filter(|b| b.go_name.is_none())
-                .map(|b| b.lisette_name.clone())
-                .collect();
-            for info in alternatives.iter_mut() {
-                for binding in info.bindings.iter_mut() {
-                    if unused_names.contains(&binding.lisette_name) {
-                        binding.go_name = None;
-                    }
-                }
-            }
-
-            let hoisted: Vec<_> = alternatives
-                .iter()
-                .map(|info| {
-                    decision_tree::apply_refutable_root_assertion(self, output, info, &subject_var)
-                })
-                .collect();
-
-            for (i, info) in alternatives.iter().enumerate() {
-                let (effective, ok_var) = &hoisted[i];
-                let condition =
-                    compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
-
-                self.emit_branch_header(output, &condition, false, i == 0);
-
-                decision_tree::emit_tree_bindings(self, output, &info.bindings, effective);
-                self.emit_block(output, body);
-            }
-
-            self.emit_while_let_break_else(output);
-            return;
-        }
-
-        let info = decision_tree::collect_pattern_info(self, pattern, typed_pattern, &scrutinee_ty);
-        self.apply_effects(&info.effects);
-        let (effective, ok_var) =
-            decision_tree::apply_refutable_root_assertion(self, output, &info, &subject_var);
-        let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
-        write_line!(output, "if {} {{", condition);
-        self.enter_scope();
-
-        if !matches!(pattern, Pattern::Or { .. }) {
-            decision_tree::emit_tree_bindings(self, output, &info.bindings, &effective);
-        }
-
-        self.emit_block(output, body);
-
-        self.emit_while_let_break_else(output);
-    }
-
-    fn emit_while_let_break_else(&mut self, output: &mut String) {
+    pub(crate) fn emit_while_let_break_else(&mut self, output: &mut String) {
         self.exit_scope();
         output.push_str("} else {\n");
         self.enter_scope();

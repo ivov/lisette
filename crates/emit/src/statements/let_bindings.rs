@@ -1,10 +1,9 @@
 use crate::Emitter;
-use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::control_flow::fallible::Fallible;
-use crate::patterns::decision_tree;
+use crate::patterns::sites::PatternSubject;
 use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::types::emitter::Destination;
-use crate::utils::{DiscardGuard, requires_temp_var, try_flip_comparison};
+use crate::utils::requires_temp_var;
 use crate::write_line;
 use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
 use syntax::types::{Type, peel_to_range_type};
@@ -58,12 +57,33 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             return;
         }
         match self.classify() {
-            LetKind::LetElse => self.emit_let_else(output),
+            LetKind::LetElse => {
+                let else_block = self
+                    .else_block
+                    .expect("LetKind::LetElse classified without else block");
+                self.emitter.emit_let_else_pattern_site(
+                    output,
+                    &self.binding.pattern,
+                    self.binding.typed_pattern.as_ref(),
+                    &self.binding.ty,
+                    self.value,
+                    else_block,
+                );
+            }
             LetKind::SimpleIdentifier => self.emit_simple_identifier(output),
             LetKind::Discard => self.emit_discard(output),
             LetKind::Propagate => self.emit_propagate(output),
             LetKind::MultiValueCall => self.emit_multi_value_call(output),
-            LetKind::ComplexPattern => self.emit_complex_pattern(output),
+            LetKind::ComplexPattern => {
+                let value_ty = self.value.get_type();
+                self.emitter.emit_irrefutable_pattern_site(
+                    output,
+                    PatternSubject::expression(self.value, &self.binding.pattern, None),
+                    &self.binding.pattern,
+                    self.binding.typed_pattern.as_ref(),
+                    &value_ty,
+                );
+            }
         }
     }
 
@@ -502,247 +522,6 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         let op = if any_new { ":=" } else { "=" };
         write_line!(output, "{} {} {}", go_vars.join(", "), op, call_str);
     }
-
-    /// Emit a complex pattern binding: `let (a, Point { x, y }) = expression`
-    ///
-    /// This creates a temp variable and destructures from it.
-    fn emit_complex_pattern(&mut self, output: &mut String) {
-        let value_ty = self.value.get_type();
-        if let Expression::Identifier { value, .. } = self.value
-            && !value.contains('.')
-        {
-            let go_name = self
-                .emitter
-                .scope
-                .bindings
-                .get(value)
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| crate::escape_reserved(value).into_owned());
-            self.emitter.emit_pattern_bindings(
-                output,
-                &go_name,
-                &self.binding.pattern,
-                self.binding.typed_pattern.as_ref(),
-                &value_ty,
-            );
-            return;
-        }
-
-        let temp_var = self.emitter.fresh_var(None);
-        self.emitter.declare(&temp_var);
-        let value_expression = self.emitter.emit_value(output, self.value);
-        write_line!(output, "{} := {}", temp_var, value_expression);
-
-        let guard = DiscardGuard::new(output, &temp_var);
-        self.emitter.emit_pattern_bindings(
-            output,
-            &temp_var,
-            &self.binding.pattern,
-            self.binding.typed_pattern.as_ref(),
-            &value_ty,
-        );
-        guard.finish(output);
-    }
-
-    /// Emit a let-else binding: `let P = expression else { ... }`
-    fn emit_let_else(&mut self, output: &mut String) {
-        let else_block = self
-            .else_block
-            .expect("emit_let_else called without else block");
-
-        let (subject_var, needs_guard) = if let Expression::Identifier { value, .. } = self.value {
-            let has_collision = Emitter::pattern_binds_name(&self.binding.pattern, value);
-            if !has_collision && !value.contains('.') {
-                let go_name = self
-                    .emitter
-                    .scope
-                    .bindings
-                    .get(value)
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| crate::escape_reserved(value).into_owned());
-                (go_name, false)
-            } else {
-                let var = self.emitter.fresh_var(Some("subject"));
-                self.emitter.declare(&var);
-                let value_expression = self.emitter.emit_value(output, self.value);
-                write_line!(output, "{} := {}", var, value_expression);
-                (var, true)
-            }
-        } else {
-            let var = self.emitter.fresh_var(Some("subject"));
-            self.emitter.declare(&var);
-            let value_expression = self.emitter.emit_value(output, self.value);
-            write_line!(output, "{} := {}", var, value_expression);
-            (var, true)
-        };
-
-        let subject_guard = if needs_guard {
-            Some(DiscardGuard::new(output, &subject_var))
-        } else {
-            None
-        };
-
-        if let Pattern::Or { patterns, .. } = &self.binding.pattern {
-            self.emit_or_pattern_let_else(output, patterns, &subject_var, else_block);
-            if let Some(guard) = subject_guard {
-                guard.finish(output);
-            }
-            return;
-        }
-
-        let value_ty = self.value.get_type();
-        let info = decision_tree::collect_pattern_info(
-            self.emitter,
-            &self.binding.pattern,
-            self.binding.typed_pattern.as_ref(),
-            &value_ty,
-        );
-        self.emitter.apply_effects(&info.effects);
-
-        let (effective_subject, assert_ok_var) = decision_tree::apply_refutable_root_assertion(
-            self.emitter,
-            output,
-            &info,
-            &subject_var,
-        );
-
-        if info.checks.is_empty() && assert_ok_var.is_none() {
-            decision_tree::emit_tree_bindings(
-                self.emitter,
-                output,
-                &info.bindings,
-                &effective_subject,
-            );
-        } else {
-            let mut guard_parts: Vec<String> = Vec::new();
-            if let Some(ref ok) = assert_ok_var {
-                guard_parts.push(format!("!{}", ok));
-            }
-            if !info.checks.is_empty() {
-                let condition = decision_tree::render_condition(&info.checks, &effective_subject);
-                let single = info.checks.len() == 1;
-                let negated = if single {
-                    negate_condition(&condition)
-                } else {
-                    format!("!({})", condition)
-                };
-                guard_parts.push(wrap_if_struct_literal(negated));
-            }
-            let guard = guard_parts.join(" || ");
-            write_line!(output, "if {} {{", guard);
-            self.emitter.emit_block(output, else_block);
-            output.push_str("}\n");
-
-            decision_tree::emit_tree_bindings(
-                self.emitter,
-                output,
-                &info.bindings,
-                &effective_subject,
-            );
-        }
-
-        if let Some(guard) = subject_guard {
-            guard.finish(output);
-        }
-    }
-
-    /// Emit let-else with or-pattern: `let A | B = expression else { ... }`
-    fn emit_or_pattern_let_else(
-        &mut self,
-        output: &mut String,
-        patterns: &[Pattern],
-        subject_var: &str,
-        else_block: &Expression,
-    ) {
-        let outer_snapshot = self.emitter.scope.bindings.snapshot();
-
-        self.emitter.emit_binding_declarations_with_type(
-            output,
-            &self.binding.pattern,
-            &self.binding.ty,
-            self.binding.typed_pattern.as_ref(),
-        );
-
-        let pattern_snapshot = self.emitter.scope.bindings.snapshot();
-
-        let value_ty = self.value.get_type();
-        let collected: Vec<_> = patterns
-            .iter()
-            .map(|alt| decision_tree::collect_pattern_info(self.emitter, alt, None, &value_ty))
-            .collect();
-        for info in &collected {
-            self.emitter.apply_effects(&info.effects);
-        }
-
-        let hoisted: Vec<_> = collected
-            .iter()
-            .map(|info| {
-                decision_tree::apply_refutable_root_assertion(
-                    self.emitter,
-                    output,
-                    info,
-                    subject_var,
-                )
-            })
-            .collect();
-
-        let irrefutable_idx = collected
-            .iter()
-            .zip(hoisted.iter())
-            .position(|(info, (_, ok_var))| info.checks.is_empty() && ok_var.is_none());
-        let chain_len = irrefutable_idx.unwrap_or(collected.len());
-
-        for (i, info) in collected.iter().take(chain_len).enumerate() {
-            let (effective, ok_var) = &hoisted[i];
-            let condition = decision_tree::compose_refutable_condition(
-                ok_var.as_deref(),
-                &info.checks,
-                effective,
-            );
-            if i == 0 {
-                write_line!(output, "if {} {{", condition);
-            } else {
-                write_line!(output, "}} else if {} {{", condition);
-            }
-
-            decision_tree::emit_tree_assignments(self.emitter, output, &info.bindings, effective);
-        }
-
-        if let Some(idx) = irrefutable_idx {
-            let info = &collected[idx];
-            let (effective, _) = &hoisted[idx];
-            if idx == 0 {
-                decision_tree::emit_tree_assignments(
-                    self.emitter,
-                    output,
-                    &info.bindings,
-                    effective,
-                );
-            } else {
-                output.push_str("} else {\n");
-                decision_tree::emit_tree_assignments(
-                    self.emitter,
-                    output,
-                    &info.bindings,
-                    effective,
-                );
-                output.push_str("}\n");
-            }
-            return;
-        }
-
-        // Restore outer bindings for else body.
-        self.emitter.scope.bindings.restore_snapshot(outer_snapshot);
-        output.push_str("} else {\n");
-        self.emitter.emit_block(output, else_block);
-        output.push_str("}\n");
-
-        // Re-apply pattern bindings for post-else code.
-        self.emitter
-            .scope
-            .bindings
-            .restore_snapshot(pattern_snapshot);
-    }
 }
 
 /// Extracts variable names from a tuple pattern for direct Go multi-value destructuring.
@@ -855,10 +634,6 @@ fn pattern_contains_name(pattern: &Pattern, name: &str) -> bool {
         } => as_name == name || pattern_contains_name(pattern, name),
         Pattern::Literal { .. } | Pattern::Unit { .. } | Pattern::WildCard { .. } => false,
     }
-}
-
-fn negate_condition(condition: &str) -> String {
-    try_flip_comparison(condition).unwrap_or_else(|| format!("!({})", condition))
 }
 
 /// True when discarding `expression` is safe to omit — its value has no

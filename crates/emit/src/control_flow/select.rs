@@ -1,6 +1,8 @@
 use crate::Emitter;
 use crate::names::go_name;
-use crate::patterns::decision_tree;
+use crate::patterns::sites::{
+    self, PatternSubject, is_some_pattern, unwrap_some_pattern, unwrap_some_typed_pattern,
+};
 use crate::utils::{DiscardGuard, contains_call};
 use crate::write_line;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, TypedPattern};
@@ -29,7 +31,7 @@ struct SelectPrep {
 impl Emitter<'_> {
     pub(crate) fn emit_select(&mut self, output: &mut String, arms: &[SelectArm]) {
         let needs_retry_loop = arms.iter().any(|arm| {
-            matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if Self::is_some_pattern(binding))
+            matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if is_some_pattern(binding))
         });
 
         let prep = self.preprocess_select_arms(output, arms, needs_retry_loop);
@@ -140,7 +142,7 @@ impl Emitter<'_> {
                 } => {
                     let channel_has_call = Self::channel_expression_has_call(receive_expression);
                     let ch = self.emit_channel_operand(output, receive_expression);
-                    if Self::is_some_pattern(binding) && needs_retry_loop {
+                    if is_some_pattern(binding) && needs_retry_loop {
                         let shadow = self.hoist_tmp_value(output, "ch", &ch);
                         channel_operands.push(Some(ch));
                         channel_shadows.push(Some(shadow));
@@ -253,11 +255,8 @@ impl Emitter<'_> {
         }
     }
 
-    /// Emit the ok-check guard pattern for channel receives with Option semantics.
+    /// Emit the ok-check guard for channel receives with Option semantics.
     /// Produces: `case {receiver_var}, {ok_var} := <-{channel}: if {ok_var} { ... } else { ... }`
-    ///
-    /// When `inner_pattern` is provided, uses `collect_pattern_info` to emit both
-    /// runtime checks (literals, enum tags) and bindings, not just bindings.
     fn emit_ok_guard(
         &mut self,
         output: &mut String,
@@ -276,28 +275,15 @@ impl Emitter<'_> {
         );
         let guard = DiscardGuard::new(output, receiver_var);
         if let Some((pattern, typed)) = inner_pattern {
-            let info = decision_tree::collect_pattern_info(self, pattern, typed, &ctx.element_ty);
-            self.apply_effects(&info.effects);
-            let (effective, ok_var) =
-                decision_tree::apply_refutable_root_assertion(self, output, &info, receiver_var);
-            if info.checks.is_empty() && ok_var.is_none() {
-                decision_tree::emit_tree_bindings(self, output, &info.bindings, &effective);
-                self.emit_in_destination(output, ctx.body);
-            } else {
-                let condition = decision_tree::compose_refutable_condition(
-                    ok_var.as_deref(),
-                    &info.checks,
-                    &effective,
-                );
-                write_line!(output, "if {} {{", condition);
-                decision_tree::emit_tree_bindings(self, output, &info.bindings, &effective);
-                self.emit_in_destination(output, ctx.body);
-                if let Some(default_body) = ctx.default_body {
-                    output.push_str("} else {\n");
-                    self.emit_in_destination(output, default_body);
-                }
-                output.push_str("}\n");
-            }
+            self.emit_select_receive_pattern_site(
+                output,
+                receiver_var,
+                pattern,
+                typed,
+                &ctx.element_ty,
+                ctx.body,
+                ctx.default_body,
+            );
         } else {
             self.emit_in_destination(output, ctx.body);
         }
@@ -318,9 +304,9 @@ impl Emitter<'_> {
         typed_pattern: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
     ) {
-        let effective_pattern = Self::unwrap_some_pattern(binding);
-        let needs_ok_check = Self::is_some_pattern(binding);
-        let inner_typed = Self::unwrap_some_typed_pattern(typed_pattern);
+        let effective_pattern = unwrap_some_pattern(binding);
+        let needs_ok_check = is_some_pattern(binding);
+        let inner_typed = unwrap_some_typed_pattern(typed_pattern);
 
         self.scope.bindings.save();
 
@@ -366,9 +352,9 @@ impl Emitter<'_> {
                     return;
                 } else {
                     write_line!(output, "case {} := <-{}:", receiver_var, ctx.channel);
-                    self.emit_pattern_bindings(
+                    self.emit_irrefutable_pattern_site(
                         output,
-                        &receiver_var,
+                        PatternSubject::for_value(receiver_var.clone()),
                         effective_pattern,
                         inner_typed,
                         &ctx.element_ty,
@@ -480,7 +466,7 @@ impl Emitter<'_> {
             element_ty,
         );
         let none_content = self.capture_scoped(output, |this, output| {
-            Emitter::emit_none_arm_body(this, output, match_arms);
+            sites::emit_none_arm_body(this, output, match_arms);
         });
 
         self.write_receive_arms(
@@ -496,26 +482,6 @@ impl Emitter<'_> {
         ok_guard.finish(output);
 
         self.scope.bindings.restore();
-    }
-
-    /// Map a `Some(pattern)` payload pattern to a case-variable name and a
-    /// flag indicating whether the payload needs decision-tree destructuring
-    /// inside the arm body (as opposed to being bound directly by the
-    /// receive-case header).
-    fn classify_receive_var_pattern(&mut self, pattern: &Pattern) -> (String, bool) {
-        match pattern {
-            Pattern::WildCard { .. } => ("_".to_string(), false),
-            Pattern::Identifier { identifier, .. } => {
-                let Some(go_name) = self.go_name_for_binding(pattern) else {
-                    return ("_".to_string(), false);
-                };
-                if self.scope.bindings.get(identifier).is_some() {
-                    return (self.fresh_var(Some("recv")), true);
-                }
-                (self.scope.bindings.add(identifier, go_name), false)
-            }
-            _ => (self.fresh_var(Some("recv")), true),
-        }
     }
 
     /// Render the Some arm's body (including payload destructure when
@@ -537,32 +503,16 @@ impl Emitter<'_> {
                 this.emit_in_destination(output, &some_arm.expression);
                 return;
             }
-            let inner_typed = Self::unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
-            let info = decision_tree::collect_pattern_info(
-                this,
+            let inner_typed = unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
+            this.emit_select_match_receive_some_site(
+                output,
+                case_var,
                 receiver_var_pattern,
                 inner_typed,
                 element_ty,
+                &some_arm.expression,
+                match_arms,
             );
-            this.apply_effects(&info.effects);
-            let (effective, ok_var) =
-                decision_tree::apply_refutable_root_assertion(this, output, &info, case_var);
-            if info.checks.is_empty() && ok_var.is_none() {
-                decision_tree::emit_tree_bindings(this, output, &info.bindings, &effective);
-                this.emit_in_destination(output, &some_arm.expression);
-                return;
-            }
-            let condition = decision_tree::compose_refutable_condition(
-                ok_var.as_deref(),
-                &info.checks,
-                &effective,
-            );
-            write_line!(output, "if {} {{", condition);
-            decision_tree::emit_tree_bindings(this, output, &info.bindings, &effective);
-            this.emit_in_destination(output, &some_arm.expression);
-            output.push_str("} else {\n");
-            Emitter::emit_none_arm_body(this, output, match_arms);
-            output.push_str("}\n");
         })
     }
 
@@ -598,18 +548,6 @@ impl Emitter<'_> {
         }
     }
 
-    fn emit_none_arm_body(emitter: &mut Emitter, output: &mut String, match_arms: &[MatchArm]) {
-        for match_arm in match_arms {
-            if let Pattern::EnumVariant { identifier, .. } = &match_arm.pattern {
-                let variant_name = go_name::unqualified_name(identifier);
-                if variant_name == "None" {
-                    emitter.emit_in_destination(output, &match_arm.expression);
-                    return;
-                }
-            }
-        }
-    }
-
     fn extract_channel_op(expression: &Expression) -> Option<(&Expression, &str, &[Expression])> {
         let Expression::Call {
             expression, args, ..
@@ -635,53 +573,6 @@ impl Emitter<'_> {
             }
         }
 
-        None
-    }
-
-    fn peel_as_binding(pattern: &Pattern) -> &Pattern {
-        match pattern {
-            Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
-            p => p,
-        }
-    }
-
-    fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
-        let pattern = Self::peel_as_binding(pattern);
-        if let Pattern::EnumVariant {
-            identifier, fields, ..
-        } = pattern
-        {
-            let variant_name = go_name::unqualified_name(identifier);
-            if variant_name == "Some" && fields.len() == 1 {
-                return &fields[0];
-            }
-        }
-        pattern
-    }
-
-    fn is_some_pattern(pattern: &Pattern) -> bool {
-        let pattern = Self::peel_as_binding(pattern);
-        if let Pattern::EnumVariant {
-            identifier, fields, ..
-        } = pattern
-        {
-            let variant_name = go_name::unqualified_name(identifier);
-            return variant_name == "Some" && fields.len() == 1;
-        }
-        false
-    }
-
-    fn unwrap_some_typed_pattern(typed: Option<&TypedPattern>) -> Option<&TypedPattern> {
-        if let Some(TypedPattern::EnumVariant {
-            variant_name,
-            fields,
-            ..
-        }) = typed
-            && variant_name == "Some"
-            && fields.len() == 1
-        {
-            return Some(&fields[0]);
-        }
         None
     }
 }

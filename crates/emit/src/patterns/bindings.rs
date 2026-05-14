@@ -9,9 +9,6 @@ use syntax::types::{Type, unqualified_name};
 use crate::Emitter;
 use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
 use crate::names::generics;
-use crate::patterns::decision_tree::{
-    apply_root_assertion, collect_pattern_info, emit_tree_bindings,
-};
 use crate::write_line;
 
 /// Shared access to a named, typed field — implemented for both
@@ -97,20 +94,6 @@ pub(crate) fn is_unconditional_catchall(pattern: &Pattern) -> bool {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn emit_pattern_bindings(
-        &mut self,
-        output: &mut String,
-        subject: &str,
-        pattern: &Pattern,
-        typed: Option<&TypedPattern>,
-        subject_ty: &Type,
-    ) {
-        let info = collect_pattern_info(self, pattern, typed, subject_ty);
-        self.apply_effects(&info.effects);
-        let effective = apply_root_assertion(self, output, &info, subject);
-        emit_tree_bindings(self, output, &info.bindings, &effective);
-    }
-
     pub(crate) fn fresh_var(&mut self, hint: Option<&str>) -> String {
         loop {
             self.scope.next_var += 1;

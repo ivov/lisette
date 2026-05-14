@@ -222,7 +222,13 @@ impl Emitter<'_> {
         let mut body_string = String::new();
 
         for (temp_name, pattern, typed, param_ty) in &destructure_bindings {
-            self.emit_pattern_bindings(&mut body_string, temp_name, pattern, *typed, param_ty);
+            self.emit_irrefutable_pattern_site(
+                &mut body_string,
+                crate::patterns::sites::PatternSubject::for_value(temp_name.clone()),
+                pattern,
+                *typed,
+                param_ty,
+            );
         }
 
         self.emit_function_body(&mut body_string, body, should_return);
@@ -360,7 +366,13 @@ impl Emitter<'_> {
         let mut body = String::new();
 
         for (var_name, pattern, typed, param_ty) in deferred_patterns {
-            self.emit_pattern_bindings(&mut body, &var_name, &pattern, typed.as_ref(), &param_ty);
+            self.emit_irrefutable_pattern_site(
+                &mut body,
+                crate::patterns::sites::PatternSubject::for_value(var_name),
+                &pattern,
+                typed.as_ref(),
+                &param_ty,
+            );
         }
 
         self.emit_function_body(

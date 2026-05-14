@@ -1,6 +1,6 @@
 use crate::Emitter;
 use crate::is_order_sensitive;
-use crate::patterns::decision_tree;
+use crate::patterns::sites::PatternSubject;
 use crate::utils::DiscardGuard;
 use crate::write_line;
 use syntax::ast::{Binding, Expression, Pattern};
@@ -104,7 +104,13 @@ impl Emitter<'_> {
                 self.emit_map_tuple_for_loop(output, elements, &binding.ty, &iter_expression, body);
             }
             _ => {
-                self.emit_pattern_for_loop(output, binding, &iter_expression, is_channel, body);
+                self.emit_for_loop_pattern_site(
+                    output,
+                    binding,
+                    &iter_expression,
+                    is_channel,
+                    body,
+                );
             }
         }
 
@@ -179,16 +185,20 @@ impl Emitter<'_> {
             );
             let key_guard = DiscardGuard::new(output, &key_var);
             let value_guard = DiscardGuard::new(output, &value_var);
-            let key_info = decision_tree::collect_pattern_info(self, first, None, first_ty);
-            self.apply_effects(&key_info.effects);
-            let effective_key =
-                decision_tree::apply_root_assertion(self, output, &key_info, &key_var);
-            decision_tree::emit_tree_bindings(self, output, &key_info.bindings, &effective_key);
-            let value_info = decision_tree::collect_pattern_info(self, second, None, second_ty);
-            self.apply_effects(&value_info.effects);
-            let effective_value =
-                decision_tree::apply_root_assertion(self, output, &value_info, &value_var);
-            decision_tree::emit_tree_bindings(self, output, &value_info.bindings, &effective_value);
+            self.emit_irrefutable_pattern_site(
+                output,
+                PatternSubject::for_value(key_var),
+                first,
+                None,
+                first_ty,
+            );
+            self.emit_irrefutable_pattern_site(
+                output,
+                PatternSubject::for_value(value_var),
+                second,
+                None,
+                second_ty,
+            );
             self.emit_block(output, body);
             key_guard.finish(output);
             value_guard.finish(output);
@@ -214,49 +224,6 @@ impl Emitter<'_> {
             );
         }
         self.emit_block(output, body);
-        output.push_str("}\n");
-    }
-
-    /// Compound-pattern for loop. Captures each element into a fresh `item`
-    /// var, emits decision-tree bindings inside the loop, and discards the
-    /// temp via `DiscardGuard` if the pattern doesn't reference it.
-    fn emit_pattern_for_loop(
-        &mut self,
-        output: &mut String,
-        binding: &Binding,
-        iter_expression: &str,
-        is_channel: bool,
-        body: &Expression,
-    ) {
-        let info = decision_tree::collect_pattern_info(
-            self,
-            &binding.pattern,
-            binding.typed_pattern.as_ref(),
-            &binding.ty,
-        );
-        self.apply_effects(&info.effects);
-        if info.bindings.is_empty() {
-            write_line!(output, "for range {} {{", iter_expression);
-            self.emit_block(output, body);
-            output.push_str("}\n");
-            return;
-        }
-        let item_var = self.fresh_var(Some("item"));
-        if is_channel {
-            write_line!(output, "for {} := range {} {{", item_var, iter_expression);
-        } else {
-            write_line!(
-                output,
-                "for _, {} := range {} {{",
-                item_var,
-                iter_expression
-            );
-        }
-        let guard = DiscardGuard::new(output, &item_var);
-        let effective_item = decision_tree::apply_root_assertion(self, output, &info, &item_var);
-        decision_tree::emit_tree_bindings(self, output, &info.bindings, &effective_item);
-        self.emit_block(output, body);
-        guard.finish(output);
         output.push_str("}\n");
     }
 

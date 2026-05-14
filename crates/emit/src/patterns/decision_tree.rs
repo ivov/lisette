@@ -1459,7 +1459,7 @@ fn extract_root_assertion(checks: &mut Vec<Check>) -> Option<TypeAssertion> {
 
 /// Hoist a root type assertion as `asserted := subject.(T)` for irrefutable
 /// destructure paths; the pattern compiler has already verified the type.
-pub(crate) fn apply_root_assertion<'s>(
+pub(super) fn apply_root_assertion<'s>(
     emitter: &mut Emitter,
     output: &mut String,
     info: &PatternInfo,
@@ -1481,7 +1481,7 @@ pub(crate) fn apply_root_assertion<'s>(
 
 /// Hoist a root type assertion as comma-ok for refutable contexts (while-let,
 /// select arms, or-pattern let-else). Returns `(effective_subject, ok_var)`.
-pub(crate) fn apply_refutable_root_assertion<'s>(
+pub(super) fn apply_refutable_root_assertion<'s>(
     emitter: &mut Emitter,
     output: &mut String,
     info: &PatternInfo,
@@ -1539,7 +1539,7 @@ pub(crate) fn apply_refutable_root_assertion<'s>(
 
 /// Combine an optional `ok` variable with rendered checks into a guard
 /// condition; returns `"true"` when both are absent.
-pub(crate) fn compose_refutable_condition(
+pub(super) fn compose_refutable_condition(
     ok_var: Option<&str>,
     checks: &[Check],
     effective_subject: &str,
@@ -1553,7 +1553,7 @@ pub(crate) fn compose_refutable_condition(
 }
 
 /// Render checks as a Go condition string.
-pub(crate) fn render_condition(checks: &[Check], subject_var: &str) -> String {
+pub(super) fn render_condition(checks: &[Check], subject_var: &str) -> String {
     if checks.is_empty() {
         return "true".to_string();
     }
@@ -1603,7 +1603,7 @@ pub(crate) fn emit_tree_bindings(
 /// Emit bindings as Go `=` assignments (for pre-declared variables in or-patterns).
 /// Only emits for bindings that are already registered in the bindings map
 /// (i.e., pre-declared with `emit_binding_declarations_with_type`).
-pub(crate) fn emit_tree_assignments(
+pub(super) fn emit_tree_assignments(
     emitter: &mut Emitter,
     output: &mut String,
     bindings: &[PatternBinding],
