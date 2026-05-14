@@ -35,7 +35,7 @@ impl Emitter<'_> {
                 fields, generics, ..
             },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return None;
         };
@@ -51,11 +51,7 @@ impl Emitter<'_> {
         let Type::Nominal { .. } = ty else {
             return false;
         };
-        self.resolve_to_function_type(ty).is_some()
-    }
-
-    pub(crate) fn resolve_to_function_type(&self, ty: &Type) -> Option<Type> {
-        crate::resolve_to_function_type(self.ctx.definitions, ty)
+        self.facts.resolve_to_function_type(ty).is_some()
     }
 
     /// Collect own + transitively inherited methods, tagged with the id
@@ -76,7 +72,7 @@ impl Emitter<'_> {
                 }
             }
             for parent_ty in &current.parents {
-                let parent = self.peel_alias(parent_ty);
+                let parent = self.facts.peel_alias(parent_ty);
                 let Type::Nominal { id, .. } = &parent else {
                     continue;
                 };
@@ -86,7 +82,7 @@ impl Emitter<'_> {
                             definition: parent_def,
                         },
                     ..
-                }) = self.ctx.definitions.get(id.as_str())
+                }) = self.facts.definition(id.as_str())
                 {
                     queue.push((parent_def, id.as_eco().clone()));
                 }
@@ -99,14 +95,14 @@ impl Emitter<'_> {
     /// from the interface's hint-shifted shape (e.g. `#[go(comma_ok)]`
     /// shifts `*T` to `(*T, bool)`).
     pub(crate) fn needs_adapter(&self, source_ty: &Type, target_ty: &Type) -> Option<AdapterPlan> {
-        let target = self.peel_alias(target_ty);
+        let target = self.facts.peel_alias(target_ty);
         let Type::Nominal { id: target_id, .. } = &target else {
             return None;
         };
         let Some(Definition {
             body: DefinitionBody::Interface { definition },
             ..
-        }) = self.ctx.definitions.get(target_id.as_str())
+        }) = self.facts.definition(target_id.as_str())
         else {
             return None;
         };
@@ -131,7 +127,7 @@ impl Emitter<'_> {
                     ..
                 },
             ..
-        }) = self.ctx.definitions.get(source_id.as_str())
+        }) = self.facts.definition(source_id.as_str())
         else {
             return None;
         };
@@ -212,8 +208,8 @@ impl Emitter<'_> {
         let (A::NullableReturn, A::CommaOk) = (user_shape, interface_shape) else {
             return None;
         };
-        let inner = self.peel_alias(return_ty).ok_type();
-        let is_interface = self.as_interface(&inner).is_some();
+        let inner = self.facts.peel_alias(return_ty).ok_type();
+        let is_interface = self.facts.is_interface(&inner);
         let val = self.fresh_var(Some("val"));
         self.declare(&val);
         let nil_check = if is_interface {
@@ -235,9 +231,8 @@ impl Emitter<'_> {
         method_name: &str,
     ) -> Vec<String> {
         let qualified = format!("{}.{}", interface_id, method_name);
-        self.ctx
-            .definitions
-            .get(qualified.as_str())
+        self.facts
+            .definition(qualified.as_str())
             .map(|d| d.go_hints().to_vec())
             .unwrap_or_default()
     }
@@ -439,7 +434,7 @@ impl Emitter<'_> {
             .zip(inferred.iter())
             .map(|(declared, inferred_slot)| {
                 let needs_widening = self.needs_adapter(inferred_slot, declared).is_some()
-                    || self.as_interface(declared).is_some()
+                    || self.facts.is_interface(declared)
                     || (declared.get_qualified_id().is_some()
                         && declared.get_qualified_id() == inferred_slot.get_qualified_id());
                 if needs_widening {

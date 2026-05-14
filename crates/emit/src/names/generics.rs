@@ -139,7 +139,7 @@ impl Emitter<'_> {
         let Some(Definition {
             body: DefinitionBody::Interface { definition },
             ..
-        }) = self.ctx.definitions.get(peeled.as_str())
+        }) = self.facts.definition(peeled.as_str())
         else {
             return HashSet::default();
         };
@@ -181,7 +181,7 @@ impl Emitter<'_> {
         if let Some(Definition {
             body: DefinitionBody::Enum { variants, .. },
             ..
-        }) = self.ctx.definitions.get(enum_id)
+        }) = self.facts.definition(enum_id)
         {
             let types = variants.iter().flat_map(|v| v.fields.iter().map(|f| &f.ty));
             Self::collect_map_key_generics(types, generic_names)

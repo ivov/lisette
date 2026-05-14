@@ -228,7 +228,7 @@ impl Emitter<'_> {
         let Some(Definition {
             body: DefinitionBody::Struct { fields, .. },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return None;
         };
@@ -256,8 +256,9 @@ impl Emitter<'_> {
         is_import_namespace_ident
             || self.is_from_prelude(expression_ty)
             || if let Type::Nominal { id, .. } = expression_ty.strip_refs() {
-                id.split_once('.')
-                    .is_some_and(|(m, _)| m != self.current_module && m != go_name::PRELUDE_MODULE)
+                id.split_once('.').is_some_and(|(m, _)| {
+                    !self.facts.is_current_module(m) && m != go_name::PRELUDE_MODULE
+                })
             } else {
                 false
             }
@@ -342,7 +343,7 @@ impl Emitter<'_> {
                     ..
                 },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return None;
         };

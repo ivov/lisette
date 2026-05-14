@@ -42,7 +42,7 @@ impl Emitter<'_> {
                 name_span,
                 ..
             } => {
-                if self.ctx.unused.is_unused_definition(name_span) {
+                if self.facts.is_unused_definition(name_span) {
                     return String::new();
                 }
                 let is_public = matches!(visibility, Visibility::Public);
@@ -400,7 +400,7 @@ impl Emitter<'_> {
         let arity = elem_expressions.len();
 
         let needs_explicit_type_args =
-            !slot_types.is_empty() && slot_types.iter().any(|t| self.as_interface(t).is_some());
+            !slot_types.is_empty() && slot_types.iter().any(|t| self.facts.is_interface(t));
 
         if !needs_explicit_type_args {
             return format!(
@@ -430,9 +430,9 @@ impl Emitter<'_> {
     ) -> String {
         let inner = self.emit_operand(output, expression, ExpressionContext::value());
 
-        if let Type::Nominal { id, .. } = &self.peel_alias(ty)
+        if let Type::Nominal { id, .. } = &self.facts.peel_alias(ty)
             && matches!(
-                self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+                self.facts.definition(id.as_str()).map(|d| &d.body),
                 Some(DefinitionBody::Interface { .. })
             )
         {
@@ -611,7 +611,7 @@ impl Emitter<'_> {
                 }
                 if let Type::Nominal { id, .. } = ty {
                     matches!(
-                        self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+                        self.facts.definition(id.as_str()).map(|d| &d.body),
                         Some(DefinitionBody::Enum { .. })
                     )
                 } else {
@@ -624,7 +624,7 @@ impl Emitter<'_> {
             {
                 if let Type::Nominal { id, .. } = ty {
                     if !matches!(
-                        self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+                        self.facts.definition(id.as_str()).map(|d| &d.body),
                         Some(DefinitionBody::Enum { .. })
                     ) {
                         return false;
@@ -635,10 +635,7 @@ impl Emitter<'_> {
                     } = &receiver_ty
                     {
                         matches!(
-                            self.ctx
-                                .definitions
-                                .get(receiver_id.as_str())
-                                .map(|d| &d.body),
+                            self.facts.definition(receiver_id.as_str()).map(|d| &d.body),
                             Some(DefinitionBody::Enum { .. } | DefinitionBody::TypeAlias { .. })
                         )
                     } else {

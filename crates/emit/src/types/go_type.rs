@@ -222,11 +222,11 @@ impl Emitter<'_> {
         }
 
         if let Some((module, _)) = qualified_name.split_once('.')
-            && module != self.current_module
+            && !self.facts.is_current_module(module)
             && module != go_name::PRELUDE_MODULE
             && !go_name::is_go_import(module)
         {
-            let go_path = format!("{}/{}", self.ctx.go_module, module);
+            let go_path = self.facts.go_import_path(module);
             let mut result = if params.is_empty() {
                 GoType::with_go_import(name.clone(), go_path)
             } else {
@@ -322,7 +322,7 @@ impl Emitter<'_> {
 
         let escaped = go_name::escape_keyword(unqualified);
 
-        if module == self.current_module || module == go_name::PRELUDE_MODULE {
+        if self.facts.is_current_module(module) || module == go_name::PRELUDE_MODULE {
             escaped.into_owned()
         } else {
             let pkg = self.go_pkg_qualifier(module);
@@ -376,7 +376,7 @@ impl Emitter<'_> {
 
     pub(crate) fn zero_value(&self, ty: &Type) -> (String, crate::EmitEffects) {
         let mut effects = crate::EmitEffects::default();
-        if self.as_interface(ty).is_some() {
+        if self.facts.is_interface(ty) {
             return ("nil".to_string(), effects);
         }
 

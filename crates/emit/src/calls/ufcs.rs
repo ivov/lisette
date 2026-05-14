@@ -19,7 +19,7 @@ impl Emitter<'_> {
         receiver_ty: &Type,
     ) -> Option<String> {
         let method_key = format!("{}.{}", qualified_name, member);
-        let definition_ty = self.ctx.definitions.get(method_key.as_str())?.ty().clone();
+        let definition_ty = self.facts.definition(method_key.as_str())?.ty().clone();
 
         let Type::Forall { vars, body } = &definition_ty else {
             return None;
@@ -155,9 +155,8 @@ impl Emitter<'_> {
 
         let method_key = format!("{}.{}", qualified_name, member);
         let is_public = self
-            .ctx
-            .definitions
-            .get(method_key.as_str())
+            .facts
+            .definition(method_key.as_str())
             .map(|d| d.visibility().is_public())
             .unwrap_or(false)
             || self.method_needs_export(member);

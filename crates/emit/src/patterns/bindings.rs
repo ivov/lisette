@@ -157,7 +157,7 @@ impl Emitter<'_> {
                     .iter()
                     .any(|e| self.pattern_has_binding_collisions(e))
                     || if let RestPattern::Bind { name, .. } = rest {
-                        !self.ctx.unused.is_unused_rest_binding(rest) && self.is_declared(name)
+                        !self.facts.is_unused_rest_binding(rest) && self.is_declared(name)
                     } else {
                         false
                     }
@@ -171,7 +171,7 @@ impl Emitter<'_> {
                 ..
             } => {
                 self.pattern_has_binding_collisions(inner)
-                    || (!self.ctx.unused.is_unused_binding(p) && self.is_declared(name))
+                    || (!self.facts.is_unused_binding(p) && self.is_declared(name))
             }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
         }
@@ -315,7 +315,7 @@ impl Emitter<'_> {
                 let Some(Definition {
                     body: DefinitionBody::Struct { generics, .. },
                     ..
-                }) = self.ctx.definitions.get(struct_name.as_str())
+                }) = self.facts.definition(struct_name.as_str())
                 else {
                     return;
                 };
@@ -340,7 +340,7 @@ impl Emitter<'_> {
                 let Some(Definition {
                     body: DefinitionBody::Enum { generics, .. },
                     ..
-                }) = self.ctx.definitions.get(enum_name.as_str())
+                }) = self.facts.definition(enum_name.as_str())
                 else {
                     return;
                 };
@@ -369,7 +369,7 @@ impl Emitter<'_> {
         let Type::Nominal { id, params, .. } = resolved else {
             return;
         };
-        match self.ctx.definitions.get(id.as_str()).map(|d| &d.body) {
+        match self.facts.definition(id.as_str()).map(|d| &d.body) {
             Some(DefinitionBody::Struct {
                 fields: field_defs,
                 generics,
@@ -430,7 +430,7 @@ impl Emitter<'_> {
             let Some(Definition {
                 body: DefinitionBody::Enum { generics, .. },
                 ..
-            }) = self.ctx.definitions.get(enum_name.as_str())
+            }) = self.facts.definition(enum_name.as_str())
             else {
                 return;
             };
@@ -453,7 +453,7 @@ impl Emitter<'_> {
                 variants, generics, ..
             },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return;
         };
@@ -492,7 +492,7 @@ impl Emitter<'_> {
                     ..
                 },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return;
         };

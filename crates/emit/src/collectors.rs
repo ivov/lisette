@@ -85,7 +85,7 @@ impl Emitter<'_> {
     pub(crate) fn collect_module_aliases(&mut self, files: &[&File]) {
         for file in files {
             for import in file.imports() {
-                let Some(alias) = import.effective_alias(self.ctx.go_package_names) else {
+                let Some(alias) = import.effective_alias(self.facts.go_package_names()) else {
                     continue;
                 };
                 self.module
@@ -129,7 +129,7 @@ impl Emitter<'_> {
                 let Some((module, _)) = name.split_once('.') else {
                     continue;
                 };
-                if module == self.current_module
+                if self.facts.is_current_module(module)
                     || go_name::is_go_import(module)
                     || module == go_name::PRELUDE_MODULE
                 {
@@ -146,13 +146,12 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn collect_local_make_function_code(&mut self) -> HashMap<u32, Vec<String>> {
-        let module_prefix = format!("{}.", self.current_module);
+        let module_prefix = format!("{}.", self.facts.current_module());
         let mut code: HashMap<u32, Vec<String>> = HashMap::default();
 
         let local_enums: Vec<_> = self
-            .ctx
-            .definitions
-            .iter()
+            .facts
+            .iter_definitions()
             .filter_map(|(key, definition)| {
                 let syntax::program::Definition {
                     name: Some(name),

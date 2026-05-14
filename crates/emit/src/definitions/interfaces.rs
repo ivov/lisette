@@ -14,7 +14,7 @@ impl Emitter<'_> {
         generics: &[Generic],
         is_public: bool,
     ) -> String {
-        if self.current_module == go_name::PRELUDE_MODULE {
+        if self.facts.is_current_module(go_name::PRELUDE_MODULE) {
             return format!("type {} struct{{}}", name);
         }
 
@@ -87,7 +87,7 @@ impl Emitter<'_> {
             .get_function_ret()
             .expect("interface method must have return type")
             .clone();
-        let qualified_id = format!("{}.{}", self.current_module, interface_name);
+        let qualified_id = self.facts.qualified_current(interface_name);
         let hints = self.go_interface_method_hints(&qualified_id, &func.name);
         let return_type = match self.classify_with_go_hints(&raw_return_ty, &hints) {
             Some(shape) => self.render_lowered_return_ty(&shape, &raw_return_ty),

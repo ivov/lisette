@@ -39,7 +39,7 @@ impl AbiShape {
 impl Emitter<'_> {
     /// Lowered shape for a Lisette return type, or `None` to keep it tagged.
     pub(crate) fn classify_direct_emission(&self, return_ty: &Type) -> Option<AbiShape> {
-        let peeled = self.peel_alias(return_ty);
+        let peeled = self.facts.peel_alias(return_ty);
         if peeled.is_result() && self.err_slot_is_nilable(&peeled) {
             return Some(if peeled.ok_type().is_unit() {
                 AbiShape::BareError
@@ -51,7 +51,7 @@ impl Emitter<'_> {
             return Some(AbiShape::PartialTuple);
         }
         if peeled.is_option() {
-            return Some(if self.is_nullable_option(&peeled) {
+            return Some(if self.facts.is_nullable_option(&peeled) {
                 AbiShape::NullableReturn
             } else {
                 AbiShape::CommaOk
@@ -68,9 +68,9 @@ impl Emitter<'_> {
     /// True when the err slot of a `Result`/`Partial` lowers to a Go
     /// nilable type, so `nil` typechecks as the no-error sentinel.
     fn err_slot_is_nilable(&self, fallible_ty: &Type) -> bool {
-        let err = self.peel_alias(&fallible_ty.err_type());
+        let err = self.facts.peel_alias(&fallible_ty.err_type());
         matches!(&err, Type::Nominal { id, .. } if id.as_str() == PRELUDE_ERROR_ID)
-            || self.is_nilable_go_type(&err)
+            || self.facts.is_nilable_go_type(&err)
     }
 
     /// Render the lowered Go return type.
@@ -79,7 +79,7 @@ impl Emitter<'_> {
         shape: &AbiShape,
         return_ty: &Type,
     ) -> String {
-        let peeled = self.peel_alias(return_ty);
+        let peeled = self.facts.peel_alias(return_ty);
         match shape {
             AbiShape::BareError => self.go_type_as_string(&peeled.err_type()),
             AbiShape::ResultTuple | AbiShape::PartialTuple => {
@@ -105,8 +105,8 @@ impl Emitter<'_> {
     /// Render a tuple slot's Go type, lowering `Option<NilableT>` to bare
     /// nilable `T` (the only arity-preserving slot recursion).
     pub(crate) fn tuple_slot_lowered_ty_string(&mut self, slot_ty: &Type) -> String {
-        if self.is_nullable_option(slot_ty) {
-            let inner = self.peel_alias(slot_ty).ok_type();
+        if self.facts.is_nullable_option(slot_ty) {
+            let inner = self.facts.peel_alias(slot_ty).ok_type();
             return self.go_type_as_string(&inner);
         }
         self.go_type_as_string(slot_ty)
@@ -120,7 +120,7 @@ impl Emitter<'_> {
         return_ty: &Type,
     ) -> crate::types::go_type::GoType {
         use crate::types::go_type::GoType;
-        let peeled = self.peel_alias(return_ty);
+        let peeled = self.facts.peel_alias(return_ty);
         match shape {
             AbiShape::BareError => self.go_type(&peeled.err_type()),
             AbiShape::ResultTuple | AbiShape::PartialTuple => {
@@ -143,8 +143,8 @@ impl Emitter<'_> {
                 let elem_gos: Vec<GoType> = elems
                     .iter()
                     .map(|t| {
-                        if self.is_nullable_option(t) {
-                            let inner = self.peel_alias(t).ok_type();
+                        if self.facts.is_nullable_option(t) {
+                            let inner = self.facts.peel_alias(t).ok_type();
                             self.go_type(&inner)
                         } else {
                             self.go_type(t)
@@ -276,13 +276,13 @@ impl Emitter<'_> {
                     return true;
                 }
                 let resolved = self.peel_alias_id(name);
-                if let Some(def) = self.ctx.definitions.get(resolved.as_str())
+                if let Some(def) = self.facts.definition(resolved.as_str())
                     && matches!(def.body, syntax::program::DefinitionBody::TypeAlias { .. })
-                    && self.resolve_to_function_type(&def.ty).is_some()
+                    && self.facts.resolve_to_function_type(&def.ty).is_some()
                 {
                     return true;
                 }
-                if let Some(def) = self.ctx.definitions.get(resolved.as_str()) {
+                if let Some(def) = self.facts.definition(resolved.as_str()) {
                     matches!(def.body, syntax::program::DefinitionBody::Interface { .. })
                 } else {
                     false
@@ -314,6 +314,7 @@ impl Emitter<'_> {
         let callee_ty = callee.get_type();
         let unwrapped = callee_ty.unwrap_forall();
         let resolved = self
+            .facts
             .resolve_to_function_type(unwrapped)
             .unwrap_or_else(|| unwrapped.clone());
         let Type::Function { return_type, .. } = resolved else {

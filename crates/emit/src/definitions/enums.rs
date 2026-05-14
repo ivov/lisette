@@ -16,7 +16,7 @@ impl Emitter<'_> {
             return None;
         }
 
-        let enum_id = format!("{}.{}", self.current_module, name);
+        let enum_id = self.facts.qualified_current(name);
 
         if !self.module.has_enum_layout(&enum_id) {
             return None;
@@ -25,7 +25,7 @@ impl Emitter<'_> {
         let variant_field_types: Vec<Type> = if let Some(Definition {
             body: DefinitionBody::Enum { variants, .. },
             ..
-        }) = self.ctx.definitions.get(enum_id.as_str())
+        }) = self.facts.definition(enum_id.as_str())
         {
             variants
                 .iter()

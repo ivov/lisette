@@ -20,7 +20,7 @@ pub(crate) fn format_lowered_err_return(
     match shape {
         AbiShape::BareError => format!("return {}", err_expr),
         AbiShape::ResultTuple => {
-            let ok_ty = emitter.peel_alias(return_ty).ok_type();
+            let ok_ty = emitter.facts.peel_alias(return_ty).ok_type();
             let ok_ty_str = emitter.go_type_as_string(&ok_ty);
             format!("return *new({}), {}", ok_ty_str, err_expr)
         }
@@ -54,7 +54,7 @@ pub(crate) fn format_lowered_none_return(
 ) -> String {
     match shape {
         AbiShape::CommaOk => {
-            let inner = emitter.peel_alias(return_ty).ok_type();
+            let inner = emitter.facts.peel_alias(return_ty).ok_type();
             let inner_str = emitter.go_type_as_string(&inner);
             format!("return *new({}), false", inner_str)
         }
@@ -73,7 +73,7 @@ pub(crate) fn emit_lowered_result_return(
 ) {
     let ok_ty_str = match shape {
         AbiShape::ResultTuple | AbiShape::PartialTuple | AbiShape::CommaOk => {
-            let ok_ty = emitter.peel_alias(return_ty).ok_type();
+            let ok_ty = emitter.facts.peel_alias(return_ty).ok_type();
             Some(emitter.go_type_as_string(&ok_ty))
         }
         _ => None,
@@ -127,9 +127,9 @@ pub(crate) fn emit_lowered_result_return(
             );
         }
         AbiShape::Tuple { arity } => {
-            let peeled = emitter.peel_alias(return_ty);
+            let peeled = emitter.facts.peel_alias(return_ty);
             let slot_tys = tuple_element_types(&peeled);
-            let any_nullable = slot_tys.iter().any(|t| emitter.is_nullable_option(t));
+            let any_nullable = slot_tys.iter().any(|t| emitter.facts.is_nullable_option(t));
             if !any_nullable {
                 let fields: Vec<String> = (0..*arity)
                     .map(|i| format!("{}.{}", result_value, syntax::parse::TUPLE_FIELDS[i]))
@@ -142,7 +142,7 @@ pub(crate) fn emit_lowered_result_return(
                     let raw = format!("{}.{}", result_value, syntax::parse::TUPLE_FIELDS[i]);
                     slot_tys
                         .get(i)
-                        .filter(|t| emitter.is_nullable_option(t))
+                        .filter(|t| emitter.facts.is_nullable_option(t))
                         .map(|t| emitter.emit_option_unwrap_to_nullable(output, &raw, t))
                         .unwrap_or(raw)
                 })
@@ -174,14 +174,14 @@ pub(crate) fn emit_callee_abi_wrapping(
         AbiShape::Tuple { arity } => {
             let temps = emitter.create_temp_vars("ret", *arity);
             write_line!(output, "{} := {}", temps.join(", "), call_str);
-            let slot_tys = tuple_element_types(&emitter.peel_alias(result_ty));
+            let slot_tys = tuple_element_types(&emitter.facts.peel_alias(result_ty));
             let wrapped: Vec<String> = temps
                 .iter()
                 .enumerate()
                 .map(|(i, v)| {
                     slot_tys
                         .get(i)
-                        .filter(|slot_ty| emitter.is_nullable_option(slot_ty))
+                        .filter(|slot_ty| emitter.facts.is_nullable_option(slot_ty))
                         .map(|slot_ty| emitter.emit_nil_check_option_wrap(output, v, slot_ty))
                         .unwrap_or_else(|| v.clone())
                 })
@@ -286,7 +286,7 @@ fn emit_option_return_adapter(
     let opt = emitter.fresh_var(Some("opt"));
     emitter.declare(&opt);
 
-    let is_nilable = emitter.is_nilable_go_type(&inner);
+    let is_nilable = emitter.facts.is_nilable_go_type(&inner);
     if is_nilable {
         let go_ret = emitter.go_type_as_string(&inner);
         let b = format!(
@@ -481,14 +481,14 @@ fn emit_lowered_tuple_tail(
         && elements.len() == arity
     {
         let return_ty = return_ctx.expect_ty();
-        let slot_tys = tuple_element_types(&emitter.peel_alias(&return_ty));
+        let slot_tys = tuple_element_types(&emitter.facts.peel_alias(&return_ty));
         let stages: Vec<EmittedExpression> = elements
             .iter()
             .enumerate()
             .map(|(i, e)| {
                 let mut setup = String::new();
                 let value = match slot_tys.get(i) {
-                    Some(slot_ty) if emitter.is_nullable_option(slot_ty) => {
+                    Some(slot_ty) if emitter.facts.is_nullable_option(slot_ty) => {
                         emit_nullable_slot_value(emitter, &mut setup, e, slot_ty)
                     }
                     _ => emitter.emit_composite_value(&mut setup, e, ExpressionContext::value()),
@@ -538,7 +538,7 @@ fn emit_lowered_partial_tail(
             }
             "Err" => {
                 let e = emitter.emit_composite_value(output, &args[0], ExpressionContext::value());
-                let ok_ty = emitter.peel_alias(&return_ty).ok_type();
+                let ok_ty = emitter.facts.peel_alias(&return_ty).ok_type();
                 let ok_ty_str = emitter.go_type_as_string(&ok_ty);
                 write_line!(output, "return *new({}), {}", ok_ty_str, e);
             }

@@ -4,6 +4,7 @@ mod collectors;
 pub(crate) mod control_flow;
 pub(crate) mod definitions;
 pub(crate) mod expressions;
+mod facts;
 pub mod imports;
 mod module_state;
 pub(crate) mod names;
@@ -20,6 +21,7 @@ mod utils;
 pub(crate) use bindings::Bindings;
 pub(crate) use calls::go_interop::GoCallStrategy;
 pub(crate) use definitions::enum_layout::EnumLayout;
+pub(crate) use facts::EmitFacts;
 pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
@@ -149,7 +151,7 @@ pub(crate) fn classify_go_return_type(
         if let Some(value) = sentinel_hint(go_hints) {
             return Some(GoCallStrategy::Sentinel { value });
         }
-        if !is_nullable_option(definitions, return_ty) {
+        if !facts::is_nullable_option(definitions, return_ty) {
             return Some(GoCallStrategy::CommaOk);
         }
         if go_hints.iter().any(|s| s == "comma_ok") {
@@ -172,48 +174,6 @@ pub(crate) fn sentinel_hint(hints: &[String]) -> Option<i64> {
         .then_some(-1)
 }
 
-pub(crate) fn is_nullable_option(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
-    ty.is_option() && is_nilable_go_type(definitions, &ty.ok_type())
-}
-
-pub(crate) fn is_nilable_go_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
-    ty.is_ref()
-        || as_interface(definitions, ty).is_some()
-        || resolve_to_function_type(definitions, ty).is_some()
-}
-
-pub(crate) fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<String> {
-    let Type::Nominal { id, .. } = peel_alias(definitions, ty) else {
-        return None;
-    };
-    matches!(
-        definitions.get(id.as_str()).map(|d| &d.body),
-        Some(DefinitionBody::Interface { .. })
-    )
-    .then(|| id.to_string())
-}
-
-pub(crate) fn resolve_to_function_type(
-    definitions: &HashMap<Symbol, Definition>,
-    ty: &Type,
-) -> Option<Type> {
-    fn as_function(ty: &Type) -> Option<Type> {
-        if matches!(ty, Type::Function { .. }) {
-            return Some(ty.clone());
-        }
-        ty.get_underlying()
-            .filter(|u| matches!(u, Type::Function { .. }))
-            .cloned()
-    }
-    as_function(ty).or_else(|| as_function(&peel_alias(definitions, ty)))
-}
-
-pub(crate) fn peel_alias(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Type {
-    syntax::types::peel_alias(ty, |id| {
-        definitions.get(id).is_some_and(Definition::is_type_alias)
-    })
-}
-
 pub struct TestEmitConfig<'a> {
     pub definitions: &'a HashMap<Symbol, Definition>,
     pub module_id: &'a str,
@@ -224,27 +184,11 @@ pub struct TestEmitConfig<'a> {
     pub go_package_names: &'a HashMap<String, String>,
 }
 
-struct EmitContext<'a> {
-    definitions: &'a HashMap<Symbol, Definition>,
-    unused: &'a UnusedInfo,
-    mutations: &'a MutationInfo,
-    ufcs_methods: &'a HashSet<(String, String)>,
-    go_package_names: &'a HashMap<String, String>,
-    entry_module: ModuleId,
-    go_module: String,
-    options: EmitOptions,
-    /// file_id -> byte offset to line lookup.
-    line_indexes: Arc<HashMap<u32, LineIndex>>,
-}
-
 pub struct Emitter<'a> {
-    ctx: EmitContext<'a>,
-    globals: Arc<GlobalEmitData>,
+    pub(crate) facts: EmitFacts<'a>,
     pub(crate) module: module_state::ModuleState,
     pub(crate) function_state: module_state::FunctionEmissionState,
     pub(crate) scope: scope::ScopeState,
-
-    current_module: ModuleId,
 
     synthesized_adapter_types: HashMap<(EcoString, EcoString), String>,
     pending_adapter_types: Vec<String>,
@@ -345,7 +289,8 @@ impl<'a> Emitter<'a> {
             ),
             None => (false, Arc::new(HashMap::default())),
         };
-        let ctx = EmitContext {
+        let globals = Arc::new(GlobalEmitData::compute(config.definitions));
+        let facts = EmitFacts::new(facts::EmitFactsConfig {
             definitions: config.definitions,
             unused: config.unused,
             mutations: config.mutations,
@@ -355,19 +300,18 @@ impl<'a> Emitter<'a> {
             go_module: config.go_module.to_string(),
             options: EmitOptions { debug },
             line_indexes,
-        };
-        let globals = Arc::new(GlobalEmitData::compute(config.definitions));
-        Self::new(ctx, globals, config.module_id)
+            globals,
+            current_module: config.module_id.to_string(),
+        });
+        Self::new(facts)
     }
 
-    fn new(ctx: EmitContext<'a>, globals: Arc<GlobalEmitData>, current_module: &str) -> Self {
+    fn new(facts: EmitFacts<'a>) -> Self {
         Self {
-            ctx,
-            globals,
+            facts,
             module: module_state::ModuleState::default(),
             function_state: module_state::FunctionEmissionState::default(),
             scope: scope::ScopeState::new(),
-            current_module: current_module.to_string(),
             synthesized_adapter_types: HashMap::default(),
             pending_adapter_types: Vec::new(),
             requirements: requirements::EmitRequirements::new(),
@@ -452,10 +396,6 @@ impl<'a> Emitter<'a> {
         self.scope.exit_block();
     }
 
-    pub(crate) fn current_module(&self) -> &str {
-        &self.current_module
-    }
-
     pub(crate) fn fresh_var(&mut self, hint: Option<&str>) -> String {
         self.scope.fresh_go_name(hint)
     }
@@ -493,11 +433,11 @@ impl<'a> Emitter<'a> {
     }
 
     pub(crate) fn maybe_line_directive(&self, span: &Span) -> String {
-        if !self.ctx.options.debug || span.is_dummy() {
+        if !self.facts.debug_enabled() || span.is_dummy() {
             return String::new();
         }
 
-        let Some(source) = self.ctx.line_indexes.get(&span.file_id) else {
+        let Some(source) = self.facts.line_index(span.file_id) else {
             return String::new();
         };
 
@@ -507,20 +447,8 @@ impl<'a> Emitter<'a> {
         format!("//line {}:{}:{}\n", source.path, line, col)
     }
 
-    fn unused_imports_for_current_module<'u>(
-        unused: &'u UnusedInfo,
-        current_module: &str,
-    ) -> &'u HashSet<EcoString> {
-        static EMPTY: std::sync::LazyLock<HashSet<EcoString>> =
-            std::sync::LazyLock::new(HashSet::default);
-        unused
-            .imports_by_module
-            .get(current_module)
-            .unwrap_or(&EMPTY)
-    }
-
     pub fn emit_files(&mut self, files: &[&File], module_id: &str) -> Vec<OutputFile> {
-        self.current_module = module_id.to_string();
+        self.facts.set_current_module(module_id);
         self.collect_module_aliases(files);
         self.collect_local_exported_method_names(files);
         self.collect_impl_bounds(files);
@@ -530,7 +458,7 @@ impl<'a> Emitter<'a> {
 
         let mut output_files = Vec::new();
 
-        let package_name = if module_id == self.ctx.entry_module {
+        let package_name = if self.facts.is_entry_module(module_id) {
             "main".to_string()
         } else {
             let raw = module_id.rsplit('/').next().unwrap_or(module_id);
@@ -560,12 +488,10 @@ impl<'a> Emitter<'a> {
                 source.collect_with_blank(adapter_decl);
             }
 
-            let unused_imports =
-                Self::unused_imports_for_current_module(self.ctx.unused, &self.current_module);
             let mut import_builder = ImportBuilder::new(
-                &self.ctx.go_module,
-                unused_imports,
-                self.ctx.go_package_names,
+                self.facts.go_module(),
+                self.facts.unused_imports_for_current_module(),
+                self.facts.go_package_names(),
             );
             import_builder.collect_from_file(file);
 
@@ -588,8 +514,8 @@ impl<'a> Emitter<'a> {
     }
 }
 
-fn emit_module(
-    analysis: &EmitInput,
+fn emit_module<'a>(
+    analysis: &'a EmitInput,
     go_module: &str,
     options: &EmitOptions,
     line_indexes: &Arc<HashMap<u32, LineIndex>>,
@@ -597,7 +523,7 @@ fn emit_module(
     module_id: &str,
     module_info: &syntax::program::ModuleInfo,
 ) -> Vec<OutputFile> {
-    let ctx = EmitContext {
+    let facts = EmitFacts::new(facts::EmitFactsConfig {
         definitions: &analysis.definitions,
         unused: &analysis.unused,
         mutations: &analysis.mutations,
@@ -607,8 +533,10 @@ fn emit_module(
         go_module: go_module.to_string(),
         options: options.clone(),
         line_indexes: line_indexes.clone(),
-    };
-    let mut emitter = Emitter::new(ctx, globals.clone(), module_id);
+        globals: globals.clone(),
+        current_module: module_id.to_string(),
+    });
+    let mut emitter: Emitter<'a> = Emitter::new(facts);
 
     let files: Vec<_> = module_info
         .file_ids

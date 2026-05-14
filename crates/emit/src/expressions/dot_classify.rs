@@ -104,14 +104,10 @@ impl Emitter<'_> {
         let enum_name = unqualified_name(enum_id);
         let constructor_key = format!("{}.{}", enum_name, variant_name);
 
-        let make_fn_name = self
-            .globals
-            .make_function_names
-            .get(&constructor_key)?
-            .clone();
+        let make_fn_name = self.facts.make_function_name(&constructor_key)?.to_string();
 
         let enum_module = go_name::module_of_type_id(enum_id);
-        let needs_qualifier = enum_module != self.current_module;
+        let needs_qualifier = !self.facts.is_current_module(enum_module);
 
         let needs_type_args = ret_params.len() > fn_params.len();
         let type_args = if needs_type_args {
@@ -154,13 +150,13 @@ impl Emitter<'_> {
 
         let enum_module = module_part(enum_id);
         let is_prelude = enum_module == go_name::PRELUDE_MODULE;
-        let is_cross_module = enum_module != self.current_module && !is_prelude;
+        let is_cross_module = !self.facts.is_current_module(enum_module) && !is_prelude;
 
         if is_cross_module && !matches!(expression, Expression::Identifier { .. }) {
             return None;
         }
 
-        let definition = self.ctx.definitions.get(enum_id.as_str())?;
+        let definition = self.facts.definition(enum_id.as_str())?;
         let DefinitionBody::Enum { variants, .. } = &definition.body else {
             return None;
         };
@@ -172,7 +168,7 @@ impl Emitter<'_> {
 
         let enum_name = unqualified_name(enum_id);
         let key = format!("{}.{}", enum_name, variant_name);
-        let make_fn = self.globals.make_function_names.get(&key)?.clone();
+        let make_fn = self.facts.make_function_name(&key)?.to_string();
         let type_args = self.format_type_args(params);
 
         if is_prelude {
@@ -208,7 +204,7 @@ impl Emitter<'_> {
             return None;
         };
 
-        let definition = self.ctx.definitions.get(enum_id.as_str())?;
+        let definition = self.facts.definition(enum_id.as_str())?;
         let DefinitionBody::Enum { variants, .. } = &definition.body else {
             return None;
         };
@@ -400,7 +396,7 @@ impl Emitter<'_> {
         let module_name = module_name.as_str();
 
         let qualified_type = format!("{}.{}", module_name, type_name);
-        let definition = self.ctx.definitions.get(qualified_type.as_str())?;
+        let definition = self.facts.definition(qualified_type.as_str())?;
 
         let is_go_type = go_name::is_go_import(module_name);
         if !is_go_type

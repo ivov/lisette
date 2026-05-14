@@ -78,7 +78,7 @@ impl Emitter<'_> {
             return IdentifierKind::PublicFunction { capitalized };
         }
 
-        let mut make_fn = self.globals.make_function_names.get(&name);
+        let mut make_fn = self.facts.make_function_name(&name);
 
         if make_fn.is_none() {
             let enum_id = match ty {
@@ -96,12 +96,12 @@ impl Emitter<'_> {
             if let Some(id) = enum_id {
                 let enum_name = unqualified_name(id);
                 let qualified = format!("{}.{}", enum_name, value);
-                make_fn = self.globals.make_function_names.get(&qualified);
+                make_fn = self.facts.make_function_name(&qualified);
             }
         }
 
         if let Some(make_fn_value) = make_fn {
-            let name = make_fn_value.clone();
+            let name = make_fn_value.to_string();
 
             match ty {
                 Type::Nominal { params, .. } => {
@@ -130,7 +130,7 @@ impl Emitter<'_> {
             }
         }
 
-        let resolved = make_fn.cloned().unwrap_or(name);
+        let resolved = make_fn.map(str::to_string).unwrap_or(name);
         IdentifierKind::Regular { name: resolved }
     }
 
@@ -166,14 +166,13 @@ impl Emitter<'_> {
         name: &str,
         instantiated_ty: &Type,
     ) -> Option<String> {
-        let qualified_name = format!("{}.{}", self.current_module, name);
+        let qualified_name = self.facts.qualified_current(name);
         let definition_ty = self
-            .ctx
-            .definitions
-            .get(qualified_name.as_str())
+            .facts
+            .definition(qualified_name.as_str())
             .or_else(|| {
                 let prelude_name = format!("{}.{}", go_name::PRELUDE_MODULE, name);
-                self.ctx.definitions.get(prelude_name.as_str())
+                self.facts.definition(prelude_name.as_str())
             })?
             .ty();
 
@@ -209,7 +208,7 @@ impl Emitter<'_> {
         qualified_name: &str,
         instantiated_ty: &Type,
     ) -> Option<String> {
-        let definition_ty = self.ctx.definitions.get(qualified_name)?.ty().clone();
+        let definition_ty = self.facts.definition(qualified_name)?.ty().clone();
 
         let Type::Forall { vars, body } = &definition_ty else {
             return None;
@@ -261,7 +260,7 @@ impl Emitter<'_> {
         let real_type_part = self
             .resolve_alias_type_name(type_part)
             .unwrap_or_else(|| type_part.to_string());
-        let qualified_name = format!("{}.{}", self.current_module, real_type_part);
+        let qualified_name = self.facts.qualified_current(&real_type_part);
         let first = fn_params.first()?;
         let stripped = first.strip_refs();
         let is_self =
@@ -273,19 +272,14 @@ impl Emitter<'_> {
 
         let is_pointer = first.is_ref();
 
-        if self
-            .ctx
-            .ufcs_methods
-            .contains(&(qualified_name.to_string(), method_part.to_string()))
-        {
+        if self.facts.is_ufcs_method(&qualified_name, method_part) {
             return None;
         }
 
-        let method_key = format!("{}.{}.{}", self.current_module, type_part, method_part);
+        let method_key = self.facts.qualified_current_member(type_part, method_part);
         let should_export = self
-            .ctx
-            .definitions
-            .get(method_key.as_str())
+            .facts
+            .definition(method_key.as_str())
             .map(|d| d.visibility().is_public())
             .unwrap_or(false)
             || self.method_needs_export(method_part);
@@ -339,7 +333,7 @@ impl Emitter<'_> {
             return None;
         };
 
-        if module_name == self.current_module {
+        if self.facts.is_current_module(&module_name) {
             return None;
         }
 
@@ -347,9 +341,8 @@ impl Emitter<'_> {
 
         let method_key = format!("{}.{}", type_id, method_name);
         let is_public = self
-            .ctx
-            .definitions
-            .get(method_key.as_str())
+            .facts
+            .definition(method_key.as_str())
             .map(|d| d.visibility().is_public())
             .unwrap_or(true)
             || self.method_needs_export(method_name);
@@ -366,7 +359,7 @@ impl Emitter<'_> {
             return None;
         };
 
-        let definition = self.ctx.definitions.get(enum_id.as_str())?;
+        let definition = self.facts.definition(enum_id.as_str())?;
         if !matches!(definition.body, DefinitionBody::ValueEnum { .. }) {
             return None;
         }
@@ -395,8 +388,8 @@ impl Emitter<'_> {
             return None;
         }
 
-        let qualified_name = format!("{}.{}", self.current_module, name);
-        let definition = self.ctx.definitions.get(qualified_name.as_str())?;
+        let qualified_name = self.facts.qualified_current(name);
+        let definition = self.facts.definition(qualified_name.as_str())?;
 
         if !definition.visibility().is_public() {
             return None;

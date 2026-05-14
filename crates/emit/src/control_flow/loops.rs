@@ -429,7 +429,7 @@ impl Emitter<'_> {
             ..
         } = expression
         {
-            !self.ctx.mutations.is_mutated(*id)
+            !self.facts.is_mutated(*id)
         } else {
             false
         }

@@ -42,7 +42,7 @@ impl Emitter<'_> {
 
         if let Type::Nominal { id, .. } = underlying
             && let Some((module, _)) = id.split_once('.')
-            && module != self.current_module
+            && !self.facts.is_current_module(module)
             && module != go_name::PRELUDE_MODULE
             && !go_name::is_go_import(module)
         {

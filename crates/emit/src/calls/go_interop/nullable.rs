@@ -67,7 +67,7 @@ impl Emitter<'_> {
 
         let inner_ty = option_ty.ok_type();
         let inner_tuple_arity = inner_ty.tuple_arity();
-        let needs_nilable_validation = self.is_nullable_option(option_ty);
+        let needs_nilable_validation = self.facts.is_nullable_option(option_ty);
 
         let needs_complex =
             needs_nilable_validation || (tuple_flattened && inner_tuple_arity.is_some());
@@ -116,7 +116,7 @@ impl Emitter<'_> {
 
         let condition = if self.is_interface_option(option_ty) {
             format!("{} && !lisette.IsNilInterface({})", ok_var, val_vars[0])
-        } else if self.is_nullable_option(option_ty) {
+        } else if self.facts.is_nullable_option(option_ty) {
             format!("{} && {} != nil", ok_var, val_vars[0])
         } else {
             ok_var.clone()

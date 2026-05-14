@@ -106,7 +106,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             Pattern::Tuple { elements, .. } => {
                 let all_unused = elements.iter().all(|el| match el {
                     Pattern::WildCard { .. } => true,
-                    Pattern::Identifier { .. } => self.emitter.ctx.unused.is_unused_binding(el),
+                    Pattern::Identifier { .. } => self.emitter.facts.is_unused_binding(el),
                     _ => false,
                 });
                 if all_unused {

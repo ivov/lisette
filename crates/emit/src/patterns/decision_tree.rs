@@ -904,7 +904,7 @@ fn interface_assert_child_path(
     path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) -> Option<AccessPath> {
-    path_ty.filter(|st| emitter.as_interface(st).is_some())?;
+    path_ty.filter(|st| emitter.facts.as_interface(st).is_some())?;
     let go_type_result = emitter.go_type(pattern_ty);
     collector.effects.merge_from_go_type(&go_type_result);
     let go_type = go_type_result.code;
@@ -974,7 +974,7 @@ fn collect_enum_variant_checks(
         let variant_name = go_name::unqualified_name(identifier);
         let module = go_name::module_of_type_id(id.as_str());
         let qualifier = emitter.go_pkg_qualifier(module);
-        let go_literal = if qualifier.is_empty() || qualifier == emitter.current_module() {
+        let go_literal = if qualifier.is_empty() || qualifier == emitter.facts.current_module() {
             variant_name.to_string()
         } else {
             format!("{}.{}", qualifier, variant_name)
@@ -1062,7 +1062,7 @@ fn collect_tagged_enum_checks(
     let resolved = go_name::variant(
         variant.identifier,
         variant.ty,
-        emitter.current_module(),
+        emitter.facts.current_module(),
         alias.as_deref(),
     );
     if resolved.needs_stdlib {
@@ -1173,8 +1173,12 @@ fn collect_struct_checks(
         let enum_info = detect_enum_info(emitter, ty, identifier, typed);
         if enum_info.is_some() {
             let alias = emitter.module_alias_for_type(ty);
-            let resolved =
-                go_name::variant(identifier, ty, emitter.current_module(), alias.as_deref());
+            let resolved = go_name::variant(
+                identifier,
+                ty,
+                emitter.facts.current_module(),
+                alias.as_deref(),
+            );
             if resolved.needs_stdlib {
                 collector.effects.needs_stdlib = true;
             }

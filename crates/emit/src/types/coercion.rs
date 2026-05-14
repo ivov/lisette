@@ -114,7 +114,7 @@ fn resolve_to_go(emitter: &Emitter, value_ty: &Type, target_ty: &Type) -> Coerci
             ty: value_ty.clone(),
         };
     }
-    if emitter.is_nullable_option(value_ty) {
+    if emitter.facts.is_nullable_option(value_ty) {
         CoercionKind::UnwrapNullableOption {
             ty: value_ty.clone(),
         }
@@ -129,7 +129,7 @@ fn resolve_to_go(emitter: &Emitter, value_ty: &Type, target_ty: &Type) -> Coerci
 }
 
 fn resolve_from_go(emitter: &Emitter, value_ty: &Type) -> CoercionKind {
-    if emitter.is_nullable_option(value_ty) {
+    if emitter.facts.is_nullable_option(value_ty) {
         CoercionKind::WrapNullableOption {
             ty: value_ty.clone(),
         }

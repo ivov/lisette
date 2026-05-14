@@ -393,7 +393,7 @@ impl Emitter<'_> {
         {
             let callee_ty = callee.get_type();
             if let Type::Function { return_type, .. } = callee_ty.unwrap_forall()
-                && let Some(strategy) = self.classify_go_return_type(return_type, &[])
+                && let Some(strategy) = self.facts.classify_go_return_type(return_type, &[])
             {
                 return enclosing_shape.matches_go_strategy(&strategy);
             }

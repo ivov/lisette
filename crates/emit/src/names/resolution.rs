@@ -28,9 +28,9 @@ impl Emitter<'_> {
             && !type_part.contains('.')
             && !name.starts_with(go_name::PRELUDE_PREFIX)
             && self
-                .ctx
-                .definitions
-                .contains_key(format!("{}.{}", go_name::PRELUDE_MODULE, type_part).as_str())
+                .facts
+                .definition(format!("{}.{}", go_name::PRELUDE_MODULE, type_part).as_str())
+                .is_some()
         {
             format!("{}.{}", go_name::PRELUDE_MODULE, name)
         } else {
@@ -45,13 +45,13 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn resolve_alias_type_name(&self, type_part: &str) -> Option<String> {
-        let qualified = format!("{}.{}", self.current_module, type_part);
+        let qualified = self.facts.qualified_current(type_part);
         let id = self.peel_alias_id(&qualified);
         if id == qualified {
             return None;
         }
         let type_module = module_part(&id);
-        if type_module == self.current_module {
+        if self.facts.is_current_module(type_module) {
             return Some(unqualified_name(&id).to_string());
         }
         Some(id)
@@ -66,11 +66,11 @@ impl Emitter<'_> {
             return name.to_string();
         }
 
-        let method_key = format!("{}.{}.{}", self.current_module, type_part, method_part);
-        let found = self.ctx.definitions.get(method_key.as_str()).or_else(|| {
+        let method_key = self.facts.qualified_current_member(type_part, method_part);
+        let found = self.facts.definition(method_key.as_str()).or_else(|| {
             let real_type = self.resolve_alias_type_name(type_part)?;
-            let alias_key = format!("{}.{}.{}", self.current_module, real_type, method_part);
-            self.ctx.definitions.get(alias_key.as_str())
+            let alias_key = self.facts.qualified_current_member(&real_type, method_part);
+            self.facts.definition(alias_key.as_str())
         });
         let is_public = if let Some(d) = found {
             d.visibility().is_public() || self.method_needs_export(method_part)
@@ -87,7 +87,7 @@ impl Emitter<'_> {
 
     pub(crate) fn require_module_import(&mut self, module: &str) -> String {
         self.requirements
-            .require_go_import(format!("{}/{}", self.ctx.go_module, module));
+            .require_go_import(self.facts.go_import_path(module));
         self.go_pkg_qualifier(module)
     }
 
@@ -95,8 +95,8 @@ impl Emitter<'_> {
         if let Some(alias) = self.module.module_alias(module) {
             return alias.to_string();
         }
-        if let Some(pkg_name) = self.ctx.go_package_names.get(module) {
-            return pkg_name.clone();
+        if let Some(pkg_name) = self.facts.go_package_name(module) {
+            return pkg_name.to_string();
         }
         let path = module
             .strip_prefix(go_name::GO_IMPORT_PREFIX)
@@ -112,7 +112,7 @@ impl Emitter<'_> {
     ) -> String {
         let module = type_id.split_once('.').map(|(m, _)| m);
         let computed_alias = match module {
-            Some(m) if m != self.current_module && m != go_name::PRELUDE_MODULE => {
+            Some(m) if !self.facts.is_current_module(m) && m != go_name::PRELUDE_MODULE => {
                 Some(self.go_pkg_qualifier(m))
             }
             _ => None,
@@ -120,7 +120,7 @@ impl Emitter<'_> {
         let resolved = go_name::qualify_method(
             type_id,
             method,
-            &self.current_module,
+            self.facts.current_module(),
             is_public,
             computed_alias.as_deref(),
         );
@@ -132,16 +132,17 @@ impl Emitter<'_> {
 
     pub(crate) fn resolve_variant(&mut self, identifier: &str, enum_id: &str) -> String {
         let enum_module = module_part(enum_id);
-        let computed_alias =
-            if enum_module != self.current_module && enum_module != go_name::PRELUDE_MODULE {
-                Some(self.go_pkg_qualifier(enum_module))
-            } else {
-                None
-            };
+        let computed_alias = if !self.facts.is_current_module(enum_module)
+            && enum_module != go_name::PRELUDE_MODULE
+        {
+            Some(self.go_pkg_qualifier(enum_module))
+        } else {
+            None
+        };
         let resolved = go_name::variant_by_id(
             identifier,
             enum_id,
-            &self.current_module,
+            self.facts.current_module(),
             computed_alias.as_deref(),
         );
         if resolved.needs_stdlib {

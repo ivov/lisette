@@ -405,7 +405,10 @@ impl Emitter<'_> {
         effective_param_ty: Option<&Type>,
     ) -> Option<String> {
         let param_fn_ty = effective_param_ty
-            .and_then(|param_ty| self.resolve_to_function_type(param_ty.unwrap_forall()))
+            .and_then(|param_ty| {
+                self.facts
+                    .resolve_to_function_type(param_ty.unwrap_forall())
+            })
             .filter(|fn_ty| {
                 let Type::Function { return_type, .. } = fn_ty else {
                     return false;
@@ -416,7 +419,7 @@ impl Emitter<'_> {
             })?;
 
         let arg_ty = arg.get_type();
-        let arg_fn_ty = self.resolve_to_function_type(arg_ty.unwrap_forall());
+        let arg_fn_ty = self.facts.resolve_to_function_type(arg_ty.unwrap_forall());
         if let Some(Type::Function {
             return_type: arg_ret,
             ..
@@ -452,7 +455,8 @@ impl Emitter<'_> {
     ) -> Option<String> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
-        let shapes_match = (self.is_nullable_option(param_ty) && self.is_nullable_option(&arg_ty))
+        let shapes_match = (self.facts.is_nullable_option(param_ty)
+            && self.facts.is_nullable_option(&arg_ty))
             || (self.is_non_nilable_option(param_ty) && self.is_non_nilable_option(&arg_ty));
         if !shapes_match {
             return None;
@@ -473,7 +477,7 @@ impl Emitter<'_> {
     ) -> Option<String> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
-        if !self.is_nullable_option(&arg_ty) {
+        if !self.facts.is_nullable_option(&arg_ty) {
             return None;
         }
         let check_ty = if param_ty.get_name() == Some("VarArgs") {
@@ -482,11 +486,13 @@ impl Emitter<'_> {
             param_ty.clone()
         };
         let needs_coercion = self
+            .facts
             .as_interface(&check_ty)
             .is_some_and(|id| go_name::is_go_import(&id))
             || (check_ty.has_name("Unknown") && {
                 let inner = arg_ty.ok_type();
-                self.as_interface(&inner)
+                self.facts
+                    .as_interface(&inner)
                     .is_some_and(|id| go_name::is_go_import(&id))
             });
 

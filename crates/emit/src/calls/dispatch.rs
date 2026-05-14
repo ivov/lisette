@@ -28,7 +28,7 @@ impl Emitter<'_> {
             if !seen.insert(id.clone()) {
                 break;
             }
-            let Some(def) = self.ctx.definitions.get(id.as_str()) else {
+            let Some(def) = self.facts.definition(id.as_str()) else {
                 break;
             };
             if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
@@ -297,10 +297,9 @@ impl Emitter<'_> {
     }
 
     fn lookup_definition_type(&self, primary: &str, fallback: Option<&str>) -> Option<Type> {
-        self.ctx
-            .definitions
-            .get(primary)
-            .or_else(|| fallback.and_then(|f| self.ctx.definitions.get(f)))
+        self.facts
+            .definition(primary)
+            .or_else(|| fallback.and_then(|f| self.facts.definition(f)))
             .map(|d| d.ty().clone())
     }
 
@@ -308,7 +307,7 @@ impl Emitter<'_> {
         let function = function.unwrap_parens();
         match function {
             Expression::Identifier { value, .. } => {
-                let qualified = format!("{}.{}", self.current_module, value);
+                let qualified = self.facts.qualified_current(value);
                 self.lookup_definition_type(&qualified, Some(value.as_str()))
             }
             Expression::DotAccess {
@@ -318,7 +317,7 @@ impl Emitter<'_> {
                     let module_name = self.module.module_for_alias(value).unwrap_or(value);
                     let qualified = format!("{}.{}", module_name, member);
                     // Try as Type.method in current module (e.g. Box.make → main.Box.make)
-                    let local = format!("{}.{}.{}", self.current_module, value, member);
+                    let local = self.facts.qualified_current_member(value, member);
                     return self.lookup_definition_type(&qualified, Some(&local));
                 }
                 if let Expression::DotAccess {
@@ -384,11 +383,11 @@ impl Emitter<'_> {
                 let variant = unqualified_name(value);
                 let enum_name = unqualified_name(&enum_id);
                 let qualified = format!("{}.{}", enum_name, variant);
-                if self.globals.make_function_names.contains_key(&qualified) {
+                if self.facts.has_make_function_name(&qualified) {
                     return Some((enum_id, variant.to_string()));
                 }
                 if let Type::Function { params, .. } = ty.unwrap_forall() {
-                    for key in self.globals.make_function_names.keys() {
+                    for key in self.facts.make_function_keys() {
                         if let Some((e_name, v_name)) = key.split_once('.')
                             && e_name == enum_name
                             && let Some(layout) = self.module.enum_layout(&enum_id)
@@ -412,7 +411,7 @@ impl Emitter<'_> {
                 } = expression.as_ref()
                 {
                     let qualified = format!("{}.{}", enum_name, member);
-                    if self.globals.make_function_names.contains_key(&qualified) {
+                    if self.facts.has_make_function_name(&qualified) {
                         let enum_id = enum_id_from_type(ty)?;
                         return Some((enum_id, member.to_string()));
                     }
@@ -422,7 +421,7 @@ impl Emitter<'_> {
                 } = expression.as_ref()
                 {
                     let qualified = format!("{}.{}", type_name, member);
-                    if self.globals.make_function_names.contains_key(&qualified) {
+                    if self.facts.has_make_function_name(&qualified) {
                         let enum_id = enum_id_from_type(ty)?;
                         return Some((enum_id, member.to_string()));
                     }
@@ -467,7 +466,7 @@ impl Emitter<'_> {
                     ..
                 },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return None;
         };
@@ -549,12 +548,11 @@ impl Emitter<'_> {
         if self.is_local_binding(function) {
             return None;
         }
-        let qualified = format!("{}.{}", self.current_module, value);
+        let qualified = self.facts.qualified_current(value);
         let prelude_qualified = format!("prelude.{}", value);
-        self.ctx
-            .definitions
-            .get(qualified.as_str())
-            .or_else(|| self.ctx.definitions.get(prelude_qualified.as_str()))
+        self.facts
+            .definition(qualified.as_str())
+            .or_else(|| self.facts.definition(prelude_qualified.as_str()))
             .and_then(|d| d.go_name())
     }
 
@@ -578,7 +576,7 @@ impl Emitter<'_> {
         }
         params
             .iter()
-            .any(|p| self.as_interface(p).is_some() || self.is_function_alias(p))
+            .any(|p| self.facts.is_interface(p) || self.is_function_alias(p))
             .then(|| self.format_type_args(params))
     }
 

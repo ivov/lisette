@@ -155,7 +155,7 @@ impl Emitter<'_> {
                         variants, generics, ..
                     },
                 ..
-            }) = self.ctx.definitions.get(enum_ctx.enum_id.as_str())
+            }) = self.facts.definition(enum_ctx.enum_id.as_str())
             else {
                 return None;
             };
@@ -176,7 +176,7 @@ impl Emitter<'_> {
             ty: def_ty,
             body: DefinitionBody::Struct { fields, .. },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return None;
         };
@@ -188,15 +188,15 @@ impl Emitter<'_> {
         ))
     }
     fn go_imported_zero(&mut self, ty: &Type, id: &str) -> String {
-        if self.as_interface(ty).is_some() || self.resolve_to_function_type(ty).is_some() {
+        if self.facts.is_interface(ty) || self.facts.resolve_to_function_type(ty).is_some() {
             return "nil".to_string();
         }
         let go_ty = self.go_type_as_string(ty);
         let is_struct_like = matches!(
-            self.ctx.definitions.get(id).map(|d| &d.body),
+            self.facts.definition(id).map(|d| &d.body),
             Some(DefinitionBody::Struct { .. })
         ) || matches!(
-            self.ctx.definitions.get(id).map(|d| &d.body),
+            self.facts.definition(id).map(|d| &d.body),
             Some(DefinitionBody::TypeAlias { annotation, .. }) if annotation.is_opaque()
         );
         if is_struct_like {
@@ -390,7 +390,7 @@ impl Emitter<'_> {
     fn add_enum_imports_if_needed(&mut self, name: &str, enum_id: &str) {
         let enum_module = go_name::module_of_type_id(enum_id);
 
-        if enum_module != self.current_module {
+        if !self.facts.is_current_module(enum_module) {
             self.require_module_import(enum_module);
         }
 

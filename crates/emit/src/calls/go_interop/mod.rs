@@ -35,14 +35,6 @@ impl GoCallStrategy {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn classify_go_return_type(
-        &self,
-        return_ty: &Type,
-        go_hints: &[String],
-    ) -> Option<GoCallStrategy> {
-        crate::classify_go_return_type(self.ctx.definitions, return_ty, go_hints)
-    }
-
     pub(crate) fn resolve_go_call_strategy(
         &self,
         expression: &Expression,
@@ -66,16 +58,16 @@ impl Emitter<'_> {
             && Self::is_go_receiver(receiver_expression)
         {
             if let Some(qualified_name) = self.go_qualified_name(receiver_expression, member)
-                && let Some(strategy) = self.globals.go_call_strategies.get(&qualified_name)
+                && let Some(strategy) = self.facts.go_call_strategy(&qualified_name)
             {
                 return Some(strategy.clone());
             }
             let go_hints = self
                 .go_qualified_name(receiver_expression, member)
-                .and_then(|name| self.ctx.definitions.get(name.as_str()))
+                .and_then(|name| self.facts.definition(name.as_str()))
                 .map(|d| d.go_hints())
                 .unwrap_or_default();
-            return self.classify_go_return_type(ty, go_hints);
+            return self.facts.classify_go_return_type(ty, go_hints);
         }
 
         None
@@ -115,9 +107,8 @@ impl Emitter<'_> {
             return false;
         };
 
-        self.ctx
-            .definitions
-            .get(qualified_name.as_str())
+        self.facts
+            .definition(qualified_name.as_str())
             .map(|definition| definition.go_hints().iter().any(|s| s == hint))
             .unwrap_or(false)
     }

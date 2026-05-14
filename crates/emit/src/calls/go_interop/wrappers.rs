@@ -116,7 +116,7 @@ impl Emitter<'_> {
         let result_var = fe.emitter.fresh_var(Some("result"));
         fe.emitter.declare(&result_var);
 
-        let interface_id = self.as_interface(ok_ty);
+        let interface_id = self.facts.as_interface(ok_ty);
         let needs_nil_guard = ok_ty.is_ref()
             || interface_id
                 .as_deref()
@@ -215,7 +215,7 @@ impl Emitter<'_> {
             ok_val.to_string()
         };
 
-        let is_interface = self.as_interface(ok_ty).is_some();
+        let is_interface = self.facts.is_interface(ok_ty);
         if is_interface {
             write_line!(
                 output,
@@ -254,14 +254,14 @@ impl Emitter<'_> {
             } = inner
             {
                 self.go_qualified_name(receiver_expression, member)
-                    .and_then(|name| self.ctx.definitions.get(name.as_str()))
+                    .and_then(|name| self.facts.definition(name.as_str()))
                     .map(|d| d.go_hints().to_vec())
                     .unwrap_or_default()
             } else {
                 vec![]
             };
 
-            return self.classify_go_return_type(&return_type, &go_hints);
+            return self.facts.classify_go_return_type(&return_type, &go_hints);
         }
 
         None

@@ -115,7 +115,7 @@ impl Emitter<'_> {
         };
 
         if has_tags && !f.visibility.is_public() {
-            let key = format!("{}.{}.{}", self.current_module, struct_name, f.name);
+            let key = self.facts.qualified_current_member(struct_name, &f.name);
             self.module.record_tag_exported_field(key);
         }
 
@@ -238,11 +238,10 @@ impl Emitter<'_> {
     /// impl blocks) become free functions in Go and do not satisfy Go
     /// interfaces, so they do not count.
     pub(super) fn stringer_method_name(&self, name: &str) -> Option<&'static str> {
-        let qualified = format!("{}.{}", self.current_module, name);
+        let qualified = self.facts.qualified_current(name);
         let methods = self
-            .ctx
-            .definitions
-            .get(qualified.as_str())
+            .facts
+            .definition(qualified.as_str())
             .and_then(|def| match &def.body {
                 DefinitionBody::Struct { methods, .. }
                 | DefinitionBody::Enum { methods, .. }
@@ -253,10 +252,7 @@ impl Emitter<'_> {
 
         let is_user_stringer = |method_name: &str| {
             methods.is_some_and(|m| is_stringer_signature(m.get(method_name)))
-                && !self
-                    .ctx
-                    .ufcs_methods
-                    .contains(&(qualified.clone(), method_name.to_string()))
+                && !self.facts.is_ufcs_method(&qualified, method_name)
         };
 
         let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);

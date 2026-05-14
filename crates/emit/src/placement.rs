@@ -107,7 +107,7 @@ fn needs_explicit_type_declaration(
     value: &Expression,
     binding_ty: &Type,
 ) -> bool {
-    if emitter.as_interface(binding_ty).is_some() {
+    if emitter.facts.as_interface(binding_ty).is_some() {
         let value_ty = value.get_type();
         if *binding_ty != value_ty {
             return true;
@@ -256,7 +256,8 @@ fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
 /// values that produce tuples widen slots to match the assignment site.
 fn resolve_let_temp_decl_ty(emitter: &mut Emitter, value: &Expression, binding_ty: &Type) -> Type {
     let value_ty = value.get_type();
-    let widens_to_interface = emitter.as_interface(binding_ty).is_some() && *binding_ty != value_ty;
+    let widens_to_interface =
+        emitter.facts.as_interface(binding_ty).is_some() && *binding_ty != value_ty;
     if !value_ty.is_unit() && !value_ty.is_never() && widens_to_interface {
         return binding_ty.clone();
     }
@@ -954,7 +955,7 @@ impl Emitter<'_> {
         };
         let go_identifier = self.choose_let_go_name(identifier, raw_go_name, false);
         let widens_to_interface =
-            self.as_interface(binding_ty).is_some() && *binding_ty != value.get_type();
+            self.facts.is_interface(binding_ty) && *binding_ty != value.get_type();
         if widens_to_interface {
             let var_ty = self.go_type_as_string(binding_ty);
             write_line!(output, "var {} {}", go_identifier, var_ty);
