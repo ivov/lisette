@@ -177,6 +177,7 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
 
     /// Format the full type string (e.g., `lisette.Result[int, error]`).
     pub(crate) fn full_type_string(&mut self) -> String {
+        self.emitter.requirements.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
@@ -199,6 +200,7 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
 
     /// Emit a success wrapper (MakeResultOk or MakeOptionSome).
     pub(crate) fn emit_success(&mut self, value: &str) -> String {
+        self.emitter.requirements.require_stdlib();
         let inner_ty = self.ok_type_string();
         let err_ty = self.err_type_string();
         self.fallible
@@ -207,6 +209,7 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
 
     /// Emit a failure wrapper (MakeResultErr or MakeOptionNone).
     pub(crate) fn emit_failure(&mut self, error_value: Option<&str>) -> String {
+        self.emitter.requirements.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
@@ -228,6 +231,7 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
         error_value: Option<&str>,
         return_ctx: &crate::ReturnContext,
     ) -> String {
+        self.emitter.requirements.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.contextual_ok_type_string(return_ctx);
         if self.fallible.is_result() {

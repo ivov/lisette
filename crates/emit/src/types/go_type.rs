@@ -222,8 +222,7 @@ impl Emitter<'_> {
         }
 
         if let Some((module, _)) = qualified_name.split_once('.')
-            && !self.facts.is_current_module(module)
-            && module != go_name::PRELUDE_MODULE
+            && self.facts.is_foreign_module(module)
             && !go_name::is_go_import(module)
         {
             let go_path = self.facts.go_import_path(module);
@@ -322,11 +321,11 @@ impl Emitter<'_> {
 
         let escaped = go_name::escape_keyword(unqualified);
 
-        if self.facts.is_current_module(module) || module == go_name::PRELUDE_MODULE {
-            escaped.into_owned()
-        } else {
+        if self.facts.is_foreign_module(module) {
             let pkg = self.go_pkg_qualifier(module);
             format!("{}.{}", pkg, escaped)
+        } else {
+            escaped.into_owned()
         }
     }
 
@@ -519,13 +518,33 @@ impl Emitter<'_> {
             return result;
         }
 
+        let go_import = self.annotation_go_import(name);
+
         if params.is_empty() {
-            return GoType::new(base_name);
+            return match go_import {
+                Some(path) => GoType::with_go_import(base_name, path),
+                None => GoType::new(base_name),
+            };
         }
         let (param_types, type_params) = self.lower_annotation_params(params);
-        let mut result = GoType::new(format!("{}[{}]", base_name, type_params.join(", ")));
+        let code = format!("{}[{}]", base_name, type_params.join(", "));
+        let mut result = match go_import {
+            Some(path) => GoType::with_go_import(code, path),
+            None => GoType::new(code),
+        };
         result.merge_all(&param_types);
         result
+    }
+
+    fn annotation_go_import(&self, name: &str) -> Option<String> {
+        if let Some(rest) = name.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+            return rest.rsplit_once('.').map(|(path, _)| path.to_string());
+        }
+        let (module, _) = name.split_once('.')?;
+        if !self.facts.is_foreign_module(module) {
+            return None;
+        }
+        Some(self.go_import_path_for_module(module))
     }
 
     /// Lower each annotation param to a `GoType`, returning both the full

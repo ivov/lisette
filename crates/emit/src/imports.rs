@@ -1,7 +1,6 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::go_name;
-use crate::utils::mask_go_string_literals;
 use diagnostics::{LisetteDiagnostic, emit as emit_diag};
 use ecow::EcoString;
 use syntax::ast::ImportAlias;
@@ -13,6 +12,7 @@ pub struct ImportBuilder<'a> {
     go_package_names: &'a HashMap<String, String>,
     imports: HashMap<String, String>,
     dropped_aliases: HashMap<String, String>,
+    used_modules: HashSet<String>,
 }
 
 impl<'a> ImportBuilder<'a> {
@@ -27,6 +27,7 @@ impl<'a> ImportBuilder<'a> {
             go_package_names,
             imports: HashMap::default(),
             dropped_aliases: HashMap::default(),
+            used_modules: HashSet::default(),
         }
     }
 
@@ -63,51 +64,24 @@ impl<'a> ImportBuilder<'a> {
                 .cloned()
                 .unwrap_or_default();
             self.imports.entry(module_id.clone()).or_insert(alias);
+            self.used_modules.insert(module_id.clone());
         }
     }
 
-    pub fn require_fmt(&mut self) {
-        self.imports.insert("fmt".to_string(), "fmt".to_string());
-    }
-
     pub fn require_stdlib(&mut self) {
-        self.imports.insert(
-            go_name::PRELUDE_IMPORT_PATH.to_string(),
-            "lisette".to_string(),
-        );
+        let path = go_name::PRELUDE_IMPORT_PATH;
+        self.imports.insert(path.to_string(), "lisette".to_string());
+        self.used_modules.insert(path.to_string());
     }
 
-    pub fn require_errors(&mut self) {
+    pub fn require_path(&mut self, path: &str) {
+        self.imports.insert(path.to_string(), path.to_string());
+        self.used_modules.insert(path.to_string());
+    }
+
+    pub fn filter_unused_imports(&mut self) {
         self.imports
-            .insert("errors".to_string(), "errors".to_string());
-    }
-
-    pub fn require_slices(&mut self) {
-        self.imports
-            .insert("slices".to_string(), "slices".to_string());
-    }
-
-    pub fn require_strings(&mut self) {
-        self.imports
-            .insert("strings".to_string(), "strings".to_string());
-    }
-
-    pub fn require_maps(&mut self) {
-        self.imports.insert("maps".to_string(), "maps".to_string());
-    }
-
-    /// This handles cases where a cross-module type alias resolves to a native
-    /// Go type, erasing the reference to the imported module.
-    pub fn filter_unreferenced(&mut self, source: &str) {
-        let masked = mask_go_string_literals(source);
-        self.imports.retain(|path, alias| {
-            if alias == "_" {
-                return true;
-            }
-            let escaped = go_name::escape_reserved(effective_package_name(path, alias));
-            let pattern = format!("{escaped}.");
-            masked.contains(&pattern)
-        });
+            .retain(|path, alias| alias == "_" || self.used_modules.contains(path));
     }
 
     pub fn build(self) -> (HashMap<String, String>, Vec<LisetteDiagnostic>) {

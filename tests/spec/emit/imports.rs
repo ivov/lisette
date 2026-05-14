@@ -397,3 +397,25 @@ pub type IntSlice = Slice<int>
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
 }
+
+#[test]
+fn import_filter_handles_apostrophe_in_doc_comments() {
+    let input = r#"
+import "go:fmt"
+import "go:example.com/lib"
+
+/// Doesn't do much.
+pub fn first() {
+  fmt.Println(lib.Value)
+}
+
+/// Doesn't do much either.
+pub fn second() {
+  fmt.Println("done")
+}
+"#;
+    let typedef = r#"
+pub const Value: int = 1
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}

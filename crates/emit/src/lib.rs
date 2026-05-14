@@ -497,8 +497,9 @@ impl<'a> Emitter<'a> {
 
             self.requirements.drain_into(&mut import_builder);
 
+            import_builder.filter_unused_imports();
+
             let rendered_source = source.render();
-            import_builder.filter_unreferenced(&rendered_source);
 
             let (imports, diagnostics) = import_builder.build();
             output_files.push(OutputFile {

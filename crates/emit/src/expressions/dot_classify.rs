@@ -8,7 +8,7 @@ use syntax::types::{Type, module_part, unqualified_name};
 impl Emitter<'_> {
     /// Emit a value enum variant as a Go constant (e.g., `reflect.String`).
     pub(crate) fn emit_value_enum_variant(
-        &self,
+        &mut self,
         expression: &Expression,
         member: &str,
     ) -> Option<String> {
@@ -27,7 +27,7 @@ impl Emitter<'_> {
 
         let module_key = go_name::module_of_type_id(&enum_id);
 
-        let qualifier = self.go_pkg_qualifier(module_key);
+        let qualifier = self.require_module_import(module_key);
 
         Some(format!("{}.{}", qualifier, member))
     }
@@ -124,7 +124,7 @@ impl Emitter<'_> {
                 }
                 format!("{}{}", resolved.name, type_args)
             } else {
-                let pkg = self.go_pkg_qualifier(enum_module);
+                let pkg = self.require_module_import(enum_module);
                 format!("{}.{}{}", pkg, make_fn_name, type_args)
             }
         } else {
@@ -321,7 +321,7 @@ impl Emitter<'_> {
             go_name::escape_keyword(member).into_owned()
         };
 
-        let pkg = self.go_pkg_qualifier(module_name);
+        let pkg = self.require_module_import(module_name);
         let go_type_name = go_name::snake_to_camel(type_name);
 
         // Extract type args from the receiver parameter

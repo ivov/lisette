@@ -350,7 +350,7 @@ impl Emitter<'_> {
         Some(self.qualify_method_call(&type_id, method_name, is_public))
     }
 
-    fn try_classify_value_enum_variant(&self, name: &str, ty: &Type) -> Option<String> {
+    fn try_classify_value_enum_variant(&mut self, name: &str, ty: &Type) -> Option<String> {
         if !name.contains('.') {
             return None;
         }
@@ -366,7 +366,7 @@ impl Emitter<'_> {
 
         let variant_name = go_name::unqualified_name(name);
         let module = go_name::module_of_type_id(enum_id.as_str());
-        let qualifier = self.go_pkg_qualifier(module);
+        let qualifier = self.require_module_import(module);
 
         Some(format!("{}.{}", qualifier, variant_name))
     }

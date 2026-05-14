@@ -87,8 +87,16 @@ impl Emitter<'_> {
 
     pub(crate) fn require_module_import(&mut self, module: &str) -> String {
         self.requirements
-            .require_go_import(self.facts.go_import_path(module));
+            .require_go_import(self.go_import_path_for_module(module));
         self.go_pkg_qualifier(module)
+    }
+
+    pub(crate) fn go_import_path_for_module(&self, module: &str) -> String {
+        let canonical = self.module.module_for_alias(module).unwrap_or(module);
+        match canonical.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+            Some(rest) => rest.to_string(),
+            None => self.facts.go_import_path(canonical),
+        }
     }
 
     pub(crate) fn go_pkg_qualifier(&self, module: &str) -> String {
@@ -112,9 +120,7 @@ impl Emitter<'_> {
     ) -> String {
         let module = type_id.split_once('.').map(|(m, _)| m);
         let computed_alias = match module {
-            Some(m) if !self.facts.is_current_module(m) && m != go_name::PRELUDE_MODULE => {
-                Some(self.go_pkg_qualifier(m))
-            }
+            Some(m) if self.facts.is_foreign_module(m) => Some(self.require_module_import(m)),
             _ => None,
         };
         let resolved = go_name::qualify_method(
@@ -132,10 +138,8 @@ impl Emitter<'_> {
 
     pub(crate) fn resolve_variant(&mut self, identifier: &str, enum_id: &str) -> String {
         let enum_module = module_part(enum_id);
-        let computed_alias = if !self.facts.is_current_module(enum_module)
-            && enum_module != go_name::PRELUDE_MODULE
-        {
-            Some(self.go_pkg_qualifier(enum_module))
+        let computed_alias = if self.facts.is_foreign_module(enum_module) {
+            Some(self.require_module_import(enum_module))
         } else {
             None
         };

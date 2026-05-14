@@ -336,20 +336,14 @@ impl Emitter<'_> {
         // not as the underlying "internal.Secret".
         if name.contains('.') && !is_prelude {
             let parts: Vec<&str> = name.split('.').collect();
-            let type_args = if let Type::Nominal { params, .. } = ty {
-                self.format_type_args(params)
-            } else {
-                String::new()
-            };
-
-            let pkg = self.go_pkg_qualifier(parts[0]);
-
-            if is_enum && parts.len() == 3 {
-                // Enum variant via type alias: "module.TypeAlias.Variant"
-                // Emit as "module.TypeAlias" (the variant fields are handled separately)
-                return format!("{}.{}{}", pkg, go_name::snake_to_camel(parts[1]), type_args);
-            } else if !is_enum && parts.len() == 2 {
-                // Cross-module struct reference
+            let emits_qualified = (is_enum && parts.len() == 3) || (!is_enum && parts.len() == 2);
+            if emits_qualified && !self.facts.is_current_module(parts[0]) {
+                let type_args = if let Type::Nominal { params, .. } = ty {
+                    self.format_type_args(params)
+                } else {
+                    String::new()
+                };
+                let pkg = self.require_module_import(parts[0]);
                 return format!("{}.{}{}", pkg, go_name::snake_to_camel(parts[1]), type_args);
             }
         }

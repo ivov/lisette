@@ -66,23 +66,19 @@ impl EmitRequirements {
     pub(crate) fn drain_into(&mut self, builder: &mut ImportBuilder) {
         let drained = std::mem::take(self);
         builder.extend_with_modules(&drained.go_imports);
-        if drained.flags.needs_fmt {
-            builder.require_fmt();
-        }
         if drained.flags.needs_stdlib {
             builder.require_stdlib();
         }
-        if drained.flags.needs_errors {
-            builder.require_errors();
-        }
-        if drained.flags.needs_slices {
-            builder.require_slices();
-        }
-        if drained.flags.needs_strings {
-            builder.require_strings();
-        }
-        if drained.flags.needs_maps {
-            builder.require_maps();
+        for (flag, path) in [
+            (drained.flags.needs_fmt, "fmt"),
+            (drained.flags.needs_errors, "errors"),
+            (drained.flags.needs_slices, "slices"),
+            (drained.flags.needs_strings, "strings"),
+            (drained.flags.needs_maps, "maps"),
+        ] {
+            if flag {
+                builder.require_path(path);
+            }
         }
     }
 }
@@ -102,6 +98,10 @@ pub(crate) struct EmitEffects {
 }
 
 impl EmitEffects {
+    pub(crate) fn require_go_import(&mut self, path: impl Into<String>) {
+        self.go_imports.push(path.into());
+    }
+
     pub(crate) fn merge_from_go_type(&mut self, go_type: &crate::types::go_type::GoType) {
         self.needs_stdlib |= go_type.needs_stdlib;
         self.go_imports.extend(go_type.go_imports.iter().cloned());

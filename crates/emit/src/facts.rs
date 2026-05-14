@@ -137,6 +137,10 @@ impl<'a> EmitFacts<'a> {
         module == self.current_module.as_str()
     }
 
+    pub(crate) fn is_foreign_module(&self, module: &str) -> bool {
+        !self.is_current_module(module) && module != crate::names::go_name::PRELUDE_MODULE
+    }
+
     pub(crate) fn is_entry_module(&self, module: &str) -> bool {
         module == self.entry_module.as_str()
     }

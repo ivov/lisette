@@ -196,8 +196,6 @@ impl Emitter<'_> {
             return true;
         }
 
-        self.requirements.require_stdlib();
-
         let lowered = return_ctx.lowered_shape();
 
         if let Expression::Identifier { .. } = expression
@@ -208,6 +206,7 @@ impl Emitter<'_> {
                 let line = abi_transition::format_lowered_none_return(self, shape, &return_ty);
                 write_line!(output, "{}", line);
             } else {
+                self.requirements.require_stdlib();
                 let mut fe = FallibleEmitter::new(self, &fallible);
                 let failure = fe.emit_failure(None);
                 write_line!(output, "return {}", failure);

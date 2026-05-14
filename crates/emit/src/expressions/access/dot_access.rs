@@ -40,6 +40,10 @@ impl Emitter<'_> {
             self.emit_coerced_expression(output, expression, receiver_coercion, ctx);
         let expression_ty = expression.get_type();
 
+        if let Some(module) = expression_ty.as_import_namespace() {
+            self.require_module_import(module);
+        }
+
         if let Some(s) = self.try_emit_tuple_member_dot(
             &expression_string,
             &expression_ty,
@@ -256,9 +260,8 @@ impl Emitter<'_> {
         is_import_namespace_ident
             || self.is_from_prelude(expression_ty)
             || if let Type::Nominal { id, .. } = expression_ty.strip_refs() {
-                id.split_once('.').is_some_and(|(m, _)| {
-                    !self.facts.is_current_module(m) && m != go_name::PRELUDE_MODULE
-                })
+                id.split_once('.')
+                    .is_some_and(|(m, _)| self.facts.is_foreign_module(m))
             } else {
                 false
             }

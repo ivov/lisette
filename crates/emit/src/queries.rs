@@ -282,7 +282,7 @@ impl Emitter<'_> {
             let mut field_types = FieldTypeMap::default();
             for (vi, variant) in variants.iter().enumerate() {
                 for (fi, field) in variant.fields.iter().enumerate() {
-                    let mut go_type = self.go_type_as_string(&field.ty);
+                    let mut go_type = self.go_type(&field.ty).code;
                     let recursive = Self::is_recursive_type(&field.ty, &enum_id);
 
                     if recursive {

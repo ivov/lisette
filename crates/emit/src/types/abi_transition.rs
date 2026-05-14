@@ -71,6 +71,7 @@ pub(crate) fn emit_lowered_result_return(
     return_ty: &Type,
     shape: &AbiShape,
 ) {
+    emitter.requirements.require_stdlib();
     let ok_ty_str = match shape {
         AbiShape::ResultTuple | AbiShape::PartialTuple | AbiShape::CommaOk => {
             let ok_ty = emitter.facts.peel_alias(return_ty).ok_type();
@@ -200,12 +201,13 @@ pub(crate) fn emit_return_adapter(
     lisette_return_type: &Type,
 ) -> Option<(String, String)> {
     let return_type = lisette_return_type;
-    emitter.requirements.require_stdlib();
 
     if return_type.is_result() {
+        emitter.requirements.require_stdlib();
         return Some(emit_result_return_adapter(emitter, inner_call, return_type));
     }
     if return_type.is_partial() {
+        emitter.requirements.require_stdlib();
         return Some(emit_partial_return_adapter(
             emitter,
             inner_call,
@@ -213,9 +215,11 @@ pub(crate) fn emit_return_adapter(
         ));
     }
     if return_type.is_option() {
+        emitter.requirements.require_stdlib();
         return Some(emit_option_return_adapter(emitter, inner_call, return_type));
     }
     if return_type.tuple_arity().is_some_and(|n| n >= 2) {
+        emitter.requirements.require_stdlib();
         return emit_tuple_return_adapter(emitter, inner_call, return_type);
     }
     None
@@ -530,7 +534,6 @@ fn emit_lowered_partial_tail(
     } = expression
         && let Some(variant) = callee.as_partial_constructor()
     {
-        emitter.requirements.require_stdlib();
         match variant {
             "Ok" => {
                 let v = emitter.emit_composite_value(output, &args[0], ExpressionContext::value());

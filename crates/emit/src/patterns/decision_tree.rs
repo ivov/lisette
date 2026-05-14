@@ -977,6 +977,9 @@ fn collect_enum_variant_checks(
         let go_literal = if qualifier.is_empty() || qualifier == emitter.facts.current_module() {
             variant_name.to_string()
         } else {
+            collector
+                .effects
+                .require_go_import(emitter.go_import_path_for_module(module));
             format!("{}.{}", qualifier, variant_name)
         };
         collector.checks.push(Check::Literal {
@@ -987,6 +990,13 @@ fn collect_enum_variant_checks(
     }
 
     if emitter.as_enum(ty).is_none() && identifier.contains('.') {
+        if let Some((module, _)) = identifier.split_once('.')
+            && emitter.facts.is_foreign_module(module)
+        {
+            collector
+                .effects
+                .require_go_import(emitter.go_import_path_for_module(module));
+        }
         collector.checks.push(Check::Literal {
             path: path.clone(),
             go_literal: identifier.to_string(),
