@@ -109,82 +109,6 @@ impl Emitter<'_> {
 
         result_var
     }
-    pub(crate) fn emit_option_result_assignment(
-        &mut self,
-        output: &mut String,
-        target_var: &str,
-        target_ty: Option<&Type>,
-        expression: &Expression,
-    ) {
-        let ty = target_ty
-            .filter(|t| t.is_option() || t.is_result())
-            .cloned()
-            .unwrap_or_else(|| expression.get_type());
-        let Some(fallible) = Fallible::from_type(&ty) else {
-            let expression_string = self.emit_operand(output, expression);
-            write_line!(output, "{} = {}", target_var, expression_string);
-            return;
-        };
-
-        let actual_expression = if let Expression::Block { items, .. } = expression {
-            if items.len() == 1 {
-                &items[0]
-            } else {
-                expression
-            }
-        } else {
-            expression
-        };
-
-        match actual_expression {
-            Expression::Call {
-                expression: callee,
-                args,
-                ..
-            } => {
-                let kind = fallible.classify_constructor(callee);
-
-                let constructor_name = match kind {
-                    Some(ConstructorKind::Success) => fallible.ok_constructor(),
-                    Some(ConstructorKind::Failure) => fallible.err_constructor(),
-                    None => {
-                        let expression_string = self.emit_operand(output, expression);
-                        write_line!(output, "{} = {}", target_var, expression_string);
-                        return;
-                    }
-                };
-
-                let mut fe = FallibleEmitter::new(self, &fallible);
-                if kind == Some(ConstructorKind::Success)
-                    || (kind == Some(ConstructorKind::Failure)
-                        && fallible.err_constructor_takes_arg())
-                {
-                    let arg = fe.emitter.emit_composite_value(output, &args[0]);
-                    let call_str = fe.format_constructor_call(constructor_name, Some(&arg));
-                    write_line!(output, "{} = {}", target_var, call_str);
-                } else {
-                    let call_str = fe.format_constructor_call(constructor_name, None);
-                    write_line!(output, "{} = {}", target_var, call_str);
-                }
-            }
-            Expression::Identifier { .. } => {
-                if fallible.classify_constructor(actual_expression)
-                    == Some(ConstructorKind::Failure)
-                {
-                    let mut fe = FallibleEmitter::new(self, &fallible);
-                    let call_str = fe.format_constructor_call(fallible.err_constructor(), None);
-                    write_line!(output, "{} = {}", target_var, call_str);
-                } else {
-                    let expression_string = self.emit_operand(output, expression);
-                    write_line!(output, "{} = {}", target_var, expression_string);
-                }
-            }
-            _ => {
-                self.emit_block_to_var_with_braces(output, expression, target_var, false);
-            }
-        }
-    }
-
     pub(crate) fn emit_propagate_to_let(
         &mut self,
         output: &mut String,
@@ -568,53 +492,25 @@ impl Emitter<'_> {
         for item in rest {
             self.emit_statement(output, item);
         }
-        self.emit_try_tail(output, last, fallible);
-    }
-
-    fn emit_try_tail(&mut self, output: &mut String, last: &Expression, fallible: &Fallible) {
-        if last.diverges().is_some() || last.get_type().is_never() {
-            self.emit_statement(output, last);
-            if !Self::is_go_never(last) {
-                output.push_str("panic(\"unreachable\")\n");
-            }
-            return;
-        }
-
-        let is_statement_only = matches!(
+        self.emit_to_place(
+            output,
             last,
-            Expression::Let { .. }
-                | Expression::Const { .. }
-                | Expression::Assignment { .. }
-                | Expression::While { .. }
-                | Expression::WhileLet { .. }
-                | Expression::For { .. }
-                | Expression::Loop { .. }
+            crate::placement::ValuePlace::FallibleSuccess(fallible),
         );
-        let is_unit_call =
-            last.get_type().is_unit() && matches!(last.unwrap_parens(), Expression::Call { .. });
-        if is_statement_only || is_unit_call {
-            // Statement-only tails and unit calls can't be used as values.
-            // Emit as statement, then return Ok(unit).
-            self.emit_statement(output, last);
-            self.emit_try_unit_return(output, fallible);
-            return;
-        }
-
-        let final_expression = self.emit_value(output, last);
-        if final_expression.is_empty() {
-            self.emit_try_unit_return(output, fallible);
-        } else {
-            self.emit_try_success_return(output, &final_expression, fallible);
-        }
     }
 
-    fn emit_try_unit_return(&mut self, output: &mut String, fallible: &Fallible) {
+    pub(crate) fn emit_try_unit_return(&mut self, output: &mut String, fallible: &Fallible) {
         let (unit_val, effects) = self.zero_value(fallible.ok_ty());
         self.apply_effects(&effects);
         self.emit_try_success_return(output, &unit_val, fallible);
     }
 
-    fn emit_try_success_return(&mut self, output: &mut String, value: &str, fallible: &Fallible) {
+    pub(crate) fn emit_try_success_return(
+        &mut self,
+        output: &mut String,
+        value: &str,
+        fallible: &Fallible,
+    ) {
         let ok_return = {
             let mut fe = FallibleEmitter::new(self, fallible);
             fe.emit_success(value)
@@ -705,34 +601,16 @@ impl Emitter<'_> {
         fallible: &Fallible,
     ) {
         let Some((last, rest)) = items.split_last() else {
-            let (zero, effects) = self.zero_value(fallible.ok_ty());
-            self.apply_effects(&effects);
-            write_line!(output, "return {}", zero);
+            self.emit_zero_return(output, fallible.ok_ty());
             return;
         };
         for item in rest {
             self.emit_statement(output, item);
         }
-        self.emit_recover_tail(output, last, fallible);
-    }
-
-    fn emit_recover_tail(&mut self, output: &mut String, last: &Expression, fallible: &Fallible) {
-        let item_ty = last.get_type();
-        if item_ty.is_never() {
-            self.emit_statement(output, last);
-            if !Self::is_go_never(last) {
-                output.push_str("panic(\"unreachable\")\n");
-            }
-            return;
-        }
-        if item_ty.is_unit() || item_ty.is_variable() {
-            self.emit_statement(output, last);
-            let (zero, effects) = self.zero_value(fallible.ok_ty());
-            self.apply_effects(&effects);
-            write_line!(output, "return {}", zero);
-            return;
-        }
-        let expression = self.emit_value(output, last);
-        write_line!(output, "return {}", expression);
+        self.emit_to_place(
+            output,
+            last,
+            crate::placement::ValuePlace::RecoverSuccess(fallible),
+        );
     }
 }

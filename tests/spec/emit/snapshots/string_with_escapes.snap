@@ -4,6 +4,4 @@ description: "input: \nfn test() {\n  \"hello\\nworld\"\n}\n"
 ---
 package main
 
-func test() {
-	_ = "hello\nworld"
-}
+func test() {}

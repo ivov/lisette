@@ -2,10 +2,9 @@ use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
 use crate::names::go_name;
-use crate::types::emitter::Destination;
+use crate::placement::ValuePlace;
 use crate::types::native::NativeGoType;
-use crate::utils::{group_params, optimize_function_body, receiver_name, requires_temp_var};
-use crate::write_line;
+use crate::utils::{group_params, optimize_function_body, receiver_name};
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinition, Generic, Pattern, Span, TypedPattern,
 };
@@ -46,92 +45,11 @@ impl Emitter<'_> {
             self.emit_statement(output, item);
         }
 
-        let is_statement_only = matches!(
-            last,
-            Expression::Assignment { .. } | Expression::Let { .. } | Expression::Const { .. }
-        );
-
-        let needs_return = should_return
-            && !matches!(last, Expression::Return { .. })
-            && !is_statement_only
-            && !last.get_type().is_unit()
-            && !last.get_type().is_never();
-
-        if !needs_return {
-            self.emit_non_returning_tail(output, last, should_return, is_statement_only);
-            return;
+        if should_return {
+            self.emit_to_place(output, last, ValuePlace::Return);
+        } else {
+            self.emit_statement(output, last);
         }
-
-        if crate::types::abi_transition::try_emit_lowered_tail_return(self, output, last) {
-            return;
-        }
-
-        if self.emit_wrapped_return(output, last) {
-            return;
-        }
-
-        self.emit_returning_tail(output, last);
-    }
-
-    /// Tail that doesn't itself produce a returned value: statement-only tails
-    /// (`let`/`const`/assignment), unit/never-typed tails, or explicit `Return`.
-    /// Emits the tail as a statement, then appends a `panic("unreachable")` for
-    /// non-Go never tails and a zero-value `return` when the function needs a
-    /// typed return value but the tail couldn't provide one.
-    fn emit_non_returning_tail(
-        &mut self,
-        output: &mut String,
-        last: &Expression,
-        should_return: bool,
-        is_statement_only: bool,
-    ) {
-        self.emit_statement(output, last);
-        if should_return && last.get_type().is_never() && !Self::is_go_never(last) {
-            output.push_str("panic(\"unreachable\")\n");
-        }
-        let last_is_unit_expr = !is_statement_only
-            && !matches!(last, Expression::Return { .. })
-            && last.get_type().is_unit();
-        if should_return
-            && (is_statement_only || last_is_unit_expr)
-            && self.return_mode.ty().is_some_and(|ty| !ty.is_unit())
-        {
-            let return_ty = self.return_mode.ty().cloned().unwrap();
-            let (zero, effects) = self.zero_value(&return_ty);
-            self.apply_effects(&effects);
-            write_line!(output, "return {}", zero);
-        }
-    }
-
-    /// Tail that produces the function's return value. Value-shaped tails
-    /// flow through `emit_value` + coercion; branching/block/loop shapes emit
-    /// into a tail destination that writes `return` at the leaves.
-    fn emit_returning_tail(&mut self, output: &mut String, last: &Expression) {
-        self.with_destination(Destination::Tail, |this| {
-            if !requires_temp_var(last) {
-                let expression = this.emit_value(output, last);
-                let return_ty = this.return_mode.ty().cloned();
-                let expression =
-                    this.apply_type_coercion(output, return_ty.as_ref(), last, expression);
-                output.push_str(&this.wrap_value(&expression));
-                return;
-            }
-            match last {
-                Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
-                    this.emit_branching_directly(output, last);
-                }
-                Expression::IfLet { .. } => {
-                    unreachable!("IfLet should be desugared to Match before emit")
-                }
-                Expression::Block { .. }
-                | Expression::Loop { .. }
-                | Expression::Propagate { .. } => {
-                    let expression = this.emit_operand(output, last);
-                    output.push_str(&this.wrap_value(&expression));
-                }
-                _ => unreachable!("requires_temp_var returned true for unexpected expression"),
-            }
-        });
     }
 
     pub(crate) fn emit_lambda(

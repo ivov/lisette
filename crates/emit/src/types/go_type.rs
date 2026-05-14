@@ -368,6 +368,12 @@ impl Emitter<'_> {
         }
     }
 
+    pub(crate) fn emit_zero_return(&mut self, output: &mut String, ty: &Type) {
+        let (zero, effects) = self.zero_value(ty);
+        self.apply_effects(&effects);
+        crate::write_line!(output, "return {}", zero);
+    }
+
     pub(crate) fn zero_value(&self, ty: &Type) -> (String, crate::EmitEffects) {
         let mut effects = crate::EmitEffects::default();
         if self.as_interface(ty).is_some() {

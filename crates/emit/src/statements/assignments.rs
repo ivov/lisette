@@ -3,7 +3,6 @@ use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::types::coercion::{Coercion, CoercionDirection};
-use crate::types::emitter::Destination;
 use crate::write_line;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
@@ -43,25 +42,14 @@ impl Emitter<'_> {
                     output.push_str("continue\n");
                 }
             }
-            Expression::If {
-                condition,
-                consequence,
-                alternative,
-                ..
-            } => {
-                self.with_destination(Destination::Statement, |this| {
-                    this.emit_if(output, condition, consequence, alternative)
-                });
+            Expression::If { .. } => {
+                self.emit_as_statement_branch(output, expression);
             }
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
             }
-            Expression::Match {
-                subject, arms, ty, ..
-            } => {
-                self.with_destination(Destination::Statement, |this| {
-                    this.emit_match(output, subject, arms, ty)
-                });
+            Expression::Match { .. } => {
+                self.emit_as_statement_branch(output, expression);
             }
             Expression::Loop {
                 body, needs_label, ..
@@ -106,10 +94,8 @@ impl Emitter<'_> {
                 self.emit_for_loop(output, binding, iterable, body, *needs_label);
                 self.pop_loop();
             }
-            Expression::Select { arms, .. } => {
-                self.with_destination(Destination::Statement, |this| {
-                    this.emit_select(output, arms)
-                });
+            Expression::Select { .. } => {
+                self.emit_as_statement_branch(output, expression);
             }
             Expression::Block { .. } => {
                 output.push_str("{\n");
@@ -142,23 +128,17 @@ impl Emitter<'_> {
             }
             _ => {
                 let unwrapped = expression.unwrap_parens();
-                match unwrapped {
-                    Expression::Task { .. } | Expression::Defer { .. } => {
-                        let emitted = self.emit_operand(output, unwrapped);
-                        if !emitted.is_empty() {
-                            write_line!(output, "{}", emitted);
-                        }
+                if matches!(
+                    unwrapped,
+                    Expression::Task { .. } | Expression::Defer { .. }
+                ) {
+                    let emitted = self.emit_operand(output, unwrapped);
+                    if !emitted.is_empty() {
+                        write_line!(output, "{}", emitted);
                     }
-                    Expression::Call { .. } => {
-                        self.emit_discard(output, unwrapped);
-                    }
-                    _ => {
-                        let emitted = self.emit_operand(output, expression);
-                        if !emitted.is_empty() && emitted != "struct{}{}" {
-                            write_line!(output, "_ = {}", emitted);
-                        }
-                    }
+                    return;
                 }
+                self.emit_discard(output, unwrapped);
             }
         }
     }
@@ -304,42 +284,13 @@ impl Emitter<'_> {
 
     fn emit_break_statement(&mut self, output: &mut String, value: Option<&Expression>) {
         if let Some(val) = value {
-            let val_str = self.emit_value(output, val);
-            // When propagation (e.g. `Err(...)? / None?`) emits a direct `return`,
-            // emit_value returns "". Skip assignment and break since the function
-            // has already returned.
-            if val_str.is_empty() && matches!(val, Expression::Propagate { .. }) {
-                return;
-            }
-            self.bind_break_value(output, val, &val_str);
+            self.emit_to_place(output, val, crate::placement::ValuePlace::BreakValue);
+            return;
         }
         if let Some(label) = self.current_loop_label() {
             write_line!(output, "break {}", label);
         } else {
             output.push_str("break\n");
-        }
-    }
-
-    /// Bind a `break` value to the enclosing loop's result var, or discard it.
-    /// Unit-typed calls are emitted as a statement before the `struct{}{}` store
-    /// to preserve side effects.
-    fn bind_break_value(&mut self, output: &mut String, val: &Expression, val_str: &str) {
-        let assign_var = self.current_loop_result_var().map(str::to_string);
-        let Some(var) = assign_var else {
-            if !val_str.is_empty() {
-                write_line!(output, "_ = {}", val_str);
-            }
-            return;
-        };
-        let is_unit_call =
-            val.get_type().is_unit() && matches!(val.unwrap_parens(), Expression::Call { .. });
-        if is_unit_call {
-            if !val_str.is_empty() {
-                write_line!(output, "{}", val_str);
-            }
-            write_line!(output, "{} = struct{{}}{{}}", var);
-        } else if !val_str.is_empty() {
-            write_line!(output, "{} = {}", var, val_str);
         }
     }
 

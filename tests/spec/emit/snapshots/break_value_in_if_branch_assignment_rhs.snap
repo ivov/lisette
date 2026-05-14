@@ -16,7 +16,6 @@ func test() {
 		tmp_2 = 1
 		x = tmp_2
 		_ = x
-		_ = 2
 	}
 	_ = tmp_1
 }

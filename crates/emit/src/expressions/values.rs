@@ -6,7 +6,6 @@ use crate::Emitter;
 use crate::expressions::emission::EmittedExpression;
 use crate::is_order_sensitive;
 use crate::types::coercion::{Coercion, CoercionDirection};
-use crate::types::emitter::Destination;
 use crate::write_line;
 use syntax::ast::{Expression, Visibility};
 use syntax::program::CallKind;
@@ -310,26 +309,17 @@ impl Emitter<'_> {
             Expression::Tuple { elements, ty, .. } => self.emit_tuple_value(output, elements, ty),
             Expression::If { ty, .. }
             | Expression::Match { ty, .. }
-            | Expression::Select { ty, .. } => {
-                self.emit_branching_as_operand(output, expression, ty)
-            }
+            | Expression::Select { ty, .. }
+            | Expression::Block { ty, .. }
+            | Expression::Loop { ty, .. } => self
+                .emit_to_place(
+                    output,
+                    expression,
+                    crate::placement::ValuePlace::OperandTemp { ty },
+                )
+                .expect("OperandTemp returns a temp name"),
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
-            }
-            Expression::Block { ty, items, .. } => {
-                self.emit_block_as_operand(output, expression, ty, items)
-            }
-            Expression::Loop {
-                body,
-                ty,
-                needs_label,
-                ..
-            } => {
-                let result_var = self.declare_result_var(output, ty);
-                self.push_loop(result_var.clone());
-                self.emit_labeled_loop(output, "for {\n", body, *needs_label);
-                self.pop_loop();
-                result_var
             }
             Expression::Return {
                 expression: return_expression,
@@ -423,25 +413,6 @@ impl Emitter<'_> {
             slot_ty_strs.join(", "),
             elem_expressions.join(", ")
         )
-    }
-
-    fn emit_branching_as_operand(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        ty: &Type,
-    ) -> String {
-        let result_var = self.declare_result_var(output, ty);
-        self.with_destination(
-            Destination::Assign {
-                var: result_var.clone(),
-                target_ty: Some(ty.clone()),
-            },
-            |this| {
-                this.emit_branching_directly(output, expression);
-            },
-        );
-        result_var
     }
 
     fn emit_cast(
@@ -577,35 +548,6 @@ impl Emitter<'_> {
         }
 
         self.emit_struct_literal(&type_string, &fields)
-    }
-
-    /// Emit a block expression as an operand, returning the result variable name.
-    /// Never-typed blocks diverge and produce no value.
-    fn emit_block_as_operand(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        ty: &Type,
-        items: &[Expression],
-    ) -> String {
-        if ty.is_never() {
-            self.emit_block(output, expression);
-            return String::new();
-        }
-        if ty.is_unit() || matches!(ty, Type::Var { .. } | Type::Forall { .. }) {
-            self.emit_block(output, expression);
-            return String::new();
-        }
-        let result_var = self.declare_result_var(output, ty);
-        let needs_braces = items.len() > 1;
-        if needs_braces {
-            output.push_str("{\n");
-        }
-        self.emit_block_to_var_with_braces(output, expression, &result_var, needs_braces);
-        if needs_braces {
-            output.push_str("}\n");
-        }
-        result_var
     }
 
     pub(crate) fn with_fresh_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {

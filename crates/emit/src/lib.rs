@@ -8,6 +8,7 @@ pub mod imports;
 pub(crate) mod names;
 mod output;
 pub(crate) mod patterns;
+mod placement;
 pub(crate) mod queries;
 pub(crate) mod statements;
 pub(crate) mod types;

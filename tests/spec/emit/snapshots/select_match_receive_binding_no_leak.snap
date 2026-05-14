@@ -22,12 +22,8 @@ func main() {
 		if ok {
 			x := recv_2
 			fmt.Println(x)
-			_ = 0
-		} else {
-			_ = 0
 		}
 	default:
 		fmt.Println(x_1)
-		_ = 0
 	}
 }

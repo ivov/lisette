@@ -10,11 +10,7 @@ func test(bad bool) int {
 	var result lisette.Result[int, string]
 	tryResult_1 := func() lisette.Result[int, string] {
 		if bad {
-			check_2 := lisette.MakeResultErr[int, string]("failed")
-			if check_2.Tag != lisette.ResultOk {
-				return lisette.MakeResultErr[int, string](check_2.ErrVal)
-			}
-			_ = check_2.OkVal
+			return lisette.MakeResultErr[int, string]("failed")
 		}
 		return lisette.MakeResultOk[int, string](42)
 	}()

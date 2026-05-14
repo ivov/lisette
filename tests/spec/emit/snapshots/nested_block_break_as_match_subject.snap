@@ -13,7 +13,6 @@ func test() {
 			break
 		}
 		_ = tmp_2
-		_ = 3
 	}
 	_ = tmp_1
 }
