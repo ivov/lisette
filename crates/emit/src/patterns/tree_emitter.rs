@@ -8,7 +8,7 @@ use crate::patterns::emit_plan::{
     ChainPlan, EmitBinding, EmitCase, EmitChainTest, EmitDecision, MatchEmitPlan, RetryLoopPlan,
     SingleCatchallPlan, is_empty_emit_decision, lower_match,
 };
-use crate::types::emitter::Destination;
+use crate::placement::{BodyPlace, emit_unreachable_panic_if_needed};
 use crate::utils::{inline_trivial_bindings, output_ends_with_diverge, output_references_var};
 use crate::write_line;
 
@@ -22,7 +22,7 @@ enum WalkRole {
 
 #[derive(Clone, Copy)]
 struct WalkCtx<'a> {
-    arm_destination: &'a Destination,
+    arm_place: &'a BodyPlace,
     role: WalkRole,
     /// Set on retry-loop walks that need a `break <label>` terminator at
     /// non-divergent leaves; `None` for switch-case/chain-body and for
@@ -31,25 +31,25 @@ struct WalkCtx<'a> {
 }
 
 impl<'a> WalkCtx<'a> {
-    fn switch_case(arm_destination: &'a Destination) -> Self {
+    fn switch_case(arm_place: &'a BodyPlace) -> Self {
         Self {
-            arm_destination,
+            arm_place,
             role: WalkRole::SwitchCase,
             break_label: None,
         }
     }
 
-    fn chain_test(arm_destination: &'a Destination) -> Self {
+    fn chain_test(arm_place: &'a BodyPlace) -> Self {
         Self {
-            arm_destination,
+            arm_place,
             role: WalkRole::ChainBody,
             break_label: None,
         }
     }
 
-    fn retry_loop(arm_destination: &'a Destination, break_label: Option<&'a str>) -> Self {
+    fn retry_loop(arm_place: &'a BodyPlace, break_label: Option<&'a str>) -> Self {
         Self {
-            arm_destination,
+            arm_place,
             role: WalkRole::RetryLoopTop,
             break_label,
         }
@@ -78,7 +78,6 @@ impl<'a> WalkCtx<'a> {
 pub(crate) struct TreeEmitter<'a, 'e> {
     emitter: &'a mut Emitter<'e>,
     arms: &'a [MatchArm],
-    ty: &'a Type,
     subject_var: String,
     subject_ty: Type,
 }
@@ -87,29 +86,23 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     pub(crate) fn new(
         emitter: &'a mut Emitter<'e>,
         arms: &'a [MatchArm],
-        ty: &'a Type,
         subject_var: String,
         subject_ty: Type,
     ) -> Self {
         Self {
             emitter,
             arms,
-            ty,
             subject_var,
             subject_ty,
         }
     }
 
-    pub(crate) fn emit(mut self, output: &mut String) {
+    pub(crate) fn emit(mut self, output: &mut String, place: &BodyPlace) {
         let pre_len = output.len();
         let expanded = expand_or_patterns(self.arms);
         let compiled = compile_expanded_arms(self.emitter, &expanded, &self.subject_ty);
         self.emitter.apply_effects(&compiled.effects);
         let tree = compiled.decision;
-
-        let routing = self.emitter.compute_arm_routing(Some(output), self.ty);
-        let result_var = routing.result_var().map(|s| s.to_string());
-        let body_destination = routing.into_body_destination();
 
         let single_catchall_has_collisions = match &tree {
             Decision::Success { arm_index, .. } => self
@@ -130,21 +123,17 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
 
         match lowered.plan {
             MatchEmitPlan::Switch { tree } => {
-                let ctx = WalkCtx::switch_case(&body_destination);
+                let ctx = WalkCtx::switch_case(place);
                 self.walk(output, &tree, &ctx);
-                if let Some(var) = &result_var {
-                    write_line!(output, "return {}", var);
-                }
             }
             MatchEmitPlan::SingleCatchall(plan) => {
-                self.render_single_catchall(output, &plan, &body_destination, &result_var);
+                self.render_single_catchall(output, &plan, place);
             }
             MatchEmitPlan::Chain(plan) => {
-                self.render_chain_root(output, &plan, &body_destination, &result_var);
+                self.render_chain_root(output, &plan, place);
             }
             MatchEmitPlan::RetryLoop(plan) => {
-                let needs_return = result_var.is_some();
-                self.render_retry_loop(output, &plan, &body_destination, needs_return);
+                self.render_retry_loop(output, &plan, place);
             }
         }
 
@@ -155,8 +144,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         &mut self,
         output: &mut String,
         plan: &SingleCatchallPlan,
-        arm_destination: &Destination,
-        result_var: &Option<String>,
+        place: &BodyPlace,
     ) {
         let emits_any_binding = plan.bindings.iter().any(|b| b.go_name.is_some());
         let needs_block = emits_any_binding || plan.pattern_has_collisions;
@@ -167,11 +155,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
 
         self.emit_bindings(output, &plan.bindings);
-        self.emit_arm_body(output, plan.arm_index, Some(arm_destination));
-
-        if let Some(var) = result_var {
-            write_line!(output, "return {}", var);
-        }
+        self.emit_arm_body(output, plan.arm_index, place);
 
         if needs_block {
             self.emitter.exit_scope();
@@ -179,26 +163,16 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
     }
 
-    fn render_chain_root(
-        &mut self,
-        output: &mut String,
-        plan: &ChainPlan,
-        arm_destination: &Destination,
-        result_var: &Option<String>,
-    ) {
-        self.emit_chain_root_decision(output, &plan.tree, arm_destination);
-        if let Some(var) = result_var {
-            write_line!(output, "return {}", var);
-        }
-        self.emitter
-            .emit_unreachable_if_needed(output, plan.chain_tail_is_exhaustive);
+    fn render_chain_root(&mut self, output: &mut String, plan: &ChainPlan, place: &BodyPlace) {
+        self.emit_chain_root_decision(output, &plan.tree, place);
+        emit_unreachable_panic_if_needed(output, place, plan.chain_tail_is_exhaustive);
     }
 
     fn emit_chain_root_decision(
         &mut self,
         output: &mut String,
         tree: &EmitDecision,
-        arm_destination: &Destination,
+        place: &BodyPlace,
     ) {
         match tree {
             EmitDecision::Success {
@@ -207,7 +181,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 ..
             } => {
                 self.emit_bindings(output, bindings);
-                self.emit_arm_body(output, *arm_index, Some(arm_destination));
+                self.emit_arm_body(output, *arm_index, place);
             }
             EmitDecision::Chain {
                 tests,
@@ -219,15 +193,15 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                     tests,
                     fallback,
                     *last_is_catchall,
-                    arm_destination,
+                    place,
                 );
             }
             EmitDecision::Unreachable => {}
             EmitDecision::Guard { .. } => {
-                self.walk(output, tree, &WalkCtx::chain_test(arm_destination));
+                self.walk(output, tree, &WalkCtx::chain_test(place));
             }
             _ => {
-                self.walk(output, tree, &WalkCtx::switch_case(arm_destination));
+                self.walk(output, tree, &WalkCtx::switch_case(place));
             }
         }
     }
@@ -239,7 +213,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         tests: &[EmitChainTest],
         fallback: &EmitDecision,
         last_is_catchall: bool,
-        arm_destination: &Destination,
+        place: &BodyPlace,
     ) {
         let regular = if last_is_catchall {
             &tests[..tests.len() - 1]
@@ -247,8 +221,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             tests
         };
 
-        let guard_ctx = WalkCtx::switch_case(arm_destination);
-        let chain_ctx = WalkCtx::chain_test(arm_destination);
+        let guard_ctx = WalkCtx::switch_case(place);
+        let chain_ctx = WalkCtx::chain_test(place);
         for (i, test) in regular.iter().enumerate() {
             let is_catchall = test.cond.is_none();
             let condition = test.cond.as_deref().unwrap_or("");
@@ -272,14 +246,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
     }
 
-    fn render_retry_loop(
-        &mut self,
-        output: &mut String,
-        plan: &RetryLoopPlan,
-        arm_destination: &Destination,
-        needs_return: bool,
-    ) {
-        let use_direct_return = arm_destination.is_tail();
+    fn render_retry_loop(&mut self, output: &mut String, plan: &RetryLoopPlan, place: &BodyPlace) {
+        let use_direct_return = place.is_return();
         let unguarded_exit = plan.root_has_unguarded_terminal || plan.last_arm_is_any_catchall;
         let skip_wrapper = !use_direct_return && unguarded_exit && plan.all_arms_diverge;
 
@@ -292,7 +260,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         };
 
         let break_label = (!label.is_empty()).then_some(label.as_str());
-        let ctx = WalkCtx::retry_loop(arm_destination, break_label);
+        let ctx = WalkCtx::retry_loop(place, break_label);
         self.walk(output, &plan.tree, &ctx);
 
         if use_direct_return {
@@ -304,9 +272,6 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 write_line!(output, "break {}", label);
             }
             output.push_str("}\n");
-            if needs_return && let Some(var) = arm_destination.assign_target() {
-                write_line!(output, "return {}", var);
-            }
         }
     }
 
@@ -323,7 +288,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                     self.emitter.enter_scope();
                 }
                 self.emit_bindings(output, bindings);
-                self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
+                self.emit_arm_body(output, *arm_index, ctx.arm_place);
                 self.apply_leaf_terminator(output, ctx);
                 if wrap {
                     self.emitter.exit_scope();
@@ -368,7 +333,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 self.apply_leaf_terminator(output, ctx);
             }
             EmitDecision::InlineBranch { branch } => {
-                let inner = WalkCtx::switch_case(ctx.arm_destination);
+                let inner = WalkCtx::switch_case(ctx.arm_place);
                 self.walk(output, branch, &inner);
                 self.apply_leaf_terminator(output, ctx);
             }
@@ -378,13 +343,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 default,
                 ..
             } => {
-                self.emit_value_switch(
-                    output,
-                    expr,
-                    cases,
-                    default.as_deref(),
-                    ctx.arm_destination,
-                );
+                self.emit_value_switch(output, expr, cases, default.as_deref(), ctx.arm_place);
                 self.apply_leaf_terminator(output, ctx);
             }
             EmitDecision::TypeSwitch {
@@ -392,7 +351,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 cases,
                 default,
             } => {
-                self.emit_type_switch(output, base, cases, default.as_deref(), ctx.arm_destination);
+                self.emit_type_switch(output, base, cases, default.as_deref(), ctx.arm_place);
                 self.apply_leaf_terminator(output, ctx);
             }
             EmitDecision::Chain {
@@ -408,7 +367,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                         tests,
                         fallback,
                         *last_is_catchall,
-                        ctx.arm_destination,
+                        ctx.arm_place,
                     );
                 }
             }
@@ -447,7 +406,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         else_branch: Option<&EmitDecision>,
         ctx: &WalkCtx,
     ) {
-        let inner = WalkCtx::switch_case(ctx.arm_destination);
+        let inner = WalkCtx::switch_case(ctx.arm_place);
         write_line!(output, "if {} {{", cond);
         self.emitter.enter_scope();
         self.walk(output, then_branch, &inner);
@@ -464,10 +423,10 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         expr: &str,
         cases: &[EmitCase],
         default: Option<&EmitDecision>,
-        arm_destination: &Destination,
+        place: &BodyPlace,
     ) {
         write_line!(output, "switch {} {{", expr);
-        let ctx = WalkCtx::switch_case(arm_destination);
+        let ctx = WalkCtx::switch_case(place);
         for case in cases {
             write_line!(output, "case {}:", case.case_label);
             self.emitter.enter_scope();
@@ -484,8 +443,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             }
         }
         output.push_str("}\n");
-        self.emitter
-            .emit_unreachable_if_needed(output, default.is_some());
+        emit_unreachable_panic_if_needed(output, place, default.is_some());
     }
 
     fn emit_type_switch(
@@ -494,13 +452,13 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         base: &str,
         cases: &[EmitCase],
         default: Option<&EmitDecision>,
-        arm_destination: &Destination,
+        place: &BodyPlace,
     ) {
         let header_start = output.len();
         write_line!(output, "switch {} := {}.(type) {{", base, base);
 
         let (body, ()) = self.capture_output(output, |this, out| {
-            let ctx = WalkCtx::switch_case(arm_destination);
+            let ctx = WalkCtx::switch_case(place);
             for case in cases {
                 write_line!(out, "case {}:", case.case_label);
                 this.emitter.enter_scope();
@@ -525,8 +483,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
         output.push_str(&body);
 
-        self.emitter
-            .emit_unreachable_if_needed(output, default.is_some());
+        emit_unreachable_panic_if_needed(output, place, default.is_some());
     }
 
     fn capture_output<R>(
@@ -611,12 +568,12 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         for &test_idx in indices {
             match &*tests[test_idx].decision {
                 EmitDecision::Success { arm_index, .. } => {
-                    self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
+                    self.emit_arm_body(output, *arm_index, ctx.arm_place);
                     self.apply_leaf_terminator(output, ctx);
                 }
                 EmitDecision::Guard { arm_index, .. } => {
                     if self.emit_guard_header(output, *arm_index) {
-                        self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
+                        self.emit_arm_body(output, *arm_index, ctx.arm_place);
                         self.apply_leaf_terminator(output, ctx);
                         self.emitter.exit_scope();
                         output.push_str("}\n");
@@ -686,21 +643,10 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
     }
 
-    fn emit_arm_body(
-        &mut self,
-        output: &mut String,
-        arm_index: usize,
-        destination: Option<&Destination>,
-    ) {
+    fn emit_arm_body(&mut self, output: &mut String, arm_index: usize, place: &BodyPlace) {
         let arm = &self.arms[arm_index];
-        match destination {
-            Some(destination) => self.emitter.with_destination(destination.clone(), |e| {
-                e.emit_in_destination(output, &arm.expression);
-            }),
-            None => self
-                .emitter
-                .emit_in_destination(output, &self.arms[arm_index].expression),
-        }
+        self.emitter
+            .emit_body_to_place(output, &arm.expression, place);
     }
 
     fn emit_guard_header(&mut self, output: &mut String, arm_index: usize) -> bool {

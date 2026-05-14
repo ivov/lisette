@@ -18,6 +18,7 @@ use crate::patterns::decision_tree::{
     self, apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
     emit_tree_assignments, emit_tree_bindings, render_condition,
 };
+use crate::placement::BodyPlace;
 use crate::utils::{DiscardGuard, try_flip_comparison};
 use crate::write_line;
 
@@ -387,6 +388,7 @@ impl Emitter<'_> {
         element_ty: &Type,
         body: &Expression,
         default_body: Option<&Expression>,
+        place: &BodyPlace,
     ) {
         self.emit_refutable_arm(
             output,
@@ -395,10 +397,11 @@ impl Emitter<'_> {
             typed,
             element_ty,
             body,
+            place,
             |this, output| {
                 if let Some(default_body) = default_body {
                     output.push_str("} else {\n");
-                    this.emit_in_destination(output, default_body);
+                    this.emit_body_to_place(output, default_body, place);
                 }
             },
         );
@@ -414,6 +417,7 @@ impl Emitter<'_> {
         element_ty: &Type,
         some_body: &Expression,
         match_arms: &[MatchArm],
+        place: &BodyPlace,
     ) {
         self.emit_refutable_arm(
             output,
@@ -422,9 +426,10 @@ impl Emitter<'_> {
             typed,
             element_ty,
             some_body,
+            place,
             |this, output| {
                 output.push_str("} else {\n");
-                emit_none_arm_body(this, output, match_arms);
+                emit_none_arm_body(this, output, match_arms, place);
             },
         );
     }
@@ -441,6 +446,7 @@ impl Emitter<'_> {
         typed: Option<&TypedPattern>,
         subject_ty: &Type,
         body: &Expression,
+        place: &BodyPlace,
         failure: impl FnOnce(&mut Emitter, &mut String),
     ) {
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
@@ -448,13 +454,13 @@ impl Emitter<'_> {
         let (effective, ok_var) = apply_refutable_root_assertion(self, output, &info, subject_var);
         if info.checks.is_empty() && ok_var.is_none() {
             emit_tree_bindings(self, output, &info.bindings, &effective);
-            self.emit_in_destination(output, body);
+            self.emit_body_to_place(output, body, place);
             return;
         }
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
         write_line!(output, "if {} {{", condition);
         emit_tree_bindings(self, output, &info.bindings, &effective);
-        self.emit_in_destination(output, body);
+        self.emit_body_to_place(output, body, place);
         failure(self, output);
         output.push_str("}\n");
     }
@@ -464,12 +470,13 @@ pub(crate) fn emit_none_arm_body(
     emitter: &mut Emitter,
     output: &mut String,
     match_arms: &[MatchArm],
+    place: &BodyPlace,
 ) {
     for match_arm in match_arms {
         if let Pattern::EnumVariant { identifier, .. } = &match_arm.pattern {
             let variant_name = go_name::unqualified_name(identifier);
             if variant_name == "None" {
-                emitter.emit_in_destination(output, &match_arm.expression);
+                emitter.emit_body_to_place(output, &match_arm.expression, place);
                 return;
             }
         }

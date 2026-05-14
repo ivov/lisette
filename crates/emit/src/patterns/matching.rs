@@ -1,11 +1,11 @@
 use crate::Emitter;
 use crate::names::go_name;
 use crate::patterns::tree_emitter::TreeEmitter;
+use crate::placement::BodyPlace;
 use crate::types::abi::AbiShape;
 use crate::utils::DiscardGuard;
 use crate::write_line;
 use syntax::ast::{Expression, MatchArm, Pattern};
-use syntax::types::Type;
 
 impl Emitter<'_> {
     pub(crate) fn emit_match(
@@ -13,13 +13,13 @@ impl Emitter<'_> {
         output: &mut String,
         subject: &Expression,
         arms: &[MatchArm],
-        ty: &Type,
+        place: &BodyPlace,
     ) {
         if subject.get_type().is_never() {
             self.emit_statement(output, subject);
             return;
         }
-        if self.try_emit_fused_lowered_match(output, subject, arms) {
+        if self.try_emit_fused_lowered_match(output, subject, arms, place) {
             return;
         }
         let subject_ty = subject.get_type();
@@ -29,8 +29,8 @@ impl Emitter<'_> {
         } else {
             Some(DiscardGuard::new(output, &subject_var))
         };
-        let tree_emitter = TreeEmitter::new(self, arms, ty, subject_var, subject_ty);
-        tree_emitter.emit(output);
+        let tree_emitter = TreeEmitter::new(self, arms, subject_var, subject_ty);
+        tree_emitter.emit(output, place);
         if let Some(guard) = guard {
             guard.finish(output);
         }
@@ -43,6 +43,7 @@ impl Emitter<'_> {
         output: &mut String,
         subject: &Expression,
         arms: &[MatchArm],
+        place: &BodyPlace,
     ) -> bool {
         let Expression::Call {
             expression: callee, ..
@@ -99,7 +100,7 @@ impl Emitter<'_> {
         {
             self.bind_fused(output, name, val);
         }
-        self.emit_in_destination(output, &ok_arm.expression);
+        self.emit_body_to_place(output, &ok_arm.expression, place);
         self.scope.bindings.restore();
         output.push_str("} else {\n");
         self.scope.bindings.save();
@@ -108,7 +109,7 @@ impl Emitter<'_> {
         {
             self.bind_fused(output, name, &err_var);
         }
-        self.emit_in_destination(output, &err_arm.expression);
+        self.emit_body_to_place(output, &err_arm.expression, place);
         self.scope.bindings.restore();
         output.push_str("}\n");
         true

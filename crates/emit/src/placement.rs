@@ -1,16 +1,45 @@
-//! Value placement: callers name the destination via `ValuePlace`, this
-//! module decides how to get the value there. `Destination` remains the
-//! leaf-direction signal that match/select arm walkers consult.
+//! Value placement: callers name the destination via `ValuePlace` (for
+//! value-producing expressions) or `BodyPlace` (for branch arm bodies);
+//! this module decides how the value gets there.
 
 use crate::Emitter;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FallibleEmitter};
 use crate::expressions::emission::EmittedExpression;
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::coercion::{Coercion, CoercionDirection};
-use crate::types::emitter::Destination;
 use crate::write_line;
 use syntax::ast::{Expression, Literal, UnaryOperator};
 use syntax::types::{Type, peel_to_range_type};
+
+/// Where a branch arm's body writes its result.
+#[derive(Clone, Debug)]
+pub(crate) enum BodyPlace {
+    Statement,
+    Assign {
+        var: String,
+        target_ty: Option<Type>,
+    },
+    Return,
+}
+
+impl BodyPlace {
+    pub(crate) fn is_return(&self) -> bool {
+        matches!(self, BodyPlace::Return)
+    }
+}
+
+/// Append `panic("unreachable")` after a branch construct in return position
+/// when the branch can fall through (no exhaustive default arm). Go would
+/// otherwise reject the function for missing a tail return.
+pub(crate) fn emit_unreachable_panic_if_needed(
+    output: &mut String,
+    place: &BodyPlace,
+    is_exhaustive: bool,
+) {
+    if place.is_return() && !is_exhaustive {
+        output.push_str("panic(\"unreachable\")\n");
+    }
+}
 
 pub(crate) enum ValuePlace<'a> {
     /// Assignment to an existing Go variable.
@@ -243,7 +272,7 @@ fn resolve_let_temp_decl_ty(emitter: &mut Emitter, value: &Expression, binding_t
         Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. }
     );
     if is_branching && let Type::Tuple(slots) = &base {
-        Type::Tuple(emitter.resolve_tuple_slot_types(slots.clone()))
+        Type::Tuple(emitter.resolve_tuple_slot_types(slots.clone(), false))
     } else {
         base
     }
@@ -365,18 +394,6 @@ impl Emitter<'_> {
         write_line!(output, "{} = struct{{}}{{}}", var);
     }
 
-    /// Wrap a branching-shaped expression at statement position so its arms
-    /// route to `Destination::Statement` (no return, no assignment).
-    pub(crate) fn emit_as_statement_branch(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-    ) {
-        self.with_destination(Destination::Statement, |this| {
-            this.emit_branching_directly(output, expression);
-        });
-    }
-
     fn emit_assign(
         &mut self,
         output: &mut String,
@@ -401,25 +418,16 @@ impl Emitter<'_> {
             return;
         }
 
-        let dest = Destination::Assign {
-            var: var.to_string(),
-            target_ty: target_ty.cloned(),
-        };
-
         if let Expression::Block { items, .. } = expression
             && items.len() > 1
         {
             output.push_str("{\n");
-            self.with_destination(dest, |this| {
-                this.emit_block_to_var_with_braces(output, expression, var, true);
-            });
+            self.emit_block_to_var_with_braces(output, expression, var, target_ty, true);
             output.push_str("}\n");
             return;
         }
 
-        self.with_destination(dest, |this| {
-            this.emit_block_to_var_with_braces(output, expression, var, false);
-        });
+        self.emit_block_to_var_with_braces(output, expression, var, target_ty, false);
     }
 
     fn emit_plain_assign(
@@ -498,7 +506,7 @@ impl Emitter<'_> {
                 }
             }
             _ => {
-                self.emit_block_to_var_with_braces(output, expression, target_var, false);
+                self.emit_block_to_var_with_braces(output, expression, target_var, None, false);
             }
         }
     }
@@ -508,6 +516,7 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
         var: &str,
+        target_ty: Option<&Type>,
         has_go_braces: bool,
     ) {
         let is_block = matches!(expression, Expression::Block { .. });
@@ -524,7 +533,7 @@ impl Emitter<'_> {
             for item in rest {
                 self.emit_statement(output, item);
             }
-            self.emit_tail_to_var(output, last, var);
+            self.emit_tail_to_var(output, last, var, target_ty);
             if is_new_target {
                 self.scope.assign_targets.remove(var);
             }
@@ -555,7 +564,13 @@ impl Emitter<'_> {
         }
     }
 
-    fn emit_tail_to_var(&mut self, output: &mut String, last: &Expression, var: &str) {
+    fn emit_tail_to_var(
+        &mut self,
+        output: &mut String,
+        last: &Expression,
+        var: &str,
+        target_ty: Option<&Type>,
+    ) {
         if matches!(
             last,
             Expression::Return { .. }
@@ -588,22 +603,19 @@ impl Emitter<'_> {
             last,
             Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. }
         ) {
-            let target_ty = self.destination.assign_target_ty().cloned();
-            self.with_destination(
-                Destination::Assign {
+            self.emit_branching_directly(
+                output,
+                last,
+                &BodyPlace::Assign {
                     var: var.to_string(),
-                    target_ty,
-                },
-                |this| {
-                    this.emit_branching_directly(output, last);
+                    target_ty: target_ty.cloned(),
                 },
             );
             return;
         }
         let expression_string = self.emit_value(output, last);
-        let target_ty = self.destination.assign_target_ty().cloned();
         let expression_string =
-            self.apply_type_coercion(output, target_ty.as_ref(), last, expression_string);
+            self.apply_type_coercion(output, target_ty, last, expression_string);
         write_line!(output, "{} = {}", var, expression_string);
     }
 
@@ -720,14 +732,14 @@ impl Emitter<'_> {
         match last {
             Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
                 output.push_str(&directive);
-                self.emit_branching_directly(output, last);
+                self.emit_branching_directly(output, last, &BodyPlace::Return);
             }
             _ => {
                 output.push_str(&directive);
                 if self.emit_wrapped_return(output, last) {
                     return;
                 }
-                let expression_string = self.emit_value(output, last);
+                let expression_string = self.emit_tail_value(output, last);
                 let return_ty = self.return_mode.ty().cloned();
                 let expression_string =
                     self.apply_type_coercion(output, return_ty.as_ref(), last, expression_string);
@@ -736,28 +748,40 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn emit_in_destination(&mut self, output: &mut String, expression: &Expression) {
-        match &self.destination {
-            Destination::Statement | Destination::Expression => {
-                self.emit_block(output, expression);
-            }
-            Destination::Assign { var, target_ty } => {
-                let var = var.clone();
+    /// Emit `last` as a tail value: a `Tuple` literal renders its slots with
+    /// return-slot widening; everything else routes through `emit_value`.
+    fn emit_tail_value(&mut self, output: &mut String, last: &Expression) -> String {
+        if let Expression::Tuple { elements, ty, .. } = last {
+            self.emit_tuple_value(output, elements, ty, true)
+        } else {
+            self.emit_value(output, last)
+        }
+    }
+
+    pub(crate) fn emit_body_to_place(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        place: &BodyPlace,
+    ) {
+        match place {
+            BodyPlace::Statement => self.emit_block(output, expression),
+            BodyPlace::Assign { var, target_ty } => {
                 let is_fallible =
                     expression.get_type().is_result() || expression.get_type().is_option();
-                let target_ty = if is_fallible { target_ty.clone() } else { None };
                 if is_fallible {
-                    self.emit_option_result_assignment(
-                        output,
-                        &var,
-                        target_ty.as_ref(),
-                        expression,
-                    );
+                    self.emit_option_result_assignment(output, var, target_ty.as_ref(), expression);
                 } else {
-                    self.emit_block_to_var_with_braces(output, expression, &var, false);
+                    self.emit_block_to_var_with_braces(
+                        output,
+                        expression,
+                        var,
+                        target_ty.as_ref(),
+                        false,
+                    );
                 }
             }
-            Destination::Tail => self.emit_block_to_tail(output, expression),
+            BodyPlace::Return => self.emit_block_to_tail(output, expression),
         }
     }
 
@@ -812,31 +836,30 @@ impl Emitter<'_> {
     }
 
     fn emit_returning_function_tail(&mut self, output: &mut String, last: &Expression) {
-        self.with_destination(Destination::Tail, |this| {
-            if !requires_temp_var(last) {
-                let expression = this.emit_value(output, last);
-                let return_ty = this.return_mode.ty().cloned();
-                let expression =
-                    this.apply_type_coercion(output, return_ty.as_ref(), last, expression);
-                output.push_str(&this.wrap_value(&expression));
-                return;
+        if !requires_temp_var(last) {
+            let expression = self.emit_tail_value(output, last);
+            let return_ty = self.return_mode.ty().cloned();
+            let expression = self.apply_type_coercion(output, return_ty.as_ref(), last, expression);
+            if !expression.is_empty() {
+                write_line!(output, "return {}", expression);
             }
-            match last {
-                Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
-                    this.emit_branching_directly(output, last);
-                }
-                Expression::IfLet { .. } => {
-                    unreachable!("IfLet should be desugared to Match before emit")
-                }
-                Expression::Block { .. }
-                | Expression::Loop { .. }
-                | Expression::Propagate { .. } => {
-                    let expression = this.emit_operand(output, last);
-                    output.push_str(&this.wrap_value(&expression));
-                }
-                _ => unreachable!("requires_temp_var returned true for unexpected expression"),
+            return;
+        }
+        match last {
+            Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
+                self.emit_branching_directly(output, last, &BodyPlace::Return);
             }
-        });
+            Expression::IfLet { .. } => {
+                unreachable!("IfLet should be desugared to Match before emit")
+            }
+            Expression::Block { .. } | Expression::Loop { .. } | Expression::Propagate { .. } => {
+                let expression = self.emit_operand(output, last);
+                if !expression.is_empty() {
+                    write_line!(output, "return {}", expression);
+                }
+            }
+            _ => unreachable!("requires_temp_var returned true for unexpected expression"),
+        }
     }
 
     /// Emit a `let identifier = value` binding. `raw_go_name == None` signals
@@ -1054,7 +1077,7 @@ impl Emitter<'_> {
             if needs_braces {
                 output.push_str("{\n");
             }
-            self.emit_block_to_var_with_braces(output, expression, &result_var, needs_braces);
+            self.emit_block_to_var_with_braces(output, expression, &result_var, None, needs_braces);
             if needs_braces {
                 output.push_str("}\n");
             }

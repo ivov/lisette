@@ -306,7 +306,9 @@ impl Emitter<'_> {
             Expression::RecoverBlock { items, ty, .. } => {
                 self.emit_recover_block(output, items, ty)
             }
-            Expression::Tuple { elements, ty, .. } => self.emit_tuple_value(output, elements, ty),
+            Expression::Tuple { elements, ty, .. } => {
+                self.emit_tuple_value(output, elements, ty, false)
+            }
             Expression::If { ty, .. }
             | Expression::Match { ty, .. }
             | Expression::Select { ty, .. }
@@ -349,17 +351,21 @@ impl Emitter<'_> {
         }
     }
 
-    fn emit_tuple_value(
+    /// Emit a Go tuple literal. `in_tail` controls slot-type widening:
+    /// tail-position tuples use the declared return-slot types directly so
+    /// the per-element coercion matches what the return site will see.
+    pub(crate) fn emit_tuple_value(
         &mut self,
         output: &mut String,
         elements: &[Expression],
         ty: &Type,
+        in_tail: bool,
     ) -> String {
         let inferred_slot_types: Vec<Type> = match ty {
             Type::Tuple(slots) => slots.clone(),
             _ => Vec::new(),
         };
-        let slot_types = self.resolve_tuple_slot_types(inferred_slot_types);
+        let slot_types = self.resolve_tuple_slot_types(inferred_slot_types, in_tail);
 
         let stages: Vec<EmittedExpression> = elements
             .iter()

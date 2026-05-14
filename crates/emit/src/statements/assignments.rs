@@ -2,6 +2,7 @@ use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::is_order_sensitive;
 use crate::names::go_name;
+use crate::placement::BodyPlace;
 use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::write_line;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
@@ -42,14 +43,11 @@ impl Emitter<'_> {
                     output.push_str("continue\n");
                 }
             }
-            Expression::If { .. } => {
-                self.emit_as_statement_branch(output, expression);
+            Expression::If { .. } | Expression::Match { .. } => {
+                self.emit_branching_directly(output, expression, &BodyPlace::Statement);
             }
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
-            }
-            Expression::Match { .. } => {
-                self.emit_as_statement_branch(output, expression);
             }
             Expression::Loop {
                 body, needs_label, ..
@@ -95,7 +93,7 @@ impl Emitter<'_> {
                 self.pop_loop();
             }
             Expression::Select { .. } => {
-                self.emit_as_statement_branch(output, expression);
+                self.emit_branching_directly(output, expression, &BodyPlace::Statement);
             }
             Expression::Block { .. } => {
                 output.push_str("{\n");

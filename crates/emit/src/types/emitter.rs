@@ -87,38 +87,6 @@ impl EmitEffects {
     }
 }
 
-/// Where the current expression's value goes.
-#[derive(Clone, Debug)]
-pub(crate) enum Destination {
-    Tail,
-    Statement,
-    Expression,
-    Assign {
-        var: String,
-        target_ty: Option<Type>,
-    },
-}
-
-impl Destination {
-    pub(crate) fn is_tail(&self) -> bool {
-        matches!(self, Destination::Tail)
-    }
-
-    pub(crate) fn assign_target(&self) -> Option<&str> {
-        match self {
-            Destination::Assign { var, .. } => Some(var),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn assign_target_ty(&self) -> Option<&Type> {
-        match self {
-            Destination::Assign { target_ty, .. } => target_ty.as_ref(),
-            _ => None,
-        }
-    }
-}
-
 /// Shape of the enclosing function body's return values.
 #[derive(Clone, Default)]
 pub(crate) enum ReturnMode {
@@ -161,33 +129,4 @@ impl ReturnMode {
 pub(crate) struct LoopContext {
     pub(crate) result_var: String,
     pub(crate) label: Option<String>,
-}
-
-pub(crate) enum ArmRouting {
-    /// Arm bodies inherit an existing destination.
-    Inherit(Destination),
-    /// Arm bodies assign to a fresh result var; the match site emits
-    /// `return <var>` after the arms.
-    CreateAndReturn {
-        var: String,
-        target_ty: Option<Type>,
-    },
-}
-
-impl ArmRouting {
-    pub(crate) fn into_body_destination(self) -> Destination {
-        match self {
-            ArmRouting::Inherit(d) => d,
-            ArmRouting::CreateAndReturn { var, target_ty } => {
-                Destination::Assign { var, target_ty }
-            }
-        }
-    }
-
-    pub(crate) fn result_var(&self) -> Option<&str> {
-        match self {
-            ArmRouting::CreateAndReturn { var, .. } => Some(var),
-            ArmRouting::Inherit(_) => None,
-        }
-    }
 }

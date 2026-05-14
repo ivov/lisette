@@ -414,7 +414,11 @@ impl Emitter<'_> {
         self.exit_scope();
     }
 
-    pub(crate) fn resolve_tuple_slot_types(&mut self, inferred: Vec<Type>) -> Vec<Type> {
+    pub(crate) fn resolve_tuple_slot_types(
+        &mut self,
+        inferred: Vec<Type>,
+        in_tail: bool,
+    ) -> Vec<Type> {
         let return_slots = self.return_mode.ty().and_then(|ty| {
             let Type::Tuple(slots) = ty else {
                 return None;
@@ -426,7 +430,7 @@ impl Emitter<'_> {
             return inferred;
         };
 
-        if self.destination.is_tail() {
+        if in_tail {
             return return_slots;
         }
 

@@ -3,6 +3,7 @@ use crate::names::go_name;
 use crate::patterns::sites::{
     self, PatternSubject, is_some_pattern, unwrap_some_pattern, unwrap_some_typed_pattern,
 };
+use crate::placement::{BodyPlace, emit_unreachable_panic_if_needed};
 use crate::utils::{DiscardGuard, contains_call};
 use crate::write_line;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, TypedPattern};
@@ -20,6 +21,7 @@ struct SelectReceiveContext<'a> {
     default_body: Option<&'a Expression>,
     retry_var: Option<&'a str>,
     element_ty: syntax::types::Type,
+    place: &'a BodyPlace,
 }
 
 struct SelectPrep {
@@ -29,7 +31,12 @@ struct SelectPrep {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn emit_select(&mut self, output: &mut String, arms: &[SelectArm]) {
+    pub(crate) fn emit_select(
+        &mut self,
+        output: &mut String,
+        arms: &[SelectArm],
+        place: &BodyPlace,
+    ) {
         let needs_retry_loop = arms.iter().any(|arm| {
             matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if is_some_pattern(binding))
         });
@@ -72,12 +79,13 @@ impl Emitter<'_> {
                         default_body,
                         retry_var,
                         element_ty: receive_expression.get_type().ok_type(),
+                        place,
                     };
                     self.emit_receive_arm(output, binding, typed_pattern.as_ref(), &receiver_ctx);
                 }
                 SelectArmPattern::Send { body, .. } => {
                     let parts = prep.send_parts[i].as_ref().unwrap();
-                    self.emit_send_arm_case(output, parts, body);
+                    self.emit_send_arm_case(output, parts, body, place);
                 }
                 SelectArmPattern::MatchReceive {
                     arms: match_arms,
@@ -85,11 +93,11 @@ impl Emitter<'_> {
                 } => {
                     let channel = prep.channel_operands[i].as_ref().unwrap();
                     let element_ty = receive_expression.get_type().ok_type();
-                    self.emit_match_receive_arm(output, match_arms, channel, &element_ty);
+                    self.emit_match_receive_arm(output, match_arms, channel, &element_ty, place);
                 }
                 SelectArmPattern::WildCard { body } => {
                     output.push_str("default:\n");
-                    self.emit_in_destination(output, body);
+                    self.emit_body_to_place(output, body, place);
                 }
             }
         }
@@ -101,14 +109,12 @@ impl Emitter<'_> {
             output.push_str("break\n}\n");
             // Go can't see that `break` is unreachable (all select paths either
             // return or continue), so emit panic to satisfy the compiler.
-            if self.destination.is_tail() {
-                output.push_str("panic(\"unreachable\")\n");
-            }
+            emit_unreachable_panic_if_needed(output, place, false);
         } else {
             let has_default = arms
                 .iter()
                 .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
-            self.emit_unreachable_if_needed(output, has_default);
+            emit_unreachable_panic_if_needed(output, place, has_default);
         }
     }
 
@@ -223,7 +229,7 @@ impl Emitter<'_> {
 
     fn emit_ok_check(&mut self, output: &mut String, ok_var: &str, ctx: &SelectReceiveContext) {
         let (body_content, ()) = self.capture_emission(output, |this, buf| {
-            this.emit_in_destination(buf, ctx.body);
+            this.emit_body_to_place(buf, ctx.body, ctx.place);
         });
         let body_empty = body_content.is_empty();
         let has_else = ctx.retry_var.is_some() || ctx.default_body.is_some();
@@ -251,7 +257,7 @@ impl Emitter<'_> {
             write_line!(output, "{} = nil", retry_var);
             output.push_str("continue\n");
         } else if let Some(default_body) = ctx.default_body {
-            self.emit_in_destination(output, default_body);
+            self.emit_body_to_place(output, default_body, ctx.place);
         }
     }
 
@@ -283,9 +289,10 @@ impl Emitter<'_> {
                 &ctx.element_ty,
                 ctx.body,
                 ctx.default_body,
+                ctx.place,
             );
         } else {
-            self.emit_in_destination(output, ctx.body);
+            self.emit_body_to_place(output, ctx.body, ctx.place);
         }
         guard.finish(output);
         self.scope.bindings.restore();
@@ -362,7 +369,7 @@ impl Emitter<'_> {
                 }
             }
         }
-        self.emit_in_destination(output, ctx.body);
+        self.emit_body_to_place(output, ctx.body, ctx.place);
         self.scope.bindings.restore();
     }
 
@@ -408,7 +415,13 @@ impl Emitter<'_> {
     }
 
     /// Emit the `case` line and body for a pre-processed send arm.
-    fn emit_send_arm_case(&mut self, output: &mut String, parts: &SendArmParts, body: &Expression) {
+    fn emit_send_arm_case(
+        &mut self,
+        output: &mut String,
+        parts: &SendArmParts,
+        body: &Expression,
+        place: &BodyPlace,
+    ) {
         match parts {
             SendArmParts::Send(ch, val) => {
                 write_line!(output, "case {} <- {}:", ch, val);
@@ -420,7 +433,7 @@ impl Emitter<'_> {
                 output.push_str("default:\n");
             }
         }
-        self.emit_in_destination(output, body);
+        self.emit_body_to_place(output, body, place);
     }
 
     fn emit_match_receive_arm(
@@ -429,6 +442,7 @@ impl Emitter<'_> {
         match_arms: &[MatchArm],
         channel: &str,
         element_ty: &syntax::types::Type,
+        place: &BodyPlace,
     ) {
         self.scope.bindings.save();
 
@@ -464,9 +478,10 @@ impl Emitter<'_> {
             &case_var,
             needs_receiver_destructure,
             element_ty,
+            place,
         );
         let none_content = self.capture_scoped(output, |this, output| {
-            sites::emit_none_arm_body(this, output, match_arms);
+            sites::emit_none_arm_body(this, output, match_arms, place);
         });
 
         self.write_receive_arms(
@@ -497,10 +512,11 @@ impl Emitter<'_> {
         case_var: &str,
         needs_receiver_destructure: bool,
         element_ty: &syntax::types::Type,
+        place: &BodyPlace,
     ) -> Option<String> {
         self.capture_scoped(output, |this, output| {
             if !needs_receiver_destructure {
-                this.emit_in_destination(output, &some_arm.expression);
+                this.emit_body_to_place(output, &some_arm.expression, place);
                 return;
             }
             let inner_typed = unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
@@ -512,6 +528,7 @@ impl Emitter<'_> {
                 element_ty,
                 &some_arm.expression,
                 match_arms,
+                place,
             );
         })
     }

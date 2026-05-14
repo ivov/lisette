@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::placement::BodyPlace;
 use crate::utils::output_ends_with_diverge;
 use crate::write_line;
 use syntax::ast::Expression;
@@ -10,17 +11,23 @@ impl Emitter<'_> {
         condition: &Expression,
         consequence: &Expression,
         alternative: &Expression,
+        place: &BodyPlace,
     ) {
         let condition_string = self.emit_condition_operand(output, condition);
         let condition_string = wrap_if_struct_literal(condition_string);
         write_line!(output, "if {} {{", condition_string);
         self.enter_scope();
-        self.emit_in_destination(output, consequence);
+        self.emit_body_to_place(output, consequence, place);
         self.exit_scope();
-        self.emit_else_chain(output, alternative);
+        self.emit_else_chain(output, alternative, place);
     }
 
-    fn emit_else_chain(&mut self, output: &mut String, alternative: &Expression) {
+    fn emit_else_chain(
+        &mut self,
+        output: &mut String,
+        alternative: &Expression,
+        place: &BodyPlace,
+    ) {
         let is_empty_alternative = match alternative {
             Expression::Unit { .. } => true,
             Expression::Block { items, .. } => items.is_empty(),
@@ -49,21 +56,22 @@ impl Emitter<'_> {
                     &condition_string,
                     consequence,
                     next_alternative,
+                    place,
                 );
                 return;
             }
             write_line!(output, "}} else if {} {{", condition_string);
             self.enter_scope();
-            self.emit_in_destination(output, consequence);
+            self.emit_body_to_place(output, consequence, place);
             self.exit_scope();
-            self.emit_else_chain(output, next_alternative);
+            self.emit_else_chain(output, next_alternative, place);
         } else if output_ends_with_diverge(output) {
             output.push_str("}\n");
-            self.emit_in_destination(output, alternative);
+            self.emit_body_to_place(output, alternative, place);
         } else {
             output.push_str("} else {\n");
             self.enter_scope();
-            self.emit_in_destination(output, alternative);
+            self.emit_body_to_place(output, alternative, place);
             self.exit_scope();
             output.push_str("}\n");
         }
@@ -76,15 +84,16 @@ impl Emitter<'_> {
         condition_string: &str,
         consequence: &Expression,
         next_alternative: &Expression,
+        place: &BodyPlace,
     ) {
         output.push_str("} else {\n");
         self.enter_scope();
         output.push_str(condition_setup);
         write_line!(output, "if {} {{", condition_string);
         self.enter_scope();
-        self.emit_in_destination(output, consequence);
+        self.emit_body_to_place(output, consequence, place);
         self.exit_scope();
-        self.emit_else_chain(output, next_alternative);
+        self.emit_else_chain(output, next_alternative, place);
         self.exit_scope();
         output.push_str("}\n");
     }
@@ -132,7 +141,12 @@ impl Emitter<'_> {
         output.push_str("}\n");
     }
 
-    pub(crate) fn emit_branching_directly(&mut self, output: &mut String, expression: &Expression) {
+    pub(crate) fn emit_branching_directly(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        place: &BodyPlace,
+    ) {
         match expression {
             Expression::If {
                 condition,
@@ -140,15 +154,13 @@ impl Emitter<'_> {
                 alternative,
                 ..
             } => {
-                self.emit_if(output, condition, consequence, alternative);
+                self.emit_if(output, condition, consequence, alternative, place);
             }
-            Expression::Match {
-                subject, arms, ty, ..
-            } => {
-                self.emit_match(output, subject, arms, ty);
+            Expression::Match { subject, arms, .. } => {
+                self.emit_match(output, subject, arms, place);
             }
             Expression::Select { arms, .. } => {
-                self.emit_select(output, arms);
+                self.emit_select(output, arms, place);
             }
             _ => unreachable!("expected if/match/select"),
         }

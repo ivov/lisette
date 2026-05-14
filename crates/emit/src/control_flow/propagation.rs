@@ -1,8 +1,8 @@
 use crate::Emitter;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FallibleEmitter};
+use crate::placement::BodyPlace;
 use crate::types::abi::AbiShape;
 use crate::types::abi_transition;
-use crate::types::emitter::Destination;
 use crate::utils::{inline_trivial_bindings, optimize_region};
 use crate::write_line;
 use syntax::ast::Expression;
@@ -138,9 +138,7 @@ impl Emitter<'_> {
         } else if !abi_transition::try_emit_lowered_tail_return(self, output, expression)
             && !self.emit_wrapped_return(output, expression)
         {
-            let expression_string = self.with_destination(Destination::Tail, |this| {
-                this.emit_value(output, expression)
-            });
+            let expression_string = self.emit_value(output, expression);
             let return_ty = self.return_mode.ty().cloned();
             let expression_string =
                 self.apply_type_coercion(output, return_ty.as_ref(), expression, expression_string);
@@ -152,8 +150,8 @@ impl Emitter<'_> {
     ///
     /// Returns `false` only when the return type is NOT Result/Option (i.e., Fallible::from_type
     /// returns None). Once a Result/Option return type is identified, this function is exhaustive:
-    /// all code paths emit the return and return `true`. The caller (emit_last_expression) uses
-    /// `Destination::Tail` only for the non-Result/Option case, so the two paths are disjoint.
+    /// all code paths emit the return and return `true`. The non-Result/Option case is handled
+    /// by the caller emitting a plain return.
     pub(crate) fn emit_wrapped_return(
         &mut self,
         output: &mut String,
@@ -392,9 +390,7 @@ impl Emitter<'_> {
         lowered: Option<&AbiShape>,
     ) {
         if lowered.is_some() {
-            self.with_destination(Destination::Tail, |this| {
-                this.emit_branching_directly(output, expression);
-            });
+            self.emit_branching_directly(output, expression, &BodyPlace::Return);
             return;
         }
 
@@ -408,13 +404,12 @@ impl Emitter<'_> {
         let pre_len = output.len();
         write_line!(output, "var {} {}", temp_var, full_ty);
 
-        self.with_destination(
-            Destination::Assign {
+        self.emit_branching_directly(
+            output,
+            expression,
+            &BodyPlace::Assign {
                 var: temp_var.clone(),
                 target_ty: Some(return_ty.clone()),
-            },
-            |this| {
-                this.emit_branching_directly(output, expression);
             },
         );
 

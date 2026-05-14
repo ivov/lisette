@@ -20,9 +20,7 @@ pub(crate) use definitions::enum_layout::EnumLayout;
 pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
-pub(crate) use types::emitter::{
-    ArmRouting, Destination, EmitEffects, EmitFlags, LineIndex, LoopContext, ReturnMode,
-};
+pub(crate) use types::emitter::{EmitEffects, EmitFlags, LineIndex, LoopContext, ReturnMode};
 pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
@@ -313,8 +311,6 @@ pub struct Emitter<'a> {
     flags: EmitFlags,
     ensure_imported: HashSet<ModuleId>,
 
-    /// Where the current expression's value goes.
-    destination: Destination,
     /// Shape of the enclosing function body's return values.
     return_mode: ReturnMode,
     /// Generic function identifiers should NOT add type args when used as callees
@@ -457,7 +453,6 @@ impl<'a> Emitter<'a> {
             pending_adapter_types: Vec::new(),
             flags: EmitFlags::default(),
             ensure_imported: HashSet::default(),
-            destination: Destination::Expression,
             return_mode: ReturnMode::None,
             emitting_call_callee: false,
             in_condition: false,
@@ -499,16 +494,6 @@ impl<'a> Emitter<'a> {
             .loop_stack
             .last()
             .and_then(|ctx| ctx.label.as_deref())
-    }
-
-    pub(crate) fn with_destination<F, R>(&mut self, destination: Destination, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let saved = std::mem::replace(&mut self.destination, destination);
-        let result = f(self);
-        self.destination = saved;
-        result
     }
 
     pub(crate) fn with_call_callee<F, R>(&mut self, f: F) -> R
@@ -583,54 +568,6 @@ impl<'a> Emitter<'a> {
         let result = f(self);
         self.return_mode = saved;
         result
-    }
-
-    pub(crate) fn wrap_value(&self, value: &str) -> String {
-        if value.is_empty() {
-            return String::new();
-        }
-        match &self.destination {
-            Destination::Tail => format!("return {}\n", value),
-            Destination::Statement => format!("{}\n", value),
-            Destination::Expression => value.to_string(),
-            Destination::Assign { var, .. } => format!("{} = {}\n", var, value),
-        }
-    }
-
-    pub(crate) fn emit_unreachable_if_needed(&self, output: &mut String, has_catchall: bool) {
-        if self.destination.is_tail() && !has_catchall {
-            output.push_str("panic(\"unreachable\")\n");
-        }
-    }
-
-    /// Route match arms to a destination, declaring a fresh result var when the
-    /// current destination is `Expression` and the match produces a value.
-    pub(crate) fn compute_arm_routing(
-        &mut self,
-        output: Option<&mut String>,
-        ty: &Type,
-    ) -> ArmRouting {
-        match &self.destination {
-            Destination::Tail => ArmRouting::Inherit(Destination::Tail),
-            Destination::Assign { var, target_ty } => ArmRouting::Inherit(Destination::Assign {
-                var: var.clone(),
-                target_ty: target_ty.clone(),
-            }),
-            Destination::Expression if !ty.is_unit() => {
-                let var = self.fresh_var(Some("result"));
-                if let Some(out) = output {
-                    let go_ty = self.go_type_as_string(ty);
-                    write_line!(out, "var {} {}", var, go_ty);
-                }
-                ArmRouting::CreateAndReturn {
-                    var,
-                    target_ty: Some(ty.clone()),
-                }
-            }
-            Destination::Expression | Destination::Statement => {
-                ArmRouting::Inherit(Destination::Statement)
-            }
-        }
     }
 
     /// Checks if a Go variable name has been declared in the current scope.
