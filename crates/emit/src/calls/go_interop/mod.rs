@@ -2,6 +2,7 @@ mod nullable;
 mod wrappers;
 
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -195,9 +196,11 @@ impl Emitter<'_> {
             return None;
         }
 
-        let call_str = self.with_array_return_wrap_skipped(has_array_return, |this| {
-            this.emit_call(output, call_expression, None)
-        });
+        let mut ctx = ExpressionContext::value();
+        if has_array_return {
+            ctx = ctx.with_raw_go_array_return();
+        }
+        let call_str = self.emit_call(output, call_expression, None, ctx);
 
         Some(call_str)
     }

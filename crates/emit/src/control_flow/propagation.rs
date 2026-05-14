@@ -1,5 +1,6 @@
 use crate::Emitter;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FallibleEmitter};
+use crate::expressions::context::ExpressionContext;
 use crate::placement::BodyPlace;
 use crate::types::abi::AbiShape;
 use crate::types::abi_transition;
@@ -42,14 +43,15 @@ impl Emitter<'_> {
 
         self.flags.needs_stdlib = true;
         let check_var = if let Expression::Identifier { value, ty, .. } = expression {
-            let go_name = self.emit_identifier(value, ty);
+            let go_name = self.emit_identifier(value, ty, ExpressionContext::value());
             if go_name.contains('(') {
                 self.hoist_tmp_value(output, "check", &go_name)
             } else {
                 go_name
             }
         } else {
-            let expression_string = self.emit_operand(output, expression);
+            let expression_string =
+                self.emit_operand(output, expression, ExpressionContext::value());
             self.hoist_tmp_value(output, "check", &expression_string)
         };
 
@@ -138,7 +140,7 @@ impl Emitter<'_> {
         } else if !abi_transition::try_emit_lowered_tail_return(self, output, expression)
             && !self.emit_wrapped_return(output, expression)
         {
-            let expression_string = self.emit_value(output, expression);
+            let expression_string = self.emit_value(output, expression, ExpressionContext::value());
             let return_ty = self.return_mode.ty().cloned();
             let expression_string =
                 self.apply_type_coercion(output, return_ty.as_ref(), expression, expression_string);
@@ -171,7 +173,7 @@ impl Emitter<'_> {
         };
 
         if Self::is_go_never(expression) {
-            let call_str = self.emit_call(output, expression, None);
+            let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
             write_line!(output, "{}", call_str);
             return true;
         }
@@ -217,7 +219,7 @@ impl Emitter<'_> {
             return true;
         }
 
-        let value = self.emit_value(output, expression);
+        let value = self.emit_value(output, expression, ExpressionContext::value());
         if let Some(shape) = lowered {
             // The destructure references the value multiple times (`.Tag`,
             // `.OkVal`, `.ErrVal` etc.); hoist to avoid re-evaluating.
@@ -254,7 +256,11 @@ impl Emitter<'_> {
                     let ok_arg = if matches!(shape, AbiShape::BareError) {
                         // Unit Ok — emit args[0] for side effects, then drop.
                         if !args.is_empty() {
-                            let _ = self.emit_composite_value(output, &args[0]);
+                            let _ = self.emit_composite_value(
+                                output,
+                                &args[0],
+                                ExpressionContext::value(),
+                            );
                         }
                         String::new()
                     } else if args.is_empty() {
@@ -263,12 +269,13 @@ impl Emitter<'_> {
                         // value for the tuple (`Some(())` under CommaOk).
                         "struct{}{}".to_string()
                     } else {
-                        self.emit_composite_value(output, &args[0])
+                        self.emit_composite_value(output, &args[0], ExpressionContext::value())
                     };
                     let line = abi_transition::format_lowered_ok_return(shape, &ok_arg);
                     write_line!(output, "{}", line);
                 } else {
-                    let arg = self.emit_composite_value(output, &args[0]);
+                    let arg =
+                        self.emit_composite_value(output, &args[0], ExpressionContext::value());
                     let mut fe = FallibleEmitter::new(self, fallible);
                     let success = fe.emit_success(&arg);
                     write_line!(output, "return {}", success);
@@ -282,7 +289,8 @@ impl Emitter<'_> {
                             abi_transition::format_lowered_none_return(self, shape, return_ty);
                         write_line!(output, "{}", line);
                     } else {
-                        let err_expr = self.emit_composite_value(output, &args[0]);
+                        let err_expr =
+                            self.emit_composite_value(output, &args[0], ExpressionContext::value());
                         let line = abi_transition::format_lowered_err_return(
                             self, shape, return_ty, &err_expr,
                         );
@@ -290,7 +298,8 @@ impl Emitter<'_> {
                     }
                 } else {
                     let failure = if fallible.is_result() {
-                        let arg = self.emit_composite_value(output, &args[0]);
+                        let arg =
+                            self.emit_composite_value(output, &args[0], ExpressionContext::value());
                         let mut fe = FallibleEmitter::new(self, fallible);
                         fe.emit_failure(Some(&arg))
                     } else {
@@ -322,7 +331,7 @@ impl Emitter<'_> {
         if let Some(shape) = lowered
             && self.callee_matches_lowered_shape(call_expression, shape)
         {
-            let call = self.emit_call(output, expression, None);
+            let call = self.emit_call(output, expression, None, ExpressionContext::value());
             write_line!(output, "return {}", call);
             return;
         }
@@ -342,12 +351,12 @@ impl Emitter<'_> {
             return;
         }
         if let Some(shape) = lowered {
-            let value = self.emit_value(output, expression);
+            let value = self.emit_value(output, expression, ExpressionContext::value());
             let temp = self.hoist_tmp_value(output, "v", &value);
             abi_transition::emit_lowered_result_return(self, output, &temp, return_ty, shape);
             return;
         }
-        let call = self.emit_call(output, expression, None);
+        let call = self.emit_call(output, expression, None, ExpressionContext::value());
         write_line!(output, "return {}", call);
     }
 
@@ -531,7 +540,7 @@ impl Emitter<'_> {
                     return None;
                 }
                 if !args.is_empty() {
-                    Some(self.emit_value(output, &args[0]))
+                    Some(self.emit_value(output, &args[0], ExpressionContext::value()))
                 } else {
                     Some(String::new())
                 }

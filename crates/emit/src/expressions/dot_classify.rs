@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use syntax::ast::Expression;
 use syntax::program::DefinitionBody;
@@ -62,8 +63,9 @@ impl Emitter<'_> {
         expression: &Expression,
         member: &str,
         result_ty: &Type,
+        ctx: ExpressionContext<'_>,
     ) -> Option<String> {
-        if let Some(s) = self.emit_cross_module_static_method(expression, member, result_ty) {
+        if let Some(s) = self.emit_cross_module_static_method(expression, member, result_ty, ctx) {
             return Some(s);
         }
         if let Some(s) = self.emit_alias_static_method(expression, member, result_ty) {
@@ -367,6 +369,7 @@ impl Emitter<'_> {
         expression: &Expression,
         member: &str,
         result_ty: &Type,
+        ctx: ExpressionContext<'_>,
     ) -> Option<String> {
         if !matches!(result_ty.unwrap_forall(), Type::Function { .. }) {
             return None;
@@ -425,7 +428,7 @@ impl Emitter<'_> {
         let is_public = definition.visibility().is_public() || self.method_needs_export(member);
         let qualified_name = self.qualify_method_call(&qualified_type, member, is_public);
 
-        let type_args = if !self.emitting_call_callee {
+        let type_args = if !ctx.is_callee() {
             self.format_cross_module_type_args(&qualified_method, result_ty)
                 .unwrap_or_default()
         } else {

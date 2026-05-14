@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::{CapturePolicy, EmittedExpression};
 use crate::names::go_name;
 use crate::utils::observable_after_mutation;
@@ -24,11 +25,11 @@ impl Emitter<'_> {
             expression,
             Expression::Literal { .. } | Expression::Identifier { .. }
         ) {
-            return self.stage_operand(expression);
+            return self.stage_operand(expression, ExpressionContext::value());
         }
 
         let mut setup = String::new();
-        let value_expr = self.emit_operand(&mut setup, expression);
+        let value_expr = self.emit_operand(&mut setup, expression, ExpressionContext::value());
         let temp_var = self.hoist_tmp_value(&mut setup, prefix, &value_expr);
         EmittedExpression::new(setup, temp_var, expression)
     }
@@ -40,27 +41,36 @@ impl Emitter<'_> {
         prefix: &str,
     ) -> String {
         if !observable_after_mutation(expression) {
-            return self.emit_operand(output, expression);
+            return self.emit_operand(output, expression, ExpressionContext::value());
         }
 
         let temp_var = self.fresh_var(Some(prefix));
         self.declare(&temp_var);
-        let expression_string = self.emit_composite_value(output, expression);
+        let expression_string =
+            self.emit_composite_value(output, expression, ExpressionContext::value());
         write_line!(output, "{} := {}", temp_var, expression_string);
         temp_var
     }
 
     /// Emit an expression to a separate buffer, capturing setup and value.
-    pub(crate) fn stage_operand(&mut self, expression: &Expression) -> EmittedExpression {
+    pub(crate) fn stage_operand(
+        &mut self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> EmittedExpression {
         let mut setup = String::new();
-        let value = self.emit_operand(&mut setup, expression);
+        let value = self.emit_operand(&mut setup, expression, ctx);
         EmittedExpression::new(setup, value, expression)
     }
 
     /// Emit an expression as a composite value to a separate buffer.
-    pub(crate) fn stage_composite(&mut self, expression: &Expression) -> EmittedExpression {
+    pub(crate) fn stage_composite(
+        &mut self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> EmittedExpression {
         let mut setup = String::new();
-        let value = self.emit_composite_value(&mut setup, expression);
+        let value = self.emit_composite_value(&mut setup, expression, ctx);
         EmittedExpression::new(setup, value, expression)
     }
 
@@ -73,8 +83,8 @@ impl Emitter<'_> {
     ) -> EmittedExpression {
         let suppress = param_ty
             .is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function { .. }));
-        let staged = self
-            .with_go_fn_short_circuit_suppressed(suppress, |this| this.stage_composite(expression));
+        let arg_ctx = ExpressionContext::value().with_forced_tagged_go_function(suppress);
+        let staged = self.stage_composite(expression, arg_ctx);
 
         if suppress {
             let mut setup = staged.setup;
@@ -151,7 +161,7 @@ impl Emitter<'_> {
         combine: Option<VariadicCombine>,
     ) -> Vec<String> {
         let spread_idx = spread.map(|s| {
-            stages.push(self.stage_operand(s));
+            stages.push(self.stage_operand(s, ExpressionContext::value()));
             stages.len() - 1
         });
         let mut values = self.sequence(output, stages, prefix);

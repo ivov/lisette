@@ -1,5 +1,6 @@
 use crate::Emitter;
 use crate::control_flow::fallible::{Fallible, FallibleEmitter, OPTION_SOME_TAG};
+use crate::expressions::context::ExpressionContext;
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -11,7 +12,7 @@ impl Emitter<'_> {
         call_expression: &Expression,
         option_ty: &Type,
     ) -> String {
-        let call_str = self.emit_call(output, call_expression, None);
+        let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         self.emit_comma_ok_wrapping(output, &call_str, option_ty, true)
     }
 
@@ -22,7 +23,7 @@ impl Emitter<'_> {
         option_ty: &Type,
         sentinel: i64,
     ) -> String {
-        let call_str = self.emit_call(output, call_expression, None);
+        let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         self.emit_sentinel_wrapping(output, &call_str, option_ty, sentinel)
     }
 
@@ -388,7 +389,7 @@ impl Emitter<'_> {
         call_expression: &Expression,
         option_ty: &Type,
     ) -> String {
-        let call_str = self.emit_call(output, call_expression, None);
+        let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
 
         let raw_var = self.hoist_tmp_value(output, "raw", &call_str);
 

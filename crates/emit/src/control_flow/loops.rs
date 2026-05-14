@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::patterns::sites::PatternSubject;
 use crate::utils::DiscardGuard;
@@ -63,7 +64,7 @@ impl Emitter<'_> {
             return;
         }
 
-        let iter_expression = self.emit_operand(output, iterable);
+        let iter_expression = self.emit_operand(output, iterable, ExpressionContext::value());
         let iter_expression = if iterable.get_type().is_ref() {
             format!("*{}", iter_expression)
         } else {
@@ -237,7 +238,7 @@ impl Emitter<'_> {
         body: &Expression,
     ) {
         let mut start_expression = match start {
-            Some(s) => self.emit_operand(output, s),
+            Some(s) => self.emit_operand(output, s, ExpressionContext::value()),
             None => "0".to_string(),
         };
 
@@ -309,7 +310,7 @@ impl Emitter<'_> {
         self.enter_scope();
 
         let range_var = if self.is_unmutated_identifier(iterable) {
-            self.emit_operand(output, iterable)
+            self.emit_operand(output, iterable, ExpressionContext::value())
         } else {
             self.emit_force_capture(output, iterable, "_range")
         };
@@ -370,7 +371,7 @@ impl Emitter<'_> {
         body: &Expression,
     ) {
         self.enter_scope();
-        let recv_str = self.emit_operand(output, receiver);
+        let recv_str = self.emit_operand(output, receiver, ExpressionContext::value());
         if let Some(label) = self.current_loop_label() {
             write_line!(output, "{}:", label);
         }
@@ -397,7 +398,7 @@ impl Emitter<'_> {
     ) {
         self.enter_scope();
         let recv_var = if self.is_unmutated_identifier(receiver) {
-            self.emit_operand(output, receiver)
+            self.emit_operand(output, receiver, ExpressionContext::value())
         } else {
             self.emit_force_capture(output, receiver, "_s")
         };

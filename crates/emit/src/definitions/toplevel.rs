@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::types::Type;
@@ -85,7 +86,8 @@ impl Emitter<'_> {
         let ty_str = self.go_type_as_string(ty);
 
         let mut output = String::new();
-        let expression_string = self.emit_operand(&mut output, expression);
+        let expression_string =
+            self.emit_operand(&mut output, expression, ExpressionContext::value());
         let value = if expression_string.is_empty() {
             "struct{}{}"
         } else {

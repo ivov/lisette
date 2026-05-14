@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::tree_emitter::TreeEmitter;
 use crate::placement::BodyPlace;
@@ -87,7 +88,7 @@ impl Emitter<'_> {
         };
         let err_var = self.fresh_var(Some("ret"));
         self.declare(&err_var);
-        let call_str = self.emit_call(output, subject, None);
+        let call_str = self.emit_call(output, subject, None, ExpressionContext::value());
         match &val_var {
             Some(v) => write_line!(output, "{}, {} := {}", v, err_var, call_str),
             None => write_line!(output, "{} := {}", err_var, call_str),
@@ -145,11 +146,12 @@ impl Emitter<'_> {
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
-            return self.emit_operand(output, subject);
+            return self.emit_operand(output, subject, ExpressionContext::value());
         }
         let var = self.fresh_var(Some("subject"));
         self.declare(&var);
-        let subject_expression = self.emit_composite_value(output, subject);
+        let subject_expression =
+            self.emit_composite_value(output, subject, ExpressionContext::value());
         write_line!(output, "{} := {}", var, subject_expression);
         var
     }

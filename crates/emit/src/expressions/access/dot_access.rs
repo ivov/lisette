@@ -5,6 +5,7 @@ use syntax::program::{
 use syntax::types::Type;
 
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::go_name;
 use crate::types::coercion::{Coercion, CoercionDirection};
 
@@ -12,19 +13,31 @@ impl Emitter<'_> {
     pub(crate) fn emit_dot_access(
         &mut self,
         output: &mut String,
-        expression: &Expression,
-        member: &str,
-        result_ty: &Type,
-        dot_access_kind: Option<SemanticDotKind>,
-        receiver_coercion: Option<ReceiverCoercion>,
+        dot_access: &Expression,
+        ctx: ExpressionContext<'_>,
     ) -> String {
+        let Expression::DotAccess {
+            expression,
+            member,
+            ty: result_ty,
+            dot_access_kind,
+            receiver_coercion,
+            ..
+        } = dot_access
+        else {
+            unreachable!("emit_dot_access requires a DotAccess expression");
+        };
+        let dot_access_kind = *dot_access_kind;
+        let receiver_coercion = *receiver_coercion;
+
         if let Some(s) =
-            self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind)
+            self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind, ctx)
         {
             return s;
         }
 
-        let expression_string = self.emit_coerced_expression(output, expression, receiver_coercion);
+        let expression_string =
+            self.emit_coerced_expression(output, expression, receiver_coercion, ctx);
         let expression_ty = expression.get_type();
 
         if let Some(s) = self.try_emit_tuple_member_dot(
@@ -51,7 +64,7 @@ impl Emitter<'_> {
         }
 
         let result = format!("{}.{}", expression_string, field);
-        self.append_cross_module_type_args(result, &expression_ty, member, result_ty)
+        self.append_cross_module_type_args(result, &expression_ty, member, result_ty, ctx)
     }
 
     /// Phase 1 dispatch: the semantic kind may resolve without needing the
@@ -65,6 +78,7 @@ impl Emitter<'_> {
         member: &str,
         result_ty: &Type,
         dot_access_kind: Option<SemanticDotKind>,
+        ctx: ExpressionContext<'_>,
     ) -> Option<String> {
         match dot_access_kind {
             Some(SemanticDotKind::ValueEnumVariant) => {
@@ -74,7 +88,7 @@ impl Emitter<'_> {
                 self.emit_enum_variant_dot(expression, member, result_ty)
             }
             Some(SemanticDotKind::StaticMethod { .. }) => {
-                self.emit_static_method_dot(expression, member, result_ty)
+                self.emit_static_method_dot(expression, member, result_ty, ctx)
             }
             Some(SemanticDotKind::InstanceMethodValue {
                 is_exported,
@@ -88,7 +102,7 @@ impl Emitter<'_> {
             ),
             Some(SemanticDotKind::ModuleMember) | None => self
                 .emit_enum_variant_dot(expression, member, result_ty)
-                .or_else(|| self.emit_static_method_dot(expression, member, result_ty)),
+                .or_else(|| self.emit_static_method_dot(expression, member, result_ty, ctx)),
             _ => None,
         }
     }
@@ -185,8 +199,9 @@ impl Emitter<'_> {
         expression_ty: &Type,
         member: &str,
         result_ty: &Type,
+        ctx: ExpressionContext<'_>,
     ) -> String {
-        if self.emitting_call_callee {
+        if ctx.is_callee() {
             return base_access;
         }
         let Some(module) = expression_ty.as_import_namespace() else {
@@ -257,6 +272,7 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
         coercion: Option<ReceiverCoercion>,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         let (expression_string, had_explicit_deref) = if let Expression::Unary {
             operator: UnaryOperator::Deref,
@@ -264,9 +280,9 @@ impl Emitter<'_> {
             ..
         } = expression
         {
-            (self.emit_operand(output, inner), true)
+            (self.emit_operand(output, inner, ctx), true)
         } else {
-            (self.emit_operand(output, expression), false)
+            (self.emit_operand(output, expression, ctx), false)
         };
 
         let is_absorbed_ref = self.is_absorbed_ref_generic(expression);

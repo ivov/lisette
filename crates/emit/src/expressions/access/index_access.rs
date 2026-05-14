@@ -2,6 +2,7 @@ use syntax::ast::{Expression, UnaryOperator};
 use syntax::types::peel_to_range_type;
 
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 
 impl Emitter<'_> {
@@ -39,7 +40,7 @@ impl Emitter<'_> {
             return self.emit_range_var_slice(&values[0], &values[1], range_kind, needs_cap);
         }
 
-        let index_staged = self.stage_composite(index);
+        let index_staged = self.stage_composite(index, ExpressionContext::value());
         let values = self.sequence(output, vec![base_staged, index_staged], "_base");
         format!("{}[{}]", values[0], values[1])
     }
@@ -53,9 +54,9 @@ impl Emitter<'_> {
             ..
         } = expression
         else {
-            return self.stage_operand(expression);
+            return self.stage_operand(expression, ExpressionContext::value());
         };
-        let s = self.stage_operand(inner);
+        let s = self.stage_operand(inner, ExpressionContext::value());
         EmittedExpression {
             value: format!("(*{})", s.value),
             setup: s.setup,
@@ -79,10 +80,10 @@ impl Emitter<'_> {
 
         let mut all_stages = vec![base_staged];
         if let Some(s) = start {
-            all_stages.push(self.stage_operand(s));
+            all_stages.push(self.stage_operand(s, ExpressionContext::value()));
         }
         if let Some(e) = end {
-            all_stages.push(self.stage_operand(e));
+            all_stages.push(self.stage_operand(e, ExpressionContext::value()));
         }
         let values = self.sequence(output, all_stages, "_base");
         let base_str = &values[0];

@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::placement::BodyPlace;
 use crate::utils::output_ends_with_diverge;
 use crate::write_line;
@@ -13,7 +14,8 @@ impl Emitter<'_> {
         alternative: &Expression,
         place: &BodyPlace,
     ) {
-        let condition_string = self.emit_condition_operand(output, condition);
+        let condition_string =
+            self.emit_operand(output, condition, ExpressionContext::value().condition());
         let condition_string = wrap_if_struct_literal(condition_string);
         write_line!(output, "if {} {{", condition_string);
         self.enter_scope();
@@ -46,7 +48,7 @@ impl Emitter<'_> {
         } = alternative
         {
             let (setup, condition_string) = self.capture_emission(output, |this, buf| {
-                this.emit_condition_operand(buf, condition)
+                this.emit_operand(buf, condition, ExpressionContext::value().condition())
             });
             let condition_string = wrap_if_struct_literal(condition_string);
             if !setup.is_empty() {

@@ -3,6 +3,7 @@ use rustc_hash::FxHashSet as HashSet;
 use syntax::program::DefinitionBody;
 
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::is_order_sensitive;
 use crate::types::coercion::{Coercion, CoercionDirection};
@@ -135,10 +136,15 @@ impl Emitter<'_> {
         result_var
     }
 
-    pub(crate) fn emit_value(&mut self, output: &mut String, expression: &Expression) -> String {
+    pub(crate) fn emit_value(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> String {
         if let Some(strategy) = self.classify_go_fn_value(expression) {
-            if self.go_fn_matches_lowered_slot(expression, &strategy) {
-                return self.emit_operand(output, expression);
+            if self.go_fn_matches_lowered_slot(expression, &strategy, ctx) {
+                return self.emit_operand(output, expression, ctx);
             }
             return self.emit_go_fn_wrapper(output, expression, &strategy);
         }
@@ -147,7 +153,7 @@ impl Emitter<'_> {
             return self.emit_array_return_wrapper(output, expression);
         }
 
-        self.emit_operand(output, expression)
+        self.emit_operand(output, expression, ctx)
     }
 
     /// Wrap a captured tagged-shape prelude fn ref into a lowered-ABI closure
@@ -158,8 +164,9 @@ impl Emitter<'_> {
         expression: &Expression,
         ty: &Type,
         raw: String,
+        ctx: ExpressionContext<'_>,
     ) -> String {
-        if self.emitting_call_callee || self.suppress_go_fn_short_circuit {
+        if ctx.is_callee() || ctx.forces_tagged_go_function() {
             return raw;
         }
         if !Self::is_tagged_shape_fn_value(expression) {
@@ -181,8 +188,9 @@ impl Emitter<'_> {
         &self,
         expression: &Expression,
         strategy: &crate::GoCallStrategy,
+        ctx: ExpressionContext<'_>,
     ) -> bool {
-        if self.suppress_go_fn_short_circuit {
+        if ctx.forces_tagged_go_function() {
             return false;
         }
         let fn_ty = expression.get_type();
@@ -199,6 +207,7 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         expression: &Expression,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         if expression.get_type().is_unit()
             && matches!(
@@ -206,33 +215,38 @@ impl Emitter<'_> {
                 Expression::Call { .. } | Expression::Block { .. }
             )
         {
-            let call_str = self.emit_value(output, expression);
+            let call_str = self.emit_value(output, expression, ctx);
             if !call_str.is_empty() {
                 write_line!(output, "{call_str}");
             }
             return "struct{}{}".to_string();
         }
-        self.emit_value(output, expression)
+        self.emit_value(output, expression, ctx)
     }
 
-    pub(crate) fn emit_operand(&mut self, output: &mut String, expression: &Expression) -> String {
+    pub(crate) fn emit_operand(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> String {
         match expression {
             Expression::Literal { literal, ty, .. } => self.emit_literal(output, literal, ty),
             Expression::Identifier { value, ty, .. } => {
-                let raw = self.emit_identifier(value, ty);
-                self.maybe_lower_tagged_fn_ref(output, expression, ty, raw)
+                let raw = self.emit_identifier(value, ty, ctx);
+                self.maybe_lower_tagged_fn_ref(output, expression, ty, raw, ctx)
             }
             Expression::Binary {
                 operator,
                 left,
                 right,
                 ..
-            } => self.emit_binary_expression(output, operator, left, right),
+            } => self.emit_binary_expression(output, operator, left, right, ctx),
             Expression::Unary {
                 operator,
                 expression,
                 ..
-            } => self.emit_unary_expression(output, operator, expression),
+            } => self.emit_unary_expression(output, operator, expression, ctx),
             Expression::Call { ty, .. } => {
                 if let Some(strategy) = self.resolve_go_call_strategy(expression) {
                     self.emit_go_wrapped_call(output, expression, &strategy, ty)
@@ -242,29 +256,15 @@ impl Emitter<'_> {
                     && let Some(shape) = self.classify_callee_abi(callee)
                 {
                     self.flags.needs_stdlib = true;
-                    let call_str = self.emit_call(output, expression, Some(ty));
+                    let call_str = self.emit_call(output, expression, Some(ty), ctx);
                     crate::types::abi_transition::emit_callee_abi_wrapping(
                         self, output, &shape, &call_str, ty,
                     )
                 } else {
-                    self.emit_call(output, expression, Some(ty))
+                    self.emit_call(output, expression, Some(ty), ctx)
                 }
             }
-            Expression::DotAccess {
-                expression,
-                member,
-                ty,
-                dot_access_kind,
-                receiver_coercion,
-                ..
-            } => self.emit_dot_access(
-                output,
-                expression,
-                member,
-                ty,
-                *dot_access_kind,
-                *receiver_coercion,
-            ),
+            Expression::DotAccess { .. } => self.emit_dot_access(output, expression, ctx),
             Expression::IndexedAccess {
                 expression, index, ..
             } => self.emit_index_access(output, expression, index),
@@ -274,9 +274,9 @@ impl Emitter<'_> {
                 spread,
                 ty,
                 ..
-            } => self.emit_struct_call(output, name, field_assignments, spread, ty),
+            } => self.emit_struct_call(output, name, field_assignments, spread, ty, ctx),
             Expression::Paren { expression, .. } => {
-                let inner = self.emit_operand(output, expression);
+                let inner = self.emit_operand(output, expression, ctx);
                 format!("({})", inner)
             }
             Expression::Reference {
@@ -295,10 +295,10 @@ impl Emitter<'_> {
             Expression::NoOp => String::new(),
             Expression::Lambda {
                 params, body, ty, ..
-            } => self.emit_lambda(params, body, ty),
+            } => self.emit_lambda(params, body, ty, ctx),
             Expression::Function {
                 params, body, ty, ..
-            } => self.emit_lambda(params, body, ty),
+            } => self.emit_lambda(params, body, ty, ctx),
             Expression::Propagate { expression, .. } => {
                 self.emit_propagate(output, expression, None)
             }
@@ -371,9 +371,9 @@ impl Emitter<'_> {
             .iter()
             .enumerate()
             .map(|(i, e)| {
-                self.with_expected_slot_type(slot_types.get(i).cloned(), |this| {
-                    this.stage_composite(e)
-                })
+                let element_ctx =
+                    ExpressionContext::value().with_expected_slot_type(slot_types.get(i));
+                self.stage_composite(e, element_ctx)
             })
             .collect();
         let elem_expressions = self.sequence(output, stages, "_v");
@@ -428,7 +428,7 @@ impl Emitter<'_> {
         target_type: &syntax::ast::Annotation,
         ty: &Type,
     ) -> String {
-        let inner = self.emit_operand(output, expression);
+        let inner = self.emit_operand(output, expression, ExpressionContext::value());
 
         if let Type::Nominal { id, .. } = &self.peel_alias(ty)
             && matches!(
@@ -448,7 +448,8 @@ impl Emitter<'_> {
 
     fn emit_reference(&mut self, output: &mut String, inner: &Expression, ty: &Type) -> String {
         if inner.get_type().is_unit() && matches!(inner.unwrap_parens(), Expression::Call { .. }) {
-            let emitted = self.emit_operand(output, inner.unwrap_parens());
+            let emitted =
+                self.emit_operand(output, inner.unwrap_parens(), ExpressionContext::value());
             if !emitted.is_empty() {
                 write_line!(output, "{}", emitted);
             }
@@ -456,7 +457,7 @@ impl Emitter<'_> {
             return format!("&{}", tmp);
         }
 
-        let emitted = self.emit_value(output, inner);
+        let emitted = self.emit_value(output, inner, ExpressionContext::value());
         if inner.get_type() == *ty {
             emitted
         } else if self.is_go_unaddressable(inner)
@@ -493,7 +494,7 @@ impl Emitter<'_> {
         target: &Expression,
         value: &Expression,
     ) {
-        let rhs_staged = self.stage_composite(value);
+        let rhs_staged = self.stage_composite(value, ExpressionContext::value());
 
         let target_str = if is_order_sensitive(target) {
             self.emit_left_value_capturing(output, target, !rhs_staged.setup.is_empty())
@@ -532,10 +533,10 @@ impl Emitter<'_> {
         let mut stages: Vec<EmittedExpression> = Vec::new();
         let has_start = start.is_some();
         if let Some(s) = start {
-            stages.push(self.stage_operand(s));
+            stages.push(self.stage_operand(s, ExpressionContext::value()));
         }
         if let Some(e) = end {
-            stages.push(self.stage_operand(e));
+            stages.push(self.stage_operand(e, ExpressionContext::value()));
         }
 
         if stages.is_empty() {
@@ -553,7 +554,7 @@ impl Emitter<'_> {
             fields.push(("End".to_string(), values[0].clone()));
         }
 
-        self.emit_struct_literal(&type_string, &fields)
+        self.emit_struct_literal(&type_string, &fields, ExpressionContext::value())
     }
 
     pub(crate) fn with_fresh_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
@@ -588,7 +589,7 @@ impl Emitter<'_> {
         if let Some(call_str) = self.emit_go_call_discarded(output, expression) {
             return format!("{} {}", keyword, call_str);
         }
-        let inner = self.emit_value(output, expression);
+        let inner = self.emit_value(output, expression, ExpressionContext::value());
         if needs_iife_for_async(expression, &inner) {
             write_line!(output, "{} func() {{", keyword);
             if !inner.is_empty() {

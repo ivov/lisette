@@ -4,6 +4,7 @@
 
 use crate::Emitter;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FallibleEmitter};
+use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::coercion::{Coercion, CoercionDirection};
@@ -329,7 +330,7 @@ impl Emitter<'_> {
 
         let value_ty = value.get_type();
         if value_ty.is_unit() || value_ty.is_variable() || value_ty.is_never() {
-            let value_expression = self.emit_operand(output, value);
+            let value_expression = self.emit_operand(output, value, ExpressionContext::value());
             if !value_expression.is_empty() {
                 if matches!(unwrapped, Expression::Call { .. }) {
                     write_line!(output, "{}", value_expression);
@@ -356,12 +357,12 @@ impl Emitter<'_> {
             false
         };
         if is_lowered_lisette_call {
-            let call_str = self.emit_call(output, value, None);
+            let call_str = self.emit_call(output, value, None, ExpressionContext::value());
             write_line!(output, "{}", call_str);
             return;
         }
 
-        let value_expression = self.emit_operand(output, value);
+        let value_expression = self.emit_operand(output, value, ExpressionContext::value());
         write_line!(output, "_ = {}", value_expression);
     }
 
@@ -387,7 +388,7 @@ impl Emitter<'_> {
     /// `var`. Preserves the call's side effects while giving the var a
     /// well-typed value.
     fn emit_unit_call_into_var(&mut self, output: &mut String, value: &Expression, var: &str) {
-        let call_str = self.emit_value(output, value);
+        let call_str = self.emit_value(output, value, ExpressionContext::value());
         if !call_str.is_empty() {
             write_line!(output, "{call_str}");
         }
@@ -436,7 +437,7 @@ impl Emitter<'_> {
         target_var: &str,
         expression: &Expression,
     ) {
-        let expression_string = self.emit_operand(output, expression);
+        let expression_string = self.emit_operand(output, expression, ExpressionContext::value());
         write_line!(output, "{} = {}", target_var, expression_string);
     }
 
@@ -486,7 +487,11 @@ impl Emitter<'_> {
                     || (kind == Some(ConstructorKind::Failure)
                         && fallible.err_constructor_takes_arg())
                 {
-                    let arg = fe.emitter.emit_composite_value(output, &args[0]);
+                    let arg = fe.emitter.emit_composite_value(
+                        output,
+                        &args[0],
+                        ExpressionContext::value(),
+                    );
                     let call_str = fe.format_constructor_call(constructor_name, Some(&arg));
                     write_line!(output, "{} = {}", target_var, call_str);
                 } else {
@@ -613,7 +618,7 @@ impl Emitter<'_> {
             );
             return;
         }
-        let expression_string = self.emit_value(output, last);
+        let expression_string = self.emit_value(output, last, ExpressionContext::value());
         let expression_string =
             self.apply_type_coercion(output, target_ty, last, expression_string);
         write_line!(output, "{} = {}", var, expression_string);
@@ -653,7 +658,7 @@ impl Emitter<'_> {
                 self.emit_append_args(output, func, args, (**spread).as_ref(), is_extend);
             write_line!(output, "{} = append({}, {})", var, receiver_lv, args_str);
         } else {
-            let value_str = self.emit_value(output, last);
+            let value_str = self.emit_value(output, last, ExpressionContext::value());
             write_line!(output, "{} = {}", var, value_str);
         }
 
@@ -679,7 +684,10 @@ impl Emitter<'_> {
         spread: Option<&Expression>,
         is_extend: bool,
     ) -> String {
-        let stages: Vec<EmittedExpression> = args.iter().map(|a| self.stage_composite(a)).collect();
+        let stages: Vec<EmittedExpression> = args
+            .iter()
+            .map(|a| self.stage_composite(a, ExpressionContext::value()))
+            .collect();
         let combine = Self::variadic_combine_for(function, spread, 0);
         let emitted_args =
             self.sequence_with_spread(output, stages, spread, false, "_arg", combine);
@@ -754,7 +762,7 @@ impl Emitter<'_> {
         if let Expression::Tuple { elements, ty, .. } = last {
             self.emit_tuple_value(output, elements, ty, true)
         } else {
-            self.emit_value(output, last)
+            self.emit_value(output, last, ExpressionContext::value())
         }
     }
 
@@ -853,7 +861,7 @@ impl Emitter<'_> {
                 unreachable!("IfLet should be desugared to Match before emit")
             }
             Expression::Block { .. } | Expression::Loop { .. } | Expression::Propagate { .. } => {
-                let expression = self.emit_operand(output, last);
+                let expression = self.emit_operand(output, last, ExpressionContext::value());
                 if !expression.is_empty() {
                     write_line!(output, "return {}", expression);
                 }
@@ -945,7 +953,7 @@ impl Emitter<'_> {
         raw_go_name: Option<&str>,
         value: &Expression,
     ) {
-        let value_expression = self.emit_value(output, value);
+        let value_expression = self.emit_value(output, value, ExpressionContext::value());
         write_line!(output, "{}", value_expression);
         let Some(raw_go_name) = raw_go_name else {
             return;
@@ -972,7 +980,7 @@ impl Emitter<'_> {
         binding_ty: &Type,
         mutable: bool,
     ) {
-        let value_expression = self.emit_value(output, value);
+        let value_expression = self.emit_value(output, value, ExpressionContext::value());
         let coercion = Coercion::resolve(
             self,
             &value.get_type(),
@@ -1131,7 +1139,7 @@ impl Emitter<'_> {
             return;
         }
 
-        let final_expression = self.emit_value(output, last);
+        let final_expression = self.emit_value(output, last, ExpressionContext::value());
         if final_expression.is_empty() {
             self.emit_try_unit_return(output, fallible);
         } else {
@@ -1153,12 +1161,12 @@ impl Emitter<'_> {
             self.emit_zero_return(output, fallible.ok_ty());
             return;
         }
-        let expression = self.emit_value(output, last);
+        let expression = self.emit_value(output, last, ExpressionContext::value());
         write_line!(output, "return {}", expression);
     }
 
     fn emit_break_value(&mut self, output: &mut String, val: &Expression) {
-        let val_str = self.emit_value(output, val);
+        let val_str = self.emit_value(output, val, ExpressionContext::value());
         if val_str.is_empty() && matches!(val, Expression::Propagate { .. }) {
             return;
         }

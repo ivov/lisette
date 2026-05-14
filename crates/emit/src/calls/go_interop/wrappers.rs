@@ -2,6 +2,7 @@ use crate::Emitter;
 use crate::control_flow::fallible::{
     Fallible, FallibleEmitter, PARTIAL_BOTH_CTOR, PARTIAL_OK_CTOR,
 };
+use crate::expressions::context::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::utils::optimize_region;
@@ -22,7 +23,7 @@ impl Emitter<'_> {
             unreachable!("emit_go_tuple_call_wrapped called with non-call expression");
         };
 
-        let call_str = self.emit_call(output, call_expression, None);
+        let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
 
         let temp_vars = self.create_temp_vars("ret", arity);
 
@@ -39,7 +40,7 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        let call_str = self.emit_call(output, call_expression, None);
+        let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         self.emit_partial_wrapping(output, &call_str, partial_ty)
     }
 
@@ -91,7 +92,7 @@ impl Emitter<'_> {
     ) -> String {
         self.flags.needs_stdlib = true;
 
-        let call_str = self.emit_call(output, call_expression, None);
+        let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         self.emit_result_wrapping(output, &call_str, result_ty)
     }
 
@@ -280,7 +281,7 @@ impl Emitter<'_> {
     }
 
     fn hoist_go_fn_if_needed(&mut self, output: &mut String, expression: &Expression) -> String {
-        let go_fn_str = self.emit_operand(output, expression);
+        let go_fn_str = self.emit_operand(output, expression, ExpressionContext::value());
 
         let is_go_module_fn = matches!(
             expression.unwrap_parens(),
@@ -328,7 +329,7 @@ impl Emitter<'_> {
                 return_type,
                 ..
             } => (params.clone(), (**return_type).clone()),
-            _ => return self.emit_operand(output, expression),
+            _ => return self.emit_operand(output, expression, ExpressionContext::value()),
         };
 
         let go_fn_str = self.hoist_go_fn_if_needed(output, expression);

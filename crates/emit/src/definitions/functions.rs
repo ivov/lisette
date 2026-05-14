@@ -1,6 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use crate::placement::ValuePlace;
 use crate::types::native::NativeGoType;
@@ -57,6 +58,7 @@ impl Emitter<'_> {
         params: &[Binding],
         body: &Expression,
         ty: &Type,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         let saved_declared = std::mem::take(&mut self.scope.declared);
         let saved_scope_depth = self.scope.scope_depth;
@@ -95,15 +97,17 @@ impl Emitter<'_> {
             })
             .collect();
 
+        let argument_flows_to_unknown = ctx.argument_flows_to_unknown();
+        let suppress_lowering = ctx.forces_tagged_go_function();
+
         let has_return = matches!(ty, Type::Function { return_type, .. }
             if !(return_type.is_unit()
                 || return_type.is_variable()
-                || (self.arg_flows_to_unknown && return_type.is_never())));
+                || (argument_flows_to_unknown && return_type.is_never())));
 
         // When the lambda flows into a Go-prelude generic callback that
         // expects the unlowered single-return form, suppress the lambda's
         // own return-type lowering so signature and body match.
-        let suppress_lowering = self.suppress_go_fn_short_circuit;
         let return_ty_string = if has_return {
             match ty {
                 Type::Function { return_type, .. } => {
@@ -134,8 +138,6 @@ impl Emitter<'_> {
             self.return_mode.clone()
         };
         let saved_return_mode = std::mem::replace(&mut self.return_mode, new_mode);
-        let saved_suppress = std::mem::replace(&mut self.suppress_go_fn_short_circuit, false);
-        let saved_flows = std::mem::replace(&mut self.arg_flows_to_unknown, false);
 
         let mut body_string = String::new();
 
@@ -157,8 +159,6 @@ impl Emitter<'_> {
         self.scope.bindings.restore();
 
         self.return_mode = saved_return_mode;
-        self.suppress_go_fn_short_circuit = saved_suppress;
-        self.arg_flows_to_unknown = saved_flows;
 
         format!(
             "func({}){} {{\n{}}}",

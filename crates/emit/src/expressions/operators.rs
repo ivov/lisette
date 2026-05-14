@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::utils::try_flip_comparison;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
 use syntax::types::Type;
@@ -21,6 +22,7 @@ impl Emitter<'_> {
         operator: &BinaryOperator,
         left_expression: &Expression,
         right_expression: &Expression,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         if matches!(operator, BinaryOperator::Pipeline) {
             unreachable!("Pipeline operator should have been desugared by now")
@@ -42,6 +44,7 @@ impl Emitter<'_> {
                 left_expression,
                 right_expression,
                 emit_info,
+                ctx,
             );
         }
 
@@ -56,7 +59,7 @@ impl Emitter<'_> {
                 && left_ty.is_float()
                 && !left_ty.is_complex()
             {
-                let float_expression = self.emit_operand(output, left_expression);
+                let float_expression = self.emit_operand(output, left_expression, ctx);
                 return format!("complex(0, {}*{})", float_expression, imag_coef);
             }
             if let Expression::Literal {
@@ -66,7 +69,7 @@ impl Emitter<'_> {
                 && right_ty.is_float()
                 && !right_ty.is_complex()
             {
-                let float_expression = self.emit_operand(output, right_expression);
+                let float_expression = self.emit_operand(output, right_expression, ctx);
                 return format!("complex(0, {}*{})", float_expression, imag_coef);
             }
         }
@@ -77,12 +80,13 @@ impl Emitter<'_> {
                 operator,
                 left_expression,
                 right_expression,
+                ctx,
             );
         }
 
         let stages = vec![
-            self.stage_composite(left_expression),
-            self.stage_composite(right_expression),
+            self.stage_composite(left_expression, ctx),
+            self.stage_composite(right_expression, ctx),
         ];
         let values = self.sequence(output, stages, "_left");
         let left_string = values[0].clone();
@@ -97,13 +101,14 @@ impl Emitter<'_> {
         operator: &BinaryOperator,
         left_expression: &Expression,
         right_expression: &Expression,
+        ctx: ExpressionContext<'_>,
     ) -> String {
-        let left_staged = self.stage_composite(left_expression);
+        let left_staged = self.stage_composite(left_expression, ctx);
         output.push_str(&left_staged.setup);
 
         // Wrap RHS setup in an IIFE so it runs only when control reaches the
         // RHS — hoisting it before the operator would defeat short-circuit.
-        let right_staged = self.stage_composite(right_expression);
+        let right_staged = self.stage_composite(right_expression, ctx);
         let right_string = if right_staged.setup.is_empty() {
             right_staged.value
         } else {
@@ -121,6 +126,7 @@ impl Emitter<'_> {
         output: &mut String,
         operator: &UnaryOperator,
         expression: &Expression,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         // Special case: -9223372036854775808 cannot be written as a positive literal
         // because 9223372036854775808 overflows i64. Go handles this correctly
@@ -138,7 +144,7 @@ impl Emitter<'_> {
             return "-9223372036854775808".to_string();
         }
 
-        let expression = self.emit_operand(output, expression);
+        let expression = self.emit_operand(output, expression, ctx);
 
         // Negate comparisons by flipping the operator instead of prepending `!`.
         // Without this, `!len(s) == 0` would be `(!len(s)) == 0` in Go
@@ -252,10 +258,11 @@ impl Emitter<'_> {
         left_expression: &Expression,
         right_expression: &Expression,
         info: NumericBinaryEmitInfo,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         let stages = vec![
-            self.stage_operand(left_expression),
-            self.stage_operand(right_expression),
+            self.stage_operand(left_expression, ctx),
+            self.stage_operand(right_expression, ctx),
         ];
         let values = self.sequence(output, stages, "_left");
         let left_string = values[0].clone();

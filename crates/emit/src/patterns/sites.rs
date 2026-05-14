@@ -13,6 +13,7 @@ use syntax::types::Type;
 
 use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::decision_tree::{
     self, apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
@@ -85,7 +86,7 @@ impl Emitter<'_> {
                 }
                 let var = self.fresh_var(temp_hint);
                 self.declare(&var);
-                let expression = self.emit_value(output, scrutinee);
+                let expression = self.emit_value(output, scrutinee, ExpressionContext::value());
                 write_line!(output, "{} := {}", var, expression);
                 let guard = DiscardGuard::new(output, &var);
                 ResolvedSubject {
@@ -189,7 +190,7 @@ impl Emitter<'_> {
         };
         let subject_var = inline_var.unwrap_or_else(|| {
             let var = self.fresh_var(Some("subject"));
-            let expression = self.emit_operand(output, scrutinee);
+            let expression = self.emit_operand(output, scrutinee, ExpressionContext::value());
             write_line!(output, "{} := {}", var, expression);
             var
         });

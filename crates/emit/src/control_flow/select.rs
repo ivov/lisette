@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::{
     self, PatternSubject, is_some_pattern, unwrap_some_pattern, unwrap_some_typed_pattern,
@@ -209,14 +210,14 @@ impl Emitter<'_> {
     ) -> String {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some((channel, "receive", _)) = Self::extract_channel_op(unwrapped) {
-            let ch = self.emit_value(output, channel);
+            let ch = self.emit_value(output, channel, ExpressionContext::value());
             return if channel.get_type().is_ref() {
                 cancel_deref_of_address(ch)
             } else {
                 ch
             };
         }
-        self.emit_value(output, receive_expression)
+        self.emit_value(output, receive_expression, ExpressionContext::value())
     }
 
     fn fresh_ok_var(&mut self) -> String {
@@ -382,7 +383,7 @@ impl Emitter<'_> {
         let unwrapped = send_expression.unwrap_parens();
         if let Some((channel, member, args)) = Self::extract_channel_op(unwrapped) {
             let ch_has_call = needs_hoist && contains_call(channel);
-            let mut ch = self.emit_value(output, channel);
+            let mut ch = self.emit_value(output, channel, ExpressionContext::value());
             if channel.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
@@ -392,7 +393,8 @@ impl Emitter<'_> {
             match member {
                 "send" if !args.is_empty() => {
                     let val_has_call = needs_hoist && contains_call(&args[0]);
-                    let mut val = self.emit_composite_value(output, &args[0]);
+                    let mut val =
+                        self.emit_composite_value(output, &args[0], ExpressionContext::value());
                     if val_has_call {
                         val = self.hoist_tmp_value(output, "send_val", &val);
                     }
@@ -403,7 +405,7 @@ impl Emitter<'_> {
             }
         } else {
             let expression_has_call = needs_hoist && contains_call(send_expression);
-            let mut ch = self.emit_value(output, send_expression);
+            let mut ch = self.emit_value(output, send_expression, ExpressionContext::value());
             if send_expression.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }

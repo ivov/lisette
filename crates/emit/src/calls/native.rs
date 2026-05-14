@@ -1,6 +1,7 @@
 use super::NativeCallContext;
 use crate::Emitter;
 use crate::expressions::access::index_access::range_var_bounds;
+use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
@@ -265,7 +266,7 @@ impl Emitter<'_> {
 
         let mut all_stages: Vec<EmittedExpression> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
-        all_stages.push(self.stage_operand(expression));
+        all_stages.push(self.stage_operand(expression, ExpressionContext::value()));
         all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
 
         let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 1);
@@ -391,12 +392,12 @@ impl Emitter<'_> {
             ..
         } = arg
         {
-            let mut stages = vec![self.stage_operand(receiver_expr)];
+            let mut stages = vec![self.stage_operand(receiver_expr, ExpressionContext::value())];
             if let Some(s) = start.as_deref() {
-                stages.push(self.stage_operand(s));
+                stages.push(self.stage_operand(s, ExpressionContext::value()));
             }
             if let Some(e) = end.as_deref() {
-                stages.push(self.stage_operand(e));
+                stages.push(self.stage_operand(e, ExpressionContext::value()));
             }
             let values = self.sequence(output, stages, "_arg");
             let mut bounds = values.iter().skip(1);
@@ -420,7 +421,7 @@ impl Emitter<'_> {
         let range_kind = peel_to_range_type(&arg_ty)
             .and_then(|t| t.get_name())
             .expect("substring arg should resolve to a known range type");
-        let receiver_staged = self.stage_operand(receiver_expr);
+        let receiver_staged = self.stage_operand(receiver_expr, ExpressionContext::value());
         let range_staged = self.stage_or_capture(arg, "range");
         let values = self.sequence(output, vec![receiver_staged, range_staged], "_arg");
         let (start, end) = range_var_bounds(&values[1], range_kind);

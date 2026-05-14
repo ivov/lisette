@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::types::coercion::{Coercion, CoercionDirection};
 use syntax::ast::{FormatStringPart, Literal};
@@ -46,8 +47,10 @@ impl Emitter<'_> {
             }
             Literal::FormatString(parts) => self.emit_format_string(output, parts),
             Literal::Slice(elems) => {
-                let stages: Vec<EmittedExpression> =
-                    elems.iter().map(|e| self.stage_composite(e)).collect();
+                let stages: Vec<EmittedExpression> = elems
+                    .iter()
+                    .map(|e| self.stage_composite(e, ExpressionContext::value()))
+                    .collect();
                 let elements = self.sequence(output, stages, "_v");
 
                 let elem_lisette_ty = ty
@@ -94,7 +97,7 @@ impl Emitter<'_> {
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
-                    Some(self.stage_composite(e))
+                    Some(self.stage_composite(e, ExpressionContext::value()))
                 } else {
                     None
                 }

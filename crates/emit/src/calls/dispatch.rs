@@ -3,6 +3,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use super::NativeCallContext;
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::names::go_name;
 use crate::types::coercion::{Coercion, CoercionDirection};
@@ -137,7 +138,7 @@ impl Emitter<'_> {
                 let capacity = ctx
                     .args
                     .first()
-                    .map(|a| self.emit_operand(output, a))
+                    .map(|a| self.emit_operand(output, a, ExpressionContext::value()))
                     .unwrap_or_else(|| "0".to_string());
                 Some(format!("make(chan {}, {})", elem, capacity))
             }
@@ -158,6 +159,7 @@ impl Emitter<'_> {
         output: &mut String,
         call_expression: &Expression,
         call_ty: Option<&Type>,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         let Expression::Call {
             expression: callee,
@@ -178,7 +180,7 @@ impl Emitter<'_> {
         match call_kind {
             Some(CallKind::TupleStructConstructor) => {
                 if let Some(result) =
-                    self.try_emit_tuple_struct_call(output, function, args, call_ty)
+                    self.try_emit_tuple_struct_call(output, function, args, call_ty, ctx)
                 {
                     return result;
                 }
@@ -196,7 +198,7 @@ impl Emitter<'_> {
             ) => {
                 let native_type = NativeGoType::from_kind(kind);
                 let method = self.extract_native_method_name(function);
-                let ctx = NativeCallContext {
+                let native_ctx = NativeCallContext {
                     function,
                     args,
                     spread,
@@ -205,7 +207,7 @@ impl Emitter<'_> {
                     native_type: &native_type,
                     method,
                 };
-                return self.emit_native_call(output, &ctx);
+                return self.emit_native_call(output, &native_ctx);
             }
             Some(CallKind::ReceiverMethodUfcs { is_public }) => {
                 let method = self.extract_receiver_ufcs_method(function);
@@ -216,7 +218,7 @@ impl Emitter<'_> {
             _ => {}
         }
 
-        self.emit_regular_call(output, function, args, type_args, call_ty, spread)
+        self.emit_regular_call(output, call_expression, call_ty, ctx)
     }
 
     fn extract_native_method_name<'a>(&self, function: &'a Expression) -> &'a str {
@@ -438,6 +440,7 @@ impl Emitter<'_> {
         function: &Expression,
         args: &[Expression],
         call_ty: Option<&Type>,
+        ctx: ExpressionContext<'_>,
     ) -> Option<String> {
         let ty = function.get_type();
 
@@ -485,7 +488,10 @@ impl Emitter<'_> {
         };
 
         let go_ty = self.go_type_as_string(&return_ty);
-        let stages: Vec<EmittedExpression> = args.iter().map(|a| self.stage_composite(a)).collect();
+        let stages: Vec<EmittedExpression> = args
+            .iter()
+            .map(|a| self.stage_composite(a, ExpressionContext::value()))
+            .collect();
         let values = self.sequence(output, stages, "_arg");
 
         let field_pairs: Vec<(String, String)> = field_tys
@@ -502,7 +508,7 @@ impl Emitter<'_> {
             })
             .collect();
 
-        Some(self.emit_struct_literal(&go_ty, &field_pairs))
+        Some(self.emit_struct_literal(&go_ty, &field_pairs, ctx))
     }
 
     fn emit_assert_type(
@@ -521,7 +527,7 @@ impl Emitter<'_> {
         };
         let arg_expression = args
             .first()
-            .map(|a| self.emit_composite_value(output, a))
+            .map(|a| self.emit_composite_value(output, a, ExpressionContext::value()))
             .unwrap_or_default();
         self.flags.needs_stdlib = true;
         format!(

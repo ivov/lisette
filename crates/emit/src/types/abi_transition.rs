@@ -4,6 +4,7 @@ use crate::Emitter;
 use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
 };
+use crate::expressions::context::ExpressionContext;
 use crate::types::abi::{AbiShape, tuple_element_types};
 use crate::write_line;
 use syntax::parse::TUPLE_FIELDS;
@@ -484,7 +485,7 @@ fn emit_lowered_tuple_tail(
                     Some(slot_ty) if emitter.is_nullable_option(slot_ty) => {
                         emit_nullable_slot_value(emitter, &mut setup, e, slot_ty)
                     }
-                    _ => emitter.emit_composite_value(&mut setup, e),
+                    _ => emitter.emit_composite_value(&mut setup, e, ExpressionContext::value()),
                 };
                 EmittedExpression::new(setup, value, e)
             })
@@ -495,7 +496,7 @@ fn emit_lowered_tuple_tail(
     }
 
     let return_ty = emitter.return_mode.expect_ty();
-    let value = emitter.emit_value(output, expression);
+    let value = emitter.emit_value(output, expression, ExpressionContext::value());
     let temp = emitter.hoist_tmp_value(output, "tup", &value);
     emit_lowered_result_return(
         emitter,
@@ -525,18 +526,18 @@ fn emit_lowered_partial_tail(
         emitter.flags.needs_stdlib = true;
         match variant {
             "Ok" => {
-                let v = emitter.emit_composite_value(output, &args[0]);
+                let v = emitter.emit_composite_value(output, &args[0], ExpressionContext::value());
                 write_line!(output, "return {}, nil", v);
             }
             "Err" => {
-                let e = emitter.emit_composite_value(output, &args[0]);
+                let e = emitter.emit_composite_value(output, &args[0], ExpressionContext::value());
                 let ok_ty = emitter.peel_alias(&return_ty).ok_type();
                 let ok_ty_str = emitter.go_type_as_string(&ok_ty);
                 write_line!(output, "return *new({}), {}", ok_ty_str, e);
             }
             "Both" => {
-                let v = emitter.emit_composite_value(output, &args[0]);
-                let e = emitter.emit_composite_value(output, &args[1]);
+                let v = emitter.emit_composite_value(output, &args[0], ExpressionContext::value());
+                let e = emitter.emit_composite_value(output, &args[1], ExpressionContext::value());
                 write_line!(output, "return {}, {}", v, e);
             }
             _ => unreachable!("as_partial_constructor only returns Ok/Err/Both"),
@@ -544,7 +545,7 @@ fn emit_lowered_partial_tail(
         return true;
     }
 
-    let value = emitter.emit_value(output, expression);
+    let value = emitter.emit_value(output, expression, ExpressionContext::value());
     emit_lowered_result_return(emitter, output, &value, &return_ty, &AbiShape::PartialTuple);
     true
 }
@@ -568,7 +569,7 @@ fn emit_nullable_slot_value(
         return match kind {
             Ok(()) => {
                 debug_assert_eq!(args.len(), 1, "Some(...) takes exactly one arg");
-                emitter.emit_composite_value(output, &args[0])
+                emitter.emit_composite_value(output, &args[0], ExpressionContext::value())
             }
             Err(()) => "nil".to_string(),
         };
@@ -578,6 +579,6 @@ fn emit_nullable_slot_value(
     {
         return "nil".to_string();
     }
-    let value = emitter.emit_value(output, expression);
+    let value = emitter.emit_value(output, expression, ExpressionContext::value());
     emitter.emit_option_unwrap_to_nullable(output, &value, slot_ty)
 }

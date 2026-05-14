@@ -1,5 +1,6 @@
 use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
+use crate::expressions::context::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::placement::BodyPlace;
@@ -130,7 +131,7 @@ impl Emitter<'_> {
                     unwrapped,
                     Expression::Task { .. } | Expression::Defer { .. }
                 ) {
-                    let emitted = self.emit_operand(output, unwrapped);
+                    let emitted = self.emit_operand(output, unwrapped, ExpressionContext::value());
                     if !emitted.is_empty() {
                         write_line!(output, "{}", emitted);
                     }
@@ -212,7 +213,7 @@ impl Emitter<'_> {
             };
             write_line!(output, "{}{}", target_str, inc_op);
         } else {
-            let rhs_str = self.emit_operand(output, rhs);
+            let rhs_str = self.emit_operand(output, rhs, ExpressionContext::value());
             write_line!(output, "{} {}= {}", target_str, op, rhs_str);
         }
     }
@@ -249,7 +250,7 @@ impl Emitter<'_> {
             _ => None,
         };
 
-        let rhs_staged = self.stage_composite(value);
+        let rhs_staged = self.stage_composite(value, ExpressionContext::value());
         let rhs_has_setup = !rhs_staged.setup.is_empty();
 
         let target_str = if is_order_sensitive(target) {
@@ -301,7 +302,7 @@ impl Emitter<'_> {
     ) {
         self.push_loop("_");
         let (setup, cond) = self.capture_emission(output, |this, buf| {
-            this.emit_condition_operand(buf, condition)
+            this.emit_operand(buf, condition, ExpressionContext::value().condition())
         });
         if !setup.is_empty() {
             // Condition produced setup statements (temps); they must
@@ -345,9 +346,9 @@ impl Emitter<'_> {
                     ..
                 } = expression.as_ref()
                 {
-                    self.emit_operand(output, inner)
+                    self.emit_operand(output, inner, ExpressionContext::value())
                 } else {
-                    self.emit_operand(output, expression)
+                    self.emit_operand(output, expression, ExpressionContext::value())
                 };
                 let expression_ty = expression.get_type();
                 self.format_dot_access_lvalue(&base_str, &expression_ty, member)
@@ -361,12 +362,12 @@ impl Emitter<'_> {
                     ..
                 } = expression.as_ref()
                 {
-                    let inner_str = self.emit_operand(output, inner);
+                    let inner_str = self.emit_operand(output, inner, ExpressionContext::value());
                     format!("(*{})", inner_str)
                 } else {
-                    self.emit_operand(output, expression)
+                    self.emit_operand(output, expression, ExpressionContext::value())
                 };
-                let index_str = self.emit_operand(output, index);
+                let index_str = self.emit_operand(output, index, ExpressionContext::value());
                 format!("{}[{}]", expression_string, index_str)
             }
             Expression::Unary {
@@ -375,7 +376,7 @@ impl Emitter<'_> {
                 ..
             } => self.emit_deref_lvalue(output, expression),
             Expression::Call { .. } if expression.get_type().is_ref() => {
-                let call_str = self.emit_operand(output, expression);
+                let call_str = self.emit_operand(output, expression, ExpressionContext::value());
                 self.hoist_tmp_value(output, "ref", &call_str)
             }
             _ => "_".to_string(),
@@ -385,7 +386,7 @@ impl Emitter<'_> {
     /// Emit `*X` lvalue form, capturing the pointee into a temp if it's a
     /// call (Go requires an addressable operand for deref-assignment).
     fn emit_deref_lvalue(&mut self, output: &mut String, pointee: &Expression) -> String {
-        let pointee_string = self.emit_operand(output, pointee);
+        let pointee_string = self.emit_operand(output, pointee, ExpressionContext::value());
         if matches!(pointee.unwrap_parens(), Expression::Call { .. }) {
             let tmp = self.hoist_tmp_value(output, "ref", &pointee_string);
             return format!("*{}", tmp);
@@ -453,10 +454,10 @@ impl Emitter<'_> {
                     ..
                 } = base.as_ref()
                 {
-                    let inner_str = self.emit_operand(output, inner);
+                    let inner_str = self.emit_operand(output, inner, ExpressionContext::value());
                     format!("(*{})", inner_str)
                 } else {
-                    self.emit_operand(output, base)
+                    self.emit_operand(output, base, ExpressionContext::value())
                 };
                 // When the RHS produces temp statements (if/match/block used as value),
                 // the index must be captured even for simple identifiers — the RHS
@@ -469,7 +470,7 @@ impl Emitter<'_> {
                 let index_str = if index_needs_capture {
                     self.emit_force_capture(output, index, "idx")
                 } else {
-                    self.emit_operand(output, index)
+                    self.emit_operand(output, index, ExpressionContext::value())
                 };
                 format!("{}[{}]", base_str, index_str)
             }
@@ -484,7 +485,7 @@ impl Emitter<'_> {
                     ..
                 } = base.as_ref()
                 {
-                    self.emit_operand(output, inner)
+                    self.emit_operand(output, inner, ExpressionContext::value())
                 } else if is_order_sensitive(base) {
                     self.emit_left_value_capturing(output, base, rhs_has_setup)
                 } else {

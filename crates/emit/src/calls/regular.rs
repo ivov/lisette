@@ -1,6 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
@@ -105,15 +106,28 @@ impl Emitter<'_> {
     pub(super) fn emit_regular_call(
         &mut self,
         output: &mut String,
-        function: &Expression,
-        args: &[Expression],
-        type_args: &[Annotation],
+        call_expression: &Expression,
         call_ty: Option<&Type>,
-        spread: Option<&Expression>,
+        expression_ctx: ExpressionContext<'_>,
     ) -> String {
+        let Expression::Call {
+            expression: callee,
+            args,
+            type_args,
+            spread,
+            ..
+        } = call_expression
+        else {
+            unreachable!("emit_regular_call requires a Call expression");
+        };
+        let function = callee.unwrap_parens();
+        let spread = (**spread).as_ref();
+
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
-            let stages: Vec<EmittedExpression> =
-                args.iter().map(|a| self.stage_operand(a)).collect();
+            let stages: Vec<EmittedExpression> = args
+                .iter()
+                .map(|a| self.stage_operand(a, ExpressionContext::value()))
+                .collect();
             let wrap_to_any = Self::spread_needs_any_wrap(function, spread);
             let combine = Self::variadic_combine_for(function, spread, 0);
             let args_strings =
@@ -121,7 +135,7 @@ impl Emitter<'_> {
             return format!("{}({})", go_name, args_strings.join(", "));
         }
 
-        let mut function_string = self.with_call_callee(|this| this.emit_operand(output, function));
+        let mut function_string = self.emit_operand(output, function, expression_ctx.callee());
 
         if matches!(
             function,
@@ -133,8 +147,13 @@ impl Emitter<'_> {
             function_string = format!("({})", function_string);
         }
 
-        let type_args_string =
-            self.resolve_call_type_args(function, type_args, call_ty, &mut function_string);
+        let type_args_string = self.resolve_call_type_args(
+            function,
+            type_args,
+            call_ty,
+            &mut function_string,
+            expression_ctx,
+        );
 
         let pointer_indices = self.get_recursive_enum_pointer_indices(function);
 
@@ -157,7 +176,7 @@ impl Emitter<'_> {
             _ => (false, false),
         };
 
-        let ctx = CallArgsContext {
+        let args_ctx = CallArgsContext {
             fn_param_types: &fn_param_types,
             pointer_indices: &pointer_indices,
             is_go_call,
@@ -166,7 +185,7 @@ impl Emitter<'_> {
             wrap_spread_to_any: Self::spread_needs_any_wrap(function, spread),
             combine_variadic: Self::variadic_combine_for(function, spread, 0),
         };
-        let args_strings = self.emit_call_args(output, args, &ctx);
+        let args_strings = self.emit_call_args(output, args, &args_ctx);
 
         let call_str = format!(
             "{}{}({})",
@@ -176,7 +195,9 @@ impl Emitter<'_> {
         );
         let call_str = collapse_fmt_print(&function_string, &args_strings, call_str);
 
-        if let Some(wrapped) = self.wrap_go_array_return(output, function, &call_str) {
+        if let Some(wrapped) =
+            self.wrap_go_array_return(output, function, &call_str, expression_ctx)
+        {
             return wrapped;
         }
         call_str
@@ -184,14 +205,15 @@ impl Emitter<'_> {
 
     /// Materialize a Go array-returning call into a variable and reslice it,
     /// so the caller sees a `[]T` slice instead of a fixed-size array.
-    /// Skipped in discarded-call contexts via `skip_array_return_wrap`.
+    /// Skipped in discarded-call contexts via raw-array-return context.
     fn wrap_go_array_return(
         &mut self,
         output: &mut String,
         function: &Expression,
         call_str: &str,
+        ctx: ExpressionContext<'_>,
     ) -> Option<String> {
-        if self.skip_array_return_wrap {
+        if ctx.keeps_raw_go_array_return() {
             return None;
         }
         let Expression::DotAccess {
@@ -217,16 +239,16 @@ impl Emitter<'_> {
         type_args: &[Annotation],
         call_ty: Option<&Type>,
         function_string: &mut String,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         let mut type_args_string = self.format_type_args_from_annotations(type_args);
 
-        let slot_ty = self.current_slot_expected_ty.clone();
+        let slot_ty = ctx.expected_slot_type();
 
         if type_args_string.is_empty()
             && let Some(inferred) = self.infer_return_only_type_args(function)
         {
             type_args_string = slot_ty
-                .as_ref()
                 .and_then(|t| self.prelude_container_type_args(t))
                 .unwrap_or(inferred);
         }
@@ -234,11 +256,7 @@ impl Emitter<'_> {
         if type_args_string.is_empty() && Self::is_prelude_variant_constructor(function) {
             let candidate = call_ty
                 .and_then(|t| self.prelude_container_type_args(t))
-                .or_else(|| {
-                    slot_ty
-                        .as_ref()
-                        .and_then(|t| self.prelude_container_type_args(t))
-                });
+                .or_else(|| slot_ty.and_then(|t| self.prelude_container_type_args(t)));
             type_args_string = candidate.unwrap_or_default();
         }
 
@@ -336,7 +354,7 @@ impl Emitter<'_> {
         }
 
         if ctx.pointer_indices.contains(&index) {
-            let value = self.emit_value(output, arg);
+            let value = self.emit_value(output, arg, ExpressionContext::value());
             if matches!(arg, Expression::Reference { .. }) || arg.get_type().is_ref() {
                 return value;
             }
@@ -348,11 +366,10 @@ impl Emitter<'_> {
         let suppress = ctx.is_prelude_dispatch
             && unwrapped_param_ty.is_some_and(|p| matches!(p, Type::Function { .. }));
         let flows_to_unknown = unwrapped_param_ty.is_some_and(|p| p.resolves_to_unknown());
-        let value = self.with_go_fn_short_circuit_suppressed(suppress, |this| {
-            this.with_arg_flows_to_unknown(flows_to_unknown, |this| {
-                this.emit_composite_value(output, arg)
-            })
-        });
+        let arg_ctx = ExpressionContext::value()
+            .with_forced_tagged_go_function(suppress)
+            .with_unknown_argument_target(flows_to_unknown);
+        let value = self.emit_composite_value(output, arg, arg_ctx);
         if suppress
             && let Some(tagged) =
                 self.try_lower_arg_to_tagged(output, arg, &value, effective_param_ty)
@@ -411,10 +428,10 @@ impl Emitter<'_> {
             && self.classify_direct_emission(arg_ret).is_some()
             && self.classify_direct_emission(param_ret).is_some()
         {
-            return Some(self.emit_value(output, arg));
+            return Some(self.emit_value(output, arg, ExpressionContext::value()));
         }
 
-        let value = self.emit_value(output, arg);
+        let value = self.emit_value(output, arg, ExpressionContext::value());
         Some(crate::types::abi_transition::emit_lisette_callback_wrapper(
             self,
             output,
@@ -443,7 +460,7 @@ impl Emitter<'_> {
         if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
             return Some("nil".to_string());
         }
-        let value = self.emit_value(output, arg);
+        let value = self.emit_value(output, arg, ExpressionContext::value());
         let coercion = Coercion::resolve(self, &arg_ty, param_ty, CoercionDirection::ToGoBoundary);
         Some(coercion.apply(self, output, value))
     }
@@ -489,7 +506,7 @@ impl Emitter<'_> {
         if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
             return "nil".to_string();
         }
-        let value = self.emit_value(output, arg);
+        let value = self.emit_value(output, arg, ExpressionContext::value());
         let coercion = Coercion::resolve(self, arg_ty, arg_ty, CoercionDirection::ToGoBoundary);
         coercion.apply(self, output, value)
     }

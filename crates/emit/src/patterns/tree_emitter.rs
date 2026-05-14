@@ -3,6 +3,7 @@ use syntax::types::Type;
 
 use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
+use crate::expressions::context::ExpressionContext;
 use crate::patterns::decision_tree::{Decision, compile_expanded_arms, expand_or_patterns};
 use crate::patterns::emit_plan::{
     ChainPlan, EmitBinding, EmitCase, EmitChainTest, EmitDecision, MatchEmitPlan, RetryLoopPlan,
@@ -652,9 +653,11 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     fn emit_guard_header(&mut self, output: &mut String, arm_index: usize) -> bool {
         let guard = &self.arms[arm_index].guard;
         if let Some(guard_expression) = guard {
-            let guard_str = self
-                .emitter
-                .emit_condition_operand(output, guard_expression);
+            let guard_str = self.emitter.emit_operand(
+                output,
+                guard_expression,
+                ExpressionContext::value().condition(),
+            );
             let guard_str = wrap_if_struct_literal(guard_str);
             write_line!(output, "if {} {{", guard_str);
             self.emitter.enter_scope();

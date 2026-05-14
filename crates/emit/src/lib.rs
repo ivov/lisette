@@ -313,27 +313,6 @@ pub struct Emitter<'a> {
 
     /// Shape of the enclosing function body's return values.
     return_mode: ReturnMode,
-    /// Generic function identifiers should NOT add type args when used as callees
-    /// (the call site handles instantiation), only when used as values.
-    emitting_call_callee: bool,
-    /// Set while emitting expressions that will appear in Go `if`/`for`/`switch`
-    /// conditions. Generic composite literals (`Type[Args]{...}`) need inner parens
-    /// in these contexts because gofmt strips outer condition parens for generics.
-    in_condition: bool,
-    /// When true, `emit_regular_call` skips array return wrapping (`arr := call; arr[:]`)
-    /// and returns the raw call string. Set by `emit_go_call_discarded` for discarded calls
-    /// where the array-to-slice conversion is unnecessary.
-    skip_array_return_wrap: bool,
-    /// Declared slot type during tuple staging; recovers Go alias type args that
-    /// call-site inference loses in assign-position match arms.
-    current_slot_expected_ty: Option<Type>,
-    /// Set when the destination is a Go-side function (e.g. a generic
-    /// `func(T) U` callback) that needs the unlowered single-return form.
-    suppress_go_fn_short_circuit: bool,
-    /// True while emitting an argument into an `Unknown` (`any`) param;
-    /// makes `emit_lambda` render `Never`-returning lambdas as `func()`
-    /// (not `func() struct{}`).
-    arg_flows_to_unknown: bool,
 }
 
 impl<'a> Emitter<'a> {
@@ -454,21 +433,7 @@ impl<'a> Emitter<'a> {
             flags: EmitFlags::default(),
             ensure_imported: HashSet::default(),
             return_mode: ReturnMode::None,
-            emitting_call_callee: false,
-            in_condition: false,
-            skip_array_return_wrap: false,
-            current_slot_expected_ty: None,
-            suppress_go_fn_short_circuit: false,
-            arg_flows_to_unknown: false,
         }
-    }
-
-    pub(crate) fn emit_condition_operand(
-        &mut self,
-        output: &mut String,
-        expression: &syntax::ast::Expression,
-    ) -> String {
-        self.with_condition(|this| this.emit_operand(output, expression))
     }
 
     pub(crate) fn push_loop(&mut self, result_var: impl Into<String>) {
@@ -494,70 +459,6 @@ impl<'a> Emitter<'a> {
             .loop_stack
             .last()
             .and_then(|ctx| ctx.label.as_deref())
-    }
-
-    pub(crate) fn with_call_callee<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let saved = std::mem::replace(&mut self.emitting_call_callee, true);
-        let result = f(self);
-        self.emitting_call_callee = saved;
-        result
-    }
-
-    pub(crate) fn with_condition<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let saved = std::mem::replace(&mut self.in_condition, true);
-        let result = f(self);
-        self.in_condition = saved;
-        result
-    }
-
-    pub(crate) fn with_expected_slot_type<F, R>(
-        &mut self,
-        ty: Option<syntax::types::Type>,
-        f: F,
-    ) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let saved = std::mem::replace(&mut self.current_slot_expected_ty, ty);
-        let result = f(self);
-        self.current_slot_expected_ty = saved;
-        result
-    }
-
-    pub(crate) fn with_go_fn_short_circuit_suppressed<F, R>(&mut self, suppress: bool, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
-        let result = f(self);
-        self.suppress_go_fn_short_circuit = saved;
-        result
-    }
-
-    pub(crate) fn with_array_return_wrap_skipped<F, R>(&mut self, skip: bool, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let saved = std::mem::replace(&mut self.skip_array_return_wrap, skip);
-        let result = f(self);
-        self.skip_array_return_wrap = saved;
-        result
-    }
-
-    pub(crate) fn with_arg_flows_to_unknown<F, R>(&mut self, flows: bool, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let saved = std::mem::replace(&mut self.arg_flows_to_unknown, flows);
-        let result = f(self);
-        self.arg_flows_to_unknown = saved;
-        result
     }
 
     pub(crate) fn with_return_mode<F, R>(&mut self, mode: ReturnMode, f: F) -> R

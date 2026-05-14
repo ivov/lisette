@@ -2310,6 +2310,24 @@ fn test() {
 }
 
 #[test]
+fn if_generic_struct_literal_method_callee_in_condition() {
+    let input = r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn ok(self) -> bool { true }
+}
+
+fn test() {
+  if Box { v: 1 }.ok() {
+    let _ = 1
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_guarded_catchall_unused_subject() {
     let input = r#"
 struct P { v: int }

@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::patterns::sites::PatternSubject;
 use crate::write_line;
 use syntax::ast::{Binding, Expression, Pattern};
@@ -195,7 +196,9 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             })
             .collect();
 
-        let call_str = self.emitter.emit_call(output, self.value, None);
+        let call_str = self
+            .emitter
+            .emit_call(output, self.value, None, ExpressionContext::value());
 
         for (identifier, go_name) in planned.iter().flatten() {
             self.emitter.scope.bindings.add(*identifier, go_name);
