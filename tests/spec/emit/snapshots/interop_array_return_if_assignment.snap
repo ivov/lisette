@@ -19,6 +19,6 @@ func main() {
 			return arr_2[:]
 		}
 	}
-	data := []uint8{}
+	data := ([]uint8)(nil)
 	_ = f(data)
 }

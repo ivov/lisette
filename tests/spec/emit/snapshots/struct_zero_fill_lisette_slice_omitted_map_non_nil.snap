@@ -16,8 +16,5 @@ func (c Conf) String() string {
 }
 
 func test() Conf {
-	return Conf{
-		items:  []int{},
-		lookup: map[string]int{},
-	}
+	return Conf{lookup: map[string]int{}}
 }

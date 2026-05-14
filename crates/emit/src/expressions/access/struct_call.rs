@@ -58,16 +58,18 @@ impl Emitter<'_> {
         });
 
         let is_go_struct = Self::is_go_imported_type(ty);
-        let stages: Vec<EmittedExpression> = field_assignments
+        let kept = self.kept_struct_call_fields(field_assignments, spread, ty, is_go_struct);
+
+        let stages: Vec<EmittedExpression> = kept
             .iter()
             .map(|f| self.stage_composite(&f.value, ExpressionContext::value()))
             .collect();
         let emitted_values = self.sequence(output, stages, "_field");
         let mut field_names: Vec<String> = Vec::new();
         let mut field_values: Vec<String> = Vec::new();
-        for (fi, f) in field_assignments.iter().enumerate() {
+        for (slot, f) in kept.iter().enumerate() {
             let field_name = self.resolve_struct_call_field_name(&f.name, ty, &ctx);
-            let mut value = emitted_values[fi].clone();
+            let mut value = emitted_values[slot].clone();
             value = self.wrap_recursive_enum_field(output, value, f, &ctx);
             let value_ty = f.value.get_type();
             let field_ty = self.lookup_struct_field_ty(ty, &f.name);
@@ -119,6 +121,9 @@ impl Emitter<'_> {
                     self.lookup_unspecified_fields(ty, name, ctx.enum_ctx.as_ref(), &assigned);
                 if let Some(unspecified) = unspecified {
                     for (field_name, field_ty) in unspecified {
+                        if field_ty.is_slice() {
+                            continue;
+                        }
                         let go_field_name =
                             self.resolve_struct_call_field_name(&field_name, ty, &ctx);
                         let zero = self.lisette_zero(&field_ty);
@@ -131,6 +136,37 @@ impl Emitter<'_> {
                 self.emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx)
             }
         }
+    }
+
+    /// Drop empty `Slice<T>` field assignments so Go's nil zero-value applies
+    /// instead of an `[]T{}` allocation. Skipped for Go-imported structs (the
+    /// Go API may distinguish nil from empty) and `From` spreads (the override
+    /// must still fire to clear the inherited value).
+    fn kept_struct_call_fields<'a>(
+        &self,
+        field_assignments: &'a [StructFieldAssignment],
+        spread: &StructSpread,
+        ty: &Type,
+        is_go_struct: bool,
+    ) -> Vec<&'a StructFieldAssignment> {
+        let can_omit_slices = !is_go_struct
+            && !matches!(spread, StructSpread::From(_))
+            && field_assignments
+                .iter()
+                .any(|f| f.value.is_empty_collection());
+        if !can_omit_slices {
+            return field_assignments.iter().collect();
+        }
+        field_assignments
+            .iter()
+            .filter(|f| {
+                !(f.value.is_empty_collection()
+                    && self
+                        .lookup_struct_field_ty(ty, &f.name)
+                        .as_ref()
+                        .is_some_and(Type::is_slice))
+            })
+            .collect()
     }
 
     /// Look up unspecified fields of a Lisette-defined struct or enum struct variant,
@@ -220,7 +256,7 @@ impl Emitter<'_> {
                         .first()
                         .map(|a| self.go_type_as_string(a))
                         .unwrap_or_else(|| "any".to_string());
-                    format!("[]{}{{}}", inner)
+                    format!("([]{})(nil)", inner)
                 }
                 CompoundKind::Map => {
                     let key = args
@@ -253,6 +289,7 @@ impl Emitter<'_> {
                     let go_ty = self.go_type_as_string(ty);
                     let pairs: Vec<(String, String)> = fields
                         .into_iter()
+                        .filter(|(_, field_ty)| !field_ty.is_slice())
                         .map(|(name, field_ty)| {
                             let go_name = if self.field_is_public(ty, &name) {
                                 go_name::make_exported(&name)

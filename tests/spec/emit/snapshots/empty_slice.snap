@@ -5,5 +5,5 @@ description: "input: \nfn test() {\n  let x: Slice<int> = [];\n}\n"
 package main
 
 func test() {
-	_ = []int{}
+	_ = ([]int)(nil)
 }

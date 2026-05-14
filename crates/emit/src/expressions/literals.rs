@@ -47,12 +47,6 @@ impl Emitter<'_> {
             }
             Literal::FormatString(parts) => self.emit_format_string(output, parts),
             Literal::Slice(elems) => {
-                let stages: Vec<EmittedExpression> = elems
-                    .iter()
-                    .map(|e| self.stage_composite(e, ExpressionContext::value()))
-                    .collect();
-                let elements = self.sequence(output, stages, "_v");
-
                 let elem_lisette_ty = ty
                     .get_type_params()
                     .expect("Slice type must have type args")
@@ -60,6 +54,19 @@ impl Emitter<'_> {
                     .expect("Slice type must have element type")
                     .clone();
                 let elem_ty = self.go_type_as_string(&elem_lisette_ty);
+
+                if elems.is_empty() {
+                    // Parens around the slice type disambiguate the conversion when
+                    // the element type itself ends in `)` (e.g. `func(int)`); Go
+                    // otherwise parses `[]func(int)(nil)` as a call expression.
+                    return format!("([]{})(nil)", elem_ty);
+                }
+
+                let stages: Vec<EmittedExpression> = elems
+                    .iter()
+                    .map(|e| self.stage_composite(e, ExpressionContext::value()))
+                    .collect();
+                let elements = self.sequence(output, stages, "_v");
 
                 let mut wrapped: Vec<String> = Vec::with_capacity(elements.len());
                 for (expr, emitted) in elems.iter().zip(elements) {

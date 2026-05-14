@@ -22,7 +22,7 @@ func (w Wrap) String() string {
 
 func main() {
 	m := make(map[string]Wrap)
-	m["a"] = Wrap(Inner{items: []int{}})
+	m["a"] = Wrap(Inner{})
 	inner := Inner(m["a"])
 	inner.items = append(inner.items, 1)
 	m["a"] = Wrap(inner)

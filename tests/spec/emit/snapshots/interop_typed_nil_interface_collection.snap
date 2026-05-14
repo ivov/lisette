@@ -17,7 +17,7 @@ func main() {
 	if opt_1.Tag == lisette.OptionSome {
 		unwrap_2 = opt_1.SomeVal
 	}
-	src_3 := []lisette.Option[ast.Expr]{}
+	src_3 := ([]lisette.Option[ast.Expr])(nil)
 	unwrapped_4 := make([]ast.Expr, len(src_3))
 	for i_5, v_6 := range src_3 {
 		if v_6.Tag == lisette.OptionSome {

@@ -14,6 +14,6 @@ func (w Wrap) String() string {
 
 func main() {
 	m := make(map[string]Wrap)
-	m["a"] = Wrap([]int{})
+	m["a"] = Wrap(([]int)(nil))
 	m["a"] = Wrap(append([]int(m["a"]), 1))
 }

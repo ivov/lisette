@@ -9,7 +9,7 @@ import "strconv"
 type F func(string) (int, error)
 
 func main() {
-	xs := []F{}
+	xs := ([]F)(nil)
 	xs = append(xs, strconv.Atoi)
 	_ = xs
 }

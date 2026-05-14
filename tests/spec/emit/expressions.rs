@@ -296,7 +296,7 @@ fn test() -> Outer {
 }
 
 #[test]
-fn struct_zero_fill_lisette_slice_and_map_non_nil() {
+fn struct_zero_fill_lisette_slice_omitted_map_non_nil() {
     let input = r#"
 struct Conf { items: Slice<int>, lookup: Map<string, int> }
 
