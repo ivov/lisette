@@ -11,34 +11,39 @@ use crate::types::emitter::Destination;
 use crate::utils::{inline_trivial_bindings, output_ends_with_diverge, output_references_var};
 use crate::write_line;
 
-struct GuardedTreeContext<'a> {
-    arm_destination: &'a Destination,
-    subject_var: &'a str,
-    label: &'a str,
-    use_direct_return: bool,
-}
-
+#[derive(Clone, Copy)]
 enum LeafTerminator<'a> {
     None,
     BreakLabel(&'a str),
 }
 
+#[derive(Clone, Copy)]
 enum GuardFailurePolicy {
     EmitInline,
     FallThrough,
+    Sibling,
 }
 
-enum NestedHandler {
-    Regular,
-    RetryLoop,
+#[derive(Clone, Copy)]
+enum ChainMode {
+    Cascading,
+    GroupedRetry,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LeafScope {
+    Implicit,
+    Explicit,
+}
+
+#[derive(Clone, Copy)]
 struct WalkCtx<'a> {
     arm_destination: &'a Destination,
     subject_var: &'a str,
     terminator: LeafTerminator<'a>,
     guard_failure: GuardFailurePolicy,
-    nested: NestedHandler,
+    chain_mode: ChainMode,
+    leaf_scope: LeafScope,
 }
 
 impl<'a> WalkCtx<'a> {
@@ -48,7 +53,8 @@ impl<'a> WalkCtx<'a> {
             subject_var,
             terminator: LeafTerminator::None,
             guard_failure: GuardFailurePolicy::EmitInline,
-            nested: NestedHandler::Regular,
+            chain_mode: ChainMode::Cascading,
+            leaf_scope: LeafScope::Implicit,
         }
     }
 
@@ -58,21 +64,36 @@ impl<'a> WalkCtx<'a> {
             subject_var,
             terminator: LeafTerminator::None,
             guard_failure: GuardFailurePolicy::FallThrough,
-            nested: NestedHandler::Regular,
+            chain_mode: ChainMode::Cascading,
+            leaf_scope: LeafScope::Implicit,
         }
     }
 
-    fn retry_loop(ctx: &GuardedTreeContext<'a>) -> Self {
+    fn retry_loop(
+        arm_destination: &'a Destination,
+        subject_var: &'a str,
+        label: &'a str,
+        use_direct_return: bool,
+    ) -> Self {
         Self {
-            arm_destination: ctx.arm_destination,
-            subject_var: ctx.subject_var,
-            terminator: if ctx.use_direct_return {
+            arm_destination,
+            subject_var,
+            terminator: if use_direct_return {
                 LeafTerminator::None
             } else {
-                LeafTerminator::BreakLabel(ctx.label)
+                LeafTerminator::BreakLabel(label)
             },
+            guard_failure: GuardFailurePolicy::Sibling,
+            chain_mode: ChainMode::GroupedRetry,
+            leaf_scope: LeafScope::Explicit,
+        }
+    }
+
+    fn nested(self) -> Self {
+        Self {
+            leaf_scope: LeafScope::Implicit,
             guard_failure: GuardFailurePolicy::FallThrough,
-            nested: NestedHandler::RetryLoop,
+            ..self
         }
     }
 }
@@ -477,9 +498,18 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 arm_index,
                 bindings,
             } => {
+                let wrap = ctx.leaf_scope == LeafScope::Explicit;
+                if wrap {
+                    output.push_str("{\n");
+                    self.emitter.enter_scope();
+                }
                 self.emit_bindings(output, bindings, ctx.subject_var);
                 self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
                 self.apply_leaf_terminator(output, ctx);
+                if wrap {
+                    self.emitter.exit_scope();
+                    output.push_str("}\n");
+                }
             }
             Decision::Guard {
                 arm_index,
@@ -487,22 +517,34 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 success,
                 failure,
             } => {
+                let needs_pre_scope = ctx.leaf_scope == LeafScope::Explicit && !bindings.is_empty();
+                if needs_pre_scope {
+                    output.push_str("{\n");
+                    self.emitter.enter_scope();
+                }
                 self.emit_bindings(output, bindings, ctx.subject_var);
                 if self.emit_guard_header(output, *arm_index) {
-                    self.walk(output, success, ctx);
+                    self.walk(output, success, &ctx.nested());
                     self.emitter.exit_scope();
                     match ctx.guard_failure {
                         GuardFailurePolicy::EmitInline => {
                             self.walk_else_or_flat(output, failure, ctx);
                         }
-                        GuardFailurePolicy::FallThrough => {
+                        GuardFailurePolicy::FallThrough | GuardFailurePolicy::Sibling => {
                             output.push_str("}\n");
                         }
                     }
                 }
+                if needs_pre_scope {
+                    self.emitter.exit_scope();
+                    output.push_str("}\n");
+                }
+                if matches!(ctx.guard_failure, GuardFailurePolicy::Sibling) {
+                    self.walk(output, failure, ctx);
+                }
             }
-            Decision::Chain { .. } | Decision::Switch { .. } => match ctx.nested {
-                NestedHandler::Regular => {
+            Decision::Chain { tests, fallback } => match ctx.chain_mode {
+                ChainMode::Cascading => {
                     self.emit_chain_decisions(
                         output,
                         decision,
@@ -510,20 +552,14 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                         ctx.subject_var,
                     );
                 }
-                NestedHandler::RetryLoop => {
-                    let label = match &ctx.terminator {
-                        LeafTerminator::BreakLabel(l) => *l,
-                        LeafTerminator::None => "",
-                    };
-                    let guarded_ctx = GuardedTreeContext {
-                        arm_destination: ctx.arm_destination,
-                        subject_var: ctx.subject_var,
-                        label,
-                        use_direct_return: matches!(ctx.terminator, LeafTerminator::None),
-                    };
-                    self.emit_guarded_tree(output, decision, &guarded_ctx);
+                ChainMode::GroupedRetry => {
+                    self.emit_chain_grouped(output, tests, fallback, ctx);
                 }
             },
+            Decision::Switch { .. } => {
+                self.emit_switch(output, decision, ctx.arm_destination);
+                self.apply_leaf_terminator(output, ctx);
+            }
             Decision::Unreachable => {}
         }
     }
@@ -729,13 +765,13 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         };
 
         let subject_var = self.subject_var.clone();
-        let ctx = GuardedTreeContext {
+        let ctx = WalkCtx::retry_loop(
             arm_destination,
-            subject_var: &subject_var,
-            label: &label,
-            use_direct_return: use_direct_return || skip_wrapper,
-        };
-        self.emit_guarded_tree(output, tree, &ctx);
+            &subject_var,
+            &label,
+            use_direct_return || skip_wrapper,
+        );
+        self.walk(output, tree, &ctx);
 
         if use_direct_return {
             if !tree_has_terminal {
@@ -752,107 +788,14 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
     }
 
-    fn emit_guarded_tree(
-        &mut self,
-        output: &mut String,
-        tree: &Decision,
-        ctx: &GuardedTreeContext,
-    ) {
-        match tree {
-            Decision::Success {
-                arm_index,
-                bindings,
-            } => self.emit_guarded_success(output, *arm_index, bindings, ctx),
-
-            Decision::Guard {
-                arm_index,
-                bindings,
-                failure,
-                ..
-            } => self.emit_guarded_guard(output, *arm_index, bindings, failure, ctx),
-
-            Decision::Chain { tests, fallback } => {
-                self.emit_guarded_chain(output, tests, fallback, ctx);
-            }
-
-            Decision::Switch { .. } => {
-                self.emit_switch(output, tree, ctx.arm_destination);
-                if !ctx.use_direct_return && !output_ends_with_diverge(output) {
-                    write_line!(output, "break {}", ctx.label);
-                }
-            }
-
-            Decision::Unreachable => {}
-        }
-    }
-
-    /// Successful leaf: emit the arm body in its own scope and terminate
-    /// either by the arm's own divergence or by breaking out of the labeled
-    /// retry loop the guarded tree lives inside.
-    fn emit_guarded_success(
-        &mut self,
-        output: &mut String,
-        arm_index: usize,
-        bindings: &[PatternBinding],
-        ctx: &GuardedTreeContext,
-    ) {
-        output.push_str("{\n");
-        self.emitter.enter_scope();
-        self.emit_bindings(output, bindings, ctx.subject_var);
-        self.emit_arm_body(output, arm_index, Some(ctx.arm_destination));
-        if !ctx.use_direct_return && !output_ends_with_diverge(output) {
-            write_line!(output, "break {}", ctx.label);
-        }
-        self.emitter.exit_scope();
-        output.push_str("}\n");
-    }
-
-    /// Guard arm: emit bindings (possibly scoped), then an `if <guard>`
-    /// header. On guard success emit the arm body; on guard failure recurse
-    /// into the failure branch.
-    fn emit_guarded_guard(
-        &mut self,
-        output: &mut String,
-        arm_index: usize,
-        bindings: &[PatternBinding],
-        failure: &Decision,
-        ctx: &GuardedTreeContext,
-    ) {
-        let needs_scope = !bindings.is_empty();
-        if needs_scope {
-            output.push_str("{\n");
-            self.emitter.enter_scope();
-        }
-        self.emit_bindings(output, bindings, ctx.subject_var);
-
-        if self.emit_guard_header(output, arm_index) {
-            self.emit_arm_body(output, arm_index, Some(ctx.arm_destination));
-            if !ctx.use_direct_return && !output_ends_with_diverge(output) {
-                write_line!(output, "break {}", ctx.label);
-            }
-            self.emitter.exit_scope();
-            output.push_str("}\n");
-        }
-
-        if needs_scope {
-            self.emitter.exit_scope();
-            output.push_str("}\n");
-        }
-
-        self.emit_guarded_tree(output, failure, ctx);
-    }
-
-    /// Chain of tests: collapse consecutive tests sharing the same rendered
-    /// condition into a single `if` block, then emit each group. When the
-    /// fallback is unreachable and the last group is a singleton, unwrap it
-    /// as an exhaustive catchall rather than emitting a dead condition.
-    fn emit_guarded_chain(
+    fn emit_chain_grouped(
         &mut self,
         output: &mut String,
         tests: &[ChainTest],
         fallback: &Decision,
-        ctx: &GuardedTreeContext,
+        ctx: &WalkCtx,
     ) {
+        let inner_ctx = ctx.nested();
         let last_is_catchall = matches!(fallback, Decision::Unreachable) && tests.len() > 1;
         let groups = self.group_chain_tests_by_condition(tests, ctx.subject_var);
         let group_count = groups.len();
@@ -860,11 +803,18 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         for (g, (condition, indices)) in groups.iter().enumerate() {
             let is_last_group = g == group_count - 1;
             let collapse_as_catchall = is_last_group && last_is_catchall && indices.len() == 1;
-            self.emit_chain_group(output, condition, indices, tests, ctx, collapse_as_catchall);
+            self.emit_chain_group(
+                output,
+                condition,
+                indices,
+                tests,
+                &inner_ctx,
+                collapse_as_catchall,
+            );
         }
 
         if !matches!(fallback, Decision::Unreachable) {
-            self.emit_guarded_tree(output, fallback, ctx);
+            self.walk(output, fallback, ctx);
         }
     }
 
@@ -898,12 +848,11 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         condition: &str,
         indices: &[usize],
         tests: &[ChainTest],
-        ctx: &GuardedTreeContext,
+        ctx: &WalkCtx,
         collapse_as_catchall: bool,
     ) {
         if collapse_as_catchall {
-            let walk_ctx = WalkCtx::retry_loop(ctx);
-            self.walk(output, &tests[indices[0]].decision, &walk_ctx);
+            self.walk(output, &tests[indices[0]].decision, ctx);
             return;
         }
 
@@ -932,7 +881,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         output: &mut String,
         indices: &[usize],
         tests: &[ChainTest],
-        ctx: &GuardedTreeContext,
+        ctx: &WalkCtx,
     ) {
         if let Some(&ref_idx) = indices
             .iter()
@@ -941,9 +890,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             let bindings = Self::decision_top_bindings(&tests[ref_idx].decision);
             self.emit_bindings(output, bindings, ctx.subject_var);
         }
-        let walk_ctx = WalkCtx::retry_loop(ctx);
         for &test_idx in indices {
-            self.walk_skip_initial_bindings(output, &tests[test_idx].decision, &walk_ctx);
+            self.walk_skip_initial_bindings(output, &tests[test_idx].decision, ctx);
         }
     }
 
@@ -955,9 +903,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         output: &mut String,
         indices: &[usize],
         tests: &[ChainTest],
-        ctx: &GuardedTreeContext,
+        ctx: &WalkCtx,
     ) {
-        let walk_ctx = WalkCtx::retry_loop(ctx);
         for (j, &test_idx) in indices.iter().enumerate() {
             let is_last_in_group = j == indices.len() - 1;
             let needs_wrapper =
@@ -966,7 +913,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 output.push_str("{\n");
                 self.emitter.enter_scope();
             }
-            self.walk(output, &tests[test_idx].decision, &walk_ctx);
+            self.walk(output, &tests[test_idx].decision, ctx);
             if needs_wrapper {
                 self.emitter.exit_scope();
                 output.push_str("}\n");
