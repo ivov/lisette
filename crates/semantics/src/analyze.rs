@@ -335,7 +335,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                 let has_module_warnings = lints.iter().any(|lint| {
                     lint.file_id()
                         .map(|fid| file_ids.contains(&fid))
-                        .unwrap_or(false)
+                        .unwrap_or(true)
                 });
                 if !has_module_warnings
                     && let Err(e) =
