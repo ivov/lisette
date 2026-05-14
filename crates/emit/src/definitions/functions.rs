@@ -62,7 +62,7 @@ impl Emitter<'_> {
             return;
         }
 
-        if self.try_emit_lowered_tail_return(output, last) {
+        if crate::types::abi_transition::try_emit_lowered_tail_return(self, output, last) {
             return;
         }
 

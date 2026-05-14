@@ -1632,3 +1632,35 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn abi_transition_lowered_tail_return_partial_ok() {
+    let input = r#"
+fn run(x: int) -> Partial<int, error> {
+  Partial.Ok(x)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn abi_transition_lowered_tail_return_tuple_with_nullable_slot() {
+    let input = r#"
+fn run(x: int, y: Option<Ref<int>>) -> (int, Option<Ref<int>>) {
+  (x, y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn abi_transition_callback_adapter_lowered_to_tagged() {
+    let input = r#"
+fn double(x: int) -> Option<int> { Some(x + x) }
+
+fn run() -> Option<int> {
+  Option.and_then(Some(2), double)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

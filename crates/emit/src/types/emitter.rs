@@ -148,6 +148,14 @@ impl ReturnMode {
             _ => None,
         }
     }
+
+    /// Clone the return type, asserting the function has a return context.
+    /// Use after a `lowered_shape()` check that has already established this.
+    pub(crate) fn expect_ty(&self) -> Type {
+        self.ty()
+            .cloned()
+            .expect("lowered abi requires a return context")
+    }
 }
 
 pub(crate) struct LoopContext {

@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::GoCallStrategy;
 use crate::names::go_name::PRELUDE_ERROR_ID;
 use syntax::ast::{Annotation, Expression};
 use syntax::types::{Type, unqualified_name};
@@ -20,6 +21,19 @@ pub(crate) enum AbiShape {
     NullableReturn,
     /// `Tuple<T1, T2, ...>` → `(T1, T2, ...)`. Arity ≥ 2.
     Tuple { arity: usize },
+}
+
+impl AbiShape {
+    pub(crate) fn matches_go_strategy(&self, strategy: &GoCallStrategy) -> bool {
+        match (strategy, self) {
+            (GoCallStrategy::Result, AbiShape::ResultTuple | AbiShape::BareError)
+            | (GoCallStrategy::Partial, AbiShape::PartialTuple)
+            | (GoCallStrategy::CommaOk, AbiShape::CommaOk)
+            | (GoCallStrategy::NullableReturn, AbiShape::NullableReturn) => true,
+            (GoCallStrategy::Tuple { arity: a }, AbiShape::Tuple { arity: b }) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl Emitter<'_> {

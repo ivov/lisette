@@ -173,7 +173,7 @@ impl Emitter<'_> {
         if self.classify_direct_emission(return_type).is_none() {
             return raw;
         }
-        self.emit_lisette_callback_wrapper(output, &raw, fn_ty)
+        crate::types::abi_transition::emit_lisette_callback_wrapper(self, output, &raw, fn_ty)
     }
 
     /// True when a Go function value's natural ABI matches the slot's
@@ -193,16 +193,7 @@ impl Emitter<'_> {
         let Some(shape) = self.classify_direct_emission(return_type) else {
             return false;
         };
-        use crate::GoCallStrategy as G;
-        use crate::types::abi::AbiShape as A;
-        match (strategy, &shape) {
-            (G::Result, A::ResultTuple | A::BareError)
-            | (G::Partial, A::PartialTuple)
-            | (G::CommaOk, A::CommaOk)
-            | (G::NullableReturn, A::NullableReturn) => true,
-            (G::Tuple { arity: a }, A::Tuple { arity: b }) => a == b,
-            _ => false,
-        }
+        shape.matches_go_strategy(strategy)
     }
 
     pub(crate) fn emit_composite_value(
@@ -253,7 +244,9 @@ impl Emitter<'_> {
                 {
                     self.flags.needs_stdlib = true;
                     let call_str = self.emit_call(output, expression, Some(ty));
-                    self.emit_callee_abi_wrapping(output, &shape, &call_str, ty)
+                    crate::types::abi_transition::emit_callee_abi_wrapping(
+                        self, output, &shape, &call_str, ty,
+                    )
                 } else {
                     self.emit_call(output, expression, Some(ty))
                 }

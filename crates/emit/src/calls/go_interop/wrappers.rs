@@ -1,15 +1,12 @@
 use crate::Emitter;
 use crate::control_flow::fallible::{
-    Fallible, FallibleEmitter, OPTION_SOME_TAG, PARTIAL_BOTH_CTOR, PARTIAL_ERR_TAG,
-    PARTIAL_OK_CTOR, PARTIAL_OK_TAG, RESULT_OK_TAG,
+    Fallible, FallibleEmitter, PARTIAL_BOTH_CTOR, PARTIAL_OK_CTOR,
 };
 use crate::is_order_sensitive;
 use crate::names::go_name;
-use crate::types::abi::{AbiShape, tuple_element_types};
 use crate::utils::optimize_region;
 use crate::write_line;
 use syntax::ast::Expression;
-use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
 use super::GoCallStrategy;
@@ -234,45 +231,6 @@ impl Emitter<'_> {
         write_line!(output, "{} = {}", result_var, nil_err);
     }
 
-    /// Wrap a lowered-callee `call_str` into the Lisette tagged shape declared
-    /// by `result_ty`.
-    pub(crate) fn emit_callee_abi_wrapping(
-        &mut self,
-        output: &mut String,
-        shape: &AbiShape,
-        call_str: &str,
-        result_ty: &Type,
-    ) -> String {
-        match shape {
-            AbiShape::PartialTuple => self.emit_partial_wrapping(output, call_str, result_ty),
-            AbiShape::CommaOk => self.emit_comma_ok_wrapping(output, call_str, result_ty, false),
-            AbiShape::NullableReturn => {
-                let raw_var = self.hoist_tmp_value(output, "raw", call_str);
-                self.emit_nil_check_option_wrap(output, &raw_var, result_ty)
-            }
-            AbiShape::ResultTuple | AbiShape::BareError => {
-                self.emit_result_wrapping(output, call_str, result_ty)
-            }
-            AbiShape::Tuple { arity } => {
-                let temps = self.create_temp_vars("ret", *arity);
-                write_line!(output, "{} := {}", temps.join(", "), call_str);
-                let slot_tys = tuple_element_types(&self.peel_alias(result_ty));
-                let wrapped: Vec<String> = temps
-                    .iter()
-                    .enumerate()
-                    .map(|(i, v)| {
-                        slot_tys
-                            .get(i)
-                            .filter(|slot_ty| self.is_nullable_option(slot_ty))
-                            .map(|slot_ty| self.emit_nil_check_option_wrap(output, v, slot_ty))
-                            .unwrap_or_else(|| v.clone())
-                    })
-                    .collect();
-                self.emit_tuple_from_vars(output, &wrapped, result_ty)
-            }
-        }
-    }
-
     pub(crate) fn classify_go_fn_value(&self, expression: &Expression) -> Option<GoCallStrategy> {
         let inner = expression.unwrap_parens();
 
@@ -341,7 +299,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn build_wrapper_params(&mut self, params: &[Type]) -> (Vec<String>, Vec<String>) {
+    pub(crate) fn build_wrapper_params(&mut self, params: &[Type]) -> (Vec<String>, Vec<String>) {
         let mut param_strs = Vec::new();
         let mut arg_names = Vec::new();
         let last_idx = params.len().saturating_sub(1);
@@ -448,250 +406,5 @@ impl Emitter<'_> {
             ret_ty_str,
             body
         )
-    }
-
-    pub(crate) fn emit_return_adapter(
-        &mut self,
-        inner_call: &str,
-        lisette_return_type: &Type,
-    ) -> Option<(String, String)> {
-        let return_type = lisette_return_type;
-        self.flags.needs_stdlib = true;
-
-        if return_type.is_result() {
-            return Some(self.emit_result_return_adapter(inner_call, return_type));
-        }
-        if return_type.is_partial() {
-            return Some(self.emit_partial_return_adapter(inner_call, return_type));
-        }
-        if return_type.is_option() {
-            return Some(self.emit_option_return_adapter(inner_call, return_type));
-        }
-        if return_type.tuple_arity().is_some_and(|n| n >= 2) {
-            return self.emit_tuple_return_adapter(inner_call, return_type);
-        }
-        None
-    }
-
-    /// `Result<(), error>` → `error`; `Result<T, error>` → `(T, error)`.
-    fn emit_result_return_adapter(
-        &mut self,
-        inner_call: &str,
-        return_type: &Type,
-    ) -> (String, String) {
-        let ok_ty = return_type.ok_type();
-        let err_ty = return_type.err_type();
-        let err_ty_str = self.go_type_as_string(&err_ty);
-        let res = self.fresh_var(Some("res"));
-        self.declare(&res);
-
-        let mut b = format!("{res} := {inner_call}\n");
-        let ok_tag = RESULT_OK_TAG;
-        if ok_ty.is_unit() {
-            write_line!(
-                b,
-                "if {res}.Tag == {ok_tag} {{\nreturn nil\n}}\nreturn {res}.ErrVal"
-            );
-            return (err_ty_str, b);
-        }
-        let ok_ty_str = self.go_type_as_string(&ok_ty);
-        write_line!(
-            b,
-            "if {res}.Tag == {ok_tag} {{\nreturn {res}.OkVal, nil\n}}\n\
-             return *new({ok_ty_str}), {res}.ErrVal"
-        );
-        (format!("({ok_ty_str}, {err_ty_str})"), b)
-    }
-
-    /// `Partial<T, error>` → `(T, error)`, distinguishing Ok/Err/both branches.
-    fn emit_partial_return_adapter(
-        &mut self,
-        inner_call: &str,
-        return_type: &Type,
-    ) -> (String, String) {
-        let ok_ty = return_type.ok_type();
-        let err_ty = return_type.err_type();
-        let ok_ty_str = self.go_type_as_string(&ok_ty);
-        let err_ty_str = self.go_type_as_string(&err_ty);
-        let res = self.fresh_var(Some("res"));
-        self.declare(&res);
-
-        let b = format!(
-            "{res} := {inner_call}\n\
-             if {res}.Tag == {PARTIAL_OK_TAG} {{\nreturn {res}.OkVal, nil\n}}\n\
-             if {res}.Tag == {PARTIAL_ERR_TAG} {{\nreturn *new({ok_ty_str}), {res}.ErrVal\n}}\n\
-             return {res}.OkVal, {res}.ErrVal\n"
-        );
-        (format!("({ok_ty_str}, {err_ty_str})"), b)
-    }
-
-    /// `Option<fn>`/`Option<Ref<T>>`/`Option<Interface>` → bare nilable Go type
-    /// (collapsed because Go's nil already encodes absence). Other payloads use
-    /// the Go-idiomatic `(T, bool)` comma-ok convention.
-    fn emit_option_return_adapter(
-        &mut self,
-        inner_call: &str,
-        return_type: &Type,
-    ) -> (String, String) {
-        let inner = return_type.ok_type();
-        let some_tag = OPTION_SOME_TAG;
-        let opt = self.fresh_var(Some("opt"));
-        self.declare(&opt);
-
-        let is_nilable = self.is_nilable_go_type(&inner);
-        if is_nilable {
-            let go_ret = self.go_type_as_string(&inner);
-            let b = format!(
-                "{opt} := {inner_call}\n\
-                 if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal\n}}\n\
-                 return nil\n"
-            );
-            return (go_ret, b);
-        }
-
-        let inner_ty_str = self.go_type_as_string(&inner);
-        let b = format!(
-            "{opt} := {inner_call}\n\
-             if {opt}.Tag == {some_tag} {{\nreturn {opt}.SomeVal, true\n}}\n\
-             return *new({inner_ty_str}), false\n"
-        );
-        (format!("({inner_ty_str}, bool)"), b)
-    }
-
-    /// Arity-2+ tuple → Go multi-return. Each slot recurses through
-    /// `emit_return_adapter`, wrapping in an IIFE when the slot itself needs
-    /// adapter-style unwrapping. Returns `None` only if the resolved type
-    /// isn't actually a tuple/constructor shape.
-    fn emit_tuple_return_adapter(
-        &mut self,
-        inner_call: &str,
-        return_type: &Type,
-    ) -> Option<(String, String)> {
-        let tuple_params: Vec<Type> = match return_type {
-            Type::Tuple(elements) => elements.clone(),
-            Type::Nominal { params, .. } => params.clone(),
-            _ => return None,
-        };
-        let arity = tuple_params.len();
-        let tup = self.fresh_var(Some("tup"));
-        self.declare(&tup);
-
-        let mut body = format!("{tup} := {inner_call}\n");
-        let mut ret_types: Vec<String> = Vec::with_capacity(arity);
-        let mut field_exprs: Vec<String> = Vec::with_capacity(arity);
-
-        for (i, slot_ty) in tuple_params.iter().enumerate() {
-            let raw_field = format!("{tup}.{}", TUPLE_FIELDS[i]);
-            match self.emit_return_adapter(&raw_field, slot_ty) {
-                Some((inner_ret, inner_body)) => {
-                    let sub = self.fresh_var(Some("sub"));
-                    self.declare(&sub);
-                    body.push_str(&format!(
-                        "{sub} := func() {inner_ret} {{\n{inner_body}}}()\n"
-                    ));
-                    field_exprs.push(sub);
-                    ret_types.push(inner_ret);
-                }
-                None => {
-                    ret_types.push(self.go_type_as_string(slot_ty));
-                    field_exprs.push(raw_field);
-                }
-            }
-        }
-
-        body.push_str(&format!("return {}\n", field_exprs.join(", ")));
-        Some((format!("({})", ret_types.join(", ")), body))
-    }
-
-    pub(crate) fn emit_lisette_callback_wrapper(
-        &mut self,
-        output: &mut String,
-        fn_value: &str,
-        fn_type: &Type,
-    ) -> String {
-        let Type::Function {
-            params,
-            return_type,
-            ..
-        } = fn_type
-        else {
-            return fn_value.to_string();
-        };
-
-        let return_type = return_type.as_ref();
-
-        let (param_strs, arg_names) = self.build_wrapper_params(params);
-        let params_str = param_strs.join(", ");
-
-        let cb_var = self.hoist_tmp_value(output, "cb", fn_value);
-
-        let mut prelude = String::new();
-        let inner_args: Vec<String> = arg_names
-            .iter()
-            .zip(params.iter())
-            .map(|(name, param_ty)| self.lower_arg_to_tagged(&mut prelude, name, param_ty))
-            .collect();
-
-        let call_str = format!("{}({})", cb_var, inner_args.join(", "));
-
-        // Option<fn> adaptation only fires in interface-method shims. Here
-        // a closure-valued Option means the caller owns the nil check.
-        if let Type::Nominal { id, params: ps, .. } = return_type
-            && id == "Option"
-            && let Some(inner) = ps.first()
-            && matches!(inner.unwrap_forall(), Type::Function { .. })
-        {
-            return fn_value.to_string();
-        }
-
-        let Some((go_ret, body)) = self.emit_return_adapter(&call_str, return_type) else {
-            return fn_value.to_string();
-        };
-
-        format!("func({params_str}) {go_ret} {{\n{prelude}{body}}}")
-    }
-
-    /// Convert a fn-typed wrapper arg from lowered Go ABI back to tagged for
-    /// the inner call. Identity for non-fn args and for fn args with no
-    /// lowered return.
-    pub(crate) fn lower_arg_to_tagged(
-        &mut self,
-        prelude: &mut String,
-        arg_name: &str,
-        param_ty: &Type,
-    ) -> String {
-        let unwrapped = param_ty.unwrap_forall();
-        let Type::Function {
-            params: inner_params,
-            return_type: inner_ret,
-            ..
-        } = unwrapped
-        else {
-            return arg_name.to_string();
-        };
-        let inner_ret = inner_ret.as_ref();
-        let Some(shape) = self.classify_direct_emission(inner_ret) else {
-            return arg_name.to_string();
-        };
-
-        let (inner_param_strs, inner_arg_names) = self.build_wrapper_params(inner_params);
-        let inner_call = format!("{}({})", arg_name, inner_arg_names.join(", "));
-        let tagged_ret = self.go_type_as_string(inner_ret);
-
-        let mut body = String::new();
-        let result_var = self.emit_callee_abi_wrapping(&mut body, &shape, &inner_call, inner_ret);
-        write_line!(body, "return {}", result_var);
-
-        let tagged_var = self.fresh_var(Some("tagged"));
-        self.declare(&tagged_var);
-        write_line!(
-            prelude,
-            "{} := func({}) {} {{\n{}}}",
-            tagged_var,
-            inner_param_strs.join(", "),
-            tagged_ret,
-            body
-        );
-        tagged_var
     }
 }

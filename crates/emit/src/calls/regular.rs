@@ -151,6 +151,9 @@ impl Emitter<'_> {
                 );
                 (Self::is_go_receiver(expression), is_prelude)
             }
+            Expression::Identifier {
+                qualified: Some(q), ..
+            } if q.starts_with("prelude.") => (false, true),
             _ => (false, false),
         };
 
@@ -350,6 +353,12 @@ impl Emitter<'_> {
                 this.emit_composite_value(output, arg)
             })
         });
+        if suppress
+            && let Some(tagged) =
+                self.try_lower_arg_to_tagged(output, arg, &value, effective_param_ty)
+        {
+            return tagged;
+        }
         match effective_param_ty {
             Some(target) => {
                 let coercion =
@@ -406,7 +415,12 @@ impl Emitter<'_> {
         }
 
         let value = self.emit_value(output, arg);
-        Some(self.emit_lisette_callback_wrapper(output, &value, &param_fn_ty))
+        Some(crate::types::abi_transition::emit_lisette_callback_wrapper(
+            self,
+            output,
+            &value,
+            &param_fn_ty,
+        ))
     }
 
     /// Bridge a Lisette `Option<T>` argument to Go's nil-accepting form: `*T`

@@ -379,7 +379,11 @@ impl Emitter<'_> {
             return;
         }
 
-        let (go_ret, body) = match self.emit_return_adapter(&inner_call, &method.return_type) {
+        let (go_ret, body) = match crate::types::abi_transition::emit_return_adapter(
+            self,
+            &inner_call,
+            &method.return_type,
+        ) {
             Some((ret, body)) => (ret, body),
             None => {
                 if method.return_type.is_unit() {
