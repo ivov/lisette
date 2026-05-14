@@ -1,10 +1,11 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
+use crate::expressions::emission::EmittedExpression;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
 use crate::types::coercion::{Coercion, CoercionDirection};
-use crate::utils::{Staged, mask_go_string_literals};
+use crate::utils::mask_go_string_literals;
 use syntax::ast::{Annotation, Expression, UnaryOperator};
 use syntax::types::Type;
 
@@ -111,7 +112,8 @@ impl Emitter<'_> {
         spread: Option<&Expression>,
     ) -> String {
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
-            let stages: Vec<Staged> = args.iter().map(|a| self.stage_operand(a)).collect();
+            let stages: Vec<EmittedExpression> =
+                args.iter().map(|a| self.stage_operand(a)).collect();
             let wrap_to_any = Self::spread_needs_any_wrap(function, spread);
             let combine = Self::variadic_combine_for(function, spread, 0);
             let args_strings =
@@ -119,10 +121,7 @@ impl Emitter<'_> {
             return format!("{}({})", go_name, args_strings.join(", "));
         }
 
-        let saved = self.emitting_call_callee;
-        self.emitting_call_callee = true;
-        let mut function_string = self.emit_operand(output, function);
-        self.emitting_call_callee = saved;
+        let mut function_string = self.with_call_callee(|this| this.emit_operand(output, function));
 
         if matches!(
             function,
@@ -255,13 +254,13 @@ impl Emitter<'_> {
         args: &[Expression],
         ctx: &CallArgsContext<'_>,
     ) -> Vec<String> {
-        let stages: Vec<Staged> = args
+        let stages: Vec<EmittedExpression> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| {
                 let mut setup = String::new();
                 let value = self.emit_call_arg(&mut setup, arg, i, ctx);
-                Staged::new(setup, value, arg)
+                EmittedExpression::new(setup, value, arg)
             })
             .collect();
         self.sequence_with_spread(
@@ -346,11 +345,11 @@ impl Emitter<'_> {
         let suppress = ctx.is_prelude_dispatch
             && unwrapped_param_ty.is_some_and(|p| matches!(p, Type::Function { .. }));
         let flows_to_unknown = unwrapped_param_ty.is_some_and(|p| p.resolves_to_unknown());
-        let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
-        let saved_flows = std::mem::replace(&mut self.arg_flows_to_unknown, flows_to_unknown);
-        let value = self.emit_composite_value(output, arg);
-        self.suppress_go_fn_short_circuit = saved;
-        self.arg_flows_to_unknown = saved_flows;
+        let value = self.with_go_fn_short_circuit_suppressed(suppress, |this| {
+            this.with_arg_flows_to_unknown(flows_to_unknown, |this| {
+                this.emit_composite_value(output, arg)
+            })
+        });
         match effective_param_ty {
             Some(target) => {
                 let coercion =

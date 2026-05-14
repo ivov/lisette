@@ -3,9 +3,10 @@ use crate::control_flow::fallible::{
     ConstructorKind, Fallible, FallibleEmitter, OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG,
     RESULT_OK_TAG,
 };
+use crate::expressions::emission::EmittedExpression;
 use crate::types::abi::AbiShape;
 use crate::types::emitter::Destination;
-use crate::utils::{Staged, inline_trivial_bindings, optimize_region};
+use crate::utils::{inline_trivial_bindings, optimize_region};
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -29,7 +30,8 @@ impl Emitter<'_> {
             // this point that references it doesn't produce "undefined" in Go.
             if var_name != "_" {
                 let inner_ty = fallible.ok_ty();
-                let zero = self.zero_value(inner_ty);
+                let (zero, effects) = self.zero_value(inner_ty);
+                self.apply_effects(&effects);
                 if self.is_declared(var_name) {
                     write_line!(output, "{} = {}", var_name, zero);
                 } else {
@@ -318,7 +320,7 @@ impl Emitter<'_> {
                 .cloned()
                 .expect("lowered abi requires a return context");
             let slot_tys = crate::types::abi::tuple_element_types(&self.peel_alias(&return_ty));
-            let stages: Vec<Staged> = elements
+            let stages: Vec<EmittedExpression> = elements
                 .iter()
                 .enumerate()
                 .map(|(i, e)| {
@@ -329,7 +331,7 @@ impl Emitter<'_> {
                         }
                         _ => self.emit_composite_value(&mut setup, e),
                     };
-                    Staged::new(setup, value, e)
+                    EmittedExpression::new(setup, value, e)
                 })
                 .collect();
             let parts = self.sequence(output, stages, "_ret");
@@ -888,7 +890,8 @@ impl Emitter<'_> {
     }
 
     fn emit_try_unit_return(&mut self, output: &mut String, fallible: &Fallible) {
-        let unit_val = self.zero_value(fallible.ok_ty());
+        let (unit_val, effects) = self.zero_value(fallible.ok_ty());
+        self.apply_effects(&effects);
         self.emit_try_success_return(output, &unit_val, fallible);
     }
 
@@ -983,7 +986,8 @@ impl Emitter<'_> {
         fallible: &Fallible,
     ) {
         let Some((last, rest)) = items.split_last() else {
-            let zero = self.zero_value(fallible.ok_ty());
+            let (zero, effects) = self.zero_value(fallible.ok_ty());
+            self.apply_effects(&effects);
             write_line!(output, "return {}", zero);
             return;
         };
@@ -1004,7 +1008,8 @@ impl Emitter<'_> {
         }
         if item_ty.is_unit() || item_ty.is_variable() {
             self.emit_statement(output, last);
-            let zero = self.zero_value(fallible.ok_ty());
+            let (zero, effects) = self.zero_value(fallible.ok_ty());
+            self.apply_effects(&effects);
             write_line!(output, "return {}", zero);
             return;
         }

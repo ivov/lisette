@@ -6,9 +6,10 @@ use syntax::types::{CompoundKind, SimpleKind, Type, unqualified_name};
 
 use crate::Emitter;
 use crate::definitions::enum_layout;
+use crate::expressions::emission::EmittedExpression;
 use crate::go_name;
 use crate::types::coercion::{Coercion, CoercionDirection};
-use crate::utils::{Staged, observable_after_mutation};
+use crate::utils::observable_after_mutation;
 use crate::write_line;
 
 /// Context for emitting a struct literal or enum variant construction.
@@ -55,7 +56,7 @@ impl Emitter<'_> {
         });
 
         let is_go_struct = Self::is_go_imported_type(ty);
-        let stages: Vec<Staged> = field_assignments
+        let stages: Vec<EmittedExpression> = field_assignments
             .iter()
             .map(|f| self.stage_composite(&f.value))
             .collect();

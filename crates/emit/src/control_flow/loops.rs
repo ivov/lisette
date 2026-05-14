@@ -180,12 +180,12 @@ impl Emitter<'_> {
             let key_guard = DiscardGuard::new(output, &key_var);
             let value_guard = DiscardGuard::new(output, &value_var);
             let key_info = decision_tree::collect_pattern_info(self, first, None, first_ty);
-            self.apply_pattern_effects(&key_info.effects);
+            self.apply_effects(&key_info.effects);
             let effective_key =
                 decision_tree::apply_root_assertion(self, output, &key_info, &key_var);
             decision_tree::emit_tree_bindings(self, output, &key_info.bindings, &effective_key);
             let value_info = decision_tree::collect_pattern_info(self, second, None, second_ty);
-            self.apply_pattern_effects(&value_info.effects);
+            self.apply_effects(&value_info.effects);
             let effective_value =
                 decision_tree::apply_root_assertion(self, output, &value_info, &value_var);
             decision_tree::emit_tree_bindings(self, output, &value_info.bindings, &effective_value);
@@ -234,7 +234,7 @@ impl Emitter<'_> {
             binding.typed_pattern.as_ref(),
             &binding.ty,
         );
-        self.apply_pattern_effects(&info.effects);
+        self.apply_effects(&info.effects);
         if info.bindings.is_empty() {
             write_line!(output, "for range {} {{", iter_expression);
             self.emit_block(output, body);

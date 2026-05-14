@@ -239,28 +239,9 @@ impl PatternInfo {
 }
 
 /// Side effects (stdlib gate + Go imports) accumulated while walking a
-/// pattern.
-#[derive(Debug, Clone, Default)]
-pub(crate) struct PatternEffects {
-    pub needs_stdlib: bool,
-    pub go_imports: Vec<String>,
-}
-
-impl PatternEffects {
-    pub(crate) fn merge_from_go_type(&mut self, go_type: &crate::types::go_type::GoType) {
-        if go_type.needs_stdlib {
-            self.needs_stdlib = true;
-        }
-        self.go_imports.extend(go_type.go_imports.iter().cloned());
-    }
-
-    pub(crate) fn extend(&mut self, other: &PatternEffects) {
-        if other.needs_stdlib {
-            self.needs_stdlib = true;
-        }
-        self.go_imports.extend(other.go_imports.iter().cloned());
-    }
-}
+/// pattern. Alias for the crate-wide `EmitEffects` so analysis helpers
+/// outside `patterns/` can produce the same shape.
+pub(crate) type PatternEffects = crate::EmitEffects;
 
 /// Result of compiling a list of expanded arms into a `Decision`.
 pub(crate) struct CompiledDecision {

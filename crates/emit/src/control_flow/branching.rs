@@ -1,10 +1,11 @@
 use crate::Emitter;
+use crate::expressions::emission::EmittedExpression;
 use crate::names::go_name;
 use crate::patterns::decision_tree;
 use crate::patterns::decision_tree::compose_refutable_condition;
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::emitter::Destination;
-use crate::utils::{Staged, output_ends_with_diverge};
+use crate::utils::output_ends_with_diverge;
 use crate::write_line;
 use syntax::ast::{Expression, Pattern, TypedPattern};
 
@@ -171,7 +172,7 @@ impl Emitter<'_> {
                 .map(|alt| decision_tree::collect_pattern_info(self, alt, None, &scrutinee_ty))
                 .collect();
             for info in &alternatives {
-                self.apply_pattern_effects(&info.effects);
+                self.apply_effects(&info.effects);
             }
 
             let unused_names: rustc_hash::FxHashSet<String> = alternatives
@@ -211,7 +212,7 @@ impl Emitter<'_> {
         }
 
         let info = decision_tree::collect_pattern_info(self, pattern, typed_pattern, &scrutinee_ty);
-        self.apply_pattern_effects(&info.effects);
+        self.apply_effects(&info.effects);
         let (effective, ok_var) =
             decision_tree::apply_refutable_root_assertion(self, output, &info, &subject_var);
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
@@ -567,7 +568,7 @@ impl Emitter<'_> {
         spread: Option<&Expression>,
         is_extend: bool,
     ) -> String {
-        let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
+        let stages: Vec<EmittedExpression> = args.iter().map(|a| self.stage_composite(a)).collect();
         let combine = Self::variadic_combine_for(function, spread, 0);
         let emitted_args =
             self.sequence_with_spread(output, stages, spread, false, "_arg", combine);

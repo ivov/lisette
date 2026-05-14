@@ -4065,3 +4065,47 @@ fn test() -> int {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn emitted_expr_call_before_setup_arg_capture() {
+    let input = r#"
+fn side() -> int { 1 }
+
+fn get_y() -> Result<int, error> { Ok(2) }
+
+fn add(_a: int, _b: int) -> int { 0 }
+
+fn run() -> Result<int, error> {
+  Ok(add(side(), get_y()?))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn emitted_expr_literal_args_skip_capture() {
+    let input = r#"
+fn add3(_a: int, _b: int, _c: int) -> int { 0 }
+
+fn run() -> int {
+  add3(1, 2, 3)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn emitted_expr_call_after_setup_arg_no_capture() {
+    let input = r#"
+fn side() -> int { 1 }
+
+fn get_x() -> Result<int, error> { Ok(2) }
+
+fn add(_a: int, _b: int) -> int { 0 }
+
+fn run() -> Result<int, error> {
+  Ok(add(get_x()?, side()))
+}
+"#;
+    assert_emit_snapshot!(input);
+}

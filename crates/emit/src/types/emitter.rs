@@ -42,6 +42,51 @@ pub(crate) struct EmitFlags {
     pub(crate) needs_maps: bool,
 }
 
+/// Pure-analysis effects: stdlib gates and Go imports accumulated while a
+/// `&Emitter` helper computes a result, applied later at the renderer
+/// boundary via `Emitter::apply_effects`.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct EmitEffects {
+    pub needs_stdlib: bool,
+    pub needs_fmt: bool,
+    pub needs_errors: bool,
+    pub needs_slices: bool,
+    pub needs_strings: bool,
+    pub needs_maps: bool,
+    pub go_imports: Vec<String>,
+}
+
+impl EmitEffects {
+    pub(crate) fn merge_from_go_type(&mut self, go_type: &crate::types::go_type::GoType) {
+        if go_type.needs_stdlib {
+            self.needs_stdlib = true;
+        }
+        self.go_imports.extend(go_type.go_imports.iter().cloned());
+    }
+
+    pub(crate) fn extend(&mut self, other: &EmitEffects) {
+        if other.needs_stdlib {
+            self.needs_stdlib = true;
+        }
+        if other.needs_fmt {
+            self.needs_fmt = true;
+        }
+        if other.needs_errors {
+            self.needs_errors = true;
+        }
+        if other.needs_slices {
+            self.needs_slices = true;
+        }
+        if other.needs_strings {
+            self.needs_strings = true;
+        }
+        if other.needs_maps {
+            self.needs_maps = true;
+        }
+        self.go_imports.extend(other.go_imports.iter().cloned());
+    }
+}
+
 /// Where the current expression's value goes.
 #[derive(Clone, Debug)]
 pub(crate) enum Destination {

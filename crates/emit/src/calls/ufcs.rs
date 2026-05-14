@@ -1,10 +1,10 @@
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::Emitter;
+use crate::expressions::emission::EmittedExpression;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
-use crate::utils::Staged;
 use syntax::ast::{Annotation, Expression, Literal};
 use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
@@ -105,7 +105,7 @@ impl Emitter<'_> {
             Type::Function { params, .. } => params.clone(),
             _ => Vec::new(),
         };
-        let mut all_stages: Vec<Staged> =
+        let mut all_stages: Vec<EmittedExpression> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
         all_stages.push(self.stage_operand(receiver));
         for (i, arg) in args.iter().enumerate() {
@@ -184,7 +184,7 @@ impl Emitter<'_> {
             go_name::escape_keyword(method).into_owned()
         };
 
-        let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
+        let stages: Vec<EmittedExpression> = args.iter().map(|a| self.stage_composite(a)).collect();
 
         let combine = Self::variadic_combine_for(function, spread, 0);
         let emitted_all = self.sequence_with_spread(output, stages, spread, false, "_arg", combine);

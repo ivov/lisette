@@ -3,10 +3,10 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use super::NativeCallContext;
 use crate::Emitter;
+use crate::expressions::emission::EmittedExpression;
 use crate::names::go_name;
 use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::types::native::NativeGoType;
-use crate::utils::Staged;
 use syntax::ast::{Annotation, Expression, StructKind};
 use syntax::program::{CallKind, Definition, DefinitionBody};
 use syntax::types::{
@@ -485,7 +485,7 @@ impl Emitter<'_> {
         };
 
         let go_ty = self.go_type_as_string(&return_ty);
-        let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
+        let stages: Vec<EmittedExpression> = args.iter().map(|a| self.stage_composite(a)).collect();
         let values = self.sequence(output, stages, "_arg");
 
         let field_pairs: Vec<(String, String)> = field_tys

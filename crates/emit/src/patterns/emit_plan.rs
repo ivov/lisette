@@ -98,10 +98,7 @@ pub(crate) struct EmitCase {
     pub decision: Box<EmitDecision>,
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct MatchPlanEffects {
-    pub needs_stdlib: bool,
-}
+pub(crate) type MatchPlanEffects = crate::EmitEffects;
 
 #[derive(Debug)]
 pub(crate) struct LoweredMatch {

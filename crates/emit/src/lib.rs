@@ -20,7 +20,7 @@ pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
 pub(crate) use types::emitter::{
-    ArmRouting, Destination, EmitFlags, LineIndex, LoopContext, ReturnMode,
+    ArmRouting, Destination, EmitEffects, EmitFlags, LineIndex, LoopContext, ReturnMode,
 };
 pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
@@ -472,11 +472,7 @@ impl<'a> Emitter<'a> {
         output: &mut String,
         expression: &syntax::ast::Expression,
     ) -> String {
-        let prev = self.in_condition;
-        self.in_condition = true;
-        let result = self.emit_operand(output, expression);
-        self.in_condition = prev;
-        result
+        self.with_condition(|this| this.emit_operand(output, expression))
     }
 
     pub(crate) fn push_loop(&mut self, result_var: impl Into<String>) {
@@ -511,6 +507,70 @@ impl<'a> Emitter<'a> {
         let saved = std::mem::replace(&mut self.destination, destination);
         let result = f(self);
         self.destination = saved;
+        result
+    }
+
+    pub(crate) fn with_call_callee<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = std::mem::replace(&mut self.emitting_call_callee, true);
+        let result = f(self);
+        self.emitting_call_callee = saved;
+        result
+    }
+
+    pub(crate) fn with_condition<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = std::mem::replace(&mut self.in_condition, true);
+        let result = f(self);
+        self.in_condition = saved;
+        result
+    }
+
+    pub(crate) fn with_expected_slot_type<F, R>(
+        &mut self,
+        ty: Option<syntax::types::Type>,
+        f: F,
+    ) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = std::mem::replace(&mut self.current_slot_expected_ty, ty);
+        let result = f(self);
+        self.current_slot_expected_ty = saved;
+        result
+    }
+
+    pub(crate) fn with_go_fn_short_circuit_suppressed<F, R>(&mut self, suppress: bool, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
+        let result = f(self);
+        self.suppress_go_fn_short_circuit = saved;
+        result
+    }
+
+    pub(crate) fn with_array_return_wrap_skipped<F, R>(&mut self, skip: bool, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = std::mem::replace(&mut self.skip_array_return_wrap, skip);
+        let result = f(self);
+        self.skip_array_return_wrap = saved;
+        result
+    }
+
+    pub(crate) fn with_arg_flows_to_unknown<F, R>(&mut self, flows: bool, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = std::mem::replace(&mut self.arg_flows_to_unknown, flows);
+        let result = f(self);
+        self.arg_flows_to_unknown = saved;
         result
     }
 
@@ -603,12 +663,24 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub(crate) fn apply_pattern_effects(
-        &mut self,
-        effects: &crate::patterns::decision_tree::PatternEffects,
-    ) {
+    pub(crate) fn apply_effects(&mut self, effects: &EmitEffects) {
         if effects.needs_stdlib {
             self.flags.needs_stdlib = true;
+        }
+        if effects.needs_fmt {
+            self.flags.needs_fmt = true;
+        }
+        if effects.needs_errors {
+            self.flags.needs_errors = true;
+        }
+        if effects.needs_slices {
+            self.flags.needs_slices = true;
+        }
+        if effects.needs_strings {
+            self.flags.needs_strings = true;
+        }
+        if effects.needs_maps {
+            self.flags.needs_maps = true;
         }
         for go_import in &effects.go_imports {
             self.ensure_imported.insert(go_import.clone());

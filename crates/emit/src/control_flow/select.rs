@@ -277,7 +277,7 @@ impl Emitter<'_> {
         let guard = DiscardGuard::new(output, receiver_var);
         if let Some((pattern, typed)) = inner_pattern {
             let info = decision_tree::collect_pattern_info(self, pattern, typed, &ctx.element_ty);
-            self.apply_pattern_effects(&info.effects);
+            self.apply_effects(&info.effects);
             let (effective, ok_var) =
                 decision_tree::apply_refutable_root_assertion(self, output, &info, receiver_var);
             if info.checks.is_empty() && ok_var.is_none() {
@@ -544,7 +544,7 @@ impl Emitter<'_> {
                 inner_typed,
                 element_ty,
             );
-            this.apply_pattern_effects(&info.effects);
+            this.apply_effects(&info.effects);
             let (effective, ok_var) =
                 decision_tree::apply_refutable_root_assertion(this, output, &info, case_var);
             if info.checks.is_empty() && ok_var.is_none() {

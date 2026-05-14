@@ -195,9 +195,9 @@ impl Emitter<'_> {
             return None;
         }
 
-        self.skip_array_return_wrap = has_array_return;
-        let call_str = self.emit_call(output, call_expression, None);
-        self.skip_array_return_wrap = false;
+        let call_str = self.with_array_return_wrap_skipped(has_array_return, |this| {
+            this.emit_call(output, call_expression, None)
+        });
 
         Some(call_str)
     }

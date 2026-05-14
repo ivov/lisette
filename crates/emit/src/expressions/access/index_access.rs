@@ -2,7 +2,7 @@ use syntax::ast::{Expression, UnaryOperator};
 use syntax::types::peel_to_range_type;
 
 use crate::Emitter;
-use crate::utils::Staged;
+use crate::expressions::emission::EmittedExpression;
 
 impl Emitter<'_> {
     pub(crate) fn emit_index_access(
@@ -46,7 +46,7 @@ impl Emitter<'_> {
 
     /// Stage an indexable base expression, unwrapping an explicit deref into
     /// a parenthesized `(*x)` form while preserving evaluation-order setup.
-    fn stage_base_with_deref(&mut self, expression: &Expression) -> Staged {
+    fn stage_base_with_deref(&mut self, expression: &Expression) -> EmittedExpression {
         let Expression::Unary {
             operator: UnaryOperator::Deref,
             expression: inner,
@@ -56,10 +56,10 @@ impl Emitter<'_> {
             return self.stage_operand(expression);
         };
         let s = self.stage_operand(inner);
-        Staged {
+        EmittedExpression {
             value: format!("(*{})", s.value),
             setup: s.setup,
-            needs_capture: s.needs_capture,
+            capture: s.capture,
         }
     }
 

@@ -3,10 +3,10 @@ use rustc_hash::FxHashSet as HashSet;
 use syntax::program::DefinitionBody;
 
 use crate::Emitter;
+use crate::expressions::emission::EmittedExpression;
 use crate::is_order_sensitive;
 use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::types::emitter::Destination;
-use crate::utils::Staged;
 use crate::write_line;
 use syntax::ast::{Expression, Visibility};
 use syntax::program::CallKind;
@@ -378,17 +378,13 @@ impl Emitter<'_> {
         };
         let slot_types = self.resolve_tuple_slot_types(inferred_slot_types);
 
-        let stages: Vec<Staged> = elements
+        let stages: Vec<EmittedExpression> = elements
             .iter()
             .enumerate()
             .map(|(i, e)| {
-                let prev = std::mem::replace(
-                    &mut self.current_slot_expected_ty,
-                    slot_types.get(i).cloned(),
-                );
-                let staged = self.stage_composite(e);
-                self.current_slot_expected_ty = prev;
-                staged
+                self.with_expected_slot_type(slot_types.get(i).cloned(), |this| {
+                    this.stage_composite(e)
+                })
             })
             .collect();
         let elem_expressions = self.sequence(output, stages, "_v");
@@ -563,7 +559,7 @@ impl Emitter<'_> {
     ) -> String {
         let type_string = self.go_type_as_string(ty);
 
-        let mut stages: Vec<Staged> = Vec::new();
+        let mut stages: Vec<EmittedExpression> = Vec::new();
         let has_start = start.is_some();
         if let Some(s) = start {
             stages.push(self.stage_operand(s));

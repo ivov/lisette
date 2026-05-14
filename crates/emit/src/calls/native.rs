@@ -1,9 +1,9 @@
 use super::NativeCallContext;
 use crate::Emitter;
 use crate::expressions::access::index_access::range_var_bounds;
+use crate::expressions::emission::EmittedExpression;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
-use crate::utils::Staged;
 use syntax::ast::Expression;
 use syntax::types::peel_to_range_type;
 
@@ -263,7 +263,7 @@ impl Emitter<'_> {
             return self.emit_string_substring(output, expression, ctx.args);
         }
 
-        let mut all_stages: Vec<Staged> =
+        let mut all_stages: Vec<EmittedExpression> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
         all_stages.push(self.stage_operand(expression));
         all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args));

@@ -368,14 +368,16 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn zero_value(&self, ty: &Type) -> String {
+    pub(crate) fn zero_value(&self, ty: &Type) -> (String, crate::EmitEffects) {
+        let mut effects = crate::EmitEffects::default();
         if self.as_interface(ty).is_some() {
-            return "nil".to_string();
+            return ("nil".to_string(), effects);
         }
 
         let go_ty = self.go_type(ty);
+        effects.merge_from_go_type(&go_ty);
 
-        match go_ty.code.as_str() {
+        let value = match go_ty.code.as_str() {
             "int" | "int8" | "int16" | "int32" | "int64" | "uint" | "uint8" | "uint16"
             | "uint32" | "uint64" | "uintptr" | "byte" | "rune" => "0".to_string(),
             "float32" | "float64" => "0.0".to_string(),
@@ -393,7 +395,8 @@ impl Emitter<'_> {
                 "nil".to_string()
             }
             _ => format!("*new({})", go_ty.code),
-        }
+        };
+        (value, effects)
     }
 
     pub(crate) fn annotation_to_go_type(&mut self, annotation: &Annotation) -> String {

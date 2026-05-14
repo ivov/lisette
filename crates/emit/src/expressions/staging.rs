@@ -1,6 +1,7 @@
 use crate::Emitter;
+use crate::expressions::emission::{CapturePolicy, EmittedExpression};
 use crate::names::go_name;
-use crate::utils::{Staged, observable_after_mutation};
+use crate::utils::observable_after_mutation;
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -9,12 +10,16 @@ use syntax::types::Type;
 #[derive(Clone)]
 pub(crate) struct VariadicCombine {
     pub elem_ty: Type,
-    /// Staged-value index where variadic-feeding args begin.
+    /// EmittedExpr-value index where variadic-feeding args begin.
     pub fixed_count: usize,
 }
 
 impl Emitter<'_> {
-    pub(crate) fn stage_or_capture(&mut self, expression: &Expression, prefix: &str) -> Staged {
+    pub(crate) fn stage_or_capture(
+        &mut self,
+        expression: &Expression,
+        prefix: &str,
+    ) -> EmittedExpression {
         if matches!(
             expression,
             Expression::Literal { .. } | Expression::Identifier { .. }
@@ -25,7 +30,7 @@ impl Emitter<'_> {
         let mut setup = String::new();
         let value_expr = self.emit_operand(&mut setup, expression);
         let temp_var = self.hoist_tmp_value(&mut setup, prefix, &value_expr);
-        Staged::new(setup, temp_var, expression)
+        EmittedExpression::new(setup, temp_var, expression)
     }
 
     pub(crate) fn emit_force_capture(
@@ -46,17 +51,17 @@ impl Emitter<'_> {
     }
 
     /// Emit an expression to a separate buffer, capturing setup and value.
-    pub(crate) fn stage_operand(&mut self, expression: &Expression) -> Staged {
+    pub(crate) fn stage_operand(&mut self, expression: &Expression) -> EmittedExpression {
         let mut setup = String::new();
         let value = self.emit_operand(&mut setup, expression);
-        Staged::new(setup, value, expression)
+        EmittedExpression::new(setup, value, expression)
     }
 
     /// Emit an expression as a composite value to a separate buffer.
-    pub(crate) fn stage_composite(&mut self, expression: &Expression) -> Staged {
+    pub(crate) fn stage_composite(&mut self, expression: &Expression) -> EmittedExpression {
         let mut setup = String::new();
         let value = self.emit_composite_value(&mut setup, expression);
-        Staged::new(setup, value, expression)
+        EmittedExpression::new(setup, value, expression)
     }
 
     /// Suppresses the Go-fn identity short-circuit when the formal param
@@ -65,12 +70,11 @@ impl Emitter<'_> {
         &mut self,
         expression: &Expression,
         param_ty: Option<&syntax::types::Type>,
-    ) -> Staged {
+    ) -> EmittedExpression {
         let suppress = param_ty
             .is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function { .. }));
-        let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
-        let staged = self.stage_composite(expression);
-        self.suppress_go_fn_short_circuit = saved;
+        let staged = self
+            .with_go_fn_short_circuit_suppressed(suppress, |this| this.stage_composite(expression));
 
         if suppress
             && !matches!(expression.unwrap_parens(), Expression::Lambda { .. })
@@ -83,7 +87,7 @@ impl Emitter<'_> {
             let mut setup = staged.setup;
             let cb_var = self.hoist_tmp_value(&mut setup, "cb", &staged.value);
             let tagged = self.lower_arg_to_tagged(&mut setup, &cb_var, param_ty);
-            return Staged::new(setup, tagged, expression);
+            return EmittedExpression::new(setup, tagged, expression);
         }
 
         staged
@@ -93,7 +97,7 @@ impl Emitter<'_> {
         &mut self,
         function: &Expression,
         args: &[Expression],
-    ) -> Vec<Staged> {
+    ) -> Vec<EmittedExpression> {
         let fn_ty = function.get_type();
         let formal_params: &[syntax::types::Type] = match fn_ty.unwrap_forall() {
             syntax::types::Type::Function { params, .. } => params,
@@ -113,7 +117,7 @@ impl Emitter<'_> {
     pub(crate) fn sequence_with_spread(
         &mut self,
         output: &mut String,
-        mut stages: Vec<Staged>,
+        mut stages: Vec<EmittedExpression>,
         spread: Option<&Expression>,
         wrap_to_any: bool,
         prefix: &str,
@@ -152,7 +156,7 @@ impl Emitter<'_> {
     pub(crate) fn sequence(
         &mut self,
         output: &mut String,
-        stages: Vec<Staged>,
+        stages: Vec<EmittedExpression>,
         prefix: &str,
     ) -> Vec<String> {
         // Fast path: when no element produces setup, just move the values out.
@@ -166,7 +170,7 @@ impl Emitter<'_> {
 
             output.push_str(&s.setup);
 
-            if later_has_setup && s.needs_capture {
+            if later_has_setup && matches!(s.capture, CapturePolicy::IfLaterSetup) {
                 let tmp = self.hoist_tmp_value(output, prefix, &s.value);
                 results.push(tmp);
             } else {

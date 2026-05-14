@@ -177,7 +177,7 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
-            let err_ty = self.emitter.go_type(
+            let err_ty = self.emitter.go_type_as_string(
                 self.fallible
                     .err_ty()
                     .expect("Result type must have an error type"),
@@ -245,11 +245,9 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
         let inner_ty = self.ok_type_string();
         let arg_str = arg.unwrap_or("");
         if self.fallible.is_result() {
-            let err_ty = self.emitter.go_type(
-                self.fallible
-                    .err_ty()
-                    .expect("Result type must have an error type"),
-            );
+            let err_ty = self
+                .err_type_string()
+                .expect("Result type must have an error type");
             format!("{}[{}, {}]({})", constructor, inner_ty, err_ty, arg_str)
         } else {
             format!("{}[{}]({})", constructor, inner_ty, arg_str)

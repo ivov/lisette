@@ -97,7 +97,8 @@ impl Emitter<'_> {
             && self.return_mode.ty().is_some_and(|ty| !ty.is_unit())
         {
             let return_ty = self.return_mode.ty().cloned().unwrap();
-            let zero = self.zero_value(&return_ty);
+            let (zero, effects) = self.zero_value(&return_ty);
+            self.apply_effects(&effects);
             write_line!(output, "return {}", zero);
         }
     }
