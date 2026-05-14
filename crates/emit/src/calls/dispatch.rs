@@ -315,7 +315,7 @@ impl Emitter<'_> {
                 expression, member, ..
             } => {
                 if let Expression::Identifier { value, .. } = expression.as_ref() {
-                    let module_name = self.resolve_alias_to_module(value);
+                    let module_name = self.module.module_for_alias(value).unwrap_or(value);
                     let qualified = format!("{}.{}", module_name, member);
                     // Try as Type.method in current module (e.g. Box.make → main.Box.make)
                     let local = format!("{}.{}.{}", self.current_module, value, member);
@@ -330,7 +330,10 @@ impl Emitter<'_> {
                         value: module_name, ..
                     } = inner_expression.as_ref()
                 {
-                    let module_name = self.resolve_alias_to_module(module_name);
+                    let module_name = self
+                        .module
+                        .module_for_alias(module_name)
+                        .unwrap_or(module_name);
                     let qualified = format!("{}.{}.{}", module_name, type_name, member);
                     return self.lookup_definition_type(&qualified, None);
                 }
@@ -348,7 +351,7 @@ impl Emitter<'_> {
             return HashSet::default();
         };
 
-        let Some(layout) = self.module.enum_layouts.get(&enum_id) else {
+        let Some(layout) = self.module.enum_layout(&enum_id) else {
             return HashSet::default();
         };
 
@@ -388,7 +391,7 @@ impl Emitter<'_> {
                     for key in self.globals.make_function_names.keys() {
                         if let Some((e_name, v_name)) = key.split_once('.')
                             && e_name == enum_name
-                            && let Some(layout) = self.module.enum_layouts.get(&enum_id)
+                            && let Some(layout) = self.module.enum_layout(&enum_id)
                             && let Some(v) = layout.get_variant(v_name)
                             && v.fields.len() == params.len()
                         {

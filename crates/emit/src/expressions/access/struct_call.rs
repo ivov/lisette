@@ -364,7 +364,7 @@ impl Emitter<'_> {
         // Use resolve_variant for correct tag constant — handles cross-module
         let tag_constant = self.resolve_variant(name, enum_id);
 
-        let pointer_fields = if let Some(layout) = self.module.enum_layouts.get(enum_id) {
+        let pointer_fields = if let Some(layout) = self.module.enum_layout(enum_id) {
             if let Some(variant) = layout.get_variant(&variant_name) {
                 variant
                     .fields
@@ -396,7 +396,11 @@ impl Emitter<'_> {
 
         let parts: Vec<&str> = name.split('.').collect();
         if parts.len() == 3 {
-            let module = self.resolve_alias_to_module(parts[0]).to_string();
+            let module = self
+                .module
+                .module_for_alias(parts[0])
+                .unwrap_or(parts[0])
+                .to_string();
             self.require_module_import(&module);
         }
     }

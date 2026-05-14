@@ -5,11 +5,10 @@ use crate::names::go_name;
 
 impl Emitter<'_> {
     pub(crate) fn resolve_go_name(&mut self, name: &str) -> String {
-        if !self.module.escape_remap.is_empty()
-            && !name.contains('.')
-            && let Some(remapped) = self.module.escape_remap.get(name)
+        if !name.contains('.')
+            && let Some(remapped) = self.module.escape_remap(name)
         {
-            return remapped.clone();
+            return remapped.to_string();
         }
 
         if let Some(go_call) = self.try_resolve_cross_module_static_method(name) {
@@ -86,14 +85,6 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn resolve_alias_to_module<'b>(&'b self, name: &'b str) -> &'b str {
-        self.module
-            .reverse_module_aliases
-            .get(name)
-            .map(|s| s.as_str())
-            .unwrap_or(name)
-    }
-
     pub(crate) fn require_module_import(&mut self, module: &str) -> String {
         self.requirements
             .require_go_import(format!("{}/{}", self.ctx.go_module, module));
@@ -101,8 +92,8 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn go_pkg_qualifier(&self, module: &str) -> String {
-        if let Some(alias) = self.module.module_aliases.get(module) {
-            return alias.clone();
+        if let Some(alias) = self.module.module_alias(module) {
+            return alias.to_string();
         }
         if let Some(pkg_name) = self.ctx.go_package_names.get(module) {
             return pkg_name.clone();

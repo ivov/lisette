@@ -217,12 +217,8 @@ impl Emitter<'_> {
             go_name::snake_to_camel(&function_definition.name)
         } else if receiver.is_some() {
             go_name::escape_keyword(&function_definition.name).into_owned()
-        } else if let Some(remapped) = self
-            .module
-            .escape_remap
-            .get(function_definition.name.as_str())
-        {
-            remapped.clone()
+        } else if let Some(remapped) = self.module.escape_remap(function_definition.name.as_str()) {
+            remapped.to_string()
         } else {
             go_name::escape_reserved(&function_definition.name).into_owned()
         };
@@ -252,51 +248,54 @@ impl Emitter<'_> {
             parts.push(generics_str);
         }
 
-        let saved_absorbed =
-            self.detect_absorbed_ref_generics(params_to_process, &function_definition.generics);
-
-        let (params_string, deferred_patterns) = self.emit_function_params(params_to_process);
-        parts.push(params_string);
-
-        let return_ty = if function_definition.return_type.is_unit() {
-            String::new()
-        } else if let Some(shape) = self.classify_direct_emission(&function_definition.return_type)
-        {
-            self.render_lowered_return_ty(&shape, &function_definition.return_type)
-        } else {
-            self.go_type_as_string(&function_definition.return_type)
-        };
-
-        if !return_ty.is_empty() {
-            parts.push(return_ty);
-        }
-
-        let signature = parts.join(" ");
-
         let mut body = String::new();
+        let signature = self.with_absorbed_ref_generics(
+            params_to_process,
+            &function_definition.generics,
+            |this| {
+                let (params_string, deferred_patterns) =
+                    this.emit_function_params(params_to_process);
+                parts.push(params_string);
 
-        let should_return = !function_definition.return_type.is_unit();
-        self.with_scope_return_context_fallback(return_ctx.clone(), |this| {
-            for (var_name, pattern, typed, param_ty) in deferred_patterns {
-                this.emit_irrefutable_pattern_site(
-                    &mut body,
-                    crate::patterns::sites::PatternSubject::for_value(var_name),
-                    &pattern,
-                    typed.as_ref(),
-                    &param_ty,
-                );
-            }
+                let return_ty = if function_definition.return_type.is_unit() {
+                    String::new()
+                } else if let Some(shape) =
+                    this.classify_direct_emission(&function_definition.return_type)
+                {
+                    this.render_lowered_return_ty(&shape, &function_definition.return_type)
+                } else {
+                    this.go_type_as_string(&function_definition.return_type)
+                };
 
-            this.emit_function_body(
-                &mut body,
-                &function_definition.body,
-                should_return,
-                &return_ctx,
-            );
-        });
+                if !return_ty.is_empty() {
+                    parts.push(return_ty);
+                }
+
+                let signature = parts.join(" ");
+                let should_return = !function_definition.return_type.is_unit();
+
+                this.with_scope_return_context_fallback(return_ctx.clone(), |this| {
+                    for (var_name, pattern, typed, param_ty) in deferred_patterns {
+                        this.emit_irrefutable_pattern_site(
+                            &mut body,
+                            crate::patterns::sites::PatternSubject::for_value(var_name),
+                            &pattern,
+                            typed.as_ref(),
+                            &param_ty,
+                        );
+                    }
+
+                    this.emit_function_body(
+                        &mut body,
+                        &function_definition.body,
+                        should_return,
+                        &return_ctx,
+                    );
+                });
+                signature
+            },
+        );
         optimize_function_body(&mut body);
-
-        self.module.absorbed_ref_generics = saved_absorbed;
 
         let trimmed_body = body.trim_end();
         if trimmed_body.is_empty() {
@@ -383,15 +382,16 @@ impl Emitter<'_> {
         (Some(receiver_var), Some(receiver_part))
     }
 
-    /// Detect Ref<T> parameters where T is a bounded generic and populate
-    /// absorbed_ref_generics. Returns the previous value for restoration.
-    fn detect_absorbed_ref_generics(
+    fn with_absorbed_ref_generics<F, R>(
         &mut self,
         params: &[Binding],
         generics: &[Generic],
-    ) -> HashSet<String> {
-        let saved = self.module.absorbed_ref_generics.clone();
-        self.module.absorbed_ref_generics.clear();
+        f: F,
+    ) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = std::mem::take(&mut self.function_state);
         let bounded_generics: HashSet<&str> = generics
             .iter()
             .filter(|g| !g.bounds.is_empty())
@@ -403,10 +403,13 @@ impl Emitter<'_> {
                 && let Type::Parameter(name) = &inner
                 && bounded_generics.contains(name.as_ref())
             {
-                self.module.absorbed_ref_generics.insert(name.to_string());
+                self.function_state
+                    .record_absorbed_ref_generic(name.to_string());
             }
         }
-        saved
+        let result = f(self);
+        self.function_state = saved;
+        result
     }
 
     fn emit_function_params(
@@ -442,7 +445,7 @@ impl Emitter<'_> {
                 if param.ty.is_ref()
                     && let Some(inner) = param.ty.inner()
                     && let Type::Parameter(name) = &inner
-                    && self.module.absorbed_ref_generics.contains(name.as_ref())
+                    && self.function_state.is_absorbed_ref_generic(name.as_ref())
                 {
                     inner
                 } else {

@@ -18,7 +18,7 @@ impl Emitter<'_> {
 
         let enum_id = format!("{}.{}", self.current_module, name);
 
-        if !self.module.enum_layouts.contains_key(&enum_id) {
+        if !self.module.has_enum_layout(&enum_id) {
             return None;
         }
 
@@ -47,7 +47,7 @@ impl Emitter<'_> {
 
         let stringer_name = self.stringer_method_name(name);
         let needs_fmt = stringer_name.is_some();
-        let layout = self.module.enum_layouts.get(&enum_id).unwrap();
+        let layout = self.module.enum_layout(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);
         if let Some(stringer_name) = stringer_name {
             result.push_str("\n\n");
@@ -74,8 +74,7 @@ impl Emitter<'_> {
     ) -> String {
         let layout = self
             .module
-            .enum_layouts
-            .get(enum_id)
+            .enum_layout(enum_id)
             .expect("enum layout should exist");
         let variant = layout
             .get_variant(variant_name)

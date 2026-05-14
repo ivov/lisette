@@ -42,11 +42,11 @@ pub(crate) fn receiver_generics_string(generics: &[Generic]) -> String {
 
 impl Emitter<'_> {
     pub(crate) fn merge_impl_bounds(&self, type_name: &str, generics: &[Generic]) -> Vec<Generic> {
-        let Some(impl_generics) = self.module.impl_bounds.get(type_name) else {
+        let Some(impl_generics) = self.module.impl_bounds(type_name) else {
             return generics.to_vec();
         };
 
-        if self.module.unconstrained_impl_receivers.contains(type_name) {
+        if self.module.has_unconstrained_impl_receiver(type_name) {
             return generics.to_vec();
         }
 

@@ -116,7 +116,7 @@ impl Emitter<'_> {
 
         if has_tags && !f.visibility.is_public() {
             let key = format!("{}.{}.{}", self.current_module, struct_name, f.name);
-            self.module.tag_exported_fields.insert(key);
+            self.module.record_tag_exported_field(key);
         }
 
         let field_definition = if let Some(tags) = tag_string {

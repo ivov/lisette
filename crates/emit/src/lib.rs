@@ -5,6 +5,7 @@ pub(crate) mod control_flow;
 pub(crate) mod definitions;
 pub(crate) mod expressions;
 pub mod imports;
+mod module_state;
 pub(crate) mod names;
 mod output;
 pub(crate) mod patterns;
@@ -36,7 +37,7 @@ use std::sync::Arc;
 
 use ecow::EcoString;
 use imports::ImportBuilder;
-use syntax::ast::{Generic, Span};
+use syntax::ast::Span;
 use syntax::program::{
     Definition, DefinitionBody, EmitInput, File, ModuleId, MutationInfo, UnusedInfo,
 };
@@ -236,42 +237,11 @@ struct EmitContext<'a> {
     line_indexes: Arc<HashMap<u32, LineIndex>>,
 }
 
-struct ModuleData {
-    enum_layouts: HashMap<String, EnumLayout>,
-    /// Fields that were exported due to serialization tags (e.g. `#[json]`).
-    /// Key is "TypeId.field_name". Checked during field access to match
-    /// the capitalization used in the struct definition.
-    tag_exported_fields: HashSet<String>,
-    /// Local complement to `GlobalEmitData::exported_method_names`.
-    exported_method_names: HashSet<String>,
-    /// Bounds from constrained impl blocks, keyed by receiver name.
-    /// Go requires type parameter constraints on the type definition itself,
-    /// so we pre-scan impl blocks and merge their bounds into struct generics.
-    impl_bounds: HashMap<String, Vec<Generic>>,
-    /// Types that have unconstrained impl blocks (impl<T> Type<T> with no bounds).
-    /// Used to detect when a type has both constrained and unconstrained impl blocks.
-    unconstrained_impl_receivers: HashSet<String>,
-    /// Maps module IDs to their import aliases (e.g., "lib" → "L", "models/user" → "user").
-    /// Used when emitting cross-module references to use the correct alias.
-    module_aliases: HashMap<String, String>,
-    /// Reverse of `module_aliases`: maps alias → module_id (e.g., "L" → "lib").
-    /// Used for O(1) lookup when resolving an alias back to a module name.
-    reverse_module_aliases: HashMap<String, String>,
-    /// Generic type parameters whose Ref has been absorbed into the Go type parameter.
-    /// When a function has `item: Ref<T>` where T has interface bounds, Go requires
-    /// T itself (not *T) to satisfy the interface. So we emit `item T` and let Go
-    /// infer T = *ConcreteType. Ref<T> for these params should emit as just T.
-    absorbed_ref_generics: HashSet<String>,
-    /// Lisette name → freshened Go name when `escape_reserved` would collide
-    /// with a sibling top-level definition (e.g. `fn len` and `fn len_` both
-    /// targeting `len_`). Consulted at definition and call sites.
-    escape_remap: HashMap<String, String>,
-}
-
 pub struct Emitter<'a> {
     ctx: EmitContext<'a>,
     globals: Arc<GlobalEmitData>,
-    module: ModuleData,
+    pub(crate) module: module_state::ModuleState,
+    pub(crate) function_state: module_state::FunctionEmissionState,
     pub(crate) scope: scope::ScopeState,
 
     current_module: ModuleId,
@@ -394,17 +364,8 @@ impl<'a> Emitter<'a> {
         Self {
             ctx,
             globals,
-            module: ModuleData {
-                enum_layouts: HashMap::default(),
-                tag_exported_fields: HashSet::default(),
-                exported_method_names: HashSet::default(),
-                impl_bounds: HashMap::default(),
-                unconstrained_impl_receivers: HashSet::default(),
-                module_aliases: HashMap::default(),
-                reverse_module_aliases: HashMap::default(),
-                absorbed_ref_generics: HashSet::default(),
-                escape_remap: HashMap::default(),
-            },
+            module: module_state::ModuleState::default(),
+            function_state: module_state::FunctionEmissionState::default(),
             scope: scope::ScopeState::new(),
             current_module: current_module.to_string(),
             synthesized_adapter_types: HashMap::default(),
@@ -525,7 +486,7 @@ impl<'a> Emitter<'a> {
     pub(crate) fn module_alias_for_type(&self, ty: &Type) -> Option<String> {
         if let Type::Nominal { id, .. } = ty {
             let module = names::go_name::module_of_type_id(id);
-            self.module.module_aliases.get(module).cloned()
+            self.module.module_alias(module).map(str::to_string)
         } else {
             None
         }

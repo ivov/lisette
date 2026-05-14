@@ -53,7 +53,7 @@ impl Emitter<'_> {
                     }
                     // Also export fields that have serialization tags (e.g. #[json])
                     let tag_key = format!("{}.{}", id, field_name);
-                    return self.module.tag_exported_fields.contains(&tag_key);
+                    return self.module.is_tag_exported_field(&tag_key);
                 }
                 let method_key = format!("{}.{}", id, field_name);
                 self.ctx
@@ -89,7 +89,7 @@ impl Emitter<'_> {
 
     pub(crate) fn method_needs_export(&self, method_name: &str) -> bool {
         self.globals.exported_method_names.contains(method_name)
-            || self.module.exported_method_names.contains(method_name)
+            || self.module.has_local_exported_method_name(method_name)
             || matches!(method_name, "string" | "goString" | "error")
     }
 
@@ -327,7 +327,7 @@ impl Emitter<'_> {
             let generics = self.merge_impl_bounds(enum_name, &generics);
 
             let layout = EnumLayout::new(&enum_id, &generics, &variants, &field_types);
-            self.module.enum_layouts.insert(enum_id, layout);
+            self.module.record_enum_layout(enum_id, layout);
         }
     }
 
@@ -345,8 +345,7 @@ impl Emitter<'_> {
         field_name: &str,
     ) -> Option<String> {
         self.module
-            .enum_layouts
-            .get(enum_id)?
+            .enum_layout(enum_id)?
             .struct_field_name(variant_name, field_name)
     }
 
@@ -357,8 +356,7 @@ impl Emitter<'_> {
         field_index: usize,
     ) -> Option<String> {
         self.module
-            .enum_layouts
-            .get(enum_id)?
+            .enum_layout(enum_id)?
             .tuple_field_name(variant_name, field_index)
     }
 
@@ -408,7 +406,7 @@ impl Emitter<'_> {
 
     pub(crate) fn is_enum_field_pointer(&self, ty: &Type, variant: &str, index: usize) -> bool {
         if let Type::Nominal { id, .. } = ty
-            && let Some(layout) = self.module.enum_layouts.get(id.as_ref())
+            && let Some(layout) = self.module.enum_layout(id.as_ref())
             && let Some(variant_layout) = layout.get_variant(variant)
             && let Some(field) = variant_layout.fields.get(index)
         {

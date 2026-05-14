@@ -318,7 +318,7 @@ impl Emitter<'_> {
         expression_ty.is_ref()
             && expression_ty.inner().is_some_and(|inner| {
                 matches!(inner, Type::Parameter(name)
-                    if self.module.absorbed_ref_generics.contains(name.as_ref()))
+                    if self.function_state.is_absorbed_ref_generic(name.as_ref()))
             })
     }
 
