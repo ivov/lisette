@@ -485,33 +485,47 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     ) {
         let header_start = output.len();
         write_line!(output, "switch {} := {}.(type) {{", base, base);
-        let body_start = output.len();
 
-        let ctx = WalkCtx::switch_case(arm_destination);
-        for case in cases {
-            write_line!(output, "case {}:", case.case_label);
-            self.emitter.enter_scope();
-            self.walk(output, &case.decision, &ctx);
-            self.emitter.exit_scope();
-        }
-        if let Some(default_decision) = default {
-            let pre = output.len();
-            self.emitter.enter_scope();
-            self.walk(output, default_decision, &ctx);
-            self.emitter.exit_scope();
-            if output.len() > pre {
-                output.insert_str(pre, "default:\n");
+        let (body, ()) = self.capture_output(output, |this, out| {
+            let ctx = WalkCtx::switch_case(arm_destination);
+            for case in cases {
+                write_line!(out, "case {}:", case.case_label);
+                this.emitter.enter_scope();
+                this.walk(out, &case.decision, &ctx);
+                this.emitter.exit_scope();
             }
-        }
-        output.push_str("}\n");
+            if let Some(default_decision) = default {
+                let pre = out.len();
+                this.emitter.enter_scope();
+                this.walk(out, default_decision, &ctx);
+                this.emitter.exit_scope();
+                if out.len() > pre {
+                    out.insert_str(pre, "default:\n");
+                }
+            }
+            out.push_str("}\n");
+        });
 
-        if !output_references_var(&output[body_start..], base) {
-            let new_header = format!("switch {}.(type) {{\n", base);
-            output.replace_range(header_start..body_start, &new_header);
+        if !output_references_var(&body, base) {
+            output.truncate(header_start);
+            write_line!(output, "switch {}.(type) {{", base);
         }
+        output.push_str(&body);
 
         self.emitter
             .emit_unreachable_if_needed(output, default.is_some());
+    }
+
+    fn capture_output<R>(
+        &mut self,
+        output: &mut String,
+        f: impl FnOnce(&mut Self, &mut String) -> R,
+    ) -> (String, R) {
+        let before = output.len();
+        let result = f(self, output);
+        let captured = output[before..].to_string();
+        output.truncate(before);
+        (captured, result)
     }
 
     fn emit_chain_grouped(
