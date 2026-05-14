@@ -16,10 +16,10 @@ impl Emitter<'_> {
         if let Pattern::Identifier { identifier, .. } = pattern
             && let Some(mut go_name) = self.go_name_for_binding(pattern)
         {
-            if self.scope.bindings.has_go_name(&go_name) {
+            if self.scope.has_binding_for_go_name(&go_name) {
                 go_name = self.fresh_var(Some(&go_name));
             }
-            return self.scope.bindings.add(identifier, go_name);
+            return self.scope.bind(identifier, go_name);
         }
         match fallback {
             Some(hint) => self.fresh_var(Some(hint)),
@@ -35,7 +35,7 @@ impl Emitter<'_> {
         body: &Expression,
         needs_label: bool,
     ) {
-        self.maybe_set_loop_label(needs_label);
+        self.set_current_loop_label_if_needed(needs_label);
 
         if let Expression::Range {
             start,

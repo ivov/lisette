@@ -1,6 +1,5 @@
 use crate::Emitter;
 use crate::expressions::context::ExpressionContext;
-use crate::names::go_name;
 use crate::patterns::tree_emitter::TreeEmitter;
 use crate::placement::BodyPlace;
 use crate::types::abi::AbiShape;
@@ -95,29 +94,29 @@ impl Emitter<'_> {
         }
 
         write_line!(output, "if {} == nil {{", err_var);
-        self.scope.bindings.save();
+        self.scope.push_binding_frame();
         if let (Some(name), Some(val)) = (ok_binding, &val_var)
             && name != "_"
         {
             self.bind_fused(output, name, val);
         }
         self.emit_body_to_place(output, &ok_arm.expression, place);
-        self.scope.bindings.restore();
+        self.scope.pop_binding_frame();
         output.push_str("} else {\n");
-        self.scope.bindings.save();
+        self.scope.push_binding_frame();
         if let Some(name) = err_binding
             && name != "_"
         {
             self.bind_fused(output, name, &err_var);
         }
         self.emit_body_to_place(output, &err_arm.expression, place);
-        self.scope.bindings.restore();
+        self.scope.pop_binding_frame();
         output.push_str("}\n");
         true
     }
 
     fn bind_fused(&mut self, output: &mut String, name: &str, value: &str) {
-        let go_name = self.scope.bindings.add(name, name);
+        let go_name = self.scope.bind(name, name);
         self.declare(&go_name);
         write_line!(output, "{} := {}", go_name, value);
     }
@@ -137,12 +136,7 @@ impl Emitter<'_> {
                 .iter()
                 .any(|arm| Emitter::pattern_binds_name(&arm.pattern, &name));
             if !has_collision && !name.contains('.') {
-                return self
-                    .scope
-                    .bindings
-                    .get(&name)
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| go_name::escape_reserved(&name).into_owned());
+                return self.scope.resolve_or_escape(&name);
             }
         }
         if matches!(subject, Expression::Literal { .. }) {

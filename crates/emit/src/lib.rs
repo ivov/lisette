@@ -10,6 +10,7 @@ mod output;
 pub(crate) mod patterns;
 mod placement;
 pub(crate) mod queries;
+mod scope;
 pub(crate) mod statements;
 pub(crate) mod types;
 mod utils;
@@ -265,42 +266,11 @@ struct ModuleData {
     escape_remap: HashMap<String, String>,
 }
 
-struct ScopeState {
-    next_var: usize,
-    bindings: Bindings,
-    /// Stack of Go variable names declared at each scope level.
-    declared: Vec<HashSet<String>>,
-    /// Current Go block scope depth (0 = function level).
-    scope_depth: usize,
-    /// Stack of loop contexts (result var + optional label) per nesting level.
-    loop_stack: Vec<LoopContext>,
-    /// Go variable names currently used as block-to-var assign targets.
-    assign_targets: HashSet<String>,
-    /// Per-scope stack so const eligibility does not leak across siblings.
-    go_const_bindings: Vec<HashSet<String>>,
-}
-
-impl ScopeState {
-    fn reset_for_top_level(&mut self) {
-        self.next_var = 0;
-        self.bindings.reset();
-        self.declared.clear();
-        self.declared.push(HashSet::default());
-        self.go_const_bindings.truncate(1);
-    }
-}
-
-fn pop_keep_base<T>(stack: &mut Vec<T>) {
-    if stack.len() > 1 {
-        stack.pop();
-    }
-}
-
 pub struct Emitter<'a> {
     ctx: EmitContext<'a>,
     globals: Arc<GlobalEmitData>,
     module: ModuleData,
-    scope: ScopeState,
+    pub(crate) scope: scope::ScopeState,
 
     current_module: ModuleId,
 
@@ -434,15 +404,7 @@ impl<'a> Emitter<'a> {
                 absorbed_ref_generics: HashSet::default(),
                 escape_remap: HashMap::default(),
             },
-            scope: ScopeState {
-                next_var: 0,
-                bindings: Bindings::new(),
-                declared: vec![HashSet::default()],
-                scope_depth: 0,
-                loop_stack: Vec::new(),
-                assign_targets: HashSet::default(),
-                go_const_bindings: vec![HashSet::default()],
-            },
+            scope: scope::ScopeState::new(),
             current_module: current_module.to_string(),
             synthesized_adapter_types: HashMap::default(),
             pending_adapter_types: Vec::new(),
@@ -453,59 +415,37 @@ impl<'a> Emitter<'a> {
     }
 
     pub(crate) fn push_loop(&mut self, result_var: impl Into<String>) {
-        self.scope.loop_stack.push(LoopContext {
+        self.scope.push_loop(LoopContext {
             result_var: result_var.into(),
             label: None,
         });
     }
 
     pub(crate) fn pop_loop(&mut self) {
-        self.scope.loop_stack.pop();
+        self.scope.pop_loop();
     }
 
     pub(crate) fn current_loop_result_var(&self) -> Option<&str> {
-        self.scope
-            .loop_stack
-            .last()
-            .map(|ctx| ctx.result_var.as_str())
+        self.scope.current_loop_result_var()
     }
 
     pub(crate) fn current_loop_label(&self) -> Option<&str> {
-        self.scope
-            .loop_stack
-            .last()
-            .and_then(|ctx| ctx.label.as_deref())
+        self.scope.current_loop_label()
     }
 
-    /// Checks if a Go variable name has been declared in the current scope.
-    /// Tracks declarations at each scope level so variable shadowing works correctly.
-    /// Returns true if this is a new declaration (use :=), false if already declared (use =).
+    /// `true` if this is a new declaration in the current block (use `:=`),
+    /// `false` if the name is already declared (use `=`).
     pub(crate) fn try_declare(&mut self, go_name: &str) -> bool {
-        if let Some(current_scope) = self.scope.declared.last_mut() {
-            if current_scope.contains(go_name) {
-                false
-            } else {
-                current_scope.insert(go_name.to_string());
-                true
-            }
-        } else {
-            true
-        }
+        self.scope.try_declare_go_name(go_name)
     }
 
     pub(crate) fn is_declared(&self, go_name: &str) -> bool {
-        self.scope
-            .declared
-            .iter()
-            .any(|scope| scope.contains(go_name))
+        self.scope.is_go_name_declared(go_name)
     }
 
-    /// Unconditionally marks a Go variable name as declared in the current scope.
-    /// Use this for parameters, which are always "declared" at function entry.
+    /// Unconditionally marks `go_name` as declared in the current block.
     pub(crate) fn declare(&mut self, go_name: &str) {
-        if let Some(current_scope) = self.scope.declared.last_mut() {
-            current_scope.insert(go_name.to_string());
-        }
+        self.scope.declare_go_name(go_name);
     }
 
     pub(crate) fn apply_effects(&mut self, effects: &EmitEffects) {
@@ -568,42 +508,42 @@ impl<'a> Emitter<'a> {
     }
 
     pub(crate) fn enter_scope(&mut self) {
-        self.scope.scope_depth += 1;
-        self.scope.bindings.save();
-        self.scope.declared.push(HashSet::default());
-        self.scope.go_const_bindings.push(HashSet::default());
+        self.scope.enter_block();
     }
 
     pub(crate) fn exit_scope(&mut self) {
-        self.scope.scope_depth = self.scope.scope_depth.saturating_sub(1);
-        self.scope.bindings.restore();
-        pop_keep_base(&mut self.scope.declared);
-        pop_keep_base(&mut self.scope.go_const_bindings);
+        self.scope.exit_block();
     }
 
     pub(crate) fn current_module(&self) -> &str {
         &self.current_module
     }
 
-    pub(crate) fn push_const_frame(&mut self) {
-        self.scope.go_const_bindings.push(HashSet::default());
+    pub(crate) fn fresh_var(&mut self, hint: Option<&str>) -> String {
+        self.scope.fresh_go_name(hint)
     }
 
-    pub(crate) fn pop_const_frame(&mut self) {
-        pop_keep_base(&mut self.scope.go_const_bindings);
-    }
-
-    pub(crate) fn record_go_const(&mut self, go_identifier: String) {
-        if let Some(top) = self.scope.go_const_bindings.last_mut() {
-            top.insert(go_identifier);
+    pub(crate) fn set_current_loop_label_if_needed(&mut self, needs_label: bool) {
+        if needs_label {
+            let label = self.fresh_var(Some("loop"));
+            self.scope.set_current_loop_label(label);
         }
     }
 
+    pub(crate) fn push_const_frame(&mut self) {
+        self.scope.push_const_frame();
+    }
+
+    pub(crate) fn pop_const_frame(&mut self) {
+        self.scope.pop_const_frame();
+    }
+
+    pub(crate) fn record_go_const(&mut self, go_identifier: String) {
+        self.scope.record_go_const_binding(go_identifier);
+    }
+
     pub(crate) fn is_go_const_binding(&self, go_identifier: &str) -> bool {
-        self.scope
-            .go_const_bindings
-            .iter()
-            .any(|frame| frame.contains(go_identifier))
+        self.scope.is_go_const_binding(go_identifier)
     }
 
     pub(crate) fn module_alias_for_type(&self, ty: &Type) -> Option<String> {

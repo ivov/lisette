@@ -221,7 +221,7 @@ impl Emitter<'_> {
     }
 
     fn fresh_ok_var(&mut self) -> String {
-        if self.scope.bindings.has_go_name("ok") || self.is_declared("ok") {
+        if self.scope.has_binding_for_go_name("ok") || self.is_declared("ok") {
             self.fresh_var(Some("ok"))
         } else {
             "ok".to_string()
@@ -296,7 +296,7 @@ impl Emitter<'_> {
             self.emit_body_to_place(output, ctx.body, ctx.place);
         }
         guard.finish(output);
-        self.scope.bindings.restore();
+        self.scope.pop_binding_frame();
         let has_else = ctx.retry_var.is_some() || ctx.default_body.is_some();
         if has_else {
             output.push_str("} else {\n");
@@ -316,12 +316,12 @@ impl Emitter<'_> {
         let needs_ok_check = is_some_pattern(binding);
         let inner_typed = unwrap_some_typed_pattern(typed_pattern);
 
-        self.scope.bindings.save();
+        self.scope.push_binding_frame();
 
         match effective_pattern {
             Pattern::Identifier { identifier, .. } => {
                 if let Some(go_name) = self.go_name_for_binding(effective_pattern) {
-                    let var = self.scope.bindings.add(identifier, go_name);
+                    let var = self.scope.bind(identifier, go_name);
                     if needs_ok_check {
                         self.emit_ok_guard(output, &var, None, ctx);
                         return;
@@ -332,7 +332,7 @@ impl Emitter<'_> {
                     let ok_var = self.fresh_ok_var();
                     write_line!(output, "case _, {} := <-{}:", ok_var, ctx.channel);
                     self.emit_ok_check(output, &ok_var, ctx);
-                    self.scope.bindings.restore();
+                    self.scope.pop_binding_frame();
                     return;
                 } else {
                     write_line!(output, "case <-{}:", ctx.channel);
@@ -343,7 +343,7 @@ impl Emitter<'_> {
                     let ok_var = self.fresh_ok_var();
                     write_line!(output, "case _, {} := <-{}:", ok_var, ctx.channel);
                     self.emit_ok_check(output, &ok_var, ctx);
-                    self.scope.bindings.restore();
+                    self.scope.pop_binding_frame();
                     return;
                 }
                 write_line!(output, "case <-{}:", ctx.channel);
@@ -371,7 +371,7 @@ impl Emitter<'_> {
             }
         }
         self.emit_body_to_place(output, ctx.body, ctx.place);
-        self.scope.bindings.restore();
+        self.scope.pop_binding_frame();
     }
 
     fn prepare_send_arm(
@@ -446,7 +446,7 @@ impl Emitter<'_> {
         element_ty: &syntax::types::Type,
         place: &BodyPlace,
     ) {
-        self.scope.bindings.save();
+        self.scope.push_binding_frame();
 
         let (receiver_var_pattern, some_arm) = match_arms
             .iter()
@@ -498,7 +498,7 @@ impl Emitter<'_> {
         }
         ok_guard.finish(output);
 
-        self.scope.bindings.restore();
+        self.scope.pop_binding_frame();
     }
 
     /// Render the Some arm's body (including payload destructure when

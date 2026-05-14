@@ -1572,27 +1572,24 @@ pub(crate) fn emit_tree_bindings(
 ) {
     for binding in bindings {
         let Some(ref go_name) = binding.go_name else {
-            emitter.scope.bindings.add(&binding.lisette_name, "");
+            emitter.scope.bind(&binding.lisette_name, "");
             continue;
         };
 
         let access_expression = binding.path.render(subject_var);
 
-        if emitter.scope.bindings.has_go_name(go_name) {
+        if emitter.scope.has_binding_for_go_name(go_name) {
             let fresh = emitter.fresh_var(Some(&binding.lisette_name));
-            emitter.scope.bindings.add(&binding.lisette_name, &fresh);
+            emitter.scope.bind(&binding.lisette_name, &fresh);
             emitter.try_declare(&fresh);
             write_line!(output, "{} := {}", fresh, access_expression);
         } else {
-            let name = emitter
-                .scope
-                .bindings
-                .add(&binding.lisette_name, go_name.clone());
+            let name = emitter.scope.bind(&binding.lisette_name, go_name.clone());
             if emitter.try_declare(&name) {
                 write_line!(output, "{} := {}", name, access_expression);
             } else {
                 let fresh = emitter.fresh_var(Some(&binding.lisette_name));
-                emitter.scope.bindings.add(&binding.lisette_name, &fresh);
+                emitter.scope.bind(&binding.lisette_name, &fresh);
                 emitter.try_declare(&fresh);
                 write_line!(output, "{} := {}", fresh, access_expression);
             }
@@ -1615,7 +1612,7 @@ pub(super) fn emit_tree_assignments(
         }
 
         // Only assign to variables that were pre-declared
-        let Some(registered_name) = emitter.scope.bindings.get(&binding.lisette_name) else {
+        let Some(registered_name) = emitter.scope.resolve_binding(&binding.lisette_name) else {
             continue;
         };
         let name = registered_name.to_string();

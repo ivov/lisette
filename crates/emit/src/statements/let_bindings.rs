@@ -87,7 +87,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         if let Pattern::Identifier { identifier, .. } = &self.binding.pattern
             && let Some(raw_go_name) = self.emitter.go_name_for_binding(&self.binding.pattern)
         {
-            let go_identifier = self.emitter.scope.bindings.add(identifier, &raw_go_name);
+            let go_identifier = self.emitter.scope.bind(identifier, &raw_go_name);
             self.emitter.try_declare(&go_identifier);
             let var_ty = self.emitter.go_type_as_string(&self.binding.ty);
             write_line!(output, "var {} {}", go_identifier, var_ty);
@@ -201,7 +201,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             .emit_call(output, self.value, None, ExpressionContext::value());
 
         for (identifier, go_name) in planned.iter().flatten() {
-            self.emitter.scope.bindings.add(*identifier, go_name);
+            self.emitter.scope.bind(*identifier, go_name);
             self.emitter.try_declare(go_name);
         }
 

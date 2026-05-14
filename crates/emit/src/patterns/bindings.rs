@@ -94,19 +94,6 @@ pub(crate) fn is_unconditional_catchall(pattern: &Pattern) -> bool {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn fresh_var(&mut self, hint: Option<&str>) -> String {
-        loop {
-            self.scope.next_var += 1;
-            let name = match hint {
-                Some(h) => format!("{}_{}", h, self.scope.next_var),
-                None => format!("tmp_{}", self.scope.next_var),
-            };
-            if !self.scope.bindings.has_go_name(&name) && !self.is_declared(&name) {
-                return name;
-            }
-        }
-    }
-
     pub(crate) fn pattern_has_bindings(pattern: &Pattern) -> bool {
         match pattern {
             Pattern::Identifier { .. } => true,
@@ -255,7 +242,7 @@ impl Emitter<'_> {
         resolved: &Type,
     ) {
         let Some(go_name) = self.go_name_for_binding(pattern) else {
-            self.scope.bindings.add(lisette_name, "_");
+            self.scope.bind(lisette_name, "_");
             return;
         };
         self.declare_var_decl(output, lisette_name, go_name, resolved);
@@ -275,7 +262,7 @@ impl Emitter<'_> {
         } else {
             go_name
         };
-        let go_name = self.scope.bindings.add(lisette_name, go_name);
+        let go_name = self.scope.bind(lisette_name, go_name);
         self.declare(&go_name);
         let go_ty = self.go_type_as_string(resolved);
         write_line!(output, "var {} {}", go_name, go_ty);

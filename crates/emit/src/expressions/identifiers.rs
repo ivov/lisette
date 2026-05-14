@@ -66,10 +66,9 @@ impl Emitter<'_> {
 
         let name = self
             .scope
-            .bindings
-            .get(value)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| value.to_string());
+            .resolve_binding(value)
+            .unwrap_or(value)
+            .to_string();
 
         if let Some(go_constant) = self.try_classify_value_enum_variant(&name, ty) {
             return IdentifierKind::ValueEnumVariant { go_constant };
@@ -388,7 +387,7 @@ impl Emitter<'_> {
             return None;
         }
 
-        if self.scope.bindings.get(name).is_some() {
+        if self.scope.resolve_binding(name).is_some() {
             return None;
         }
 

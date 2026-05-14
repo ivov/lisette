@@ -74,12 +74,12 @@ impl Emitter<'_> {
             Some(remapped) => remapped.clone(),
             None => identifier.to_string(),
         };
-        let initial_go_name = self.scope.bindings.add(identifier, target_name);
+        let initial_go_name = self.scope.bind(identifier, target_name);
         let go_identifier = if self.try_declare(&initial_go_name) {
             initial_go_name
         } else {
             let fresh = self.fresh_var(Some(identifier));
-            self.scope.bindings.add(identifier, &fresh);
+            self.scope.bind(identifier, &fresh);
             self.try_declare(&fresh);
             fresh
         };
@@ -116,8 +116,7 @@ impl Emitter<'_> {
             Expression::Identifier { value, .. } => {
                 let resolved = self
                     .scope
-                    .bindings
-                    .get(value.as_str())
+                    .resolve_binding(value.as_str())
                     .unwrap_or(value.as_str());
                 self.is_go_const_binding(resolved)
             }

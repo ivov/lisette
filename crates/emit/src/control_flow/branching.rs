@@ -181,15 +181,6 @@ impl Emitter<'_> {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn maybe_set_loop_label(&mut self, needs_label: bool) {
-        if needs_label {
-            let label = self.fresh_var(Some("loop"));
-            if let Some(ctx) = self.scope.loop_stack.last_mut() {
-                ctx.label = Some(label);
-            }
-        }
-    }
-
     pub(crate) fn emit_labeled_loop(
         &mut self,
         output: &mut String,
@@ -197,7 +188,7 @@ impl Emitter<'_> {
         body: &Expression,
         needs_label: bool,
     ) {
-        self.maybe_set_loop_label(needs_label);
+        self.set_current_loop_label_if_needed(needs_label);
         if let Some(label) = self.current_loop_label() {
             write_line!(output, "{}:", label);
         }

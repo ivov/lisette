@@ -76,12 +76,7 @@ impl Emitter<'_> {
                     && !value.contains('.')
                     && !Self::pattern_binds_name(pattern, value)
                 {
-                    let var = self
-                        .scope
-                        .bindings
-                        .get(value)
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| crate::escape_reserved(value).into_owned());
+                    let var = self.scope.resolve_or_escape(value);
                     return ResolvedSubject { var, guard: None };
                 }
                 let var = self.fresh_var(temp_hint);
@@ -166,7 +161,7 @@ impl Emitter<'_> {
         body: &Expression,
         needs_label: bool,
     ) {
-        self.maybe_set_loop_label(needs_label);
+        self.set_current_loop_label_if_needed(needs_label);
         if let Some(label) = self.current_loop_label() {
             write_line!(output, "{}:", label);
         }
@@ -175,13 +170,7 @@ impl Emitter<'_> {
         let inline_var = if let Expression::Identifier { value, .. } = scrutinee {
             let has_collision = Self::pattern_binds_name(pattern, value);
             if !has_collision && !value.contains('.') {
-                Some(
-                    self.scope
-                        .bindings
-                        .get(value)
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| crate::escape_reserved(value).into_owned()),
-                )
+                Some(self.scope.resolve_or_escape(value))
             } else {
                 None
             }
@@ -273,11 +262,11 @@ impl Emitter<'_> {
         subject_ty: &Type,
         else_block: &Expression,
     ) {
-        let outer_snapshot = self.scope.bindings.snapshot();
+        let outer_snapshot = self.scope.binding_snapshot();
 
         self.emit_binding_declarations_with_type(output, pattern, binding_ty, typed);
 
-        let pattern_snapshot = self.scope.bindings.snapshot();
+        let pattern_snapshot = self.scope.binding_snapshot();
 
         let collected: Vec<_> = patterns
             .iter()
@@ -323,12 +312,12 @@ impl Emitter<'_> {
             return;
         }
 
-        self.scope.bindings.restore_snapshot(outer_snapshot);
+        self.scope.restore_binding_snapshot(outer_snapshot);
         output.push_str("} else {\n");
         self.emit_block(output, else_block);
         output.push_str("}\n");
 
-        self.scope.bindings.restore_snapshot(pattern_snapshot);
+        self.scope.restore_binding_snapshot(pattern_snapshot);
     }
 
     fn emit_while_let_or_pattern(
@@ -550,10 +539,10 @@ impl Emitter<'_> {
                 let Some(go_name) = self.go_name_for_binding(pattern) else {
                     return ("_".to_string(), false);
                 };
-                if self.scope.bindings.get(identifier).is_some() {
+                if self.scope.resolve_binding(identifier).is_some() {
                     return (self.fresh_var(Some("recv")), true);
                 }
-                (self.scope.bindings.add(identifier, go_name), false)
+                (self.scope.bind(identifier, go_name), false)
             }
             _ => (self.fresh_var(Some("recv")), true),
         }

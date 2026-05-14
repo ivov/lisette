@@ -611,32 +611,25 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     fn emit_bindings(&mut self, output: &mut String, bindings: &[EmitBinding]) {
         for binding in bindings {
             let Some(ref go_name) = binding.go_name else {
-                self.emitter.scope.bindings.add(&binding.lisette_name, "");
+                self.emitter.scope.bind(&binding.lisette_name, "");
                 continue;
             };
             let access_expression = &binding.rendered_access;
-            if self.emitter.scope.bindings.has_go_name(go_name) {
+            if self.emitter.scope.has_binding_for_go_name(go_name) {
                 let fresh = self.emitter.fresh_var(Some(&binding.lisette_name));
-                self.emitter
-                    .scope
-                    .bindings
-                    .add(&binding.lisette_name, &fresh);
+                self.emitter.scope.bind(&binding.lisette_name, &fresh);
                 self.emitter.try_declare(&fresh);
                 write_line!(output, "{} := {}", fresh, access_expression);
             } else {
                 let name = self
                     .emitter
                     .scope
-                    .bindings
-                    .add(&binding.lisette_name, go_name.clone());
+                    .bind(&binding.lisette_name, go_name.clone());
                 if self.emitter.try_declare(&name) {
                     write_line!(output, "{} := {}", name, access_expression);
                 } else {
                     let fresh = self.emitter.fresh_var(Some(&binding.lisette_name));
-                    self.emitter
-                        .scope
-                        .bindings
-                        .add(&binding.lisette_name, &fresh);
+                    self.emitter.scope.bind(&binding.lisette_name, &fresh);
                     self.emitter.try_declare(&fresh);
                     write_line!(output, "{} := {}", fresh, access_expression);
                 }

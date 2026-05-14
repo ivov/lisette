@@ -1,5 +1,3 @@
-use rustc_hash::FxHashSet as HashSet;
-
 use syntax::program::DefinitionBody;
 
 use crate::Emitter;
@@ -560,17 +558,9 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn with_fresh_scope<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        let saved_declared = std::mem::take(&mut self.scope.declared);
-        self.scope.declared = vec![HashSet::default()];
-        let saved_scope_depth = self.scope.scope_depth;
-        self.scope.scope_depth = 0;
-        self.scope.bindings.save();
-
+        let frame = self.scope.enter_isolated_function();
         let result = f(self);
-
-        self.scope.bindings.restore();
-        self.scope.declared = saved_declared;
-        self.scope.scope_depth = saved_scope_depth;
+        self.scope.exit_isolated_function(frame);
         result
     }
 
@@ -616,7 +606,7 @@ impl Emitter<'_> {
             Expression::Identifier { value, ty, .. }
                 if !matches!(ty.unwrap_forall(), Type::Function { .. }) =>
             {
-                if self.scope.bindings.get(value).is_some() {
+                if self.scope.resolve_binding(value).is_some() {
                     return false;
                 }
                 if let Type::Nominal { id, .. } = ty {

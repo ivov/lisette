@@ -223,7 +223,7 @@ impl Emitter<'_> {
         let Expression::Identifier { value, .. } = target.unwrap_parens() else {
             return false;
         };
-        match self.scope.bindings.get(value) {
+        match self.scope.resolve_binding(value) {
             Some(go_name) => go_name == "_",
             None => value == "_",
         }
@@ -334,10 +334,9 @@ impl Emitter<'_> {
         match expression {
             Expression::Identifier { value, .. } => self
                 .scope
-                .bindings
-                .get(value)
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| value.to_string()),
+                .resolve_binding(value)
+                .unwrap_or(value)
+                .to_string(),
             Expression::DotAccess {
                 expression, member, ..
             } => {

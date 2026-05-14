@@ -536,13 +536,13 @@ impl Emitter<'_> {
         self.enter_block_scope(is_block, has_go_braces);
 
         if let Some((last, rest)) = items.split_last() {
-            let is_new_target = self.scope.assign_targets.insert(var.to_string());
+            let is_new_target = self.scope.try_acquire_assign_target(var);
             for item in rest {
                 self.emit_statement(output, item);
             }
             self.emit_tail_to_var(output, last, var, target_ty);
             if is_new_target {
-                self.scope.assign_targets.remove(var);
+                self.scope.release_assign_target(var);
             }
         }
 
@@ -556,7 +556,7 @@ impl Emitter<'_> {
         if has_go_braces {
             self.enter_scope();
         } else {
-            self.scope.bindings.save();
+            self.scope.push_binding_frame();
         }
     }
 
@@ -567,7 +567,7 @@ impl Emitter<'_> {
         if has_go_braces {
             self.exit_scope();
         } else {
-            self.scope.bindings.restore();
+            self.scope.pop_binding_frame();
         }
     }
 
@@ -913,7 +913,7 @@ impl Emitter<'_> {
         }
         let needs_temp = requires_temp_var(value);
         let Some(raw_go_name) = raw_go_name else {
-            self.scope.bindings.add(identifier, "_");
+            self.scope.bind(identifier, "_");
             if needs_temp {
                 self.emit_let_temp(output, "_", value, binding_ty);
             } else {
@@ -926,9 +926,9 @@ impl Emitter<'_> {
             if self.is_declared(&go_identifier) || expression_contains_binding(value, identifier) {
                 let fresh = self.fresh_var(Some(identifier));
                 self.emit_let_temp(output, &fresh, value, binding_ty);
-                self.scope.bindings.add(identifier, &fresh);
+                self.scope.bind(identifier, &fresh);
             } else {
-                self.scope.bindings.add(identifier, raw_go_name);
+                self.scope.bind(identifier, raw_go_name);
                 self.emit_let_temp(output, &go_identifier, value, binding_ty);
             }
             return;
@@ -947,7 +947,7 @@ impl Emitter<'_> {
         binding_ty: &Type,
     ) {
         let Some(raw_go_name) = raw_go_name else {
-            self.scope.bindings.add(identifier, "_");
+            self.scope.bind(identifier, "_");
             let return_ctx = self.scope_return_context_fallback().clone();
             self.emit_propagate_to_let(output, "_", value, &return_ctx);
             return;
@@ -962,7 +962,7 @@ impl Emitter<'_> {
         }
         let return_ctx = self.scope_return_context_fallback().clone();
         self.emit_propagate_to_let(output, &go_identifier, value, &return_ctx);
-        self.scope.bindings.add(identifier, &go_identifier);
+        self.scope.bind(identifier, &go_identifier);
         self.try_declare(&go_identifier);
     }
 
@@ -985,9 +985,9 @@ impl Emitter<'_> {
             let fresh = self.fresh_var(Some(identifier));
             self.declare(&fresh);
             write_line!(output, "{} := struct{{}}{{}}", fresh);
-            self.scope.bindings.add(identifier, &fresh);
+            self.scope.bind(identifier, &fresh);
         } else {
-            let go_identifier = self.scope.bindings.add(identifier, raw_go_name);
+            let go_identifier = self.scope.bind(identifier, raw_go_name);
             self.try_declare(&go_identifier);
             write_line!(output, "{} := struct{{}}{{}}", go_identifier);
         }
@@ -1012,12 +1012,12 @@ impl Emitter<'_> {
         let value_expression = coercion.apply(self, output, value_expression);
         let value_expression = maybe_clone_subslice(self, value, mutable, value_expression);
 
-        let go_identifier = self.scope.bindings.add(identifier, raw_go_name);
+        let go_identifier = self.scope.bind(identifier, raw_go_name);
         let is_new = self.try_declare(&go_identifier);
 
-        if !is_new || self.scope.assign_targets.contains(&go_identifier) {
+        if !is_new || self.scope.is_active_assign_target(&go_identifier) {
             let fresh = self.fresh_var(Some(identifier));
-            self.scope.bindings.add(identifier, &fresh);
+            self.scope.bind(identifier, &fresh);
             self.try_declare(&fresh);
             write_line!(output, "{} := {}", fresh, value_expression);
         } else if needs_explicit_type_declaration(self, value, binding_ty) {

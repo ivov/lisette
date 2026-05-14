@@ -62,12 +62,7 @@ impl Emitter<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> String {
-        let saved_declared = std::mem::take(&mut self.scope.declared);
-        let saved_scope_depth = self.scope.scope_depth;
-        self.scope.declared = vec![HashSet::default()];
-        self.scope.scope_depth = 0;
-
-        self.scope.bindings.save();
+        let frame = self.scope.enter_isolated_function();
 
         let mut destructure_bindings: Vec<(String, &Pattern, Option<&TypedPattern>, &Type)> =
             vec![];
@@ -79,7 +74,7 @@ impl Emitter<'_> {
                     if let Some(go_name) = self.go_name_for_binding(&p.pattern) {
                         self.declare_param(identifier, go_name)
                     } else {
-                        self.scope.bindings.add(identifier, "_");
+                        self.scope.bind(identifier, "_");
                         "_".to_string()
                     }
                 } else if matches!(&p.pattern, Pattern::WildCard { .. }) {
@@ -156,9 +151,7 @@ impl Emitter<'_> {
         });
         optimize_function_body(&mut body_string);
 
-        self.scope.declared = saved_declared;
-        self.scope.scope_depth = saved_scope_depth;
-        self.scope.bindings.restore();
+        self.scope.exit_isolated_function(frame);
 
         format!(
             "func({}){} {{\n{}}}",
@@ -171,10 +164,10 @@ impl Emitter<'_> {
     /// Bind and declare a parameter. If the natural post-escape Go name is
     /// already declared in this scope, pick a fresh Go name so later identifier lookups in the body resolve to the renamed slot.
     fn declare_param(&mut self, lisette_name: &str, raw_go_name: impl Into<String>) -> String {
-        let go_id = self.scope.bindings.add(lisette_name, raw_go_name);
+        let go_id = self.scope.bind(lisette_name, raw_go_name);
         let go_id = if self.is_declared(&go_id) {
             let fresh = self.fresh_var(Some(lisette_name));
-            self.scope.bindings.add(lisette_name, fresh)
+            self.scope.bind(lisette_name, fresh)
         } else {
             go_id
         };
@@ -384,7 +377,7 @@ impl Emitter<'_> {
 
         let receiver_part = format!("({} {})", receiver_var, ty_string);
 
-        self.scope.bindings.add("self", receiver_var.clone());
+        self.scope.bind("self", receiver_var.clone());
         self.declare(&receiver_var);
 
         (Some(receiver_var), Some(receiver_part))
