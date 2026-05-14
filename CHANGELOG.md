@@ -1,6 +1,13 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.5](https://github.com/ivov/lisette/compare/lisette-v0.2.4...lisette-v0.2.5) - 2026-05-14
+
+- fix: track go import usage during emit [#410](https://github.com/ivov/lisette/pull/410) [`00d1b7a`](https://github.com/ivov/lisette/commit/00d1b7ab37daa2e0af24fb55e84622cb6e10a18c)
+- perf: emit nil for empty Slice literals [#409](https://github.com/ivov/lisette/pull/409) [`1155da5`](https://github.com/ivov/lisette/commit/1155da531aa7e536c256c7460e611209f58e8e12)
+- refactor: emit architecture overhaul [#407](https://github.com/ivov/lisette/pull/407) [`01c7c34`](https://github.com/ivov/lisette/commit/01c7c3443a8f7e41ed94fd6fc2dda8b082278d47)
+- fix: cache no longer hides internal_type_leak warnings [#405](https://github.com/ivov/lisette/pull/405) [`d820e1d`](https://github.com/ivov/lisette/commit/d820e1d8472f35cd56a578d40c9c62d9d2b2329d)
+- perf: skip unchanged emit/gofmt/tidy work on rebuilds [#403](https://github.com/ivov/lisette/pull/403) [`3ef0961`](https://github.com/ivov/lisette/commit/3ef096162bba93a595c84c711962607082a29295)
 ## [0.2.4](https://github.com/ivov/lisette/compare/lisette-v0.2.3...lisette-v0.2.4) - 2026-05-12
 
 - fix: honor allow attributes on interface methods [#402](https://github.com/ivov/lisette/pull/402) [`3e2e5c2`](https://github.com/ivov/lisette/commit/3e2e5c2ddba766bd8a81c4451877845c2c1909f2)
