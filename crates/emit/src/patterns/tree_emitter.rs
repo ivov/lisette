@@ -3,98 +3,75 @@ use syntax::types::Type;
 
 use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
-use crate::patterns::decision_tree::{
-    AccessPath, ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind,
-    compile_expanded_arms, emit_tree_bindings, expand_or_patterns, render_condition,
+use crate::patterns::decision_tree::{compile_expanded_arms, expand_or_patterns};
+use crate::patterns::emit_plan::{
+    ChainPlan, EmitBinding, EmitCase, EmitChainTest, EmitDecision, LoweringCtx, MatchEmitPlan,
+    RetryLoopPlan, SingleCatchallPlan, emit_lowered_bindings, is_empty_emit_decision, lower_match,
 };
 use crate::types::emitter::Destination;
 use crate::utils::{inline_trivial_bindings, output_ends_with_diverge, output_references_var};
 use crate::write_line;
 
-#[derive(Clone, Copy)]
-enum LeafTerminator<'a> {
-    None,
-    BreakLabel(&'a str),
-}
-
-#[derive(Clone, Copy)]
-enum GuardFailurePolicy {
-    EmitInline,
-    FallThrough,
-    Sibling,
-}
-
-#[derive(Clone, Copy)]
-enum ChainMode {
-    Cascading,
-    GroupedRetry,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum LeafScope {
-    Implicit,
-    Explicit,
+enum WalkRole {
+    SwitchCase,
+    ChainBody,
+    RetryLoopTop,
+    RetryLoopNested,
 }
 
 #[derive(Clone, Copy)]
 struct WalkCtx<'a> {
     arm_destination: &'a Destination,
-    subject_var: &'a str,
-    terminator: LeafTerminator<'a>,
-    guard_failure: GuardFailurePolicy,
-    chain_mode: ChainMode,
-    leaf_scope: LeafScope,
+    role: WalkRole,
+    /// Set on retry-loop walks that need a `break <label>` terminator at
+    /// non-divergent leaves; `None` for switch-case/chain-body and for
+    /// direct-return or skip-wrapper retry loops.
+    break_label: Option<&'a str>,
 }
 
 impl<'a> WalkCtx<'a> {
-    fn switch_case(arm_destination: &'a Destination, subject_var: &'a str) -> Self {
+    fn switch_case(arm_destination: &'a Destination) -> Self {
         Self {
             arm_destination,
-            subject_var,
-            terminator: LeafTerminator::None,
-            guard_failure: GuardFailurePolicy::EmitInline,
-            chain_mode: ChainMode::Cascading,
-            leaf_scope: LeafScope::Implicit,
+            role: WalkRole::SwitchCase,
+            break_label: None,
         }
     }
 
-    fn chain_test(arm_destination: &'a Destination, subject_var: &'a str) -> Self {
+    fn chain_test(arm_destination: &'a Destination) -> Self {
         Self {
             arm_destination,
-            subject_var,
-            terminator: LeafTerminator::None,
-            guard_failure: GuardFailurePolicy::FallThrough,
-            chain_mode: ChainMode::Cascading,
-            leaf_scope: LeafScope::Implicit,
+            role: WalkRole::ChainBody,
+            break_label: None,
         }
     }
 
-    fn retry_loop(
-        arm_destination: &'a Destination,
-        subject_var: &'a str,
-        label: &'a str,
-        use_direct_return: bool,
-    ) -> Self {
+    fn retry_loop(arm_destination: &'a Destination, break_label: Option<&'a str>) -> Self {
         Self {
             arm_destination,
-            subject_var,
-            terminator: if use_direct_return {
-                LeafTerminator::None
-            } else {
-                LeafTerminator::BreakLabel(label)
-            },
-            guard_failure: GuardFailurePolicy::Sibling,
-            chain_mode: ChainMode::GroupedRetry,
-            leaf_scope: LeafScope::Explicit,
+            role: WalkRole::RetryLoopTop,
+            break_label,
         }
     }
 
     fn nested(self) -> Self {
-        Self {
-            leaf_scope: LeafScope::Implicit,
-            guard_failure: GuardFailurePolicy::FallThrough,
-            ..self
-        }
+        let role = match self.role {
+            WalkRole::SwitchCase | WalkRole::ChainBody => WalkRole::ChainBody,
+            WalkRole::RetryLoopTop | WalkRole::RetryLoopNested => WalkRole::RetryLoopNested,
+        };
+        Self { role, ..self }
+    }
+
+    fn is_grouped_retry(&self) -> bool {
+        matches!(
+            self.role,
+            WalkRole::RetryLoopTop | WalkRole::RetryLoopNested
+        )
+    }
+
+    fn leaf_scope_explicit(&self) -> bool {
+        matches!(self.role, WalkRole::RetryLoopTop)
     }
 }
 
@@ -132,378 +109,207 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         let result_var = routing.result_var().map(|s| s.to_string());
         let body_destination = routing.into_body_destination();
 
-        if matches!(tree, Decision::Switch { .. }) {
-            self.emit_switch(output, &tree, &body_destination);
-            if let Some(var) = &result_var {
-                write_line!(output, "return {}", var);
+        let plan = {
+            let subject_var = self.subject_var.clone();
+            let mut ctx = LoweringCtx::new(self.emitter, self.arms, subject_var);
+            lower_match(&mut ctx, &tree)
+        };
+
+        match plan {
+            MatchEmitPlan::Switch { tree } => {
+                let ctx = WalkCtx::switch_case(&body_destination);
+                self.walk(output, &tree, &ctx);
+                if let Some(var) = &result_var {
+                    write_line!(output, "return {}", var);
+                }
             }
-            inline_trivial_bindings(output, pre_len);
-            return;
+            MatchEmitPlan::SingleCatchall(plan) => {
+                self.render_single_catchall(output, &plan, &body_destination, &result_var);
+            }
+            MatchEmitPlan::Chain(plan) => {
+                self.render_chain_root(output, &plan, &body_destination, &result_var);
+            }
+            MatchEmitPlan::RetryLoop(plan) => {
+                let needs_return = result_var.is_some();
+                self.render_retry_loop(output, &plan, &body_destination, needs_return);
+            }
         }
 
-        if let Decision::Success {
-            arm_index,
-            bindings,
-        } = &tree
-        {
-            self.emit_single_catchall(output, *arm_index, bindings, &body_destination, &result_var);
-            inline_trivial_bindings(output, pre_len);
-            return;
-        }
-
-        let has_guards = self.arms.iter().any(|arm| arm.has_guard());
-        if has_guards {
-            let needs_return = result_var.is_some();
-            self.emit_with_loop(output, &tree, &body_destination, needs_return);
-        } else {
-            self.emit_chain(output, &tree, &body_destination, &result_var);
-        }
         inline_trivial_bindings(output, pre_len);
     }
 
-    fn emit_switch(&mut self, output: &mut String, tree: &Decision, arm_destination: &Destination) {
-        let Decision::Switch {
-            path,
-            kind,
-            branches,
-            fallback,
-        } = tree
-        else {
-            unreachable!("emit_switch called on non-Switch");
-        };
-
-        if matches!(kind, SwitchKind::TypeSwitch) {
-            return self.emit_type_switch(output, tree, arm_destination);
-        }
-
-        let subject_var = self.subject_var.clone();
-        let switch_expression = self.render_switch_expression(path, kind, &subject_var);
-
-        if self.try_emit_boolean_switch(
-            output,
-            kind,
-            branches,
-            fallback,
-            &switch_expression,
-            arm_destination,
-            &subject_var,
-        ) {
-            return;
-        }
-
-        if self.try_emit_two_branch_switch(
-            output,
-            branches,
-            fallback,
-            &switch_expression,
-            arm_destination,
-            &subject_var,
-        ) {
-            return;
-        }
-
-        if self.try_emit_single_branch_switch(
-            output,
-            branches,
-            fallback,
-            &switch_expression,
-            arm_destination,
-            &subject_var,
-        ) {
-            return;
-        }
-
-        write_line!(output, "switch {} {{", switch_expression);
-        self.emit_switch_body(
-            output,
-            branches,
-            fallback,
-            arm_destination,
-            &subject_var,
-            true,
-        );
-    }
-
-    /// Render the expression driving a non-type-switch dispatch.
-    /// `EnumTag` reads `.Tag` off the subject; `Value` uses the subject path
-    /// directly. Both wrap struct literals to keep gofmt from stripping parens.
-    fn render_switch_expression(
-        &self,
-        path: &AccessPath,
-        kind: &SwitchKind,
-        subject_var: &str,
-    ) -> String {
-        let base = path.render(subject_var);
-        match kind {
-            SwitchKind::EnumTag => wrap_if_struct_literal(format!("{}.Tag", base)),
-            SwitchKind::Value => wrap_if_struct_literal(base),
-            SwitchKind::TypeSwitch => unreachable!("handled by emit_type_switch"),
-        }
-    }
-
-    /// Propagate the stdlib-needed flag from any of the supplied branches.
-    /// Collected in one place because every small-shape specialization
-    /// otherwise repeats the same assignment.
-    fn mark_stdlib_from_branches(&mut self, branches: &[&SwitchBranch]) {
-        if branches.iter().any(|b| b.needs_stdlib) {
-            self.emitter.flags.needs_stdlib = true;
-        }
-    }
-
-    /// Emit `if <cond> { <then> }` with an optional else arm. The else branch
-    /// may inline (e.g. a nested `if`) via `walk_else_or_flat`; `None` closes
-    /// the if block with `}\n`.
-    fn emit_if_else_arm(
+    fn render_single_catchall(
         &mut self,
         output: &mut String,
-        condition: &str,
-        then: &Decision,
-        otherwise: Option<&Decision>,
+        plan: &SingleCatchallPlan,
         arm_destination: &Destination,
-        subject_var: &str,
+        result_var: &Option<String>,
     ) {
-        let ctx = WalkCtx::switch_case(arm_destination, subject_var);
-        write_line!(output, "if {} {{", condition);
-        self.emitter.enter_scope();
-        self.walk(output, then, &ctx);
-        self.emitter.exit_scope();
-        match otherwise {
-            Some(d) => self.walk_else_or_flat(output, d, &ctx),
-            None => output.push_str("}\n"),
-        }
-    }
+        let emits_any_binding = plan.bindings.iter().any(|b| b.go_name.is_some());
+        let needs_block = emits_any_binding || plan.pattern_has_collisions;
 
-    /// Two-branch value switch with `true`/`false` labels: emit as a direct
-    /// `if <expr> { true_branch } else { false_branch }` on the raw expression.
-    #[allow(clippy::too_many_arguments)]
-    fn try_emit_boolean_switch(
-        &mut self,
-        output: &mut String,
-        kind: &SwitchKind,
-        branches: &[SwitchBranch],
-        fallback: &Option<Box<Decision>>,
-        switch_expression: &str,
-        arm_destination: &Destination,
-        subject_var: &str,
-    ) -> bool {
-        if branches.len() != 2
-            || fallback.is_some()
-            || !matches!(kind, SwitchKind::Value)
-            || !branches.iter().any(|b| b.case_label == "true")
-            || !branches.iter().any(|b| b.case_label == "false")
-        {
-            return false;
-        }
-        let (true_branch, false_branch) = if branches[0].case_label == "true" {
-            (&branches[0], &branches[1])
-        } else {
-            (&branches[1], &branches[0])
-        };
-        self.mark_stdlib_from_branches(&[true_branch, false_branch]);
-        self.emit_if_else_arm(
-            output,
-            switch_expression,
-            &true_branch.decision,
-            Some(&false_branch.decision),
-            arm_destination,
-            subject_var,
-        );
-        true
-    }
-
-    /// Two-branch non-boolean switch (common for Option/Result): emit as
-    /// `if <expr> == <first.label> { first } else { second }`.
-    fn try_emit_two_branch_switch(
-        &mut self,
-        output: &mut String,
-        branches: &[SwitchBranch],
-        fallback: &Option<Box<Decision>>,
-        switch_expression: &str,
-        arm_destination: &Destination,
-        subject_var: &str,
-    ) -> bool {
-        if branches.len() != 2 || fallback.is_some() {
-            return false;
-        }
-        let first = &branches[0];
-        let second = &branches[1];
-        self.mark_stdlib_from_branches(&[first, second]);
-        let condition = format!("{} == {}", switch_expression, first.case_label);
-        self.emit_if_else_arm(
-            output,
-            &condition,
-            &first.decision,
-            Some(&second.decision),
-            arm_destination,
-            subject_var,
-        );
-        true
-    }
-
-    /// Single-branch shapes: one branch + no-or-empty fallback (plain `if`),
-    /// one branch + real fallback (`if/else`), or one branch + missing
-    /// fallback (inline the body, no condition wrapper — exhaustive enum).
-    fn try_emit_single_branch_switch(
-        &mut self,
-        output: &mut String,
-        branches: &[SwitchBranch],
-        fallback: &Option<Box<Decision>>,
-        switch_expression: &str,
-        arm_destination: &Destination,
-        subject_var: &str,
-    ) -> bool {
-        if branches.len() != 1 {
-            return false;
-        }
-        let branch = &branches[0];
-        self.mark_stdlib_from_branches(&[branch]);
-
-        if self.is_empty_fallback(fallback) {
-            let condition = format!("{} == {}", switch_expression, branch.case_label);
-            self.emit_if_else_arm(
-                output,
-                &condition,
-                &branch.decision,
-                None,
-                arm_destination,
-                subject_var,
-            );
-            return true;
-        }
-        if let Some(fb) = fallback.as_deref() {
-            let condition = format!("{} == {}", switch_expression, branch.case_label);
-            self.emit_if_else_arm(
-                output,
-                &condition,
-                &branch.decision,
-                Some(fb),
-                arm_destination,
-                subject_var,
-            );
-            return true;
-        }
-        // Single-variant enum: emit the body directly, no wrapper.
-        let ctx = WalkCtx::switch_case(arm_destination, subject_var);
-        self.walk(output, &branch.decision, &ctx);
-        true
-    }
-
-    /// Emit a Go type switch: `switch x := x.(type) { case T: ... default: ... }`.
-    fn emit_type_switch(
-        &mut self,
-        output: &mut String,
-        tree: &Decision,
-        arm_destination: &Destination,
-    ) {
-        let Decision::Switch {
-            path,
-            branches,
-            fallback,
-            ..
-        } = tree
-        else {
-            unreachable!("emit_type_switch called on non-Switch");
-        };
-
-        let subject_var = self.subject_var.clone();
-        let base = path.render(&subject_var);
-
-        let header_start = output.len();
-        write_line!(output, "switch {} := {}.(type) {{", base, base);
-        let body_start = output.len();
-        self.emit_switch_body(output, branches, fallback, arm_destination, &base, false);
-        if !output_references_var(&output[body_start..], &base) {
-            let new_header = format!("switch {}.(type) {{\n", base);
-            output.replace_range(header_start..body_start, &new_header);
-        }
-    }
-
-    /// Emit case branches, the default block, the closing brace, and the
-    /// unreachable guard for a switch that has already emitted its header line.
-    ///
-    /// `track_stdlib`: when true, propagates `needs_stdlib` from branch labels
-    /// (required for enum-tag switches; not needed for type switches).
-    fn emit_switch_body(
-        &mut self,
-        output: &mut String,
-        branches: &[SwitchBranch],
-        fallback: &Option<Box<Decision>>,
-        arm_destination: &Destination,
-        subject_var: &str,
-        track_stdlib: bool,
-    ) {
-        let use_last_as_default = fallback.is_none() && !branches.is_empty();
-        let regular_branches = if use_last_as_default {
-            &branches[..branches.len() - 1]
-        } else {
-            branches
-        };
-
-        let ctx = WalkCtx::switch_case(arm_destination, subject_var);
-        for branch in regular_branches {
-            if track_stdlib && branch.needs_stdlib {
-                self.emitter.flags.needs_stdlib = true;
-            }
-            write_line!(output, "case {}:", branch.case_label);
+        if needs_block {
+            output.push_str("{\n");
             self.emitter.enter_scope();
-            self.walk(output, &branch.decision, &ctx);
-            self.emitter.exit_scope();
         }
 
-        let default_decision = if use_last_as_default {
-            let last = branches.last().unwrap();
-            if track_stdlib && last.needs_stdlib {
-                self.emitter.flags.needs_stdlib = true;
-            }
-            Some(&last.decision)
-        } else {
-            fallback.as_deref()
-        };
-        if let Some(decision) = default_decision {
-            let pre = output.len();
-            self.emitter.enter_scope();
-            self.walk(output, decision, &ctx);
-            self.emitter.exit_scope();
-            if output.len() > pre {
-                output.insert_str(pre, "default:\n");
-            }
+        self.emit_bindings(output, &plan.bindings);
+        self.emit_arm_body(output, plan.arm_index, Some(arm_destination));
+
+        if let Some(var) = result_var {
+            write_line!(output, "return {}", var);
         }
 
-        output.push_str("}\n");
+        if needs_block {
+            self.emitter.exit_scope();
+            output.push_str("}\n");
+        }
+    }
 
+    fn render_chain_root(
+        &mut self,
+        output: &mut String,
+        plan: &ChainPlan,
+        arm_destination: &Destination,
+        result_var: &Option<String>,
+    ) {
+        self.emit_chain_root_decision(output, &plan.tree, arm_destination);
+        if let Some(var) = result_var {
+            write_line!(output, "return {}", var);
+        }
         self.emitter
-            .emit_unreachable_if_needed(output, fallback.is_some() || use_last_as_default);
+            .emit_unreachable_if_needed(output, plan.chain_tail_is_exhaustive);
     }
 
-    /// Emit a guard's `if <condition> {` header and enter scope.
-    /// Returns `true` if the guard was emitted; `false` if no guard exists.
-    fn emit_guard_header(&mut self, output: &mut String, arm_index: usize) -> bool {
-        let guard = &self.arms[arm_index].guard;
-        if let Some(guard_expression) = guard {
-            let guard_str = self
-                .emitter
-                .emit_condition_operand(output, guard_expression);
-            let guard_str = wrap_if_struct_literal(guard_str);
-            write_line!(output, "if {} {{", guard_str);
-            self.emitter.enter_scope();
-            true
-        } else {
-            false
-        }
-    }
-
-    fn walk(&mut self, output: &mut String, decision: &Decision, ctx: &WalkCtx) {
-        match decision {
-            Decision::Success {
+    fn emit_chain_root_decision(
+        &mut self,
+        output: &mut String,
+        tree: &EmitDecision,
+        arm_destination: &Destination,
+    ) {
+        match tree {
+            EmitDecision::Success {
                 arm_index,
                 bindings,
+                ..
             } => {
-                let wrap = ctx.leaf_scope == LeafScope::Explicit;
+                self.emit_bindings(output, bindings);
+                self.emit_arm_body(output, *arm_index, Some(arm_destination));
+            }
+            EmitDecision::Chain {
+                tests,
+                fallback,
+                last_is_catchall,
+            } => {
+                self.emit_chain_branch_header_loop(
+                    output,
+                    tests,
+                    fallback,
+                    *last_is_catchall,
+                    arm_destination,
+                );
+            }
+            EmitDecision::Unreachable => {}
+            EmitDecision::Guard { .. } => {
+                self.walk(output, tree, &WalkCtx::chain_test(arm_destination));
+            }
+            _ => {
+                self.walk(output, tree, &WalkCtx::switch_case(arm_destination));
+            }
+        }
+    }
+
+    /// Shared by chain root and nested cascading chain rendering.
+    fn emit_chain_branch_header_loop(
+        &mut self,
+        output: &mut String,
+        tests: &[EmitChainTest],
+        fallback: &EmitDecision,
+        last_is_catchall: bool,
+        arm_destination: &Destination,
+    ) {
+        let regular = if last_is_catchall {
+            &tests[..tests.len() - 1]
+        } else {
+            tests
+        };
+
+        let guard_ctx = WalkCtx::switch_case(arm_destination);
+        let chain_ctx = WalkCtx::chain_test(arm_destination);
+        for (i, test) in regular.iter().enumerate() {
+            let is_catchall = test.cond.is_none();
+            let condition = test.cond.as_deref().unwrap_or("");
+            self.emitter
+                .emit_branch_header(output, condition, is_catchall, i == 0);
+            if matches!(test.decision.as_ref(), EmitDecision::Guard { .. }) {
+                self.walk(output, &test.decision, &guard_ctx);
+            } else {
+                self.walk(output, &test.decision, &chain_ctx);
+            }
+        }
+
+        self.emitter.exit_scope();
+        if last_is_catchall {
+            let last_test = tests.last().unwrap();
+            self.walk_else_or_flat(output, &last_test.decision, &chain_ctx);
+        } else if matches!(fallback, EmitDecision::Unreachable) {
+            output.push_str("}\n");
+        } else {
+            self.walk_else_or_flat(output, fallback, &chain_ctx);
+        }
+    }
+
+    fn render_retry_loop(
+        &mut self,
+        output: &mut String,
+        plan: &RetryLoopPlan,
+        arm_destination: &Destination,
+        needs_return: bool,
+    ) {
+        let use_direct_return = arm_destination.is_tail();
+        let unguarded_exit = plan.root_has_unguarded_terminal || plan.last_arm_is_any_catchall;
+        let skip_wrapper = !use_direct_return && unguarded_exit && plan.all_arms_diverge;
+
+        let label = if use_direct_return || skip_wrapper {
+            String::new()
+        } else {
+            let l = self.emitter.fresh_var(Some("match"));
+            write_line!(output, "{}:\nfor {{", l);
+            l
+        };
+
+        let break_label = (!label.is_empty()).then_some(label.as_str());
+        let ctx = WalkCtx::retry_loop(arm_destination, break_label);
+        self.walk(output, &plan.tree, &ctx);
+
+        if use_direct_return {
+            if !plan.root_has_unguarded_terminal {
+                output.push_str("panic(\"unreachable\")\n");
+            }
+        } else if !skip_wrapper {
+            if !unguarded_exit {
+                write_line!(output, "break {}", label);
+            }
+            output.push_str("}\n");
+            if needs_return && let Some(var) = arm_destination.assign_target() {
+                write_line!(output, "return {}", var);
+            }
+        }
+    }
+
+    fn walk(&mut self, output: &mut String, decision: &EmitDecision, ctx: &WalkCtx) {
+        match decision {
+            EmitDecision::Success {
+                arm_index,
+                bindings,
+                ..
+            } => {
+                let wrap = ctx.leaf_scope_explicit();
                 if wrap {
                     output.push_str("{\n");
                     self.emitter.enter_scope();
                 }
-                self.emit_bindings(output, bindings, ctx.subject_var);
+                self.emit_bindings(output, bindings);
                 self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
                 self.apply_leaf_terminator(output, ctx);
                 if wrap {
@@ -511,96 +317,102 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                     output.push_str("}\n");
                 }
             }
-            Decision::Guard {
+            EmitDecision::Guard {
                 arm_index,
                 bindings,
                 success,
                 failure,
             } => {
-                let needs_pre_scope = ctx.leaf_scope == LeafScope::Explicit && !bindings.is_empty();
+                let needs_pre_scope = ctx.leaf_scope_explicit() && !bindings.is_empty();
                 if needs_pre_scope {
                     output.push_str("{\n");
                     self.emitter.enter_scope();
                 }
-                self.emit_bindings(output, bindings, ctx.subject_var);
+                self.emit_bindings(output, bindings);
                 if self.emit_guard_header(output, *arm_index) {
                     self.walk(output, success, &ctx.nested());
                     self.emitter.exit_scope();
-                    match ctx.guard_failure {
-                        GuardFailurePolicy::EmitInline => {
-                            self.walk_else_or_flat(output, failure, ctx);
-                        }
-                        GuardFailurePolicy::FallThrough | GuardFailurePolicy::Sibling => {
-                            output.push_str("}\n");
-                        }
+                    if ctx.role == WalkRole::SwitchCase {
+                        self.walk_else_or_flat(output, failure, ctx);
+                    } else {
+                        output.push_str("}\n");
                     }
                 }
                 if needs_pre_scope {
                     self.emitter.exit_scope();
                     output.push_str("}\n");
                 }
-                if matches!(ctx.guard_failure, GuardFailurePolicy::Sibling) {
+                if ctx.role == WalkRole::RetryLoopTop {
                     self.walk(output, failure, ctx);
                 }
             }
-            Decision::Chain { tests, fallback } => match ctx.chain_mode {
-                ChainMode::Cascading => {
-                    self.emit_chain_decisions(
+            EmitDecision::IfElse {
+                cond,
+                then_branch,
+                else_branch,
+            } => {
+                self.emit_if_else_block(output, cond, then_branch, else_branch.as_deref(), ctx);
+                self.apply_leaf_terminator(output, ctx);
+            }
+            EmitDecision::InlineBranch { branch } => {
+                let inner = WalkCtx::switch_case(ctx.arm_destination);
+                self.walk(output, branch, &inner);
+                self.apply_leaf_terminator(output, ctx);
+            }
+            EmitDecision::Switch {
+                expr,
+                cases,
+                default,
+                ..
+            } => {
+                self.emit_value_switch(
+                    output,
+                    expr,
+                    cases,
+                    default.as_deref(),
+                    ctx.arm_destination,
+                );
+                self.apply_leaf_terminator(output, ctx);
+            }
+            EmitDecision::TypeSwitch {
+                base,
+                cases,
+                default,
+            } => {
+                self.emit_type_switch(output, base, cases, default.as_deref(), ctx.arm_destination);
+                self.apply_leaf_terminator(output, ctx);
+            }
+            EmitDecision::Chain {
+                tests,
+                fallback,
+                last_is_catchall,
+            } => {
+                if ctx.is_grouped_retry() {
+                    self.emit_chain_grouped(output, tests, fallback, *last_is_catchall, ctx);
+                } else {
+                    self.emit_chain_branch_header_loop(
                         output,
-                        decision,
+                        tests,
+                        fallback,
+                        *last_is_catchall,
                         ctx.arm_destination,
-                        ctx.subject_var,
                     );
                 }
-                ChainMode::GroupedRetry => {
-                    self.emit_chain_grouped(output, tests, fallback, ctx);
-                }
-            },
-            Decision::Switch { .. } => {
-                self.emit_switch(output, decision, ctx.arm_destination);
-                self.apply_leaf_terminator(output, ctx);
             }
-            Decision::Unreachable => {}
-        }
-    }
-
-    /// For the hoisted chain-group path: shared bindings are emitted once
-    /// above the merged block, so the Success/Guard leaf must not re-emit them.
-    fn walk_skip_initial_bindings(
-        &mut self,
-        output: &mut String,
-        decision: &Decision,
-        ctx: &WalkCtx,
-    ) {
-        match decision {
-            Decision::Success { arm_index, .. } => {
-                self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
-                self.apply_leaf_terminator(output, ctx);
-            }
-            Decision::Guard { arm_index, .. } => {
-                if self.emit_guard_header(output, *arm_index) {
-                    self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
-                    self.apply_leaf_terminator(output, ctx);
-                    self.emitter.exit_scope();
-                    output.push_str("}\n");
-                }
-            }
-            _ => {
-                self.walk(output, decision, ctx);
-            }
+            EmitDecision::Unreachable => {}
         }
     }
 
     fn apply_leaf_terminator(&mut self, output: &mut String, ctx: &WalkCtx) {
-        if let LeafTerminator::BreakLabel(label) = ctx.terminator
+        if let Some(label) = ctx.break_label
             && !output_ends_with_diverge(output)
         {
             write_line!(output, "break {}", label);
         }
     }
 
-    fn walk_else_or_flat(&mut self, output: &mut String, decision: &Decision, ctx: &WalkCtx) {
-        if self.is_empty_decision(decision) {
+    fn walk_else_or_flat(&mut self, output: &mut String, decision: &EmitDecision, ctx: &WalkCtx) {
+        if is_empty_emit_decision(decision) {
             output.push_str("}\n");
         } else if output_ends_with_diverge(output) {
             output.push_str("}\n");
@@ -614,240 +426,122 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
     }
 
-    fn emit_single_catchall(
+    fn emit_if_else_block(
         &mut self,
         output: &mut String,
-        arm_index: usize,
-        bindings: &[PatternBinding],
-        arm_destination: &Destination,
-        result_var: &Option<String>,
+        cond: &str,
+        then_branch: &EmitDecision,
+        else_branch: Option<&EmitDecision>,
+        ctx: &WalkCtx,
     ) {
-        let arm = &self.arms[arm_index];
-        let emits_any_binding = bindings.iter().any(|b| b.go_name.is_some());
-        let needs_block =
-            emits_any_binding || self.emitter.pattern_has_binding_collisions(&arm.pattern);
+        let inner = WalkCtx::switch_case(ctx.arm_destination);
+        write_line!(output, "if {} {{", cond);
+        self.emitter.enter_scope();
+        self.walk(output, then_branch, &inner);
+        self.emitter.exit_scope();
+        match else_branch {
+            Some(d) => self.walk_else_or_flat(output, d, &inner),
+            None => output.push_str("}\n"),
+        }
+    }
 
-        if needs_block {
-            output.push_str("{\n");
+    fn emit_value_switch(
+        &mut self,
+        output: &mut String,
+        expr: &str,
+        cases: &[EmitCase],
+        default: Option<&EmitDecision>,
+        arm_destination: &Destination,
+    ) {
+        write_line!(output, "switch {} {{", expr);
+        let ctx = WalkCtx::switch_case(arm_destination);
+        for case in cases {
+            write_line!(output, "case {}:", case.case_label);
             self.emitter.enter_scope();
-        }
-
-        let subject_var = self.subject_var.clone();
-        self.emit_bindings(output, bindings, &subject_var);
-        self.emit_arm_body(output, arm_index, Some(arm_destination));
-
-        if let Some(var) = result_var {
-            write_line!(output, "return {}", var);
-        }
-
-        if needs_block {
+            self.walk(output, &case.decision, &ctx);
             self.emitter.exit_scope();
-            output.push_str("}\n");
         }
-    }
-
-    fn emit_chain(
-        &mut self,
-        output: &mut String,
-        tree: &Decision,
-        arm_destination: &Destination,
-        result_var: &Option<String>,
-    ) {
-        let subject_var = self.subject_var.clone();
-        self.emit_chain_decisions(output, tree, arm_destination, &subject_var);
-
-        if let Some(var) = result_var {
-            write_line!(output, "return {}", var);
+        if let Some(default_decision) = default {
+            let pre = output.len();
+            self.emitter.enter_scope();
+            self.walk(output, default_decision, &ctx);
+            self.emitter.exit_scope();
+            if output.len() > pre {
+                output.insert_str(pre, "default:\n");
+            }
         }
-
-        let has_catchall =
-            self.arms.last().is_some_and(|arm| {
-                Self::is_unconditional_catchall(&arm.pattern) && !arm.has_guard()
-            }) || Self::decision_is_exhaustive(tree);
+        output.push_str("}\n");
         self.emitter
-            .emit_unreachable_if_needed(output, has_catchall);
+            .emit_unreachable_if_needed(output, default.is_some());
     }
 
-    fn emit_chain_decisions(
+    fn emit_type_switch(
         &mut self,
         output: &mut String,
-        tree: &Decision,
+        base: &str,
+        cases: &[EmitCase],
+        default: Option<&EmitDecision>,
         arm_destination: &Destination,
-        subject_var: &str,
     ) {
-        match tree {
-            Decision::Success {
-                arm_index,
-                bindings,
-            } => {
-                self.emit_bindings(output, bindings, subject_var);
-                self.emit_arm_body(output, *arm_index, Some(arm_destination));
-            }
+        let header_start = output.len();
+        write_line!(output, "switch {} := {}.(type) {{", base, base);
+        let body_start = output.len();
 
-            Decision::Chain { tests, fallback } => {
-                let last_is_catchall =
-                    matches!(fallback.as_ref(), Decision::Unreachable) && tests.len() > 1;
-
-                let regular_tests = if last_is_catchall {
-                    &tests[..tests.len() - 1]
-                } else {
-                    tests
-                };
-
-                let guard_ctx = WalkCtx::switch_case(arm_destination, subject_var);
-                let chain_ctx = WalkCtx::chain_test(arm_destination, subject_var);
-                for (i, test) in regular_tests.iter().enumerate() {
-                    let condition = render_condition(&test.checks, subject_var);
-                    let is_catchall = test.checks.is_empty();
-
-                    self.emitter
-                        .emit_branch_header(output, &condition, is_catchall, i == 0);
-
-                    if matches!(test.decision, Decision::Guard { .. }) {
-                        self.walk(output, &test.decision, &guard_ctx);
-                    } else {
-                        self.walk(output, &test.decision, &chain_ctx);
-                    }
-                }
-
-                self.emitter.exit_scope();
-                if last_is_catchall {
-                    let last_test = tests.last().unwrap();
-                    self.walk_else_or_flat(output, &last_test.decision, &chain_ctx);
-                } else if matches!(fallback.as_ref(), Decision::Unreachable) {
-                    output.push_str("}\n");
-                } else {
-                    self.walk_else_or_flat(output, fallback, &chain_ctx);
-                }
-            }
-
-            Decision::Switch { .. } => {
-                self.emit_switch(output, tree, arm_destination);
-            }
-
-            Decision::Unreachable => {}
-
-            Decision::Guard { .. } => {
-                let ctx = WalkCtx::chain_test(arm_destination, subject_var);
-                self.walk(output, tree, &ctx);
+        let ctx = WalkCtx::switch_case(arm_destination);
+        for case in cases {
+            write_line!(output, "case {}:", case.case_label);
+            self.emitter.enter_scope();
+            self.walk(output, &case.decision, &ctx);
+            self.emitter.exit_scope();
+        }
+        if let Some(default_decision) = default {
+            let pre = output.len();
+            self.emitter.enter_scope();
+            self.walk(output, default_decision, &ctx);
+            self.emitter.exit_scope();
+            if output.len() > pre {
+                output.insert_str(pre, "default:\n");
             }
         }
-    }
+        output.push_str("}\n");
 
-    fn emit_with_loop(
-        &mut self,
-        output: &mut String,
-        tree: &Decision,
-        arm_destination: &Destination,
-        needs_return: bool,
-    ) {
-        let use_direct_return = arm_destination.is_tail();
-        let tree_has_terminal = Self::tree_has_unguarded_terminal(tree);
-        let last_arm_is_unguarded_catchall = tree_has_terminal
-            || self
-                .arms
-                .last()
-                .is_some_and(|arm| !arm.has_guard() && Emitter::is_catchall_pattern(&arm.pattern));
-
-        let skip_wrapper = !use_direct_return
-            && last_arm_is_unguarded_catchall
-            && self
-                .arms
-                .iter()
-                .all(|arm| arm.expression.diverges().is_some());
-
-        let label = if use_direct_return || skip_wrapper {
-            String::new()
-        } else {
-            let l = self.emitter.fresh_var(Some("match"));
-            write_line!(output, "{}:\nfor {{", l);
-            l
-        };
-
-        let subject_var = self.subject_var.clone();
-        let ctx = WalkCtx::retry_loop(
-            arm_destination,
-            &subject_var,
-            &label,
-            use_direct_return || skip_wrapper,
-        );
-        self.walk(output, tree, &ctx);
-
-        if use_direct_return {
-            if !tree_has_terminal {
-                output.push_str("panic(\"unreachable\")\n");
-            }
-        } else if !skip_wrapper {
-            if !last_arm_is_unguarded_catchall {
-                write_line!(output, "break {}", label);
-            }
-            output.push_str("}\n");
-            if needs_return && let Some(var) = arm_destination.assign_target() {
-                write_line!(output, "return {}", var);
-            }
+        if !output_references_var(&output[body_start..], base) {
+            let new_header = format!("switch {}.(type) {{\n", base);
+            output.replace_range(header_start..body_start, &new_header);
         }
+
+        self.emitter
+            .emit_unreachable_if_needed(output, default.is_some());
     }
 
     fn emit_chain_grouped(
         &mut self,
         output: &mut String,
-        tests: &[ChainTest],
-        fallback: &Decision,
+        tests: &[EmitChainTest],
+        fallback: &EmitDecision,
+        last_is_catchall: bool,
         ctx: &WalkCtx,
     ) {
         let inner_ctx = ctx.nested();
-        let last_is_catchall = matches!(fallback, Decision::Unreachable) && tests.len() > 1;
-        let groups = self.group_chain_tests_by_condition(tests, ctx.subject_var);
+        let groups = group_chain_tests_by_condition(tests);
         let group_count = groups.len();
 
-        for (g, (condition, indices)) in groups.iter().enumerate() {
+        for (g, (_condition, indices)) in groups.iter().enumerate() {
             let is_last_group = g == group_count - 1;
             let collapse_as_catchall = is_last_group && last_is_catchall && indices.len() == 1;
-            self.emit_chain_group(
-                output,
-                condition,
-                indices,
-                tests,
-                &inner_ctx,
-                collapse_as_catchall,
-            );
+            self.emit_chain_group(output, indices, tests, &inner_ctx, collapse_as_catchall);
         }
 
-        if !matches!(fallback, Decision::Unreachable) {
+        if !matches!(fallback, EmitDecision::Unreachable) {
             self.walk(output, fallback, ctx);
         }
     }
 
-    /// Group consecutive chain tests that render to the same condition, so
-    /// e.g. three `if tag == Some { ... }` blocks collapse into one.
-    fn group_chain_tests_by_condition(
-        &self,
-        tests: &[ChainTest],
-        subject_var: &str,
-    ) -> Vec<(String, Vec<usize>)> {
-        let mut groups: Vec<(String, Vec<usize>)> = Vec::new();
-        for (i, test) in tests.iter().enumerate() {
-            let condition = render_condition(&test.checks, subject_var);
-            if let Some((last_cond, indices)) = groups.last_mut()
-                && *last_cond == condition
-            {
-                indices.push(i);
-                continue;
-            }
-            groups.push((condition, vec![i]));
-        }
-        groups
-    }
-
-    /// Emit one group of merged-condition chain tests. `collapse_as_catchall`
-    /// drops the condition wrapper entirely when the final group is an
-    /// exhaustive singleton and the fallback is unreachable.
     fn emit_chain_group(
         &mut self,
         output: &mut String,
-        condition: &str,
         indices: &[usize],
-        tests: &[ChainTest],
+        tests: &[EmitChainTest],
         ctx: &WalkCtx,
         collapse_as_catchall: bool,
     ) {
@@ -856,14 +550,15 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             return;
         }
 
-        if tests[indices[0]].checks.is_empty() {
-            output.push_str("{\n");
+        let first = &tests[indices[0]];
+        if let Some(cond) = &first.cond {
+            write_line!(output, "if {} {{", cond);
         } else {
-            write_line!(output, "if {} {{", condition);
+            output.push_str("{\n");
         }
         self.emitter.enter_scope();
 
-        if Self::bindings_are_hoistable(tests, indices, ctx.subject_var) {
+        if bindings_are_hoistable(tests, indices) {
             self.emit_chain_group_hoisted(output, indices, tests, ctx);
         } else {
             self.emit_chain_group_per_test(output, indices, tests, ctx);
@@ -873,42 +568,49 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         output.push_str("}\n");
     }
 
-    /// Hoist shared pattern bindings to the top of the merged block and emit
-    /// each test's body without its own binding prelude. Caller pre-checked
-    /// that the bindings are hoist-safe.
     fn emit_chain_group_hoisted(
         &mut self,
         output: &mut String,
         indices: &[usize],
-        tests: &[ChainTest],
+        tests: &[EmitChainTest],
         ctx: &WalkCtx,
     ) {
         if let Some(&ref_idx) = indices
             .iter()
-            .find(|&&idx| !Self::decision_top_bindings(&tests[idx].decision).is_empty())
+            .find(|&&idx| !decision_top_bindings(&tests[idx].decision).is_empty())
         {
-            let bindings = Self::decision_top_bindings(&tests[ref_idx].decision);
-            self.emit_bindings(output, bindings, ctx.subject_var);
+            self.emit_bindings(output, decision_top_bindings(&tests[ref_idx].decision));
         }
         for &test_idx in indices {
-            self.walk_skip_initial_bindings(output, &tests[test_idx].decision, ctx);
+            match &*tests[test_idx].decision {
+                EmitDecision::Success { arm_index, .. } => {
+                    self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
+                    self.apply_leaf_terminator(output, ctx);
+                }
+                EmitDecision::Guard { arm_index, .. } => {
+                    if self.emit_guard_header(output, *arm_index) {
+                        self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
+                        self.apply_leaf_terminator(output, ctx);
+                        self.emitter.exit_scope();
+                        output.push_str("}\n");
+                    }
+                }
+                _ => self.walk(output, &tests[test_idx].decision, ctx),
+            }
         }
     }
 
-    /// Emit each test in the group with its own binding prelude. Non-last
-    /// tests that declare bindings are wrapped in their own block so the
-    /// bindings stay scoped to that test.
     fn emit_chain_group_per_test(
         &mut self,
         output: &mut String,
         indices: &[usize],
-        tests: &[ChainTest],
+        tests: &[EmitChainTest],
         ctx: &WalkCtx,
     ) {
         for (j, &test_idx) in indices.iter().enumerate() {
             let is_last_in_group = j == indices.len() - 1;
             let needs_wrapper =
-                !is_last_in_group && Self::decision_has_bindings(&tests[test_idx].decision);
+                !is_last_in_group && decision_has_bindings(&tests[test_idx].decision);
             if needs_wrapper {
                 output.push_str("{\n");
                 self.emitter.enter_scope();
@@ -921,13 +623,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
     }
 
-    fn emit_bindings(
-        &mut self,
-        output: &mut String,
-        bindings: &[PatternBinding],
-        subject_var: &str,
-    ) {
-        emit_tree_bindings(self.emitter, output, bindings, subject_var);
+    fn emit_bindings(&mut self, output: &mut String, bindings: &[EmitBinding]) {
+        emit_lowered_bindings(self.emitter, output, bindings);
     }
 
     fn emit_arm_body(
@@ -947,116 +644,67 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
     }
 
-    /// Extract top-level bindings from a decision node.
-    fn decision_top_bindings(decision: &Decision) -> &[PatternBinding] {
-        match decision {
-            Decision::Guard { bindings, .. } | Decision::Success { bindings, .. } => bindings,
-            _ => &[],
+    fn emit_guard_header(&mut self, output: &mut String, arm_index: usize) -> bool {
+        let guard = &self.arms[arm_index].guard;
+        if let Some(guard_expression) = guard {
+            let guard_str = self
+                .emitter
+                .emit_condition_operand(output, guard_expression);
+            let guard_str = wrap_if_struct_literal(guard_str);
+            write_line!(output, "if {} {{", guard_str);
+            self.emitter.enter_scope();
+            true
+        } else {
+            false
         }
     }
+}
 
-    /// Whether a decision node's own bindings are non-empty (used to decide
-    /// if a subscope wrapper `{ }` is needed inside merged guard groups).
-    fn decision_has_bindings(decision: &Decision) -> bool {
-        !Self::decision_top_bindings(decision).is_empty()
+fn decision_top_bindings(decision: &EmitDecision) -> &[EmitBinding] {
+    match decision {
+        EmitDecision::Guard { bindings, .. } | EmitDecision::Success { bindings, .. } => bindings,
+        _ => &[],
     }
+}
 
-    /// Check if all decisions in a merged group have identical bindings
-    /// (same names, same paths), so they can be hoisted once at the top.
-    fn bindings_are_hoistable(tests: &[ChainTest], indices: &[usize], subject_var: &str) -> bool {
-        if indices.len() <= 1 {
-            return false;
-        }
-        let reference = indices.iter().find_map(|&idx| {
-            let b = Self::decision_top_bindings(&tests[idx].decision);
-            if !b.is_empty() { Some(b) } else { None }
-        });
-        let Some(reference) = reference else {
-            return false;
-        };
-        indices.iter().all(|&idx| {
-            let b = Self::decision_top_bindings(&tests[idx].decision);
-            b.is_empty()
-                || (b.len() == reference.len()
-                    && b.iter().zip(reference.iter()).all(|(a, r)| {
-                        a.lisette_name == r.lisette_name
-                            && a.go_name == r.go_name
-                            && a.path.render(subject_var) == r.path.render(subject_var)
-                    }))
-        })
+fn decision_has_bindings(decision: &EmitDecision) -> bool {
+    !decision_top_bindings(decision).is_empty()
+}
+
+fn bindings_are_hoistable(tests: &[EmitChainTest], indices: &[usize]) -> bool {
+    if indices.len() <= 1 {
+        return false;
     }
+    let reference = indices.iter().find_map(|&idx| {
+        let b = decision_top_bindings(&tests[idx].decision);
+        if !b.is_empty() { Some(b) } else { None }
+    });
+    let Some(reference) = reference else {
+        return false;
+    };
+    indices.iter().all(|&idx| {
+        let b = decision_top_bindings(&tests[idx].decision);
+        b.is_empty()
+            || (b.len() == reference.len()
+                && b.iter().zip(reference.iter()).all(|(a, r)| {
+                    a.lisette_name == r.lisette_name
+                        && a.go_name == r.go_name
+                        && a.rendered_access == r.rendered_access
+                }))
+    })
+}
 
-    fn is_unconditional_catchall(pattern: &syntax::ast::Pattern) -> bool {
-        match pattern {
-            syntax::ast::Pattern::Or { patterns, .. } => {
-                patterns.iter().all(Emitter::is_catchall_pattern)
-            }
-            other => Emitter::is_catchall_pattern(other),
-        }
-    }
-
-    /// Check if a decision tree is structurally exhaustive (has an unconditional success path).
-    fn decision_is_exhaustive(tree: &Decision) -> bool {
-        match tree {
-            Decision::Success { .. } => true,
-            Decision::Chain {
-                fallback, tests, ..
-            } => {
-                // When fallback is Unreachable with 2+ tests, the last test's
-                // else branch is exhaustive (emitted as `} else {`).
-                (matches!(fallback.as_ref(), Decision::Unreachable) && tests.len() > 1)
-                    || Self::decision_is_exhaustive(fallback)
-            }
-            Decision::Switch {
-                fallback, branches, ..
-            } => fallback.is_some() || !branches.is_empty(),
-            _ => false,
-        }
-    }
-
-    /// Check if a guard tree has an unguarded terminal (i.e., the final fallback is
-    /// an unconditional Success, not an Unreachable or a guarded arm).
-    fn tree_has_unguarded_terminal(tree: &Decision) -> bool {
-        match tree {
-            Decision::Success { .. } => true,
-            Decision::Guard { failure, .. } => Self::tree_has_unguarded_terminal(failure),
-            Decision::Chain { tests, fallback } => {
-                Self::tree_has_unguarded_terminal(fallback)
-                    || (matches!(fallback.as_ref(), Decision::Unreachable)
-                        && tests
-                            .last()
-                            .is_some_and(|t| Self::tree_has_unguarded_terminal(&t.decision)))
-            }
-            Decision::Switch {
-                fallback, branches, ..
-            } => fallback.as_ref().map_or(!branches.is_empty(), |fb| {
-                Self::tree_has_unguarded_terminal(fb)
-            }),
-            Decision::Unreachable => false,
-        }
-    }
-
-    /// Check if a decision would produce no output (unit body, no bindings).
-    fn is_empty_decision(&self, decision: &Decision) -> bool {
-        if let Decision::Success {
-            arm_index,
-            bindings,
-        } = decision
+fn group_chain_tests_by_condition<'a>(tests: &'a [EmitChainTest]) -> Vec<(&'a str, Vec<usize>)> {
+    let mut groups: Vec<(&'a str, Vec<usize>)> = Vec::new();
+    for (i, test) in tests.iter().enumerate() {
+        let key = test.cond.as_deref().unwrap_or("");
+        if let Some((last_key, indices)) = groups.last_mut()
+            && *last_key == key
         {
-            if !bindings.is_empty() {
-                return false;
-            }
-            let expression = &*self.arms[*arm_index].expression;
-            return matches!(expression, syntax::ast::Expression::Unit { .. })
-                || matches!(expression, syntax::ast::Expression::Block { items, .. } if items.is_empty());
+            indices.push(i);
+            continue;
         }
-        false
+        groups.push((key, vec![i]));
     }
-
-    /// Check if the switch fallback is an empty arm (unit body, no bindings).
-    fn is_empty_fallback(&self, fallback: &Option<Box<Decision>>) -> bool {
-        fallback
-            .as_deref()
-            .is_some_and(|fb| self.is_empty_decision(fb))
-    }
+    groups
 }

@@ -197,6 +197,15 @@ impl Emitter<'_> {
         }
     }
 
+    /// Like `is_catchall_pattern`, but Or-patterns require EVERY alternative
+    /// to be catchall (rather than ANY).
+    pub(crate) fn is_unconditional_catchall(pattern: &Pattern) -> bool {
+        match pattern {
+            Pattern::Or { patterns, .. } => patterns.iter().all(Self::is_catchall_pattern),
+            other => Self::is_catchall_pattern(other),
+        }
+    }
+
     pub(crate) fn emit_binding_declarations_with_type(
         &mut self,
         output: &mut String,

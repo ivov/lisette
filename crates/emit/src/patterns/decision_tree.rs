@@ -275,6 +275,7 @@ pub(crate) enum Decision {
     Switch {
         path: AccessPath,
         kind: SwitchKind,
+        shape: SwitchShape,
         branches: Vec<SwitchBranch>,
         fallback: Option<Box<Decision>>,
     },
@@ -296,6 +297,86 @@ pub(crate) enum SwitchKind {
     Value,
     /// Switch on dynamic Go type — `switch x := x.(type)`
     TypeSwitch,
+}
+
+/// Structural shape of a switch site, chosen at build time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SwitchShape {
+    /// Type switch (case labels are Go type names).
+    TypeSwitch,
+    /// Two branches, `"true"`/`"false"` labels, no fallback, `kind == Value`.
+    Bool,
+    /// Two branches, no fallback, not Bool.
+    Binary,
+    /// One branch (any fallback presence).
+    SingleArm,
+    /// Everything else.
+    Multi,
+}
+
+fn classify_switch_shape(
+    kind: &SwitchKind,
+    branches: &[SwitchBranch],
+    fallback: &Option<Box<Decision>>,
+) -> SwitchShape {
+    if matches!(kind, SwitchKind::TypeSwitch) {
+        return SwitchShape::TypeSwitch;
+    }
+    let is_bool = matches!(kind, SwitchKind::Value)
+        && branches.len() == 2
+        && fallback.is_none()
+        && branches.iter().any(|b| b.case_label == "true")
+        && branches.iter().any(|b| b.case_label == "false");
+    if is_bool {
+        return SwitchShape::Bool;
+    }
+    if branches.len() == 2 && fallback.is_none() {
+        return SwitchShape::Binary;
+    }
+    if branches.len() == 1 {
+        return SwitchShape::SingleArm;
+    }
+    SwitchShape::Multi
+}
+
+/// True when a decision tree has an unconditional success path.
+pub(crate) fn decision_is_exhaustive(tree: &Decision) -> bool {
+    match tree {
+        Decision::Success { .. } => true,
+        Decision::Chain {
+            tests, fallback, ..
+        } => {
+            (matches!(fallback.as_ref(), Decision::Unreachable) && tests.len() > 1)
+                || decision_is_exhaustive(fallback)
+        }
+        Decision::Switch {
+            fallback, branches, ..
+        } => fallback.is_some() || !branches.is_empty(),
+        _ => false,
+    }
+}
+
+/// True when the tree has a terminal Success reachable without passing a guard.
+pub(crate) fn tree_has_unguarded_terminal(tree: &Decision) -> bool {
+    match tree {
+        Decision::Success { .. } => true,
+        Decision::Guard { failure, .. } => tree_has_unguarded_terminal(failure),
+        Decision::Chain {
+            tests, fallback, ..
+        } => {
+            tree_has_unguarded_terminal(fallback)
+                || (matches!(fallback.as_ref(), Decision::Unreachable)
+                    && tests
+                        .last()
+                        .is_some_and(|t| tree_has_unguarded_terminal(&t.decision)))
+        }
+        Decision::Switch {
+            fallback, branches, ..
+        } => fallback
+            .as_ref()
+            .map_or(!branches.is_empty(), |fb| tree_has_unguarded_terminal(fb)),
+        Decision::Unreachable => false,
+    }
 }
 
 /// A single branch in a Switch node.
@@ -464,7 +545,7 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
             });
     }
 
-    let branches = branch_order
+    let branches: Vec<SwitchBranch> = branch_order
         .into_iter()
         .map(|label| {
             let (needs_stdlib, inner_arms) = branch_map.remove(&label).unwrap();
@@ -495,9 +576,11 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
         Some(Box::new(build_tree(fallback_arms)))
     };
 
+    let shape = classify_switch_shape(&kind, &branches, &fallback);
     Some(Decision::Switch {
         path: switch_path,
         kind,
+        shape,
         branches,
         fallback,
     })
