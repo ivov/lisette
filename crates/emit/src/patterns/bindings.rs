@@ -106,6 +106,7 @@ impl Emitter<'_> {
         subject_ty: &Type,
     ) {
         let info = collect_pattern_info(self, pattern, typed, subject_ty);
+        self.apply_pattern_effects(&info.effects);
         let effective = apply_root_assertion(self, output, &info, subject);
         emit_tree_bindings(self, output, &info.bindings, &effective);
     }

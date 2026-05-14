@@ -170,6 +170,9 @@ impl Emitter<'_> {
                 .iter()
                 .map(|alt| decision_tree::collect_pattern_info(self, alt, None, &scrutinee_ty))
                 .collect();
+            for info in &alternatives {
+                self.apply_pattern_effects(&info.effects);
+            }
 
             let unused_names: rustc_hash::FxHashSet<String> = alternatives
                 .iter()
@@ -208,6 +211,7 @@ impl Emitter<'_> {
         }
 
         let info = decision_tree::collect_pattern_info(self, pattern, typed_pattern, &scrutinee_ty);
+        self.apply_pattern_effects(&info.effects);
         let (effective, ok_var) =
             decision_tree::apply_refutable_root_assertion(self, output, &info, &subject_var);
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);

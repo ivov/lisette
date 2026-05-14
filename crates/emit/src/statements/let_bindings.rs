@@ -597,6 +597,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             self.binding.typed_pattern.as_ref(),
             &value_ty,
         );
+        self.emitter.apply_pattern_effects(&info.effects);
 
         let (effective_subject, assert_ok_var) = decision_tree::apply_refutable_root_assertion(
             self.emitter,
@@ -669,6 +670,9 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             .iter()
             .map(|alt| decision_tree::collect_pattern_info(self.emitter, alt, None, &value_ty))
             .collect();
+        for info in &collected {
+            self.emitter.apply_pattern_effects(&info.effects);
+        }
 
         let hoisted: Vec<_> = collected
             .iter()

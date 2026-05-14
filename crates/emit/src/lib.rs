@@ -603,6 +603,18 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    pub(crate) fn apply_pattern_effects(
+        &mut self,
+        effects: &crate::patterns::decision_tree::PatternEffects,
+    ) {
+        if effects.needs_stdlib {
+            self.flags.needs_stdlib = true;
+        }
+        for go_import in &effects.go_imports {
+            self.ensure_imported.insert(go_import.clone());
+        }
+    }
+
     /// Allocate a fresh Go temp, register it as declared, and emit
     /// `tmp := value` into `output`.
     pub(crate) fn hoist_tmp_value(

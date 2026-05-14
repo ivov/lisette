@@ -228,6 +228,7 @@ pub(crate) struct PatternInfo {
     pub root_assertion: Option<TypeAssertion>,
     pub checks: Vec<Check>,
     pub bindings: Vec<PatternBinding>,
+    pub effects: PatternEffects,
 }
 
 impl PatternInfo {
@@ -237,10 +238,41 @@ impl PatternInfo {
     }
 }
 
-/// Accumulates checks and bindings during pattern compilation.
+/// Side effects (stdlib gate + Go imports) accumulated while walking a
+/// pattern.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct PatternEffects {
+    pub needs_stdlib: bool,
+    pub go_imports: Vec<String>,
+}
+
+impl PatternEffects {
+    pub(crate) fn merge_from_go_type(&mut self, go_type: &crate::types::go_type::GoType) {
+        if go_type.needs_stdlib {
+            self.needs_stdlib = true;
+        }
+        self.go_imports.extend(go_type.go_imports.iter().cloned());
+    }
+
+    pub(crate) fn extend(&mut self, other: &PatternEffects) {
+        if other.needs_stdlib {
+            self.needs_stdlib = true;
+        }
+        self.go_imports.extend(other.go_imports.iter().cloned());
+    }
+}
+
+/// Result of compiling a list of expanded arms into a `Decision`.
+pub(crate) struct CompiledDecision {
+    pub decision: Decision,
+    pub effects: PatternEffects,
+}
+
+/// Accumulates checks, bindings, and effects during pattern compilation.
 struct PatternCollector {
     checks: Vec<Check>,
     bindings: Vec<PatternBinding>,
+    effects: PatternEffects,
 }
 
 impl PatternCollector {
@@ -248,6 +280,7 @@ impl PatternCollector {
         Self {
             checks: Vec::new(),
             bindings: Vec::new(),
+            effects: PatternEffects::default(),
         }
     }
 }
@@ -667,7 +700,7 @@ fn type_assertion_to_check(assertion: TypeAssertion) -> Check {
 /// `path_ty` is the expected type of the value at `path` — used to detect
 /// when a struct pattern is matched against a Go interface (type switch).
 fn collect_checks_and_bindings(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     path: &AccessPath,
     pattern: &Pattern,
     typed: Option<&TypedPattern>,
@@ -796,7 +829,7 @@ fn collect_checks_and_bindings(
 /// Handle or-patterns without bindings by collecting conditions from each
 /// alternative and combining with `||`.
 fn collect_or_pattern_checks(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     path: &AccessPath,
     patterns: &[Pattern],
     typed: Option<&TypedPattern>,
@@ -811,29 +844,34 @@ fn collect_or_pattern_checks(
             _ => vec![None; patterns.len()],
         };
 
-        let alternatives: Vec<Vec<Check>> = patterns
+        let alt_collectors: Vec<PatternCollector> = patterns
             .iter()
             .enumerate()
             .map(|(i, p)| {
                 let mut alt_collector = PatternCollector::new();
                 let tc = typed_alternatives.get(i).copied().flatten();
                 collect_checks_and_bindings(emitter, path, p, tc, path_ty, &mut alt_collector);
-                alt_collector.checks
+                alt_collector
             })
             .collect();
 
-        if alternatives.iter().any(|checks| checks.is_empty()) {
+        if alt_collectors.iter().any(|c| c.checks.is_empty()) {
             return;
         }
 
-        collector.checks.push(Check::Or { alternatives });
+        for alt in &alt_collectors {
+            collector.effects.extend(&alt.effects);
+        }
+        collector.checks.push(Check::Or {
+            alternatives: alt_collectors.into_iter().map(|c| c.checks).collect(),
+        });
     }
 }
 
 /// Compute the access path for a struct field, handling enum struct variants
 /// and auto-pointer dereference.
 fn compute_struct_field_path(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     parent_path: &AccessPath,
     field: &StructFieldPattern,
     ty: &Type,
@@ -879,14 +917,16 @@ fn compute_struct_field_path(
 /// paths stay as-is and the type switch shadows the subject; at nested paths,
 /// child paths gain an `AssertedAs` segment so they reach the asserted value.
 fn interface_assert_child_path(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     path: &AccessPath,
     pattern_ty: &Type,
     path_ty: Option<&Type>,
     collector: &mut PatternCollector,
 ) -> Option<AccessPath> {
     path_ty.filter(|st| emitter.as_interface(st).is_some())?;
-    let go_type = emitter.go_type_as_string(pattern_ty);
+    let go_type_result = emitter.go_type(pattern_ty);
+    collector.effects.merge_from_go_type(&go_type_result);
+    let go_type = go_type_result.code;
     let child_path = if path.is_root() {
         path.clone()
     } else {
@@ -901,7 +941,7 @@ fn interface_assert_child_path(
 
 /// Collect checks and bindings for an enum variant pattern (tuple or tagged).
 fn collect_enum_variant_checks(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     path: &AccessPath,
     pattern: &Pattern,
     typed: Option<&TypedPattern>,
@@ -978,7 +1018,7 @@ fn collect_enum_variant_checks(
 
 /// Collect checks and bindings for a newtype struct pattern (single-field wrapper).
 fn collect_newtype_checks(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     path: &AccessPath,
     variant: &EnumVariantData,
     collector: &mut PatternCollector,
@@ -986,8 +1026,9 @@ fn collect_newtype_checks(
     let Some(underlying_ty) = emitter.get_newtype_underlying(variant.ty) else {
         return;
     };
-    let go_underlying_ty = emitter.go_type_as_string(&underlying_ty);
-    let field_path = path.push(PathSegment::NewtypeCast(go_underlying_ty));
+    let go_underlying = emitter.go_type(&underlying_ty);
+    collector.effects.merge_from_go_type(&go_underlying);
+    let field_path = path.push(PathSegment::NewtypeCast(go_underlying.code));
     if let Some(field) = variant.fields.first() {
         collect_checks_and_bindings(
             emitter,
@@ -1002,7 +1043,7 @@ fn collect_newtype_checks(
 
 /// Collect checks and bindings for a tuple struct pattern (positional fields).
 fn collect_tuple_struct_checks(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     path: &AccessPath,
     fields: &[Pattern],
     typed_children: &[Option<&TypedPattern>],
@@ -1031,7 +1072,7 @@ struct EnumVariantData<'a> {
 
 /// Collect checks and bindings for a tagged enum variant pattern.
 fn collect_tagged_enum_checks(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     path: &AccessPath,
     variant: &EnumVariantData,
     collector: &mut PatternCollector,
@@ -1044,7 +1085,7 @@ fn collect_tagged_enum_checks(
         alias.as_deref(),
     );
     if resolved.needs_stdlib {
-        emitter.flags.needs_stdlib = true;
+        collector.effects.needs_stdlib = true;
     }
     collector.checks.push(Check::EnumTag {
         path: path.clone(),
@@ -1101,7 +1142,7 @@ fn collect_tagged_enum_checks(
 /// Detect whether a struct pattern is actually an enum struct variant,
 /// returning `(enum_id, variant_name)` if so.
 fn detect_enum_info(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     ty: &Type,
     identifier: &str,
     typed: Option<&TypedPattern>,
@@ -1126,7 +1167,7 @@ fn detect_enum_info(
 }
 
 fn collect_struct_checks(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     path: &AccessPath,
     pattern: &Pattern,
     typed: Option<&TypedPattern>,
@@ -1154,7 +1195,7 @@ fn collect_struct_checks(
             let resolved =
                 go_name::variant(identifier, ty, emitter.current_module(), alias.as_deref());
             if resolved.needs_stdlib {
-                emitter.flags.needs_stdlib = true;
+                collector.effects.needs_stdlib = true;
             }
             collector.checks.push(Check::EnumTag {
                 path: path.clone(),
@@ -1310,16 +1351,18 @@ fn expand_interface_or_checks(arm_infos: Vec<ArmInfo>) -> Vec<ArmInfo> {
     result
 }
 
-/// Compile expanded arms into a decision tree.
+/// Compile expanded arms into a decision tree plus accumulated effects.
 pub(super) fn compile_expanded_arms<'a>(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     expanded: &'a [ExpandedArm<'a>],
     subject_ty: &Type,
-) -> Decision {
+) -> CompiledDecision {
+    let mut effects = PatternEffects::default();
     let arm_infos: Vec<ArmInfo> = expanded
         .iter()
         .map(|ea| {
             let info = collect_pattern_info(emitter, ea.pattern, ea.typed_pattern, subject_ty);
+            effects.extend(&info.effects);
             ArmInfo {
                 arm_index: ea.arm_index,
                 root_assertion: info.root_assertion,
@@ -1359,7 +1402,10 @@ pub(super) fn compile_expanded_arms<'a>(
         }
     }
 
-    build_tree(arm_infos)
+    CompiledDecision {
+        decision: build_tree(arm_infos),
+        effects,
+    }
 }
 
 /// Collect checks, bindings, and any root type assertion from a single pattern
@@ -1368,7 +1414,7 @@ pub(super) fn compile_expanded_arms<'a>(
 /// that pass a wrong type would silently miss root-level Go-interface type
 /// assertions, so the public entry takes it by reference rather than `Option`.
 pub(crate) fn collect_pattern_info(
-    emitter: &mut Emitter,
+    emitter: &Emitter,
     pattern: &Pattern,
     typed: Option<&TypedPattern>,
     subject_ty: &Type,
@@ -1387,6 +1433,7 @@ pub(crate) fn collect_pattern_info(
         root_assertion,
         checks: collector.checks,
         bindings: collector.bindings,
+        effects: collector.effects,
     }
 }
 

@@ -103,7 +103,9 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     pub(crate) fn emit(mut self, output: &mut String) {
         let pre_len = output.len();
         let expanded = expand_or_patterns(self.arms);
-        let tree = compile_expanded_arms(self.emitter, &expanded, &self.subject_ty);
+        let compiled = compile_expanded_arms(self.emitter, &expanded, &self.subject_ty);
+        self.emitter.apply_pattern_effects(&compiled.effects);
+        let tree = compiled.decision;
 
         let routing = self.emitter.compute_arm_routing(Some(output), self.ty);
         let result_var = routing.result_var().map(|s| s.to_string());
