@@ -73,6 +73,29 @@ pub(crate) fn emit_pattern_literal(literal: &Literal) -> String {
     }
 }
 
+pub(crate) fn is_catchall_pattern(pattern: &Pattern) -> bool {
+    match pattern {
+        Pattern::WildCard { .. } | Pattern::Identifier { .. } | Pattern::Unit { .. } => true,
+        Pattern::Literal { .. } | Pattern::EnumVariant { .. } => false,
+        Pattern::Struct { fields, rest, .. } => {
+            *rest && fields.iter().all(|f| is_catchall_pattern(&f.value))
+        }
+        Pattern::Tuple { elements, .. } => elements.iter().all(is_catchall_pattern),
+        Pattern::Slice { prefix, rest, .. } => prefix.is_empty() && rest.is_present(),
+        Pattern::Or { patterns, .. } => patterns.iter().any(is_catchall_pattern),
+        Pattern::AsBinding { pattern, .. } => is_catchall_pattern(pattern),
+    }
+}
+
+/// Like `is_catchall_pattern`, but Or-patterns require EVERY alternative
+/// to be catchall (rather than ANY).
+pub(crate) fn is_unconditional_catchall(pattern: &Pattern) -> bool {
+    match pattern {
+        Pattern::Or { patterns, .. } => patterns.iter().all(is_catchall_pattern),
+        other => is_catchall_pattern(other),
+    }
+}
+
 impl Emitter<'_> {
     pub(crate) fn emit_pattern_bindings(
         &mut self,
@@ -180,29 +203,6 @@ impl Emitter<'_> {
                     || (!self.ctx.unused.is_unused_binding(p) && self.is_declared(name))
             }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
-        }
-    }
-
-    pub(crate) fn is_catchall_pattern(pattern: &Pattern) -> bool {
-        match pattern {
-            Pattern::WildCard { .. } | Pattern::Identifier { .. } | Pattern::Unit { .. } => true,
-            Pattern::Literal { .. } | Pattern::EnumVariant { .. } => false,
-            Pattern::Struct { fields, rest, .. } => {
-                *rest && fields.iter().all(|f| Self::is_catchall_pattern(&f.value))
-            }
-            Pattern::Tuple { elements, .. } => elements.iter().all(Self::is_catchall_pattern),
-            Pattern::Slice { prefix, rest, .. } => prefix.is_empty() && rest.is_present(),
-            Pattern::Or { patterns, .. } => patterns.iter().any(Self::is_catchall_pattern),
-            Pattern::AsBinding { pattern, .. } => Self::is_catchall_pattern(pattern),
-        }
-    }
-
-    /// Like `is_catchall_pattern`, but Or-patterns require EVERY alternative
-    /// to be catchall (rather than ANY).
-    pub(crate) fn is_unconditional_catchall(pattern: &Pattern) -> bool {
-        match pattern {
-            Pattern::Or { patterns, .. } => patterns.iter().all(Self::is_catchall_pattern),
-            other => Self::is_catchall_pattern(other),
         }
     }
 

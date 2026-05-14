@@ -1,7 +1,7 @@
 use syntax::ast::MatchArm;
 
-use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
+use crate::patterns::bindings::{is_catchall_pattern, is_unconditional_catchall};
 use crate::patterns::decision_tree::{
     AccessPath, ChainTest, Decision, PatternBinding, SwitchKind, SwitchShape,
     decision_is_exhaustive, render_condition, tree_has_unguarded_terminal,
@@ -98,32 +98,35 @@ pub(crate) struct EmitCase {
     pub decision: Box<EmitDecision>,
 }
 
-pub(crate) struct LoweringCtx<'a, 'e> {
-    pub emitter: &'a mut Emitter<'e>,
-    pub arms: &'a [MatchArm],
-    pub current_subject: String,
+#[derive(Debug, Default)]
+pub(crate) struct MatchPlanEffects {
+    pub needs_stdlib: bool,
 }
 
-impl<'a, 'e> LoweringCtx<'a, 'e> {
-    pub(crate) fn new(
-        emitter: &'a mut Emitter<'e>,
-        arms: &'a [MatchArm],
-        subject_var: String,
-    ) -> Self {
+#[derive(Debug)]
+pub(crate) struct LoweredMatch {
+    pub plan: MatchEmitPlan,
+    pub effects: MatchPlanEffects,
+}
+
+pub(crate) struct LoweringCtx<'a> {
+    arms: &'a [MatchArm],
+    current_subject: String,
+    effects: MatchPlanEffects,
+}
+
+impl<'a> LoweringCtx<'a> {
+    fn new(arms: &'a [MatchArm], subject_var: String) -> Self {
         Self {
-            emitter,
             arms,
             current_subject: subject_var,
+            effects: MatchPlanEffects::default(),
         }
     }
 
     /// Scope a subject swap to the closure so a nested type switch's
     /// `base` cannot leak into a later outer branch.
-    pub(crate) fn with_subject<R>(
-        &mut self,
-        new_subject: String,
-        f: impl FnOnce(&mut Self) -> R,
-    ) -> R {
+    fn with_subject<R>(&mut self, new_subject: String, f: impl FnOnce(&mut Self) -> R) -> R {
         let prev = std::mem::replace(&mut self.current_subject, new_subject);
         let result = f(self);
         self.current_subject = prev;
@@ -132,7 +135,28 @@ impl<'a, 'e> LoweringCtx<'a, 'e> {
 }
 
 /// Precedence: Switch, SingleCatchall, RetryLoop (if any guard), else Chain.
-pub(crate) fn lower_match(ctx: &mut LoweringCtx, decision: &Decision) -> MatchEmitPlan {
+///
+/// `single_catchall_has_collisions` is precomputed at the call site (it
+/// needs emitter scope state). Only read on the SingleCatchall path.
+pub(crate) fn lower_match(
+    arms: &[MatchArm],
+    subject_var: String,
+    decision: &Decision,
+    single_catchall_has_collisions: bool,
+) -> LoweredMatch {
+    let mut ctx = LoweringCtx::new(arms, subject_var);
+    let plan = lower_match_inner(&mut ctx, decision, single_catchall_has_collisions);
+    LoweredMatch {
+        plan,
+        effects: ctx.effects,
+    }
+}
+
+fn lower_match_inner(
+    ctx: &mut LoweringCtx,
+    decision: &Decision,
+    single_catchall_has_collisions: bool,
+) -> MatchEmitPlan {
     if matches!(decision, Decision::Switch { .. }) {
         return MatchEmitPlan::Switch {
             tree: lower_decision(ctx, decision),
@@ -144,13 +168,11 @@ pub(crate) fn lower_match(ctx: &mut LoweringCtx, decision: &Decision) -> MatchEm
         bindings,
     } = decision
     {
-        let arm = &ctx.arms[*arm_index];
-        let pattern_has_collisions = ctx.emitter.pattern_has_binding_collisions(&arm.pattern);
         let bindings = lower_bindings(ctx, bindings);
         return MatchEmitPlan::SingleCatchall(SingleCatchallPlan {
             arm_index: *arm_index,
             bindings,
-            pattern_has_collisions,
+            pattern_has_collisions: single_catchall_has_collisions,
         });
     }
 
@@ -164,7 +186,7 @@ pub(crate) fn lower_match(ctx: &mut LoweringCtx, decision: &Decision) -> MatchEm
         let last_arm_is_any_catchall = ctx
             .arms
             .last()
-            .is_some_and(|arm| !arm.has_guard() && Emitter::is_catchall_pattern(&arm.pattern));
+            .is_some_and(|arm| !arm.has_guard() && is_catchall_pattern(&arm.pattern));
         let tree = lower_decision(ctx, decision);
         return MatchEmitPlan::RetryLoop(RetryLoopPlan {
             tree,
@@ -175,9 +197,10 @@ pub(crate) fn lower_match(ctx: &mut LoweringCtx, decision: &Decision) -> MatchEm
     }
 
     let chain_tail_is_exhaustive = decision_is_exhaustive(decision)
-        || ctx.arms.last().is_some_and(|arm| {
-            !arm.has_guard() && Emitter::is_unconditional_catchall(&arm.pattern)
-        });
+        || ctx
+            .arms
+            .last()
+            .is_some_and(|arm| !arm.has_guard() && is_unconditional_catchall(&arm.pattern));
     let tree = lower_decision(ctx, decision);
     MatchEmitPlan::Chain(ChainPlan {
         tree,
@@ -373,10 +396,8 @@ fn propagate_stdlib(
     ctx: &mut LoweringCtx,
     branches: &[crate::patterns::decision_tree::SwitchBranch],
 ) {
-    for b in branches {
-        if b.needs_stdlib {
-            ctx.emitter.flags.needs_stdlib = true;
-        }
+    if branches.iter().any(|b| b.needs_stdlib) {
+        ctx.effects.needs_stdlib = true;
     }
 }
 
@@ -425,40 +446,4 @@ fn body_is_unit_or_empty(expression: &syntax::ast::Expression) -> bool {
     use syntax::ast::Expression;
     matches!(expression, Expression::Unit { .. })
         || matches!(expression, Expression::Block { items, .. } if items.is_empty())
-}
-
-pub(crate) fn emit_lowered_bindings(
-    emitter: &mut Emitter,
-    output: &mut String,
-    bindings: &[EmitBinding],
-) {
-    use crate::write_line;
-    for binding in bindings {
-        let Some(ref go_name) = binding.go_name else {
-            emitter.scope.bindings.add(&binding.lisette_name, "");
-            continue;
-        };
-
-        let access_expression = &binding.rendered_access;
-
-        if emitter.scope.bindings.has_go_name(go_name) {
-            let fresh = emitter.fresh_var(Some(&binding.lisette_name));
-            emitter.scope.bindings.add(&binding.lisette_name, &fresh);
-            emitter.try_declare(&fresh);
-            write_line!(output, "{} := {}", fresh, access_expression);
-        } else {
-            let name = emitter
-                .scope
-                .bindings
-                .add(&binding.lisette_name, go_name.clone());
-            if emitter.try_declare(&name) {
-                write_line!(output, "{} := {}", name, access_expression);
-            } else {
-                let fresh = emitter.fresh_var(Some(&binding.lisette_name));
-                emitter.scope.bindings.add(&binding.lisette_name, &fresh);
-                emitter.try_declare(&fresh);
-                write_line!(output, "{} := {}", fresh, access_expression);
-            }
-        }
-    }
 }

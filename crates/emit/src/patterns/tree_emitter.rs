@@ -3,10 +3,10 @@ use syntax::types::Type;
 
 use crate::Emitter;
 use crate::control_flow::branching::wrap_if_struct_literal;
-use crate::patterns::decision_tree::{compile_expanded_arms, expand_or_patterns};
+use crate::patterns::decision_tree::{Decision, compile_expanded_arms, expand_or_patterns};
 use crate::patterns::emit_plan::{
-    ChainPlan, EmitBinding, EmitCase, EmitChainTest, EmitDecision, LoweringCtx, MatchEmitPlan,
-    RetryLoopPlan, SingleCatchallPlan, emit_lowered_bindings, is_empty_emit_decision, lower_match,
+    ChainPlan, EmitBinding, EmitCase, EmitChainTest, EmitDecision, MatchEmitPlan, RetryLoopPlan,
+    SingleCatchallPlan, is_empty_emit_decision, lower_match,
 };
 use crate::types::emitter::Destination;
 use crate::utils::{inline_trivial_bindings, output_ends_with_diverge, output_references_var};
@@ -109,13 +109,24 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         let result_var = routing.result_var().map(|s| s.to_string());
         let body_destination = routing.into_body_destination();
 
-        let plan = {
-            let subject_var = self.subject_var.clone();
-            let mut ctx = LoweringCtx::new(self.emitter, self.arms, subject_var);
-            lower_match(&mut ctx, &tree)
+        let single_catchall_has_collisions = match &tree {
+            Decision::Success { arm_index, .. } => self
+                .emitter
+                .pattern_has_binding_collisions(&self.arms[*arm_index].pattern),
+            _ => false,
         };
 
-        match plan {
+        let lowered = lower_match(
+            self.arms,
+            self.subject_var.clone(),
+            &tree,
+            single_catchall_has_collisions,
+        );
+        if lowered.effects.needs_stdlib {
+            self.emitter.flags.needs_stdlib = true;
+        }
+
+        match lowered.plan {
             MatchEmitPlan::Switch { tree } => {
                 let ctx = WalkCtx::switch_case(&body_destination);
                 self.walk(output, &tree, &ctx);
@@ -638,7 +649,39 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     }
 
     fn emit_bindings(&mut self, output: &mut String, bindings: &[EmitBinding]) {
-        emit_lowered_bindings(self.emitter, output, bindings);
+        for binding in bindings {
+            let Some(ref go_name) = binding.go_name else {
+                self.emitter.scope.bindings.add(&binding.lisette_name, "");
+                continue;
+            };
+            let access_expression = &binding.rendered_access;
+            if self.emitter.scope.bindings.has_go_name(go_name) {
+                let fresh = self.emitter.fresh_var(Some(&binding.lisette_name));
+                self.emitter
+                    .scope
+                    .bindings
+                    .add(&binding.lisette_name, &fresh);
+                self.emitter.try_declare(&fresh);
+                write_line!(output, "{} := {}", fresh, access_expression);
+            } else {
+                let name = self
+                    .emitter
+                    .scope
+                    .bindings
+                    .add(&binding.lisette_name, go_name.clone());
+                if self.emitter.try_declare(&name) {
+                    write_line!(output, "{} := {}", name, access_expression);
+                } else {
+                    let fresh = self.emitter.fresh_var(Some(&binding.lisette_name));
+                    self.emitter
+                        .scope
+                        .bindings
+                        .add(&binding.lisette_name, &fresh);
+                    self.emitter.try_declare(&fresh);
+                    write_line!(output, "{} := {}", fresh, access_expression);
+                }
+            }
+        }
     }
 
     fn emit_arm_body(
