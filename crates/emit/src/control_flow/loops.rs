@@ -179,12 +179,14 @@ impl Emitter<'_> {
             );
             let key_guard = DiscardGuard::new(output, &key_var);
             let value_guard = DiscardGuard::new(output, &value_var);
-            let (_, key_bindings) =
-                decision_tree::collect_pattern_info(self, first, None, first_ty);
-            decision_tree::emit_tree_bindings(self, output, &key_bindings, &key_var);
-            let (_, value_bindings) =
-                decision_tree::collect_pattern_info(self, second, None, second_ty);
-            decision_tree::emit_tree_bindings(self, output, &value_bindings, &value_var);
+            let key_info = decision_tree::collect_pattern_info(self, first, None, first_ty);
+            let effective_key =
+                decision_tree::apply_root_assertion(self, output, &key_info, &key_var);
+            decision_tree::emit_tree_bindings(self, output, &key_info.bindings, &effective_key);
+            let value_info = decision_tree::collect_pattern_info(self, second, None, second_ty);
+            let effective_value =
+                decision_tree::apply_root_assertion(self, output, &value_info, &value_var);
+            decision_tree::emit_tree_bindings(self, output, &value_info.bindings, &effective_value);
             self.emit_block(output, body);
             key_guard.finish(output);
             value_guard.finish(output);
@@ -224,13 +226,13 @@ impl Emitter<'_> {
         is_channel: bool,
         body: &Expression,
     ) {
-        let (mut checks, bindings) = decision_tree::collect_pattern_info(
+        let info = decision_tree::collect_pattern_info(
             self,
             &binding.pattern,
             binding.typed_pattern.as_ref(),
             &binding.ty,
         );
-        if bindings.is_empty() {
+        if info.bindings.is_empty() {
             write_line!(output, "for range {} {{", iter_expression);
             self.emit_block(output, body);
             output.push_str("}\n");
@@ -248,9 +250,8 @@ impl Emitter<'_> {
             );
         }
         let guard = DiscardGuard::new(output, &item_var);
-        let effective_item =
-            decision_tree::apply_root_type_assertion(self, output, &mut checks, &item_var);
-        decision_tree::emit_tree_bindings(self, output, &bindings, &effective_item);
+        let effective_item = decision_tree::apply_root_assertion(self, output, &info, &item_var);
+        decision_tree::emit_tree_bindings(self, output, &info.bindings, &effective_item);
         self.emit_block(output, body);
         guard.finish(output);
         output.push_str("}\n");

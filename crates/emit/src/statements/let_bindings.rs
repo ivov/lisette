@@ -591,44 +591,35 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
         }
 
         let value_ty = self.value.get_type();
-        let (mut checks, bindings) = decision_tree::collect_pattern_info(
+        let info = decision_tree::collect_pattern_info(
             self.emitter,
             &self.binding.pattern,
             self.binding.typed_pattern.as_ref(),
             &value_ty,
         );
 
-        let assert_go_type = decision_tree::take_root_type_assertion(&mut checks);
-        let (effective_subject, assert_ok_var): (std::borrow::Cow<'_, str>, _) =
-            match assert_go_type {
-                Some(go_type) => {
-                    let asserted = self.emitter.fresh_var(Some("asserted"));
-                    self.emitter.declare(&asserted);
-                    let ok = self.emitter.fresh_var(Some("ok"));
-                    self.emitter.declare(&ok);
-                    write_line!(
-                        output,
-                        "{}, {} := {}.({})",
-                        asserted,
-                        ok,
-                        subject_var,
-                        go_type,
-                    );
-                    (std::borrow::Cow::Owned(asserted), Some(ok))
-                }
-                None => (std::borrow::Cow::Borrowed(subject_var.as_str()), None),
-            };
+        let (effective_subject, assert_ok_var) = decision_tree::apply_refutable_root_assertion(
+            self.emitter,
+            output,
+            &info,
+            &subject_var,
+        );
 
-        if checks.is_empty() && assert_ok_var.is_none() {
-            decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &effective_subject);
+        if info.checks.is_empty() && assert_ok_var.is_none() {
+            decision_tree::emit_tree_bindings(
+                self.emitter,
+                output,
+                &info.bindings,
+                &effective_subject,
+            );
         } else {
             let mut guard_parts: Vec<String> = Vec::new();
             if let Some(ref ok) = assert_ok_var {
                 guard_parts.push(format!("!{}", ok));
             }
-            if !checks.is_empty() {
-                let condition = decision_tree::render_condition(&checks, &effective_subject);
-                let single = checks.len() == 1;
+            if !info.checks.is_empty() {
+                let condition = decision_tree::render_condition(&info.checks, &effective_subject);
+                let single = info.checks.len() == 1;
                 let negated = if single {
                     negate_condition(&condition)
                 } else {
@@ -641,7 +632,12 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             self.emitter.emit_block(output, else_block);
             output.push_str("}\n");
 
-            decision_tree::emit_tree_bindings(self.emitter, output, &bindings, &effective_subject);
+            decision_tree::emit_tree_bindings(
+                self.emitter,
+                output,
+                &info.bindings,
+                &effective_subject,
+            );
         }
 
         if let Some(guard) = subject_guard {
@@ -674,27 +670,58 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             .map(|alt| decision_tree::collect_pattern_info(self.emitter, alt, None, &value_ty))
             .collect();
 
-        let irrefutable_idx = collected.iter().position(|(checks, _)| checks.is_empty());
+        let hoisted: Vec<_> = collected
+            .iter()
+            .map(|info| {
+                decision_tree::apply_refutable_root_assertion(
+                    self.emitter,
+                    output,
+                    info,
+                    subject_var,
+                )
+            })
+            .collect();
+
+        let irrefutable_idx = collected
+            .iter()
+            .zip(hoisted.iter())
+            .position(|(info, (_, ok_var))| info.checks.is_empty() && ok_var.is_none());
         let chain_len = irrefutable_idx.unwrap_or(collected.len());
 
-        for (i, (checks, bindings)) in collected.iter().take(chain_len).enumerate() {
-            let condition = decision_tree::render_condition(checks, subject_var);
+        for (i, info) in collected.iter().take(chain_len).enumerate() {
+            let (effective, ok_var) = &hoisted[i];
+            let condition = decision_tree::compose_refutable_condition(
+                ok_var.as_deref(),
+                &info.checks,
+                effective,
+            );
             if i == 0 {
                 write_line!(output, "if {} {{", condition);
             } else {
                 write_line!(output, "}} else if {} {{", condition);
             }
 
-            decision_tree::emit_tree_assignments(self.emitter, output, bindings, subject_var);
+            decision_tree::emit_tree_assignments(self.emitter, output, &info.bindings, effective);
         }
 
         if let Some(idx) = irrefutable_idx {
-            let (_, bindings) = &collected[idx];
+            let info = &collected[idx];
+            let (effective, _) = &hoisted[idx];
             if idx == 0 {
-                decision_tree::emit_tree_assignments(self.emitter, output, bindings, subject_var);
+                decision_tree::emit_tree_assignments(
+                    self.emitter,
+                    output,
+                    &info.bindings,
+                    effective,
+                );
             } else {
                 output.push_str("} else {\n");
-                decision_tree::emit_tree_assignments(self.emitter, output, bindings, subject_var);
+                decision_tree::emit_tree_assignments(
+                    self.emitter,
+                    output,
+                    &info.bindings,
+                    effective,
+                );
                 output.push_str("}\n");
             }
             return;

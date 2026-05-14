@@ -276,15 +276,20 @@ impl Emitter<'_> {
         );
         let guard = DiscardGuard::new(output, receiver_var);
         if let Some((pattern, typed)) = inner_pattern {
-            let (checks, bindings) =
-                decision_tree::collect_pattern_info(self, pattern, typed, &ctx.element_ty);
-            if checks.is_empty() {
-                decision_tree::emit_tree_bindings(self, output, &bindings, receiver_var);
+            let info = decision_tree::collect_pattern_info(self, pattern, typed, &ctx.element_ty);
+            let (effective, ok_var) =
+                decision_tree::apply_refutable_root_assertion(self, output, &info, receiver_var);
+            if info.checks.is_empty() && ok_var.is_none() {
+                decision_tree::emit_tree_bindings(self, output, &info.bindings, &effective);
                 self.emit_in_destination(output, ctx.body);
             } else {
-                let condition = decision_tree::render_condition(&checks, receiver_var);
+                let condition = decision_tree::compose_refutable_condition(
+                    ok_var.as_deref(),
+                    &info.checks,
+                    &effective,
+                );
                 write_line!(output, "if {} {{", condition);
-                decision_tree::emit_tree_bindings(self, output, &bindings, receiver_var);
+                decision_tree::emit_tree_bindings(self, output, &info.bindings, &effective);
                 self.emit_in_destination(output, ctx.body);
                 if let Some(default_body) = ctx.default_body {
                     output.push_str("} else {\n");
@@ -532,20 +537,26 @@ impl Emitter<'_> {
                 return;
             }
             let inner_typed = Self::unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
-            let (checks, bindings) = decision_tree::collect_pattern_info(
+            let info = decision_tree::collect_pattern_info(
                 this,
                 receiver_var_pattern,
                 inner_typed,
                 element_ty,
             );
-            if checks.is_empty() {
-                decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
+            let (effective, ok_var) =
+                decision_tree::apply_refutable_root_assertion(this, output, &info, case_var);
+            if info.checks.is_empty() && ok_var.is_none() {
+                decision_tree::emit_tree_bindings(this, output, &info.bindings, &effective);
                 this.emit_in_destination(output, &some_arm.expression);
                 return;
             }
-            let condition = decision_tree::render_condition(&checks, case_var);
+            let condition = decision_tree::compose_refutable_condition(
+                ok_var.as_deref(),
+                &info.checks,
+                &effective,
+            );
             write_line!(output, "if {} {{", condition);
-            decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
+            decision_tree::emit_tree_bindings(this, output, &info.bindings, &effective);
             this.emit_in_destination(output, &some_arm.expression);
             output.push_str("} else {\n");
             Emitter::emit_none_arm_body(this, output, match_arms);

@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nimport \"go:example.com/shapes\"\n\nfn area_or_neg(s: shapes.Shape) -> int {\n  let shapes.Rect { W: w, H: h } | shapes.Box { width: w, height: h } = s else { return -1 }\n  w * h\n}\n"
+---
+package main
+
+import "example.com/shapes"
+
+func area_or_neg(s shapes.Shape) int {
+	var w int
+	var h int
+	asserted_1, ok_2 := s.(shapes.Rect)
+	asserted_3, ok_4 := s.(shapes.Box)
+	if ok_2 {
+		w = asserted_1.W
+		h = asserted_1.H
+	} else if ok_4 {
+		w = asserted_3.Width
+		h = asserted_3.Height
+	} else {
+		return -1
+	}
+	return w * h
+}

@@ -1,6 +1,7 @@
 use crate::Emitter;
 use crate::names::go_name;
 use crate::patterns::decision_tree;
+use crate::patterns::decision_tree::compose_refutable_condition;
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::emitter::Destination;
 use crate::utils::{Staged, output_ends_with_diverge};
@@ -172,24 +173,33 @@ impl Emitter<'_> {
 
             let unused_names: rustc_hash::FxHashSet<String> = alternatives
                 .iter()
-                .flat_map(|(_, bindings)| bindings.iter())
+                .flat_map(|info| info.bindings.iter())
                 .filter(|b| b.go_name.is_none())
                 .map(|b| b.lisette_name.clone())
                 .collect();
-            for (_, bindings) in alternatives.iter_mut() {
-                for binding in bindings.iter_mut() {
+            for info in alternatives.iter_mut() {
+                for binding in info.bindings.iter_mut() {
                     if unused_names.contains(&binding.lisette_name) {
                         binding.go_name = None;
                     }
                 }
             }
 
-            for (i, (checks, bindings)) in alternatives.iter().enumerate() {
-                let condition = decision_tree::render_condition(checks, &subject_var);
+            let hoisted: Vec<_> = alternatives
+                .iter()
+                .map(|info| {
+                    decision_tree::apply_refutable_root_assertion(self, output, info, &subject_var)
+                })
+                .collect();
+
+            for (i, info) in alternatives.iter().enumerate() {
+                let (effective, ok_var) = &hoisted[i];
+                let condition =
+                    compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
 
                 self.emit_branch_header(output, &condition, false, i == 0);
 
-                decision_tree::emit_tree_bindings(self, output, bindings, &subject_var);
+                decision_tree::emit_tree_bindings(self, output, &info.bindings, effective);
                 self.emit_block(output, body);
             }
 
@@ -197,14 +207,15 @@ impl Emitter<'_> {
             return;
         }
 
-        let (checks, bindings) =
-            decision_tree::collect_pattern_info(self, pattern, typed_pattern, &scrutinee_ty);
-        let condition = decision_tree::render_condition(&checks, &subject_var);
+        let info = decision_tree::collect_pattern_info(self, pattern, typed_pattern, &scrutinee_ty);
+        let (effective, ok_var) =
+            decision_tree::apply_refutable_root_assertion(self, output, &info, &subject_var);
+        let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
         write_line!(output, "if {} {{", condition);
         self.enter_scope();
 
         if !matches!(pattern, Pattern::Or { .. }) {
-            decision_tree::emit_tree_bindings(self, output, &bindings, &subject_var);
+            decision_tree::emit_tree_bindings(self, output, &info.bindings, &effective);
         }
 
         self.emit_block(output, body);

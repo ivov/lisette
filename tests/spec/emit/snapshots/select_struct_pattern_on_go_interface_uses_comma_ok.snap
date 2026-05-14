@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \nimport \"go:example.com/shapes\"\n\nfn drain(ch: Receiver<shapes.Shape>) -> int {\n  select {\n    let Some(shapes.Rect { W: w, H: h }) = ch.receive() => w * h,\n    _ => 0,\n  }\n}\n"
+---
+package main
+
+import "example.com/shapes"
+
+func drain(ch <-chan shapes.Shape) int {
+	ch_1 := ch
+	for {
+		select {
+		case recv_2, ok := <-ch_1:
+			if ok {
+				asserted_3, ok_4 := recv_2.(shapes.Rect)
+				if ok_4 {
+					return asserted_3.W * asserted_3.H
+				}
+				return 0
+			}
+			ch_1 = nil
+			continue
+		default:
+			return 0
+		}
+		break
+	}
+	panic("unreachable")
+}
