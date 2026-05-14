@@ -20,7 +20,7 @@ pub(crate) use definitions::enum_layout::EnumLayout;
 pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
-pub(crate) use types::emitter::{EmitEffects, EmitFlags, LineIndex, LoopContext, ReturnMode};
+pub(crate) use types::emitter::{EmitEffects, EmitFlags, LineIndex, LoopContext, ReturnContext};
 pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
@@ -311,16 +311,32 @@ pub struct Emitter<'a> {
     flags: EmitFlags,
     ensure_imported: HashSet<ModuleId>,
 
-    /// Shape of the enclosing function body's return values.
-    return_mode: ReturnMode,
+    /// Fallback for deep callers that cannot reach a `&ReturnContext` threaded
+    /// from a tail boundary. Set only at function/lambda/try/recover scope
+    /// entry via `with_scope_return_context_fallback`.
+    scope_return_context_fallback: ReturnContext,
 }
 
 impl<'a> Emitter<'a> {
-    pub(crate) fn fn_return_mode(&self, return_ty: Type) -> ReturnMode {
+    pub(crate) fn return_context_for_type(&self, return_ty: Type) -> ReturnContext {
         match self.classify_direct_emission(&return_ty) {
-            Some(shape) => ReturnMode::Lowered { return_ty, shape },
-            None => ReturnMode::Tagged(return_ty),
+            Some(shape) => ReturnContext::Lowered { return_ty, shape },
+            None => ReturnContext::Tagged(return_ty),
         }
+    }
+
+    pub(crate) fn scope_return_context_fallback(&self) -> &ReturnContext {
+        &self.scope_return_context_fallback
+    }
+
+    pub(crate) fn with_scope_return_context_fallback<F, R>(&mut self, ctx: ReturnContext, f: F) -> R
+    where
+        F: FnOnce(&mut Self) -> R,
+    {
+        let saved = std::mem::replace(&mut self.scope_return_context_fallback, ctx);
+        let result = f(self);
+        self.scope_return_context_fallback = saved;
+        result
     }
 }
 
@@ -432,7 +448,7 @@ impl<'a> Emitter<'a> {
             pending_adapter_types: Vec::new(),
             flags: EmitFlags::default(),
             ensure_imported: HashSet::default(),
-            return_mode: ReturnMode::None,
+            scope_return_context_fallback: ReturnContext::None,
         }
     }
 
@@ -459,16 +475,6 @@ impl<'a> Emitter<'a> {
             .loop_stack
             .last()
             .and_then(|ctx| ctx.label.as_deref())
-    }
-
-    pub(crate) fn with_return_mode<F, R>(&mut self, mode: ReturnMode, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let saved = std::mem::replace(&mut self.return_mode, mode);
-        let result = f(self);
-        self.return_mode = saved;
-        result
     }
 
     /// Checks if a Go variable name has been declared in the current scope.

@@ -26,7 +26,8 @@ impl Emitter<'_> {
                 ..
             } => self.emit_let(output, binding, value, else_block.as_deref(), *mutable),
             Expression::Return { expression, .. } => {
-                self.emit_return(output, expression);
+                let return_ctx = self.scope_return_context_fallback().clone();
+                self.emit_return(output, expression, &return_ctx);
             }
             Expression::Assignment {
                 target,

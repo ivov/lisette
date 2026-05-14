@@ -419,7 +419,7 @@ impl Emitter<'_> {
         inferred: Vec<Type>,
         in_tail: bool,
     ) -> Vec<Type> {
-        let return_slots = self.return_mode.ty().and_then(|ty| {
+        let return_slots = self.scope_return_context_fallback().ty().and_then(|ty| {
             let Type::Tuple(slots) = ty else {
                 return None;
             };

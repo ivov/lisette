@@ -20,9 +20,10 @@ impl Emitter<'_> {
         output: &mut String,
         body: &Expression,
         should_return: bool,
+        return_ctx: &crate::ReturnContext,
     ) {
         self.push_const_frame();
-        self.emit_function_body_inner(output, body, should_return);
+        self.emit_function_body_inner(output, body, should_return, return_ctx);
         self.pop_const_frame();
     }
 
@@ -31,6 +32,7 @@ impl Emitter<'_> {
         output: &mut String,
         body: &Expression,
         should_return: bool,
+        return_ctx: &crate::ReturnContext,
     ) {
         let items: &[Expression] = if let Expression::Block { items, .. } = body {
             items
@@ -47,7 +49,7 @@ impl Emitter<'_> {
         }
 
         if should_return {
-            self.emit_to_place(output, last, ValuePlace::Return);
+            self.emit_to_place(output, last, ValuePlace::Return(return_ctx));
         } else {
             self.emit_statement(output, last);
         }
@@ -127,38 +129,36 @@ impl Emitter<'_> {
 
         let should_return = has_return;
 
-        let new_mode = if let Type::Function { return_type, .. } = ty {
-            let return_ty = return_type.as_ref().clone();
-            if suppress_lowering {
-                crate::ReturnMode::Tagged(return_ty)
-            } else {
-                self.fn_return_mode(return_ty)
+        let return_ctx = match ty {
+            Type::Function { return_type, .. } => {
+                let return_ty = return_type.as_ref().clone();
+                if suppress_lowering {
+                    crate::ReturnContext::Tagged(return_ty)
+                } else {
+                    self.return_context_for_type(return_ty)
+                }
             }
-        } else {
-            self.return_mode.clone()
+            _ => crate::ReturnContext::None,
         };
-        let saved_return_mode = std::mem::replace(&mut self.return_mode, new_mode);
 
         let mut body_string = String::new();
-
-        for (temp_name, pattern, typed, param_ty) in &destructure_bindings {
-            self.emit_irrefutable_pattern_site(
-                &mut body_string,
-                crate::patterns::sites::PatternSubject::for_value(temp_name.clone()),
-                pattern,
-                *typed,
-                param_ty,
-            );
-        }
-
-        self.emit_function_body(&mut body_string, body, should_return);
+        self.with_scope_return_context_fallback(return_ctx.clone(), |this| {
+            for (temp_name, pattern, typed, param_ty) in &destructure_bindings {
+                this.emit_irrefutable_pattern_site(
+                    &mut body_string,
+                    crate::patterns::sites::PatternSubject::for_value(temp_name.clone()),
+                    pattern,
+                    *typed,
+                    param_ty,
+                );
+            }
+            this.emit_function_body(&mut body_string, body, should_return, &return_ctx);
+        });
         optimize_function_body(&mut body_string);
 
         self.scope.declared = saved_declared;
         self.scope.scope_depth = saved_scope_depth;
         self.scope.bindings.restore();
-
-        self.return_mode = saved_return_mode;
 
         format!(
             "func({}){} {{\n{}}}",
@@ -204,8 +204,7 @@ impl Emitter<'_> {
 
         let directive = self.maybe_line_directive(&function_definition.name_span);
 
-        let mode = self.fn_return_mode(function_definition.return_type.clone());
-        let saved_return_mode = std::mem::replace(&mut self.return_mode, mode);
+        let return_ctx = self.return_context_for_type(function_definition.return_type.clone());
 
         let (function_definition, receiver) =
             self.change_go_builtin_methods(function_definition, receiver);
@@ -283,24 +282,27 @@ impl Emitter<'_> {
 
         let mut body = String::new();
 
-        for (var_name, pattern, typed, param_ty) in deferred_patterns {
-            self.emit_irrefutable_pattern_site(
-                &mut body,
-                crate::patterns::sites::PatternSubject::for_value(var_name),
-                &pattern,
-                typed.as_ref(),
-                &param_ty,
-            );
-        }
+        let should_return = !function_definition.return_type.is_unit();
+        self.with_scope_return_context_fallback(return_ctx.clone(), |this| {
+            for (var_name, pattern, typed, param_ty) in deferred_patterns {
+                this.emit_irrefutable_pattern_site(
+                    &mut body,
+                    crate::patterns::sites::PatternSubject::for_value(var_name),
+                    &pattern,
+                    typed.as_ref(),
+                    &param_ty,
+                );
+            }
 
-        self.emit_function_body(
-            &mut body,
-            &function_definition.body,
-            !function_definition.return_type.is_unit(),
-        );
+            this.emit_function_body(
+                &mut body,
+                &function_definition.body,
+                should_return,
+                &return_ctx,
+            );
+        });
         optimize_function_body(&mut body);
 
-        self.return_mode = saved_return_mode;
         self.module.absorbed_ref_generics = saved_absorbed;
 
         let trimmed_body = body.trim_end();

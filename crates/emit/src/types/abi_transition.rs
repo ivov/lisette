@@ -452,13 +452,18 @@ pub(crate) fn try_emit_lowered_tail_return(
     emitter: &mut Emitter,
     output: &mut String,
     expression: &syntax::ast::Expression,
+    return_ctx: &crate::ReturnContext,
 ) -> bool {
-    let Some(shape) = emitter.return_mode.lowered_shape() else {
+    let Some(shape) = return_ctx.lowered_shape() else {
         return false;
     };
     match shape {
-        AbiShape::PartialTuple => emit_lowered_partial_tail(emitter, output, expression),
-        AbiShape::Tuple { arity } => emit_lowered_tuple_tail(emitter, output, expression, arity),
+        AbiShape::PartialTuple => {
+            emit_lowered_partial_tail(emitter, output, expression, return_ctx)
+        }
+        AbiShape::Tuple { arity } => {
+            emit_lowered_tuple_tail(emitter, output, expression, arity, return_ctx)
+        }
         _ => false,
     }
 }
@@ -468,13 +473,14 @@ fn emit_lowered_tuple_tail(
     output: &mut String,
     expression: &syntax::ast::Expression,
     arity: usize,
+    return_ctx: &crate::ReturnContext,
 ) -> bool {
     use crate::expressions::emission::EmittedExpression;
     use syntax::ast::Expression;
     if let Expression::Tuple { elements, .. } = expression
         && elements.len() == arity
     {
-        let return_ty = emitter.return_mode.expect_ty();
+        let return_ty = return_ctx.expect_ty();
         let slot_tys = tuple_element_types(&emitter.peel_alias(&return_ty));
         let stages: Vec<EmittedExpression> = elements
             .iter()
@@ -495,7 +501,7 @@ fn emit_lowered_tuple_tail(
         return true;
     }
 
-    let return_ty = emitter.return_mode.expect_ty();
+    let return_ty = return_ctx.expect_ty();
     let value = emitter.emit_value(output, expression, ExpressionContext::value());
     let temp = emitter.hoist_tmp_value(output, "tup", &value);
     emit_lowered_result_return(
@@ -512,9 +518,10 @@ fn emit_lowered_partial_tail(
     emitter: &mut Emitter,
     output: &mut String,
     expression: &syntax::ast::Expression,
+    return_ctx: &crate::ReturnContext,
 ) -> bool {
     use syntax::ast::Expression;
-    let return_ty = emitter.return_mode.expect_ty();
+    let return_ty = return_ctx.expect_ty();
 
     if let Expression::Call {
         expression: callee,

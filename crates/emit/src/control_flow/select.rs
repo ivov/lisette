@@ -22,7 +22,7 @@ struct SelectReceiveContext<'a> {
     default_body: Option<&'a Expression>,
     retry_var: Option<&'a str>,
     element_ty: syntax::types::Type,
-    place: &'a BodyPlace,
+    place: &'a BodyPlace<'a>,
 }
 
 struct SelectPrep {

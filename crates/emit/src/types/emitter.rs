@@ -88,8 +88,8 @@ impl EmitEffects {
 }
 
 /// Shape of the enclosing function body's return values.
-#[derive(Clone, Default)]
-pub(crate) enum ReturnMode {
+#[derive(Clone, Debug, Default)]
+pub(crate) enum ReturnContext {
     #[default]
     None,
     Tagged(Type),
@@ -100,19 +100,19 @@ pub(crate) enum ReturnMode {
     TaggedBlock(Type),
 }
 
-impl ReturnMode {
+impl ReturnContext {
     pub(crate) fn ty(&self) -> Option<&Type> {
         match self {
-            ReturnMode::None => None,
-            ReturnMode::Tagged(ty)
-            | ReturnMode::Lowered { return_ty: ty, .. }
-            | ReturnMode::TaggedBlock(ty) => Some(ty),
+            ReturnContext::None => None,
+            ReturnContext::Tagged(ty)
+            | ReturnContext::Lowered { return_ty: ty, .. }
+            | ReturnContext::TaggedBlock(ty) => Some(ty),
         }
     }
 
     pub(crate) fn lowered_shape(&self) -> Option<AbiShape> {
         match self {
-            ReturnMode::Lowered { shape, .. } => Some(shape.clone()),
+            ReturnContext::Lowered { shape, .. } => Some(shape.clone()),
             _ => None,
         }
     }

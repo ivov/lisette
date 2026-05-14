@@ -3,6 +3,7 @@
 //! this module decides how the value gets there.
 
 use crate::Emitter;
+use crate::ReturnContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FallibleEmitter};
 use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
@@ -14,18 +15,18 @@ use syntax::types::{Type, peel_to_range_type};
 
 /// Where a branch arm's body writes its result.
 #[derive(Clone, Debug)]
-pub(crate) enum BodyPlace {
+pub(crate) enum BodyPlace<'a> {
     Statement,
     Assign {
         var: String,
         target_ty: Option<Type>,
     },
-    Return,
+    Return(&'a ReturnContext),
 }
 
-impl BodyPlace {
+impl BodyPlace<'_> {
     pub(crate) fn is_return(&self) -> bool {
-        matches!(self, BodyPlace::Return)
+        matches!(self, BodyPlace::Return(_))
     }
 }
 
@@ -49,7 +50,7 @@ pub(crate) enum ValuePlace<'a> {
         target_ty: Option<&'a Type>,
     },
     /// Function tail-return position.
-    Return,
+    Return(&'a ReturnContext),
     /// Try-block success tail: emits `return Ok(value)` / `return Some(value)`.
     FallibleSuccess(&'a Fallible),
     /// Recover-block success tail: emits the inner success value into the
@@ -294,8 +295,8 @@ impl Emitter<'_> {
                 self.emit_assign(output, expression, var, target_ty);
                 None
             }
-            ValuePlace::Return => {
-                self.emit_function_returning_tail(output, expression);
+            ValuePlace::Return(ctx) => {
+                self.emit_function_returning_tail(output, expression, ctx);
                 None
             }
             ValuePlace::FallibleSuccess(fallible) => {
@@ -324,7 +325,8 @@ impl Emitter<'_> {
         }
 
         if let Expression::Propagate { expression, .. } = unwrapped {
-            self.emit_propagate(output, expression, Some("_"));
+            let return_ctx = self.scope_return_context_fallback().clone();
+            self.emit_propagate(output, expression, Some("_"), &return_ctx);
             return;
         }
 
@@ -696,7 +698,12 @@ impl Emitter<'_> {
         format!("{}{}", args_str, suffix)
     }
 
-    fn emit_block_to_tail(&mut self, output: &mut String, expression: &Expression) {
+    fn emit_block_to_tail(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        return_ctx: &ReturnContext,
+    ) {
         let items: &[Expression] = if let Expression::Block { items, .. } = expression {
             items
         } else {
@@ -740,17 +747,17 @@ impl Emitter<'_> {
         match last {
             Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
                 output.push_str(&directive);
-                self.emit_branching_directly(output, last, &BodyPlace::Return);
+                self.emit_branching_directly(output, last, &BodyPlace::Return(return_ctx));
             }
             _ => {
                 output.push_str(&directive);
-                if self.emit_wrapped_return(output, last) {
+                if self.emit_wrapped_return(output, last, return_ctx) {
                     return;
                 }
                 let expression_string = self.emit_tail_value(output, last);
-                let return_ty = self.return_mode.ty().cloned();
+                let return_ty = return_ctx.ty();
                 let expression_string =
-                    self.apply_type_coercion(output, return_ty.as_ref(), last, expression_string);
+                    self.apply_type_coercion(output, return_ty, last, expression_string);
                 write_line!(output, "return {}", expression_string);
             }
         }
@@ -789,7 +796,7 @@ impl Emitter<'_> {
                     );
                 }
             }
-            BodyPlace::Return => self.emit_block_to_tail(output, expression),
+            BodyPlace::Return(ctx) => self.emit_block_to_tail(output, expression, ctx),
         }
     }
 
@@ -797,7 +804,12 @@ impl Emitter<'_> {
     /// branching shape; non-returning tails (statement-only / unit / never)
     /// fall back to a typed zero-value return when the signature still
     /// expects a return value.
-    fn emit_function_returning_tail(&mut self, output: &mut String, last: &Expression) {
+    fn emit_function_returning_tail(
+        &mut self,
+        output: &mut String,
+        last: &Expression,
+        return_ctx: &ReturnContext,
+    ) {
         let is_statement_only = matches!(
             last,
             Expression::Assignment { .. } | Expression::Let { .. } | Expression::Const { .. }
@@ -809,17 +821,19 @@ impl Emitter<'_> {
             && !last.get_type().is_never();
 
         if !needs_return {
-            self.emit_non_returning_function_tail(output, last, is_statement_only);
+            self.emit_non_returning_function_tail(output, last, is_statement_only, return_ctx);
             return;
         }
 
-        if crate::types::abi_transition::try_emit_lowered_tail_return(self, output, last) {
+        if crate::types::abi_transition::try_emit_lowered_tail_return(
+            self, output, last, return_ctx,
+        ) {
             return;
         }
-        if self.emit_wrapped_return(output, last) {
+        if self.emit_wrapped_return(output, last, return_ctx) {
             return;
         }
-        self.emit_returning_function_tail(output, last);
+        self.emit_returning_function_tail(output, last, return_ctx);
     }
 
     fn emit_non_returning_function_tail(
@@ -827,6 +841,7 @@ impl Emitter<'_> {
         output: &mut String,
         last: &Expression,
         is_statement_only: bool,
+        return_ctx: &ReturnContext,
     ) {
         self.emit_statement(output, last);
         if last.get_type().is_never() && !Self::is_go_never(last) {
@@ -836,18 +851,23 @@ impl Emitter<'_> {
             && !matches!(last, Expression::Return { .. })
             && last.get_type().is_unit();
         if (is_statement_only || last_is_unit_expr)
-            && self.return_mode.ty().is_some_and(|ty| !ty.is_unit())
+            && let Some(return_ty) = return_ctx.ty().filter(|ty| !ty.is_unit())
         {
-            let return_ty = self.return_mode.ty().cloned().unwrap();
+            let return_ty = return_ty.clone();
             self.emit_zero_return(output, &return_ty);
         }
     }
 
-    fn emit_returning_function_tail(&mut self, output: &mut String, last: &Expression) {
+    fn emit_returning_function_tail(
+        &mut self,
+        output: &mut String,
+        last: &Expression,
+        return_ctx: &ReturnContext,
+    ) {
         if !requires_temp_var(last) {
             let expression = self.emit_tail_value(output, last);
-            let return_ty = self.return_mode.ty().cloned();
-            let expression = self.apply_type_coercion(output, return_ty.as_ref(), last, expression);
+            let return_ty = return_ctx.ty();
+            let expression = self.apply_type_coercion(output, return_ty, last, expression);
             if !expression.is_empty() {
                 write_line!(output, "return {}", expression);
             }
@@ -855,7 +875,7 @@ impl Emitter<'_> {
         }
         match last {
             Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
-                self.emit_branching_directly(output, last, &BodyPlace::Return);
+                self.emit_branching_directly(output, last, &BodyPlace::Return(return_ctx));
             }
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
@@ -928,7 +948,8 @@ impl Emitter<'_> {
     ) {
         let Some(raw_go_name) = raw_go_name else {
             self.scope.bindings.add(identifier, "_");
-            self.emit_propagate_to_let(output, "_", value);
+            let return_ctx = self.scope_return_context_fallback().clone();
+            self.emit_propagate_to_let(output, "_", value, &return_ctx);
             return;
         };
         let go_identifier = self.choose_let_go_name(identifier, raw_go_name, false);
@@ -939,7 +960,8 @@ impl Emitter<'_> {
             write_line!(output, "var {} {}", go_identifier, var_ty);
             self.declare(&go_identifier);
         }
-        self.emit_propagate_to_let(output, &go_identifier, value);
+        let return_ctx = self.scope_return_context_fallback().clone();
+        self.emit_propagate_to_let(output, &go_identifier, value, &return_ctx);
         self.scope.bindings.add(identifier, &go_identifier);
         self.try_declare(&go_identifier);
     }
@@ -1053,7 +1075,7 @@ impl Emitter<'_> {
         let var_ty = if has_variable_ok_ty {
             if !binding_ty.is_variable() && !binding_ty.ok_type().is_variable() {
                 self.go_type_as_string(binding_ty)
-            } else if let Some(ctx_ty) = self.return_mode.ty().cloned() {
+            } else if let Some(ctx_ty) = self.scope_return_context_fallback().ty().cloned() {
                 if Fallible::from_type(&ctx_ty).is_some() {
                     self.go_type_as_string(&ctx_ty)
                 } else {

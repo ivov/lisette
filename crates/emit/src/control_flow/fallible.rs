@@ -162,9 +162,12 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
             .map(|t| self.emitter.go_type_as_string(t))
     }
 
-    /// Get the ok type string from the current return context, falling back to the fallible's ok type.
-    pub(crate) fn contextual_ok_type_string(&mut self) -> String {
-        if let Some(ty) = self.emitter.return_mode.ty() {
+    /// Ok type from the supplied return context, with the fallible's own ok type as fallback.
+    pub(crate) fn contextual_ok_type_string(
+        &mut self,
+        return_ctx: &crate::ReturnContext,
+    ) -> String {
+        if let Some(ty) = return_ctx.ty() {
             let ok_ty = ty.ok_type();
             self.emitter.go_type_as_string(&ok_ty)
         } else {
@@ -220,9 +223,13 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
     }
 
     /// Emit a failure wrapper using the contextual ok type (from return context).
-    pub(crate) fn emit_contextual_failure(&mut self, error_value: Option<&str>) -> String {
+    pub(crate) fn emit_contextual_failure(
+        &mut self,
+        error_value: Option<&str>,
+        return_ctx: &crate::ReturnContext,
+    ) -> String {
         let pkg = go_name::GO_STDLIB_PKG;
-        let inner_ty = self.contextual_ok_type_string();
+        let inner_ty = self.contextual_ok_type_string(return_ctx);
         if self.fallible.is_result() {
             let err_ty = self.err_type_string().expect("Result must have error type");
             format!(

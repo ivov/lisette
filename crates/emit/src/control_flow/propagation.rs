@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::ReturnContext;
 use crate::control_flow::fallible::{ConstructorKind, Fallible, FallibleEmitter};
 use crate::expressions::context::ExpressionContext;
 use crate::placement::BodyPlace;
@@ -9,19 +10,29 @@ use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
+#[derive(Clone, Copy)]
+struct WrappedReturnInfo<'a> {
+    fallible: &'a Fallible,
+    return_ty: &'a Type,
+    lowered: Option<&'a AbiShape>,
+    return_ctx: &'a ReturnContext,
+}
+
 impl Emitter<'_> {
     pub(crate) fn emit_propagate(
         &mut self,
         output: &mut String,
         expression: &Expression,
         result_var_name: Option<&str>,
+        return_ctx: &ReturnContext,
     ) -> String {
         let expression_ty = expression.get_type();
         let fallible = Fallible::from_type(&expression_ty)
             .expect("emit_propagate called on non-Result/Option type");
 
         if let Some(var_name) = result_var_name
-            && let Some(result) = self.try_emit_error_constructor(output, expression, &fallible)
+            && let Some(result) =
+                self.try_emit_error_constructor(output, expression, &fallible, return_ctx)
         {
             // Direct failure constructor (e.g. Err(...)? or None?) already emitted
             // `return ...`. Declare the binding variable so any dead code after
@@ -66,8 +77,8 @@ impl Emitter<'_> {
 
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
 
-        if let Some(shape) = self.return_mode.lowered_shape() {
-            let return_ty = self.return_mode.ty().cloned().expect("lowered abi");
+        if let Some(shape) = return_ctx.lowered_shape() {
+            let return_ty = return_ctx.expect_ty();
             // Option propagation: failure carries no payload, so emit a
             // shape-specific `None` return rather than an err-return.
             let lowered_failure = if fallible.is_result() {
@@ -86,7 +97,7 @@ impl Emitter<'_> {
         } else {
             let err_return = {
                 let mut fe = FallibleEmitter::new(self, &fallible);
-                fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)))
+                fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)), return_ctx)
             };
             write_line!(
                 output,
@@ -116,15 +127,21 @@ impl Emitter<'_> {
         output: &mut String,
         var_name: &str,
         expression: &Expression,
+        return_ctx: &ReturnContext,
     ) {
         let Expression::Propagate { expression, .. } = expression else {
             return;
         };
-        self.emit_propagate(output, expression, Some(var_name));
+        self.emit_propagate(output, expression, Some(var_name), return_ctx);
     }
 
-    pub(crate) fn emit_return(&mut self, output: &mut String, expression: &Expression) {
-        let is_unit = self.return_mode.ty().is_some_and(Type::is_unit);
+    pub(crate) fn emit_return(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        return_ctx: &ReturnContext,
+    ) {
+        let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
 
         if is_unit {
             let is_pure = matches!(
@@ -137,13 +154,14 @@ impl Emitter<'_> {
                 self.emit_statement(output, expression);
             }
             output.push_str("return\n");
-        } else if !abi_transition::try_emit_lowered_tail_return(self, output, expression)
-            && !self.emit_wrapped_return(output, expression)
+        } else if !abi_transition::try_emit_lowered_tail_return(
+            self, output, expression, return_ctx,
+        ) && !self.emit_wrapped_return(output, expression, return_ctx)
         {
             let expression_string = self.emit_value(output, expression, ExpressionContext::value());
-            let return_ty = self.return_mode.ty().cloned();
+            let return_ty = return_ctx.ty();
             let expression_string =
-                self.apply_type_coercion(output, return_ty.as_ref(), expression, expression_string);
+                self.apply_type_coercion(output, return_ty, expression, expression_string);
             write_line!(output, "return {}", expression_string);
         }
     }
@@ -158,14 +176,14 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         expression: &Expression,
+        return_ctx: &ReturnContext,
     ) -> bool {
         let expression_ty = expression.get_type();
 
-        let return_ty = self
-            .return_mode
+        let return_ty = return_ctx
             .ty()
-            .cloned()
             .filter(|ty| Fallible::from_type(ty).is_some())
+            .cloned()
             .unwrap_or(expression_ty);
 
         let Some(fallible) = Fallible::from_type(&return_ty) else {
@@ -180,7 +198,7 @@ impl Emitter<'_> {
 
         self.flags.needs_stdlib = true;
 
-        let lowered = self.return_mode.lowered_shape();
+        let lowered = return_ctx.lowered_shape();
 
         if let Expression::Identifier { .. } = expression
             && fallible.classify_constructor(expression) == Some(ConstructorKind::Failure)
@@ -197,25 +215,20 @@ impl Emitter<'_> {
             return true;
         }
 
+        let info = WrappedReturnInfo {
+            fallible: &fallible,
+            return_ty: &return_ty,
+            lowered: lowered.as_ref(),
+            return_ctx,
+        };
+
         if matches!(expression, Expression::Call { .. }) {
-            self.emit_wrapped_call_return(
-                output,
-                expression,
-                &fallible,
-                &return_ty,
-                lowered.as_ref(),
-            );
+            self.emit_wrapped_call_return(output, expression, info);
             return true;
         }
 
         if matches!(expression, Expression::If { .. } | Expression::Match { .. }) {
-            self.emit_wrapped_branching_return(
-                output,
-                expression,
-                &fallible,
-                &return_ty,
-                lowered.as_ref(),
-            );
+            self.emit_wrapped_branching_return(output, expression, info);
             return true;
         }
 
@@ -238,10 +251,14 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         expression: &Expression,
-        fallible: &Fallible,
-        return_ty: &Type,
-        lowered: Option<&AbiShape>,
+        info: WrappedReturnInfo<'_>,
     ) {
+        let WrappedReturnInfo {
+            fallible,
+            return_ty,
+            lowered,
+            return_ctx: _,
+        } = info;
         let Expression::Call {
             expression: call_expression,
             args,
@@ -394,12 +411,16 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         expression: &Expression,
-        fallible: &Fallible,
-        return_ty: &Type,
-        lowered: Option<&AbiShape>,
+        info: WrappedReturnInfo<'_>,
     ) {
+        let WrappedReturnInfo {
+            fallible,
+            return_ty,
+            lowered,
+            return_ctx,
+        } = info;
         if lowered.is_some() {
-            self.emit_branching_directly(output, expression, &BodyPlace::Return);
+            self.emit_branching_directly(output, expression, &BodyPlace::Return(return_ctx));
             return;
         }
 
@@ -448,15 +469,11 @@ impl Emitter<'_> {
         write_line!(output, "{} := func() {} {{", result_var, full_ty);
         let closure_body_start = output.len();
 
-        // The IIFE's signature is the tagged `Result`, so its body must too.
-        self.with_return_mode(
-            crate::ReturnMode::TaggedBlock(effective_ty.clone()),
-            |this| {
-                this.with_fresh_scope(|emitter| {
-                    emitter.emit_try_body(output, items, &fallible);
-                });
-            },
-        );
+        self.with_scope_return_context_fallback(ReturnContext::TaggedBlock(effective_ty), |this| {
+            this.with_fresh_scope(|emitter| {
+                emitter.emit_try_body(output, items, &fallible);
+            });
+        });
 
         inline_trivial_bindings(output, closure_body_start);
         output.push_str("}()\n");
@@ -481,10 +498,10 @@ impl Emitter<'_> {
         if !needs_return_context {
             return ty.clone();
         }
-        self.return_mode
+        self.scope_return_context_fallback()
             .ty()
-            .cloned()
             .filter(|ty| Fallible::from_type(ty).is_some())
+            .cloned()
             .unwrap_or_else(|| ty.clone())
     }
 
@@ -529,6 +546,7 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
         fallible: &Fallible,
+        return_ctx: &ReturnContext,
     ) -> Option<String> {
         let err_arg = match expression {
             Expression::Call {
@@ -557,7 +575,7 @@ impl Emitter<'_> {
         self.flags.needs_stdlib = true;
         let err_return = {
             let mut fe = FallibleEmitter::new(self, fallible);
-            fe.emit_contextual_failure(err_arg.as_deref())
+            fe.emit_contextual_failure(err_arg.as_deref(), return_ctx)
         };
 
         write_line!(output, "return {}", err_return);
@@ -587,8 +605,8 @@ impl Emitter<'_> {
             inner_ty_str
         );
 
-        let mode = self.fn_return_mode(fallible.ok_ty().clone());
-        self.with_return_mode(mode, |this| {
+        let body_return_ctx = self.return_context_for_type(fallible.ok_ty().clone());
+        self.with_scope_return_context_fallback(body_return_ctx, |this| {
             this.with_fresh_scope(|emitter| {
                 emitter.emit_recover_body(output, items, &fallible);
             });

@@ -23,7 +23,7 @@ enum WalkRole {
 
 #[derive(Clone, Copy)]
 struct WalkCtx<'a> {
-    arm_place: &'a BodyPlace,
+    arm_place: &'a BodyPlace<'a>,
     role: WalkRole,
     /// Set on retry-loop walks that need a `break <label>` terminator at
     /// non-divergent leaves; `None` for switch-case/chain-body and for
@@ -32,7 +32,7 @@ struct WalkCtx<'a> {
 }
 
 impl<'a> WalkCtx<'a> {
-    fn switch_case(arm_place: &'a BodyPlace) -> Self {
+    fn switch_case(arm_place: &'a BodyPlace<'a>) -> Self {
         Self {
             arm_place,
             role: WalkRole::SwitchCase,
@@ -40,7 +40,7 @@ impl<'a> WalkCtx<'a> {
         }
     }
 
-    fn chain_test(arm_place: &'a BodyPlace) -> Self {
+    fn chain_test(arm_place: &'a BodyPlace<'a>) -> Self {
         Self {
             arm_place,
             role: WalkRole::ChainBody,
@@ -48,7 +48,7 @@ impl<'a> WalkCtx<'a> {
         }
     }
 
-    fn retry_loop(arm_place: &'a BodyPlace, break_label: Option<&'a str>) -> Self {
+    fn retry_loop(arm_place: &'a BodyPlace<'a>, break_label: Option<&'a str>) -> Self {
         Self {
             arm_place,
             role: WalkRole::RetryLoopTop,

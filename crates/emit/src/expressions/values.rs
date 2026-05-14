@@ -300,7 +300,8 @@ impl Emitter<'_> {
                 params, body, ty, ..
             } => self.emit_lambda(params, body, ty, ctx),
             Expression::Propagate { expression, .. } => {
-                self.emit_propagate(output, expression, None)
+                let return_ctx = self.scope_return_context_fallback().clone();
+                self.emit_propagate(output, expression, None, &return_ctx)
             }
             Expression::TryBlock { items, ty, .. } => self.emit_try_block(output, items, ty),
             Expression::RecoverBlock { items, ty, .. } => {
@@ -327,7 +328,8 @@ impl Emitter<'_> {
                 expression: return_expression,
                 ..
             } => {
-                self.emit_return(output, return_expression);
+                let return_ctx = self.scope_return_context_fallback().clone();
+                self.emit_return(output, return_expression, &return_ctx);
                 String::new()
             }
             Expression::Range {
