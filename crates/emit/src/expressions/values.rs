@@ -253,7 +253,7 @@ impl Emitter<'_> {
                 } = expression
                     && let Some(shape) = self.classify_callee_abi(callee)
                 {
-                    self.flags.needs_stdlib = true;
+                    self.requirements.require_stdlib();
                     let call_str = self.emit_call(output, expression, Some(ty), ctx);
                     crate::types::abi_transition::emit_callee_abi_wrapping(
                         self, output, &shape, &call_str, ty,
@@ -396,7 +396,7 @@ impl Emitter<'_> {
         }
         let elem_expressions = wrapped_expressions;
 
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
         let arity = elem_expressions.len();
 
         let needs_explicit_type_args =

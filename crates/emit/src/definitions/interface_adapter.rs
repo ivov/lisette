@@ -217,7 +217,7 @@ impl Emitter<'_> {
         let val = self.fresh_var(Some("val"));
         self.declare(&val);
         let nil_check = if is_interface {
-            self.flags.needs_stdlib = true;
+            self.requirements.require_stdlib();
             format!("!lisette.IsNilInterface({})", val)
         } else {
             format!("{} != nil", val)

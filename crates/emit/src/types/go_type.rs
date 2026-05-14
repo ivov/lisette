@@ -136,10 +136,10 @@ impl Emitter<'_> {
     pub(crate) fn go_type_as_string(&mut self, ty: &Type) -> String {
         let result = self.go_type(ty);
         if result.needs_stdlib {
-            self.flags.needs_stdlib = true;
+            self.requirements.require_stdlib();
         }
         for go_import in &result.go_imports {
-            self.ensure_imported.insert(go_import.clone());
+            self.requirements.require_go_import(go_import.clone());
         }
         result.code
     }
@@ -370,7 +370,7 @@ impl Emitter<'_> {
 
     pub(crate) fn emit_zero_return(&mut self, output: &mut String, ty: &Type) {
         let (zero, effects) = self.zero_value(ty);
-        self.apply_effects(&effects);
+        self.requirements.apply_effects(&effects);
         crate::write_line!(output, "return {}", zero);
     }
 
@@ -408,10 +408,10 @@ impl Emitter<'_> {
     pub(crate) fn annotation_to_go_type(&mut self, annotation: &Annotation) -> String {
         let result = self.go_type_from_annotation(annotation);
         if result.needs_stdlib {
-            self.flags.needs_stdlib = true;
+            self.requirements.require_stdlib();
         }
         for go_import in &result.go_imports {
-            self.ensure_imported.insert(go_import.clone());
+            self.requirements.require_go_import(go_import.clone());
         }
         result.code
     }

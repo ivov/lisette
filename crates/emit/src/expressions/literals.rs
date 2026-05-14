@@ -137,7 +137,7 @@ impl Emitter<'_> {
             return format!("\"{}\"", format_string);
         }
 
-        self.flags.needs_fmt = true;
+        self.requirements.require_fmt();
         if format_string == "%v" && args.len() == 1 {
             return format!("fmt.Sprint({})", args[0]);
         }

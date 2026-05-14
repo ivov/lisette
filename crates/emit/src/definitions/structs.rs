@@ -53,7 +53,7 @@ impl Emitter<'_> {
                 stringer_name,
             );
             if !stringer_fields.is_empty() {
-                self.ensure_imported.insert("fmt".to_string());
+                self.requirements.require_fmt();
             }
             format!("{definition}\n\n{string_method}")
         } else {
@@ -89,7 +89,7 @@ impl Emitter<'_> {
             return definition;
         }
         if string_method.contains("fmt.") {
-            self.ensure_imported.insert("fmt".to_string());
+            self.requirements.require_fmt();
         }
         format!("{definition}\n\n{string_method}")
     }

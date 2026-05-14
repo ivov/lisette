@@ -40,7 +40,7 @@ impl Emitter<'_> {
             if var_name != "_" {
                 let inner_ty = fallible.ok_ty();
                 let (zero, effects) = self.zero_value(inner_ty);
-                self.apply_effects(&effects);
+                self.requirements.apply_effects(&effects);
                 if self.is_declared(var_name) {
                     write_line!(output, "{} = {}", var_name, zero);
                 } else {
@@ -52,7 +52,7 @@ impl Emitter<'_> {
             return result;
         }
 
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
         let check_var = if let Expression::Identifier { value, ty, .. } = expression {
             let go_name = self.emit_identifier(value, ty, ExpressionContext::value());
             if go_name.contains('(') {
@@ -196,7 +196,7 @@ impl Emitter<'_> {
             return true;
         }
 
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
 
         let lowered = return_ctx.lowered_shape();
 
@@ -453,7 +453,7 @@ impl Emitter<'_> {
         items: &[Expression],
         ty: &Type,
     ) -> String {
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
 
         let effective_ty = self.resolve_fallible_block_type(items, ty);
         let fallible = Fallible::from_type(&effective_ty)
@@ -522,7 +522,7 @@ impl Emitter<'_> {
 
     pub(crate) fn emit_try_unit_return(&mut self, output: &mut String, fallible: &Fallible) {
         let (unit_val, effects) = self.zero_value(fallible.ok_ty());
-        self.apply_effects(&effects);
+        self.requirements.apply_effects(&effects);
         self.emit_try_success_return(output, &unit_val, fallible);
     }
 
@@ -572,7 +572,7 @@ impl Emitter<'_> {
             _ => return None,
         };
 
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
         let err_return = {
             let mut fe = FallibleEmitter::new(self, fallible);
             fe.emit_contextual_failure(err_arg.as_deref(), return_ctx)
@@ -588,7 +588,7 @@ impl Emitter<'_> {
         items: &[Expression],
         ty: &Type,
     ) -> String {
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
 
         let effective_ty = self.resolve_fallible_block_type(items, ty);
         let fallible = Fallible::from_type(&effective_ty)

@@ -216,7 +216,7 @@ impl Emitter<'_> {
     }
 
     pub(super) fn build_tuple_literal(&mut self, vars: &[String], _tuple_ty: &Type) -> String {
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
         format!("lisette.MakeTuple{}({})", vars.len(), vars.join(", "))
     }
 

@@ -243,10 +243,10 @@ pub(super) fn try_inline_native_method(
 impl Emitter<'_> {
     pub(super) fn apply_inline_import(&mut self, import: InlineImport) {
         match import {
-            InlineImport::Slices => self.flags.needs_slices = true,
-            InlineImport::Strings => self.flags.needs_strings = true,
-            InlineImport::Maps => self.flags.needs_maps = true,
-            InlineImport::Stdlib => self.flags.needs_stdlib = true,
+            InlineImport::Slices => self.requirements.require_slices(),
+            InlineImport::Strings => self.requirements.require_strings(),
+            InlineImport::Maps => self.requirements.require_maps(),
+            InlineImport::Stdlib => self.requirements.require_stdlib(),
             InlineImport::None => {}
         }
     }
@@ -307,7 +307,7 @@ impl Emitter<'_> {
 
         let mut new_args = vec![receiver];
         new_args.extend(emitted_args);
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
         let fn_name = format!(
             "{}.{}{}",
             go_name::GO_STDLIB_PKG,
@@ -352,7 +352,7 @@ impl Emitter<'_> {
             }
         }
 
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
         let fn_name = format!(
             "{}.{}{}",
             go_name::GO_STDLIB_PKG,
@@ -374,7 +374,7 @@ impl Emitter<'_> {
         receiver_expr: &Expression,
         args: &[Expression],
     ) -> String {
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
         let arg = &args[0];
         let is_ref_receiver = receiver_expr.get_type().is_ref();
         let deref = |raw: &str| -> String {

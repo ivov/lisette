@@ -40,7 +40,7 @@ impl Emitter<'_> {
 
         let resolved = go_name::resolve(&name);
         if resolved.needs_stdlib {
-            self.flags.needs_stdlib = true;
+            self.requirements.require_stdlib();
         }
         resolved.name
     }
@@ -95,8 +95,8 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn require_module_import(&mut self, module: &str) -> String {
-        self.ensure_imported
-            .insert(format!("{}/{}", self.ctx.go_module, module));
+        self.requirements
+            .require_go_import(format!("{}/{}", self.ctx.go_module, module));
         self.go_pkg_qualifier(module)
     }
 
@@ -134,7 +134,7 @@ impl Emitter<'_> {
             computed_alias.as_deref(),
         );
         if resolved.needs_stdlib {
-            self.flags.needs_stdlib = true;
+            self.requirements.require_stdlib();
         }
         resolved.name
     }
@@ -154,7 +154,7 @@ impl Emitter<'_> {
             computed_alias.as_deref(),
         );
         if resolved.needs_stdlib {
-            self.flags.needs_stdlib = true;
+            self.requirements.require_stdlib();
         }
         resolved.name
     }

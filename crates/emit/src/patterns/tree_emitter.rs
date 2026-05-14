@@ -102,7 +102,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         let pre_len = output.len();
         let expanded = expand_or_patterns(self.arms);
         let compiled = compile_expanded_arms(self.emitter, &expanded, &self.subject_ty);
-        self.emitter.apply_effects(&compiled.effects);
+        self.emitter.requirements.apply_effects(&compiled.effects);
         let tree = compiled.decision;
 
         let single_catchall_has_collisions = match &tree {
@@ -119,7 +119,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             single_catchall_has_collisions,
         );
         if lowered.effects.needs_stdlib {
-            self.emitter.flags.needs_stdlib = true;
+            self.emitter.requirements.require_stdlib();
         }
 
         match lowered.plan {

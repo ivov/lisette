@@ -45,19 +45,23 @@ impl Emitter<'_> {
         let receiver_generics = receiver_generics_string(&generics);
         let has_json = attributes.iter().any(|a| a.name == "json");
 
+        let stringer_name = self.stringer_method_name(name);
+        let needs_fmt = stringer_name.is_some();
         let layout = self.module.enum_layouts.get(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);
-        if let Some(stringer_name) = self.stringer_method_name(name) {
+        if let Some(stringer_name) = stringer_name {
             result.push_str("\n\n");
             result.push_str(&layout.emit_stringer_method(&receiver_generics, stringer_name));
-            self.ensure_imported.insert("fmt".to_string());
         }
         if has_json {
             result.push_str("\n\n");
             result.push_str(&layout.emit_json_methods(&receiver_generics));
         }
+        if needs_fmt {
+            self.requirements.require_fmt();
+        }
         if has_json {
-            self.ensure_imported.insert("encoding/json".to_string());
+            self.requirements.require_go_import("encoding/json");
         }
 
         Some(result)

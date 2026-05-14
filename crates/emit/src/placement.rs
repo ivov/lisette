@@ -217,7 +217,7 @@ fn maybe_clone_subslice(
     if !is_mutable_subslice(value, mutable) {
         return expression;
     }
-    emitter.flags.needs_slices = true;
+    emitter.requirements.require_slices();
     format!("slices.Clone({})", expression)
 }
 

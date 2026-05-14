@@ -102,7 +102,7 @@ impl Emitter<'_> {
     ) {
         let resolved = self.resolve_pattern_subject(output, subject);
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        self.apply_effects(&info.effects);
+        self.requirements.apply_effects(&info.effects);
         let effective = apply_root_assertion(self, output, &info, &resolved.var);
         emit_tree_bindings(self, output, &info.bindings, &effective);
         if let Some(guard) = resolved.guard {
@@ -193,7 +193,7 @@ impl Emitter<'_> {
         }
 
         let info = decision_tree::collect_pattern_info(self, pattern, typed, &scrutinee_ty);
-        self.apply_effects(&info.effects);
+        self.requirements.apply_effects(&info.effects);
         let (effective, ok_var) = apply_refutable_root_assertion(self, output, &info, &subject_var);
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
         write_line!(output, "if {} {{", condition);
@@ -218,7 +218,7 @@ impl Emitter<'_> {
         else_block: &Expression,
     ) {
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        self.apply_effects(&info.effects);
+        self.requirements.apply_effects(&info.effects);
 
         let (effective_subject, assert_ok_var) =
             apply_refutable_root_assertion(self, output, &info, subject_var);
@@ -273,7 +273,7 @@ impl Emitter<'_> {
             .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
             .collect();
         for info in &collected {
-            self.apply_effects(&info.effects);
+            self.requirements.apply_effects(&info.effects);
         }
 
         let hoisted: Vec<_> = collected
@@ -333,7 +333,7 @@ impl Emitter<'_> {
             .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
             .collect();
         for info in &alternatives {
-            self.apply_effects(&info.effects);
+            self.requirements.apply_effects(&info.effects);
         }
 
         let unused_names: rustc_hash::FxHashSet<String> = alternatives
@@ -440,7 +440,7 @@ impl Emitter<'_> {
         failure: impl FnOnce(&mut Emitter, &mut String),
     ) {
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        self.apply_effects(&info.effects);
+        self.requirements.apply_effects(&info.effects);
         let (effective, ok_var) = apply_refutable_root_assertion(self, output, &info, subject_var);
         if info.checks.is_empty() && ok_var.is_none() {
             emit_tree_bindings(self, output, &info.bindings, &effective);

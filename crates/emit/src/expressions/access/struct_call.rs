@@ -241,7 +241,7 @@ impl Emitter<'_> {
                         .first()
                         .map(|a| self.go_type_as_string(a))
                         .unwrap_or_else(|| "any".to_string());
-                    self.flags.needs_stdlib = true;
+                    self.requirements.require_stdlib();
                     return format!("{}.MakeOptionNone[{}]()", go_name::GO_STDLIB_PKG, inner);
                 }
                 if go_name::is_go_import(id.as_str()) {

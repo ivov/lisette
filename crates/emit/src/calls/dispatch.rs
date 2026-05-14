@@ -529,7 +529,7 @@ impl Emitter<'_> {
             .first()
             .map(|a| self.emit_composite_value(output, a, ExpressionContext::value()))
             .unwrap_or_default();
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
         format!(
             "{}.AssertType[{}]({})",
             go_name::GO_STDLIB_PKG,

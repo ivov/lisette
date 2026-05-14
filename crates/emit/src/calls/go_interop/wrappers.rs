@@ -38,7 +38,7 @@ impl Emitter<'_> {
         call_expression: &Expression,
         partial_ty: &Type,
     ) -> String {
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
 
         let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         self.emit_partial_wrapping(output, &call_str, partial_ty)
@@ -90,7 +90,7 @@ impl Emitter<'_> {
         call_expression: &Expression,
         result_ty: &Type,
     ) -> String {
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
 
         let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         self.emit_result_wrapping(output, &call_str, result_ty)
@@ -226,7 +226,7 @@ impl Emitter<'_> {
             write_line!(output, "}} else if {} == nil {{", nil_check);
         }
 
-        self.flags.needs_errors = true;
+        self.requirements.require_errors();
         let mut fe = FallibleEmitter::new(self, fallible);
         let nil_err = fe.emit_failure(Some("errors.New(\"unexpected nil\")"));
         write_line!(output, "{} = {}", result_var, nil_err);
@@ -357,7 +357,7 @@ impl Emitter<'_> {
         expression: &Expression,
         strategy: &GoCallStrategy,
     ) -> String {
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
 
         let fn_type = expression.get_type();
         let (params, return_type) = match fn_type.unwrap_forall() {

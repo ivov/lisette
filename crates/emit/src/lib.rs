@@ -10,6 +10,7 @@ mod output;
 pub(crate) mod patterns;
 mod placement;
 pub(crate) mod queries;
+mod requirements;
 mod scope;
 pub(crate) mod statements;
 pub(crate) mod types;
@@ -21,7 +22,8 @@ pub(crate) use definitions::enum_layout::EnumLayout;
 pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
-pub(crate) use types::emitter::{EmitEffects, EmitFlags, LineIndex, LoopContext, ReturnContext};
+pub(crate) use requirements::EmitEffects;
+pub(crate) use types::emitter::{LineIndex, LoopContext, ReturnContext};
 pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
@@ -278,8 +280,7 @@ pub struct Emitter<'a> {
     pending_adapter_types: Vec<String>,
 
     // Per-file accumulated state (reset between files)
-    flags: EmitFlags,
-    ensure_imported: HashSet<ModuleId>,
+    pub(crate) requirements: requirements::EmitRequirements,
 
     /// Fallback for deep callers that cannot reach a `&ReturnContext` threaded
     /// from a tail boundary. Set only at function/lambda/try/recover scope
@@ -408,8 +409,7 @@ impl<'a> Emitter<'a> {
             current_module: current_module.to_string(),
             synthesized_adapter_types: HashMap::default(),
             pending_adapter_types: Vec::new(),
-            flags: EmitFlags::default(),
-            ensure_imported: HashSet::default(),
+            requirements: requirements::EmitRequirements::new(),
             scope_return_context_fallback: ReturnContext::None,
         }
     }
@@ -446,30 +446,6 @@ impl<'a> Emitter<'a> {
     /// Unconditionally marks `go_name` as declared in the current block.
     pub(crate) fn declare(&mut self, go_name: &str) {
         self.scope.declare_go_name(go_name);
-    }
-
-    pub(crate) fn apply_effects(&mut self, effects: &EmitEffects) {
-        if effects.needs_stdlib {
-            self.flags.needs_stdlib = true;
-        }
-        if effects.needs_fmt {
-            self.flags.needs_fmt = true;
-        }
-        if effects.needs_errors {
-            self.flags.needs_errors = true;
-        }
-        if effects.needs_slices {
-            self.flags.needs_slices = true;
-        }
-        if effects.needs_strings {
-            self.flags.needs_strings = true;
-        }
-        if effects.needs_maps {
-            self.flags.needs_maps = true;
-        }
-        for go_import in &effects.go_imports {
-            self.ensure_imported.insert(go_import.clone());
-        }
     }
 
     /// Allocate a fresh Go temp, register it as declared, and emit
@@ -632,28 +608,7 @@ impl<'a> Emitter<'a> {
             );
             import_builder.collect_from_file(file);
 
-            let ensure_imported = std::mem::take(&mut self.ensure_imported);
-            import_builder.extend_with_modules(&ensure_imported);
-
-            let flags = std::mem::take(&mut self.flags);
-            if flags.needs_fmt {
-                import_builder.require_fmt();
-            }
-            if flags.needs_stdlib {
-                import_builder.require_stdlib();
-            }
-            if flags.needs_errors {
-                import_builder.require_errors();
-            }
-            if flags.needs_slices {
-                import_builder.require_slices();
-            }
-            if flags.needs_strings {
-                import_builder.require_strings();
-            }
-            if flags.needs_maps {
-                import_builder.require_maps();
-            }
+            self.requirements.drain_into(&mut import_builder);
 
             let rendered_source = source.render();
             import_builder.filter_unreferenced(&rendered_source);

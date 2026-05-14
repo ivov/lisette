@@ -124,7 +124,7 @@ impl Emitter<'_> {
             if make_fn_name.starts_with(go_name::PRELUDE_PREFIX) {
                 let resolved = go_name::resolve(&make_fn_name);
                 if resolved.needs_stdlib {
-                    self.flags.needs_stdlib = true;
+                    self.requirements.require_stdlib();
                 }
                 format!("{}{}", resolved.name, type_args)
             } else {
@@ -178,7 +178,7 @@ impl Emitter<'_> {
         if is_prelude {
             let resolved = go_name::resolve(&make_fn);
             if resolved.needs_stdlib {
-                self.flags.needs_stdlib = true;
+                self.requirements.require_stdlib();
             }
             Some(format!("{}{}()", resolved.name, type_args))
         } else if is_cross_module {

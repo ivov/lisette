@@ -167,7 +167,7 @@ impl Emitter<'_> {
         let mut values = self.sequence(output, stages, prefix);
         if let Some(i) = spread_idx {
             if wrap_to_any {
-                self.flags.needs_stdlib = true;
+                self.requirements.require_stdlib();
                 values[i] = format!("{}.SliceToAny({})", go_name::GO_STDLIB_PKG, values[i]);
             }
             match combine {

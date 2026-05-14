@@ -200,7 +200,7 @@ pub(crate) fn emit_return_adapter(
     lisette_return_type: &Type,
 ) -> Option<(String, String)> {
     let return_type = lisette_return_type;
-    emitter.flags.needs_stdlib = true;
+    emitter.requirements.require_stdlib();
 
     if return_type.is_result() {
         return Some(emit_result_return_adapter(emitter, inner_call, return_type));
@@ -530,7 +530,7 @@ fn emit_lowered_partial_tail(
     } = expression
         && let Some(variant) = callee.as_partial_constructor()
     {
-        emitter.flags.needs_stdlib = true;
+        emitter.requirements.require_stdlib();
         match variant {
             "Ok" => {
                 let v = emitter.emit_composite_value(output, &args[0], ExpressionContext::value());
