@@ -4,7 +4,7 @@ use crate::control_flow::fallible::{
     RESULT_OK_TAG,
 };
 use crate::types::abi::AbiShape;
-use crate::types::emitter::Position;
+use crate::types::emitter::Destination;
 use crate::utils::{Staged, inline_trivial_bindings, optimize_region};
 use crate::write_line;
 use syntax::ast::Expression;
@@ -65,8 +65,8 @@ impl Emitter<'_> {
 
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
 
-        if let Some(shape) = self.current_lowered_abi() {
-            let return_ty = self.return_lowering.ty().cloned().expect("lowered abi");
+        if let Some(shape) = self.return_mode.lowered_shape() {
+            let return_ty = self.return_mode.ty().cloned().expect("lowered abi");
             // Option propagation: failure carries no payload, so emit a
             // shape-specific `None` return rather than an err-return.
             let lowered_failure = if fallible.is_result() {
@@ -293,7 +293,7 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
     ) -> bool {
-        let Some(shape) = self.current_lowered_abi() else {
+        let Some(shape) = self.return_mode.lowered_shape() else {
             return false;
         };
         match shape {
@@ -313,7 +313,7 @@ impl Emitter<'_> {
             && elements.len() == arity
         {
             let return_ty = self
-                .return_lowering
+                .return_mode
                 .ty()
                 .cloned()
                 .expect("lowered abi requires a return context");
@@ -338,7 +338,7 @@ impl Emitter<'_> {
         }
 
         let return_ty = self
-            .return_lowering
+            .return_mode
             .ty()
             .cloned()
             .expect("lowered abi requires a return context");
@@ -350,7 +350,7 @@ impl Emitter<'_> {
 
     fn emit_lowered_partial_tail(&mut self, output: &mut String, expression: &Expression) -> bool {
         let return_ty = self
-            .return_lowering
+            .return_mode
             .ty()
             .cloned()
             .expect("lowered abi requires a return context");
@@ -478,7 +478,7 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn emit_return(&mut self, output: &mut String, expression: &Expression) {
-        let is_unit = self.return_lowering.ty().is_some_and(Type::is_unit);
+        let is_unit = self.return_mode.ty().is_some_and(Type::is_unit);
 
         if is_unit {
             let is_pure = matches!(
@@ -494,9 +494,10 @@ impl Emitter<'_> {
         } else if !self.try_emit_lowered_tail_return(output, expression)
             && !self.emit_wrapped_return(output, expression)
         {
-            let expression_string =
-                self.with_position(Position::Tail, |this| this.emit_value(output, expression));
-            let return_ty = self.return_lowering.ty().cloned();
+            let expression_string = self.with_destination(Destination::Tail, |this| {
+                this.emit_value(output, expression)
+            });
+            let return_ty = self.return_mode.ty().cloned();
             let expression_string =
                 self.apply_type_coercion(output, return_ty.as_ref(), expression, expression_string);
             write_line!(output, "return {}", expression_string);
@@ -508,7 +509,7 @@ impl Emitter<'_> {
     /// Returns `false` only when the return type is NOT Result/Option (i.e., Fallible::from_type
     /// returns None). Once a Result/Option return type is identified, this function is exhaustive:
     /// all code paths emit the return and return `true`. The caller (emit_last_expression) uses
-    /// `Position::Tail` only for the non-Result/Option case, so the two paths are disjoint.
+    /// `Destination::Tail` only for the non-Result/Option case, so the two paths are disjoint.
     pub(crate) fn emit_wrapped_return(
         &mut self,
         output: &mut String,
@@ -517,7 +518,7 @@ impl Emitter<'_> {
         let expression_ty = expression.get_type();
 
         let return_ty = self
-            .return_lowering
+            .return_mode
             .ty()
             .cloned()
             .filter(|ty| Fallible::from_type(ty).is_some())
@@ -535,7 +536,7 @@ impl Emitter<'_> {
 
         self.flags.needs_stdlib = true;
 
-        let lowered = self.current_lowered_abi();
+        let lowered = self.return_mode.lowered_shape();
 
         if let Expression::Identifier { .. } = expression
             && fallible.classify_constructor(expression) == Some(ConstructorKind::Failure)
@@ -746,11 +747,9 @@ impl Emitter<'_> {
         lowered: Option<&AbiShape>,
     ) {
         if lowered.is_some() {
-            let saved_target_ty = self.assign_target_ty.replace(return_ty.clone());
-            self.with_position(Position::Tail, |this| {
+            self.with_destination(Destination::Tail, |this| {
                 this.emit_branching_directly(output, expression);
             });
-            self.assign_target_ty = saved_target_ty;
             return;
         }
 
@@ -764,13 +763,15 @@ impl Emitter<'_> {
         let pre_len = output.len();
         write_line!(output, "var {} {}", temp_var, full_ty);
 
-        let saved_target_ty = self.assign_target_ty.replace(return_ty.clone());
-
-        self.with_position(Position::Assign(temp_var.clone()), |this| {
-            this.emit_branching_directly(output, expression);
-        });
-
-        self.assign_target_ty = saved_target_ty;
+        self.with_destination(
+            Destination::Assign {
+                var: temp_var.clone(),
+                target_ty: Some(return_ty.clone()),
+            },
+            |this| {
+                this.emit_branching_directly(output, expression);
+            },
+        );
 
         write_line!(output, "return {}", temp_var);
         optimize_region(output, pre_len, Some(&temp_var));
@@ -799,8 +800,8 @@ impl Emitter<'_> {
         let closure_body_start = output.len();
 
         // The IIFE's signature is the tagged `Result`, so its body must too.
-        self.with_return_lowering(
-            crate::ReturnLowering::TaggedBlock(effective_ty.clone()),
+        self.with_return_mode(
+            crate::ReturnMode::TaggedBlock(effective_ty.clone()),
             |this| {
                 this.with_fresh_scope(|emitter| {
                     emitter.emit_try_body(output, items, &fallible);
@@ -831,7 +832,7 @@ impl Emitter<'_> {
         if !needs_return_context {
             return ty.clone();
         }
-        self.return_lowering
+        self.return_mode
             .ty()
             .cloned()
             .filter(|ty| Fallible::from_type(ty).is_some())
@@ -964,8 +965,8 @@ impl Emitter<'_> {
             inner_ty_str
         );
 
-        let plan = crate::FnLoweringPlan::for_fn(self, fallible.ok_ty().clone());
-        self.with_return_lowering(crate::ReturnLowering::Function(plan), |this| {
+        let mode = self.fn_return_mode(fallible.ok_ty().clone());
+        self.with_return_mode(mode, |this| {
             this.with_fresh_scope(|emitter| {
                 emitter.emit_recover_body(output, items, &fallible);
             });

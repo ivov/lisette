@@ -99,7 +99,7 @@ impl Emitter<'_> {
         {
             self.bind_fused(output, name, val);
         }
-        self.emit_in_position(output, &ok_arm.expression);
+        self.emit_in_destination(output, &ok_arm.expression);
         self.scope.bindings.restore();
         output.push_str("} else {\n");
         self.scope.bindings.save();
@@ -108,7 +108,7 @@ impl Emitter<'_> {
         {
             self.bind_fused(output, name, &err_var);
         }
-        self.emit_in_position(output, &err_arm.expression);
+        self.emit_in_destination(output, &err_arm.expression);
         self.scope.bindings.restore();
         output.push_str("}\n");
         true

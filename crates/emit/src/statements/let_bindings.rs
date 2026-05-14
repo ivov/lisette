@@ -3,7 +3,7 @@ use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::control_flow::fallible::Fallible;
 use crate::patterns::decision_tree;
 use crate::types::coercion::{Coercion, CoercionDirection};
-use crate::types::emitter::Position;
+use crate::types::emitter::Destination;
 use crate::utils::{DiscardGuard, requires_temp_var, try_flip_comparison};
 use crate::write_line;
 use syntax::ast::{Binding, Expression, Literal, Pattern, UnaryOperator};
@@ -323,15 +323,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             self.emit_var_decl_if_needed(output, identifier);
             self.emitter.try_declare(identifier);
         }
-
-        let saved_target_ty = self
-            .emitter
-            .assign_target_ty
-            .replace(self.binding.ty.clone());
-
         self.emit_value_to_temp(output, identifier);
-
-        self.emitter.assign_target_ty = saved_target_ty;
     }
 
     fn emit_var_decl_if_needed(&mut self, output: &mut String, identifier: &str) {
@@ -354,7 +346,7 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
             let binding_ty = &self.binding.ty;
             if !binding_ty.is_variable() && !binding_ty.ok_type().is_variable() {
                 self.emitter.go_type_as_string(binding_ty)
-            } else if let Some(ctx_ty) = self.emitter.return_lowering.ty().cloned() {
+            } else if let Some(ctx_ty) = self.emitter.return_mode.ty().cloned() {
                 if Fallible::from_type(&ctx_ty).is_some() {
                     self.emitter.go_type_as_string(&ctx_ty)
                 } else {
@@ -370,17 +362,21 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
     }
 
     /// Emit the value-producing expression into the already-declared temp var
-    /// `identifier`. Branching expressions position themselves in `Assign(id)`;
+    /// `identifier`. Branching expressions enter `Destination::Assign`;
     /// `Propagate`/`TryBlock`/`RecoverBlock` produce a value string assigned
     /// directly; `Loop` pushes the temp as its break-target before emitting.
     fn emit_value_to_temp(&mut self, output: &mut String, identifier: &str) {
         match self.value {
             Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
                 let value = self.value;
-                self.emitter
-                    .with_position(Position::Assign(identifier.to_string()), |this| {
-                        this.emit_branching_directly(output, value)
-                    });
+                let target_ty = self.binding.ty.clone();
+                self.emitter.with_destination(
+                    Destination::Assign {
+                        var: identifier.to_string(),
+                        target_ty: Some(target_ty),
+                    },
+                    |this| this.emit_branching_directly(output, value),
+                );
             }
             Expression::IfLet { .. } => {
                 unreachable!("IfLet should be desugared to Match before emit")
@@ -390,11 +386,16 @@ impl<'a, 'e> LetEmitter<'a, 'e> {
                 if needs_braces {
                     output.push_str("{\n");
                 }
-                self.emitter.emit_block_to_var_with_braces(
-                    output,
-                    self.value,
-                    identifier,
-                    needs_braces,
+                let target_ty = self.binding.ty.clone();
+                let value = self.value;
+                self.emitter.with_destination(
+                    Destination::Assign {
+                        var: identifier.to_string(),
+                        target_ty: Some(target_ty),
+                    },
+                    |this| {
+                        this.emit_block_to_var_with_braces(output, value, identifier, needs_braces);
+                    },
                 );
                 if needs_braces {
                     output.push_str("}\n");

@@ -5,7 +5,7 @@ use syntax::program::DefinitionBody;
 use crate::Emitter;
 use crate::is_order_sensitive;
 use crate::types::coercion::{Coercion, CoercionDirection};
-use crate::types::emitter::Position;
+use crate::types::emitter::Destination;
 use crate::utils::Staged;
 use crate::write_line;
 use syntax::ast::{Expression, Visibility};
@@ -443,11 +443,15 @@ impl Emitter<'_> {
         ty: &Type,
     ) -> String {
         let result_var = self.declare_result_var(output, ty);
-        let saved_target_ty = self.assign_target_ty.replace(ty.clone());
-        self.with_position(Position::Assign(result_var.clone()), |this| {
-            this.emit_branching_directly(output, expression);
-        });
-        self.assign_target_ty = saved_target_ty;
+        self.with_destination(
+            Destination::Assign {
+                var: result_var.clone(),
+                target_ty: Some(ty.clone()),
+            },
+            |this| {
+                this.emit_branching_directly(output, expression);
+            },
+        );
         result_var
     }
 

@@ -3,7 +3,7 @@ use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::is_order_sensitive;
 use crate::names::go_name;
 use crate::types::coercion::{Coercion, CoercionDirection};
-use crate::types::emitter::Position;
+use crate::types::emitter::Destination;
 use crate::write_line;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
@@ -49,7 +49,7 @@ impl Emitter<'_> {
                 alternative,
                 ..
             } => {
-                self.with_position(Position::Statement, |this| {
+                self.with_destination(Destination::Statement, |this| {
                     this.emit_if(output, condition, consequence, alternative)
                 });
             }
@@ -59,7 +59,7 @@ impl Emitter<'_> {
             Expression::Match {
                 subject, arms, ty, ..
             } => {
-                self.with_position(Position::Statement, |this| {
+                self.with_destination(Destination::Statement, |this| {
                     this.emit_match(output, subject, arms, ty)
                 });
             }
@@ -107,7 +107,9 @@ impl Emitter<'_> {
                 self.pop_loop();
             }
             Expression::Select { arms, .. } => {
-                self.with_position(Position::Statement, |this| this.emit_select(output, arms));
+                self.with_destination(Destination::Statement, |this| {
+                    this.emit_select(output, arms)
+                });
             }
             Expression::Block { .. } => {
                 output.push_str("{\n");

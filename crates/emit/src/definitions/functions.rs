@@ -2,7 +2,7 @@ use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
 use crate::names::go_name;
-use crate::types::emitter::Position;
+use crate::types::emitter::Destination;
 use crate::types::native::NativeGoType;
 use crate::utils::{group_params, optimize_function_body, receiver_name, requires_temp_var};
 use crate::write_line;
@@ -94,9 +94,9 @@ impl Emitter<'_> {
             && last.get_type().is_unit();
         if should_return
             && (is_statement_only || last_is_unit_expr)
-            && self.return_lowering.ty().is_some_and(|ty| !ty.is_unit())
+            && self.return_mode.ty().is_some_and(|ty| !ty.is_unit())
         {
-            let return_ty = self.return_lowering.ty().cloned().unwrap();
+            let return_ty = self.return_mode.ty().cloned().unwrap();
             let zero = self.zero_value(&return_ty);
             write_line!(output, "return {}", zero);
         }
@@ -104,12 +104,12 @@ impl Emitter<'_> {
 
     /// Tail that produces the function's return value. Value-shaped tails
     /// flow through `emit_value` + coercion; branching/block/loop shapes emit
-    /// into a tail position that writes `return` at the leaves.
+    /// into a tail destination that writes `return` at the leaves.
     fn emit_returning_tail(&mut self, output: &mut String, last: &Expression) {
-        self.with_position(Position::Tail, |this| {
+        self.with_destination(Destination::Tail, |this| {
             if !requires_temp_var(last) {
                 let expression = this.emit_value(output, last);
-                let return_ty = this.return_lowering.ty().cloned();
+                let return_ty = this.return_mode.ty().cloned();
                 let expression =
                     this.apply_type_coercion(output, return_ty.as_ref(), last, expression);
                 output.push_str(&this.wrap_value(&expression));
@@ -204,18 +204,17 @@ impl Emitter<'_> {
 
         let should_return = has_return;
 
-        let new_lowering = if let Type::Function { return_type, .. } = ty {
+        let new_mode = if let Type::Function { return_type, .. } = ty {
             let return_ty = return_type.as_ref().clone();
-            let plan = if suppress_lowering {
-                crate::FnLoweringPlan::for_tagged_lambda(return_ty)
+            if suppress_lowering {
+                crate::ReturnMode::Tagged(return_ty)
             } else {
-                crate::FnLoweringPlan::for_fn(self, return_ty)
-            };
-            crate::ReturnLowering::Function(plan)
+                self.fn_return_mode(return_ty)
+            }
         } else {
-            self.return_lowering.clone()
+            self.return_mode.clone()
         };
-        let saved_return_lowering = std::mem::replace(&mut self.return_lowering, new_lowering);
+        let saved_return_mode = std::mem::replace(&mut self.return_mode, new_mode);
         let saved_suppress = std::mem::replace(&mut self.suppress_go_fn_short_circuit, false);
         let saved_flows = std::mem::replace(&mut self.arg_flows_to_unknown, false);
 
@@ -232,7 +231,7 @@ impl Emitter<'_> {
         self.scope.scope_depth = saved_scope_depth;
         self.scope.bindings.restore();
 
-        self.return_lowering = saved_return_lowering;
+        self.return_mode = saved_return_mode;
         self.suppress_go_fn_short_circuit = saved_suppress;
         self.arg_flows_to_unknown = saved_flows;
 
@@ -280,11 +279,8 @@ impl Emitter<'_> {
 
         let directive = self.maybe_line_directive(&function_definition.name_span);
 
-        let plan = crate::FnLoweringPlan::for_fn(self, function_definition.return_type.clone());
-        let saved_return_lowering = std::mem::replace(
-            &mut self.return_lowering,
-            crate::ReturnLowering::Function(plan),
-        );
+        let mode = self.fn_return_mode(function_definition.return_type.clone());
+        let saved_return_mode = std::mem::replace(&mut self.return_mode, mode);
 
         let (function_definition, receiver) =
             self.change_go_builtin_methods(function_definition, receiver);
@@ -373,7 +369,7 @@ impl Emitter<'_> {
         );
         optimize_function_body(&mut body);
 
-        self.return_lowering = saved_return_lowering;
+        self.return_mode = saved_return_mode;
         self.module.absorbed_ref_generics = saved_absorbed;
 
         let trimmed_body = body.trim_end();

@@ -19,7 +19,9 @@ pub(crate) use definitions::enum_layout::EnumLayout;
 pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
-pub(crate) use types::emitter::{ArmPosition, EmitFlags, LineIndex, LoopContext, Position};
+pub(crate) use types::emitter::{
+    ArmRouting, Destination, EmitFlags, LineIndex, LoopContext, ReturnMode,
+};
 pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
@@ -310,13 +312,10 @@ pub struct Emitter<'a> {
     flags: EmitFlags,
     ensure_imported: HashSet<ModuleId>,
 
-    // Temporary emission context (saved/restored per-expression).
-    // These are implicit arguments — ideally parameters, but
-    // plumbing through deep call chains is impractical.
-    position: Position,
-    return_lowering: ReturnLowering,
-    /// Target type for Option/Result assignment (interface coercion).
-    assign_target_ty: Option<Type>,
+    /// Where the current expression's value goes.
+    destination: Destination,
+    /// Shape of the enclosing function body's return values.
+    return_mode: ReturnMode,
     /// Generic function identifiers should NOT add type args when used as callees
     /// (the call site handles instantiation), only when used as values.
     emitting_call_callee: bool,
@@ -340,49 +339,11 @@ pub struct Emitter<'a> {
     arg_flows_to_unknown: bool,
 }
 
-#[derive(Clone)]
-pub(crate) struct FnLoweringPlan {
-    return_ty: Type,
-    shape: Option<types::abi::AbiShape>,
-}
-
-impl FnLoweringPlan {
-    pub(crate) fn for_fn(emitter: &Emitter<'_>, return_ty: Type) -> Self {
-        let shape = emitter.classify_direct_emission(&return_ty);
-        Self { return_ty, shape }
-    }
-
-    pub(crate) fn for_tagged_lambda(return_ty: Type) -> Self {
-        Self {
-            return_ty,
-            shape: None,
-        }
-    }
-}
-
-#[derive(Clone, Default)]
-pub(crate) enum ReturnLowering {
-    #[default]
-    None,
-    Function(FnLoweringPlan),
-    /// `try { ... }` IIFE: body must return the tagged Result/Option even
-    /// when the outer function's return type would normally lower.
-    TaggedBlock(Type),
-}
-
-impl ReturnLowering {
-    pub(crate) fn ty(&self) -> Option<&Type> {
-        match self {
-            Self::None => None,
-            Self::Function(plan) => Some(&plan.return_ty),
-            Self::TaggedBlock(ty) => Some(ty),
-        }
-    }
-
-    pub(crate) fn shape(&self) -> Option<types::abi::AbiShape> {
-        match self {
-            Self::Function(plan) => plan.shape.clone(),
-            _ => None,
+impl<'a> Emitter<'a> {
+    pub(crate) fn fn_return_mode(&self, return_ty: Type) -> ReturnMode {
+        match self.classify_direct_emission(&return_ty) {
+            Some(shape) => ReturnMode::Lowered { return_ty, shape },
+            None => ReturnMode::Tagged(return_ty),
         }
     }
 }
@@ -495,9 +456,8 @@ impl<'a> Emitter<'a> {
             pending_adapter_types: Vec::new(),
             flags: EmitFlags::default(),
             ensure_imported: HashSet::default(),
-            position: Position::Expression,
-            return_lowering: ReturnLowering::default(),
-            assign_target_ty: None,
+            destination: Destination::Expression,
+            return_mode: ReturnMode::None,
             emitting_call_callee: false,
             in_condition: false,
             skip_array_return_wrap: false,
@@ -544,23 +504,23 @@ impl<'a> Emitter<'a> {
             .and_then(|ctx| ctx.label.as_deref())
     }
 
-    pub(crate) fn with_position<F, R>(&mut self, position: Position, f: F) -> R
+    pub(crate) fn with_destination<F, R>(&mut self, destination: Destination, f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {
-        let saved = std::mem::replace(&mut self.position, position);
+        let saved = std::mem::replace(&mut self.destination, destination);
         let result = f(self);
-        self.position = saved;
+        self.destination = saved;
         result
     }
 
-    pub(crate) fn with_return_lowering<F, R>(&mut self, lowering: ReturnLowering, f: F) -> R
+    pub(crate) fn with_return_mode<F, R>(&mut self, mode: ReturnMode, f: F) -> R
     where
         F: FnOnce(&mut Self) -> R,
     {
-        let saved = std::mem::replace(&mut self.return_lowering, lowering);
+        let saved = std::mem::replace(&mut self.return_mode, mode);
         let result = f(self);
-        self.return_lowering = saved;
+        self.return_mode = saved;
         result
     }
 
@@ -568,50 +528,48 @@ impl<'a> Emitter<'a> {
         if value.is_empty() {
             return String::new();
         }
-        match &self.position {
-            Position::Tail => format!("return {}\n", value),
-            Position::Statement => format!("{}\n", value),
-            Position::Expression => value.to_string(),
-            Position::Assign(var) => format!("{} = {}\n", var, value),
+        match &self.destination {
+            Destination::Tail => format!("return {}\n", value),
+            Destination::Statement => format!("{}\n", value),
+            Destination::Expression => value.to_string(),
+            Destination::Assign { var, .. } => format!("{} = {}\n", var, value),
         }
     }
 
     pub(crate) fn emit_unreachable_if_needed(&self, output: &mut String, has_catchall: bool) {
-        if self.position.is_tail() && !has_catchall {
+        if self.destination.is_tail() && !has_catchall {
             output.push_str("panic(\"unreachable\")\n");
         }
     }
 
-    /// Computes the position for match arms based on the current position and result type.
-    ///
-    /// For control flow constructs that need to produce values (match, if-else), this
-    /// determines whether we need a temporary result variable and what position the
-    /// inner branches should use.
-    ///
-    /// If `output` is provided, declares the result variable when needed.
-    pub(crate) fn compute_arm_position(
+    /// Route match arms to a destination, declaring a fresh result var when the
+    /// current destination is `Expression` and the match produces a value.
+    pub(crate) fn compute_arm_routing(
         &mut self,
         output: Option<&mut String>,
         ty: &Type,
-    ) -> ArmPosition {
-        if self.position.is_tail() {
-            return ArmPosition::from_position(Position::Tail);
-        }
-
-        if let Some(var) = self.position.assign_target() {
-            return ArmPosition::from_position(Position::Assign(var.to_string()));
-        }
-
-        if self.position.is_expression() && !ty.is_unit() {
-            let var = self.fresh_var(Some("result"));
-            if let Some(out) = output {
-                let go_ty = self.go_type_as_string(ty);
-                write_line!(out, "var {} {}", var, go_ty);
+    ) -> ArmRouting {
+        match &self.destination {
+            Destination::Tail => ArmRouting::Inherit(Destination::Tail),
+            Destination::Assign { var, target_ty } => ArmRouting::Inherit(Destination::Assign {
+                var: var.clone(),
+                target_ty: target_ty.clone(),
+            }),
+            Destination::Expression if !ty.is_unit() => {
+                let var = self.fresh_var(Some("result"));
+                if let Some(out) = output {
+                    let go_ty = self.go_type_as_string(ty);
+                    write_line!(out, "var {} {}", var, go_ty);
+                }
+                ArmRouting::CreateAndReturn {
+                    var,
+                    target_ty: Some(ty.clone()),
+                }
             }
-            return ArmPosition::with_result_var(var);
+            Destination::Expression | Destination::Statement => {
+                ArmRouting::Inherit(Destination::Statement)
+            }
         }
-
-        ArmPosition::from_position(Position::Statement)
     }
 
     /// Checks if a Go variable name has been declared in the current scope.

@@ -87,7 +87,7 @@ impl Emitter<'_> {
                 }
                 SelectArmPattern::WildCard { body } => {
                     output.push_str("default:\n");
-                    self.emit_in_position(output, body);
+                    self.emit_in_destination(output, body);
                 }
             }
         }
@@ -99,7 +99,7 @@ impl Emitter<'_> {
             output.push_str("break\n}\n");
             // Go can't see that `break` is unreachable (all select paths either
             // return or continue), so emit panic to satisfy the compiler.
-            if self.position.is_tail() {
+            if self.destination.is_tail() {
                 output.push_str("panic(\"unreachable\")\n");
             }
         } else {
@@ -221,7 +221,7 @@ impl Emitter<'_> {
 
     fn emit_ok_check(&mut self, output: &mut String, ok_var: &str, ctx: &SelectReceiveContext) {
         let (body_content, ()) = self.capture_emission(output, |this, buf| {
-            this.emit_in_position(buf, ctx.body);
+            this.emit_in_destination(buf, ctx.body);
         });
         let body_empty = body_content.is_empty();
         let has_else = ctx.retry_var.is_some() || ctx.default_body.is_some();
@@ -249,7 +249,7 @@ impl Emitter<'_> {
             write_line!(output, "{} = nil", retry_var);
             output.push_str("continue\n");
         } else if let Some(default_body) = ctx.default_body {
-            self.emit_in_position(output, default_body);
+            self.emit_in_destination(output, default_body);
         }
     }
 
@@ -280,20 +280,20 @@ impl Emitter<'_> {
                 decision_tree::collect_pattern_info(self, pattern, typed, &ctx.element_ty);
             if checks.is_empty() {
                 decision_tree::emit_tree_bindings(self, output, &bindings, receiver_var);
-                self.emit_in_position(output, ctx.body);
+                self.emit_in_destination(output, ctx.body);
             } else {
                 let condition = decision_tree::render_condition(&checks, receiver_var);
                 write_line!(output, "if {} {{", condition);
                 decision_tree::emit_tree_bindings(self, output, &bindings, receiver_var);
-                self.emit_in_position(output, ctx.body);
+                self.emit_in_destination(output, ctx.body);
                 if let Some(default_body) = ctx.default_body {
                     output.push_str("} else {\n");
-                    self.emit_in_position(output, default_body);
+                    self.emit_in_destination(output, default_body);
                 }
                 output.push_str("}\n");
             }
         } else {
-            self.emit_in_position(output, ctx.body);
+            self.emit_in_destination(output, ctx.body);
         }
         guard.finish(output);
         self.scope.bindings.restore();
@@ -370,7 +370,7 @@ impl Emitter<'_> {
                 }
             }
         }
-        self.emit_in_position(output, ctx.body);
+        self.emit_in_destination(output, ctx.body);
         self.scope.bindings.restore();
     }
 
@@ -428,7 +428,7 @@ impl Emitter<'_> {
                 output.push_str("default:\n");
             }
         }
-        self.emit_in_position(output, body);
+        self.emit_in_destination(output, body);
     }
 
     fn emit_match_receive_arm(
@@ -528,7 +528,7 @@ impl Emitter<'_> {
     ) -> Option<String> {
         self.capture_scoped(output, |this, output| {
             if !needs_receiver_destructure {
-                this.emit_in_position(output, &some_arm.expression);
+                this.emit_in_destination(output, &some_arm.expression);
                 return;
             }
             let inner_typed = Self::unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
@@ -540,13 +540,13 @@ impl Emitter<'_> {
             );
             if checks.is_empty() {
                 decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
-                this.emit_in_position(output, &some_arm.expression);
+                this.emit_in_destination(output, &some_arm.expression);
                 return;
             }
             let condition = decision_tree::render_condition(&checks, case_var);
             write_line!(output, "if {} {{", condition);
             decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
-            this.emit_in_position(output, &some_arm.expression);
+            this.emit_in_destination(output, &some_arm.expression);
             output.push_str("} else {\n");
             Emitter::emit_none_arm_body(this, output, match_arms);
             output.push_str("}\n");
@@ -590,7 +590,7 @@ impl Emitter<'_> {
             if let Pattern::EnumVariant { identifier, .. } = &match_arm.pattern {
                 let variant_name = go_name::unqualified_name(identifier);
                 if variant_name == "None" {
-                    emitter.emit_in_position(output, &match_arm.expression);
+                    emitter.emit_in_destination(output, &match_arm.expression);
                     return;
                 }
             }

@@ -2,7 +2,7 @@ use crate::Emitter;
 use crate::names::go_name;
 use crate::patterns::decision_tree;
 use crate::statements::assignments::is_lvalue_chain;
-use crate::types::emitter::Position;
+use crate::types::emitter::Destination;
 use crate::utils::{Staged, output_ends_with_diverge};
 use crate::write_line;
 use syntax::ast::{Expression, Pattern, TypedPattern};
@@ -19,7 +19,7 @@ impl Emitter<'_> {
         let condition_string = wrap_if_struct_literal(condition_string);
         write_line!(output, "if {} {{", condition_string);
         self.enter_scope();
-        self.emit_in_position(output, consequence);
+        self.emit_in_destination(output, consequence);
         self.exit_scope();
         self.emit_else_chain(output, alternative);
     }
@@ -58,16 +58,16 @@ impl Emitter<'_> {
             }
             write_line!(output, "}} else if {} {{", condition_string);
             self.enter_scope();
-            self.emit_in_position(output, consequence);
+            self.emit_in_destination(output, consequence);
             self.exit_scope();
             self.emit_else_chain(output, next_alternative);
         } else if output_ends_with_diverge(output) {
             output.push_str("}\n");
-            self.emit_in_position(output, alternative);
+            self.emit_in_destination(output, alternative);
         } else {
             output.push_str("} else {\n");
             self.enter_scope();
-            self.emit_in_position(output, alternative);
+            self.emit_in_destination(output, alternative);
             self.exit_scope();
             output.push_str("}\n");
         }
@@ -86,7 +86,7 @@ impl Emitter<'_> {
         output.push_str(condition_setup);
         write_line!(output, "if {} {{", condition_string);
         self.enter_scope();
-        self.emit_in_position(output, consequence);
+        self.emit_in_destination(output, consequence);
         self.exit_scope();
         self.emit_else_chain(output, next_alternative);
         self.exit_scope();
@@ -358,13 +358,20 @@ impl Emitter<'_> {
             last,
             Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. }
         ) {
-            self.with_position(Position::Assign(var.to_string()), |this| {
-                this.emit_branching_directly(output, last);
-            });
+            let target_ty = self.destination.assign_target_ty().cloned();
+            self.with_destination(
+                Destination::Assign {
+                    var: var.to_string(),
+                    target_ty,
+                },
+                |this| {
+                    this.emit_branching_directly(output, last);
+                },
+            );
             return;
         }
         let expression_string = self.emit_value(output, last);
-        let target_ty = self.assign_target_ty.clone();
+        let target_ty = self.destination.assign_target_ty().cloned();
         let expression_string =
             self.apply_type_coercion(output, target_ty.as_ref(), last, expression_string);
         write_line!(output, "{} = {}", var, expression_string);
@@ -464,7 +471,7 @@ impl Emitter<'_> {
                     return;
                 }
                 let expression_string = self.emit_value(output, last);
-                let return_ty = self.return_lowering.ty().cloned();
+                let return_ty = self.return_mode.ty().cloned();
                 let expression_string =
                     self.apply_type_coercion(output, return_ty.as_ref(), last, expression_string);
                 write_line!(output, "return {}", expression_string);
@@ -472,15 +479,17 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn emit_in_position(&mut self, output: &mut String, expression: &Expression) {
-        match &self.position {
-            Position::Statement | Position::Expression => {
+    pub(crate) fn emit_in_destination(&mut self, output: &mut String, expression: &Expression) {
+        match &self.destination {
+            Destination::Statement | Destination::Expression => {
                 self.emit_block(output, expression);
             }
-            Position::Assign(var) => {
+            Destination::Assign { var, target_ty } => {
                 let var = var.clone();
-                if expression.get_type().is_result() || expression.get_type().is_option() {
-                    let target_ty = self.assign_target_ty.clone();
+                let is_fallible =
+                    expression.get_type().is_result() || expression.get_type().is_option();
+                let target_ty = if is_fallible { target_ty.clone() } else { None };
+                if is_fallible {
                     self.emit_option_result_assignment(
                         output,
                         &var,
@@ -491,7 +500,7 @@ impl Emitter<'_> {
                     self.emit_block_to_var_with_braces(output, expression, &var, false);
                 }
             }
-            Position::Tail => self.emit_block_to_tail(output, expression),
+            Destination::Tail => self.emit_block_to_tail(output, expression),
         }
     }
 }

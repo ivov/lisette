@@ -1,3 +1,6 @@
+use crate::types::abi::AbiShape;
+use syntax::types::Type;
+
 #[derive(Clone)]
 pub(crate) struct LineIndex {
     pub(crate) path: String,
@@ -39,26 +42,64 @@ pub(crate) struct EmitFlags {
     pub(crate) needs_maps: bool,
 }
 
+/// Where the current expression's value goes.
 #[derive(Clone, Debug)]
-pub(crate) enum Position {
+pub(crate) enum Destination {
     Tail,
     Statement,
     Expression,
-    Assign(String),
+    Assign {
+        var: String,
+        target_ty: Option<Type>,
+    },
 }
 
-impl Position {
+impl Destination {
     pub(crate) fn is_tail(&self) -> bool {
-        matches!(self, Position::Tail)
-    }
-
-    pub(crate) fn is_expression(&self) -> bool {
-        matches!(self, Position::Expression)
+        matches!(self, Destination::Tail)
     }
 
     pub(crate) fn assign_target(&self) -> Option<&str> {
         match self {
-            Position::Assign(var) => Some(var),
+            Destination::Assign { var, .. } => Some(var),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn assign_target_ty(&self) -> Option<&Type> {
+        match self {
+            Destination::Assign { target_ty, .. } => target_ty.as_ref(),
+            _ => None,
+        }
+    }
+}
+
+/// Shape of the enclosing function body's return values.
+#[derive(Clone, Default)]
+pub(crate) enum ReturnMode {
+    #[default]
+    None,
+    Tagged(Type),
+    Lowered {
+        return_ty: Type,
+        shape: AbiShape,
+    },
+    TaggedBlock(Type),
+}
+
+impl ReturnMode {
+    pub(crate) fn ty(&self) -> Option<&Type> {
+        match self {
+            ReturnMode::None => None,
+            ReturnMode::Tagged(ty)
+            | ReturnMode::Lowered { return_ty: ty, .. }
+            | ReturnMode::TaggedBlock(ty) => Some(ty),
+        }
+    }
+
+    pub(crate) fn lowered_shape(&self) -> Option<AbiShape> {
+        match self {
+            ReturnMode::Lowered { shape, .. } => Some(shape.clone()),
             _ => None,
         }
     }
@@ -69,30 +110,31 @@ pub(crate) struct LoopContext {
     pub(crate) label: Option<String>,
 }
 
-pub(crate) struct ArmPosition {
-    pub(crate) position: Position,
-    pub(crate) needs_return: bool,
-    result_var: Option<String>,
+pub(crate) enum ArmRouting {
+    /// Arm bodies inherit an existing destination.
+    Inherit(Destination),
+    /// Arm bodies assign to a fresh result var; the match site emits
+    /// `return <var>` after the arms.
+    CreateAndReturn {
+        var: String,
+        target_ty: Option<Type>,
+    },
 }
 
-impl ArmPosition {
-    pub(crate) fn from_position(position: Position) -> Self {
-        Self {
-            position,
-            needs_return: false,
-            result_var: None,
-        }
-    }
-
-    pub(crate) fn with_result_var(var: String) -> Self {
-        Self {
-            position: Position::Assign(var.clone()),
-            needs_return: true,
-            result_var: Some(var),
+impl ArmRouting {
+    pub(crate) fn into_body_destination(self) -> Destination {
+        match self {
+            ArmRouting::Inherit(d) => d,
+            ArmRouting::CreateAndReturn { var, target_ty } => {
+                Destination::Assign { var, target_ty }
+            }
         }
     }
 
     pub(crate) fn result_var(&self) -> Option<&str> {
-        self.result_var.as_deref()
+        match self {
+            ArmRouting::CreateAndReturn { var, .. } => Some(var),
+            ArmRouting::Inherit(_) => None,
+        }
     }
 }

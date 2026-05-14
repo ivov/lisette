@@ -7,12 +7,12 @@ use crate::patterns::decision_tree::{
     AccessPath, ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind,
     compile_expanded_arms, emit_tree_bindings, expand_or_patterns, render_condition,
 };
-use crate::types::emitter::Position;
+use crate::types::emitter::Destination;
 use crate::utils::{inline_trivial_bindings, output_ends_with_diverge, output_references_var};
 use crate::write_line;
 
 struct GuardedTreeContext<'a> {
-    arm_position: &'a Position,
+    arm_destination: &'a Destination,
     subject_var: &'a str,
     label: &'a str,
     use_direct_return: bool,
@@ -34,7 +34,7 @@ enum NestedHandler {
 }
 
 struct WalkCtx<'a> {
-    arm_position: &'a Position,
+    arm_destination: &'a Destination,
     subject_var: &'a str,
     terminator: LeafTerminator<'a>,
     guard_failure: GuardFailurePolicy,
@@ -42,9 +42,9 @@ struct WalkCtx<'a> {
 }
 
 impl<'a> WalkCtx<'a> {
-    fn switch_case(arm_position: &'a Position, subject_var: &'a str) -> Self {
+    fn switch_case(arm_destination: &'a Destination, subject_var: &'a str) -> Self {
         Self {
-            arm_position,
+            arm_destination,
             subject_var,
             terminator: LeafTerminator::None,
             guard_failure: GuardFailurePolicy::EmitInline,
@@ -52,9 +52,9 @@ impl<'a> WalkCtx<'a> {
         }
     }
 
-    fn chain_test(arm_position: &'a Position, subject_var: &'a str) -> Self {
+    fn chain_test(arm_destination: &'a Destination, subject_var: &'a str) -> Self {
         Self {
-            arm_position,
+            arm_destination,
             subject_var,
             terminator: LeafTerminator::None,
             guard_failure: GuardFailurePolicy::FallThrough,
@@ -64,7 +64,7 @@ impl<'a> WalkCtx<'a> {
 
     fn retry_loop(ctx: &GuardedTreeContext<'a>) -> Self {
         Self {
-            arm_position: ctx.arm_position,
+            arm_destination: ctx.arm_destination,
             subject_var: ctx.subject_var,
             terminator: if ctx.use_direct_return {
                 LeafTerminator::None
@@ -107,13 +107,12 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         let expanded = expand_or_patterns(self.arms);
         let tree = compile_expanded_arms(self.emitter, &expanded, &self.subject_ty);
 
-        let arm_position = self.emitter.compute_arm_position(Some(output), self.ty);
-        let position = arm_position.position.clone();
-        let needs_return = arm_position.needs_return;
-        let result_var = arm_position.result_var().map(|s| s.to_string());
+        let routing = self.emitter.compute_arm_routing(Some(output), self.ty);
+        let result_var = routing.result_var().map(|s| s.to_string());
+        let body_destination = routing.into_body_destination();
 
         if matches!(tree, Decision::Switch { .. }) {
-            self.emit_switch(output, &tree, &position);
+            self.emit_switch(output, &tree, &body_destination);
             if let Some(var) = &result_var {
                 write_line!(output, "return {}", var);
             }
@@ -126,21 +125,22 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             bindings,
         } = &tree
         {
-            self.emit_single_catchall(output, *arm_index, bindings, &position, &result_var);
+            self.emit_single_catchall(output, *arm_index, bindings, &body_destination, &result_var);
             inline_trivial_bindings(output, pre_len);
             return;
         }
 
         let has_guards = self.arms.iter().any(|arm| arm.has_guard());
         if has_guards {
-            self.emit_with_loop(output, &tree, &position, needs_return);
+            let needs_return = result_var.is_some();
+            self.emit_with_loop(output, &tree, &body_destination, needs_return);
         } else {
-            self.emit_chain(output, &tree, &position, &result_var);
+            self.emit_chain(output, &tree, &body_destination, &result_var);
         }
         inline_trivial_bindings(output, pre_len);
     }
 
-    fn emit_switch(&mut self, output: &mut String, tree: &Decision, arm_position: &Position) {
+    fn emit_switch(&mut self, output: &mut String, tree: &Decision, arm_destination: &Destination) {
         let Decision::Switch {
             path,
             kind,
@@ -152,7 +152,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         };
 
         if matches!(kind, SwitchKind::TypeSwitch) {
-            return self.emit_type_switch(output, tree, arm_position);
+            return self.emit_type_switch(output, tree, arm_destination);
         }
 
         let subject_var = self.subject_var.clone();
@@ -164,7 +164,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             branches,
             fallback,
             &switch_expression,
-            arm_position,
+            arm_destination,
             &subject_var,
         ) {
             return;
@@ -175,7 +175,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             branches,
             fallback,
             &switch_expression,
-            arm_position,
+            arm_destination,
             &subject_var,
         ) {
             return;
@@ -186,14 +186,21 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             branches,
             fallback,
             &switch_expression,
-            arm_position,
+            arm_destination,
             &subject_var,
         ) {
             return;
         }
 
         write_line!(output, "switch {} {{", switch_expression);
-        self.emit_switch_body(output, branches, fallback, arm_position, &subject_var, true);
+        self.emit_switch_body(
+            output,
+            branches,
+            fallback,
+            arm_destination,
+            &subject_var,
+            true,
+        );
     }
 
     /// Render the expression driving a non-type-switch dispatch.
@@ -231,10 +238,10 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         condition: &str,
         then: &Decision,
         otherwise: Option<&Decision>,
-        arm_position: &Position,
+        arm_destination: &Destination,
         subject_var: &str,
     ) {
-        let ctx = WalkCtx::switch_case(arm_position, subject_var);
+        let ctx = WalkCtx::switch_case(arm_destination, subject_var);
         write_line!(output, "if {} {{", condition);
         self.emitter.enter_scope();
         self.walk(output, then, &ctx);
@@ -255,7 +262,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         branches: &[SwitchBranch],
         fallback: &Option<Box<Decision>>,
         switch_expression: &str,
-        arm_position: &Position,
+        arm_destination: &Destination,
         subject_var: &str,
     ) -> bool {
         if branches.len() != 2
@@ -277,7 +284,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             switch_expression,
             &true_branch.decision,
             Some(&false_branch.decision),
-            arm_position,
+            arm_destination,
             subject_var,
         );
         true
@@ -291,7 +298,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         branches: &[SwitchBranch],
         fallback: &Option<Box<Decision>>,
         switch_expression: &str,
-        arm_position: &Position,
+        arm_destination: &Destination,
         subject_var: &str,
     ) -> bool {
         if branches.len() != 2 || fallback.is_some() {
@@ -306,7 +313,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             &condition,
             &first.decision,
             Some(&second.decision),
-            arm_position,
+            arm_destination,
             subject_var,
         );
         true
@@ -321,7 +328,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         branches: &[SwitchBranch],
         fallback: &Option<Box<Decision>>,
         switch_expression: &str,
-        arm_position: &Position,
+        arm_destination: &Destination,
         subject_var: &str,
     ) -> bool {
         if branches.len() != 1 {
@@ -337,7 +344,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 &condition,
                 &branch.decision,
                 None,
-                arm_position,
+                arm_destination,
                 subject_var,
             );
             return true;
@@ -349,19 +356,24 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 &condition,
                 &branch.decision,
                 Some(fb),
-                arm_position,
+                arm_destination,
                 subject_var,
             );
             return true;
         }
         // Single-variant enum: emit the body directly, no wrapper.
-        let ctx = WalkCtx::switch_case(arm_position, subject_var);
+        let ctx = WalkCtx::switch_case(arm_destination, subject_var);
         self.walk(output, &branch.decision, &ctx);
         true
     }
 
     /// Emit a Go type switch: `switch x := x.(type) { case T: ... default: ... }`.
-    fn emit_type_switch(&mut self, output: &mut String, tree: &Decision, arm_position: &Position) {
+    fn emit_type_switch(
+        &mut self,
+        output: &mut String,
+        tree: &Decision,
+        arm_destination: &Destination,
+    ) {
         let Decision::Switch {
             path,
             branches,
@@ -378,7 +390,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         let header_start = output.len();
         write_line!(output, "switch {} := {}.(type) {{", base, base);
         let body_start = output.len();
-        self.emit_switch_body(output, branches, fallback, arm_position, &base, false);
+        self.emit_switch_body(output, branches, fallback, arm_destination, &base, false);
         if !output_references_var(&output[body_start..], &base) {
             let new_header = format!("switch {}.(type) {{\n", base);
             output.replace_range(header_start..body_start, &new_header);
@@ -395,7 +407,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         output: &mut String,
         branches: &[SwitchBranch],
         fallback: &Option<Box<Decision>>,
-        arm_position: &Position,
+        arm_destination: &Destination,
         subject_var: &str,
         track_stdlib: bool,
     ) {
@@ -406,7 +418,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             branches
         };
 
-        let ctx = WalkCtx::switch_case(arm_position, subject_var);
+        let ctx = WalkCtx::switch_case(arm_destination, subject_var);
         for branch in regular_branches {
             if track_stdlib && branch.needs_stdlib {
                 self.emitter.flags.needs_stdlib = true;
@@ -466,7 +478,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 bindings,
             } => {
                 self.emit_bindings(output, bindings, ctx.subject_var);
-                self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
+                self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
                 self.apply_leaf_terminator(output, ctx);
             }
             Decision::Guard {
@@ -491,7 +503,12 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             }
             Decision::Chain { .. } | Decision::Switch { .. } => match ctx.nested {
                 NestedHandler::Regular => {
-                    self.emit_chain_decisions(output, decision, ctx.arm_position, ctx.subject_var);
+                    self.emit_chain_decisions(
+                        output,
+                        decision,
+                        ctx.arm_destination,
+                        ctx.subject_var,
+                    );
                 }
                 NestedHandler::RetryLoop => {
                     let label = match &ctx.terminator {
@@ -499,7 +516,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                         LeafTerminator::None => "",
                     };
                     let guarded_ctx = GuardedTreeContext {
-                        arm_position: ctx.arm_position,
+                        arm_destination: ctx.arm_destination,
                         subject_var: ctx.subject_var,
                         label,
                         use_direct_return: matches!(ctx.terminator, LeafTerminator::None),
@@ -521,12 +538,12 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     ) {
         match decision {
             Decision::Success { arm_index, .. } => {
-                self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
+                self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
                 self.apply_leaf_terminator(output, ctx);
             }
             Decision::Guard { arm_index, .. } => {
                 if self.emit_guard_header(output, *arm_index) {
-                    self.emit_arm_body(output, *arm_index, Some(ctx.arm_position));
+                    self.emit_arm_body(output, *arm_index, Some(ctx.arm_destination));
                     self.apply_leaf_terminator(output, ctx);
                     self.emitter.exit_scope();
                     output.push_str("}\n");
@@ -566,7 +583,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         output: &mut String,
         arm_index: usize,
         bindings: &[PatternBinding],
-        arm_position: &Position,
+        arm_destination: &Destination,
         result_var: &Option<String>,
     ) {
         let arm = &self.arms[arm_index];
@@ -581,7 +598,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
 
         let subject_var = self.subject_var.clone();
         self.emit_bindings(output, bindings, &subject_var);
-        self.emit_arm_body(output, arm_index, Some(arm_position));
+        self.emit_arm_body(output, arm_index, Some(arm_destination));
 
         if let Some(var) = result_var {
             write_line!(output, "return {}", var);
@@ -597,11 +614,11 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         &mut self,
         output: &mut String,
         tree: &Decision,
-        arm_position: &Position,
+        arm_destination: &Destination,
         result_var: &Option<String>,
     ) {
         let subject_var = self.subject_var.clone();
-        self.emit_chain_decisions(output, tree, arm_position, &subject_var);
+        self.emit_chain_decisions(output, tree, arm_destination, &subject_var);
 
         if let Some(var) = result_var {
             write_line!(output, "return {}", var);
@@ -619,7 +636,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         &mut self,
         output: &mut String,
         tree: &Decision,
-        arm_position: &Position,
+        arm_destination: &Destination,
         subject_var: &str,
     ) {
         match tree {
@@ -628,7 +645,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 bindings,
             } => {
                 self.emit_bindings(output, bindings, subject_var);
-                self.emit_arm_body(output, *arm_index, Some(arm_position));
+                self.emit_arm_body(output, *arm_index, Some(arm_destination));
             }
 
             Decision::Chain { tests, fallback } => {
@@ -641,8 +658,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                     tests
                 };
 
-                let guard_ctx = WalkCtx::switch_case(arm_position, subject_var);
-                let chain_ctx = WalkCtx::chain_test(arm_position, subject_var);
+                let guard_ctx = WalkCtx::switch_case(arm_destination, subject_var);
+                let chain_ctx = WalkCtx::chain_test(arm_destination, subject_var);
                 for (i, test) in regular_tests.iter().enumerate() {
                     let condition = render_condition(&test.checks, subject_var);
                     let is_catchall = test.checks.is_empty();
@@ -669,13 +686,13 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             }
 
             Decision::Switch { .. } => {
-                self.emit_switch(output, tree, arm_position);
+                self.emit_switch(output, tree, arm_destination);
             }
 
             Decision::Unreachable => {}
 
             Decision::Guard { .. } => {
-                let ctx = WalkCtx::chain_test(arm_position, subject_var);
+                let ctx = WalkCtx::chain_test(arm_destination, subject_var);
                 self.walk(output, tree, &ctx);
             }
         }
@@ -685,10 +702,10 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         &mut self,
         output: &mut String,
         tree: &Decision,
-        arm_position: &Position,
+        arm_destination: &Destination,
         needs_return: bool,
     ) {
-        let use_direct_return = arm_position.is_tail();
+        let use_direct_return = arm_destination.is_tail();
         let tree_has_terminal = Self::tree_has_unguarded_terminal(tree);
         let last_arm_is_unguarded_catchall = tree_has_terminal
             || self
@@ -713,7 +730,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
 
         let subject_var = self.subject_var.clone();
         let ctx = GuardedTreeContext {
-            arm_position,
+            arm_destination,
             subject_var: &subject_var,
             label: &label,
             use_direct_return: use_direct_return || skip_wrapper,
@@ -729,7 +746,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 write_line!(output, "break {}", label);
             }
             output.push_str("}\n");
-            if needs_return && let Some(var) = arm_position.assign_target() {
+            if needs_return && let Some(var) = arm_destination.assign_target() {
                 write_line!(output, "return {}", var);
             }
         }
@@ -759,7 +776,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             }
 
             Decision::Switch { .. } => {
-                self.emit_switch(output, tree, ctx.arm_position);
+                self.emit_switch(output, tree, ctx.arm_destination);
                 if !ctx.use_direct_return && !output_ends_with_diverge(output) {
                     write_line!(output, "break {}", ctx.label);
                 }
@@ -782,7 +799,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         output.push_str("{\n");
         self.emitter.enter_scope();
         self.emit_bindings(output, bindings, ctx.subject_var);
-        self.emit_arm_body(output, arm_index, Some(ctx.arm_position));
+        self.emit_arm_body(output, arm_index, Some(ctx.arm_destination));
         if !ctx.use_direct_return && !output_ends_with_diverge(output) {
             write_line!(output, "break {}", ctx.label);
         }
@@ -809,7 +826,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         self.emit_bindings(output, bindings, ctx.subject_var);
 
         if self.emit_guard_header(output, arm_index) {
-            self.emit_arm_body(output, arm_index, Some(ctx.arm_position));
+            self.emit_arm_body(output, arm_index, Some(ctx.arm_destination));
             if !ctx.use_direct_return && !output_ends_with_diverge(output) {
                 write_line!(output, "break {}", ctx.label);
             }
@@ -970,16 +987,16 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         &mut self,
         output: &mut String,
         arm_index: usize,
-        position: Option<&Position>,
+        destination: Option<&Destination>,
     ) {
         let arm = &self.arms[arm_index];
-        match position {
-            Some(position) => self.emitter.with_position(position.clone(), |e| {
-                e.emit_in_position(output, &arm.expression);
+        match destination {
+            Some(destination) => self.emitter.with_destination(destination.clone(), |e| {
+                e.emit_in_destination(output, &arm.expression);
             }),
             None => self
                 .emitter
-                .emit_in_position(output, &self.arms[arm_index].expression),
+                .emit_in_destination(output, &self.arms[arm_index].expression),
         }
     }
 

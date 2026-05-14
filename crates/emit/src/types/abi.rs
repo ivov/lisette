@@ -252,11 +252,6 @@ impl Emitter<'_> {
         }
     }
 
-    /// Lowered shape of the enclosing function's return type, if any.
-    pub(crate) fn current_lowered_abi(&self) -> Option<AbiShape> {
-        self.return_lowering.shape()
-    }
-
     /// Annotation-side mirror of `is_nullable_option`'s inner check.
     pub(crate) fn annotation_inner_is_nilable(&self, annotation: &Annotation) -> bool {
         match annotation {
