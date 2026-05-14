@@ -175,8 +175,28 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
 
     let heading = "Failed to compile Lisette project to Go";
 
-    if let Err(code) = go_cli::write_go_outputs(&prep.target_dir, &result.output, heading) {
-        return code;
+    let emit = match go_cli::write_go_outputs(&prep.target_dir, &result.output) {
+        Ok(emit) => emit,
+        Err(e) => {
+            cli_error!(heading, e.message, e.hint);
+            return 1;
+        }
+    };
+
+    // Force a maximal go.mod rewrite only if a prior tidy marker exists and the
+    // external import set changed since it was written.
+    let import_set_hash =
+        go_cli::compute_import_set_hash(&emit.new_manifest, &prep.manifest.project.name);
+    if let Some(prior) = go_cli::read_tidy_marker(&prep.target_dir)
+        && prior != import_set_hash
+    {
+        go_cli::invalidate_go_mod_stamp(&prep.target_dir);
+        if let Err(e) =
+            go_cli::write_go_mod(&prep.target_dir, &prep.manifest.project.name, &locator)
+        {
+            cli_error!(heading, e, "Check file permissions on `target/go.mod`");
+            return 1;
+        }
     }
 
     let produced: Vec<&str> = result
@@ -193,9 +213,18 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
         return 1;
     }
 
-    if let Err(code) = go_cli::finalize_go_dir(&prep.target_dir, heading, locator.target()) {
-        return code;
+    if let Err(e) = go_cli::finalize_go_dir(
+        &prep.target_dir,
+        locator.target(),
+        &emit.changed,
+        import_set_hash,
+    ) {
+        cli_error!(heading, e.message, e.hint);
+        return 1;
     }
+
+    // Committed only after gofmt + tidy succeed.
+    go_cli::write_emit_manifest(&prep.target_dir, &emit.new_manifest);
 
     if !quiet {
         eprintln!(

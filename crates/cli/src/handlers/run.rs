@@ -295,15 +295,23 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
 
     let heading = "Failed to run standalone file";
 
-    if let Err(code) = go_cli::write_go_outputs(&temp_dir, &result.output, heading) {
-        return code;
-    }
+    let emit = match go_cli::write_go_outputs(&temp_dir, &result.output) {
+        Ok(emit) => emit,
+        Err(e) => {
+            cli_error!(heading, e.message, e.hint);
+            return 1;
+        }
+    };
 
     let target = compile_config.locator.target();
+    let import_set_hash = go_cli::compute_import_set_hash(&emit.new_manifest, "lis-standalone");
 
-    if let Err(code) = go_cli::finalize_go_dir(&temp_dir, heading, target) {
-        return code;
+    if let Err(e) = go_cli::finalize_go_dir(&temp_dir, target, &emit.changed, import_set_hash) {
+        cli_error!(heading, e.message, e.hint);
+        return 1;
     }
+
+    go_cli::write_emit_manifest(&temp_dir, &emit.new_manifest);
 
     run_with_invocation_cwd(&temp_dir, &args, "Failed to run standalone file", target)
 }
