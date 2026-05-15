@@ -150,16 +150,15 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     ) {
         let emits_any_binding = plan.bindings.iter().any(|b| b.go_name.is_some());
         let needs_block = emits_any_binding || plan.pattern_has_collisions;
+        let arm_body = &*self.arms[plan.arm_index].expression;
 
         if needs_block {
             output.push_str("{\n");
             self.emitter.enter_scope();
         }
-
-        let arm_body = &*self.arms[plan.arm_index].expression;
-        self.emit_bindings(output, &plan.bindings, &[arm_body], None);
+        let inlines = self.emit_bindings(output, &plan.bindings, &[arm_body], None);
         self.emit_arm_body(output, plan.arm_index, place);
-
+        self.drop_inline_bindings(&inlines);
         if needs_block {
             self.emitter.exit_scope();
             output.push_str("}\n");
@@ -288,11 +287,11 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 ..
             } => {
                 let wrap = ctx.leaf_scope_explicit();
+                let arm_body = &*self.arms[*arm_index].expression;
                 if wrap {
                     output.push_str("{\n");
                     self.emitter.enter_scope();
                 }
-                let arm_body = &*self.arms[*arm_index].expression;
                 let inlines = self.emit_bindings(output, bindings, &[arm_body], None);
                 self.emit_arm_body(output, *arm_index, ctx.arm_place);
                 self.apply_leaf_terminator(output, ctx);
@@ -739,7 +738,9 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         if analyze_inline_candidate(lisette_name, consumers) != InlineDecision::Inline {
             return false;
         }
-        if !failure_trees.is_empty() && region_blocks_inline(failure_trees, lisette_name) {
+        if !failure_trees.is_empty()
+            && region_blocks_inline(failure_trees.iter().copied(), lisette_name)
+        {
             return false;
         }
         self.emitter

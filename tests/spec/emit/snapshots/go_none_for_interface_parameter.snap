@@ -13,14 +13,13 @@ import (
 
 func main() {
 	ret_1, ret_2 := http.NewRequest("GET", "https://example.com", nil)
-	var result_3 lisette.Result[*http.Request, error]
+	var req lisette.Result[*http.Request, error]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[*http.Request, error](ret_2)
+		req = lisette.MakeResultErr[*http.Request, error](ret_2)
 	} else if ret_1 == nil {
-		result_3 = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
+		req = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
 	} else {
-		result_3 = lisette.MakeResultOk[*http.Request, error](ret_1)
+		req = lisette.MakeResultOk[*http.Request, error](ret_1)
 	}
-	req := result_3
 	fmt.Println(req)
 }

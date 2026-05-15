@@ -211,7 +211,7 @@ impl ValueTempDiscard {
     }
 }
 
-/// Check if the output ends with a diverging statement (break/continue/return/panic).
+/// True when the last emitted Go line is `break`, `continue`, `return`, or `panic`.
 pub(crate) fn output_ends_with_diverge(output: &str) -> bool {
     output
         .trim_end()

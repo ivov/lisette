@@ -1,6 +1,7 @@
 use syntax::types::Type;
 
 use crate::Emitter;
+use crate::calls::go_interop::WrapperTarget;
 use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
 };
@@ -163,15 +164,21 @@ pub(crate) fn emit_callee_abi_wrapping(
     result_ty: &Type,
 ) -> String {
     match shape {
-        AbiShape::PartialTuple => emitter.emit_partial_wrapping(output, call_str, result_ty),
-        AbiShape::CommaOk => emitter.emit_comma_ok_wrapping(output, call_str, result_ty, false),
+        AbiShape::PartialTuple => emitter
+            .emit_partial_wrapping(output, call_str, result_ty, WrapperTarget::FreshSlot)
+            .expect_slot(),
+        AbiShape::CommaOk => emitter
+            .emit_comma_ok_wrapping(output, call_str, result_ty, false, WrapperTarget::FreshSlot)
+            .expect_slot(),
         AbiShape::NullableReturn => {
             let raw_var = emitter.hoist_tmp_value(output, "raw", call_str);
-            emitter.emit_nil_check_option_wrap(output, &raw_var, result_ty)
+            emitter
+                .emit_nil_check_option_wrap(output, &raw_var, result_ty, WrapperTarget::FreshSlot)
+                .expect_slot()
         }
-        AbiShape::ResultTuple | AbiShape::BareError => {
-            emitter.emit_result_wrapping(output, call_str, result_ty)
-        }
+        AbiShape::ResultTuple | AbiShape::BareError => emitter
+            .emit_result_wrapping(output, call_str, result_ty, WrapperTarget::FreshSlot)
+            .expect_slot(),
         AbiShape::Tuple { arity } => {
             let temps = emitter.create_temp_vars("ret", *arity);
             write_line!(output, "{} := {}", temps.join(", "), call_str);
@@ -183,7 +190,16 @@ pub(crate) fn emit_callee_abi_wrapping(
                     slot_tys
                         .get(i)
                         .filter(|slot_ty| emitter.facts.is_nullable_option(slot_ty))
-                        .map(|slot_ty| emitter.emit_nil_check_option_wrap(output, v, slot_ty))
+                        .map(|slot_ty| {
+                            emitter
+                                .emit_nil_check_option_wrap(
+                                    output,
+                                    v,
+                                    slot_ty,
+                                    WrapperTarget::FreshSlot,
+                                )
+                                .expect_slot()
+                        })
                         .unwrap_or_else(|| v.clone())
                 })
                 .collect();

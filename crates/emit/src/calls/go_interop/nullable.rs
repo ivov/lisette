@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, write_leaf};
 use crate::control_flow::fallible::{Fallible, FallibleEmitter, OPTION_SOME_TAG};
 use crate::expressions::context::ExpressionContext;
 use crate::write_line;
@@ -13,7 +14,8 @@ impl Emitter<'_> {
         option_ty: &Type,
     ) -> String {
         let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
-        self.emit_comma_ok_wrapping(output, &call_str, option_ty, true)
+        self.emit_comma_ok_wrapping(output, &call_str, option_ty, true, WrapperTarget::FreshSlot)
+            .expect_slot()
     }
 
     pub(super) fn emit_go_sentinel_call_wrapped(
@@ -24,7 +26,14 @@ impl Emitter<'_> {
         sentinel: i64,
     ) -> String {
         let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
-        self.emit_sentinel_wrapping(output, &call_str, option_ty, sentinel)
+        self.emit_sentinel_wrapping(
+            output,
+            &call_str,
+            option_ty,
+            sentinel,
+            WrapperTarget::FreshSlot,
+        )
+        .expect_slot()
     }
 
     /// Capture the call's raw return into a temp, then reuse
@@ -35,22 +44,16 @@ impl Emitter<'_> {
         call_str: &str,
         option_ty: &Type,
         sentinel: i64,
-    ) -> String {
+        target: WrapperTarget<'_>,
+    ) -> WrapperOutcome {
         self.requirements.require_stdlib();
         let raw = self.hoist_tmp_value(output, "ret", call_str);
         let inner_ty_str = self.go_type_as_string(&option_ty.ok_type());
-        let option_var = self.fresh_var(Some("option"));
-        self.declare(&option_var);
-        write_line!(
-            output,
-            "{} := lisette.OptionFromCommaOk[{}]({}, {} != {})",
-            option_var,
-            inner_ty_str,
-            raw,
-            raw,
-            sentinel
+        let value_expr = format!(
+            "lisette.OptionFromCommaOk[{}]({}, {} != {})",
+            inner_ty_str, raw, raw, sentinel
         );
-        option_var
+        self.emit_simple_wrapper_value(output, target, "option", &value_expr)
     }
 
     /// Wrap a comma-ok-returning call into a tagged `Option`. `tuple_flattened`
@@ -62,7 +65,8 @@ impl Emitter<'_> {
         call_str: &str,
         option_ty: &Type,
         tuple_flattened: bool,
-    ) -> String {
+        target: WrapperTarget<'_>,
+    ) -> WrapperOutcome {
         self.requirements.require_stdlib();
 
         let inner_ty = option_ty.ok_type();
@@ -74,16 +78,8 @@ impl Emitter<'_> {
 
         if !needs_complex {
             let inner_ty_str = self.go_type_as_string(&inner_ty);
-            let option_var = self.fresh_var(Some("option"));
-            self.declare(&option_var);
-            write_line!(
-                output,
-                "{} := lisette.OptionFromCommaOk[{}]({})",
-                option_var,
-                inner_ty_str,
-                call_str
-            );
-            return option_var;
+            let value_expr = format!("lisette.OptionFromCommaOk[{}]({})", inner_ty_str, call_str);
+            return self.emit_simple_wrapper_value(output, target, "option", &value_expr);
         }
 
         let fallible = Fallible::from_type(option_ty).expect("Option type expected");
@@ -109,10 +105,10 @@ impl Emitter<'_> {
             val_vars[0].clone()
         };
 
-        let mut fe = FallibleEmitter::new(self, &fallible);
-        let option_ty_str = fe.full_type_string();
-        let option_var = fe.emitter.fresh_var(Some("option"));
-        fe.emitter.declare(&option_var);
+        let option_ty_str = {
+            let mut fe = FallibleEmitter::new(self, &fallible);
+            fe.full_type_string()
+        };
 
         let condition = if self.is_interface_option(option_ty) {
             format!("{} && !lisette.IsNilInterface({})", ok_var, val_vars[0])
@@ -121,22 +117,27 @@ impl Emitter<'_> {
         } else {
             ok_var.clone()
         };
-        write_line!(output, "var {} {}", option_var, option_ty_str);
+
+        let (sink, outcome) = self.open_wrapper_slot(output, target, &option_ty_str, "option");
         write_line!(output, "if {} {{", condition);
 
-        let mut fe = FallibleEmitter::new(self, &fallible);
-        let some_wrapper = fe.emit_success(&val_expression);
-        write_line!(output, "{} = {}", option_var, some_wrapper);
+        let some_wrapper = {
+            let mut fe = FallibleEmitter::new(self, &fallible);
+            fe.emit_success(&val_expression)
+        };
+        write_leaf(output, &sink, &some_wrapper);
 
         output.push_str("} else {\n");
 
-        let mut fe = FallibleEmitter::new(self, &fallible);
-        let none_wrapper = fe.emit_failure(None);
-        write_line!(output, "{} = {}", option_var, none_wrapper);
+        let none_wrapper = {
+            let mut fe = FallibleEmitter::new(self, &fallible);
+            fe.emit_failure(None)
+        };
+        write_leaf(output, &sink, &none_wrapper);
 
         output.push_str("}\n");
 
-        option_var
+        outcome
     }
 
     pub(crate) fn emit_nil_check_option_wrap(
@@ -144,7 +145,8 @@ impl Emitter<'_> {
         output: &mut String,
         raw_value: &str,
         option_ty: &Type,
-    ) -> String {
+        target: WrapperTarget<'_>,
+    ) -> WrapperOutcome {
         self.requirements.require_stdlib();
 
         let inner_ty = option_ty.ok_type();
@@ -154,17 +156,11 @@ impl Emitter<'_> {
         } else {
             format!("{} == nil", raw_value)
         };
-        let option_var = self.fresh_var(Some("option"));
-        self.declare(&option_var);
-        write_line!(
-            output,
-            "{} := lisette.OptionFromNilable[{}]({}, {})",
-            option_var,
-            inner_ty_str,
-            raw_value,
-            is_nil_check
+        let value_expr = format!(
+            "lisette.OptionFromNilable[{}]({}, {})",
+            inner_ty_str, raw_value, is_nil_check
         );
-        option_var
+        self.emit_simple_wrapper_value(output, target, "option", &value_expr)
     }
 
     pub(crate) fn emit_option_unwrap_to_nullable(
@@ -390,9 +386,8 @@ impl Emitter<'_> {
         option_ty: &Type,
     ) -> String {
         let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
-
         let raw_var = self.hoist_tmp_value(output, "raw", &call_str);
-
-        self.emit_nil_check_option_wrap(output, &raw_var, option_ty)
+        self.emit_nil_check_option_wrap(output, &raw_var, option_ty, WrapperTarget::FreshSlot)
+            .expect_slot()
     }
 }

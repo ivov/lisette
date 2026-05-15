@@ -7,15 +7,12 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func checked_sqrt(n int) lisette.Result[int, string] {
-	var tmp_1 lisette.Result[int, string]
 	if n < 0 {
-		tmp_1 = lisette.MakeResultErr[int, string]("negative input")
-	} else {
-		x := n
-		for x*x > n {
-			x--
-		}
-		tmp_1 = lisette.MakeResultOk[int, string](x)
+		return lisette.MakeResultErr[int, string]("negative input")
 	}
-	return tmp_1
+	x := n
+	for x*x > n {
+		x--
+	}
+	return lisette.MakeResultOk[int, string](x)
 }

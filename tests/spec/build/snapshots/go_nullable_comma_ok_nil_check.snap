@@ -12,12 +12,11 @@ import (
 
 func main() {
 	ret_1, ret_2 := debug.ReadBuildInfo()
-	var option_3 lisette.Option[*debug.BuildInfo]
+	var info lisette.Option[*debug.BuildInfo]
 	if ret_2 && ret_1 != nil {
-		option_3 = lisette.MakeOptionSome[*debug.BuildInfo](ret_1)
+		info = lisette.MakeOptionSome[*debug.BuildInfo](ret_1)
 	} else {
-		option_3 = lisette.MakeOptionNone[*debug.BuildInfo]()
+		info = lisette.MakeOptionNone[*debug.BuildInfo]()
 	}
-	info := option_3
 	fmt.Print(info.IsSome())
 }

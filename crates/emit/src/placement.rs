@@ -102,6 +102,55 @@ fn requires_temp_var(expression: &Expression) -> bool {
     )
 }
 
+/// Match `…; let X = <CF>; X` so the caller can emit `<CF>` directly into
+/// the surrounding place, skipping the `X` materialization.
+fn try_elide_tail_let(items: &[Expression]) -> Option<(&Expression, &[Expression])> {
+    if items.len() < 2 {
+        return None;
+    }
+    let last = items.last()?;
+    let Expression::Identifier {
+        value: tail_name, ..
+    } = last
+    else {
+        return None;
+    };
+    let penultimate = &items[items.len() - 2];
+    let Expression::Let {
+        binding,
+        value,
+        else_block,
+        mutable,
+        ..
+    } = penultimate
+    else {
+        return None;
+    };
+    if else_block.is_some() || *mutable {
+        return None;
+    }
+    let syntax::ast::Pattern::Identifier { identifier, .. } = &binding.pattern else {
+        return None;
+    };
+    if identifier != tail_name {
+        return None;
+    }
+    // Only `If` and `Match` can be re-emitted at the surrounding place via
+    // `emit_branching_directly`; other shapes still stage through temps so
+    // eliding the let would not save anything.
+    if !matches!(
+        value.as_ref(),
+        Expression::If { .. } | Expression::Match { .. }
+    ) {
+        return None;
+    }
+    let rest = &items[..items.len() - 2];
+    if crate::inline_uses::region_blocks_inline(rest.iter(), tail_name.as_str()) {
+        return None;
+    }
+    Some((value.as_ref(), rest))
+}
+
 fn needs_explicit_type_declaration(
     emitter: &Emitter,
     value: &Expression,
@@ -711,7 +760,7 @@ impl Emitter<'_> {
             std::slice::from_ref(expression)
         };
 
-        let Some((last, rest)) = items.split_last() else {
+        let Some((last, rest)) = try_elide_tail_let(items).or_else(|| items.split_last()) else {
             return;
         };
 
@@ -1003,6 +1052,18 @@ impl Emitter<'_> {
         binding_ty: &Type,
         mutable: bool,
     ) {
+        if !mutable
+            && self.try_emit_let_into_wrapper_slot(
+                output,
+                identifier,
+                raw_go_name,
+                value,
+                binding_ty,
+            )
+        {
+            return;
+        }
+
         let value_expression = self.emit_value(output, value, ExpressionContext::value());
         let coercion = Coercion::resolve(
             self,
@@ -1033,6 +1094,48 @@ impl Emitter<'_> {
         } else {
             write_line!(output, "{} := {}", go_identifier, value_expression);
         }
+    }
+
+    /// Route a slot-style Go-interop wrapper to write into the let's chosen
+    /// Go name, eliminating the `name := result_N` alias. Returns true on hit.
+    fn try_emit_let_into_wrapper_slot(
+        &mut self,
+        output: &mut String,
+        identifier: &str,
+        raw_go_name: &str,
+        value: &Expression,
+        binding_ty: &Type,
+    ) -> bool {
+        let go_identifier = crate::escape_reserved(raw_go_name);
+        if self.is_declared(&go_identifier)
+            || self.scope.is_active_assign_target(&go_identifier)
+            || self.scope.has_binding_for_go_name(&go_identifier)
+        {
+            return false;
+        }
+        if value.get_type() != *binding_ty {
+            return false;
+        }
+        let Some(strategy) = self.resolve_go_call_strategy(value) else {
+            return false;
+        };
+        if matches!(
+            strategy,
+            crate::calls::go_interop::GoCallStrategy::Tuple { .. }
+        ) {
+            return false;
+        }
+        let target = crate::calls::go_interop::WrapperTarget::Slot(&go_identifier);
+        if self
+            .emit_go_wrapped_call_to(output, value, &strategy, binding_ty, target)
+            .is_none()
+        {
+            return false;
+        }
+        // `open_wrapper_slot` / `emit_simple_wrapper_value` already declared
+        // `go_identifier`; only the binding from the user-name still needs setup.
+        self.scope.bind(identifier, go_identifier.as_ref());
+        true
     }
 
     fn emit_let_temp(

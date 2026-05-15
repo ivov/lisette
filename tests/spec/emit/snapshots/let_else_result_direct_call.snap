@@ -7,13 +7,10 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func parse(s string) lisette.Result[int, string] {
-	var tmp_1 lisette.Result[int, string]
 	if s == "42" {
-		tmp_1 = lisette.MakeResultOk[int, string](42)
-	} else {
-		tmp_1 = lisette.MakeResultErr[int, string]("bad")
+		return lisette.MakeResultOk[int, string](42)
 	}
-	return tmp_1
+	return lisette.MakeResultErr[int, string]("bad")
 }
 
 func test() int {

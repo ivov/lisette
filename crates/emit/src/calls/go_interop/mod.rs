@@ -1,6 +1,8 @@
 mod nullable;
 mod wrappers;
 
+pub(crate) use wrappers::WrapperTarget;
+
 use crate::Emitter;
 use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
@@ -98,6 +100,45 @@ impl Emitter<'_> {
             }
             GoCallStrategy::Sentinel { value } => {
                 self.emit_go_sentinel_call_wrapped(output, expression, result_ty, *value)
+            }
+        }
+    }
+
+    /// Like `emit_go_wrapped_call` but writes into `target`. `None` for the
+    /// `Tuple` strategy (does not use the slot pattern).
+    pub(crate) fn emit_go_wrapped_call_to(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        strategy: &GoCallStrategy,
+        result_ty: &Type,
+        target: WrapperTarget<'_>,
+    ) -> Option<crate::calls::go_interop::wrappers::WrapperOutcome> {
+        use crate::expressions::context::ExpressionContext;
+        match strategy {
+            GoCallStrategy::Tuple { .. } => None,
+            GoCallStrategy::Result => {
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                self.requirements.require_stdlib();
+                Some(self.emit_result_wrapping(output, &call_str, result_ty, target))
+            }
+            GoCallStrategy::CommaOk => {
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                Some(self.emit_comma_ok_wrapping(output, &call_str, result_ty, true, target))
+            }
+            GoCallStrategy::NullableReturn => {
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                let raw_var = self.hoist_tmp_value(output, "raw", &call_str);
+                Some(self.emit_nil_check_option_wrap(output, &raw_var, result_ty, target))
+            }
+            GoCallStrategy::Partial => {
+                self.requirements.require_stdlib();
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                Some(self.emit_partial_wrapping(output, &call_str, result_ty, target))
+            }
+            GoCallStrategy::Sentinel { value } => {
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                Some(self.emit_sentinel_wrapping(output, &call_str, result_ty, *value, target))
             }
         }
     }

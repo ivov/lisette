@@ -7,13 +7,10 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func try_value(x int) lisette.Result[int, string] {
-	var tmp_1 lisette.Result[int, string]
 	if x > 0 {
-		tmp_1 = lisette.MakeResultOk[int, string](x)
-	} else {
-		tmp_1 = lisette.MakeResultErr[int, string]("negative")
+		return lisette.MakeResultOk[int, string](x)
 	}
-	return tmp_1
+	return lisette.MakeResultErr[int, string]("negative")
 }
 
 func test() {

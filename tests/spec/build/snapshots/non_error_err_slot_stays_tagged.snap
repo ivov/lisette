@@ -18,13 +18,10 @@ func (m MyError) String() string {
 }
 
 func parse(s string) lisette.Result[int, MyError] {
-	var tmp_1 lisette.Result[int, MyError]
 	if s == "ok" {
-		tmp_1 = lisette.MakeResultOk[int, MyError](1)
-	} else {
-		tmp_1 = lisette.MakeResultErr[int, MyError](MyError{msg: "bad"})
+		return lisette.MakeResultOk[int, MyError](1)
 	}
-	return tmp_1
+	return lisette.MakeResultErr[int, MyError](MyError{msg: "bad"})
 }
 
 func main() {

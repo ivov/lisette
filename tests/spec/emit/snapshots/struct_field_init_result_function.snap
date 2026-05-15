@@ -18,13 +18,10 @@ func (c Container) String() string {
 }
 
 func get_res(b bool) lisette.Result[int, string] {
-	var tmp_1 lisette.Result[int, string]
 	if b {
-		tmp_1 = lisette.MakeResultOk[int, string](42)
-	} else {
-		tmp_1 = lisette.MakeResultErr[int, string]("failed")
+		return lisette.MakeResultOk[int, string](42)
 	}
-	return tmp_1
+	return lisette.MakeResultErr[int, string]("failed")
 }
 
 func test() {

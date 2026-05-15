@@ -2,6 +2,7 @@ use syntax::ast::Expression;
 use syntax::types::Type;
 
 use crate::Emitter;
+use crate::calls::go_interop::WrapperTarget;
 use crate::definitions::interface_adapter::AdapterPlan;
 
 pub(crate) struct Coercion {
@@ -64,9 +65,9 @@ impl Coercion {
             CoercionKind::UnwrapNullableCollection { ty, elem_option_ty } => {
                 emitter.emit_collection_nullable_unwrap(output, &value, &ty, &elem_option_ty)
             }
-            CoercionKind::WrapNullableOption { ty } => {
-                emitter.emit_nil_check_option_wrap(output, &value, &ty)
-            }
+            CoercionKind::WrapNullableOption { ty } => emitter
+                .emit_nil_check_option_wrap(output, &value, &ty, WrapperTarget::FreshSlot)
+                .expect_slot(),
             CoercionKind::WrapPointerOption { ty } => {
                 emitter.emit_pointer_to_option_wrap(output, &value, &ty)
             }

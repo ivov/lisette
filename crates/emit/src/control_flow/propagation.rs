@@ -14,7 +14,6 @@ struct WrappedReturnInfo<'a> {
     fallible: &'a Fallible,
     return_ty: &'a Type,
     lowered: Option<&'a AbiShape>,
-    return_ctx: &'a ReturnContext,
 }
 
 impl Emitter<'_> {
@@ -210,7 +209,6 @@ impl Emitter<'_> {
             fallible: &fallible,
             return_ty: &return_ty,
             lowered: lowered.as_ref(),
-            return_ctx,
         };
 
         if matches!(expression, Expression::Call { .. }) {
@@ -219,7 +217,7 @@ impl Emitter<'_> {
         }
 
         if matches!(expression, Expression::If { .. } | Expression::Match { .. }) {
-            self.emit_wrapped_branching_return(output, expression, info);
+            self.emit_branching_directly(output, expression, &BodyPlace::Return(return_ctx));
             return true;
         }
 
@@ -248,7 +246,6 @@ impl Emitter<'_> {
             fallible,
             return_ty,
             lowered,
-            return_ctx: _,
         } = info;
         let Expression::Call {
             expression: call_expression,
@@ -393,46 +390,6 @@ impl Emitter<'_> {
             return callee_shape == *enclosing_shape;
         }
         false
-    }
-
-    /// Lowered ABI pushes the return into each branch leaf; tagged ABI
-    /// builds a temp and returns it.
-    fn emit_wrapped_branching_return(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        info: WrappedReturnInfo<'_>,
-    ) {
-        let WrappedReturnInfo {
-            fallible,
-            return_ty,
-            lowered,
-            return_ctx,
-        } = info;
-        if lowered.is_some() {
-            self.emit_branching_directly(output, expression, &BodyPlace::Return(return_ctx));
-            return;
-        }
-
-        let temp_var = self.fresh_var(None);
-        self.declare(&temp_var);
-        let full_ty = {
-            let mut fe = FallibleEmitter::new(self, fallible);
-            fe.full_type_string()
-        };
-
-        write_line!(output, "var {} {}", temp_var, full_ty);
-
-        self.emit_branching_directly(
-            output,
-            expression,
-            &BodyPlace::Assign {
-                var: temp_var.clone(),
-                target_ty: Some(return_ty.clone()),
-            },
-        );
-
-        write_line!(output, "return {}", temp_var);
     }
 
     pub(crate) fn emit_try_block(

@@ -10,13 +10,10 @@ import (
 )
 
 func divide(a, b int) lisette.Result[int, string] {
-	var tmp_1 lisette.Result[int, string]
 	if b == 0 {
-		tmp_1 = lisette.MakeResultErr[int, string]("division by zero")
-	} else {
-		tmp_1 = lisette.MakeResultOk[int, string](a / b)
+		return lisette.MakeResultErr[int, string]("division by zero")
 	}
-	return tmp_1
+	return lisette.MakeResultOk[int, string](a / b)
 }
 
 func describe(r lisette.Result[int, string]) string {

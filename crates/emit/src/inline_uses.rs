@@ -20,7 +20,10 @@ pub(crate) fn analyze_inline_candidate(
     walker.decide()
 }
 
-pub(crate) fn region_blocks_inline(trees: &[&Expression], lisette_name: &str) -> bool {
+pub(crate) fn region_blocks_inline<'a, I>(trees: I, lisette_name: &str) -> bool
+where
+    I: IntoIterator<Item = &'a Expression>,
+{
     let mut walker = Walker::new(lisette_name);
     for tree in trees {
         walker.walk(tree);

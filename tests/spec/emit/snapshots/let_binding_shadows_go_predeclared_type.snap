@@ -11,13 +11,12 @@ import (
 
 func parse(s string) (int, error) {
 	ret_1, ret_2 := strconv.Atoi(s)
-	var result_3 lisette.Result[int, error]
+	var result lisette.Result[int, error]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[int, error](ret_2)
+		result = lisette.MakeResultErr[int, error](ret_2)
 	} else {
-		result_3 = lisette.MakeResultOk[int, error](ret_1)
+		result = lisette.MakeResultOk[int, error](ret_1)
 	}
-	result := result_3
 	if result.Tag == lisette.ResultOk {
 		return result.OkVal, nil
 	}

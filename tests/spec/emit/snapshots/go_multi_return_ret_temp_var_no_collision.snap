@@ -12,14 +12,13 @@ import (
 
 func main() {
 	ret_1, ret_2 := strconv.Atoi("42")
-	var result_3 lisette.Result[int, error]
+	var n lisette.Result[int, error]
 	if ret_2 != nil {
-		result_3 = lisette.MakeResultErr[int, error](ret_2)
+		n = lisette.MakeResultErr[int, error](ret_2)
 	} else {
-		result_3 = lisette.MakeResultOk[int, error](ret_1)
+		n = lisette.MakeResultOk[int, error](ret_1)
 	}
-	n := result_3
-	ret_1_4 := 7
+	ret_1_3 := 7
 	fmt.Println(n)
-	fmt.Println(ret_1_4)
+	fmt.Println(ret_1_3)
 }

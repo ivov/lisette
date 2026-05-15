@@ -10,13 +10,10 @@ import (
 )
 
 func next_result(counter int) lisette.Result[int, string] {
-	var tmp_1 lisette.Result[int, string]
 	if counter < 5 {
-		tmp_1 = lisette.MakeResultOk[int, string](counter)
-	} else {
-		tmp_1 = lisette.MakeResultErr[int, string]("done")
+		return lisette.MakeResultOk[int, string](counter)
 	}
-	return tmp_1
+	return lisette.MakeResultErr[int, string]("done")
 }
 
 func test() {
