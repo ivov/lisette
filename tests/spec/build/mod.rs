@@ -3888,6 +3888,95 @@ fn main() {}
 }
 
 #[test]
+fn declared_go_dep_blank_without_prefix_preserves_blank_in_suggestion() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"import _ "github.com/gin-gonic/gin"
+
+fn main() {}
+"#,
+    );
+
+    let result = compile_check_with_locator(
+        fs,
+        locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
+    );
+    assert_eq!(result.errors.len(), 1);
+    assert_eq!(
+        result.errors[0].code_str(),
+        Some("resolve.missing_go_prefix")
+    );
+    let rendered = result.errors[0].plain_help().unwrap_or_default();
+    assert!(
+        rendered.contains("import _ \"go:github.com/gin-gonic/gin\""),
+        "expected blank-preserving suggestion in help, got: {}",
+        rendered
+    );
+}
+
+#[test]
+fn blank_import_of_project_module_emits_single_diagnostic() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("utils", "lib.lis", "pub fn helper() -> int { 42 }\n");
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"import _ "utils"
+
+fn main() {}
+"#,
+    );
+
+    let result = compile_check(fs);
+    let blank_errors: Vec<_> = result
+        .errors
+        .iter()
+        .filter(|e| e.code_str() == Some("resolve.blank_import_non_go"))
+        .collect();
+    assert_eq!(
+        blank_errors.len(),
+        1,
+        "expected single blank_import_non_go diagnostic, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn undeclared_dotted_blank_import_reports_both_path_and_blank() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"import _ "github.com/some/other"
+
+fn main() {}
+"#,
+    );
+
+    let result = compile_check_with_locator(
+        fs,
+        locator_with_go_dep("github.com/gin-gonic/gin", "v1.12.0"),
+    );
+    let codes: Vec<_> = result.errors.iter().map(|e| e.code_str()).collect();
+    assert!(
+        codes.contains(&Some("resolve.invalid_module_path")),
+        "expected invalid_module_path, got: {:?}",
+        codes
+    );
+    let blank_count = codes
+        .iter()
+        .filter(|c| **c == Some("resolve.blank_import_non_go"))
+        .count();
+    assert_eq!(
+        blank_count, 1,
+        "expected exactly one blank_import_non_go, got codes: {:?}",
+        codes
+    );
+}
+
+#[test]
 fn undeclared_dotted_path_keeps_generic_diagnostic() {
     let mut fs = MockFileSystem::new();
     fs.add_file(

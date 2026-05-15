@@ -653,11 +653,7 @@ impl<'s> TaskState<'s> {
             }
             seen_paths.insert(import.name.to_string());
 
-            if let Some(ImportAlias::Blank(blank_span)) = &import.alias {
-                if !import.name.starts_with("go:") {
-                    self.sink
-                        .push(diagnostics::infer::blank_import_non_go(*blank_span));
-                }
+            if matches!(import.alias, Some(ImportAlias::Blank(_))) {
                 continue;
             }
 

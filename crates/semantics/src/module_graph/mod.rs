@@ -313,18 +313,31 @@ fn process_file_imports(
             continue;
         }
 
-        if file_import.name.contains('.') {
-            if locator.is_declared_go_dep(&file_import.name) {
-                sink.push(diagnostics::module_graph::missing_go_prefix(
-                    &file_import.name,
-                    file_import.name_span,
-                ));
-            } else {
-                sink.push(diagnostics::module_graph::invalid_module_path(
-                    &file_import.name,
-                    file_import.name_span,
-                ));
-            }
+        let blank_span = match &file_import.alias {
+            Some(ImportAlias::Blank(span)) => Some(*span),
+            _ => None,
+        };
+        let is_dotted = file_import.name.contains('.');
+
+        if is_dotted && locator.is_declared_go_dep(&file_import.name) {
+            sink.push(diagnostics::module_graph::missing_go_prefix(
+                &file_import.name,
+                file_import.name_span,
+                blank_span.is_some(),
+            ));
+            continue;
+        }
+
+        if is_dotted {
+            sink.push(diagnostics::module_graph::invalid_module_path(
+                &file_import.name,
+                file_import.name_span,
+            ));
+        }
+        if let Some(span) = blank_span {
+            sink.push(diagnostics::infer::blank_import_non_go(span));
+        }
+        if is_dotted || blank_span.is_some() {
             continue;
         }
 
