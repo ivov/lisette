@@ -22,6 +22,10 @@ struct InlineRule {
     method: &'static str,
     arity: i8,
     template: &'static str,
+    /// Direct Go form of the negated method. Set when the positive template
+    /// emits a comparison, so `!method(...)` can flip the operator instead
+    /// of prepending `!` (Go's `!` binds tighter than `==`).
+    negated_template: Option<&'static str>,
     import: InlineImport,
 }
 
@@ -41,6 +45,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "length",
         arity: 0,
         template: "len({r})",
+        negated_template: None,
         import: InlineImport::None,
     },
     InlineRule {
@@ -48,6 +53,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "capacity",
         arity: 0,
         template: "cap({r})",
+        negated_template: None,
         import: InlineImport::None,
     },
     InlineRule {
@@ -62,6 +68,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "is_empty",
         arity: 0,
         template: "len({r}) == 0",
+        negated_template: Some("len({r}) != 0"),
         import: InlineImport::None,
     },
     InlineRule {
@@ -69,6 +76,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "enumerate",
         arity: 0,
         template: "{r}",
+        negated_template: None,
         import: InlineImport::None,
     },
     InlineRule {
@@ -76,6 +84,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "clone",
         arity: 0,
         template: "slices.Clone({r})",
+        negated_template: None,
         import: InlineImport::Slices,
     },
     InlineRule {
@@ -83,6 +92,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "clone",
         arity: 0,
         template: "maps.Clone({r})",
+        negated_template: None,
         import: InlineImport::Maps,
     },
     InlineRule {
@@ -90,6 +100,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "bytes",
         arity: 0,
         template: "[]byte({r})",
+        negated_template: None,
         import: InlineImport::None,
     },
     InlineRule {
@@ -97,6 +108,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "runes",
         arity: 0,
         template: "[]rune({r})",
+        negated_template: None,
         import: InlineImport::None,
     },
     // Single-arg methods
@@ -105,6 +117,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "delete",
         arity: 1,
         template: "delete({r}, {0})",
+        negated_template: None,
         import: InlineImport::None,
     },
     InlineRule {
@@ -112,6 +125,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "extend",
         arity: 1,
         template: "append({r}, {0}...)",
+        negated_template: None,
         import: InlineImport::None,
     },
     InlineRule {
@@ -119,6 +133,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "copy_from",
         arity: 1,
         template: "copy({r}, {0})",
+        negated_template: None,
         import: InlineImport::None,
     },
     InlineRule {
@@ -126,6 +141,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "contains",
         arity: 1,
         template: "slices.Contains({r}, {0})",
+        negated_template: None,
         import: InlineImport::Slices,
     },
     InlineRule {
@@ -133,6 +149,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "contains",
         arity: 1,
         template: "strings.Contains({r}, {0})",
+        negated_template: None,
         import: InlineImport::Strings,
     },
     InlineRule {
@@ -140,6 +157,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "split",
         arity: 1,
         template: "strings.Split({r}, {0})",
+        negated_template: None,
         import: InlineImport::Strings,
     },
     InlineRule {
@@ -147,6 +165,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "starts_with",
         arity: 1,
         template: "strings.HasPrefix({r}, {0})",
+        negated_template: None,
         import: InlineImport::Strings,
     },
     InlineRule {
@@ -154,6 +173,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "ends_with",
         arity: 1,
         template: "strings.HasSuffix({r}, {0})",
+        negated_template: None,
         import: InlineImport::Strings,
     },
     InlineRule {
@@ -161,6 +181,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "byte_at",
         arity: 1,
         template: "{r}[{0}]",
+        negated_template: None,
         import: InlineImport::None,
     },
     InlineRule {
@@ -168,6 +189,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "rune_at",
         arity: 1,
         template: "lisette.RuneAt({r}, {0})",
+        negated_template: None,
         import: InlineImport::Stdlib,
     },
     InlineRule {
@@ -175,6 +197,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "join",
         arity: 1,
         template: "strings.Join({r}, {0})",
+        negated_template: None,
         import: InlineImport::Strings,
     },
     InlineRule {
@@ -182,6 +205,7 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "any",
         arity: 1,
         template: "slices.ContainsFunc({r}, {0})",
+        negated_template: None,
         import: InlineImport::Slices,
     },
     // Variadic methods
@@ -190,13 +214,13 @@ static INLINE_METHODS: &[InlineRule] = &[
         method: "append",
         arity: -1,
         template: "append({r+args})",
+        negated_template: None,
         import: InlineImport::None,
     },
 ];
 
-fn render_inline(rule: &InlineRule, receiver: &str, args: &[String]) -> String {
-    let mut result = rule.template.to_string();
-    result = result.replace("{r}", receiver);
+fn render_inline(template: &str, receiver: &str, args: &[String]) -> String {
+    let mut result = template.replace("{r}", receiver);
     for (i, arg) in args.iter().enumerate() {
         result = result.replace(&format!("{{{}}}", i), arg);
     }
@@ -213,31 +237,90 @@ fn render_inline(rule: &InlineRule, receiver: &str, args: &[String]) -> String {
     result
 }
 
+fn lookup_inline_rule(
+    native_type: &NativeGoType,
+    method: &str,
+    arity: usize,
+) -> Option<&'static InlineRule> {
+    INLINE_METHODS.iter().find(|s| {
+        s.method == method
+            && s.types.contains(native_type)
+            && (s.arity < 0 || s.arity as usize == arity)
+    })
+}
+
 /// Try to inline a native type method call to raw Go.
 ///
-/// Many native type methods are thin wrappers around Go builtins.
-/// Inlining them produces cleaner output and avoids function call overhead.
-///
-/// Returns `Some((code, extra_import))` if the method can be inlined.
+/// `negated=true` selects each rule's `negated_template`, returning `None`
+/// when the rule does not define one. Many native type methods are thin
+/// wrappers around Go builtins; inlining them avoids function call overhead.
 pub(super) fn try_inline_native_method(
     native_type: &NativeGoType,
     method: &str,
     receiver: &str,
     args: &[String],
+    negated: bool,
 ) -> Option<(String, InlineImport)> {
     // Special case: append with 0 args returns receiver unchanged
-    // (Go's append requires at least 2 args)
-    if method == "append" && args.is_empty() {
+    // (Go's append requires at least 2 args).
+    if !negated && method == "append" && args.is_empty() {
         return Some((receiver.to_string(), InlineImport::None));
     }
+    let rule = lookup_inline_rule(native_type, method, args.len())?;
+    let template = if negated {
+        rule.negated_template?
+    } else {
+        rule.template
+    };
+    Some((render_inline(template, receiver, args), rule.import))
+}
 
-    let rule = INLINE_METHODS.iter().find(|s| {
-        s.method == method
-            && s.types.contains(native_type)
-            && (s.arity < 0 || s.arity as usize == args.len())
-    })?;
+/// Whether some rule for this (type, method, arity) defines a negated template.
+/// Used as a cheap pre-check before staging arguments.
+pub(super) fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -> bool {
+    lookup_inline_rule(native_type, method, arity)
+        .and_then(|r| r.negated_template)
+        .is_some()
+}
 
-    Some((render_inline(rule, receiver, args), rule.import))
+/// Resolve the inline rule for a dot-access form, applying the static-receiver
+/// fallback when the standard receiver shape does not match.
+fn apply_inline_lookup(
+    emitter: &mut Emitter,
+    native_type: &NativeGoType,
+    method: &str,
+    receiver: &str,
+    emitted_args: &[String],
+    negated: bool,
+) -> Option<String> {
+    if let Some((inlined, import)) =
+        try_inline_native_method(native_type, method, receiver, emitted_args, negated)
+    {
+        emitter.apply_inline_import(import);
+        return Some(inlined);
+    }
+    if let Some((static_receiver, remaining)) = emitted_args.split_first()
+        && let Some((inlined, import)) =
+            try_inline_native_method(native_type, method, static_receiver, remaining, negated)
+    {
+        emitter.apply_inline_import(import);
+        return Some(inlined);
+    }
+    None
+}
+
+/// Resolve the inline rule for an identifier-form call (args[0] is the receiver).
+fn apply_inline_identifier_lookup(
+    emitter: &mut Emitter,
+    ctx: &NativeCallContext,
+    emitted_args: &[String],
+    negated: bool,
+) -> Option<String> {
+    let (receiver, remaining) = emitted_args.split_first()?;
+    let (inlined, import) =
+        try_inline_native_method(ctx.native_type, ctx.method, receiver, remaining, negated)?;
+    emitter.apply_inline_import(import);
+    Some(inlined)
 }
 
 impl Emitter<'_> {
@@ -264,45 +347,17 @@ impl Emitter<'_> {
             return self.emit_string_substring(output, expression, ctx.args);
         }
 
-        let mut all_stages: Vec<EmittedExpression> =
-            Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
-        all_stages.push(self.stage_operand(expression, ExpressionContext::value()));
-        all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
+        let (receiver, emitted_args) = self.stage_native_dot_access_call(output, ctx);
 
-        let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 1);
-        let all_values =
-            self.sequence_with_spread(output, all_stages, ctx.spread, false, "_arg", combine);
-
-        let raw_receiver = all_values[0].clone();
-        let emitted_args: Vec<String> = all_values[1..].to_vec();
-
-        let is_ref_receiver = expression.get_type().is_ref();
-        let receiver = if is_ref_receiver {
-            format!("*{}", raw_receiver)
-        } else {
-            raw_receiver.clone()
-        };
-
-        if let Some((inlined, extra_import)) =
-            try_inline_native_method(ctx.native_type, ctx.method, &receiver, &emitted_args)
-        {
-            self.apply_inline_import(extra_import);
-
+        if let Some(inlined) = apply_inline_lookup(
+            self,
+            ctx.native_type,
+            ctx.method,
+            &receiver,
+            &emitted_args,
+            false,
+        ) {
             return inlined;
-        }
-
-        if !emitted_args.is_empty() {
-            let static_receiver = &emitted_args[0];
-            let remaining_args = &emitted_args[1..];
-            if let Some((inlined, extra_import)) = try_inline_native_method(
-                ctx.native_type,
-                ctx.method,
-                static_receiver,
-                remaining_args,
-            ) {
-                self.apply_inline_import(extra_import);
-                return inlined;
-            }
         }
 
         let mut new_args = vec![receiver];
@@ -323,6 +378,57 @@ impl Emitter<'_> {
         format!("{}{}({})", fn_name, type_args_string, new_args.join(", "))
     }
 
+    /// Negated counterpart for dot-access native method calls. Returns
+    /// `None` when the rule has no `negated_template`, so the unary-not
+    /// caller can fall back to `!expr` without having staged anything.
+    pub(super) fn try_emit_negated_native_method_dot_access(
+        &mut self,
+        output: &mut String,
+        ctx: &NativeCallContext,
+    ) -> Option<String> {
+        if !has_inline_negation(ctx.native_type, ctx.method, ctx.args.len()) {
+            return None;
+        }
+        let (receiver, emitted_args) = self.stage_native_dot_access_call(output, ctx);
+        apply_inline_lookup(
+            self,
+            ctx.native_type,
+            ctx.method,
+            &receiver,
+            &emitted_args,
+            true,
+        )
+    }
+
+    fn stage_native_dot_access_call(
+        &mut self,
+        output: &mut String,
+        ctx: &NativeCallContext,
+    ) -> (String, Vec<String>) {
+        let Expression::DotAccess { expression, .. } = ctx.function else {
+            unreachable!("expected DotAccess for native method call")
+        };
+
+        let mut all_stages: Vec<EmittedExpression> =
+            Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
+        all_stages.push(self.stage_operand(expression, ExpressionContext::value()));
+        all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
+
+        let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 1);
+        let all_values =
+            self.sequence_with_spread(output, all_stages, ctx.spread, false, "_arg", combine);
+
+        let raw_receiver = all_values[0].clone();
+        let emitted_args: Vec<String> = all_values[1..].to_vec();
+
+        let receiver = if expression.get_type().is_ref() {
+            format!("*{}", raw_receiver)
+        } else {
+            raw_receiver
+        };
+        (receiver, emitted_args)
+    }
+
     pub(super) fn emit_native_method_identifier(
         &mut self,
         output: &mut String,
@@ -335,21 +441,10 @@ impl Emitter<'_> {
             return self.emit_string_substring(output, &ctx.args[0], &ctx.args[1..]);
         }
 
-        let stages = self.stage_native_method_args(ctx.function, ctx.args);
+        let emitted_args = self.stage_native_identifier_args(output, ctx);
 
-        let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 0);
-        let emitted_args =
-            self.sequence_with_spread(output, stages, ctx.spread, false, "_arg", combine);
-
-        if !emitted_args.is_empty() {
-            let receiver = &emitted_args[0];
-            let remaining_args = &emitted_args[1..];
-            if let Some((inlined, extra_import)) =
-                try_inline_native_method(ctx.native_type, ctx.method, receiver, remaining_args)
-            {
-                self.apply_inline_import(extra_import);
-                return inlined;
-            }
+        if let Some(inlined) = apply_inline_identifier_lookup(self, ctx, &emitted_args, false) {
+            return inlined;
         }
 
         self.requirements.require_stdlib();
@@ -366,6 +461,30 @@ impl Emitter<'_> {
             type_args_string,
             emitted_args.join(", ")
         )
+    }
+
+    /// Negated counterpart for identifier-form native method calls.
+    pub(super) fn try_emit_negated_native_method_identifier(
+        &mut self,
+        output: &mut String,
+        ctx: &NativeCallContext,
+    ) -> Option<String> {
+        let receiver_arity = ctx.args.len().saturating_sub(1);
+        if !has_inline_negation(ctx.native_type, ctx.method, receiver_arity) {
+            return None;
+        }
+        let emitted_args = self.stage_native_identifier_args(output, ctx);
+        apply_inline_identifier_lookup(self, ctx, &emitted_args, true)
+    }
+
+    fn stage_native_identifier_args(
+        &mut self,
+        output: &mut String,
+        ctx: &NativeCallContext,
+    ) -> Vec<String> {
+        let stages = self.stage_native_method_args(ctx.function, ctx.args);
+        let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 0);
+        self.sequence_with_spread(output, stages, ctx.spread, false, "_arg", combine)
     }
 
     fn emit_string_substring(

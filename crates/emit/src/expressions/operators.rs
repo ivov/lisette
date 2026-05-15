@@ -1,6 +1,5 @@
 use crate::Emitter;
 use crate::expressions::context::ExpressionContext;
-use crate::utils::try_flip_comparison;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
 use syntax::types::Type;
 
@@ -144,16 +143,36 @@ impl Emitter<'_> {
             return "-9223372036854775808".to_string();
         }
 
-        let expression = self.emit_operand(output, expression, ctx);
-
-        // Negate comparisons by flipping the operator instead of prepending `!`.
-        // Without this, `!len(s) == 0` would be `(!len(s)) == 0` in Go
-        // because `!` binds tighter than `==`.
-        if matches!(operator, UnaryOperator::Not)
-            && let Some(flipped) = try_flip_comparison(&expression)
-        {
-            return flipped;
+        // Negate comparisons by flipping the operator instead of prepending `!`:
+        // `!` binds tighter than `==` in Go, so `!(a == b)` must not emit as `!a == b`.
+        if matches!(operator, UnaryOperator::Not) {
+            let target = expression.unwrap_parens();
+            let preserve_parens = matches!(expression, Expression::Paren { .. });
+            let wrap = |s: String| {
+                if preserve_parens {
+                    format!("({})", s)
+                } else {
+                    s
+                }
+            };
+            if let Expression::Binary {
+                operator: cmp,
+                left,
+                right,
+                ..
+            } = target
+                && let Some(flipped) = flip_comparison(cmp)
+            {
+                return wrap(self.emit_binary_expression(output, &flipped, left, right, ctx));
+            }
+            if matches!(target, Expression::Call { .. })
+                && let Some(negated) = self.try_emit_negated_call(output, target)
+            {
+                return wrap(negated);
+            }
         }
+
+        let expression = self.emit_operand(output, expression, ctx);
 
         let op_str = match operator {
             UnaryOperator::Negative => "-",
@@ -284,6 +303,18 @@ impl Emitter<'_> {
             Some(ty) => format!("{}({})", self.go_type_as_string(ty), result),
             None => result,
         }
+    }
+}
+
+fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {
+    match operator {
+        BinaryOperator::Equal => Some(BinaryOperator::NotEqual),
+        BinaryOperator::NotEqual => Some(BinaryOperator::Equal),
+        BinaryOperator::LessThan => Some(BinaryOperator::GreaterThanOrEqual),
+        BinaryOperator::LessThanOrEqual => Some(BinaryOperator::GreaterThan),
+        BinaryOperator::GreaterThan => Some(BinaryOperator::LessThanOrEqual),
+        BinaryOperator::GreaterThanOrEqual => Some(BinaryOperator::LessThan),
+        _ => None,
     }
 }
 

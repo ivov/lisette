@@ -154,6 +154,56 @@ impl Emitter<'_> {
         }
     }
 
+    /// Emit `call_expression` in negated form when the underlying inline rule
+    /// has a `negated_template`. Used by unary-not to avoid a precedence bug
+    /// for comparison-emitting calls (`!s.is_empty()` → `len(s) != 0`, not
+    /// `!len(s) == 0` which Go parses as `(!len(s)) == 0`).
+    pub(crate) fn try_emit_negated_call(
+        &mut self,
+        output: &mut String,
+        call_expression: &Expression,
+    ) -> Option<String> {
+        let Expression::Call {
+            expression: callee,
+            args,
+            spread,
+            call_kind,
+            type_args,
+            ..
+        } = call_expression
+        else {
+            return None;
+        };
+        let function = callee.unwrap_parens();
+        let spread = (**spread).as_ref();
+
+        let call_kind = call_kind.filter(|_| !self.is_local_binding(function))?;
+        let kind = match call_kind {
+            CallKind::NativeMethod(kind) | CallKind::NativeMethodIdentifier(kind) => kind,
+            _ => return None,
+        };
+        let native_type = NativeGoType::from_kind(kind);
+        let method = self.extract_native_method_name(function);
+        let native_ctx = NativeCallContext {
+            function,
+            args,
+            spread,
+            type_args,
+            call_ty: None,
+            native_type: &native_type,
+            method,
+        };
+        match call_kind {
+            CallKind::NativeMethod(_) => {
+                self.try_emit_negated_native_method_dot_access(output, &native_ctx)
+            }
+            CallKind::NativeMethodIdentifier(_) => {
+                self.try_emit_negated_native_method_identifier(output, &native_ctx)
+            }
+            _ => unreachable!(),
+        }
+    }
+
     pub(crate) fn emit_call(
         &mut self,
         output: &mut String,

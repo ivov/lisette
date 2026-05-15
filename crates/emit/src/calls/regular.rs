@@ -6,7 +6,6 @@ use crate::expressions::emission::EmittedExpression;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
 use crate::types::coercion::{Coercion, CoercionDirection};
-use crate::utils::mask_go_string_literals;
 use syntax::ast::{Annotation, Expression, UnaryOperator};
 use syntax::types::Type;
 
@@ -42,7 +41,12 @@ fn find_go_string_literal_close(s: &str) -> Option<usize> {
 /// Collapse redundant fmt wrappers:
 /// - `fmt.Print{ln}(fmt.Sprintf(...))` → `fmt.Printf(..., "\n")`
 /// - `fmt.Print{ln}(fmt.Sprint(x))` → `fmt.Print{ln}(x)`
-fn collapse_fmt_print(function_string: &str, args_strings: &[String], call_str: String) -> String {
+fn collapse_fmt_print(
+    function_string: &str,
+    args: &[Expression],
+    args_strings: &[String],
+    call_str: String,
+) -> String {
     if function_string != "fmt.Print" && function_string != "fmt.Println" {
         return call_str;
     }
@@ -71,35 +75,24 @@ fn collapse_fmt_print(function_string: &str, args_strings: &[String], call_str: 
         return call_str;
     }
 
-    if let Some(inner) = arg
-        .strip_prefix("fmt.Sprint(")
-        .and_then(|s| s.strip_suffix(')'))
-        && is_single_top_level_arg(inner)
+    if let Some(arg_expression) = args.first()
+        && let Expression::Call {
+            expression: inner_callee,
+            args: inner_args,
+            spread,
+            ..
+        } = arg_expression.unwrap_parens()
+        && spread.is_none()
+        && inner_args.len() == 1
+        && inner_callee.unwrap_parens().as_dotted_path().as_deref() == Some("fmt.Sprint")
+        && let Some(inner) = arg
+            .strip_prefix("fmt.Sprint(")
+            .and_then(|s| s.strip_suffix(')'))
     {
         return format!("{}({})", function_string, inner);
     }
 
     call_str
-}
-
-/// True when `args` has no comma at top-level paren depth — i.e. represents a
-/// single argument. Commas inside nested parens/brackets/braces or inside
-/// string literals do not split.
-fn is_single_top_level_arg(args: &str) -> bool {
-    if args.is_empty() {
-        return false;
-    }
-    let masked = mask_go_string_literals(args);
-    let mut depth: i32 = 0;
-    for &b in masked.as_bytes() {
-        match b {
-            b'(' | b'[' | b'{' => depth += 1,
-            b')' | b']' | b'}' => depth -= 1,
-            b',' if depth == 0 => return false,
-            _ => {}
-        }
-    }
-    true
 }
 
 impl Emitter<'_> {
@@ -193,7 +186,7 @@ impl Emitter<'_> {
             type_args_string,
             args_strings.join(", ")
         );
-        let call_str = collapse_fmt_print(&function_string, &args_strings, call_str);
+        let call_str = collapse_fmt_print(&function_string, args, &args_strings, call_str);
 
         if let Some(wrapped) =
             self.wrap_go_array_return(output, function, &call_str, expression_ctx)

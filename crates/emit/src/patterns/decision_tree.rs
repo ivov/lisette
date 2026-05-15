@@ -172,6 +172,41 @@ impl Check {
         }
     }
 
+    /// Render the negation of this check as a Go boolean expression.
+    /// Comparison-shaped checks flip their operator; Or and TypeAssert
+    /// have no clean local negation, so they wrap in `!(...)`.
+    pub(crate) fn render_negated(&self, subject: &str) -> String {
+        match self {
+            Check::EnumTag {
+                path, tag_constant, ..
+            } => {
+                let rendered_path = path.render(subject);
+                format!("{}.Tag != {}", rendered_path, tag_constant)
+            }
+            Check::Literal {
+                path, go_literal, ..
+            } => {
+                let rendered_path = path.render(subject);
+                match go_literal.as_str() {
+                    "true" => format!("!{}", rendered_path),
+                    "false" => rendered_path,
+                    _ => format!("{} != {}", rendered_path, go_literal),
+                }
+            }
+            Check::SliceLenEq { path, length } => {
+                let rendered_path = path.render(subject);
+                format!("len({}) != {}", rendered_path, length)
+            }
+            Check::SliceLenGe { path, min_length } => {
+                let rendered_path = path.render(subject);
+                format!("len({}) < {}", rendered_path, min_length)
+            }
+            Check::Or { .. } | Check::TypeAssert { .. } => {
+                format!("!({})", self.render(subject))
+            }
+        }
+    }
+
     /// Returns the access path being checked (for switch grouping).
     fn path(&self) -> Option<&AccessPath> {
         match self {

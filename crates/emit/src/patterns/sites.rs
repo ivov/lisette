@@ -20,7 +20,7 @@ use crate::patterns::decision_tree::{
     emit_tree_assignments, emit_tree_bindings, render_condition,
 };
 use crate::placement::BodyPlace;
-use crate::utils::{DiscardGuard, try_flip_comparison};
+use crate::utils::DiscardGuard;
 use crate::write_line;
 
 /// How a pattern's subject value reaches the site.
@@ -233,12 +233,9 @@ impl Emitter<'_> {
             guard_parts.push(format!("!{}", ok));
         }
         if !info.checks.is_empty() {
-            let condition = render_condition(&info.checks, &effective_subject);
-            let single = info.checks.len() == 1;
-            let negated = if single {
-                negate_condition(&condition)
-            } else {
-                format!("!({})", condition)
+            let negated = match info.checks.as_slice() {
+                [check] => check.render_negated(&effective_subject),
+                _ => format!("!({})", render_condition(&info.checks, &effective_subject)),
             };
             guard_parts.push(wrap_if_struct_literal(negated));
         }
@@ -471,10 +468,6 @@ pub(crate) fn emit_none_arm_body(
             }
         }
     }
-}
-
-fn negate_condition(condition: &str) -> String {
-    try_flip_comparison(condition).unwrap_or_else(|| format!("!({})", condition))
 }
 
 /// True when `Some(_)`-shaped (peeling any outer `as`-binding), with exactly

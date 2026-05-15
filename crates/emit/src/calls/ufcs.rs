@@ -137,6 +137,7 @@ impl Emitter<'_> {
                 member,
                 &receiver_arg,
                 &emitted_args,
+                false,
             )
         {
             self.apply_inline_import(extra_import);
