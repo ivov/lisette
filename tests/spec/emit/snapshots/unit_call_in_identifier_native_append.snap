@@ -10,5 +10,6 @@ func main() {
 	xs := ([]struct{})(nil)
 	_arg_1 := xs
 	noop()
-	_ = append(_arg_1, struct{}{})
+	y := append(_arg_1, struct{}{})
+	_ = y
 }

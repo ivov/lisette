@@ -10,6 +10,7 @@ func test() {
 	recoverResult_1 := lisette.RecoverBlock(func() struct{} {
 		panic("boom")
 	})
-	if recoverResult_1.Tag == lisette.ResultOk {
+	result := recoverResult_1
+	if result.Tag == lisette.ResultOk {
 	}
 }

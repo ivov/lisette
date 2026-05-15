@@ -22,7 +22,8 @@ func consume() int {
 	n := tmp_1.First
 	c := tmp_1.Second
 	if c.Tag == lisette.OptionSome {
-		return n + c.SomeVal()
+		f := c.SomeVal
+		return n + f()
 	}
 	return n
 }

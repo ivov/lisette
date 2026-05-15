@@ -44,9 +44,11 @@ func (e Either[L, R]) String() string {
 
 func Either_describe(self Either[MyInt, MyString]) MyString {
 	if self.Tag == EitherLeft {
-		return fmt.Sprintf("int(%d)", self.Left)
+		n := self.Left
+		return fmt.Sprintf("int(%d)", n)
 	}
-	return fmt.Sprintf("str(%s)", self.Right)
+	s := self.Right
+	return fmt.Sprintf("str(%s)", s)
 }
 
 func test() MyString {

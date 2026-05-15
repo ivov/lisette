@@ -19,6 +19,7 @@ func make_() Point {
 }
 
 func test() string {
-	_ = make_()
+	subject_1 := make_()
+	_ = subject_1
 	return "subject_1"
 }

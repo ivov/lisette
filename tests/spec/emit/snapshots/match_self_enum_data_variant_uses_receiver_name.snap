@@ -44,5 +44,7 @@ func (s Shape) area() int {
 		r := s.Circle
 		return r * r * 3
 	}
-	return s.Width * s.Height
+	width := s.Width
+	height := s.Height
+	return width * height
 }

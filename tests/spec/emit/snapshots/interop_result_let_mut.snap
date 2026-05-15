@@ -18,7 +18,8 @@ func main() {
 	} else {
 		result_3 = lisette.MakeResultOk[int, error](ret_1)
 	}
-	_ = result_3
+	r := result_3
+	_ = r
 	f = strconv.Atoi
 	ret_4, ret_5 := f("99")
 	var result_6 lisette.Result[int, error]
@@ -27,5 +28,6 @@ func main() {
 	} else {
 		result_6 = lisette.MakeResultOk[int, error](ret_4)
 	}
-	_ = result_6
+	r2 := result_6
+	_ = r2
 }

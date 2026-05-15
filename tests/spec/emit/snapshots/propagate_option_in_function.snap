@@ -16,5 +16,6 @@ func process() (int, bool) {
 	if check_2.Tag != lisette.OptionSome {
 		return *new(int), false
 	}
-	return check_2.SomeVal + 1, true
+	x := check_2.SomeVal
+	return x + 1, true
 }

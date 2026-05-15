@@ -11,9 +11,11 @@ import (
 
 func describe(r lisette.Result[int, string]) string {
 	if r.Tag == lisette.ResultOk {
-		return fmt.Sprint(r.OkVal)
+		v := r.OkVal
+		return fmt.Sprint(v)
 	}
-	return r.ErrVal
+	e := r.ErrVal
+	return e
 }
 
 func test() string {

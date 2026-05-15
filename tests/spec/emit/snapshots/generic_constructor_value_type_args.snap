@@ -32,5 +32,6 @@ func (w Wrap[T]) String() string {
 
 func main() {
 	f := MakeWrapW[int]
-	_ = f(1)
+	w := f(1)
+	_ = w
 }

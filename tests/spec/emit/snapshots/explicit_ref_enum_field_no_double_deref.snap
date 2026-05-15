@@ -42,5 +42,6 @@ func list_len[T any](list List[T]) int {
 	if list.Tag == ListNil {
 		return 0
 	}
-	return 1 + list_len(*list.Cons1)
+	rest := list.Cons1
+	return 1 + list_len(*rest)
 }

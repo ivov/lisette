@@ -40,7 +40,8 @@ func (p Pair[A, B]) String() string {
 
 func test(p Pair[int, string]) int {
 	if p.Tag == PairBoth {
-		return p.Both0
+		n := p.Both0
+		return n
 	}
 	return 0
 }

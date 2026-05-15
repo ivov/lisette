@@ -11,7 +11,8 @@ import (
 
 func main() {
 	b := aws.Bucket{}
-	src_3 := b.Annotations
+	raw_2 := b.Annotations
+	src_3 := raw_2
 	wrapped_4 := make(map[string]lisette.Option[string], len(src_3))
 	for i_5, v_6 := range src_3 {
 		if v_6 != nil {
@@ -22,6 +23,7 @@ func main() {
 	}
 	subject_1 := wrapped_4["k"]
 	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+		v := subject_1.SomeVal
+		_ = v
 	}
 }

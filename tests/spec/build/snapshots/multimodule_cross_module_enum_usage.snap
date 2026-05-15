@@ -8,9 +8,12 @@ import "github.com/user/myproject/shapes"
 
 func describe(s shapes.ShapeKind) float64 {
 	if s.Tag == shapes.ShapeKindCircleKind {
-		return s.CircleKind.Radius
+		c := s.CircleKind
+		return c.Radius
 	}
-	return s.Width * s.Height
+	width := s.Width
+	height := s.Height
+	return width * height
 }
 
 func main() {

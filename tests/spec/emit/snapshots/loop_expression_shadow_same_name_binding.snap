@@ -7,7 +7,8 @@ package main
 func test() int {
 	var x_1 int
 	for {
-		x_1 = 1
+		x := 1
+		x_1 = x
 		break
 	}
 	return x_1

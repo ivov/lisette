@@ -17,6 +17,7 @@ func a() {
 
 func main() {
 	a()
-	var y int = make_()
+	x := make_()
+	var y int = x
 	fmt.Println(y)
 }

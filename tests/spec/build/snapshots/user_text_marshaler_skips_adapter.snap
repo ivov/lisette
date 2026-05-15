@@ -19,5 +19,6 @@ func (w Widget) MarshalText() ([]byte, error) {
 }
 
 func main() {
-	_ = Widget{id: 7}
+	w := Widget{id: 7}
+	_ = w
 }

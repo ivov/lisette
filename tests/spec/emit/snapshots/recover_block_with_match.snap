@@ -16,7 +16,8 @@ func test() int {
 	})
 	result := recoverResult_1
 	if result.Tag == lisette.ResultOk {
-		return result.OkVal
+		x := result.OkVal
+		return x
 	}
 	return 0
 }

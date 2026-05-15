@@ -7,5 +7,6 @@ package main
 func test() {
 	x := 42
 	r1 := &x
-	_ = *r1
+	r2 := r1
+	_ = *r2
 }

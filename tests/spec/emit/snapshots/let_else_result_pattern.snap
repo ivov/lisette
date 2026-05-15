@@ -10,5 +10,6 @@ func test(res lisette.Result[int, string]) int {
 	if res.Tag != lisette.ResultOk {
 		return -1
 	}
-	return res.OkVal
+	value := res.OkVal
+	return value
 }

@@ -34,5 +34,7 @@ func (s Shape) String() string {
 }
 
 func area(s Shape) int {
-	return s.Width * s.Height
+	width := s.Width
+	height := s.Height
+	return width * height
 }

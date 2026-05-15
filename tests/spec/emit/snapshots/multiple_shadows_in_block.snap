@@ -9,7 +9,8 @@ func test() int {
 	var tmp_1 int
 	{
 		x := x * 2
-		tmp_1 = x + 100
+		x_2 := x + 100
+		tmp_1 = x_2
 	}
 	return tmp_1
 }

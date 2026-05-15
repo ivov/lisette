@@ -8,5 +8,7 @@ import "example.com/shapes"
 
 func area(s shapes.Shape) int {
 	asserted_1 := s.(shapes.Rect)
-	return asserted_1.W * asserted_1.H
+	w := asserted_1.W
+	h := asserted_1.H
+	return w * h
 }

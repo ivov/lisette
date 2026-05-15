@@ -16,7 +16,8 @@ func main() {
 	option_2 := lisette.OptionFromCommaOk[any](m.Load("key"))
 	subject_1 := option_2
 	if subject_1.Tag == lisette.OptionSome {
-		fmt.Printf("got: %v\n", subject_1.SomeVal)
+		v := subject_1.SomeVal
+		fmt.Printf("got: %v\n", v)
 	} else {
 		fmt.Println("not found")
 	}

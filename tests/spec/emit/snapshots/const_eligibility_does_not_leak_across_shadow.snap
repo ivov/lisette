@@ -12,6 +12,7 @@ func make_() int {
 
 func main() {
 	const x int = 1
-	var y int = make_()
+	x_1 := make_()
+	var y int = x_1
 	fmt.Println(y)
 }

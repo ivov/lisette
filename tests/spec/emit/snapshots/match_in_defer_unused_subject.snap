@@ -16,6 +16,7 @@ func (p P) String() string {
 
 func test() {
 	defer func() {
-		_ = P{v: 1}
+		p := P{v: 1}
+		_ = p
 	}()
 }

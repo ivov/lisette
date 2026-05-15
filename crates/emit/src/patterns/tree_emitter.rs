@@ -10,7 +10,7 @@ use crate::patterns::emit_plan::{
     SingleCatchallPlan, is_empty_emit_decision, lower_match,
 };
 use crate::placement::{BodyPlace, emit_unreachable_panic_if_needed};
-use crate::utils::{inline_trivial_bindings, output_ends_with_diverge, output_references_var};
+use crate::utils::{output_ends_with_diverge, output_references_var};
 use crate::write_line;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -99,7 +99,6 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
     }
 
     pub(crate) fn emit(mut self, output: &mut String, place: &BodyPlace) {
-        let pre_len = output.len();
         let expanded = expand_or_patterns(self.arms);
         let compiled = compile_expanded_arms(self.emitter, &expanded, &self.subject_ty);
         self.emitter.requirements.apply_effects(&compiled.effects);
@@ -137,8 +136,6 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 self.render_retry_loop(output, &plan, place);
             }
         }
-
-        inline_trivial_bindings(output, pre_len);
     }
 
     fn render_single_catchall(

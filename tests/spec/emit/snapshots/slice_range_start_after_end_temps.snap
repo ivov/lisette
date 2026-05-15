@@ -19,5 +19,6 @@ func main() {
 	} else {
 		end = 3
 	}
-	_ = items()[start():end:end]
+	s := items()[start():end:end]
+	_ = s
 }

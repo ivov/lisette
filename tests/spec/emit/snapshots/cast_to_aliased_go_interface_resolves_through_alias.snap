@@ -29,7 +29,8 @@ func run(s svc.Alias) int {
 	}
 	subject_1 := result_4
 	if subject_1.Tag == lisette.ResultOk {
-		return subject_1.OkVal
+		n := subject_1.OkVal
+		return n
 	}
 	return 0
 }

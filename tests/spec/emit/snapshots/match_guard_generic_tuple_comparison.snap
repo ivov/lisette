@@ -18,7 +18,8 @@ func test() int {
 	w := W[int]{F0: 1}
 	subject_1 := w
 	{
-		if subject_1 == (W[int]{F0: 2}) {
+		x := subject_1
+		if x == (W[int]{F0: 2}) {
 			return 0
 		}
 	}

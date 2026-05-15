@@ -17,6 +17,8 @@ func (p Pair) String() string {
 
 func test(p Pair) int {
 	{
-		return p.F0 + p.F1
+		a := p.F0
+		b := p.F1
+		return a + b
 	}
 }

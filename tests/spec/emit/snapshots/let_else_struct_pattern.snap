@@ -22,5 +22,7 @@ func test(opt lisette.Option[Point]) int {
 	if opt.Tag != lisette.OptionSome {
 		return 0
 	}
-	return opt.SomeVal.x + opt.SomeVal.y
+	x := opt.SomeVal.x
+	y := opt.SomeVal.y
+	return x + y
 }

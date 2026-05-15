@@ -25,5 +25,6 @@ func main() int {
 		}
 		break
 	}
-	return result + 1
+	tmp_1 := result + 1
+	return tmp_1
 }

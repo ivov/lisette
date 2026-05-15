@@ -71,8 +71,11 @@ func main() {
 	}
 	switch e.Tag {
 	case events.EventClick:
-		_ = e.X + e.Y
+		x := e.X
+		y := e.Y
+		_ = x + y
 	case events.EventKeyPress:
-		_ = e.KeyPress
+		k := e.KeyPress
+		_ = k
 	}
 }

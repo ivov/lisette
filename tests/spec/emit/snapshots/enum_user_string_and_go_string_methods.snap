@@ -32,5 +32,6 @@ func (c Color) GoString() string {
 }
 
 func main() {
-	_ = MakeColorRed()
+	c := MakeColorRed()
+	_ = c
 }

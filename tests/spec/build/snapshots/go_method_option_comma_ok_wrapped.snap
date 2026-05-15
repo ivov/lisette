@@ -14,5 +14,6 @@ import (
 func main() {
 	ctx := context.Background()
 	option_1 := lisette.OptionFromCommaOk[time.Time](ctx.Deadline())
-	fmt.Print(option_1.IsSome())
+	deadline := option_1
+	fmt.Print(deadline.IsSome())
 }

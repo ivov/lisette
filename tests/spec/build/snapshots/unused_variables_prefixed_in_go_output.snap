@@ -5,7 +5,8 @@ source: tests/spec/build/mod.rs
 package main
 
 func process(_, used_param int) int {
-	return used_param * 2
+	used_var := used_param * 2
+	return used_var
 }
 
 func main() {

@@ -15,7 +15,9 @@ func (p P) String() string {
 }
 
 func test() {
-	_ = P{v: 1}
+	p := P{v: 1}
+	subject_1 := p
+	_ = subject_1
 match_2:
 	for {
 		{

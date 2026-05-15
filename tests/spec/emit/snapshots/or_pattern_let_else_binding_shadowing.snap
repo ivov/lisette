@@ -22,5 +22,6 @@ func main() {
 		return
 	}
 	_ = x
-	_ = 2
+	x_3 := 2
+	_ = x_3
 }

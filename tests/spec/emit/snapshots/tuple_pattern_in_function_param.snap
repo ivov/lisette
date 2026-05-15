@@ -7,5 +7,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func sum(arg_1 lisette.Tuple2[int, int]) int {
-	return arg_1.First + arg_1.Second
+	x := arg_1.First
+	y := arg_1.Second
+	return x + y
 }

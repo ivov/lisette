@@ -16,7 +16,8 @@ func main() {
 	option_3 := lisette.OptionFromNilable[error](raw_2, lisette.IsNilInterface(raw_2))
 	subject_1 := option_3
 	if subject_1.Tag == lisette.OptionSome {
-		fmt.Println(subject_1.SomeVal.Error())
+		e := subject_1.SomeVal
+		fmt.Println(e.Error())
 	} else {
 		fmt.Println("no error")
 	}

@@ -15,7 +15,8 @@ func main() {
 	option_3 := lisette.OptionFromNilable[evts.Msg](raw_2, lisette.IsNilInterface(raw_2))
 	subject_1 := option_3
 	if subject_1.Tag == lisette.OptionSome {
-		fmt.Println(subject_1.SomeVal)
+		e := subject_1.SomeVal
+		fmt.Println(e)
 	} else {
 		fmt.Println("none")
 	}

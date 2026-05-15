@@ -21,5 +21,6 @@ func test() int {
 	if subject_1.Tag != lisette.ResultOk {
 		return -1
 	}
-	return subject_1.OkVal
+	x := subject_1.OkVal
+	return x
 }

@@ -14,5 +14,6 @@ func bump(i *int) string {
 func main() {
 	i := 0
 	items := []string{"a", "b", "c"}
-	_ = strings.Join(items, bump(&i))
+	joined := strings.Join(items, bump(&i))
+	_ = joined
 }

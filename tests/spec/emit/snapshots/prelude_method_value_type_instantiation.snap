@@ -18,5 +18,6 @@ func main() {
 	option_3 := lisette.OptionFromCommaOk[int](f(lisette.MakeOptionSome(1), func(v int) int {
 		return v + 1
 	}))
-	_ = option_3
+	x := option_3
+	_ = x
 }

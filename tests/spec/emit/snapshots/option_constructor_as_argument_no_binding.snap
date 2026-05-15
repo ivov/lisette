@@ -8,7 +8,8 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func unwrap_or(o lisette.Option[int], fallback int) int {
 	if o.Tag == lisette.OptionSome {
-		return o.SomeVal
+		v := o.SomeVal
+		return v
 	}
 	return fallback
 }

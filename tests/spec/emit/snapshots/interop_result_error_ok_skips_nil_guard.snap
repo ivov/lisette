@@ -19,7 +19,8 @@ func main() {
 	}
 	subject_1 := result_4
 	if subject_1.Tag == lisette.ResultOk {
-		_ = subject_1.OkVal
+		stored := subject_1.OkVal
+		_ = stored
 	} else {
 	}
 }

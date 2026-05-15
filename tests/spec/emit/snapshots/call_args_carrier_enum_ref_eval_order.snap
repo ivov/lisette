@@ -31,7 +31,8 @@ func (c Carrier) String() string {
 }
 
 func bump(c Carrier) int {
-	*c.P = 1
+	p := c.P
+	*p = 1
 	return 9
 }
 
@@ -46,5 +47,6 @@ func main() {
 		Tag: CarrierC,
 		P:   &i,
 	}
-	_ = first(m[i][0], []int{bump(c)}[0])
+	x := first(m[i][0], []int{bump(c)}[0])
+	_ = x
 }

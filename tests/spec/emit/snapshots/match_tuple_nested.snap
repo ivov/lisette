@@ -11,5 +11,8 @@ func test() int {
 	if nested.First.First == 1 && nested.First.Second == 2 && nested.Second == 3 {
 		return 6
 	}
-	return nested.First.First + nested.First.Second + nested.Second
+	x := nested.First.First
+	y := nested.First.Second
+	z := nested.Second
+	return x + y + z
 }

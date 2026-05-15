@@ -14,9 +14,12 @@ func use_split(f func(string) (string, string), p string) string {
 	ret_2, ret_3 := f(p)
 	tup_4 := lisette.MakeTuple2(ret_2, ret_3)
 	tmp_1 := tup_4
-	return fmt.Sprintf("%v/%v", tmp_1.First, tmp_1.Second)
+	dir := tmp_1.First
+	file := tmp_1.Second
+	return fmt.Sprintf("%v/%v", dir, file)
 }
 
 func main() {
-	_ = use_split(path.Split, "/foo/bar.txt")
+	r := use_split(path.Split, "/foo/bar.txt")
+	_ = r
 }

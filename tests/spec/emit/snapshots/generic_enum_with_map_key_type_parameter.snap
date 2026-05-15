@@ -40,5 +40,6 @@ func (c Container[K, V]) String() string {
 func test() {
 	m := make(map[string]int)
 	m["hello"] = 1
-	_ = MakeContainerIndexed[string, int](m)
+	c := MakeContainerIndexed[string, int](m)
+	_ = c
 }

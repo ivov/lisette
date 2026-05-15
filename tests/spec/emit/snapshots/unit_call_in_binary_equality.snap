@@ -8,5 +8,6 @@ func noop() {}
 
 func test() {
 	noop()
-	_ = struct{}{} == struct{}{}
+	b := struct{}{} == struct{}{}
+	_ = b
 }

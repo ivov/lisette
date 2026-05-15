@@ -10,13 +10,16 @@ func handle(e events.Event) int {
 	subject_1 := e
 	switch subject_1 := subject_1.(type) {
 	case events.Click:
-		if subject_1.X > 100 {
+		x := subject_1.X
+		if x > 100 {
 			return 3
 		}
-		if subject_1.X > 50 {
+		x_2 := subject_1.X
+		if x_2 > 50 {
 			return 2
 		}
-		if subject_1.X > 0 {
+		x_3 := subject_1.X
+		if x_3 > 0 {
 			return 1
 		}
 		return 0

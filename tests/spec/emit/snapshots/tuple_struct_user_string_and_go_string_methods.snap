@@ -15,5 +15,6 @@ func (u UserId) GoString() string {
 }
 
 func main() {
-	_ = UserId(1)
+	u := UserId(1)
+	_ = u
 }

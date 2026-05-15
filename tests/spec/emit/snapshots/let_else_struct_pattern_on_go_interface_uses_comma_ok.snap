@@ -11,5 +11,7 @@ func try_area(s shapes.Shape) int {
 	if !ok_2 {
 		return -1
 	}
-	return asserted_1.W * asserted_1.H
+	w := asserted_1.W
+	h := asserted_1.H
+	return w * h
 }

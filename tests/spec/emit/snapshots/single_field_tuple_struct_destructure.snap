@@ -14,5 +14,6 @@ func (w Wrapper) String() string {
 
 func test() int {
 	w := Wrapper(42)
-	return int(w)
+	val := int(w)
+	return val
 }

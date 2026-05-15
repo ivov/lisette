@@ -5,5 +5,6 @@ description: "input: \nfn test(items: Slice<int>) -> int {\n  let len = items.le
 package main
 
 func test(items []int) int {
-	return len(items)
+	len_ := len(items)
+	return len_
 }

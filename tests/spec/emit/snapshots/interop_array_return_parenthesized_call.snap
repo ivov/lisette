@@ -10,5 +10,6 @@ func main() {
 	data := ([]uint8)(nil)
 	arr_1 := sha256.Sum256(data)
 	out := arr_1[:]
-	_ = append(out, 1)
+	out2 := append(out, 1)
+	_ = out2
 }

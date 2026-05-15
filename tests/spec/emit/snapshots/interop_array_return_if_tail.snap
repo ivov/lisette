@@ -23,5 +23,6 @@ func get(cond bool) func([]uint8) []uint8 {
 func main() {
 	f := get(true)
 	data := ([]uint8)(nil)
-	_ = f(data)
+	out := f(data)
+	_ = out
 }

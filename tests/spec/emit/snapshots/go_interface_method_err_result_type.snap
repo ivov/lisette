@@ -14,5 +14,6 @@ func main() {
 	ctx := context.Background()
 	raw_1 := ctx.Err()
 	option_2 := lisette.OptionFromNilable[error](raw_1, lisette.IsNilInterface(raw_1))
-	fmt.Printf("err=%v\n", option_2)
+	err := option_2
+	fmt.Printf("err=%v\n", err)
 }

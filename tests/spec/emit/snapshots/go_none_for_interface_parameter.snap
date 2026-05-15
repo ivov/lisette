@@ -21,5 +21,6 @@ func main() {
 	} else {
 		result_3 = lisette.MakeResultOk[*http.Request, error](ret_1)
 	}
-	fmt.Println(result_3)
+	req := result_3
+	fmt.Println(req)
 }

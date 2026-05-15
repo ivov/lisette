@@ -15,5 +15,6 @@ func main() {
 	_ = l.PushBack(42)
 	raw_1 := l.Front()
 	option_2 := lisette.OptionFromNilable[*list.Element](raw_1, raw_1 == nil)
-	fmt.Print(option_2.IsSome())
+	front := option_2
+	fmt.Print(front.IsSome())
 }

@@ -20,6 +20,8 @@ func (p Point) String() string {
 
 func test(pair lisette.Tuple2[Point, int]) int {
 	{
-		return pair.First.x + pair.Second
+		p := pair.First
+		z := pair.Second
+		return p.x + z
 	}
 }

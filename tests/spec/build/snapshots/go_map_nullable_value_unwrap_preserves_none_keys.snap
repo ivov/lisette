@@ -39,7 +39,8 @@ func main() {
 		Outer:   unwrap_2,
 		Objects: unwrapped_4,
 	}
-	src_8 := scope.Objects
+	raw_7 := scope.Objects
+	src_8 := raw_7
 	wrapped_9 := make(map[string]lisette.Option[*ast.Object], len(src_8))
 	for i_10, v_11 := range src_8 {
 		if v_11 != nil {

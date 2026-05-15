@@ -6,7 +6,8 @@ package main
 
 func test(nums []int) int {
 	if len(nums) >= 1 {
-		return nums[0]
+		first := nums[0]
+		return first
 	}
 	return 0
 }

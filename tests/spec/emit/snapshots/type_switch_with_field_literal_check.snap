@@ -12,7 +12,8 @@ func handle(e events.Event) int {
 		if e.X == 5 {
 			return 100
 		}
-		return e.X
+		x := e.X
+		return x
 	default:
 		return 0
 	}

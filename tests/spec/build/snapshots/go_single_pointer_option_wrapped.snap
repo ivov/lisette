@@ -13,5 +13,6 @@ import (
 func main() {
 	raw_1 := flag.Lookup("verbose")
 	option_2 := lisette.OptionFromNilable[*flag.Flag](raw_1, raw_1 == nil)
-	fmt.Print(option_2.IsSome())
+	result := option_2
+	fmt.Print(result.IsSome())
 }

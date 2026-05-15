@@ -6,6 +6,7 @@ package main
 
 func test(x int) int {
 	{
-		return x * 2
+		y := x
+		return y * 2
 	}
 }

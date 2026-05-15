@@ -12,5 +12,6 @@ func test() int {
 	if subject_1.Tag != lisette.OptionSome {
 		return 0
 	}
-	return subject_1.SomeVal
+	opt_2 := subject_1.SomeVal
+	return opt_2
 }

@@ -34,5 +34,6 @@ func main() {
 		X: 3,
 		Y: 4,
 	}
-	_ = apply(p, lib.Point.Sum)
+	result := apply(p, lib.Point.Sum)
+	_ = result
 }

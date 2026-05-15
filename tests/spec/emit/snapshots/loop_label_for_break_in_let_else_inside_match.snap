@@ -27,7 +27,8 @@ loop_1:
 			if subject_2.Tag != lisette.OptionSome {
 				break loop_1
 			}
-			_ = subject_2.SomeVal
+			v := subject_2.SomeVal
+			_ = v
 		}
 	}
 	return count

@@ -16,5 +16,6 @@ func get() func([]uint8) []uint8 {
 func main() {
 	f := get()
 	data := ([]uint8)(nil)
-	_ = f(data)
+	out := f(data)
+	_ = out
 }

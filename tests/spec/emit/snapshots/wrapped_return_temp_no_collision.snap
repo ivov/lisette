@@ -9,7 +9,8 @@ func foo() (int, bool) {
 		return 1, true
 	}
 	return *new(int), false
-	_ = 7
+	tmp_1 := 7
+	_ = tmp_1
 	return *new(int), false
 }
 

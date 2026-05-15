@@ -16,5 +16,6 @@ func (p Point) String() string {
 }
 
 func get_x(arg_1 Point) int {
-	return arg_1.X
+	x := arg_1.X
+	return x
 }

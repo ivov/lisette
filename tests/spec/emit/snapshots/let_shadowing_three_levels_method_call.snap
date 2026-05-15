@@ -6,5 +6,6 @@ package main
 
 func test() int {
 	x := "now a string"
-	return len(x)
+	x_1 := len(x)
+	return x_1
 }

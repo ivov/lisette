@@ -10,10 +10,12 @@ import (
 )
 
 func main() {
-	raw_1 := flag.Lookup("verbose")
+	f := flag.Lookup
+	raw_1 := f("verbose")
 	option_2 := lisette.OptionFromNilable[*flag.Flag](raw_1, raw_1 == nil)
 	r := option_2
 	if r.Tag == lisette.OptionSome {
-		_ = r.SomeVal
+		v := r.SomeVal
+		_ = v
 	}
 }

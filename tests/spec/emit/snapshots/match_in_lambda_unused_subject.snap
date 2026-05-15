@@ -20,11 +20,13 @@ func (p P) String() string {
 func test() int {
 	opt := lisette.MakeOptionSome(1)
 	result := lisette.OptionMap(opt, func(x int) int {
-		_ = P{v: x}
+		p := P{v: x}
+		_ = p
 		return 1
 	})
 	if result.Tag == lisette.OptionSome {
-		return result.SomeVal
+		x := result.SomeVal
+		return x
 	}
 	return 0
 }

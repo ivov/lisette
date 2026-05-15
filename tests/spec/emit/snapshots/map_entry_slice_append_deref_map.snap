@@ -20,5 +20,6 @@ func main() {
 	r := &m
 	entry := (*r)["a"]
 	entry.items = append(entry.items, 1)
-	(*r)["a"] = entry
+	base_1 := r
+	(*base_1)["a"] = entry
 }

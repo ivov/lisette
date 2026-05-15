@@ -27,7 +27,8 @@ loop_1:
 		}
 		subject_3 := result_8
 		if subject_3.Tag == lisette.ResultOk {
-			r_2 = subject_3.OkVal.First
+			r := subject_3.OkVal.First
+			r_2 = r
 		} else {
 			if subject_3.ErrVal == io.EOF {
 				break loop_1

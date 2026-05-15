@@ -12,5 +12,6 @@ func bump(i *int) int {
 func main() {
 	items := []int{100, 200, 300}
 	i := 0
-	_ = items[bump(&i)]
+	v := items[bump(&i)]
+	_ = v
 }

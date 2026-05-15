@@ -17,5 +17,6 @@ func (s S) inc() int {
 func main() {
 	s := S{}
 	ref_1 := s.inc
-	_ = &ref_1
+	r := &ref_1
+	_ = r
 }

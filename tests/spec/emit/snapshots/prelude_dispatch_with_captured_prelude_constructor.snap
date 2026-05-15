@@ -19,7 +19,9 @@ func main() {
 	_arg_6 := opt
 	cb_3 := g
 	tagged_5 := func(arg0 int) lisette.Option[int] {
-		return lisette.OptionFromCommaOk[int](cb_3(arg0))
+		option_4 := lisette.OptionFromCommaOk[int](cb_3(arg0))
+		return option_4
 	}
-	_ = lisette.OptionAndThen(_arg_6, tagged_5)
+	r := lisette.OptionAndThen(_arg_6, tagged_5)
+	_ = r
 }

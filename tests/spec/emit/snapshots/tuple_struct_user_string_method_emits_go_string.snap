@@ -17,5 +17,6 @@ func (u UserId) String() string {
 }
 
 func main() {
-	_ = UserId(1)
+	u := UserId(1)
+	_ = u
 }

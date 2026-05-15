@@ -10,14 +10,16 @@ func test() int {
 	opt1 := lisette.MakeOptionSome(5)
 	var x1 int
 	if opt1.Tag == lisette.OptionSome {
-		x1 = opt1.SomeVal
+		v := opt1.SomeVal
+		x1 = v
 	} else {
 		x1 = 0
 	}
 	opt2 := lisette.MakeOptionSome(10)
 	var x2 int
 	if opt2.Tag == lisette.OptionSome {
-		x2 = opt2.SomeVal
+		v := opt2.SomeVal
+		x2 = v
 	} else {
 		x2 = 0
 	}

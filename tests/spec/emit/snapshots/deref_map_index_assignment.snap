@@ -5,5 +5,6 @@ description: "input: \nfn update(m: Ref<Map<string, int>>, key: string, val: int
 package main
 
 func update(m *map[string]int, key string, val int) {
-	(*m)[key] = val
+	base_1 := m
+	(*base_1)[key] = val
 }

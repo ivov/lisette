@@ -9,9 +9,12 @@ import "example.com/events"
 func handle(e events.Event) int {
 	switch e := e.(type) {
 	case events.Click:
-		return e.X * e.Y
+		x := e.X
+		y := e.Y
+		return x * y
 	case events.Scroll:
-		return e.Delta
+		delta := e.Delta
+		return delta
 	default:
 		return 0
 	}

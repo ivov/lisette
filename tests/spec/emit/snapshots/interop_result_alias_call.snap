@@ -10,7 +10,9 @@ import (
 )
 
 func main() {
-	ret_1, ret_2 := strconv.Atoi("42")
+	f := strconv.Atoi
+	g := f
+	ret_1, ret_2 := g("42")
 	var result_3 lisette.Result[int, error]
 	if ret_2 != nil {
 		result_3 = lisette.MakeResultErr[int, error](ret_2)
@@ -19,7 +21,8 @@ func main() {
 	}
 	r := result_3
 	if r.Tag == lisette.ResultOk {
-		_ = r.OkVal
+		v := r.OkVal
+		_ = v
 	} else {
 	}
 }

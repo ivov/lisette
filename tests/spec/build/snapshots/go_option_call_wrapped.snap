@@ -12,5 +12,6 @@ import (
 
 func main() {
 	option_1 := lisette.OptionFromCommaOk[string](comment.DefaultLookupPackage("math"))
-	fmt.Print(option_1.IsSome())
+	result := option_1
+	fmt.Print(result.IsSome())
 }

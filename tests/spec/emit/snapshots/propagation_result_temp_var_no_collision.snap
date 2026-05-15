@@ -11,8 +11,10 @@ func foo() lisette.Result[int, string] {
 	if check_1.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](check_1.ErrVal)
 	}
-	y := check_1.OkVal + 1
-	_ = 7
+	result_2 := check_1.OkVal
+	y := result_2 + 1
+	result_2_3 := 7
+	_ = result_2_3
 	return lisette.MakeResultOk[int, string](y)
 }
 

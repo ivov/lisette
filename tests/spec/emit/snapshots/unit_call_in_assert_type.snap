@@ -10,5 +10,6 @@ func noop() {}
 
 func main() {
 	noop()
-	_ = lisette.AssertType[struct{}](struct{}{})
+	x := lisette.AssertType[struct{}](struct{}{})
+	_ = x
 }

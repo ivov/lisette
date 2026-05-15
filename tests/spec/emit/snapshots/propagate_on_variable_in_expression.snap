@@ -11,5 +11,6 @@ func test() (int, bool) {
 	if x.Tag != lisette.OptionSome {
 		return *new(int), false
 	}
-	return x.SomeVal + 1, true
+	result_1 := x.SomeVal
+	return result_1 + 1, true
 }

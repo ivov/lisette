@@ -16,5 +16,7 @@ func make_splitter() func(string) (string, string) {
 func main() {
 	f := make_splitter()
 	ret_1, ret_2 := f("/foo/bar.txt")
-	_ = lisette.MakeTuple2(ret_1, ret_2)
+	tup_3 := lisette.MakeTuple2(ret_1, ret_2)
+	r := tup_3
+	_ = r
 }

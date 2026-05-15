@@ -9,5 +9,6 @@ func mk() int {
 }
 
 func test() int {
-	return mk()
+	new_ := mk
+	return new_()
 }

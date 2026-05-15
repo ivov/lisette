@@ -19,5 +19,6 @@ func mk() P {
 }
 
 func test() {
-	_ = mk()
+	tmp_1 := mk()
+	_ = tmp_1
 }

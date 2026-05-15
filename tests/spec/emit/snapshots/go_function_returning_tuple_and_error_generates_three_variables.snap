@@ -25,6 +25,7 @@ func main() {
 		_ = host
 		_ = port
 	} else {
-		_ = subject_1.ErrVal
+		e := subject_1.ErrVal
+		_ = e
 	}
 }

@@ -19,7 +19,9 @@ func parse(s string) (int, error) {
 	}
 	result := result_3
 	if result.Tag == lisette.ResultOk {
-		return result.OkVal, nil
+		n := result.OkVal
+		return n, nil
 	}
-	return *new(int), result.ErrVal
+	e := result.ErrVal
+	return *new(int), e
 }

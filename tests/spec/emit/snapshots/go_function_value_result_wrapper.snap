@@ -12,7 +12,8 @@ import (
 func parse_with(f func(string) (int, error), s string) int {
 	ret_1, ret_2 := f(s)
 	if ret_2 == nil {
-		return ret_1
+		n := ret_1
+		return n
 	} else {
 		return 0
 	}

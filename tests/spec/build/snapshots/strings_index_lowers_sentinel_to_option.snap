@@ -14,7 +14,8 @@ func find(haystack, needle string) int {
 	option_3 := lisette.OptionFromCommaOk[int](ret_2, ret_2 != -1)
 	subject_1 := option_3
 	if subject_1.Tag == lisette.OptionSome {
-		return subject_1.SomeVal
+		i := subject_1.SomeVal
+		return i
 	}
 	return -2
 }

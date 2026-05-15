@@ -11,5 +11,7 @@ import (
 
 func main() {
 	ret_1, ret_2 := path.Split("/foo/bar.txt")
-	_ = lisette.MakeTuple2(ret_1, ret_2)
+	tup_3 := lisette.MakeTuple2(ret_1, ret_2)
+	r := tup_3
+	_ = r
 }

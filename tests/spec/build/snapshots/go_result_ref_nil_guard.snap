@@ -21,5 +21,6 @@ func main() {
 	} else {
 		result_3 = lisette.MakeResultOk[*os.File, error](ret_1)
 	}
-	fmt.Print(result_3.IsOk())
+	result := result_3
+	fmt.Print(result.IsOk())
 }

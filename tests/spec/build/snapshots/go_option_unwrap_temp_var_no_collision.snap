@@ -30,6 +30,7 @@ func main() {
 		result_5 = lisette.MakeResultOk[*http.Request, error](ret_3)
 	}
 	req := result_5
-	_ = 7
+	unwrap_2_6 := 7
+	_ = unwrap_2_6
 	fmt.Println(req)
 }

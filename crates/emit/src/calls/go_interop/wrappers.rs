@@ -5,7 +5,6 @@ use crate::control_flow::fallible::{
 use crate::expressions::context::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::names::go_name;
-use crate::utils::inline_trivial_bindings;
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -399,7 +398,6 @@ impl Emitter<'_> {
         };
 
         write_line!(body, "return {}", result_var);
-        inline_trivial_bindings(&mut body, 0);
 
         format!(
             "func({}) {} {{\n{}}}",

@@ -29,13 +29,16 @@ func main() {
 		if check_3.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[int, string](check_3.ErrVal)
 		}
-		return lisette.MakeResultOk[int, string](check_3.OkVal + 1)
+		x := check_3.OkVal
+		return lisette.MakeResultOk[int, string](x + 1)
 	}()
 	result = tryResult_2
 	if result.Tag == lisette.ResultOk {
-		fmt.Println(result.OkVal)
+		v := result.OkVal
+		fmt.Println(v)
 	} else {
-		fmt.Println(result.ErrVal)
+		e := result.ErrVal
+		fmt.Println(e)
 	}
 	fmt.Println(x_1)
 }

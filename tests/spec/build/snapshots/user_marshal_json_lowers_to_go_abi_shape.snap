@@ -33,8 +33,10 @@ func main() {
 	}
 	subject_1 := result_4
 	if subject_1.Tag == lisette.ResultOk {
-		fmt.Println(string(subject_1.OkVal))
+		b := subject_1.OkVal
+		fmt.Println(string(b))
 	} else {
-		fmt.Println(subject_1.ErrVal)
+		e := subject_1.ErrVal
+		fmt.Println(e)
 	}
 }

@@ -11,6 +11,8 @@ import (
 
 func test(pairs []lisette.Tuple2[int, string]) {
 	for _, item_1 := range pairs {
-		fmt.Println(item_1.First, item_1.Second)
+		a := item_1.First
+		b := item_1.Second
+		fmt.Println(a, b)
 	}
 }

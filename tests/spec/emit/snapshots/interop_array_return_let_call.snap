@@ -12,5 +12,6 @@ func main() {
 		return arr_1[:]
 	}
 	data := []uint8("hello")
-	_ = f(data)
+	hash := f(data)
+	_ = hash
 }

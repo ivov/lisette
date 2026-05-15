@@ -12,5 +12,6 @@ func main() {
 	m[idx_1] = 7
 	_base_2 := m
 	noop()
-	_ = _base_2[struct{}{}]
+	x := _base_2[struct{}{}]
+	_ = x
 }

@@ -9,9 +9,12 @@ import "example.com/events"
 func handle(m events.Msg) int {
 	switch m := m.(type) {
 	case events.Click:
-		return m.X + m.Y
+		x := m.X
+		y := m.Y
+		return x + y
 	case events.KeyPress:
-		return len(m.Key)
+		key := m.Key
+		return len(key)
 	default:
 		return 0
 	}

@@ -10,11 +10,14 @@ import (
 )
 
 func main() {
-	ret_1, ret_2 := strconv.Atoi("42")
+	parse := strconv.Atoi
+	ret_1, ret_2 := parse("42")
 	if ret_2 == nil {
-		fmt.Printf("parsed: %d\n", ret_1)
+		n := ret_1
+		fmt.Printf("parsed: %d\n", n)
 	} else {
-		msg := ret_2.Error()
+		e := ret_2
+		msg := e.Error()
 		fmt.Println(msg)
 	}
 }

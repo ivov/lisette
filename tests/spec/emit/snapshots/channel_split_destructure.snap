@@ -9,5 +9,6 @@ import lisette "github.com/ivov/lisette/prelude"
 func test() {
 	ch := make(chan int)
 	tmp_1 := lisette.ChannelSplit(ch)
-	_ = lisette.SenderSend(tmp_1.First, 42)
+	tx := tmp_1.First
+	_ = lisette.SenderSend(tx, 42)
 }

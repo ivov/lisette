@@ -10,7 +10,9 @@ func sum(items []shapes.Shape) int {
 	total := 0
 	for _, item_1 := range items {
 		asserted_2 := item_1.(shapes.Rect)
-		total += asserted_2.W * asserted_2.H
+		w := asserted_2.W
+		h := asserted_2.H
+		total += w * h
 	}
 	return total
 }

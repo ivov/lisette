@@ -18,6 +18,7 @@ func (d Doubler) Read(_ []uint8) (int, error) {
 
 func main() {
 	m := make(map[string]io.Reader)
-	m["src"] = Doubler{}
+	d := Doubler{}
+	m["src"] = d
 	_ = m
 }

@@ -43,14 +43,18 @@ func test() int {
 	e1 := MakeEventClick(10, 20)
 	var sum1 int
 	if e1.Tag == EventClick {
-		sum1 = e1.Click0 + e1.Click1
+		x := e1.Click0
+		y := e1.Click1
+		sum1 = x + y
 	} else {
 		sum1 = 0
 	}
 	e2 := MakeEventClick(30, 40)
 	var sum2 int
 	if e2.Tag == EventClick {
-		sum2 = e2.Click0 + e2.Click1
+		x := e2.Click0
+		y := e2.Click1
+		sum2 = x + y
 	} else {
 		sum2 = 0
 	}

@@ -24,7 +24,8 @@ func test() {
 	for {
 		subject_1 := next_result(i)
 		if subject_1.Tag == lisette.ResultOk {
-			fmt.Printf("Got: %v\n", subject_1.OkVal)
+			x := subject_1.OkVal
+			fmt.Printf("Got: %v\n", x)
 			i++
 		} else {
 			break

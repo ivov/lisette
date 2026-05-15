@@ -40,7 +40,8 @@ func (s Status) String() string {
 
 func test(s Status) int {
 	if s.Tag == StatusGood {
-		return s.Good
+		n := s.Good
+		return n
 	}
 	return -1
 }

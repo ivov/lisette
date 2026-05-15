@@ -20,5 +20,6 @@ func main() {
 		}
 	}
 	data := ([]uint8)(nil)
-	_ = f(data)
+	out := f(data)
+	_ = out
 }

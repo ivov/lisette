@@ -10,5 +10,6 @@ import (
 )
 
 func main() {
-	fmt.Fprintf(os.Stdout, "hi %d", 3)
+	f := fmt.Fprintf
+	f(os.Stdout, "hi %d", 3)
 }

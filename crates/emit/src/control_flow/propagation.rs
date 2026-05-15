@@ -5,7 +5,6 @@ use crate::expressions::context::ExpressionContext;
 use crate::placement::BodyPlace;
 use crate::types::abi::AbiShape;
 use crate::types::abi_transition;
-use crate::utils::inline_trivial_bindings;
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -429,7 +428,6 @@ impl Emitter<'_> {
             fe.full_type_string()
         };
 
-        let pre_len = output.len();
         write_line!(output, "var {} {}", temp_var, full_ty);
 
         self.emit_branching_directly(
@@ -442,7 +440,6 @@ impl Emitter<'_> {
         );
 
         write_line!(output, "return {}", temp_var);
-        inline_trivial_bindings(output, pre_len);
     }
 
     pub(crate) fn emit_try_block(
@@ -465,7 +462,6 @@ impl Emitter<'_> {
         };
 
         write_line!(output, "{} := func() {} {{", result_var, full_ty);
-        let closure_body_start = output.len();
 
         self.with_scope_return_context_fallback(ReturnContext::TaggedBlock(effective_ty), |this| {
             this.with_fresh_scope(|emitter| {
@@ -473,7 +469,6 @@ impl Emitter<'_> {
             });
         });
 
-        inline_trivial_bindings(output, closure_body_start);
         output.push_str("}()\n");
 
         result_var

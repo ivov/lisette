@@ -16,6 +16,7 @@ func (b Box[T]) String() string {
 
 func test(b Box[int]) int {
 	{
-		return b.F0
+		x := b.F0
+		return x
 	}
 }

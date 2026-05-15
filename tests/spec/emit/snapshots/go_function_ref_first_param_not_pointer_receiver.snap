@@ -15,6 +15,7 @@ func main() {
 	option_2 := lisette.OptionFromNilable[*flag.Flag](raw_1, raw_1 == nil)
 	fl := option_2
 	if fl.Tag == lisette.OptionSome {
-		f(fl.SomeVal)
+		v := fl.SomeVal
+		f(v)
 	}
 }

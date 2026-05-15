@@ -10,10 +10,12 @@ func categorize(items []int) string {
 	if subject_1 == 0 {
 		return "empty"
 	}
-	if subject_1 == 1 {
+	n := subject_1
+	if n == 1 {
 		return "single"
 	}
-	if subject_1 <= 3 {
+	n_2 := subject_1
+	if n_2 <= 3 {
 		return "few"
 	}
 	return "many"

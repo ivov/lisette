@@ -23,6 +23,7 @@ func make_point() Point {
 }
 
 func test() int {
-	_ = make_point()
+	subject_1 := make_point()
+	_ = subject_1
 	return 1
 }

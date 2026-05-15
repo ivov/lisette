@@ -11,7 +11,8 @@ func test() int {
 	sum := 0
 	for key_1, value_2 := range items {
 		_ = value_2
-		sum += key_1
+		i := key_1
+		sum += i
 	}
 	return sum
 }

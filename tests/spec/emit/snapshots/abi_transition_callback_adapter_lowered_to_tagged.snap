@@ -14,7 +14,8 @@ func run() (int, bool) {
 	_arg_4 := lisette.MakeOptionSome(2)
 	cb_1 := double
 	tagged_3 := func(arg0 int) lisette.Option[int] {
-		return lisette.OptionFromCommaOk[int](cb_1(arg0))
+		option_2 := lisette.OptionFromCommaOk[int](cb_1(arg0))
+		return option_2
 	}
 	v_5 := lisette.OptionAndThen(_arg_4, tagged_3)
 	if v_5.Tag == lisette.OptionSome {

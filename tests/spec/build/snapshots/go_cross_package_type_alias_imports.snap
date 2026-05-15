@@ -24,10 +24,12 @@ func main() {
 	}
 	result := result_3
 	if result.Tag == lisette.ResultOk {
-		size := result.OkVal.Size()
+		info := result.OkVal
+		size := info.Size()
 		fmt.Printf("size: %d\n", size)
 	} else {
-		msg := result.ErrVal.Error()
+		e := result.ErrVal
+		msg := e.Error()
 		fmt.Printf("error: %s\n", msg)
 	}
 }

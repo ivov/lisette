@@ -13,5 +13,7 @@ func test() int {
 	} else if pair.First == 1 && pair.Second == 2 {
 		return 3
 	}
-	return pair.First + pair.Second
+	x := pair.First
+	y := pair.Second
+	return x + y
 }

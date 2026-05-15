@@ -23,7 +23,8 @@ match_2:
 			fmt.Printf("non-positive: %v\n", n)
 			break match_2
 		}
-		fmt.Printf("error: %v\n", subject_1.ErrVal)
+		e := subject_1.ErrVal
+		fmt.Printf("error: %v\n", e)
 		break match_2
 	}
 }

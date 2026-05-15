@@ -9,7 +9,8 @@ func noop() {}
 func main() {
 	var x int
 	noop()
-	_ = struct{}{}
+	subject_1 := struct{}{}
+	_ = subject_1
 	x = 1
 	_ = x
 }

@@ -8,6 +8,8 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test(s []int) int {
 	return lisette.EnumeratedSliceFold(s, 0, func(acc int, arg_1 lisette.Tuple2[int, int]) int {
-		return acc + arg_1.First*arg_1.Second
+		i := arg_1.First
+		v := arg_1.Second
+		return acc + i*v
 	})
 }

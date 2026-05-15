@@ -7,5 +7,6 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
-	_ = ([]lisette.Option[int])(nil)
+	xs := ([]lisette.Option[int])(nil)
+	_ = xs
 }

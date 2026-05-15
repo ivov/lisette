@@ -19,7 +19,8 @@ func maybe_get() Callback {
 
 func run(cb lisette.Option[Callback]) int {
 	if cb.Tag == lisette.OptionSome {
-		return cb.SomeVal()
+		f := cb.SomeVal
+		return f()
 	}
 	return -1
 }
@@ -27,5 +28,6 @@ func run(cb lisette.Option[Callback]) int {
 func main() {
 	raw_1 := maybe_get()
 	option_2 := lisette.OptionFromNilable[Callback](raw_1, raw_1 == nil)
-	fmt.Println(run(option_2))
+	cb := option_2
+	fmt.Println(run(cb))
 }

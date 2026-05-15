@@ -21,7 +21,8 @@ func parse_and_divide(a, b float64) lisette.Result[string, string] {
 	option_2 := lisette.OptionFromCommaOk[float64](safe_divide(a, b))
 	subject_1 := option_2
 	if subject_1.Tag == lisette.OptionSome {
-		result = subject_1.SomeVal
+		v := subject_1.SomeVal
+		result = v
 	} else {
 		return lisette.MakeResultErr[string, string]("division by zero")
 	}

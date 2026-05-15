@@ -31,7 +31,8 @@ func main() {
 		Rbrace:     token.Pos(0),
 		Incomplete: false,
 	}
-	src_8 := lit.Elts
+	raw_7 := lit.Elts
+	src_8 := raw_7
 	wrapped_9 := make([]lisette.Option[ast.Expr], len(src_8))
 	for i_10, v_11 := range src_8 {
 		if !lisette.IsNilInterface(v_11) {
@@ -43,7 +44,8 @@ func main() {
 	elts := wrapped_9
 	for _, elt := range elts {
 		if elt.Tag == lisette.OptionSome {
-			fmt.Println(elt.SomeVal.Pos())
+			e := elt.SomeVal
+			fmt.Println(e.Pos())
 		} else {
 			fmt.Println("nil")
 		}

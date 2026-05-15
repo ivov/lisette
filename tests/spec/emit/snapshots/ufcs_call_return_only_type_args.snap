@@ -20,5 +20,6 @@ func Box_make[T any, U any](_ Box[T]) U {
 
 func main() {
 	b := Box[int]{value: 1}
-	_ = Box_make[int, string](b)
+	x := Box_make[int, string](b)
+	_ = x
 }

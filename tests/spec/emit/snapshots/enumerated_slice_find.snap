@@ -8,7 +8,8 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test(s []int) (lisette.Tuple2[int, int], bool) {
 	v_2 := lisette.EnumeratedSliceFind(s, func(arg_1 lisette.Tuple2[int, int]) bool {
-		return arg_1.Second > 10
+		v := arg_1.Second
+		return v > 10
 	})
 	if v_2.Tag == lisette.OptionSome {
 		return v_2.SomeVal, true

@@ -14,7 +14,8 @@ func main() {
 	raw := store.GetValue("count")
 	subject_1 := lisette.AssertType[int](raw)
 	if subject_1.Tag == lisette.OptionSome {
-		fmt.Print(subject_1.SomeVal)
+		n := subject_1.SomeVal
+		fmt.Print(n)
 	} else {
 		fmt.Print("not an int")
 	}

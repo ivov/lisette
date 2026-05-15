@@ -18,11 +18,13 @@ func test() int {
 		if check_3.Tag != lisette.OptionSome {
 			return lisette.MakeOptionNone[int]()
 		}
-		return lisette.MakeOptionSome[int](check_3.SomeVal + 1)
+		x := check_3.SomeVal
+		return lisette.MakeOptionSome[int](x + 1)
 	}()
 	opt = tryResult_1
 	if opt.Tag == lisette.OptionSome {
-		return opt.SomeVal
+		v := opt.SomeVal
+		return v
 	}
 	return 0
 }

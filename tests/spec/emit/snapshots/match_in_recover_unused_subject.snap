@@ -19,8 +19,10 @@ func (p P) String() string {
 
 func test() {
 	recoverResult_1 := lisette.RecoverBlock(func() struct{} {
-		_ = P{v: 1}
+		p := P{v: 1}
+		_ = p
 		return struct{}{}
 	})
-	_ = recoverResult_1
+	out := recoverResult_1
+	_ = out
 }

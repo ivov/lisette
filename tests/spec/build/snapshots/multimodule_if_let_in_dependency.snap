@@ -21,7 +21,8 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func UnwrapOrDefault(opt lisette.Option[int]) int {
 	if opt.Tag == lisette.OptionSome {
-		return opt.SomeVal
+		x := opt.SomeVal
+		return x
 	}
 	return 0
 }

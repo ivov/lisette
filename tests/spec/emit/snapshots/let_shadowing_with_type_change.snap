@@ -5,5 +5,6 @@ description: "input: \nfn test() -> string {\n  let x = 42;\n  let x = \"hello\"
 package main
 
 func test() string {
-	return "hello"
+	x := "hello"
+	return x
 }

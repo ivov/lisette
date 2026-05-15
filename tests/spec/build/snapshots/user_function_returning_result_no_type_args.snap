@@ -16,8 +16,10 @@ func parse_int(s string) (int, error) {
 func main() {
 	ret_1, ret_2 := parse_int("42")
 	if ret_2 == nil {
-		fmt.Println(ret_1)
+		n := ret_1
+		fmt.Println(n)
 	} else {
-		fmt.Println(ret_2)
+		e := ret_2
+		fmt.Println(e)
 	}
 }

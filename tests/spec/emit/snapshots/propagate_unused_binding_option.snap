@@ -12,7 +12,8 @@ func maybe() (int, bool) {
 
 func test() (struct{}, bool) {
 	option_1 := lisette.OptionFromCommaOk[int](maybe())
-	if option_1.Tag != lisette.OptionSome {
+	check_2 := option_1
+	if check_2.Tag != lisette.OptionSome {
 		return *new(struct{}), false
 	}
 	return struct{}{}, true

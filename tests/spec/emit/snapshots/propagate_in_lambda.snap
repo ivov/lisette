@@ -16,11 +16,13 @@ func test() int {
 		if check_1.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[int, string](check_1.ErrVal)
 		}
-		return lisette.MakeResultOk[int, string](check_1.OkVal + x)
+		v := check_1.OkVal
+		return lisette.MakeResultOk[int, string](v + x)
 	}
 	subject_2 := f(5)
 	if subject_2.Tag == lisette.ResultOk {
-		return subject_2.OkVal
+		n := subject_2.OkVal
+		return n
 	}
 	return -1
 }

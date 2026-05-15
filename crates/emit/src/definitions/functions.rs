@@ -5,7 +5,7 @@ use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use crate::placement::ValuePlace;
 use crate::types::native::NativeGoType;
-use crate::utils::{group_params, inline_trivial_bindings, receiver_name};
+use crate::utils::{group_params, receiver_name};
 use syntax::ast::{
     Annotation, Binding, Expression, FunctionDefinition, Generic, Pattern, Span, TypedPattern,
 };
@@ -149,7 +149,6 @@ impl Emitter<'_> {
             }
             this.emit_function_body(&mut body_string, body, should_return, &return_ctx);
         });
-        inline_trivial_bindings(&mut body_string, 0);
 
         self.scope.exit_isolated_function(frame);
 
@@ -295,7 +294,6 @@ impl Emitter<'_> {
                 signature
             },
         );
-        inline_trivial_bindings(&mut body, 0);
 
         let trimmed_body = body.trim_end();
         if trimmed_body.is_empty() {

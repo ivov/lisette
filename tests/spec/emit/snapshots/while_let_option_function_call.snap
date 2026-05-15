@@ -22,7 +22,8 @@ func test() {
 		option_2 := lisette.OptionFromCommaOk[int](next_item(i))
 		subject_1 := option_2
 		if subject_1.Tag == lisette.OptionSome {
-			fmt.Printf("Got: %v\n", subject_1.SomeVal)
+			x := subject_1.SomeVal
+			fmt.Printf("Got: %v\n", x)
 			i++
 		} else {
 			break

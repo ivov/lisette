@@ -15,5 +15,6 @@ func main() {
 	case ref_1 <- 1:
 	default:
 	}
-	_ = 2
+	ref_1_2 := 2
+	_ = ref_1_2
 }

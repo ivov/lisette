@@ -20,5 +20,6 @@ func bump(i *int) int {
 func main() {
 	i := 0
 	fs := []func(int) int{f0, f1}
-	_ = fs[i](bump(&i))
+	r := fs[i](bump(&i))
+	_ = r
 }

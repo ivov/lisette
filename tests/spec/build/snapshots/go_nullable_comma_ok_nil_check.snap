@@ -18,5 +18,6 @@ func main() {
 	} else {
 		option_3 = lisette.MakeOptionNone[*debug.BuildInfo]()
 	}
-	fmt.Print(option_3.IsSome())
+	info := option_3
+	fmt.Print(info.IsSome())
 }

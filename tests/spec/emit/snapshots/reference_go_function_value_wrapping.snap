@@ -8,5 +8,6 @@ import "strconv"
 
 func main() {
 	ref_1 := strconv.Atoi
-	_ = &ref_1
+	r := &ref_1
+	_ = r
 }

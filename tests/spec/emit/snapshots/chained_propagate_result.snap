@@ -14,5 +14,6 @@ func get_nested(outer lisette.Result[lisette.Result[int, string], string]) liset
 	if inner.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](inner.ErrVal)
 	}
-	return lisette.MakeResultOk[int, string](inner.OkVal)
+	val := inner.OkVal
+	return lisette.MakeResultOk[int, string](val)
 }

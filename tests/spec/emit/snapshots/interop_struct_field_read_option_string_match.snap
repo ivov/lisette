@@ -11,9 +11,11 @@ import (
 
 func main() {
 	bucket := aws.Bucket{}
-	option_3 := lisette.OptionFromPointer[string](bucket.Name)
+	raw_2 := bucket.Name
+	option_3 := lisette.OptionFromPointer[string](raw_2)
 	subject_1 := option_3
 	if subject_1.Tag == lisette.OptionSome {
-		_ = subject_1.SomeVal
+		name := subject_1.SomeVal
+		_ = name
 	}
 }

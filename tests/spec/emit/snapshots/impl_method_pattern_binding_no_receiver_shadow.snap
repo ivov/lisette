@@ -21,7 +21,8 @@ func (n Node) String() string {
 func (n Node) sum() int {
 	subject_1 := n.Next
 	if subject_1.Tag == lisette.OptionSome {
-		return n.Value + subject_1.SomeVal
+		n_2 := subject_1.SomeVal
+		return n.Value + n_2
 	}
 	return n.Value
 }

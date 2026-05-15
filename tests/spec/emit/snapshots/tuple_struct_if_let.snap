@@ -20,7 +20,9 @@ func (p Point) String() string {
 
 func test(p lisette.Option[Point]) int {
 	if p.Tag == lisette.OptionSome {
-		return p.SomeVal.F0 + p.SomeVal.F1
+		x := p.SomeVal.F0
+		y := p.SomeVal.F1
+		return x + y
 	}
 	return 0
 }
