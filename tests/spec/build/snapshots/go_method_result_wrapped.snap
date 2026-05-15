@@ -14,12 +14,13 @@ import (
 func main() {
 	reader := bufio.NewReader(strings.NewReader("hello\nworld"))
 	ret_1, ret_2 := reader.ReadString(10)
-	var line lisette.Result[string, error]
+	var result_3 lisette.Result[string, error]
 	if ret_2 != nil {
-		line = lisette.MakeResultErr[string, error](ret_2)
+		result_3 = lisette.MakeResultErr[string, error](ret_2)
 	} else {
-		line = lisette.MakeResultOk[string, error](ret_1)
+		result_3 = lisette.MakeResultOk[string, error](ret_1)
 	}
+	line := result_3
 	if line.Tag == lisette.ResultOk {
 		fmt.Print(line.OkVal)
 	} else {

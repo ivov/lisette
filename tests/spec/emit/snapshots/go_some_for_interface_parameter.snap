@@ -21,13 +21,13 @@ func main() {
 		unwrap_2 = opt_1.SomeVal
 	}
 	ret_3, ret_4 := http.NewRequest("POST", "https://example.com", unwrap_2)
-	var req lisette.Result[*http.Request, error]
+	var result_5 lisette.Result[*http.Request, error]
 	if ret_4 != nil {
-		req = lisette.MakeResultErr[*http.Request, error](ret_4)
+		result_5 = lisette.MakeResultErr[*http.Request, error](ret_4)
 	} else if ret_3 == nil {
-		req = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
+		result_5 = lisette.MakeResultErr[*http.Request, error](errors.New("unexpected nil"))
 	} else {
-		req = lisette.MakeResultOk[*http.Request, error](ret_3)
+		result_5 = lisette.MakeResultOk[*http.Request, error](ret_3)
 	}
-	fmt.Println(req)
+	fmt.Println(result_5)
 }

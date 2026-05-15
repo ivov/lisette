@@ -15,12 +15,13 @@ func make_() (func(string) (int, error), error) {
 
 func main() {
 	ret_1, ret_2 := make_()
-	var r lisette.Result[func(string) (int, error), error]
+	var result_3 lisette.Result[func(string) (int, error), error]
 	if ret_2 != nil {
-		r = lisette.MakeResultErr[func(string) (int, error), error](ret_2)
+		result_3 = lisette.MakeResultErr[func(string) (int, error), error](ret_2)
 	} else {
-		r = lisette.MakeResultOk[func(string) (int, error), error](ret_1)
+		result_3 = lisette.MakeResultOk[func(string) (int, error), error](ret_1)
 	}
+	r := result_3
 	if r.Tag == lisette.ResultOk {
 		ret_4, ret_5 := r.OkVal("1")
 		var result_6 lisette.Result[int, error]

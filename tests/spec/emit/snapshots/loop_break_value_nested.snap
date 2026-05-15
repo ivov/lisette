@@ -5,12 +5,15 @@ description: "input: \nfn test() -> int {\n  let x = loop {\n    let inner = loo
 package main
 
 func test() int {
+	var x int
 	for {
 		var inner int
 		for {
 			inner = 10
 			break
 		}
-		return inner + 1
+		x = inner + 1
+		break
 	}
+	return x
 }

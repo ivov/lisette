@@ -15,6 +15,7 @@ func nested() lisette.Result[int, string] {
 }
 
 func test() lisette.Result[lisette.Result[int, string], string] {
+	var r lisette.Result[lisette.Result[int, string], string]
 	tryResult_1 := func() lisette.Result[lisette.Result[int, string], string] {
 		check_2 := risky()
 		if check_2.Tag != lisette.ResultOk {
@@ -22,5 +23,6 @@ func test() lisette.Result[lisette.Result[int, string], string] {
 		}
 		return lisette.MakeResultOk[lisette.Result[int, string], string](nested())
 	}()
-	return tryResult_1
+	r = tryResult_1
+	return r
 }

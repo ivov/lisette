@@ -11,8 +11,11 @@ func test(cond1, cond2 bool) int {
 	} else {
 		x = 3
 	}
+	var x_1 int
 	if cond2 {
-		return x * 10
+		x_1 = x * 10
+	} else {
+		x_1 = x * 20
 	}
-	return x * 20
+	return x_1
 }

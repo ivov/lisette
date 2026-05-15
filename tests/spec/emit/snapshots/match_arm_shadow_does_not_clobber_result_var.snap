@@ -7,15 +7,22 @@ package main
 import "fmt"
 
 func test(x int) string {
+	var result string
 	subject_1 := x
+match_2:
 	for {
 		{
 			n := subject_1
 			if n < 10 {
 				result_3 := n * n
-				return fmt.Sprintf("small(%v)", result_3)
+				result = fmt.Sprintf("small(%v)", result_3)
+				break match_2
 			}
 		}
-		return "other"
+		{
+			result = "other"
+			break match_2
+		}
 	}
+	return result
 }

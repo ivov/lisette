@@ -13,12 +13,12 @@ func main() {
 	f := strconv.Atoi
 	go func() {
 		ret_1, ret_2 := f("42")
-		var r lisette.Result[int, error]
+		var result_3 lisette.Result[int, error]
 		if ret_2 != nil {
-			r = lisette.MakeResultErr[int, error](ret_2)
+			result_3 = lisette.MakeResultErr[int, error](ret_2)
 		} else {
-			r = lisette.MakeResultOk[int, error](ret_1)
+			result_3 = lisette.MakeResultOk[int, error](ret_1)
 		}
-		_ = r
+		_ = result_3
 	}()
 }

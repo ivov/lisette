@@ -11,12 +11,13 @@ import (
 
 func main() {
 	ret_2, ret_3 := legacy.Close()
-	var subject_1 lisette.Result[error, error]
+	var result_4 lisette.Result[error, error]
 	if ret_3 != nil {
-		subject_1 = lisette.MakeResultErr[error, error](ret_3)
+		result_4 = lisette.MakeResultErr[error, error](ret_3)
 	} else {
-		subject_1 = lisette.MakeResultOk[error, error](ret_2)
+		result_4 = lisette.MakeResultOk[error, error](ret_2)
 	}
+	subject_1 := result_4
 	if subject_1.Tag == lisette.ResultOk {
 		_ = subject_1.OkVal
 	} else {

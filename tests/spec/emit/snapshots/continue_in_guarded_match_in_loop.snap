@@ -18,7 +18,9 @@ loop_1:
 					break match_3
 				}
 			}
-			continue loop_1
+			{
+				continue loop_1
+			}
 		}
 	}
 	return sum

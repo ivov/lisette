@@ -26,12 +26,13 @@ func test() int {
 			return lisette.MakeResultOk[int, string](check_3.OkVal)
 		}()
 		inner = tryResult_2
-		var _left_7 int
+		var inner_val int
 		if inner.Tag == lisette.ResultOk {
-			_left_7 = inner.OkVal
+			inner_val = inner.OkVal
 		} else {
-			_left_7 = 0
+			inner_val = 0
 		}
+		_left_7 := inner_val
 		check_5 := risky_b()
 		if check_5.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[int, string](check_5.ErrVal)

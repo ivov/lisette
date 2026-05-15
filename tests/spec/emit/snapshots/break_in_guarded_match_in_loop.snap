@@ -18,7 +18,9 @@ loop_1:
 					break loop_1
 				}
 			}
-			break match_3
+			{
+				break match_3
+			}
 		}
 	}
 	return result

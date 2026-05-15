@@ -5,5 +5,7 @@ description: "input: \nfn test(s: Slice<int>) -> Slice<int> {\n  let x = { s.app
 package main
 
 func test(s []int) []int {
-	return append(s, 2)
+	var x []int
+	x = append(s, 2)
+	return x
 }

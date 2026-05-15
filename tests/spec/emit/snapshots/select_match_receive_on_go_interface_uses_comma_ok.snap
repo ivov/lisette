@@ -13,10 +13,12 @@ func drain(ch <-chan shapes.Shape) int {
 			asserted_2, ok_3 := recv_1.(shapes.Rect)
 			if ok_3 {
 				return asserted_2.W * asserted_2.H
+			} else {
+				return -1
 			}
+		} else {
 			return -1
 		}
-		return -1
 	}
 	panic("unreachable")
 }

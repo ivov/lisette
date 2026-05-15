@@ -5,5 +5,8 @@ description: "input: \nfn test() -> int {\n  let x | x = 42 else {\n    return 0
 package main
 
 func test() int {
-	return 42
+	subject_1 := 42
+	var x int
+	x = subject_1
+	return x
 }

@@ -9,10 +9,13 @@ import lisette "github.com/ivov/lisette/prelude"
 func use_value(_ int) {}
 
 func divide(a, b int) lisette.Result[int, string] {
+	var tmp_1 lisette.Result[int, string]
 	if b == 0 {
-		return lisette.MakeResultErr[int, string]("err")
+		tmp_1 = lisette.MakeResultErr[int, string]("err")
+	} else {
+		tmp_1 = lisette.MakeResultOk[int, string](a / b)
 	}
-	return lisette.MakeResultOk[int, string](a / b)
+	return tmp_1
 }
 
 func test() {

@@ -20,5 +20,7 @@ func test() int {
 	if subject_1 == 1 {
 		return 1
 	}
-	return 0
+	{
+		return 0
+	}
 }

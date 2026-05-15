@@ -17,12 +17,13 @@ func parse(s string) (int, error) {
 func process() (int, error) {
 	x := 42
 	ret_2, ret_3 := parse(fmt.Sprint(x))
-	var check_5 lisette.Result[int, error]
+	var result_4 lisette.Result[int, error]
 	if ret_3 != nil {
-		check_5 = lisette.MakeResultErr[int, error](ret_3)
+		result_4 = lisette.MakeResultErr[int, error](ret_3)
 	} else {
-		check_5 = lisette.MakeResultOk[int, error](ret_2)
+		result_4 = lisette.MakeResultOk[int, error](ret_2)
 	}
+	check_5 := result_4
 	if check_5.Tag != lisette.ResultOk {
 		return *new(int), check_5.ErrVal
 	}

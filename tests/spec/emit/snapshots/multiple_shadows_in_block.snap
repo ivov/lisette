@@ -6,8 +6,10 @@ package main
 
 func test() int {
 	x := 5
+	var tmp_1 int
 	{
 		x := x * 2
-		return x + 100
+		tmp_1 = x + 100
 	}
+	return tmp_1
 }

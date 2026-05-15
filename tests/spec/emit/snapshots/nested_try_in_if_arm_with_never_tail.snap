@@ -11,6 +11,7 @@ func die() struct{} {
 }
 
 func test(flag bool) lisette.Result[int, string] {
+	var tmp_1 lisette.Result[int, string]
 	if flag {
 		tryResult_2 := func() lisette.Result[int, string] {
 			check_3 := lisette.MakeResultOk[int, string](1)
@@ -20,7 +21,9 @@ func test(flag bool) lisette.Result[int, string] {
 			die()
 			panic("unreachable")
 		}()
-		return tryResult_2
+		tmp_1 = tryResult_2
+	} else {
+		tmp_1 = lisette.MakeResultOk[int, string](42)
 	}
-	return lisette.MakeResultOk[int, string](42)
+	return tmp_1
 }

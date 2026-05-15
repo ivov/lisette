@@ -12,9 +12,10 @@ func test() int {
 		case val, ok := <-ch_1:
 			if ok {
 				return val
+			} else {
+				ch_1 = nil
+				continue
 			}
-			ch_1 = nil
-			continue
 		default:
 			return 0
 		}

@@ -5,8 +5,11 @@ description: "input: \nfn test(cond: bool) -> int {\n  let x = 1;\n  let x = if 
 package main
 
 func test(cond bool) int {
+	var x int
 	if cond {
-		return 2
+		x = 2
+	} else {
+		x = 3
 	}
-	return 3
+	return x
 }

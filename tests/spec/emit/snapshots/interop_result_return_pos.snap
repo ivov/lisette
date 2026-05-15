@@ -16,12 +16,13 @@ func make_parser() func(string) (int, error) {
 func main() {
 	f := make_parser()
 	ret_1, ret_2 := f("42")
-	var r lisette.Result[int, error]
+	var result_3 lisette.Result[int, error]
 	if ret_2 != nil {
-		r = lisette.MakeResultErr[int, error](ret_2)
+		result_3 = lisette.MakeResultErr[int, error](ret_2)
 	} else {
-		r = lisette.MakeResultOk[int, error](ret_1)
+		result_3 = lisette.MakeResultOk[int, error](ret_1)
 	}
+	r := result_3
 	if r.Tag == lisette.ResultOk {
 		_ = r.OkVal
 	} else {

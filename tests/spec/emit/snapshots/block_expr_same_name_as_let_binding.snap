@@ -5,6 +5,10 @@ description: "input: \nfn test() -> int {\n  let result = {\n    let result = 42
 package main
 
 func test() int {
-	result := 42
-	return result * 2
+	var result_1 int
+	{
+		result := 42
+		result_1 = result * 2
+	}
+	return result_1
 }

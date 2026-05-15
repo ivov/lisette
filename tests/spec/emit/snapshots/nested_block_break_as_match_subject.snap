@@ -9,8 +9,10 @@ func test() {
 	for {
 		var tmp_2 int
 		{
-			tmp_1 = 1
-			break
+			{
+				tmp_1 = 1
+				break
+			}
 		}
 		_ = tmp_2
 	}

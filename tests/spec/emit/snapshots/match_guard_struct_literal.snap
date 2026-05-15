@@ -29,6 +29,8 @@ match_2:
 		}) {
 			break match_2
 		}
-		break match_2
+		{
+			break match_2
+		}
 	}
 }

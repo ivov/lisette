@@ -6,12 +6,16 @@ package main
 
 func test() int {
 	n := 0
+	var tmp_1 int
+loop_2:
 	for {
 		var tmp_3 int
 		if n == 5 {
-			return n
+			tmp_1 = n
+			break loop_2
 		}
 		tmp_3 = n + 1
 		n = tmp_3
 	}
+	return tmp_1
 }

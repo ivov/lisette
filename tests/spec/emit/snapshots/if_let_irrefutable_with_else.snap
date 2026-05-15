@@ -5,5 +5,7 @@ description: "input: \nfn test(x: int) -> int {\n  if let y = x {\n    y * 2\n  
 package main
 
 func test(x int) int {
-	return x * 2
+	{
+		return x * 2
+	}
 }

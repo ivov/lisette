@@ -25,6 +25,8 @@ match_2:
 		if false {
 			break match_2
 		}
-		break match_2
+		{
+			break match_2
+		}
 	}
 }

@@ -5,7 +5,7 @@ use crate::expressions::context::ExpressionContext;
 use crate::placement::BodyPlace;
 use crate::types::abi::AbiShape;
 use crate::types::abi_transition;
-use crate::utils::{inline_trivial_bindings, optimize_region};
+use crate::utils::inline_trivial_bindings;
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -403,9 +403,8 @@ impl Emitter<'_> {
         false
     }
 
-    /// Lowered ABI: push the return to each branch leaf so `Some(42)`
-    /// collapses to `return 42, true` directly. Tagged ABI keeps the
-    /// materialise-then-return shape so `optimize_region` can inline.
+    /// Lowered ABI pushes the return into each branch leaf; tagged ABI
+    /// builds a temp and returns it.
     fn emit_wrapped_branching_return(
         &mut self,
         output: &mut String,
@@ -443,7 +442,7 @@ impl Emitter<'_> {
         );
 
         write_line!(output, "return {}", temp_var);
-        optimize_region(output, pre_len, Some(&temp_var));
+        inline_trivial_bindings(output, pre_len);
     }
 
     pub(crate) fn emit_try_block(

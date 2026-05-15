@@ -5,7 +5,10 @@ description: "input: \nfn test() -> int {\n  let x = loop {\n    let x = 1\n    
 package main
 
 func test() int {
+	var x_1 int
 	for {
-		return 1
+		x_1 = 1
+		break
 	}
+	return x_1
 }

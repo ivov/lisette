@@ -62,7 +62,9 @@ func eval(e E) int {
 			return x
 		}
 	}
-	return 0
+	{
+		return 0
+	}
 }
 
 func test() {

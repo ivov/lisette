@@ -13,13 +13,13 @@ import (
 
 func main() {
 	ret_1, ret_2 := os.Open("/tmp/test.txt")
-	var result lisette.Result[*os.File, error]
+	var result_3 lisette.Result[*os.File, error]
 	if ret_2 != nil {
-		result = lisette.MakeResultErr[*os.File, error](ret_2)
+		result_3 = lisette.MakeResultErr[*os.File, error](ret_2)
 	} else if ret_1 == nil {
-		result = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
+		result_3 = lisette.MakeResultErr[*os.File, error](errors.New("unexpected nil"))
 	} else {
-		result = lisette.MakeResultOk[*os.File, error](ret_1)
+		result_3 = lisette.MakeResultOk[*os.File, error](ret_1)
 	}
-	fmt.Print(result.IsOk())
+	fmt.Print(result_3.IsOk())
 }

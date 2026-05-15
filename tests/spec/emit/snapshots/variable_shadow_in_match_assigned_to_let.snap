@@ -8,8 +8,11 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func test() int {
 	val := lisette.MakeOptionSome(42)
+	var result int
 	if val.Tag == lisette.OptionSome {
-		return val.SomeVal * 2
+		result = val.SomeVal * 2
+	} else {
+		result = 0
 	}
-	return 0
+	return result
 }

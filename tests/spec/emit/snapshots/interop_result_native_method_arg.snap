@@ -13,10 +13,13 @@ func main() {
 	xs := []string{"1"}
 	ys := lisette.SliceMap(xs, func(arg0 string) lisette.Result[int, error] {
 		ret_1, ret_2 := strconv.Atoi(arg0)
+		var result_3 lisette.Result[int, error]
 		if ret_2 != nil {
-			return lisette.MakeResultErr[int, error](ret_2)
+			result_3 = lisette.MakeResultErr[int, error](ret_2)
+		} else {
+			result_3 = lisette.MakeResultOk[int, error](ret_1)
 		}
-		return lisette.MakeResultOk[int, error](ret_1)
+		return result_3
 	})
 	subject_4 := ys[0]
 	if subject_4.Tag == lisette.ResultOk {

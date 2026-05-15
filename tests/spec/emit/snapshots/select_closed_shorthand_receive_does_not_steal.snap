@@ -16,9 +16,10 @@ func test() int {
 		case _, ok := <-ch_1:
 			if ok {
 				return 10
+			} else {
+				ch_1 = nil
+				continue
 			}
-			ch_1 = nil
-			continue
 		case sink <- 5:
 			return 20
 		default:
