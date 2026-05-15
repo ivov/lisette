@@ -15,8 +15,7 @@ func maybe_int(b bool) (int, bool) {
 
 func unwrap_or(o lisette.Option[int], fallback int) int {
 	if o.Tag == lisette.OptionSome {
-		v := o.SomeVal
-		return v
+		return o.SomeVal
 	}
 	return fallback
 }

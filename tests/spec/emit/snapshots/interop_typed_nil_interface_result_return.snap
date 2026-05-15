@@ -24,10 +24,8 @@ func main() {
 	}
 	info := result_3
 	if info.Tag == lisette.ResultOk {
-		i := info.OkVal
-		fmt.Println(i.Size())
+		fmt.Println(info.OkVal.Size())
 	} else {
-		e := info.ErrVal
-		fmt.Println(e)
+		fmt.Println(info.ErrVal)
 	}
 }

@@ -183,6 +183,34 @@ fn discard_if_unused(output: &mut String, pre_len: usize, var: &str) {
     }
 }
 
+/// If `var` is never referenced after the captured `tmp := <expr>\n` line,
+/// `finish` rewrites it to `_ = <expr>\n`. Otherwise the declaration stays.
+pub(crate) struct ValueTempDiscard {
+    decl_start: usize,
+    decl_end: usize,
+    var: String,
+    original_expr: String,
+}
+
+impl ValueTempDiscard {
+    pub(crate) fn new(output: &str, decl_start: usize, var: &str, original_expr: &str) -> Self {
+        Self {
+            decl_start,
+            decl_end: output.len(),
+            var: var.to_string(),
+            original_expr: original_expr.to_string(),
+        }
+    }
+
+    pub(crate) fn finish(self, output: &mut String) {
+        if output_references_var(&output[self.decl_end..], &self.var) {
+            return;
+        }
+        let replacement = format!("_ = {}\n", self.original_expr);
+        output.replace_range(self.decl_start..self.decl_end, &replacement);
+    }
+}
+
 /// Check if the output ends with a diverging statement (break/continue/return/panic).
 pub(crate) fn output_ends_with_diverge(output: &str) -> bool {
     output

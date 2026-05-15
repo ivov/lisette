@@ -19,7 +19,7 @@ func add(_, _ int) int {
 }
 
 func run() (int, error) {
-	_arg_6 := side()
+	_arg_5 := side()
 	ret_1, ret_2 := get_y()
 	var result_3 lisette.Result[int, error]
 	if ret_2 != nil {
@@ -31,6 +31,5 @@ func run() (int, error) {
 	if check_4.Tag != lisette.ResultOk {
 		return *new(int), check_4.ErrVal
 	}
-	result_5 := check_4.OkVal
-	return add(_arg_6, result_5), nil
+	return add(_arg_5, check_4.OkVal), nil
 }

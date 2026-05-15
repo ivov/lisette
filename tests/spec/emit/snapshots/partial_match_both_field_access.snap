@@ -11,10 +11,8 @@ func test(p lisette.Partial[int, string]) string {
 	case lisette.PartialOk:
 		return "ok"
 	case lisette.PartialErr:
-		e := p.ErrVal
-		return e
+		return p.ErrVal
 	default:
-		e := p.ErrVal
-		return e
+		return p.ErrVal
 	}
 }

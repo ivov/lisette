@@ -18,9 +18,8 @@ func f() lisette.Result[int, string] {
 	if check_1.Tag != lisette.ResultOk {
 		return lisette.MakeResultErr[int, string](check_1.ErrVal)
 	}
-	result_2 := check_1.OkVal
 	select {
-	case v, ok := <-result_2:
+	case v, ok := <-check_1.OkVal:
 		if ok {
 			x = v
 		} else {

@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::bindings::BindingValue;
 use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
@@ -115,11 +116,11 @@ impl Emitter<'_> {
                     | Literal::Char(_)
             ),
             Expression::Identifier { value, .. } => {
-                let resolved = self
-                    .scope
-                    .resolve_binding(value.as_str())
-                    .unwrap_or(value.as_str());
-                self.is_go_const_binding(resolved)
+                match self.scope.resolve_identifier_binding(value.as_str()) {
+                    Some(BindingValue::GoName(name)) => self.is_go_const_binding(name),
+                    Some(BindingValue::InlineExpr(_)) => false,
+                    None => self.is_go_const_binding(value.as_str()),
+                }
             }
             Expression::Binary { left, right, .. } => {
                 self.is_go_const_eligible(left) && self.is_go_const_eligible(right)

@@ -9,8 +9,7 @@ import lisette "github.com/ivov/lisette/prelude"
 func test(opt lisette.Option[int]) int {
 	var x int
 	if opt.Tag == lisette.OptionSome {
-		v := opt.SomeVal
-		x = v
+		x = opt.SomeVal
 	} else {
 		x = 0
 	}

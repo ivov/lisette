@@ -55,13 +55,10 @@ func test(e E) int {
 		}
 	}
 	if subject_1.Tag == EA {
-		x := subject_1.A
-		return x
+		return subject_1.A
 	}
 	if subject_1.Tag == EB {
-		x := subject_1.B
-		return x
+		return subject_1.B
 	}
-	x := subject_1.C
-	return x
+	return subject_1.C
 }

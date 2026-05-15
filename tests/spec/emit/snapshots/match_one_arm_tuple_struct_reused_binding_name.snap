@@ -27,15 +27,12 @@ func test() string {
 		F1: 2,
 	}
 	{
-		x := p.F0
-		y := p.F1
-		_ = x + y
+		_ = p.F0 + p.F1
 	}
 	n := Name("hello")
 	var b string
 	{
-		x := string(n)
-		b = x
+		b = string(n)
 	}
 	return b
 }

@@ -23,8 +23,7 @@ func main() {
 	}
 	for _, tag := range wrapped_3 {
 		if tag.Tag == lisette.OptionSome {
-			v := tag.SomeVal
-			_ = v
+			_ = tag.SomeVal
 		}
 	}
 }

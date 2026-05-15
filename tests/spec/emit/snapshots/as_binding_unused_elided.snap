@@ -17,7 +17,6 @@ func (p Point) String() string {
 
 func test(p Point) int {
 	{
-		x := p.x
-		return x
+		return p.x
 	}
 }

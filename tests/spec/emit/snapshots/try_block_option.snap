@@ -23,8 +23,7 @@ func test() int {
 	}()
 	opt = tryResult_1
 	if opt.Tag == lisette.OptionSome {
-		v := opt.SomeVal
-		return v
+		return opt.SomeVal
 	}
 	return 0
 }

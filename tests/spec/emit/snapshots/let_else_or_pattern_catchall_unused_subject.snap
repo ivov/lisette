@@ -5,6 +5,5 @@ description: "input: \nfn test() {\n  let _ | _ = 1 else {\n    panic(\"x\")\n  
 package main
 
 func test() {
-	subject_1 := 1
-	_ = subject_1
+	_ = 1
 }

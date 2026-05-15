@@ -44,12 +44,10 @@ func (e Either[L, R]) String() string {
 
 func (e Either[L, R]) display() string {
 	if e.Tag == EitherLeft {
-		l := e.Left
-		s := l.display()
+		s := e.Left.display()
 		return fmt.Sprintf("Left(%v)", s)
 	}
-	r := e.Right
-	s := r.display()
+	s := e.Right.display()
 	return fmt.Sprintf("Right(%v)", s)
 }
 

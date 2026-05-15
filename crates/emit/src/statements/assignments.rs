@@ -1,4 +1,5 @@
 use crate::Emitter;
+use crate::bindings::BindingValue;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::expressions::context::ExpressionContext;
 use crate::is_order_sensitive;
@@ -223,8 +224,9 @@ impl Emitter<'_> {
         let Expression::Identifier { value, .. } = target.unwrap_parens() else {
             return false;
         };
-        match self.scope.resolve_binding(value) {
-            Some(go_name) => go_name == "_",
+        match self.scope.resolve_identifier_binding(value) {
+            Some(BindingValue::GoName(go_name)) => go_name == "_",
+            Some(BindingValue::InlineExpr(_)) => false,
             None => value == "_",
         }
     }
@@ -334,7 +336,7 @@ impl Emitter<'_> {
         match expression {
             Expression::Identifier { value, .. } => self
                 .scope
-                .resolve_binding(value)
+                .resolve_binding_go_name(value)
                 .unwrap_or(value)
                 .to_string(),
             Expression::DotAccess {

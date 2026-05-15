@@ -16,9 +16,7 @@ func test(pair lisette.Tuple2[int, int]) string {
 		}
 	}
 	{
-		x := subject_1.First
-		y := subject_1.Second
-		if x > y {
+		if subject_1.First > subject_1.Second {
 			return "greater"
 		}
 	}

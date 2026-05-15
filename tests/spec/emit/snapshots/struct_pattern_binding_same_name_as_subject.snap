@@ -26,8 +26,6 @@ func test() int {
 	}
 	subject_1 := b
 	{
-		a := subject_1.a
-		b_2 := subject_1.b
-		return a + b_2
+		return subject_1.a + subject_1.b
 	}
 }

@@ -25,7 +25,6 @@ func test(p Point) int {
 		}
 	}
 	{
-		y := subject_1.F1
-		return y
+		return subject_1.F1
 	}
 }

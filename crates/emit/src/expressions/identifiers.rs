@@ -1,6 +1,7 @@
 use syntax::program::DefinitionBody;
 
 use crate::Emitter;
+use crate::bindings::BindingValue;
 use crate::expressions::context::ExpressionContext;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
@@ -28,6 +29,9 @@ impl Emitter<'_> {
         ty: &Type,
         ctx: ExpressionContext<'_>,
     ) -> String {
+        if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
+            return expr.as_str().to_string();
+        }
         match self.classify_identifier(value, ty, ctx) {
             IdentifierKind::UnitValue => "struct{}{}".to_string(),
             IdentifierKind::ValueEnumVariant { go_constant } => go_constant,
@@ -66,7 +70,7 @@ impl Emitter<'_> {
 
         let name = self
             .scope
-            .resolve_binding(value)
+            .resolve_binding_go_name(value)
             .unwrap_or(value)
             .to_string();
 
@@ -380,7 +384,7 @@ impl Emitter<'_> {
             return None;
         }
 
-        if self.scope.resolve_binding(name).is_some() {
+        if self.scope.resolve_identifier_binding(name).is_some() {
             return None;
         }
 

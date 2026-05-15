@@ -14,8 +14,7 @@ func handle(e events.Event, threshold int) int {
 		if x > threshold {
 			return x
 		}
-		x_2 := subject_1.X
-		return x_2 + 1
+		return subject_1.X + 1
 	default:
 		return 0
 	}

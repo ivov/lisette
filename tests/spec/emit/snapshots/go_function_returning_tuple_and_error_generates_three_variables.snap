@@ -20,12 +20,9 @@ func main() {
 	}
 	subject_1 := result_6
 	if subject_1.Tag == lisette.ResultOk {
-		host := subject_1.OkVal.First
-		port := subject_1.OkVal.Second
-		_ = host
-		_ = port
+		_ = subject_1.OkVal.First
+		_ = subject_1.OkVal.Second
 	} else {
-		e := subject_1.ErrVal
-		_ = e
+		_ = subject_1.ErrVal
 	}
 }

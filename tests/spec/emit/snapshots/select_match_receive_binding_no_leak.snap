@@ -20,8 +20,7 @@ func main() {
 	select {
 	case recv_2, ok := <-ch:
 		if ok {
-			x := recv_2
-			fmt.Println(x)
+			fmt.Println(recv_2)
 		}
 	default:
 		fmt.Println(x_1)

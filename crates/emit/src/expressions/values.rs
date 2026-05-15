@@ -1,6 +1,7 @@
 use syntax::program::DefinitionBody;
 
 use crate::Emitter;
+use crate::bindings::BindingValue;
 use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::is_order_sensitive;
@@ -606,16 +607,19 @@ impl Emitter<'_> {
             Expression::Identifier { value, ty, .. }
                 if !matches!(ty.unwrap_forall(), Type::Function { .. }) =>
             {
-                if self.scope.resolve_binding(value).is_some() {
-                    return false;
-                }
-                if let Type::Nominal { id, .. } = ty {
-                    matches!(
-                        self.facts.definition(id.as_str()).map(|d| &d.body),
-                        Some(DefinitionBody::Enum { .. })
-                    )
-                } else {
-                    false
+                match self.scope.resolve_identifier_binding(value) {
+                    Some(BindingValue::GoName(_)) => false,
+                    Some(BindingValue::InlineExpr(_)) => true,
+                    None => {
+                        if let Type::Nominal { id, .. } = ty {
+                            matches!(
+                                self.facts.definition(id.as_str()).map(|d| &d.body),
+                                Some(DefinitionBody::Enum { .. })
+                            )
+                        } else {
+                            false
+                        }
+                    }
                 }
             }
 

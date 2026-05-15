@@ -40,9 +40,7 @@ func (l List) String() string {
 
 func list_sum(l List) int {
 	if l.Tag == ListCons {
-		head := l.Cons0
-		tail := *l.Cons1
-		return head + list_sum(tail)
+		return l.Cons0 + list_sum((*l.Cons1))
 	}
 	return 0
 }

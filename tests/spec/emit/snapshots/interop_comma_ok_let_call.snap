@@ -14,8 +14,7 @@ func main() {
 	option_1 := lisette.OptionFromCommaOk[string](f("HOME"))
 	r := option_1
 	if r.Tag == lisette.OptionSome {
-		v := r.SomeVal
-		_ = v
+		_ = r.SomeVal
 	} else {
 	}
 }

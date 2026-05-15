@@ -1,9 +1,11 @@
 use crate::Emitter;
+use crate::bindings::BindingValue;
 use crate::expressions::context::ExpressionContext;
+use crate::patterns::bindings::pattern_binds_name;
 use crate::patterns::tree_emitter::TreeEmitter;
 use crate::placement::BodyPlace;
 use crate::types::abi::AbiShape;
-use crate::utils::DiscardGuard;
+use crate::utils::{DiscardGuard, ValueTempDiscard};
 use crate::write_line;
 use syntax::ast::{Expression, MatchArm, Pattern};
 
@@ -23,16 +25,20 @@ impl Emitter<'_> {
             return;
         }
         let subject_ty = subject.get_type();
-        let subject_var = self.emit_match_subject_var(output, subject, arms);
-        let guard = if matches!(subject, Expression::Literal { .. }) {
+        let (subject_var, value_guard) = self.emit_match_subject_var(output, subject, arms);
+        let plain_guard = if value_guard.is_some() || matches!(subject, Expression::Literal { .. })
+        {
             None
         } else {
             Some(DiscardGuard::new(output, &subject_var))
         };
         let tree_emitter = TreeEmitter::new(self, arms, subject_var, subject_ty);
         tree_emitter.emit(output, place);
-        if let Some(guard) = guard {
-            guard.finish(output);
+        if let Some(g) = value_guard {
+            g.finish(output);
+        }
+        if let Some(g) = plain_guard {
+            g.finish(output);
         }
     }
 
@@ -126,7 +132,7 @@ impl Emitter<'_> {
         output: &mut String,
         subject: &Expression,
         arms: &[MatchArm],
-    ) -> String {
+    ) -> (String, Option<ValueTempDiscard>) {
         let any_guard = arms.iter().any(|arm| arm.has_guard());
         if let Expression::Identifier { value, .. } = subject
             && !any_guard
@@ -134,20 +140,29 @@ impl Emitter<'_> {
             let name = value.to_string();
             let has_collision = arms
                 .iter()
-                .any(|arm| Emitter::pattern_binds_name(&arm.pattern, &name));
-            if !has_collision && !name.contains('.') {
-                return self.scope.resolve_or_escape(&name);
+                .any(|arm| pattern_binds_name(&arm.pattern, &name));
+            let bound_to_inline = matches!(
+                self.scope.resolve_identifier_binding(&name),
+                Some(BindingValue::InlineExpr(_))
+            );
+            if !has_collision && !name.contains('.') && !bound_to_inline {
+                return (self.scope.resolve_or_escape_go_name(&name), None);
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
-            return self.emit_operand(output, subject, ExpressionContext::value());
+            return (
+                self.emit_operand(output, subject, ExpressionContext::value()),
+                None,
+            );
         }
         let var = self.fresh_var(Some("subject"));
         self.declare(&var);
         let subject_expression =
             self.emit_composite_value(output, subject, ExpressionContext::value());
+        let decl_start = output.len();
         write_line!(output, "{} := {}", var, subject_expression);
-        var
+        let guard = ValueTempDiscard::new(output, decl_start, &var, &subject_expression);
+        (var, Some(guard))
     }
 }
 

@@ -10,9 +10,8 @@ func test() int {
 	val := lisette.MakeOptionSome(42)
 	var result int
 	if val.Tag == lisette.OptionSome {
-		x := val.SomeVal
-		x_1 := x * 2
-		result = x_1
+		x := val.SomeVal * 2
+		result = x
 	} else {
 		result = 0
 	}

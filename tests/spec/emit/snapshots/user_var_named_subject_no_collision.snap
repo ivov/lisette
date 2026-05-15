@@ -10,8 +10,7 @@ func test(opt lisette.Option[int]) int {
 	subject_1 := 42
 	var val int
 	if opt.Tag == lisette.OptionSome {
-		v := opt.SomeVal
-		val = v
+		val = opt.SomeVal
 	} else {
 		val = 0
 	}

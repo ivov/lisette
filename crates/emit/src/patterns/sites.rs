@@ -12,15 +12,18 @@ use syntax::ast::{Binding, Expression, MatchArm, Pattern, TypedPattern};
 use syntax::types::Type;
 
 use crate::Emitter;
+use crate::bindings::BindingValue;
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
+use crate::patterns::bindings::pattern_binds_name;
 use crate::patterns::decision_tree::{
     self, apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
-    emit_tree_assignments, emit_tree_bindings, render_condition,
+    drop_inline_overlays, emit_tree_assignments, emit_tree_bindings,
+    emit_tree_bindings_with_consumers, render_condition,
 };
 use crate::placement::BodyPlace;
-use crate::utils::DiscardGuard;
+use crate::utils::{DiscardGuard, ValueTempDiscard};
 use crate::write_line;
 
 /// How a pattern's subject value reaches the site.
@@ -56,7 +59,7 @@ impl<'a> PatternSubject<'a> {
 
 struct ResolvedSubject {
     var: String,
-    guard: Option<DiscardGuard>,
+    guard: Option<ValueTempDiscard>,
 }
 
 impl Emitter<'_> {
@@ -74,16 +77,21 @@ impl Emitter<'_> {
             } => {
                 if let Expression::Identifier { value, .. } = scrutinee
                     && !value.contains('.')
-                    && !Self::pattern_binds_name(pattern, value)
+                    && !pattern_binds_name(pattern, value)
+                    && !matches!(
+                        self.scope.resolve_identifier_binding(value),
+                        Some(BindingValue::InlineExpr(_))
+                    )
                 {
-                    let var = self.scope.resolve_or_escape(value);
+                    let var = self.scope.resolve_or_escape_go_name(value);
                     return ResolvedSubject { var, guard: None };
                 }
                 let var = self.fresh_var(temp_hint);
                 self.declare(&var);
                 let expression = self.emit_value(output, scrutinee, ExpressionContext::value());
+                let decl_start = output.len();
                 write_line!(output, "{} := {}", var, expression);
-                let guard = DiscardGuard::new(output, &var);
+                let guard = ValueTempDiscard::new(output, decl_start, &var, &expression);
                 ResolvedSubject {
                     var,
                     guard: Some(guard),
@@ -168,9 +176,13 @@ impl Emitter<'_> {
         output.push_str("for {\n");
 
         let inline_var = if let Expression::Identifier { value, .. } = scrutinee {
-            let has_collision = Self::pattern_binds_name(pattern, value);
-            if !has_collision && !value.contains('.') {
-                Some(self.scope.resolve_or_escape(value))
+            let has_collision = pattern_binds_name(pattern, value);
+            let bound_to_inline = matches!(
+                self.scope.resolve_identifier_binding(value),
+                Some(BindingValue::InlineExpr(_))
+            );
+            if !has_collision && !value.contains('.') && !bound_to_inline {
+                Some(self.scope.resolve_or_escape_go_name(value))
             } else {
                 None
             }
@@ -200,7 +212,7 @@ impl Emitter<'_> {
         self.enter_scope();
 
         if !matches!(pattern, Pattern::Or { .. }) {
-            emit_tree_bindings(self, output, &info.bindings, &effective);
+            emit_tree_bindings_with_consumers(self, output, &info.bindings, &effective, &[body]);
         }
 
         self.emit_block(output, body);
@@ -358,8 +370,10 @@ impl Emitter<'_> {
 
             self.emit_branch_header(output, &condition, false, i == 0);
 
-            emit_tree_bindings(self, output, &info.bindings, effective);
+            let overlays =
+                emit_tree_bindings_with_consumers(self, output, &info.bindings, effective, &[body]);
             self.emit_block(output, body);
+            drop_inline_overlays(self, &overlays);
         }
 
         self.emit_while_let_break_else(output);
@@ -440,14 +454,16 @@ impl Emitter<'_> {
         self.requirements.apply_effects(&info.effects);
         let (effective, ok_var) = apply_refutable_root_assertion(self, output, &info, subject_var);
         if info.checks.is_empty() && ok_var.is_none() {
-            emit_tree_bindings(self, output, &info.bindings, &effective);
+            emit_tree_bindings_with_consumers(self, output, &info.bindings, &effective, &[body]);
             self.emit_body_to_place(output, body, place);
             return;
         }
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
         write_line!(output, "if {} {{", condition);
-        emit_tree_bindings(self, output, &info.bindings, &effective);
+        let overlays =
+            emit_tree_bindings_with_consumers(self, output, &info.bindings, &effective, &[body]);
         self.emit_body_to_place(output, body, place);
+        drop_inline_overlays(self, &overlays);
         failure(self, output);
         output.push_str("}\n");
     }
@@ -532,7 +548,7 @@ impl Emitter<'_> {
                 let Some(go_name) = self.go_name_for_binding(pattern) else {
                     return ("_".to_string(), false);
                 };
-                if self.scope.resolve_binding(identifier).is_some() {
+                if self.scope.resolve_identifier_binding(identifier).is_some() {
                     return (self.fresh_var(Some("recv")), true);
                 }
                 (self.scope.bind(identifier, go_name), false)

@@ -22,8 +22,7 @@ func main() {
 	}
 	line := result_3
 	if line.Tag == lisette.ResultOk {
-		s := line.OkVal
-		fmt.Print(s)
+		fmt.Print(line.OkVal)
 	} else {
 		fmt.Print("error")
 	}

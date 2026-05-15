@@ -13,8 +13,7 @@ func apply(f func(string) (string, bool), key string) string {
 	option_2 := lisette.OptionFromCommaOk[string](f(key))
 	subject_1 := option_2
 	if subject_1.Tag == lisette.OptionSome {
-		v := subject_1.SomeVal
-		return v
+		return subject_1.SomeVal
 	}
 	return "unset"
 }

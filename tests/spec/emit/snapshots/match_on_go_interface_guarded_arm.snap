@@ -10,9 +10,7 @@ func handle(e events.Event, active bool) int {
 	subject_1 := e
 	switch subject_1 := subject_1.(type) {
 	case events.Click:
-		x := subject_1.X
-		y := subject_1.Y
-		return x + y
+		return subject_1.X + subject_1.Y
 	case events.KeyPress:
 		if active {
 			return -1

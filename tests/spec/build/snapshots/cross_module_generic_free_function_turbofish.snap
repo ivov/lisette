@@ -54,10 +54,8 @@ import (
 func main() {
 	r := lib.Ok2[int, string](42)
 	if r.Tag == lib.Result2Ok2 {
-		v := r.Ok2
-		fmt.Println(v)
+		fmt.Println(r.Ok2)
 	} else {
-		e := r.Err2
-		fmt.Println(e)
+		fmt.Println(r.Err2)
 	}
 }

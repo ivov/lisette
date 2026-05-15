@@ -44,8 +44,7 @@ func main() {
 	elts := wrapped_9
 	for _, elt := range elts {
 		if elt.Tag == lisette.OptionSome {
-			e := elt.SomeVal
-			fmt.Println(e.Pos())
+			fmt.Println(elt.SomeVal.Pos())
 		} else {
 			fmt.Println("nil")
 		}

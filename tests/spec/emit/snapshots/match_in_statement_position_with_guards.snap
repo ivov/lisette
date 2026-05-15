@@ -15,12 +15,11 @@ func test() {
 match_2:
 	for {
 		if subject_1.Tag == lisette.ResultOk {
-			n := subject_1.OkVal
-			if n > 0 {
-				fmt.Printf("positive: %v\n", n)
+			if subject_1.OkVal > 0 {
+				fmt.Printf("positive: %v\n", subject_1.OkVal)
 				break match_2
 			}
-			fmt.Printf("non-positive: %v\n", n)
+			fmt.Printf("non-positive: %v\n", subject_1.OkVal)
 			break match_2
 		}
 		e := subject_1.ErrVal

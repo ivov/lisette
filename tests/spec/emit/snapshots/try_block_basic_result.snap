@@ -17,13 +17,11 @@ func test() int {
 		if check_2.Tag != lisette.ResultOk {
 			return lisette.MakeResultErr[int, string](check_2.ErrVal)
 		}
-		result_3 := check_2.OkVal
-		return lisette.MakeResultOk[int, string](result_3)
+		return lisette.MakeResultOk[int, string](check_2.OkVal)
 	}()
 	result = tryResult_1
 	if result.Tag == lisette.ResultOk {
-		x := result.OkVal
-		return x
+		return result.OkVal
 	}
 	return 0
 }

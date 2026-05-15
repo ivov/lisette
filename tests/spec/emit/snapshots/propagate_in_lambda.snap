@@ -21,8 +21,7 @@ func test() int {
 	}
 	subject_2 := f(5)
 	if subject_2.Tag == lisette.ResultOk {
-		n := subject_2.OkVal
-		return n
+		return subject_2.OkVal
 	}
 	return -1
 }

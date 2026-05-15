@@ -14,7 +14,6 @@ func (u UserId) String() string {
 
 func test(uid UserId) int {
 	{
-		id := int(uid)
-		return id
+		return int(uid)
 	}
 }

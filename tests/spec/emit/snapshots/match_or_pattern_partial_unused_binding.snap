@@ -51,11 +51,9 @@ func (e E) String() string {
 func eval(e E) int {
 	switch e.Tag {
 	case EA:
-		x := e.A.First
-		return x
+		return e.A.First
 	case EB:
-		x := e.B.First
-		return x
+		return e.B.First
 	default:
 		return 0
 	}

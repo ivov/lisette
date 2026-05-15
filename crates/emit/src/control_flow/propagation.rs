@@ -65,15 +65,6 @@ impl Emitter<'_> {
             self.hoist_tmp_value(output, "check", &expression_string)
         };
 
-        let (result_var, result_var_pre_declared) = match result_var_name {
-            Some(name) => (name.to_string(), self.is_declared(name)),
-            None => {
-                let v = self.fresh_var(Some("result"));
-                self.declare(&v);
-                (v, false)
-            }
-        };
-
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
 
         if let Some(shape) = return_ctx.lowered_shape() {
@@ -107,19 +98,21 @@ impl Emitter<'_> {
             );
         }
 
-        if result_var != "_" {
-            let op = if result_var_pre_declared { "=" } else { ":=" };
-            write_line!(
-                output,
-                "{} {} {}.{}",
-                result_var,
-                op,
-                check_var,
-                fallible.ok_field()
-            );
-        }
+        let ok_access = format!("{}.{}", check_var, fallible.ok_field());
 
-        result_var
+        match result_var_name {
+            None => ok_access,
+            Some("_") => "_".to_string(),
+            Some(name) => {
+                let pre_declared = self.is_declared(name);
+                let op = if pre_declared { "=" } else { ":=" };
+                write_line!(output, "{} {} {}", name, op, ok_access);
+                if !pre_declared {
+                    self.declare(name);
+                }
+                name.to_string()
+            }
+        }
     }
     pub(crate) fn emit_propagate_to_let(
         &mut self,

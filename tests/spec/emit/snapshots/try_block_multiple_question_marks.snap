@@ -31,8 +31,7 @@ func test() int {
 	}()
 	result = tryResult_1
 	if result.Tag == lisette.ResultOk {
-		sum := result.OkVal
-		return sum
+		return result.OkVal
 	}
 	return 0
 }

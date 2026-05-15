@@ -10,16 +10,14 @@ func test() int {
 	res1 := lisette.MakeResultOk[int, string](5)
 	var x1 int
 	if res1.Tag == lisette.ResultOk {
-		v := res1.OkVal
-		x1 = v
+		x1 = res1.OkVal
 	} else {
 		x1 = 0
 	}
 	res2 := lisette.MakeResultOk[int, string](10)
 	var x2 int
 	if res2.Tag == lisette.ResultOk {
-		v := res2.OkVal
-		x2 = v
+		x2 = res2.OkVal
 	} else {
 		x2 = 0
 	}

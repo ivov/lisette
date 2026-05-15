@@ -14,8 +14,7 @@ func categorize(items []int) string {
 	if n == 1 {
 		return "single"
 	}
-	n_2 := subject_1
-	if n_2 <= 3 {
+	if subject_1 <= 3 {
 		return "few"
 	}
 	return "many"

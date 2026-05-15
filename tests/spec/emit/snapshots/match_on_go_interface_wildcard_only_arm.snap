@@ -9,9 +9,7 @@ import "example.com/events"
 func handle(e events.Event) int {
 	switch e := e.(type) {
 	case events.Click:
-		x := e.X
-		y := e.Y
-		return x + y
+		return e.X + e.Y
 	case events.KeyPress:
 		return -1
 	case events.Resize:

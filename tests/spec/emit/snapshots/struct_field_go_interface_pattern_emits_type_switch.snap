@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/patterns.rs
-assertion_line: 1226
 description: "input: \nimport \"go:example.com/events\"\n\nstruct Box {\n  e: events.Event,\n}\n\nfn describe(b: Box) -> int {\n  match b {\n    Box { e: events.Token(s) } => s.length(),\n    _ => 0,\n  }\n}\n"
 ---
 package main
@@ -20,8 +19,7 @@ func (b Box) String() string {
 
 func describe(b Box) int {
 	if func() bool { _, ok := b.e.(events.Token); return ok }() {
-		s := string(b.e.(events.Token))
-		return len(s)
+		return len(string(b.e.(events.Token)))
 	}
 	return 0
 }

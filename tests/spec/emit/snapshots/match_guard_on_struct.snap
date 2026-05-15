@@ -25,9 +25,7 @@ func test(p Point) string {
 		}
 	}
 	{
-		x := subject_1.x
-		y := subject_1.y
-		if x > y {
+		if subject_1.x > subject_1.y {
 			return "above"
 		}
 	}

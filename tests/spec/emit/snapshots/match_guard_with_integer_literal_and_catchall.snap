@@ -12,8 +12,7 @@ func main() {
 	match_2:
 		for {
 			{
-				d := subject_1
-				if d < 5 {
+				if subject_1 < 5 {
 					fmt.Println("low")
 					break match_2
 				}

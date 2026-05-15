@@ -12,9 +12,7 @@ func drain(ch <-chan shapes.Shape) int {
 		if ok {
 			asserted_2, ok_3 := recv_1.(shapes.Rect)
 			if ok_3 {
-				w := asserted_2.W
-				h := asserted_2.H
-				return w * h
+				return asserted_2.W * asserted_2.H
 			} else {
 				return -1
 			}

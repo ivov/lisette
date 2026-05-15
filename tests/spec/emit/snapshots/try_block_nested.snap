@@ -23,29 +23,25 @@ func test() int {
 			if check_3.Tag != lisette.ResultOk {
 				return lisette.MakeResultErr[int, string](check_3.ErrVal)
 			}
-			result_4 := check_3.OkVal
-			return lisette.MakeResultOk[int, string](result_4)
+			return lisette.MakeResultOk[int, string](check_3.OkVal)
 		}()
 		inner = tryResult_2
 		var inner_val int
 		if inner.Tag == lisette.ResultOk {
-			x := inner.OkVal
-			inner_val = x
+			inner_val = inner.OkVal
 		} else {
 			inner_val = 0
 		}
-		_left_7 := inner_val
-		check_5 := risky_b()
-		if check_5.Tag != lisette.ResultOk {
-			return lisette.MakeResultErr[int, string](check_5.ErrVal)
+		_left_5 := inner_val
+		check_4 := risky_b()
+		if check_4.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, string](check_4.ErrVal)
 		}
-		result_6 := check_5.OkVal
-		return lisette.MakeResultOk[int, string](_left_7 + result_6)
+		return lisette.MakeResultOk[int, string](_left_5 + check_4.OkVal)
 	}()
 	outer = tryResult_1
 	if outer.Tag == lisette.ResultOk {
-		x := outer.OkVal
-		return x
+		return outer.OkVal
 	}
 	return -1
 }

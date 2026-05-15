@@ -2,6 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Bindings;
+use crate::bindings::{BindingValue, InlineExpr};
 use crate::types::emitter::LoopContext;
 
 pub(crate) struct ScopeState {
@@ -15,7 +16,7 @@ pub(crate) struct ScopeState {
 }
 
 pub(crate) struct BindingSnapshot {
-    inner: HashMap<String, String>,
+    inner: HashMap<String, BindingValue>,
 }
 
 pub(crate) struct IsolatedFunctionFrame {
@@ -49,18 +50,31 @@ impl ScopeState {
         lisette_name: impl Into<String>,
         go_name: impl Into<String>,
     ) -> String {
-        self.bindings.add(lisette_name, go_name)
+        self.bindings.bind_go_name(lisette_name, go_name)
     }
 
-    pub(crate) fn resolve_binding(&self, lisette_name: &str) -> Option<&str> {
+    pub(crate) fn bind_inline_expr(&mut self, lisette_name: impl Into<String>, expr: InlineExpr) {
+        self.bindings.bind_inline_expr(lisette_name, expr);
+    }
+
+    pub(crate) fn remove_binding(&mut self, lisette_name: &str) {
+        self.bindings.remove(lisette_name);
+    }
+
+    pub(crate) fn resolve_identifier_binding(&self, lisette_name: &str) -> Option<&BindingValue> {
         self.bindings.get(lisette_name)
     }
 
-    /// Resolved Go name for `lisette_name`, falling back to the
-    /// keyword-escaped form when unbound.
-    pub(crate) fn resolve_or_escape(&self, lisette_name: &str) -> String {
+    pub(crate) fn resolve_binding_go_name(&self, lisette_name: &str) -> Option<&str> {
+        self.bindings.get_go_name(lisette_name)
+    }
+
+    /// Falls back to the keyword-escaped form when the name is unbound or
+    /// bound to an inline expression — callers needing a usable local Go
+    /// identifier must materialize a fresh temp in that case.
+    pub(crate) fn resolve_or_escape_go_name(&self, lisette_name: &str) -> String {
         self.bindings
-            .get(lisette_name)
+            .get_go_name(lisette_name)
             .map(String::from)
             .unwrap_or_else(|| crate::escape_reserved(lisette_name).into_owned())
     }

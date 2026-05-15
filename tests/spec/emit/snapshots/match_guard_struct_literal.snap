@@ -20,8 +20,7 @@ func main() {
 		x: 1,
 		y: 2,
 	}
-	subject_1 := p
-	_ = subject_1
+	_ = p
 match_2:
 	for {
 		if (p == Point{

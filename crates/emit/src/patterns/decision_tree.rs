@@ -82,6 +82,17 @@ impl AccessPath {
         }
         result
     }
+
+    /// Like `render`, but a tail-`Deref` is parenthesized so the result is
+    /// safe to embed as a selector receiver, index target, or call callee.
+    pub(crate) fn render_composable(&self, subject: &str) -> String {
+        let rendered = self.render(subject);
+        if matches!(self.segments.last(), Some(PathSegment::Deref)) {
+            format!("({})", rendered)
+        } else {
+            rendered
+        }
+    }
 }
 
 /// A single runtime check that must be true for a pattern to match.
@@ -1612,13 +1623,23 @@ pub(super) fn render_condition(checks: &[Check], subject_var: &str) -> String {
     conditions.join(" && ")
 }
 
-/// Emit bindings as Go `:=` declarations.
 pub(crate) fn emit_tree_bindings(
     emitter: &mut Emitter,
     output: &mut String,
     bindings: &[PatternBinding],
     subject_var: &str,
 ) {
+    emit_tree_bindings_with_consumers(emitter, output, bindings, subject_var, &[]);
+}
+
+pub(crate) fn emit_tree_bindings_with_consumers(
+    emitter: &mut Emitter,
+    output: &mut String,
+    bindings: &[PatternBinding],
+    subject_var: &str,
+    consumers: &[&syntax::ast::Expression],
+) -> Vec<(String, Option<crate::bindings::BindingValue>)> {
+    let mut installed_inlines = Vec::new();
     for binding in bindings {
         let Some(ref go_name) = binding.go_name else {
             emitter.scope.bind(&binding.lisette_name, "");
@@ -1626,6 +1647,23 @@ pub(crate) fn emit_tree_bindings(
         };
 
         let access_expression = binding.path.render(subject_var);
+
+        if !consumers.is_empty()
+            && crate::inline_uses::analyze_inline_candidate(&binding.lisette_name, consumers)
+                == crate::inline_uses::InlineDecision::Inline
+        {
+            let previous = emitter
+                .scope
+                .resolve_identifier_binding(&binding.lisette_name)
+                .cloned();
+            let safe_text = binding.path.render_composable(subject_var);
+            emitter.scope.bind_inline_expr(
+                &binding.lisette_name,
+                crate::bindings::InlineExpr::new(safe_text),
+            );
+            installed_inlines.push((binding.lisette_name.clone(), previous));
+            continue;
+        }
 
         if emitter.scope.has_binding_for_go_name(go_name) {
             let fresh = emitter.fresh_var(Some(&binding.lisette_name));
@@ -1641,6 +1679,26 @@ pub(crate) fn emit_tree_bindings(
                 emitter.scope.bind(&binding.lisette_name, &fresh);
                 emitter.try_declare(&fresh);
                 write_line!(output, "{} := {}", fresh, access_expression);
+            }
+        }
+    }
+    installed_inlines
+}
+
+pub(crate) fn drop_inline_overlays(
+    emitter: &mut Emitter,
+    installed: &[(String, Option<crate::bindings::BindingValue>)],
+) {
+    for (name, previous) in installed {
+        match previous {
+            Some(crate::bindings::BindingValue::GoName(go)) => {
+                emitter.scope.bind(name.as_str(), go.as_str());
+            }
+            Some(crate::bindings::BindingValue::InlineExpr(expr)) => {
+                emitter.scope.bind_inline_expr(name.as_str(), expr.clone());
+            }
+            None => {
+                emitter.scope.remove_binding(name);
             }
         }
     }
@@ -1660,8 +1718,9 @@ pub(super) fn emit_tree_assignments(
             continue;
         }
 
-        // Only assign to variables that were pre-declared
-        let Some(registered_name) = emitter.scope.resolve_binding(&binding.lisette_name) else {
+        // Only assign to variables that were pre-declared as Go names
+        let Some(registered_name) = emitter.scope.resolve_binding_go_name(&binding.lisette_name)
+        else {
             continue;
         };
         let name = registered_name.to_string();

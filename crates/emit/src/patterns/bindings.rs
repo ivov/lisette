@@ -93,6 +93,26 @@ pub(crate) fn is_unconditional_catchall(pattern: &Pattern) -> bool {
     }
 }
 
+pub(crate) fn pattern_binds_name(pattern: &Pattern, name: &str) -> bool {
+    match pattern {
+        Pattern::Identifier { identifier, .. } => identifier == name,
+        Pattern::Tuple { elements, .. } => elements.iter().any(|e| pattern_binds_name(e, name)),
+        Pattern::EnumVariant { fields, .. } => fields.iter().any(|f| pattern_binds_name(f, name)),
+        Pattern::Struct { fields, .. } => fields.iter().any(|f| pattern_binds_name(&f.value, name)),
+        Pattern::Slice { prefix, rest, .. } => {
+            prefix.iter().any(|e| pattern_binds_name(e, name))
+                || matches!(rest, RestPattern::Bind { name: n, .. } if n == name)
+        }
+        Pattern::Or { patterns, .. } => patterns.iter().any(|p| pattern_binds_name(p, name)),
+        Pattern::AsBinding {
+            pattern,
+            name: as_name,
+            ..
+        } => as_name == name || pattern_binds_name(pattern, name),
+        Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
+    }
+}
+
 impl Emitter<'_> {
     pub(crate) fn pattern_has_bindings(pattern: &Pattern) -> bool {
         match pattern {
@@ -108,34 +128,6 @@ impl Emitter<'_> {
             }
             Pattern::Or { patterns, .. } => patterns.iter().any(Self::pattern_has_bindings),
             Pattern::AsBinding { .. } => true,
-            Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
-        }
-    }
-
-    pub(crate) fn pattern_binds_name(pattern: &Pattern, name: &str) -> bool {
-        match pattern {
-            Pattern::Identifier { identifier, .. } => identifier == name,
-            Pattern::Tuple { elements, .. } => {
-                elements.iter().any(|e| Self::pattern_binds_name(e, name))
-            }
-            Pattern::EnumVariant { fields, .. } => {
-                fields.iter().any(|f| Self::pattern_binds_name(f, name))
-            }
-            Pattern::Struct { fields, .. } => fields
-                .iter()
-                .any(|f| Self::pattern_binds_name(&f.value, name)),
-            Pattern::Slice { prefix, rest, .. } => {
-                prefix.iter().any(|e| Self::pattern_binds_name(e, name))
-                    || matches!(rest, RestPattern::Bind { name: n, .. } if n == name)
-            }
-            Pattern::Or { patterns, .. } => {
-                patterns.iter().any(|p| Self::pattern_binds_name(p, name))
-            }
-            Pattern::AsBinding {
-                pattern,
-                name: as_name,
-                ..
-            } => as_name == name || Self::pattern_binds_name(pattern, name),
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
         }
     }

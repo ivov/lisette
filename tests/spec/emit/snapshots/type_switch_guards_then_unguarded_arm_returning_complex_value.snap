@@ -18,8 +18,7 @@ func handle(e events.Event) (int, bool) {
 		if x_2 > 0 {
 			return x_2, true
 		}
-		x_3 := subject_1.X
-		return -x_3, true
+		return -subject_1.X, true
 	default:
 		return *new(int), false
 	}

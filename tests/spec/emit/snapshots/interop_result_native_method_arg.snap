@@ -23,8 +23,7 @@ func main() {
 	})
 	subject_4 := ys[0]
 	if subject_4.Tag == lisette.ResultOk {
-		v := subject_4.OkVal
-		_ = v
+		_ = subject_4.OkVal
 	} else {
 	}
 }

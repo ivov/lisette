@@ -15,8 +15,7 @@ func main() {
 	pos := option_2
 	var tmp_3 int
 	if pos.Tag == lisette.OptionSome {
-		i := pos.SomeVal
-		tmp_3 = i
+		tmp_3 = pos.SomeVal
 	} else {
 		tmp_3 = -2
 	}

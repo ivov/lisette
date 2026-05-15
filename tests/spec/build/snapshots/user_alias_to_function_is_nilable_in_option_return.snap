@@ -19,8 +19,7 @@ func maybe_get() Callback {
 
 func run(cb lisette.Option[Callback]) int {
 	if cb.Tag == lisette.OptionSome {
-		f := cb.SomeVal
-		return f()
+		return cb.SomeVal()
 	}
 	return -1
 }

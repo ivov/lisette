@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/patterns.rs
-assertion_line: 1184
 description: "input: \nimport \"go:example.com/events\"\n\nfn describe(e: events.Event) -> int {\n  match e {\n    events.Token(s) => s.length(),\n    _ => 0,\n  }\n}\n"
 ---
 package main
@@ -10,8 +9,7 @@ import "example.com/events"
 func describe(e events.Event) int {
 	switch e := e.(type) {
 	case events.Token:
-		s := string(e)
-		return len(s)
+		return len(string(e))
 	default:
 		return 0
 	}

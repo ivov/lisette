@@ -1,10 +1,14 @@
-use syntax::ast::MatchArm;
+use syntax::ast::{Expression, MatchArm};
 use syntax::types::Type;
 
 use crate::Emitter;
+use crate::bindings::{BindingValue, InlineExpr};
 use crate::control_flow::branching::wrap_if_struct_literal;
 use crate::expressions::context::ExpressionContext;
-use crate::patterns::decision_tree::{Decision, compile_expanded_arms, expand_or_patterns};
+use crate::inline_uses::{InlineDecision, analyze_inline_candidate, region_blocks_inline};
+use crate::patterns::decision_tree::{
+    Decision, compile_expanded_arms, drop_inline_overlays, expand_or_patterns,
+};
 use crate::patterns::emit_plan::{
     ChainPlan, EmitBinding, EmitCase, EmitChainTest, EmitDecision, MatchEmitPlan, RetryLoopPlan,
     SingleCatchallPlan, is_empty_emit_decision, lower_match,
@@ -152,7 +156,8 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
             self.emitter.enter_scope();
         }
 
-        self.emit_bindings(output, &plan.bindings);
+        let arm_body = &*self.arms[plan.arm_index].expression;
+        self.emit_bindings(output, &plan.bindings, &[arm_body], None);
         self.emit_arm_body(output, plan.arm_index, place);
 
         if needs_block {
@@ -178,8 +183,10 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 bindings,
                 ..
             } => {
-                self.emit_bindings(output, bindings);
+                let arm_body = &*self.arms[*arm_index].expression;
+                let inlines = self.emit_bindings(output, bindings, &[arm_body], None);
                 self.emit_arm_body(output, *arm_index, place);
+                self.drop_inline_bindings(&inlines);
             }
             EmitDecision::Chain {
                 tests,
@@ -285,9 +292,11 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                     output.push_str("{\n");
                     self.emitter.enter_scope();
                 }
-                self.emit_bindings(output, bindings);
+                let arm_body = &*self.arms[*arm_index].expression;
+                let inlines = self.emit_bindings(output, bindings, &[arm_body], None);
                 self.emit_arm_body(output, *arm_index, ctx.arm_place);
                 self.apply_leaf_terminator(output, ctx);
+                self.drop_inline_bindings(&inlines);
                 if wrap {
                     self.emitter.exit_scope();
                     output.push_str("}\n");
@@ -304,15 +313,26 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                     output.push_str("{\n");
                     self.emitter.enter_scope();
                 }
-                self.emit_bindings(output, bindings);
+                let arm = &self.arms[*arm_index];
+                let arm_guard = arm.guard.as_deref();
+                let arm_body = &*arm.expression;
+                let mut guard_consumers: Vec<&Expression> = Vec::with_capacity(2);
+                if let Some(g) = arm_guard {
+                    guard_consumers.push(g);
+                }
+                guard_consumers.push(arm_body);
+                let inlines = self.emit_bindings(output, bindings, &guard_consumers, Some(failure));
                 if self.emit_guard_header(output, *arm_index) {
                     self.walk(output, success, &ctx.nested());
                     self.emitter.exit_scope();
+                    self.drop_inline_bindings(&inlines);
                     if ctx.role == WalkRole::SwitchCase {
                         self.walk_else_or_flat(output, failure, ctx);
                     } else {
                         output.push_str("}\n");
                     }
+                } else {
+                    self.drop_inline_bindings(&inlines);
                 }
                 if needs_pre_scope {
                     self.emitter.exit_scope();
@@ -557,11 +577,33 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         tests: &[EmitChainTest],
         ctx: &WalkCtx,
     ) {
+        let mut inlines: Vec<(String, Option<BindingValue>)> = Vec::new();
         if let Some(&ref_idx) = indices
             .iter()
             .find(|&&idx| !decision_top_bindings(&tests[idx].decision).is_empty())
         {
-            self.emit_bindings(output, decision_top_bindings(&tests[ref_idx].decision));
+            let mut consumers: Vec<&Expression> = Vec::new();
+            for &idx in indices {
+                let decision = &*tests[idx].decision;
+                let arm_index = match decision {
+                    EmitDecision::Success { arm_index, .. }
+                    | EmitDecision::Guard { arm_index, .. } => Some(*arm_index),
+                    _ => None,
+                };
+                if let Some(arm_index) = arm_index {
+                    let arm = &self.arms[arm_index];
+                    if let Some(g) = arm.guard.as_deref() {
+                        consumers.push(g);
+                    }
+                    consumers.push(&arm.expression);
+                }
+            }
+            inlines = self.emit_bindings(
+                output,
+                decision_top_bindings(&tests[ref_idx].decision),
+                &consumers,
+                None,
+            );
         }
         for &test_idx in indices {
             match &*tests[test_idx].decision {
@@ -580,6 +622,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 _ => self.walk(output, &tests[test_idx].decision, ctx),
             }
         }
+        self.drop_inline_bindings(&inlines);
     }
 
     fn emit_chain_group_per_test(
@@ -605,13 +648,57 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         }
     }
 
-    fn emit_bindings(&mut self, output: &mut String, bindings: &[EmitBinding]) {
+    /// Returns the per-name (Lisette name, previous binding) pairs that were
+    /// replaced by an inline substitution. Pass to `drop_inline_bindings` to
+    /// roll back exactly the inline overlays without affecting Go-name
+    /// bindings emitted in the same call.
+    fn emit_bindings(
+        &mut self,
+        output: &mut String,
+        bindings: &[EmitBinding],
+        consumers: &[&Expression],
+        failure_blocker: Option<&EmitDecision>,
+    ) -> Vec<(String, Option<BindingValue>)> {
+        let failure_trees: Vec<&Expression> = match failure_blocker {
+            Some(failure) => {
+                let mut reached: Vec<usize> = Vec::new();
+                collect_reachable_arms(failure, &mut reached);
+                let mut trees: Vec<&Expression> = Vec::with_capacity(reached.len() * 2);
+                for idx in reached {
+                    let arm = &self.arms[idx];
+                    if let Some(guard) = arm.guard.as_ref() {
+                        trees.push(guard);
+                    }
+                    trees.push(&arm.expression);
+                }
+                trees
+            }
+            None => Vec::new(),
+        };
+
+        let mut installed_inlines: Vec<(String, Option<BindingValue>)> = Vec::new();
         for binding in bindings {
             let Some(ref go_name) = binding.go_name else {
                 self.emitter.scope.bind(&binding.lisette_name, "");
                 continue;
             };
             let access_expression = &binding.rendered_access;
+
+            let previous = self
+                .emitter
+                .scope
+                .resolve_identifier_binding(&binding.lisette_name)
+                .cloned();
+            if self.try_inline_binding(
+                &binding.lisette_name,
+                &binding.composable_access,
+                consumers,
+                &failure_trees,
+            ) {
+                installed_inlines.push((binding.lisette_name.clone(), previous));
+                continue;
+            }
+
             if self.emitter.scope.has_binding_for_go_name(go_name) {
                 let fresh = self.emitter.fresh_var(Some(&binding.lisette_name));
                 self.emitter.scope.bind(&binding.lisette_name, &fresh);
@@ -632,6 +719,33 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 }
             }
         }
+        installed_inlines
+    }
+
+    fn drop_inline_bindings(&mut self, installed: &[(String, Option<BindingValue>)]) {
+        drop_inline_overlays(self.emitter, installed);
+    }
+
+    fn try_inline_binding(
+        &mut self,
+        lisette_name: &str,
+        composable_access: &str,
+        consumers: &[&Expression],
+        failure_trees: &[&Expression],
+    ) -> bool {
+        if consumers.is_empty() {
+            return false;
+        }
+        if analyze_inline_candidate(lisette_name, consumers) != InlineDecision::Inline {
+            return false;
+        }
+        if !failure_trees.is_empty() && region_blocks_inline(failure_trees, lisette_name) {
+            return false;
+        }
+        self.emitter
+            .scope
+            .bind_inline_expr(lisette_name, InlineExpr::new(composable_access));
+        true
     }
 
     fn emit_arm_body(&mut self, output: &mut String, arm_index: usize, place: &BodyPlace) {
@@ -662,6 +776,57 @@ fn decision_top_bindings(decision: &EmitDecision) -> &[EmitBinding] {
     match decision {
         EmitDecision::Guard { bindings, .. } | EmitDecision::Success { bindings, .. } => bindings,
         _ => &[],
+    }
+}
+
+fn collect_reachable_arms(decision: &EmitDecision, out: &mut Vec<usize>) {
+    match decision {
+        EmitDecision::Success { arm_index, .. } => {
+            if !out.contains(arm_index) {
+                out.push(*arm_index);
+            }
+        }
+        EmitDecision::Guard {
+            arm_index,
+            success,
+            failure,
+            ..
+        } => {
+            if !out.contains(arm_index) {
+                out.push(*arm_index);
+            }
+            collect_reachable_arms(success, out);
+            collect_reachable_arms(failure, out);
+        }
+        EmitDecision::IfElse {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            collect_reachable_arms(then_branch, out);
+            if let Some(else_b) = else_branch.as_deref() {
+                collect_reachable_arms(else_b, out);
+            }
+        }
+        EmitDecision::InlineBranch { branch } => collect_reachable_arms(branch, out),
+        EmitDecision::Switch { cases, default, .. }
+        | EmitDecision::TypeSwitch { cases, default, .. } => {
+            for c in cases {
+                collect_reachable_arms(&c.decision, out);
+            }
+            if let Some(d) = default.as_deref() {
+                collect_reachable_arms(d, out);
+            }
+        }
+        EmitDecision::Chain {
+            tests, fallback, ..
+        } => {
+            for t in tests {
+                collect_reachable_arms(&t.decision, out);
+            }
+            collect_reachable_arms(fallback, out);
+        }
+        EmitDecision::Unreachable => {}
     }
 }
 

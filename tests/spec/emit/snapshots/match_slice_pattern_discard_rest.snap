@@ -8,6 +8,5 @@ func test(items []int) int {
 	if len(items) == 0 {
 		return 0
 	}
-	first := items[0]
-	return first
+	return items[0]
 }

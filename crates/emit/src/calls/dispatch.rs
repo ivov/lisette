@@ -608,7 +608,7 @@ impl Emitter<'_> {
 
     fn is_local_binding(&self, function: &Expression) -> bool {
         if let Expression::Identifier { value, .. } = function {
-            self.scope.resolve_binding(value).is_some()
+            self.scope.resolve_identifier_binding(value).is_some()
         } else {
             false
         }

@@ -7,9 +7,7 @@ package main
 func test() int {
 	arr := []int{1, 2, 3, 4, 5}
 	if len(arr) >= 1 {
-		first := arr[0]
-		rest := arr[1:]
-		return first + rest[0]
+		return arr[0] + arr[1:][0]
 	}
 	return 0
 }

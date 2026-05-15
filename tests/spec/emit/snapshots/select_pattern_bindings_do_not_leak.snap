@@ -23,8 +23,7 @@ func main() {
 		select {
 		case recv_2, ok := <-ch_1:
 			if ok {
-				x_3 := recv_2.x
-				result = x_3
+				result = recv_2.x
 			} else {
 				ch_1 = nil
 				continue

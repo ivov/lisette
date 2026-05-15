@@ -47,8 +47,7 @@ func test(r Res, threshold int) int {
 		}
 	}
 	if subject_1.Tag == ResErr {
-		x := subject_1.Err
-		if x > threshold {
+		if subject_1.Err > threshold {
 			return 100
 		}
 	}

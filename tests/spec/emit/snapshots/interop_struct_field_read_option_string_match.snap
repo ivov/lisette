@@ -15,7 +15,6 @@ func main() {
 	option_3 := lisette.OptionFromPointer[string](raw_2)
 	subject_1 := option_3
 	if subject_1.Tag == lisette.OptionSome {
-		name := subject_1.SomeVal
-		_ = name
+		_ = subject_1.SomeVal
 	}
 }

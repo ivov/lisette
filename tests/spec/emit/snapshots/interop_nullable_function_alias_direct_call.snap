@@ -14,7 +14,6 @@ func main() {
 	option_2 := lisette.OptionFromNilable[scheduler.Cmd](raw_1, raw_1 == nil)
 	cmd := option_2
 	if cmd.Tag == lisette.OptionSome {
-		c := cmd.SomeVal
-		_ = c
+		_ = cmd.SomeVal
 	}
 }

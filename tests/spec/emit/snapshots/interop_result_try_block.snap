@@ -34,8 +34,7 @@ func main() {
 	}
 	r := result_3
 	if r.Tag == lisette.ResultOk {
-		f := r.OkVal
-		ret_4, ret_5 := f("1")
+		ret_4, ret_5 := r.OkVal("1")
 		var result_6 lisette.Result[int, error]
 		if ret_5 != nil {
 			result_6 = lisette.MakeResultErr[int, error](ret_5)
@@ -44,8 +43,7 @@ func main() {
 		}
 		r2 := result_6
 		if r2.Tag == lisette.ResultOk {
-			v := r2.OkVal
-			_ = v
+			_ = r2.OkVal
 		} else {
 		}
 	} else {

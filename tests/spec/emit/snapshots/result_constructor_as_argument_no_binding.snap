@@ -14,8 +14,7 @@ func describe(r lisette.Result[int, string]) string {
 		v := r.OkVal
 		return fmt.Sprint(v)
 	}
-	e := r.ErrVal
-	return e
+	return r.ErrVal
 }
 
 func test() string {

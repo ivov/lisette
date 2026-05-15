@@ -9,8 +9,7 @@ import lisette "github.com/ivov/lisette/prelude"
 func main() {
 	opt := lisette.MakeOptionSome(1)
 	if opt.Tag == lisette.OptionSome {
-		x := opt.SomeVal
-		_ = x
+		_ = opt.SomeVal
 	} else {
 	}
 	subject_1 := 7

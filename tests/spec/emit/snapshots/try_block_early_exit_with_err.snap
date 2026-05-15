@@ -16,8 +16,7 @@ func test(bad bool) int {
 	}()
 	result = tryResult_1
 	if result.Tag == lisette.ResultOk {
-		x := result.OkVal
-		return x
+		return result.OkVal
 	}
 	return -1
 }

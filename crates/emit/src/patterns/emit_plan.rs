@@ -12,6 +12,7 @@ pub(crate) struct EmitBinding {
     pub lisette_name: String,
     pub go_name: Option<String>,
     pub rendered_access: String,
+    pub composable_access: String,
 }
 
 #[derive(Debug)]
@@ -284,6 +285,7 @@ fn lower_bindings(ctx: &mut LoweringCtx, bindings: &[PatternBinding]) -> Vec<Emi
             lisette_name: b.lisette_name.clone(),
             go_name: b.go_name.clone(),
             rendered_access: b.path.render(&ctx.current_subject),
+            composable_access: b.path.render_composable(&ctx.current_subject),
         })
         .collect()
 }

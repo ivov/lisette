@@ -1,4 +1,4 @@
-mod bindings;
+pub(crate) mod bindings;
 pub(crate) mod calls;
 mod collectors;
 pub(crate) mod control_flow;
@@ -6,6 +6,7 @@ pub(crate) mod definitions;
 pub(crate) mod expressions;
 mod facts;
 pub mod imports;
+mod inline_uses;
 mod module_state;
 pub(crate) mod names;
 mod output;

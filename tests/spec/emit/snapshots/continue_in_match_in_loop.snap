@@ -11,8 +11,7 @@ loop_1:
 		if item == 0 {
 			continue loop_1
 		}
-		n := item
-		sum += n
+		sum += item
 	}
 	return sum
 }

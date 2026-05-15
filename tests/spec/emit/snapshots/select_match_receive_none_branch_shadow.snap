@@ -14,8 +14,7 @@ func test() int {
 	select {
 	case recv_1, ok := <-ch:
 		if ok {
-			x_2 := recv_1
-			out = x_2
+			out = recv_1
 		} else {
 			out = x
 		}

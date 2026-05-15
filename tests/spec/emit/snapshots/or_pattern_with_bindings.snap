@@ -40,9 +40,7 @@ func (e E) String() string {
 
 func test(e E) int {
 	if e.Tag == EA {
-		x := e.A
-		return x
+		return e.A
 	}
-	x := e.B
-	return x
+	return e.B
 }

@@ -23,7 +23,6 @@ func main() {
 	}
 	subject_1 := wrapped_4["k"]
 	if subject_1.Tag == lisette.OptionSome {
-		v := subject_1.SomeVal
-		_ = v
+		_ = subject_1.SomeVal
 	}
 }
