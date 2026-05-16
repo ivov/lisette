@@ -42,12 +42,13 @@ impl Emitter<'_> {
         let ty_string = self.go_type_as_string(underlying);
 
         if let Type::Nominal { id, .. } = underlying
-            && let Some((module, _)) = id.split_once('.')
+            && let Some(module) = self.facts.module_for_qualified_name(id.as_str())
             && !self.facts.is_current_module(module)
             && module != go_name::PRELUDE_MODULE
             && !go_name::is_go_import(module)
         {
-            self.require_module_import(module);
+            let module = module.to_string();
+            self.require_module_import(&module);
         }
 
         let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();

@@ -260,8 +260,9 @@ impl Emitter<'_> {
         is_import_namespace_ident
             || self.is_from_prelude(expression_ty)
             || if let Type::Nominal { id, .. } = expression_ty.strip_refs() {
-                id.split_once('.')
-                    .is_some_and(|(m, _)| self.facts.is_foreign_module(m))
+                self.facts
+                    .module_for_qualified_name(id.as_str())
+                    .is_some_and(|m| self.facts.is_foreign_module(m))
             } else {
                 false
             }

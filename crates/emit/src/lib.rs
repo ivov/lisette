@@ -183,6 +183,7 @@ pub struct TestEmitConfig<'a> {
     pub mutations: &'a MutationInfo,
     pub ufcs_methods: &'a HashSet<(String, String)>,
     pub go_package_names: &'a HashMap<String, String>,
+    pub go_module_ids: &'a HashSet<String>,
 }
 
 pub struct Emitter<'a> {
@@ -297,6 +298,7 @@ impl<'a> Emitter<'a> {
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
             go_package_names: config.go_package_names,
+            go_module_ids: config.go_module_ids,
             entry_module: config.module_id.to_string(),
             go_module: config.go_module.to_string(),
             options: EmitOptions { debug },
@@ -426,7 +428,7 @@ impl<'a> Emitter<'a> {
 
     pub(crate) fn module_alias_for_type(&self, ty: &Type) -> Option<String> {
         if let Type::Nominal { id, .. } = ty {
-            let module = names::go_name::module_of_type_id(id);
+            let module = self.facts.module_for_qualified_name(id)?;
             self.module.module_alias(module).map(str::to_string)
         } else {
             None
@@ -531,6 +533,7 @@ fn emit_module<'a>(
         mutations: &analysis.mutations,
         ufcs_methods: &analysis.ufcs_methods,
         go_package_names: &analysis.go_package_names,
+        go_module_ids: &analysis.go_module_ids,
         entry_module: analysis.entry_module_id.to_string(),
         go_module: go_module.to_string(),
         options: options.clone(),

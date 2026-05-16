@@ -419,10 +419,11 @@ impl Emitter<'_> {
     }
 
     fn add_enum_imports_if_needed(&mut self, name: &str, enum_id: &str) {
-        let enum_module = go_name::module_of_type_id(enum_id);
-
-        if !self.facts.is_current_module(enum_module) {
-            self.require_module_import(enum_module);
+        if let Some(enum_module) = self.facts.module_for_qualified_name(enum_id)
+            && !self.facts.is_current_module(enum_module)
+        {
+            let enum_module = enum_module.to_string();
+            self.require_module_import(&enum_module);
         }
 
         let parts: Vec<&str> = name.split('.').collect();

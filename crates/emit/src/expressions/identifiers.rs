@@ -369,7 +369,7 @@ impl Emitter<'_> {
         }
 
         let variant_name = go_name::unqualified_name(name);
-        let module = go_name::module_of_type_id(enum_id.as_str());
+        let module = self.facts.module_for_qualified_name(enum_id.as_str())?;
         let qualifier = self.require_module_import(module);
 
         Some(format!("{}.{}", qualifier, variant_name))

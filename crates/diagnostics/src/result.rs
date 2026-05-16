@@ -24,6 +24,7 @@ pub struct SemanticResult {
     /// stdlib typedefs.
     pub typedef_paths: HashMap<u32, PathBuf>,
     pub go_package_names: HashMap<String, String>,
+    pub go_module_ids: HashSet<String>,
 }
 
 impl SemanticResult {
@@ -41,6 +42,7 @@ impl SemanticResult {
             ufcs_methods: HashSet::default(),
             typedef_paths: HashMap::default(),
             go_package_names: HashMap::default(),
+            go_module_ids: HashSet::default(),
         }
     }
 
@@ -59,6 +61,7 @@ impl SemanticResult {
             cached_modules: self.cached_modules,
             ufcs_methods: self.ufcs_methods,
             go_package_names: self.go_package_names,
+            go_module_ids: self.go_module_ids,
         }
     }
 }

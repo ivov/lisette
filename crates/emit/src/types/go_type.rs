@@ -540,7 +540,7 @@ impl Emitter<'_> {
         if let Some(rest) = name.strip_prefix(go_name::GO_IMPORT_PREFIX) {
             return rest.rsplit_once('.').map(|(path, _)| path.to_string());
         }
-        let (module, _) = name.split_once('.')?;
+        let module = self.facts.module_for_qualified_name(name)?;
         if !self.facts.is_foreign_module(module) {
             return None;
         }

@@ -7,7 +7,7 @@ use syntax::ast::{
     TypedPattern,
 };
 use syntax::program::{Definition, DefinitionBody};
-use syntax::types::{Type, module_part, substitute, unqualified_name};
+use syntax::types::{Type, substitute, unqualified_name};
 
 use crate::checker::EnvResolve;
 use crate::store::Store;
@@ -532,7 +532,9 @@ impl TaskState<'_> {
 
         let scrutinee_is_error = expected_ty.shallow_resolve_in(&self.env).is_error();
 
-        let struct_module = module_part(&qualified_name);
+        let struct_module = store
+            .module_for_qualified_name(&qualified_name)
+            .unwrap_or(&qualified_name);
         let is_cross_module = struct_module != self.cursor.module_id;
 
         let available: Vec<String> = struct_fields.iter().map(|f| f.name.to_string()).collect();

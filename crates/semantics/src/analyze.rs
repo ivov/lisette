@@ -354,6 +354,13 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     let mut definitions = HashMap::default();
     let mut modules = HashMap::default();
 
+    let go_module_ids: HashSet<String> = store
+        .modules
+        .keys()
+        .filter(|id| id.starts_with(syntax::types::GO_IMPORT_PREFIX))
+        .cloned()
+        .collect();
+
     for (mod_id, module) in store.modules {
         let is_internal = module.is_internal();
 
@@ -394,6 +401,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         ufcs_methods,
         typedef_paths: store.typedef_paths,
         go_package_names: store.go_package_names,
+        go_module_ids,
     };
 
     (result, facts)

@@ -16,6 +16,7 @@ pub(crate) struct EmitFactsConfig<'a> {
     pub(crate) mutations: &'a MutationInfo,
     pub(crate) ufcs_methods: &'a HashSet<(String, String)>,
     pub(crate) go_package_names: &'a HashMap<String, String>,
+    pub(crate) go_module_ids: &'a HashSet<String>,
     pub(crate) entry_module: ModuleId,
     pub(crate) go_module: String,
     pub(crate) options: EmitOptions,
@@ -30,6 +31,7 @@ pub(crate) struct EmitFacts<'a> {
     mutations: &'a MutationInfo,
     ufcs_methods: &'a HashSet<(String, String)>,
     go_package_names: &'a HashMap<String, String>,
+    go_module_ids: &'a HashSet<String>,
     entry_module: ModuleId,
     go_module: String,
     options: EmitOptions,
@@ -46,6 +48,7 @@ impl<'a> EmitFacts<'a> {
             mutations: config.mutations,
             ufcs_methods: config.ufcs_methods,
             go_package_names: config.go_package_names,
+            go_module_ids: config.go_module_ids,
             entry_module: config.entry_module,
             go_module: config.go_module,
             options: config.options,
@@ -53,6 +56,13 @@ impl<'a> EmitFacts<'a> {
             globals: config.globals,
             current_module: config.current_module,
         }
+    }
+
+    pub(crate) fn module_for_qualified_name<'b>(&self, id: &'b str) -> Option<&'b str>
+    where
+        'a: 'b,
+    {
+        syntax::types::module_for_qualified_name(id, self.go_module_ids.iter().map(String::as_str))
     }
 
     pub(crate) fn definition(&self, id: &str) -> Option<&'a Definition> {

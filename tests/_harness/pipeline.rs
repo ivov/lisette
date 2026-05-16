@@ -98,7 +98,15 @@ impl CompiledTest {
 
         init_prelude(&mut store);
 
-        let (typed_ast, definitions, unused, mutations, ufcs_methods, go_package_names) = {
+        let (
+            typed_ast,
+            definitions,
+            unused,
+            mutations,
+            ufcs_methods,
+            go_package_names,
+            go_module_ids,
+        ) = {
             let mut checker = TaskState::with_fresh_allocator(&sink);
             checker
                 .ufcs_methods
@@ -256,6 +264,12 @@ impl CompiledTest {
 
             let ufcs_methods = std::mem::take(&mut checker.ufcs_methods);
             let go_package_names = store.go_package_names.clone();
+            let go_module_ids: HashSet<String> = store
+                .modules
+                .keys()
+                .filter(|id| id.starts_with(syntax::types::GO_IMPORT_PREFIX))
+                .cloned()
+                .collect();
 
             (
                 typed_ast,
@@ -264,6 +278,7 @@ impl CompiledTest {
                 mutations,
                 ufcs_methods,
                 go_package_names,
+                go_module_ids,
             )
         };
 
@@ -276,6 +291,7 @@ impl CompiledTest {
             mutations,
             ufcs_methods,
             go_package_names,
+            go_module_ids,
         }
     }
 }
@@ -289,6 +305,7 @@ pub struct InferenceResult {
     pub mutations: MutationInfo,
     pub ufcs_methods: HashSet<(String, String)>,
     pub go_package_names: HashMap<String, String>,
+    pub go_module_ids: HashSet<String>,
 }
 
 fn unwrap_test_wrapper(expression: Expression) -> Expression {

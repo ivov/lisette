@@ -419,3 +419,78 @@ pub const Value: int = 1
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
 }
+
+#[test]
+fn gopkg_in_dotted_version_path_resolves_module() {
+    let input = r#"
+import "go:gopkg.in/yaml.v3"
+
+fn test() {
+  let _ = yaml.Decoder{}
+}
+"#;
+    let typedef = r#"// Package: yaml
+
+pub struct Decoder {}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
+}
+
+#[test]
+fn gopkg_in_value_enum_chain_access_emits_correct_qualifier() {
+    let input = r#"
+import "go:gopkg.in/yaml.v3"
+
+fn test() {
+  let _ = yaml.Kind.ScalarNode
+}
+"#;
+    let typedef = r#"// Package: yaml
+
+pub enum Kind: uint32 {
+  ScalarNode = 8,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
+}
+
+#[test]
+fn gopkg_in_instance_method_emits_correct_qualifier() {
+    let input = r#"
+import "go:gopkg.in/yaml.v3"
+
+fn test() {
+  let mut d = yaml.Decoder{}
+  d.KnownFields(true)
+}
+"#;
+    let typedef = r#"// Package: yaml
+
+pub struct Decoder {}
+
+impl Decoder {
+  pub fn KnownFields(self: Ref<Decoder>, enable: bool)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
+}
+
+#[test]
+fn gopkg_in_struct_pattern_match_emits_correct_qualifier() {
+    let input = r#"
+import "go:gopkg.in/yaml.v3"
+
+fn describe(e: yaml.TypeError) -> int {
+  match e {
+    yaml.TypeError { Errors: errs } => errs.length(),
+  }
+}
+"#;
+    let typedef = r#"// Package: yaml
+
+pub struct TypeError {
+  pub Errors: Slice<string>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
+}

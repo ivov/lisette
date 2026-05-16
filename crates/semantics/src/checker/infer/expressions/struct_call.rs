@@ -6,8 +6,7 @@ use ecow::EcoString;
 use syntax::ast::{Expression, Span, StructFieldAssignment, StructSpread};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{
-    CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, module_part, substitute,
-    unqualified_name,
+    CompoundKind, SimpleKind, SubstitutionMap, Symbol, Type, substitute, unqualified_name,
 };
 
 use super::super::TaskState;
@@ -264,7 +263,9 @@ impl TaskState<'_> {
 
         let new_spread = self.infer_struct_spread(store, spread, &struct_call_ty);
 
-        let struct_module = module_part(&qualified_name);
+        let struct_module = store
+            .module_for_qualified_name(&qualified_name)
+            .unwrap_or(&qualified_name);
         let is_cross_module = struct_module != self.cursor.module_id
             || struct_name
                 .split_once('.')
@@ -313,9 +314,8 @@ impl TaskState<'_> {
             && is_cross_module
             && !is_go_imported
         {
-            let owning_module = qualified_name
-                .split_once('.')
-                .map(|(m, _)| m)
+            let owning_module = store
+                .module_for_qualified_name(&qualified_name)
                 .unwrap_or(&qualified_name);
             for field in &struct_fields {
                 if !matched_fields.contains(&field.name) && !field.visibility.is_public() {
@@ -648,10 +648,8 @@ fn has_zero_nominal(
         DefinitionBody::Struct { fields, .. } => {
             let def_ty = &def.ty;
             let map = build_substitution(def_ty, params);
-            let struct_module = id
-                .as_str()
-                .split_once('.')
-                .map(|(m, _)| m)
+            let struct_module = store
+                .module_for_qualified_name(id.as_str())
                 .unwrap_or(from_module);
             let struct_is_foreign = struct_module != from_module;
             let struct_name: EcoString = id.last_segment().into();

@@ -5,7 +5,7 @@ use syntax::ast::{Expression, Span, StructKind};
 use syntax::program::{
     Definition, DefinitionBody, DotAccessKind, NativeTypeKind, ReceiverCoercion,
 };
-use syntax::types::{Symbol, Type, module_part, substitute, unqualified_name};
+use syntax::types::{Symbol, Type, substitute, unqualified_name};
 
 use super::super::TaskState;
 use super::super::addressability::check_is_non_addressable;
@@ -278,8 +278,8 @@ impl TaskState<'_> {
 
     /// Whether a type's owning module is foreign (not current, prelude, or Go stdlib).
     /// Used to gate cross-module visibility checks on methods.
-    fn is_foreign_type(&self, type_id: &str) -> bool {
-        let type_module = module_part(type_id);
+    fn is_foreign_type(&self, store: &Store, type_id: &str) -> bool {
+        let type_module = store.module_for_qualified_name(type_id).unwrap_or(type_id);
         type_module != self.cursor.module_id
             && type_module != "prelude"
             && !type_module.starts_with("go:")
@@ -437,7 +437,9 @@ impl TaskState<'_> {
 
         self.facts.add_usage(*args.span, field.name_span);
 
-        let struct_module = module_part(&struct_name);
+        let struct_module = store
+            .module_for_qualified_name(&struct_name)
+            .unwrap_or(&struct_name);
         let is_cross_module = struct_module != self.cursor.module_id;
 
         if is_cross_module && !field_is_pub {
@@ -658,7 +660,7 @@ impl TaskState<'_> {
                 self.facts.add_usage(*args.span, definition_span);
             }
 
-            if self.is_foreign_type(&qualified_name)
+            if self.is_foreign_type(store, &qualified_name)
                 && let Some(def) = store.get_definition(&method_key)
                 && matches!(def.body, DefinitionBody::Value { .. })
                 && !def.visibility.is_public()
@@ -918,7 +920,7 @@ impl TaskState<'_> {
             return None;
         };
 
-        let is_foreign = self.is_foreign_type(&id);
+        let is_foreign = self.is_foreign_type(store, &id);
         if is_foreign && !visibility.is_public() {
             return None;
         }
@@ -1019,7 +1021,7 @@ impl TaskState<'_> {
                 ));
         }
 
-        if self.is_foreign_type(&id) && !is_public {
+        if self.is_foreign_type(store, &id) && !is_public {
             self.sink.push(diagnostics::infer::private_method_access(
                 args.member_name,
                 type_simple_name,
@@ -1038,7 +1040,7 @@ impl TaskState<'_> {
 
         self.unify(store, args.expected_ty, &method_ty, args.span);
 
-        let type_module = module_part(&id);
+        let type_module = store.module_for_qualified_name(&id).unwrap_or(&id);
         let is_cross_module = type_module != self.cursor.module_id;
         let is_exported = is_public || is_cross_module;
         let kind = DotAccessKind::StaticMethod { is_exported };
@@ -1052,7 +1054,7 @@ impl TaskState<'_> {
             // fall back to false; the emitter will check method_needs_export.
             return false;
         };
-        let type_module = module_part(&id);
+        let type_module = store.module_for_qualified_name(&id).unwrap_or(&id);
         let is_cross_module = type_module != self.cursor.module_id;
 
         if is_cross_module {

@@ -233,15 +233,18 @@ impl TaskState<'_> {
                     substituted_method,
                     impl_method_without_receiver.clone(),
                 ));
-            } else if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env) {
-                let parts: Vec<&str> = id.split('.').collect();
-                if parts.len() == 2 {
-                    self.facts.mark_method_used_for_interface(
-                        parts[0].to_string(),
-                        method_name.to_string(),
-                        Span::dummy(),
-                    );
-                }
+            } else if let Type::Nominal { id, .. } = ty.strip_refs().resolve_in(&self.env)
+                && let Some(module) = store.module_for_qualified_name(id.as_str())
+                && id
+                    .as_str()
+                    .get(module.len() + 1..)
+                    .is_some_and(|rest| !rest.contains('.'))
+            {
+                self.facts.mark_method_used_for_interface(
+                    module.to_string(),
+                    method_name.to_string(),
+                    Span::dummy(),
+                );
             }
         }
 

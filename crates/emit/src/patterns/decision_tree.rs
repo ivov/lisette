@@ -1018,7 +1018,9 @@ fn collect_enum_variant_checks(
             return;
         };
         let variant_name = go_name::unqualified_name(identifier);
-        let module = go_name::module_of_type_id(id.as_str());
+        let Some(module) = emitter.facts.module_for_qualified_name(id.as_str()) else {
+            return;
+        };
         let qualifier = emitter.go_pkg_qualifier(module);
         let go_literal = if qualifier.is_empty() || qualifier == emitter.facts.current_module() {
             variant_name.to_string()
@@ -1107,6 +1109,13 @@ struct EnumVariantData<'a> {
     typed_variant_fields: Option<&'a [syntax::ast::EnumFieldDefinition]>,
 }
 
+fn enum_module_of<'a>(emitter: &Emitter<'a>, ty: &'a Type) -> &'a str {
+    match ty {
+        Type::Nominal { id, .. } => emitter.facts.module_for_qualified_name(id).unwrap_or(id),
+        _ => "",
+    }
+}
+
 /// Collect checks and bindings for a tagged enum variant pattern.
 fn collect_tagged_enum_checks(
     emitter: &Emitter,
@@ -1115,9 +1124,11 @@ fn collect_tagged_enum_checks(
     collector: &mut PatternCollector,
 ) {
     let alias = emitter.module_alias_for_type(variant.ty);
+    let enum_module = enum_module_of(emitter, variant.ty);
     let resolved = go_name::variant(
         variant.identifier,
         variant.ty,
+        enum_module,
         emitter.facts.current_module(),
         alias.as_deref(),
     );
@@ -1229,9 +1240,11 @@ fn collect_struct_checks(
         let enum_info = detect_enum_info(emitter, ty, identifier, typed);
         if enum_info.is_some() {
             let alias = emitter.module_alias_for_type(ty);
+            let enum_module = enum_module_of(emitter, ty);
             let resolved = go_name::variant(
                 identifier,
                 ty,
+                enum_module,
                 emitter.facts.current_module(),
                 alias.as_deref(),
             );

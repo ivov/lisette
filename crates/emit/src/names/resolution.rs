@@ -1,4 +1,4 @@
-use syntax::types::{module_part, unqualified_name};
+use syntax::types::unqualified_name;
 
 use crate::Emitter;
 use crate::names::go_name;
@@ -50,7 +50,7 @@ impl Emitter<'_> {
         if id == qualified {
             return None;
         }
-        let type_module = module_part(&id);
+        let type_module = self.facts.module_for_qualified_name(&id).unwrap_or(&id);
         if self.facts.is_current_module(type_module) {
             return Some(unqualified_name(&id).to_string());
         }
@@ -118,13 +118,18 @@ impl Emitter<'_> {
         method: &str,
         is_public: bool,
     ) -> String {
-        let module = type_id.split_once('.').map(|(m, _)| m);
-        let computed_alias = match module {
+        let module = self
+            .facts
+            .module_for_qualified_name(type_id)
+            .map(str::to_string);
+        let type_name = unqualified_name(type_id);
+        let computed_alias = match module.as_deref() {
             Some(m) if self.facts.is_foreign_module(m) => Some(self.require_module_import(m)),
             _ => None,
         };
         let resolved = go_name::qualify_method(
-            type_id,
+            module.as_deref(),
+            type_name,
             method,
             self.facts.current_module(),
             is_public,
@@ -137,7 +142,10 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn resolve_variant(&mut self, identifier: &str, enum_id: &str) -> String {
-        let enum_module = module_part(enum_id);
+        let enum_module = self
+            .facts
+            .module_for_qualified_name(enum_id)
+            .unwrap_or(enum_id);
         let computed_alias = if self.facts.is_foreign_module(enum_module) {
             Some(self.require_module_import(enum_module))
         } else {
@@ -146,6 +154,7 @@ impl Emitter<'_> {
         let resolved = go_name::variant_by_id(
             identifier,
             enum_id,
+            enum_module,
             self.facts.current_module(),
             computed_alias.as_deref(),
         );

@@ -3,7 +3,7 @@ use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use syntax::ast::Expression;
 use syntax::program::DefinitionBody;
-use syntax::types::{Type, module_part, unqualified_name};
+use syntax::types::{Type, unqualified_name};
 
 impl Emitter<'_> {
     /// Emit a value enum variant as a Go constant (e.g., `reflect.String`).
@@ -25,7 +25,7 @@ impl Emitter<'_> {
             _ => return None,
         };
 
-        let module_key = go_name::module_of_type_id(&enum_id);
+        let module_key = self.facts.module_for_qualified_name(&enum_id)?;
 
         let qualifier = self.require_module_import(module_key);
 
@@ -106,7 +106,7 @@ impl Emitter<'_> {
 
         let make_fn_name = self.facts.make_function_name(&constructor_key)?.to_string();
 
-        let enum_module = go_name::module_of_type_id(enum_id);
+        let enum_module = self.facts.module_for_qualified_name(enum_id)?;
         let needs_qualifier = !self.facts.is_current_module(enum_module);
 
         let needs_type_args = ret_params.len() > fn_params.len();
@@ -148,7 +148,7 @@ impl Emitter<'_> {
             return None;
         };
 
-        let enum_module = module_part(enum_id);
+        let enum_module = self.facts.module_for_qualified_name(enum_id)?;
         let is_prelude = enum_module == go_name::PRELUDE_MODULE;
         let is_cross_module = !self.facts.is_current_module(enum_module) && !is_prelude;
 
@@ -227,9 +227,9 @@ impl Emitter<'_> {
         let alias_module = inner_ty.as_import_namespace()?.to_string();
         let alias_module = alias_module.as_str();
 
-        let enum_module = module_part(enum_id);
+        let enum_module = self.facts.module_for_qualified_name(enum_id)?.to_string();
 
-        self.require_module_import(enum_module);
+        self.require_module_import(&enum_module);
 
         let type_args = self.format_type_args(params);
 

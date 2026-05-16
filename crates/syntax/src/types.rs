@@ -64,13 +64,6 @@ impl Symbol {
     pub fn without_last_segment(&self) -> Option<&str> {
         self.0.rsplit_once('.').map(|(rest, _)| rest)
     }
-
-    /// Naive first segment (first dot split). Correct for user modules; for
-    /// `go:net/http.Handler`-style symbols, resolve via
-    /// `Store::module_for_qualified_name` instead.
-    pub fn simple_module_part(&self) -> Option<&str> {
-        self.0.split_once('.').map(|(m, _)| m)
-    }
 }
 
 impl Borrow<str> for Symbol {
@@ -148,15 +141,30 @@ pub fn unqualified_name(id: &str) -> &str {
     id.rsplit('.').next().unwrap_or(id)
 }
 
-/// Extract the module part of a dot-qualified identifier — the first
-/// segment, before any dot.
-///
-/// `"main.Point.sum"` → `"main"`, `"prelude.Option"` → `"prelude"`,
-/// `"foo"` → `"foo"`. For `go:net/http.Handler`-style ids, returns
-/// `"go:net/http"`. When the id has no dot at all, returns the id
-/// itself (the caller is responsible for handling the no-module case).
-pub fn module_part(id: &str) -> &str {
-    id.split('.').next().unwrap_or(id)
+pub const GO_IMPORT_PREFIX: &str = "go:";
+
+/// Resolve the module of a qualified ID. For `go:` IDs containing `/`,
+/// does a longest-prefix match against `module_ids` to disambiguate paths
+/// whose module segment contains dots (e.g. `gopkg.in/yaml.v3`). Otherwise
+/// splits on the first dot. Returns `None` when the id has no dot and is
+/// not a registered `go:` module.
+pub fn module_for_qualified_name<'a, I>(id: &'a str, module_ids: I) -> Option<&'a str>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    if !id.starts_with(GO_IMPORT_PREFIX) || !id.contains('/') {
+        return id.split_once('.').map(|(m, _)| m);
+    }
+    let mut best: Option<&str> = None;
+    for module_id in module_ids {
+        if id.starts_with(module_id)
+            && id.as_bytes().get(module_id.len()) == Some(&b'.')
+            && best.is_none_or(|prev| module_id.len() > prev.len())
+        {
+            best = Some(module_id);
+        }
+    }
+    best
 }
 
 pub fn is_range_type_name(name: &str) -> bool {

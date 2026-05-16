@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"go:gopkg.in/yaml.v3\"\n\nfn describe(e: yaml.TypeError) -> int {\n  match e {\n    yaml.TypeError { Errors: errs } => errs.length(),\n  }\n}\n"
+---
+package main
+
+import yaml "gopkg.in/yaml.v3"
+
+func describe(e yaml.TypeError) int {
+	{
+		return len(e.Errors)
+	}
+}
