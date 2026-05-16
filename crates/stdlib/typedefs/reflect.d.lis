@@ -5,6 +5,18 @@
 
 import "go:iter"
 
+pub enum ChanDir: int {
+  BothDir = 3,
+  RecvDir = 1,
+  SendDir = 2,
+}
+
+pub const BothDir: ChanDir = 3
+
+pub const RecvDir: ChanDir = 1
+
+pub const SendDir: ChanDir = 2
+
 pub enum Kind: uint {
   Array = 17,
   Bool = 1,
@@ -92,6 +104,18 @@ pub const Uint8: Kind = 8
 pub const Uintptr: Kind = 12
 
 pub const UnsafePointer: Kind = 26
+
+pub enum SelectDir: int {
+  SelectDefault = 3,
+  SelectRecv = 2,
+  SelectSend = 1,
+}
+
+pub const SelectDefault: SelectDir = 3
+
+pub const SelectRecv: SelectDir = 2
+
+pub const SelectSend: SelectDir = 1
 
 /// Append appends the values x to a slice s and returns the resulting slice.
 /// As in Go, each x's value must be assignable to the slice's element type.
@@ -326,9 +350,6 @@ pub fn VisibleFields(t: Type) -> Slice<StructField>
 /// The returned value is neither addressable nor settable.
 pub fn Zero(typ: Type) -> Value
 
-/// ChanDir represents a channel type's direction.
-pub struct ChanDir(int)
-
 /// A MapIter is an iterator for ranging over a map.
 /// See [Value.MapRange].
 pub type MapIter
@@ -363,9 +384,6 @@ pub struct SelectCase {
   pub Chan: Value,
   pub Send: Value,
 }
-
-/// A SelectDir describes the communication direction of a select case.
-pub struct SelectDir(int)
 
 /// SliceHeader is the runtime representation of a slice.
 /// It cannot be used safely or portably and its representation may
@@ -494,18 +512,6 @@ pub struct ValueError {
   pub Method: string,
   pub Kind: Kind,
 }
-
-pub const BothDir: ChanDir = 3
-
-pub const RecvDir: ChanDir = 1
-
-pub const SelectDefault: SelectDir = 3
-
-pub const SelectRecv: SelectDir = 2
-
-pub const SelectSend: SelectDir = 1
-
-pub const SendDir: ChanDir = 2
 
 impl ChanDir {
   fn String(self) -> string

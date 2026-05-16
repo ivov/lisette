@@ -7,6 +7,18 @@ import "go:encoding"
 import "go:io"
 import "go:time"
 
+pub enum ErrorHandling: int {
+  ContinueOnError = 0,
+  ExitOnError = 1,
+  PanicOnError = 2,
+}
+
+pub const ContinueOnError: ErrorHandling = 0
+
+pub const ExitOnError: ErrorHandling = 1
+
+pub const PanicOnError: ErrorHandling = 2
+
 /// Arg returns the i'th command-line argument. Arg(0) is the first remaining argument
 /// after flags have been processed. Arg returns an empty string if the
 /// requested element does not exist.
@@ -188,9 +200,6 @@ pub fn Visit(fn_: fn(Ref<Flag>) -> ())
 /// fn for each. It visits all flags, even those not set.
 pub fn VisitAll(fn_: fn(Ref<Flag>) -> ())
 
-/// ErrorHandling defines how [FlagSet.Parse] behaves if the parse fails.
-pub struct ErrorHandling(int)
-
 /// A Flag represents the state of a flag.
 pub struct Flag {
   pub Name: string,
@@ -232,12 +241,6 @@ pub interface Value {
   fn Set(s: string) -> Result<(), error>
   fn String() -> string
 }
-
-pub const ContinueOnError: ErrorHandling = 0
-
-pub const ExitOnError: ErrorHandling = 1
-
-pub const PanicOnError: ErrorHandling = 2
 
 pub var CommandLine: Ref<FlagSet>
 

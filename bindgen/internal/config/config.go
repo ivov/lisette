@@ -48,6 +48,11 @@ type TypeOverrides struct {
 	// Go reflection; each such param is lifted to a fresh `T` and rewritten
 	// to `Ref<T>`.
 	ReflectionDecode map[string][]string `json:"reflection_decode"`
+	// BitFlagSet forces named integer types to be emitted as bare newtypes
+	// (with #[go(bit_flag_set)]) instead of value enums. Used for types that
+	// look like enums to the heuristic but are semantically bit-flag sets,
+	// e.g. small flag types with <4 constants, or hybrids with mask outliers.
+	BitFlagSet map[string][]string `json:"bit_flag_set"`
 }
 
 // LoadConfig loads bindgen configuration from the given path.
@@ -256,6 +261,17 @@ func (c *Config) IsNeverReturn(pkg, name string) bool {
 		return false
 	}
 	return matchesWildcard(names, name)
+}
+
+func (c *Config) ShouldTreatAsBitFlagSet(pkg, typeName string) bool {
+	if c == nil {
+		return false
+	}
+	names, ok := lookupWithGlob(c.Overrides.Types.BitFlagSet, pkg)
+	if !ok {
+		return false
+	}
+	return slices.Contains(names, typeName)
 }
 
 // lookupWithGlob returns all matching names for a package from a map,

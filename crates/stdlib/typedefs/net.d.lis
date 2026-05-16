@@ -576,6 +576,7 @@ pub interface Error {
   fn Timeout() -> bool
 }
 
+#[go(bit_flag_set)]
 pub struct Flags(uint)
 
 /// A HardwareAddr represents a physical hardware address.

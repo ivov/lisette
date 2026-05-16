@@ -14,6 +14,39 @@ import "go:net"
 import "go:net/url"
 import "go:time"
 
+pub enum ConnState: int {
+  StateActive = 1,
+  StateClosed = 4,
+  StateHijacked = 3,
+  StateIdle = 2,
+  StateNew = 0,
+}
+
+pub const StateActive: ConnState = 1
+
+pub const StateClosed: ConnState = 4
+
+pub const StateHijacked: ConnState = 3
+
+pub const StateIdle: ConnState = 2
+
+pub const StateNew: ConnState = 0
+
+pub enum SameSite: int {
+  SameSiteDefaultMode = 1,
+  SameSiteLaxMode = 2,
+  SameSiteNoneMode = 4,
+  SameSiteStrictMode = 3,
+}
+
+pub const SameSiteDefaultMode: SameSite = 1
+
+pub const SameSiteLaxMode: SameSite = 2
+
+pub const SameSiteNoneMode: SameSite = 4
+
+pub const SameSiteStrictMode: SameSite = 3
+
 /// AllowQuerySemicolons returns a handler that serves requests by converting any
 /// unescaped semicolons in the URL query to ampersands, and invoking the handler h.
 /// 
@@ -583,10 +616,6 @@ pub interface CloseNotifier {
   fn CloseNotify() -> Receiver<bool>
 }
 
-/// A ConnState represents the state of a client connection to a server.
-/// It's used by the optional [Server.ConnState] hook.
-pub struct ConnState(int)
-
 /// A Cookie represents an HTTP cookie as sent in the Set-Cookie header of an
 /// HTTP response or the Cookie header of an HTTP request.
 /// 
@@ -881,14 +910,6 @@ pub interface RoundTripper {
   fn RoundTrip(request: Ref<Request>) -> Result<Ref<Response>, error>
 }
 
-/// SameSite allows a server to define a cookie attribute making it impossible for
-/// the browser to send this cookie along with cross-site requests. The main
-/// goal is to mitigate the risk of cross-origin information leakage, and provide
-/// some protection against cross-site request forgery attacks.
-/// 
-/// See https://tools.ietf.org/html/draft-ietf-httpbis-cookie-same-site-00 for details.
-pub struct SameSite(int)
-
 /// ServeMux is an HTTP request multiplexer.
 /// It matches the URL of each incoming request against a list of registered
 /// patterns and calls the handler for the pattern that
@@ -1146,24 +1167,6 @@ pub const MethodPut = "PUT"
 /// 
 /// Unless otherwise noted, these are defined in RFC 7231 section 4.3.
 pub const MethodTrace = "TRACE"
-
-pub const SameSiteDefaultMode: SameSite = 1
-
-pub const SameSiteLaxMode: SameSite = 2
-
-pub const SameSiteNoneMode: SameSite = 4
-
-pub const SameSiteStrictMode: SameSite = 3
-
-pub const StateActive: ConnState = 1
-
-pub const StateClosed: ConnState = 4
-
-pub const StateHijacked: ConnState = 3
-
-pub const StateIdle: ConnState = 2
-
-pub const StateNew: ConnState = 0
 
 /// HTTP status codes as registered with IANA.
 /// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml

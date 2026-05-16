@@ -173,6 +173,7 @@ pub fn IsWordChar(r: rune) -> bool
 pub fn Parse(s: string, flags: Flags) -> Result<Ref<Regexp>, error>
 
 /// An EmptyOp specifies a kind or mixture of zero-width assertions.
+#[go(bit_flag_set)]
 pub struct EmptyOp(uint8)
 
 /// An Error describes a failure to parse a regular expression
@@ -183,6 +184,7 @@ pub struct Error {
 }
 
 /// Flags control the behavior of the parser and record information about regexp context.
+#[go(bit_flag_set)]
 pub struct Flags(uint16)
 
 /// An Inst is a single instruction in a regular expression program.

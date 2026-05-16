@@ -167,6 +167,7 @@ pub interface FileInfo {
 /// information about files can be moved from one system
 /// to another portably. Not all bits apply to all systems.
 /// The only required bit is [ModeDir] for directories.
+#[go(bit_flag_set)]
 pub struct FileMode(uint32)
 
 /// A GlobFS is a file system with a Glob method.

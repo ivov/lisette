@@ -7,6 +7,18 @@ import "go:debug/dwarf"
 import "go:encoding/binary"
 import "go:io"
 
+pub enum Class: byte {
+  ELFCLASS32 = 1,
+  ELFCLASS64 = 2,
+  ELFCLASSNONE = 0,
+}
+
+pub const ELFCLASS32: Class = 1
+
+pub const ELFCLASS64: Class = 2
+
+pub const ELFCLASSNONE: Class = 0
+
 pub enum CompressionType: int {
   COMPRESS_HIOS = 0x6fffffff,
   COMPRESS_HIPROC = 0x7fffffff,
@@ -27,6 +39,18 @@ pub const COMPRESS_LOPROC: CompressionType = 0x70000000
 pub const COMPRESS_ZLIB: CompressionType = 1
 
 pub const COMPRESS_ZSTD: CompressionType = 2
+
+pub enum Data: byte {
+  ELFDATA2LSB = 1,
+  ELFDATA2MSB = 2,
+  ELFDATANONE = 0,
+}
+
+pub const ELFDATA2LSB: Data = 1
+
+pub const ELFDATA2MSB: Data = 2
+
+pub const ELFDATANONE: Data = 0
 
 pub enum DynTag: int {
   DT_ADDRRNGHI = 0x6ffffeff,
@@ -981,6 +1005,18 @@ pub const EM_XTENSA: Machine = 94
 pub const EM_Z80: Machine = 220
 
 pub const EM_ZSP: Machine = 79
+
+pub enum NType: int {
+  NT_FPREGSET = 2,
+  NT_PRPSINFO = 3,
+  NT_PRSTATUS = 1,
+}
+
+pub const NT_FPREGSET: NType = 2
+
+pub const NT_PRPSINFO: NType = 3
+
+pub const NT_PRSTATUS: NType = 1
 
 pub enum OSABI: byte {
   ELFOSABI_86OPEN = 5,
@@ -4311,12 +4347,6 @@ pub struct Chdr64 {
   pub Addralign: uint64,
 }
 
-/// Class is found in Header.Ident[EI_CLASS] and Header.Class.
-pub struct Class(byte)
-
-/// Data is found in Header.Ident[EI_DATA] and Header.Data.
-pub struct Data(byte)
-
 /// ELF32 Dynamic structure. The ".dynamic" section contains an array of them.
 pub struct Dyn32 {
   pub Tag: int32,
@@ -4330,9 +4360,11 @@ pub struct Dyn64 {
 }
 
 /// DT_FLAGS values.
+#[go(bit_flag_set)]
 pub struct DynFlag(int)
 
 /// DT_FLAGS_1 values.
+#[go(bit_flag_set)]
 pub struct DynFlag1(uint32)
 
 /// DynamicVersion is a version defined by a dynamic object.
@@ -4355,6 +4387,7 @@ pub struct DynamicVersionDep {
 }
 
 /// Dynamic version flags.
+#[go(bit_flag_set)]
 pub struct DynamicVersionFlag(uint16)
 
 /// DynamicVersionNeed describes a shared library needed by a dynamic object,
@@ -4430,9 +4463,6 @@ pub struct ImportedSymbol {
   pub Library: string,
 }
 
-/// NType values; used in core files.
-pub struct NType(int)
-
 /// A Prog represents a single ELF program header in an ELF binary.
 pub struct Prog {
   pub ProgHeader: ProgHeader,
@@ -4464,6 +4494,7 @@ pub struct Prog64 {
 }
 
 /// Prog.Flag
+#[go(bit_flag_set)]
 pub struct ProgFlag(uint32)
 
 /// A ProgHeader represents a single ELF program header.
@@ -4539,6 +4570,7 @@ pub struct Section64 {
 }
 
 /// Section flags.
+#[go(bit_flag_set)]
 pub struct SectionFlag(uint32)
 
 /// A SectionHeader represents a single ELF section header.
@@ -4689,26 +4721,8 @@ pub const EI_PAD = 9
 /// Indexes into the Header.Ident array.
 pub const EI_VERSION = 6
 
-pub const ELFCLASS32: Class = 1
-
-pub const ELFCLASS64: Class = 2
-
-pub const ELFCLASSNONE: Class = 0
-
-pub const ELFDATA2LSB: Data = 1
-
-pub const ELFDATA2MSB: Data = 2
-
-pub const ELFDATANONE: Data = 0
-
 /// Initial magic number for ELF files.
 pub const ELFMAG = "\x7fELF"
-
-pub const NT_FPREGSET: NType = 2
-
-pub const NT_PRPSINFO: NType = 3
-
-pub const NT_PRSTATUS: NType = 1
 
 pub const PF_MASKOS: ProgFlag = 0x0ff00000
 

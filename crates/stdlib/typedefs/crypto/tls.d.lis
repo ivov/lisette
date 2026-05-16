@@ -10,6 +10,24 @@ import "go:io"
 import "go:net"
 import "go:time"
 
+pub enum ClientAuthType: int {
+  NoClientCert = 0,
+  RequestClientCert = 1,
+  RequireAndVerifyClientCert = 4,
+  RequireAnyClientCert = 2,
+  VerifyClientCertIfGiven = 3,
+}
+
+pub const NoClientCert: ClientAuthType = 0
+
+pub const RequestClientCert: ClientAuthType = 1
+
+pub const RequireAndVerifyClientCert: ClientAuthType = 4
+
+pub const RequireAnyClientCert: ClientAuthType = 2
+
+pub const VerifyClientCertIfGiven: ClientAuthType = 3
+
 pub enum CurveID: uint16 {
   CurveP256 = 23,
   CurveP384 = 24,
@@ -75,6 +93,18 @@ pub const QUICTransportParameters: QUICEventKind = 4
 pub const QUICTransportParametersRequired: QUICEventKind = 5
 
 pub const QUICWriteData: QUICEventKind = 3
+
+pub enum RenegotiationSupport: int {
+  RenegotiateFreelyAsClient = 2,
+  RenegotiateNever = 0,
+  RenegotiateOnceAsClient = 1,
+}
+
+pub const RenegotiateFreelyAsClient: RenegotiationSupport = 2
+
+pub const RenegotiateNever: RenegotiationSupport = 0
+
+pub const RenegotiateOnceAsClient: RenegotiationSupport = 1
 
 pub enum SignatureScheme: uint16 {
   ECDSAWithP256AndSHA256 = 0x0403,
@@ -275,10 +305,6 @@ pub struct CipherSuite {
   pub Insecure: bool,
 }
 
-/// ClientAuthType declares the policy the server will follow for
-/// TLS Client Authentication.
-pub struct ClientAuthType(int)
-
 /// ClientHelloInfo contains information from a ClientHello message in order to
 /// guide application logic in the GetCertificate and GetConfigForClient callbacks.
 pub struct ClientHelloInfo {
@@ -431,41 +457,11 @@ pub struct RecordHeaderError {
   pub Conn: Option<net.Conn>,
 }
 
-/// RenegotiationSupport enumerates the different levels of support for TLS
-/// renegotiation. TLS renegotiation is the act of performing subsequent
-/// handshakes on a connection after the first. This significantly complicates
-/// the state machine and has been the source of numerous, subtle security
-/// issues. Initiating a renegotiation is not supported, but support for
-/// accepting renegotiation requests may be enabled.
-/// 
-/// Even when enabled, the server may not change its identity between handshakes
-/// (i.e. the leaf certificate must be the same). Additionally, concurrent
-/// handshake and application data flow is not permitted so renegotiation can
-/// only be used with protocols that synchronise with the renegotiation, such as
-/// HTTPS.
-/// 
-/// Renegotiation is not defined in TLS 1.3.
-pub struct RenegotiationSupport(int)
-
 /// A SessionState is a resumable session.
 pub struct SessionState {
   pub Extra: Slice<Slice<byte>>,
   pub EarlyData: bool,
 }
-
-pub const NoClientCert: ClientAuthType = 0
-
-pub const RenegotiateFreelyAsClient: RenegotiationSupport = 2
-
-pub const RenegotiateNever: RenegotiationSupport = 0
-
-pub const RenegotiateOnceAsClient: RenegotiationSupport = 1
-
-pub const RequestClientCert: ClientAuthType = 1
-
-pub const RequireAndVerifyClientCert: ClientAuthType = 4
-
-pub const RequireAnyClientCert: ClientAuthType = 2
 
 /// A list of cipher suite IDs that are, or have been, implemented by this
 /// package.
@@ -634,8 +630,6 @@ pub const TLS_RSA_WITH_AES_256_GCM_SHA384 = 0x009d
 /// 
 /// See https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
 pub const TLS_RSA_WITH_RC4_128_SHA = 0x0005
-
-pub const VerifyClientCertIfGiven: ClientAuthType = 3
 
 pub const VersionSSL30 = 0x0300
 

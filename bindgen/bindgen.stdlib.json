@@ -20,6 +20,15 @@
         "reflect": ["Select"],
         "strings": ["Cut"]
       },
+      "bit_flag_set": {
+        "debug/elf": ["DynamicVersionFlag", "ProgFlag", "SectionFlag"],
+        "go/ast": ["ChanDir", "MergeMode"],
+        "go/doc": ["Mode"],
+        "go/types": ["BasicInfo"],
+        "io/fs": ["FileMode"],
+        "regexp/syntax": ["Flags"],
+        "text/template/parse": ["Mode"]
+      },
       "direct_error": {
         "errors": ["New"],
         "fmt": ["Errorf"]

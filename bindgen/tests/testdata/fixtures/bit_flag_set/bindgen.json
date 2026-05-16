@@ -1,0 +1,11 @@
+{
+  "overrides": {
+    "types": {
+      "bit_flag_set": {
+        "github.com/ivov/lisette/bindgen/tests/testdata/fixtures/bit_flag_set": [
+          "ForcedFlags"
+        ]
+      }
+    }
+  }
+}

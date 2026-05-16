@@ -54,6 +54,7 @@ pub struct Directive {
 }
 
 /// An ImportMode controls the behavior of the Import method.
+#[go(bit_flag_set)]
 pub struct ImportMode(uint)
 
 /// MultiplePackageError describes a directory containing

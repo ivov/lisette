@@ -150,6 +150,7 @@ pub struct Func {
 }
 
 /// Mode values control the operation of [New] and [NewFromFiles].
+#[go(bit_flag_set)]
 pub struct Mode(int)
 
 /// A Note represents a marked comment starting with "MARKER(uid): note body".

@@ -28,20 +28,22 @@ type stats struct {
 }
 
 type Emitter struct {
-	buf        strings.Builder
-	stats      stats
-	skipped    int
-	methods    map[string][]convert.ConvertResult // receiver type name -> methods
-	cfg        *config.Config
-	pkgPath    string
-	pkgAliases map[string]string // package path -> local prefix used in references
+	buf             strings.Builder
+	stats           stats
+	skipped         int
+	methods         map[string][]convert.ConvertResult // receiver type name -> methods
+	cfg             *config.Config
+	pkgPath         string
+	pkgAliases      map[string]string // package path -> local prefix used in references
+	bitFlagSetTypes map[string]bool   // type names emitted as #[go(bit_flag_set)] newtypes
 }
 
-func NewEmitter(cfg *config.Config, pkgPath string) *Emitter {
+func NewEmitter(cfg *config.Config, pkgPath string, bitFlagSetTypes map[string]bool) *Emitter {
 	return &Emitter{
-		methods: make(map[string][]convert.ConvertResult),
-		cfg:     cfg,
-		pkgPath: pkgPath,
+		methods:         make(map[string][]convert.ConvertResult),
+		cfg:             cfg,
+		pkgPath:         pkgPath,
+		bitFlagSetTypes: bitFlagSetTypes,
 	}
 }
 
@@ -576,6 +578,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 			sig.WriteString(" = ")
 			sig.WriteString(result.LisetteType)
 		} else {
+			if e.bitFlagSetTypes[typeName] {
+				sig.WriteString("#[go(bit_flag_set)]\n")
+			}
 			sig.WriteString("pub struct ")
 			sig.WriteString(typeName)
 			sig.WriteString(result.TypeParams.DeclBlock())

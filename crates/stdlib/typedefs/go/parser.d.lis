@@ -91,6 +91,7 @@ pub fn ParseFile(
 /// A Mode value is a set of flags (or 0).
 /// They control the amount of source code parsed and other optional
 /// parser functionality.
+#[go(bit_flag_set)]
 pub struct Mode(uint)
 
 pub const AllErrors: Mode = 32

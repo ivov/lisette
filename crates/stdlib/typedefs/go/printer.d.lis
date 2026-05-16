@@ -28,6 +28,7 @@ pub struct Config {
 }
 
 /// A Mode value is a set of flags (or 0). They control printing.
+#[go(bit_flag_set)]
 pub struct Mode(uint)
 
 pub const RawFormat: Mode = 1
