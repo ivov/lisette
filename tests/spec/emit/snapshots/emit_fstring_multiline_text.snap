@@ -7,5 +7,5 @@ package main
 import "fmt"
 
 func test(name string) string {
-	return fmt.Sprintf("hello\n%v\nworld", name)
+	return fmt.Sprintf("hello\n%s\nworld", name)
 }

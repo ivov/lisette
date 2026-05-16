@@ -657,6 +657,19 @@ fn test() {
 }
 
 #[test]
+fn format_string_solo_rune() {
+    let input = r#"
+import "go:fmt"
+
+fn test() {
+  let c = 'A';
+  fmt.Print(f"{c}")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn compound_assignment() {
     let input = r#"
 fn test() -> int {

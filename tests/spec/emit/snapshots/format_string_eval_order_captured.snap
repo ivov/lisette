@@ -13,6 +13,6 @@ func bump(i *int) int {
 
 func main() {
 	i := 0
-	s := fmt.Sprintf("%v,%v", i, bump(&i))
+	s := fmt.Sprintf("%d,%d", i, bump(&i))
 	_ = s
 }

@@ -17,7 +17,7 @@ func test() string {
 	{
 		n_1 := pair.First
 		s_2 := pair.Second
-		r = fmt.Sprintf("%v-%v", n_1, s_2)
+		r = fmt.Sprintf("%d-%s", n_1, s_2)
 	}
-	return fmt.Sprintf("%v %v %v", n, s, r)
+	return fmt.Sprintf("%d %s %s", n, s, r)
 }

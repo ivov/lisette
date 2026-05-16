@@ -8,5 +8,5 @@ import "fmt"
 
 func test() {
 	pct := 50
-	fmt.Printf("%v%% complete", pct)
+	fmt.Printf("%d%% complete", pct)
 }

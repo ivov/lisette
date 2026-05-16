@@ -47,7 +47,7 @@ import (
 )
 
 func DescribeTaggedPair[A traits.Showable, B traits.Showable](tp types.Tagged[types.Pair[A, B]]) string {
-	return fmt.Sprintf("tagged_pair: %v", tp.Display())
+	return fmt.Sprintf("tagged_pair: %s", tp.Display())
 }
 
 
@@ -77,11 +77,11 @@ func (p Pair[A, B]) String() string {
 }
 
 func (p Pair[A, B]) Show() string {
-	return fmt.Sprintf("(%v, %v)", p.First.Show(), p.Second.Show())
+	return fmt.Sprintf("(%s, %s)", p.First.Show(), p.Second.Show())
 }
 
 func (p Pair[A, B]) Display() string {
-	return fmt.Sprintf("Pair%v", p.Show())
+	return fmt.Sprintf("Pair%s", p.Show())
 }
 
 type Tagged[T traits.Showable] struct {
@@ -94,9 +94,9 @@ func (t Tagged[T]) String() string {
 }
 
 func (t Tagged[T]) Show() string {
-	return fmt.Sprintf("[%v] %v", t.Label, t.Value.Show())
+	return fmt.Sprintf("[%s] %s", t.Label, t.Value.Show())
 }
 
 func (t Tagged[T]) Display() string {
-	return fmt.Sprintf("Tagged%v", t.Show())
+	return fmt.Sprintf("Tagged%s", t.Show())
 }

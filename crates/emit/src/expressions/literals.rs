@@ -5,7 +5,7 @@ use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::types::coercion::{Coercion, CoercionDirection};
 use syntax::ast::{FormatStringPart, Literal};
-use syntax::types::Type;
+use syntax::types::{SimpleKind, Type};
 
 impl Emitter<'_> {
     pub(super) fn emit_literal(
@@ -113,8 +113,8 @@ impl Emitter<'_> {
         let emitted = self.sequence(output, stages, "_fmtarg");
 
         let mut format_string = String::new();
-        let mut args = Vec::new();
-        let mut expression_idx = 0;
+        let mut args = Vec::with_capacity(emitted.len());
+        let mut emitted = emitted.into_iter();
 
         for part in parts {
             match part {
@@ -128,14 +128,20 @@ impl Emitter<'_> {
                     }
                 }
                 FormatStringPart::Expression(expression) => {
-                    let format_verb = if expression.get_type().is_rune() {
-                        "%c"
-                    } else {
-                        "%v"
+                    let format_verb = match expression.get_type().as_simple() {
+                        Some(SimpleKind::Rune) => "%c",
+                        Some(SimpleKind::String) => "%s",
+                        Some(SimpleKind::Bool) => "%t",
+                        Some(k) if k.is_signed_int() || k.is_unsigned_int() => "%d",
+                        Some(k) if k.is_float() => "%g",
+                        _ => "%v",
                     };
                     format_string.push_str(format_verb);
-                    args.push(emitted[expression_idx].clone());
-                    expression_idx += 1;
+                    args.push(
+                        emitted
+                            .next()
+                            .expect("emitted count matches expression parts"),
+                    );
                 }
             }
         }
@@ -145,7 +151,13 @@ impl Emitter<'_> {
         }
 
         self.requirements.require_fmt();
-        if format_string == "%v" && args.len() == 1 {
+        // Solo-expression f-strings round-trip through fmt.Sprint, which skips
+        // the format-string parse. Excluded: `%c`, because Sprint on a rune
+        // prints the integer codepoint instead of the character.
+        if args.len() == 1
+            && matches!(parts, [FormatStringPart::Expression(_)])
+            && format_string != "%c"
+        {
             return format!("fmt.Sprint({})", args[0]);
         }
         format!("fmt.Sprintf(\"{}\", {})", format_string, args.join(", "))

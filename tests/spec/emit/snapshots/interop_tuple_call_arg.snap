@@ -16,7 +16,7 @@ func use_split(f func(string) (string, string), p string) string {
 	tmp_1 := tup_4
 	dir := tmp_1.First
 	file := tmp_1.Second
-	return fmt.Sprintf("%v/%v", dir, file)
+	return fmt.Sprintf("%s/%s", dir, file)
 }
 
 func main() {

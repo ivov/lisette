@@ -45,10 +45,10 @@ func (e Either[L, R]) String() string {
 func (e Either[L, R]) display() string {
 	if e.Tag == EitherLeft {
 		s := e.Left.display()
-		return fmt.Sprintf("Left(%v)", s)
+		return fmt.Sprintf("Left(%s)", s)
 	}
 	s := e.Right.display()
-	return fmt.Sprintf("Right(%v)", s)
+	return fmt.Sprintf("Right(%s)", s)
 }
 
 type Name struct {

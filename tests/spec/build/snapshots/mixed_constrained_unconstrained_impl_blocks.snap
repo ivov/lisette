@@ -42,5 +42,5 @@ func main() {
 	b := Box[Name]{value: Name{name: "Alice"}}
 	Box_print(b)
 	b2 := Box[int]{value: 42}
-	fmt.Printf("int box: %v\n", b2.get())
+	fmt.Printf("int box: %d\n", b2.get())
 }

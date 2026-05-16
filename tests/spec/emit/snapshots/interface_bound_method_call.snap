@@ -12,5 +12,5 @@ type Stringer interface {
 
 func print_it[T Stringer](x T) {
 	s := x.string_value()
-	fmt.Printf("%v\n", s)
+	fmt.Printf("%s\n", s)
 }

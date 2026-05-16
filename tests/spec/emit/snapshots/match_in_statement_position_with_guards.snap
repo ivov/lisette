@@ -16,14 +16,14 @@ match_2:
 	for {
 		if subject_1.Tag == lisette.ResultOk {
 			if subject_1.OkVal > 0 {
-				fmt.Printf("positive: %v\n", subject_1.OkVal)
+				fmt.Printf("positive: %d\n", subject_1.OkVal)
 				break match_2
 			}
-			fmt.Printf("non-positive: %v\n", subject_1.OkVal)
+			fmt.Printf("non-positive: %d\n", subject_1.OkVal)
 			break match_2
 		}
 		e := subject_1.ErrVal
-		fmt.Printf("error: %v\n", e)
+		fmt.Printf("error: %s\n", e)
 		break match_2
 	}
 }

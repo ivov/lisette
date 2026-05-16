@@ -24,7 +24,7 @@ func (c Container[T]) String() string {
 }
 
 func Container_display[T Printable](self Container[T]) string {
-	return fmt.Sprintf("[%v] %v", self.label, self.value.PrintVal())
+	return fmt.Sprintf("[%s] %s", self.label, self.value.PrintVal())
 }
 
 func Container_total[T Summable](self Container[T]) int {
@@ -57,5 +57,5 @@ func main() {
 		label: "box",
 	}
 	fmt.Println(Container_display(c))
-	fmt.Printf("total: %v\n", Container_total(c))
+	fmt.Printf("total: %d\n", Container_total(c))
 }

@@ -15,7 +15,7 @@ match_2:
 			n := subject_1
 			if n < 10 {
 				result_3 := n * n
-				result = fmt.Sprintf("small(%v)", result_3)
+				result = fmt.Sprintf("small(%d)", result_3)
 				break match_2
 			}
 		}

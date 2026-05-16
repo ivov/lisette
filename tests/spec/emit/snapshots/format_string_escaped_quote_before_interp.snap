@@ -8,5 +8,5 @@ import "fmt"
 
 func test() {
 	x := 7
-	fmt.Printf("prefix \", %v\n", x)
+	fmt.Printf("prefix \", %d\n", x)
 }

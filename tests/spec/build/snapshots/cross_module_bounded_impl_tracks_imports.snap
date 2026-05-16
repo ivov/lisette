@@ -18,7 +18,7 @@ func (b Box[T]) String() string {
 }
 
 func (b Box[T]) Display() string {
-	return fmt.Sprintf("Box(%v)", b.Value.Show())
+	return fmt.Sprintf("Box(%s)", b.Value.Show())
 }
 
 

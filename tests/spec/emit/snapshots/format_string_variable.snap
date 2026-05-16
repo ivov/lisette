@@ -8,5 +8,5 @@ import "fmt"
 
 func test() {
 	result := 15
-	fmt.Printf("Result: %v", result)
+	fmt.Printf("Result: %d", result)
 }
