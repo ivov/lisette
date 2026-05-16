@@ -1,6 +1,15 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.6](https://github.com/ivov/lisette/compare/lisette-v0.2.5...lisette-v0.2.6) - 2026-05-16
+
+- fix: resolve dotted go import paths [#419](https://github.com/ivov/lisette/pull/419) [`d22fdfa`](https://github.com/ivov/lisette/commit/d22fdfaa0bc78850c07c0130769379999294042f)
+- fix: tighten bit-flag detection in bindgen [#418](https://github.com/ivov/lisette/pull/418) [`7a3c6fd`](https://github.com/ivov/lisette/commit/7a3c6fd20034195fb28d32175ba43b6cb2a0f306)
+- refactor: restore emit cosmetics [#416](https://github.com/ivov/lisette/pull/416) [`57f60eb`](https://github.com/ivov/lisette/commit/57f60ebda8ad332de8e77434f97620a4f44b0136)
+- fix: dedupe blank-import diagnostic [#415](https://github.com/ivov/lisette/pull/415) [`6aa882b`](https://github.com/ivov/lisette/commit/6aa882b04b58195f209113b23f151eaef1aed3eb)
+- refactor: drop last cosmetic emit cleanup pass [#414](https://github.com/ivov/lisette/pull/414) [`8e41a3a`](https://github.com/ivov/lisette/commit/8e41a3a9195374606918f872b6352e4bca8b2e0d)
+- refactor: drop four cosmetic emit cleanup passes [#413](https://github.com/ivov/lisette/pull/413) [`ed30007`](https://github.com/ivov/lisette/commit/ed300078ea67500655a10e7bfd5bfae205280b63)
+- refactor: ast-level emit negation and fmt collapse [#411](https://github.com/ivov/lisette/pull/411) [`f0b3966`](https://github.com/ivov/lisette/commit/f0b3966580b23a38cd536211f181bbe8286c06a2)
 ## [0.2.5](https://github.com/ivov/lisette/compare/lisette-v0.2.4...lisette-v0.2.5) - 2026-05-14
 
 - fix: track go import usage during emit [#410](https://github.com/ivov/lisette/pull/410) [`00d1b7a`](https://github.com/ivov/lisette/commit/00d1b7ab37daa2e0af24fb55e84622cb6e10a18c)
