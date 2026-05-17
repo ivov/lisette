@@ -270,6 +270,7 @@ fn check_discarded_tail(
         || reported_ty.is_ignored()
         || reported_ty.is_never()
         || reported_ty.is_variable()
+        || reported_ty.is_error()
     {
         return;
     } else {
@@ -310,7 +311,7 @@ fn emit_unused_expression(
         Some(UnusedExpressionKind::Option)
     } else if ty.is_partial() {
         Some(UnusedExpressionKind::Partial)
-    } else if !ty.is_unit() && !ty.is_variable() && !ty.is_never() {
+    } else if !ty.is_unit() && !ty.is_variable() && !ty.is_never() && !ty.is_error() {
         Some(UnusedExpressionKind::Value)
     } else {
         None

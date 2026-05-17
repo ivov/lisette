@@ -7233,3 +7233,62 @@ fn main() {
 "#;
     assert_parse_error_snapshot!(input);
 }
+
+#[test]
+fn infer_error_type_does_not_cascade_to_unused_value_lint() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Counter { pub n: int }
+
+impl Counter {
+  fn tick(self: Ref<Counter>) { () }
+}
+
+fn make() -> Result<Counter, error> { Ok(Counter { n: 0 }) }
+
+fn main() {
+  let c = make().unwrap()
+  c.tick()
+  ()
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|l| l.code_str() == Some("lint.unused_value")),
+        "Expected no lint.unused_value on c.tick() after .unwrap() poisoned the receiver type, got: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn infer_error_type_does_not_cascade_to_mismatched_return_value() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Counter { pub n: int }
+
+impl Counter {
+  fn tick(self: Ref<Counter>) { () }
+}
+
+fn make() -> Result<Counter, error> { Ok(Counter { n: 0 }) }
+
+fn main() {
+  let c = make().unwrap()
+  c.tick()
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.mismatched_return_value")),
+        "Expected no infer.mismatched_return_value on tail c.tick() after .unwrap() poisoned the receiver type, got: {:?}",
+        result.errors
+    );
+}
