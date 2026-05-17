@@ -1,9 +1,8 @@
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
 
-use syntax::ast::Generic;
-
 use crate::EnumLayout;
+use crate::names::constraints::{GenericConstraintTable, ParamConstraintSet};
 
 #[derive(Default)]
 pub(crate) struct ModuleState {
@@ -12,16 +11,10 @@ pub(crate) struct ModuleState {
     /// definition because Go cares about exported-vs-private field casing.
     tag_exported_fields: HashSet<String>,
     exported_method_names: HashSet<String>,
-    /// Multiple impl blocks with the same receiver must contribute their
-    /// bounds because Go requires generic constraints on the type definition
-    /// itself.
-    impl_bounds: HashMap<String, Vec<Generic>>,
-    /// Receivers with both constrained and unconstrained impl blocks need
-    /// special-cased generic-arg emission.
-    unconstrained_impl_receivers: HashSet<String>,
     module_aliases: HashMap<String, String>,
     reverse_module_aliases: HashMap<String, String>,
     escape_remap: HashMap<String, String>,
+    generic_constraints: GenericConstraintTable,
 }
 
 impl ModuleState {
@@ -51,43 +44,6 @@ impl ModuleState {
 
     pub(crate) fn has_local_exported_method_name(&self, name: &str) -> bool {
         self.exported_method_names.contains(name)
-    }
-
-    /// Merge new bounds into an existing impl_bounds entry, or insert fresh.
-    /// Multiple impl blocks with the same receiver must contribute their bounds
-    /// because Go requires generic constraints on the type definition itself.
-    pub(crate) fn record_impl_bounds(&mut self, receiver_name: &str, generics: &[Generic]) {
-        let Some(existing_generics) = self.impl_bounds.get_mut(receiver_name) else {
-            self.impl_bounds
-                .insert(receiver_name.to_string(), generics.to_vec());
-            return;
-        };
-        for new_gen in generics {
-            let Some(existing_gen) = existing_generics
-                .iter_mut()
-                .find(|g| g.name == new_gen.name)
-            else {
-                continue;
-            };
-            for bound in &new_gen.bounds {
-                if !existing_gen.bounds.contains(bound) {
-                    existing_gen.bounds.push(bound.clone());
-                }
-            }
-        }
-    }
-
-    pub(crate) fn impl_bounds(&self, type_name: &str) -> Option<&[Generic]> {
-        self.impl_bounds.get(type_name).map(Vec::as_slice)
-    }
-
-    pub(crate) fn record_unconstrained_impl_receiver(&mut self, receiver_name: impl Into<String>) {
-        self.unconstrained_impl_receivers
-            .insert(receiver_name.into());
-    }
-
-    pub(crate) fn has_unconstrained_impl_receiver(&self, type_name: &str) -> bool {
-        self.unconstrained_impl_receivers.contains(type_name)
     }
 
     pub(crate) fn record_module_alias(
@@ -120,6 +76,14 @@ impl ModuleState {
 
     pub(crate) fn escape_remap(&self, lisette_name: &str) -> Option<&str> {
         self.escape_remap.get(lisette_name).map(String::as_str)
+    }
+
+    pub(crate) fn set_generic_constraints(&mut self, table: GenericConstraintTable) {
+        self.generic_constraints = table;
+    }
+
+    pub(crate) fn generic_constraints_for(&self, symbol: &str) -> Option<&[ParamConstraintSet]> {
+        self.generic_constraints.get(symbol)
     }
 }
 

@@ -1,0 +1,36 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface Named {\n  fn name(self) -> string\n}\n\nstruct Person {\n  value: string,\n}\n\nimpl Person {\n  fn name(self) -> string {\n    self.value\n  }\n}\n\nfn count<T: Named>(x: T) -> int {\n  let mut m: Map<T, int> = Map.new()\n  m[x] = 1\n  m.length()\n}\n\nfn main() {\n  let _ = count(Person { value: \"Ada\" })\n}\n"
+---
+package main
+
+import "fmt"
+
+type Named interface {
+	name() string
+}
+
+type Person struct {
+	value string
+}
+
+func (p Person) String() string {
+	return fmt.Sprintf("Person { value: %v }", p.value)
+}
+
+func (p Person) name() string {
+	return p.value
+}
+
+func count[T interface {
+	Named
+	comparable
+}](x T) int {
+	m := make(map[T]int)
+	m[x] = 1
+	return len(m)
+}
+
+func main() {
+	_ = count(Person{value: "Ada"})
+}

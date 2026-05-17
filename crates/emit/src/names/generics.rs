@@ -1,9 +1,9 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::Emitter;
+use crate::names::constraints::{ConstraintAtom, ParamConstraintSet, classify_builtin_name};
 use syntax::EcoString;
-use syntax::ast::{Expression, Generic};
-use syntax::program::{Definition, DefinitionBody};
+use syntax::ast::{Annotation, Generic};
 use syntax::types::Type;
 
 fn build_type_map(generics: &[Generic], type_args: &[Type]) -> HashMap<EcoString, Type> {
@@ -41,281 +41,92 @@ pub(crate) fn receiver_generics_string(generics: &[Generic]) -> String {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn merge_impl_bounds(&self, type_name: &str, generics: &[Generic]) -> Vec<Generic> {
-        let Some(impl_generics) = self.module.impl_bounds(type_name) else {
-            return generics.to_vec();
-        };
-
-        if self.module.has_unconstrained_impl_receiver(type_name) {
-            return generics.to_vec();
-        }
-
-        generics
-            .iter()
-            .map(|g| {
-                if !g.bounds.is_empty() {
-                    return g.clone();
-                }
-                if let Some(impl_g) = impl_generics.iter().find(|ig| ig.name == g.name) {
-                    Generic {
-                        bounds: impl_g.bounds.clone(),
-                        ..g.clone()
-                    }
-                } else {
-                    g.clone()
-                }
-            })
-            .collect()
-    }
-
-    fn is_map_key_type(ty: &Type, generic_name: &str) -> bool {
-        if let Type::Compound {
-            kind: syntax::types::CompoundKind::Map,
-            args,
-        } = ty
-            && !args.is_empty()
-            && let Type::Parameter(name) = &args[0]
-            && name.as_ref() == generic_name
-        {
-            return true;
-        }
-        match ty {
-            Type::Nominal { id, params, .. } => {
-                if (id.as_ref() == "Map" || id.as_ref().ends_with(".Map"))
-                    && !params.is_empty()
-                    && let Type::Parameter(name) = &params[0]
-                    && name.as_ref() == generic_name
-                {
-                    return true;
-                }
-                params
-                    .iter()
-                    .any(|p| Self::is_map_key_type(p, generic_name))
-            }
-            Type::Compound { args, .. } => {
-                args.iter().any(|a| Self::is_map_key_type(a, generic_name))
-            }
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => {
-                params
-                    .iter()
-                    .any(|p| Self::is_map_key_type(p, generic_name))
-                    || Self::is_map_key_type(return_type, generic_name)
-            }
-            Type::Tuple(elements) => elements
-                .iter()
-                .any(|e| Self::is_map_key_type(e, generic_name)),
-            _ => false,
-        }
-    }
-
-    pub(crate) fn collect_map_key_generics<'a>(
-        types: impl Iterator<Item = &'a Type>,
-        generic_names: &[&str],
-    ) -> HashSet<String> {
-        let mut result = HashSet::default();
-        for ty in types {
-            for generic_name in generic_names {
-                if !result.contains(*generic_name) && Self::is_map_key_type(ty, generic_name) {
-                    result.insert(generic_name.to_string());
-                }
-            }
-        }
-        result
-    }
-
-    pub(crate) fn map_key_positions(
-        &self,
-        id: &str,
-        visited: &mut HashSet<String>,
-    ) -> HashSet<usize> {
-        if !visited.insert(id.to_string()) {
-            return HashSet::default();
-        }
-        let peeled = self.peel_alias_id(id);
-        let Some(Definition {
-            body: DefinitionBody::Interface { definition },
-            ..
-        }) = self.facts.definition(peeled.as_str())
-        else {
-            return HashSet::default();
-        };
-        let names: Vec<&str> = definition
-            .generics
-            .iter()
-            .map(|g| g.name.as_ref())
-            .collect();
-        let keys = Self::collect_map_key_generics(definition.methods.values(), &names);
-        let mut positions: HashSet<usize> = definition
-            .generics
-            .iter()
-            .enumerate()
-            .filter(|(_, g)| keys.contains(g.name.as_ref()))
-            .map(|(i, _)| i)
-            .collect();
-        for p in &definition.parents {
-            if let Type::Nominal {
-                id: pid, params, ..
-            } = p
-            {
-                for position in self.map_key_positions(pid, visited) {
-                    if let Some(Type::Parameter(name)) = params.get(position)
-                        && let Some(idx) = definition.generics.iter().position(|g| g.name == *name)
-                    {
-                        positions.insert(idx);
-                    }
-                }
-            }
-        }
-        positions
-    }
-
-    pub(crate) fn enum_map_key_generics(
-        &self,
-        enum_id: &str,
-        generic_names: &[&str],
-    ) -> HashSet<String> {
-        if let Some(Definition {
-            body: DefinitionBody::Enum { variants, .. },
-            ..
-        }) = self.facts.definition(enum_id)
-        {
-            let types = variants.iter().flat_map(|v| v.fields.iter().map(|f| &f.ty));
-            Self::collect_map_key_generics(types, generic_names)
-        } else {
-            HashSet::default()
-        }
-    }
-
-    pub(crate) fn body_has_map_key_generic(expression: &Expression, generic_name: &str) -> bool {
-        match expression {
-            Expression::Block { items, .. }
-            | Expression::TryBlock { items, .. }
-            | Expression::RecoverBlock { items, .. } => items
-                .iter()
-                .any(|item| Self::body_has_map_key_generic(item, generic_name)),
-            Expression::Let {
-                binding,
-                else_block,
-                ..
-            } => {
-                Self::is_map_key_type(&binding.ty, generic_name)
-                    || else_block
-                        .as_ref()
-                        .is_some_and(|eb| Self::body_has_map_key_generic(eb, generic_name))
-            }
-            Expression::If {
-                consequence,
-                alternative,
-                ..
-            }
-            | Expression::IfLet {
-                consequence,
-                alternative,
-                ..
-            } => {
-                Self::body_has_map_key_generic(consequence, generic_name)
-                    || Self::body_has_map_key_generic(alternative, generic_name)
-            }
-            Expression::Match { arms, .. } => arms
-                .iter()
-                .any(|arm| Self::body_has_map_key_generic(&arm.expression, generic_name)),
-            Expression::Loop { body, .. }
-            | Expression::While { body, .. }
-            | Expression::WhileLet { body, .. }
-            | Expression::For { body, .. } => Self::body_has_map_key_generic(body, generic_name),
-            Expression::Task { expression, .. } | Expression::Defer { expression, .. } => {
-                Self::body_has_map_key_generic(expression, generic_name)
-            }
-            Expression::Select { arms, .. } => arms.iter().any(|arm| {
-                use syntax::ast::SelectArmPattern;
-                match &arm.pattern {
-                    SelectArmPattern::Receive { body, .. }
-                    | SelectArmPattern::Send { body, .. }
-                    | SelectArmPattern::WildCard { body, .. } => {
-                        Self::body_has_map_key_generic(body, generic_name)
-                    }
-                    SelectArmPattern::MatchReceive { arms, .. } => arms
-                        .iter()
-                        .any(|a| Self::body_has_map_key_generic(&a.expression, generic_name)),
-                }
-            }),
-            Expression::Lambda { body, .. } | Expression::Function { body, .. } => {
-                Self::body_has_map_key_generic(body, generic_name)
-            }
-            _ => {
-                Self::is_map_key_type(&expression.get_type(), generic_name)
-                    || Self::expression_tree_has_map_key(expression, generic_name)
-            }
-        }
-    }
-
-    fn expression_tree_has_map_key(expression: &Expression, generic_name: &str) -> bool {
-        match expression {
-            Expression::Call {
-                expression,
-                args,
-                spread,
-                ..
-            } => {
-                Self::is_map_key_type(&expression.get_type(), generic_name)
-                    || args
-                        .iter()
-                        .any(|a| Self::is_map_key_type(&a.get_type(), generic_name))
-                    || args
-                        .iter()
-                        .any(|a| Self::expression_tree_has_map_key(a, generic_name))
-                    || spread.as_ref().as_ref().is_some_and(|s| {
-                        Self::is_map_key_type(&s.get_type(), generic_name)
-                            || Self::expression_tree_has_map_key(s, generic_name)
-                    })
-            }
-            _ => false,
-        }
-    }
-
-    pub(crate) fn generics_to_string_with_map_keys(
+    pub(crate) fn generics_to_string_for_symbol(
         &mut self,
+        symbol: &str,
         generics: &[Generic],
-        map_key_generics: &HashSet<String>,
     ) -> String {
         if generics.is_empty() {
             return String::new();
         }
+        let constraints = self
+            .module
+            .generic_constraints_for(symbol)
+            .map(<[ParamConstraintSet]>::to_vec);
 
-        let generics_string = generics
+        let rendered = generics
             .iter()
             .map(|g| {
-                let bounds: Vec<_> = g
-                    .bounds
-                    .iter()
-                    .map(|ann| self.annotation_to_go_type(ann))
-                    .collect();
-
-                let constraint = match bounds.as_slice() {
-                    [] => {
-                        if map_key_generics.contains(g.name.as_ref()) {
-                            "comparable".to_string()
-                        } else {
-                            "any".to_string()
-                        }
-                    }
-                    [single] => single.clone(),
-                    multiple => {
-                        let ifaces = multiple.join("; ");
-                        return format!("{} interface {{ {} }}", g.name, ifaces);
-                    }
-                };
-
+                let set = constraints
+                    .as_ref()
+                    .and_then(|sets| sets.iter().find(|s| s.name == g.name));
+                let constraint = self.render_constraint(g, set);
                 format!("{} {}", g.name, constraint)
             })
             .collect::<Vec<_>>()
             .join(", ");
 
-        format!("[{}]", generics_string)
+        format!("[{}]", rendered)
+    }
+
+    fn render_constraint(
+        &mut self,
+        generic: &Generic,
+        constraint_set: Option<&ParamConstraintSet>,
+    ) -> String {
+        let (explicit_atoms, inferred_comparable) = match constraint_set {
+            Some(set) => (set.explicit.clone(), set.inferred_comparable),
+            None => {
+                // Fallback for symbols that bypassed `collect_generic_constraints`.
+                let atoms: Vec<ConstraintAtom> = generic
+                    .bounds
+                    .iter()
+                    .map(|ann| {
+                        if let Annotation::Constructor { name, .. } = ann
+                            && let Some(b) = classify_builtin_name(name)
+                        {
+                            b
+                        } else {
+                            ConstraintAtom::Named(ann.clone())
+                        }
+                    })
+                    .collect();
+                (atoms, false)
+            }
+        };
+
+        // `Ordered` already implies `Comparable`; never double up.
+        let needs_comparable_appendage = inferred_comparable
+            && !explicit_atoms
+                .iter()
+                .any(ConstraintAtom::implies_comparable);
+
+        let mut named_bounds: Vec<String> = Vec::new();
+        let mut comparable_seen = false;
+        for atom in &explicit_atoms {
+            match atom {
+                ConstraintAtom::Comparable => {
+                    comparable_seen = true;
+                }
+                ConstraintAtom::Ordered => {
+                    self.requirements.require_go_import("cmp");
+                    named_bounds.push("cmp.Ordered".to_string());
+                }
+                ConstraintAtom::Named(ann) => {
+                    named_bounds.push(self.annotation_to_go_type(ann));
+                }
+            }
+        }
+
+        if needs_comparable_appendage || comparable_seen {
+            named_bounds.push("comparable".to_string());
+        }
+
+        match named_bounds.as_slice() {
+            [] => "any".to_string(),
+            [single] => single.clone(),
+            multiple => format!("interface {{ {} }}", multiple.join("; ")),
+        }
     }
 }
 

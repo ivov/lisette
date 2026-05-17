@@ -16,14 +16,11 @@ impl Emitter<'_> {
         kind: &StructKind,
         struct_attrs: &[Attribute],
     ) -> String {
-        let generics = self.merge_impl_bounds(name, generics);
-        let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
-        let map_key_generics =
-            Self::collect_map_key_generics(fields.iter().map(|f| &f.ty), &generic_names);
-        let generics_string = self.generics_to_string_with_map_keys(&generics, &map_key_generics);
+        let symbol = self.facts.qualified_current(name);
+        let generics_string = self.generics_to_string_for_symbol(&symbol, generics);
 
         if *kind == StructKind::Tuple {
-            return self.emit_tuple_struct(name, &generics_string, fields, &generics);
+            return self.emit_tuple_struct(name, &generics_string, fields, generics);
         }
 
         let (field_strings, stringer_fields): (Vec<String>, Vec<StringerField>) = fields
@@ -31,7 +28,7 @@ impl Emitter<'_> {
             .map(|f| self.emit_struct_field(f, name, struct_attrs))
             .unzip();
 
-        let receiver_generics = receiver_generics_string(&generics);
+        let receiver_generics = receiver_generics_string(generics);
         let go_type_name = go_name::escape_keyword(name);
 
         let definition = if field_strings.is_empty() {

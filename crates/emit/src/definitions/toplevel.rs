@@ -51,10 +51,8 @@ impl Emitter<'_> {
             self.require_module_import(&module);
         }
 
-        let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
-        let map_key_generics =
-            Self::collect_map_key_generics(std::iter::once(underlying), &generic_names);
-        let generics_string = self.generics_to_string_with_map_keys(generics, &map_key_generics);
+        let symbol = self.facts.qualified_current(name);
+        let generics_string = self.generics_to_string_for_symbol(&symbol, generics);
 
         let separator = if is_fn_alias { " " } else { " = " };
         format!(

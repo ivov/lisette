@@ -2837,3 +2837,305 @@ fn run(callback: fn(int)) {}
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn impl_method_map_key_return_constrains_struct_receiver() {
+    let input = r#"
+struct Box<T> {
+  value: T,
+}
+
+impl<T> Box<T> {
+  fn make_map(self) -> Map<T, int> {
+    Map.new<T, int>()
+  }
+}
+
+fn main() {
+  let b = Box { value: "a" }
+  let _ = b.make_map()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn impl_method_map_key_body_constrains_struct_receiver() {
+    let input = r#"
+struct Box<T> {
+  value: T,
+}
+
+impl<T> Box<T> {
+  fn count(self) -> int {
+    let m = Map.new<T, int>()
+    m.length()
+  }
+}
+
+fn main() {
+  let b = Box { value: "a" }
+  let _ = b.count()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn impl_method_map_key_body_constrains_enum_receiver_and_make_function() {
+    let input = r#"
+enum Holder<T> {
+  Empty,
+}
+
+impl<T> Holder<T> {
+  fn count(self) -> int {
+    let m = Map.new<T, int>()
+    m.length()
+  }
+}
+
+fn main() {
+  let h: Holder<string> = Holder.Empty
+  let _ = h.count()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn builtin_comparable_bound_lowers_to_go_comparable() {
+    let input = r#"
+fn id<T: Comparable>(x: T) -> T {
+  x
+}
+
+fn main() {
+  let _ = id(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn builtin_ordered_bound_lowers_to_cmp_ordered_with_import() {
+    let input = r#"
+fn id<T: Ordered>(x: T) -> T {
+  x
+}
+
+fn main() {
+  let _ = id(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_alias_propagates_comparable_to_struct_field_use() {
+    let input = r#"
+type Table<T> = Map<T, int>
+
+struct Box<T> {
+  table: Table<T>,
+}
+
+fn main() {
+  let b = Box { table: Map.new<string, int>() }
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_alias_propagates_comparable_to_function_signature() {
+    let input = r#"
+type Table<T> = Map<T, int>
+
+fn id<T>(table: Table<T>) -> Table<T> {
+  table
+}
+
+fn main() {
+  let t = Map.new<string, int>()
+  let _ = id(t)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_alias_propagates_comparable_to_enum_variant() {
+    let input = r#"
+type Table<T> = Map<T, int>
+
+enum Holder<T> {
+  Some(Table<T>),
+}
+
+fn main() {
+  let h = Holder.Some(Map.new<string, int>())
+  let _ = h
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_alias_propagates_comparable_to_interface_method() {
+    let input = r#"
+type Table<T> = Map<T, int>
+
+interface Uses<T> {
+  fn id(self, table: Table<T>) -> Table<T>
+}
+
+fn main() {
+  let _ = 1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_key_use_in_let_initializer_constrains_generic() {
+    let input = r#"
+fn is_empty<T>() -> bool {
+  let empty = Map.new<T, int>().is_empty()
+  empty
+}
+
+fn main() {
+  let _ = is_empty<int>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_key_use_in_tail_expression_constrains_generic() {
+    let input = r#"
+fn is_empty<T>() -> bool {
+  Map.new<T, int>().is_empty()
+}
+
+fn main() {
+  let _ = is_empty<int>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn map_key_use_in_if_condition_constrains_generic() {
+    let input = r#"
+fn score<T>() -> int {
+  if Map.new<T, int>().is_empty() {
+    1
+  } else {
+    0
+  }
+}
+
+fn main() {
+  let _ = score<int>()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn explicit_named_bound_merges_with_inferred_comparable_on_function() {
+    let input = r#"
+interface Named {
+  fn name(self) -> string
+}
+
+struct Person {
+  value: string,
+}
+
+impl Person {
+  fn name(self) -> string {
+    self.value
+  }
+}
+
+fn count<T: Named>(x: T) -> int {
+  let mut m: Map<T, int> = Map.new()
+  m[x] = 1
+  m.length()
+}
+
+fn main() {
+  let _ = count(Person { value: "Ada" })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn explicit_named_bound_merges_with_inferred_comparable_on_struct() {
+    let input = r#"
+interface Named {
+  fn name(self) -> string
+}
+
+struct Person {
+  value: string,
+}
+
+impl Person {
+  fn name(self) -> string {
+    self.value
+  }
+}
+
+struct Box<T: Named> {
+  table: Map<T, int>,
+}
+
+fn main() {
+  let p = Person { value: "Ada" }
+  let _ = p.name()
+  let b: Box<Person> = Box { table: Map.new() }
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn ordered_bound_plus_map_key_use_stays_cmp_ordered() {
+    let input = r#"
+fn count<T: Ordered>(x: T) -> int {
+  let mut m: Map<T, int> = Map.new()
+  m[x] = 1
+  m.length()
+}
+
+fn main() {
+  let _ = count(1)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn alias_chain_propagates_comparable_through_two_steps() {
+    let input = r#"
+type B<T> = Map<T, int>
+type A<T> = B<T>
+
+struct Box<T> {
+  table: A<T>,
+}
+
+fn main() {
+  let b = Box { table: Map.new<string, int>() }
+  let _ = b
+}
+"#;
+    assert_emit_snapshot!(input);
+}

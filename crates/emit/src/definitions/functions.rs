@@ -15,6 +15,14 @@ use syntax::types::Type;
 /// Owned param-destructure record: temp var, pattern, typed pattern, param type.
 type DeferredParamDestructure = (String, Pattern, Option<TypedPattern>, Type);
 
+fn receiver_type_name(ty: &Type) -> Option<&str> {
+    if let Type::Nominal { id, .. } = ty.unwrap_forall() {
+        Some(syntax::types::unqualified_name(id.as_str()))
+    } else {
+        None
+    }
+}
+
 /// Borrowed lambda param-destructure record. Lambdas keep references to the
 /// caller's `params` slice since they cannot outlive emission scope.
 type LambdaParamDestructure<'a> = (String, &'a Pattern, Option<&'a TypedPattern>, &'a Type);
@@ -252,7 +260,8 @@ impl Emitter<'_> {
 
         parts.push(self.pick_go_function_name(&function_definition, receiver.is_some(), is_public));
 
-        let generics_str = self.build_generics_string(&function_definition, params_to_process);
+        let generics_str =
+            self.build_generics_string(&function_definition, params_to_process, receiver.as_ref());
         if !generics_str.is_empty() {
             parts.push(generics_str);
         }
@@ -307,26 +316,28 @@ impl Emitter<'_> {
     fn build_generics_string(
         &mut self,
         function_definition: &FunctionDefinition,
-        params_to_process: &[Binding],
+        _params_to_process: &[Binding],
+        receiver: Option<&(String, Type)>,
     ) -> String {
-        let generic_names: Vec<&str> = function_definition
-            .generics
-            .iter()
-            .map(|g| g.name.as_ref())
-            .collect();
-        let sig_types = params_to_process
-            .iter()
-            .map(|p| &p.ty)
-            .chain(std::iter::once(&function_definition.return_type));
-        let mut map_key_generics = Self::collect_map_key_generics(sig_types, &generic_names);
-        for name in &generic_names {
-            if !map_key_generics.contains(*name)
-                && Self::body_has_map_key_generic(&function_definition.body, name)
-            {
-                map_key_generics.insert(name.to_string());
-            }
+        let symbol = self.symbol_for_function(&function_definition.name, receiver);
+        self.generics_to_string_for_symbol(&symbol, &function_definition.generics)
+    }
+
+    fn symbol_for_function(
+        &self,
+        function_name: &str,
+        receiver: Option<&(String, Type)>,
+    ) -> String {
+        if let Some((_, receiver_ty)) = receiver
+            && let Some(name) = receiver_type_name(receiver_ty)
+        {
+            return self.facts.qualified_current_member(name, function_name);
         }
-        self.generics_to_string_with_map_keys(&function_definition.generics, &map_key_generics)
+        if let Some((receiver, method)) = function_name.split_once('.') {
+            self.facts.qualified_current_member(receiver, method)
+        } else {
+            self.facts.qualified_current(function_name)
+        }
     }
 
     fn build_signature_tail(

@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ntype Table<T> = Map<T, int>\n\nfn id<T>(table: Table<T>) -> Table<T> {\n  table\n}\n\nfn main() {\n  let t = Map.new<string, int>()\n  let _ = id(t)\n}\n"
+---
+package main
+
+type Table[T comparable] = map[T]int
+
+func id[T comparable](table Table[T]) Table[T] {
+	return table
+}
+
+func main() {
+	t := make(map[string]int)
+	_ = id(t)
+}

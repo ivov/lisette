@@ -1,0 +1,25 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Box<T> {\n  value: T,\n}\n\nimpl<T> Box<T> {\n  fn count(self) -> int {\n    let m = Map.new<T, int>()\n    m.length()\n  }\n}\n\nfn main() {\n  let b = Box { value: \"a\" }\n  let _ = b.count()\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box[T comparable] struct {
+	value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.value)
+}
+
+func (b Box[T]) count() int {
+	m := make(map[T]int)
+	return len(m)
+}
+
+func main() {
+	b := Box[string]{value: "a"}
+	_ = b.count()
+}

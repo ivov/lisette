@@ -1,0 +1,41 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface Named {\n  fn name(self) -> string\n}\n\nstruct Person {\n  value: string,\n}\n\nimpl Person {\n  fn name(self) -> string {\n    self.value\n  }\n}\n\nstruct Box<T: Named> {\n  table: Map<T, int>,\n}\n\nfn main() {\n  let p = Person { value: \"Ada\" }\n  let _ = p.name()\n  let b: Box<Person> = Box { table: Map.new() }\n  let _ = b\n}\n"
+---
+package main
+
+import "fmt"
+
+type Named interface {
+	name() string
+}
+
+type Person struct {
+	value string
+}
+
+func (p Person) String() string {
+	return fmt.Sprintf("Person { value: %v }", p.value)
+}
+
+func (p Person) name() string {
+	return p.value
+}
+
+type Box[T interface {
+	Named
+	comparable
+}] struct {
+	table map[T]int
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { table: %v }", b.table)
+}
+
+func main() {
+	p := Person{value: "Ada"}
+	_ = p.name()
+	b := Box[Person]{table: make(map[Person]int)}
+	_ = b
+}

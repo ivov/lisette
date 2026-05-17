@@ -38,11 +38,8 @@ impl Emitter<'_> {
             let _ = self.go_type_as_string(ty);
         }
 
-        let generics = self.merge_impl_bounds(name, generics);
-        let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
-        let map_key_generics = self.enum_map_key_generics(&enum_id, &generic_names);
-        let generics_string = self.generics_to_string_with_map_keys(&generics, &map_key_generics);
-        let receiver_generics = receiver_generics_string(&generics);
+        let generics_string = self.generics_to_string_for_symbol(&enum_id, generics);
+        let receiver_generics = receiver_generics_string(generics);
         let has_json = attributes.iter().any(|a| a.name == "json");
 
         let stringer_name = self.stringer_method_name(name);
@@ -108,10 +105,7 @@ impl Emitter<'_> {
                 .map(|g| g.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
-            let map_key_generics = self.enum_map_key_generics(enum_id, &generic_names);
-            let generics_string =
-                self.generics_to_string_with_map_keys(&generics, &map_key_generics);
+            let generics_string = self.generics_to_string_for_symbol(enum_id, &generics);
             (generics_string, format!("[{}]", args))
         };
 

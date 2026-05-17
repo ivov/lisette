@@ -94,33 +94,9 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn collect_impl_bounds(&mut self, files: &[&File]) {
-        use syntax::ast::Expression;
-
-        for file in files {
-            for item in &file.items {
-                let Expression::ImplBlock {
-                    receiver_name,
-                    generics,
-                    ..
-                } = item
-                else {
-                    continue;
-                };
-                if !generics.iter().any(|g| !g.bounds.is_empty()) {
-                    self.module
-                        .record_unconstrained_impl_receiver(receiver_name.to_string());
-                    continue;
-                }
-                self.record_bound_imports(generics);
-                self.module.record_impl_bounds(receiver_name, generics);
-            }
-        }
-    }
-
     /// Register cross-module imports for any bound types referenced in these generics.
     /// In-module, Go-imported, and prelude modules don't need explicit imports.
-    fn record_bound_imports(&mut self, generics: &[syntax::ast::Generic]) {
+    pub(crate) fn record_bound_imports(&mut self, generics: &[syntax::ast::Generic]) {
         for generic in generics {
             for bound in &generic.bounds {
                 let syntax::ast::Annotation::Constructor { name, .. } = bound else {

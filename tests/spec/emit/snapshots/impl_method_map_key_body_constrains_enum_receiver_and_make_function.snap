@@ -1,0 +1,40 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum Holder<T> {\n  Empty,\n}\n\nimpl<T> Holder<T> {\n  fn count(self) -> int {\n    let m = Map.new<T, int>()\n    m.length()\n  }\n}\n\nfn main() {\n  let h: Holder<string> = Holder.Empty\n  let _ = h.count()\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeHolderEmpty[T comparable]() Holder[T] {
+	return Holder[T]{Tag: HolderEmpty}
+}
+
+type HolderTag int
+
+const (
+	HolderEmpty HolderTag = iota
+)
+
+type Holder[T comparable] struct {
+	Tag HolderTag
+}
+
+func (h Holder[T]) String() string {
+	switch h.Tag {
+	case HolderEmpty:
+		return "Holder.Empty"
+	default:
+		return fmt.Sprintf("Holder(%d)", h.Tag)
+	}
+}
+
+func (h Holder[T]) count() int {
+	m := make(map[T]int)
+	return len(m)
+}
+
+func main() {
+	h := MakeHolderEmpty[string]()
+	_ = h.count()
+}

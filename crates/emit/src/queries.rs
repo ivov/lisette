@@ -4,7 +4,6 @@ use crate::Emitter;
 use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
-use crate::names::go_name;
 use syntax::ast::{Pattern, RestPattern, StructKind};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute};
@@ -226,9 +225,9 @@ impl Emitter<'_> {
 
 impl Emitter<'_> {
     /// Pre-compute enum layouts for all known enum definitions.
-    ///
-    /// Must be called after `collect_impl_bounds()` since layouts need merged bounds.
-    /// Replaces the previous lazy `ensure_enum_layout()` pattern.
+    /// Replaces the previous lazy `ensure_enum_layout()` pattern. Generic
+    /// constraints are looked up from the constraint table at render time,
+    /// so layouts only need to store the source-AST generics.
     pub(crate) fn collect_enum_layouts(&mut self) {
         let enum_defs: Vec<_> = self
             .facts
@@ -274,9 +273,6 @@ impl Emitter<'_> {
                     );
                 }
             }
-
-            let enum_name = go_name::unqualified_name(&enum_id);
-            let generics = self.merge_impl_bounds(enum_name, &generics);
 
             let layout = EnumLayout::new(&enum_id, &generics, &variants, &field_types);
             self.module.record_enum_layout(enum_id, layout);

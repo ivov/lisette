@@ -1,6 +1,7 @@
 pub(crate) mod bindings;
 pub(crate) mod calls;
 mod collectors;
+mod constraint_collector;
 pub(crate) mod control_flow;
 pub(crate) mod definitions;
 pub(crate) mod expressions;
@@ -454,7 +455,7 @@ impl<'a> Emitter<'a> {
         self.facts.set_current_module(module_id);
         self.collect_module_aliases(files);
         self.collect_local_exported_method_names(files);
-        self.collect_impl_bounds(files);
+        self.collect_generic_constraints(files);
         self.collect_enum_layouts();
         self.collect_escape_remap(files);
         let mut make_functions_by_file = self.collect_local_make_function_code();
