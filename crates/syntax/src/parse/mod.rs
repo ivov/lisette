@@ -616,6 +616,21 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
+    pub(super) fn error_missing_initializer(&mut self, span: ast::Span) {
+        if self.too_many_errors() {
+            return;
+        }
+        let error = ParseError::new(
+            "Missing initializer",
+            span,
+            "annotated binding needs a value",
+        )
+        .with_parse_code("missing_initializer")
+        .with_help("Bindings must be initialized");
+
+        self.errors.push(error);
+    }
+
     fn track_ensure_error(&mut self, expected_token: TokenKind) {
         if self.too_many_errors() {
             return;

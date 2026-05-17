@@ -680,6 +680,16 @@ fn test() {
 }
 
 #[test]
+fn parse_typed_binding_missing_initializer() {
+    let input = r#"
+fn test() {
+  let mut x: atomic.Int64
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_struct_instantiation_missing_comma() {
     let input = r#"
 fn test() {

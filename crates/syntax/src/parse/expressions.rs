@@ -909,6 +909,28 @@ impl<'source> Parser<'source> {
 
         let binding = self.parse_binding_allowing_or();
 
+        if !self.is(Equal)
+            && let Some(Annotation::Constructor { span, .. }) = binding.annotation.as_ref()
+        {
+            self.error_missing_initializer(*span);
+            let stub_span = self.span_from_tokens(start);
+            return Expression::Let {
+                binding: Box::new(binding),
+                value: Box::new(Expression::Block {
+                    ty: Type::uninferred(),
+                    items: vec![],
+                    span: stub_span,
+                }),
+                mutable,
+                mut_span,
+                else_block: None,
+                else_span: None,
+                typed_pattern: None,
+                ty: Type::uninferred(),
+                span: stub_span,
+            };
+        }
+
         self.ensure(Equal);
 
         let expression = self.parse_expression();

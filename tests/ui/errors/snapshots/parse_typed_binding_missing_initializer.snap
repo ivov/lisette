@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Missing initializer
+   ╭─[test.lis:3:14]
+ 2 │ fn test() {
+ 3 │   let mut x: atomic.Int64
+   ·              ──────┬─────
+   ·                    ╰── annotated binding needs a value
+ 4 │ }
+   ╰────
+  help: Bindings must be initialized · code: [parse.missing_initializer]
