@@ -16,6 +16,7 @@ pub(crate) enum CoercionKind {
     UnwrapNullableOption { ty: Type },
     UnwrapPointerOption { ty: Type },
     UnwrapNullableCollection { ty: Type, elem_option_ty: Type },
+    UnwrapOptionToAny,
     WrapNullableOption { ty: Type },
     WrapPointerOption { ty: Type },
     WrapNullableCollection { ty: Type, elem_option_ty: Type },
@@ -57,13 +58,18 @@ impl Coercion {
                 format!("{}({})", type_name, value)
             }
             CoercionKind::UnwrapNullableOption { ty } => {
-                emitter.emit_option_unwrap_to_nullable(output, &value, &ty)
+                let inner = emitter.go_type_as_string(&ty.ok_type());
+                emitter.emit_option_projection(output, &value, "unwrap", &inner, false)
             }
             CoercionKind::UnwrapPointerOption { ty } => {
-                emitter.emit_option_unwrap_to_go_pointer(output, &value, &ty)
+                let ptr = format!("*{}", emitter.go_type_as_string(&ty.ok_type()));
+                emitter.emit_option_projection(output, &value, "ptr", &ptr, true)
             }
             CoercionKind::UnwrapNullableCollection { ty, elem_option_ty } => {
                 emitter.emit_collection_nullable_unwrap(output, &value, &ty, &elem_option_ty)
+            }
+            CoercionKind::UnwrapOptionToAny => {
+                emitter.emit_option_projection(output, &value, "unwrap", "any", false)
             }
             CoercionKind::WrapNullableOption { ty } => emitter
                 .emit_nil_check_option_wrap(output, &value, &ty, WrapperTarget::FreshSlot)
@@ -140,6 +146,9 @@ pub(crate) fn classify_option_shape(emitter: &Emitter, ty: &Type) -> OptionShape
 
 fn resolve_to_go(emitter: &Emitter, from: &Type, to: &Type) -> CoercionKind {
     use OptionShape::*;
+    if to.resolves_to_unknown() && from.is_option() {
+        return CoercionKind::UnwrapOptionToAny;
+    }
     match classify_option_shape(emitter, from) {
         Plain => CoercionKind::Identity,
         Nullable => CoercionKind::UnwrapNullableOption { ty: from.clone() },

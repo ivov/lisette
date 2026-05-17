@@ -385,7 +385,7 @@ impl Emitter<'_> {
         lowered: Option<&AbiShape>,
     ) {
         if let Some(shape) = lowered
-            && self.callee_matches_lowered_shape(call_expression, shape)
+            && self.callee_matches_lowered_shape(expression, call_expression, shape)
         {
             let call = self.emit_call(output, expression, None, ExpressionContext::value());
             write_line!(output, "return {}", call);
@@ -416,26 +416,16 @@ impl Emitter<'_> {
         write_line!(output, "return {}", call);
     }
 
-    /// True when the callee's natural multi-return matches the enclosing
-    /// shape, so a tail return can forward without rewrapping.
+    /// True when the callee already has the enclosing shape, so a tail
+    /// return can forward without rewrapping.
     fn callee_matches_lowered_shape(
         &self,
+        call_expression: &Expression,
         callee: &Expression,
         enclosing_shape: &AbiShape,
     ) -> bool {
-        let inner = callee.unwrap_parens();
-        if let Expression::DotAccess {
-            expression: receiver,
-            ..
-        } = inner
-            && Self::is_go_receiver(receiver)
-        {
-            let callee_ty = callee.get_type();
-            if let Type::Function { return_type, .. } = callee_ty.unwrap_forall()
-                && let Some(strategy) = self.facts.classify_go_return_type(return_type, &[])
-            {
-                return enclosing_shape.matches_go_strategy(&strategy);
-            }
+        if let Some(strategy) = self.resolve_go_call_strategy(call_expression) {
+            return enclosing_shape.matches_go_strategy(&strategy);
         }
         if let Some(callee_shape) = self.classify_callee_abi(callee) {
             return callee_shape == *enclosing_shape;

@@ -985,6 +985,10 @@ impl Expression {
         }
     }
 
+    pub fn is_none_literal(&self) -> bool {
+        matches!(self.as_option_constructor(), Some(Err(())))
+    }
+
     pub fn as_result_constructor(&self) -> Option<std::result::Result<(), ()>> {
         let variant = match self {
             Expression::Identifier { value, .. } => Some(value.as_str()),

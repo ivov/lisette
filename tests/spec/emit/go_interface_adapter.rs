@@ -684,6 +684,48 @@ pub fn Find(s: string, substr: string) -> Option<int>
 }
 
 #[test]
+fn sentinel_hinted_tail_call_wraps_in_wrapper_fn() {
+    let input = r#"
+import "go:example.com/idx"
+
+fn find(haystack: string, needle: string) -> Option<int> {
+  idx.Find(haystack, needle)
+}
+
+fn main() {
+  let _ = find("hello", "z")
+}
+"#;
+    let typedef = r#"
+#[go(sentinel_minus_one)]
+pub fn Find(s: string, substr: string) -> Option<int>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/idx", typedef)]);
+}
+
+#[test]
+fn comma_ok_hinted_nullable_tail_call_wraps_in_wrapper_fn() {
+    let input = r#"
+import "go:example.com/info"
+
+fn build_info() -> Option<Ref<info.BuildInfo>> {
+  info.Read()
+}
+
+fn main() {
+  let _ = build_info()
+}
+"#;
+    let typedef = r#"
+#[go(comma_ok)]
+pub fn Read() -> Option<Ref<BuildInfo>>
+
+pub struct BuildInfo {}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/info", typedef)]);
+}
+
+#[test]
 fn generic_named_field_struct_constructor_inserts_adapter() {
     let input = r#"
 struct Entry { name: string }

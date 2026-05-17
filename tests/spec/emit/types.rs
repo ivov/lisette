@@ -1,4 +1,5 @@
 use crate::assert_emit_snapshot;
+use crate::assert_emit_snapshot_with_go_typedefs;
 
 #[test]
 fn simple_struct_definition() {
@@ -2828,6 +2829,63 @@ fn unknown_return_in_alias_emits_any() {
 type Cb = fn() -> Unknown;
 "#;
     assert_emit_snapshot!(input);
+}
+
+#[test]
+fn option_in_go_unknown_struct_field_unwraps_to_any() {
+    let input = r#"
+import "go:example.com/dyn"
+
+fn main() {
+  let _ = dyn.Bag {
+    Decl: Some("decl"),
+    Data: None,
+  }
+}
+"#;
+    let typedef = r#"
+pub struct Bag {
+  pub Decl: Unknown,
+  pub Data: Unknown,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/dyn", typedef)]);
+}
+
+#[test]
+fn option_assigned_to_go_unknown_field_unwraps_to_any() {
+    let input = r#"
+import "go:example.com/dyn"
+
+fn main() {
+  let mut obj = dyn.Bag { Decl: "", Data: None }
+  obj.Decl = None
+  let _ = obj
+}
+"#;
+    let typedef = r#"
+pub struct Bag {
+  pub Decl: Unknown,
+  pub Data: Unknown,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/dyn", typedef)]);
+}
+
+#[test]
+fn option_in_go_unknown_call_arg_unwraps_to_any() {
+    let input = r#"
+import "go:example.com/dyn"
+
+fn main() {
+  let _ = dyn.Store("k", None)
+  let _ = dyn.Store("k", Some(1))
+}
+"#;
+    let typedef = r#"
+pub fn Store(key: string, value: Unknown) -> int
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/dyn", typedef)]);
 }
 
 #[test]

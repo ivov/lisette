@@ -134,9 +134,8 @@ pub(crate) fn emit_lowered_result_return(
     }
 }
 
-/// `Tuple` shape return: when no slot is nullable, project each tuple field
-/// directly; otherwise unwrap each nullable-Option slot through
-/// `emit_option_unwrap_to_nullable` while passing the rest through raw.
+/// `Tuple` shape return: project each tuple field, unwrapping any
+/// nullable-Option slot to its bare Go nilable.
 fn emit_lowered_tuple_return(
     emitter: &mut Emitter,
     output: &mut String,
@@ -160,7 +159,10 @@ fn emit_lowered_tuple_return(
             slot_tys
                 .get(i)
                 .filter(|t| emitter.facts.is_nullable_option(t))
-                .map(|t| emitter.emit_option_unwrap_to_nullable(output, &raw, t))
+                .map(|t| {
+                    let inner = emitter.go_type_as_string(&t.ok_type());
+                    emitter.emit_option_projection(output, &raw, "unwrap", &inner, false)
+                })
                 .unwrap_or(raw)
         })
         .collect();
@@ -589,8 +591,8 @@ fn emit_lowered_partial_tail(
     true
 }
 
-/// `Some(x)`/`None` collapse to `x`/`nil`; other Option expressions go
-/// through `emit_option_unwrap_to_nullable`.
+/// `Some(x)`/`None` collapse to `x`/`nil`; other Option expressions
+/// project at runtime.
 fn emit_nullable_slot_value(
     emitter: &mut Emitter,
     output: &mut String,
@@ -613,11 +615,10 @@ fn emit_nullable_slot_value(
             Err(()) => "nil".to_string(),
         };
     }
-    if let Expression::Identifier { .. } = expression
-        && expression.as_option_constructor() == Some(Err(()))
-    {
+    if expression.is_none_literal() {
         return "nil".to_string();
     }
     let value = emitter.emit_value(output, expression, ExpressionContext::value());
-    emitter.emit_option_unwrap_to_nullable(output, &value, slot_ty)
+    let inner = emitter.go_type_as_string(&slot_ty.ok_type());
+    emitter.emit_option_projection(output, &value, "unwrap", &inner, false)
 }

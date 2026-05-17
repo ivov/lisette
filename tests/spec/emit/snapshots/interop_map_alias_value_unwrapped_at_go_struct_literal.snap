@@ -15,9 +15,9 @@ func main() {
 	obj := ast.Object{
 		Kind: ast.Bad,
 		Name: "x",
-		Decl: lisette.MakeOptionNone[any](),
-		Data: lisette.MakeOptionNone[any](),
-		Type: lisette.MakeOptionNone[any](),
+		Decl: nil,
+		Data: nil,
+		Type: nil,
 	}
 	objects := make(map[string]lisette.Option[*ast.Object])
 	objects["present"] = lisette.MakeOptionSome(&obj)

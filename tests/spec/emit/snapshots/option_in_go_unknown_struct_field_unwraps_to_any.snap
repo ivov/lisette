@@ -1,0 +1,22 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport \"go:example.com/dyn\"\n\nfn main() {\n  let _ = dyn.Bag {\n    Decl: Some(\"decl\"),\n    Data: None,\n  }\n}\n"
+---
+package main
+
+import (
+	"example.com/dyn"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	opt_1 := lisette.MakeOptionSome("decl")
+	var unwrap_2 any
+	if opt_1.Tag == lisette.OptionSome {
+		unwrap_2 = opt_1.SomeVal
+	}
+	_ = dyn.Bag{
+		Decl: unwrap_2,
+		Data: nil,
+	}
+}

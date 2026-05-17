@@ -247,12 +247,25 @@ impl Emitter<'_> {
         let go_field_ty: Option<Type> = match target {
             Expression::DotAccess { expression, ty, .. }
                 if self.go_imported_shape(&expression.get_type()).is_some()
-                    && self.is_go_nullable(ty) =>
+                    && (self.is_go_nullable(ty) || ty.resolves_to_unknown()) =>
             {
                 Some(ty.clone())
             }
             _ => None,
         };
+
+        if let Some(ref target_ty) = go_field_ty
+            && target_ty.resolves_to_unknown()
+            && value.is_none_literal()
+        {
+            let target_str = if is_order_sensitive(target) {
+                self.emit_left_value_capturing(output, target, false)
+            } else {
+                self.emit_left_value(output, target)
+            };
+            write_line!(output, "{} = nil", target_str);
+            return;
+        }
 
         let rhs_staged = self.stage_composite(value, ExpressionContext::value());
         let rhs_has_setup = !rhs_staged.setup.is_empty();

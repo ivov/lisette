@@ -1,0 +1,20 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nimport \"go:example.com/dyn\"\n\nfn main() {\n  let _ = dyn.Store(\"k\", None)\n  let _ = dyn.Store(\"k\", Some(1))\n}\n"
+---
+package main
+
+import (
+	"example.com/dyn"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	_ = dyn.Store("k", nil)
+	opt_1 := lisette.MakeOptionSome(1)
+	var unwrap_2 any
+	if opt_1.Tag == lisette.OptionSome {
+		unwrap_2 = opt_1.SomeVal
+	}
+	_ = dyn.Store("k", unwrap_2)
+}

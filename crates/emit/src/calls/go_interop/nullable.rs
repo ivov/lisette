@@ -180,29 +180,29 @@ impl Emitter<'_> {
         self.emit_simple_wrapper_value(output, target, "option", &value_expr)
     }
 
-    pub(crate) fn emit_option_unwrap_to_nullable(
+    pub(crate) fn emit_option_projection(
         &mut self,
         output: &mut String,
         option_value: &str,
-        option_ty: &Type,
+        slot_hint: &str,
+        slot_ty: &str,
+        address: bool,
     ) -> String {
-        let inner_ty = option_ty.ok_type();
-        let go_inner_ty = self.go_type_as_string(&inner_ty);
-
         let opt_var = self.fresh_var(Some("opt"));
         self.declare(&opt_var);
-        let unwrapped_var = self.fresh_var(Some("unwrap"));
-        self.declare(&unwrapped_var);
+        let slot_var = self.fresh_var(Some(slot_hint));
+        self.declare(&slot_var);
 
         self.requirements.require_stdlib();
 
+        let amp = if address { "&" } else { "" };
         write_line!(output, "{} := {}", opt_var, option_value);
-        write_line!(output, "var {} {}", unwrapped_var, go_inner_ty);
+        write_line!(output, "var {} {}", slot_var, slot_ty);
         write_line!(output, "if {}.Tag == {} {{", opt_var, OPTION_SOME_TAG);
-        write_line!(output, "{} = {}.SomeVal", unwrapped_var, opt_var);
+        write_line!(output, "{} = {}{}.SomeVal", slot_var, amp, opt_var);
         output.push_str("}\n");
 
-        unwrapped_var
+        slot_var
     }
 
     /// Wrap a Go `*T` (T value-typed) into Lisette `Option<T>`.
@@ -224,32 +224,6 @@ impl Emitter<'_> {
             ptr_value
         );
         option_var
-    }
-
-    /// Bridge `Option<T>` to Go `*T` when T is not naturally nilable.
-    pub(crate) fn emit_option_unwrap_to_go_pointer(
-        &mut self,
-        output: &mut String,
-        option_value: &str,
-        option_ty: &Type,
-    ) -> String {
-        let inner_ty = option_ty.ok_type();
-        let go_inner_ty = self.go_type_as_string(&inner_ty);
-
-        let opt_var = self.fresh_var(Some("opt"));
-        self.declare(&opt_var);
-        let ptr_var = self.fresh_var(Some("ptr"));
-        self.declare(&ptr_var);
-
-        self.requirements.require_stdlib();
-
-        write_line!(output, "{} := {}", opt_var, option_value);
-        write_line!(output, "var {} *{}", ptr_var, go_inner_ty);
-        write_line!(output, "if {}.Tag == {} {{", opt_var, OPTION_SOME_TAG);
-        write_line!(output, "{} = &{}.SomeVal", ptr_var, opt_var);
-        output.push_str("}\n");
-
-        ptr_var
     }
 
     pub(crate) fn emit_collection_nullable_wrap(

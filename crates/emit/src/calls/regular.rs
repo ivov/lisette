@@ -464,7 +464,7 @@ impl Emitter<'_> {
             | (OptionShape::PointerBridged, OptionShape::PointerBridged) => {}
             _ => return None,
         }
-        if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
+        if arg.is_none_literal() {
             return Some("nil".to_string());
         }
         let value = self.emit_value(output, arg, ExpressionContext::value());
@@ -480,24 +480,29 @@ impl Emitter<'_> {
     ) -> Option<String> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
-        if !matches!(classify_option_shape(self, &arg_ty), OptionShape::Nullable) {
-            return None;
-        }
         let check_ty = if param_ty.get_name() == Some("VarArgs") {
             param_ty.inner().unwrap_or_else(|| param_ty.clone())
         } else {
             param_ty.clone()
         };
+
+        if arg_ty.is_option() && check_ty.resolves_to_unknown() {
+            if arg.is_none_literal() {
+                return Some("nil".to_string());
+            }
+            let value = self.emit_value(output, arg, ExpressionContext::value());
+            let coercion =
+                Coercion::resolve(self, &arg_ty, &check_ty, CoercionDirection::ToGoBoundary);
+            return Some(coercion.apply(self, output, value));
+        }
+
+        if !matches!(classify_option_shape(self, &arg_ty), OptionShape::Nullable) {
+            return None;
+        }
         let needs_coercion = self
             .facts
             .as_interface(&check_ty)
-            .is_some_and(|id| go_name::is_go_import(&id))
-            || (check_ty.has_name("Unknown") && {
-                let inner = arg_ty.ok_type();
-                self.facts
-                    .as_interface(&inner)
-                    .is_some_and(|id| go_name::is_go_import(&id))
-            });
+            .is_some_and(|id| go_name::is_go_import(&id));
 
         if !needs_coercion {
             return None;
@@ -512,7 +517,7 @@ impl Emitter<'_> {
         arg: &Expression,
         arg_ty: &Type,
     ) -> String {
-        if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
+        if arg.is_none_literal() {
             return "nil".to_string();
         }
         let value = self.emit_value(output, arg, ExpressionContext::value());

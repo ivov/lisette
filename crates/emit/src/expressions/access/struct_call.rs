@@ -73,8 +73,14 @@ impl Emitter<'_> {
             value = self.wrap_recursive_enum_field(output, value, f, &ctx);
             let value_ty = f.value.get_type();
             let field_ty = self.lookup_struct_field_ty(ty, &f.name);
-            value =
-                self.coerce_struct_field(output, value, &value_ty, field_ty.as_ref(), is_go_struct);
+            value = self.coerce_struct_field(
+                output,
+                value,
+                &f.value,
+                &value_ty,
+                field_ty.as_ref(),
+                is_go_struct,
+            );
             field_names.push(field_name);
             field_values.push(value);
         }
@@ -122,12 +128,16 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         mut value: String,
+        value_expr: &Expression,
         value_ty: &Type,
         field_ty: Option<&Type>,
         is_go_struct: bool,
     ) -> String {
         if is_go_struct {
             let target_ty = field_ty.unwrap_or(value_ty);
+            if value_expr.is_none_literal() && target_ty.resolves_to_unknown() {
+                return "nil".to_string();
+            }
             let coercion =
                 Coercion::resolve(self, value_ty, target_ty, CoercionDirection::ToGoBoundary);
             value = coercion.apply(self, output, value);
