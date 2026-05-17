@@ -474,20 +474,6 @@ fn main() {
 }
 
 #[test]
-fn const_go_keyword_name() {
-    let input = r#"
-import "go:fmt"
-
-const range: int = 42
-
-fn main() {
-  fmt.Println(range)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn const_reference_to_const_stays_const() {
     let input = r#"
 import "go:fmt"
@@ -497,25 +483,6 @@ const Y = X + 5
 
 fn main() {
   fmt.Println(Y)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn const_eligibility_does_not_leak_across_shadow() {
-    let input = r#"
-import "go:fmt"
-
-fn make() -> int {
-  2
-}
-
-fn main() {
-  const x = 1
-  let x = make()
-  const y = x
-  fmt.Println(y)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -532,12 +499,12 @@ fn make() -> int {
 
 fn main() {
   {
-    const x = 1
-    fmt.Println(x)
+    const X = 1
+    fmt.Println(X)
   }
   let x = make()
-  const y = x
-  fmt.Println(y)
+  const Y = x
+  fmt.Println(Y)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -553,15 +520,15 @@ fn make() -> int {
 }
 
 fn a() {
-  const x = 1
-  fmt.Println(x)
+  const X = 1
+  fmt.Println(X)
 }
 
 fn main() {
   a()
   let x = make()
-  const y = x
-  fmt.Println(y)
+  const Y = x
+  fmt.Println(Y)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1344,36 +1311,6 @@ fn parse(s: string) -> Result<int, error> {
     Ok(n) => Ok(n),
     Err(e) => Err(e),
   }
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn local_const_shadows_let_binding() {
-    let input = r#"
-import "go:fmt"
-
-fn main() {
-  let x = 1
-  fmt.Println(x)
-  const x = 2
-  fmt.Println(x)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn local_let_shadows_const_binding() {
-    let input = r#"
-import "go:fmt"
-
-fn main() {
-  const x = 1
-  fmt.Println(x)
-  let x = 2
-  fmt.Println(x)
 }
 "#;
     assert_emit_snapshot!(input);

@@ -55,7 +55,9 @@ impl Emitter<'_> {
 
         let is_exported =
             self.resolve_is_exported(expression, &expression_ty, member, dot_access_kind);
-        let field = go_field_name(&expression_ty, member, is_exported);
+        let field = self
+            .try_resolve_cross_module_const(&expression_ty, member)
+            .unwrap_or_else(|| go_field_name(&expression_ty, member, is_exported));
 
         if let Some(s) = self.try_emit_nullable_field_access(
             output,
@@ -354,6 +356,28 @@ impl Emitter<'_> {
         }
 
         Some(format!("{}.F{}", expression_string, index))
+    }
+
+    fn try_resolve_cross_module_const(&self, expression_ty: &Type, member: &str) -> Option<String> {
+        let module = expression_ty.as_import_namespace()?;
+        if go_name::is_go_import(module) {
+            return None;
+        }
+        let qualified_name = format!("{}.{}", module, member);
+        let definition = self.facts.definition(qualified_name.as_str())?;
+        if !definition.visibility().is_public() {
+            return None;
+        }
+        if !matches!(definition.body, DefinitionBody::Value { .. }) {
+            return None;
+        }
+        let ty = definition.ty();
+        let is_function = matches!(ty, Type::Function { .. })
+            || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function { .. }));
+        if is_function {
+            return None;
+        }
+        Some(member.to_string())
     }
 
     /// Whether the type resolves to a prelude-module declaration. Shared with

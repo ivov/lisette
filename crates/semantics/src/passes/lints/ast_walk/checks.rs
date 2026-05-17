@@ -1,6 +1,4 @@
-use super::casing::{
-    is_screaming_snake_case, is_snake_case, to_pascal_case, to_screaming_snake_case, to_snake_case,
-};
+use super::casing::{is_snake_case, to_pascal_case, to_snake_case};
 use crate::is_trivial_expression;
 use diagnostics::LisetteDiagnostic;
 use rustc_hash::FxHashMap as HashMap;
@@ -683,16 +681,6 @@ pub fn check_expression_naming(
             }
         }
 
-        Expression::Const {
-            identifier,
-            identifier_span,
-            ..
-        } => {
-            if !is_d_lis {
-                check_screaming_snake_case(identifier, identifier_span, diagnostics);
-            }
-        }
-
         _ => {}
     }
 }
@@ -748,16 +736,5 @@ fn check_snake_case(name: &str, span: &Span, code: &str, diagnostics: &mut Vec<L
         span,
         code,
         &to_snake_case(name),
-    ));
-}
-
-fn check_screaming_snake_case(name: &str, span: &Span, diagnostics: &mut Vec<LisetteDiagnostic>) {
-    if name.starts_with('_') || is_screaming_snake_case(name) {
-        return;
-    }
-
-    diagnostics.push(diagnostics::lint::miscased_screaming_snake(
-        span,
-        &to_screaming_snake_case(name),
     ));
 }

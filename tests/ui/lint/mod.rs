@@ -2540,19 +2540,6 @@ fn main() {
 }
 
 #[test]
-fn non_screaming_snake_case_constant() {
-    assert_lint_snapshot!(
-        r#"
-const maxRetries = 3;
-
-fn main() {
-  let _ = maxRetries;
-}
-"#
-    );
-}
-
-#[test]
 fn screaming_snake_case_constant_no_warning() {
     assert_no_lint_warnings!(
         r#"

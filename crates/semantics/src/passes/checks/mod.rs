@@ -1,3 +1,4 @@
+pub(crate) mod const_naming;
 pub(crate) mod duplicate_bindings;
 pub(crate) mod enum_variant_value;
 pub(crate) mod generics;
@@ -91,6 +92,9 @@ fn run_file_checks(
     native_value_usage::run(&file.items, &module.id, store, sink);
     enum_variant_value::run(&file.items, store, sink);
     temp_producing::run(&file.items, sink);
+    if !file.is_d_lis() {
+        const_naming::run(&file.items, sink);
+    }
     for expression in &file.items {
         pattern_analysis::check(expression, pattern_ctx, sink);
     }

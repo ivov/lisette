@@ -6154,6 +6154,18 @@ const VALUE = {
 }
 
 #[test]
+fn infer_const_not_screaming_snake_case() {
+    let input = r#"
+const maxRetries = 3
+
+fn main() {
+  let _ = maxRetries
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_const_self_reference_cycle() {
     let input = r#"
 const SELF = SELF

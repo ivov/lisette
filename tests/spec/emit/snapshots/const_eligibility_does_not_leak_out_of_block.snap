@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/expressions.rs
-description: "input: \nimport \"go:fmt\"\n\nfn make() -> int {\n  2\n}\n\nfn main() {\n  {\n    const x = 1\n    fmt.Println(x)\n  }\n  let x = make()\n  const y = x\n  fmt.Println(y)\n}\n"
+description: "input: \nimport \"go:fmt\"\n\nfn make() -> int {\n  2\n}\n\nfn main() {\n  {\n    const X = 1\n    fmt.Println(X)\n  }\n  let x = make()\n  const Y = x\n  fmt.Println(Y)\n}\n"
 ---
 package main
 
@@ -12,10 +12,10 @@ func make_() int {
 
 func main() {
 	{
-		const x int = 1
-		fmt.Println(x)
+		const X int = 1
+		fmt.Println(X)
 	}
 	x := make_()
-	var y int = x
-	fmt.Println(y)
+	var Y int = x
+	fmt.Println(Y)
 }

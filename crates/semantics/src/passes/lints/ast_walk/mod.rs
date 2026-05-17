@@ -1,7 +1,7 @@
 pub(crate) mod attributes;
-mod casing;
+pub(crate) mod casing;
 mod checks;
-mod visitor;
+pub(crate) mod visitor;
 
 use std::cell::RefCell;
 

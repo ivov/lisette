@@ -5173,3 +5173,52 @@ fn main() {
         "Emitter::emit must return files alphabetically sorted by name",
     );
 }
+
+#[test]
+fn cross_module_pub_const_screaming_snake_preserves_underscores() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "config",
+        "config.lis",
+        r#"
+pub const MAX_RETRIES: int = 3
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "config"
+
+fn main() {
+  let _ = config.MAX_RETRIES
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn same_module_pub_const_use_matches_definition() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub const MAX_RETRIES: int = 3
+
+pub const MAX_TIMEOUT: int = 60
+
+fn main() {
+  let _ = MAX_RETRIES
+  let _ = MAX_TIMEOUT
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}

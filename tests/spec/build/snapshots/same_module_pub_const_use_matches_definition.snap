@@ -1,0 +1,14 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+const MAX_RETRIES int = 3
+
+const MAX_TIMEOUT int = 60
+
+func main() {
+	_ = MAX_RETRIES
+	_ = MAX_TIMEOUT
+}
