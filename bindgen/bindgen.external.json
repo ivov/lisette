@@ -150,6 +150,14 @@
             "payload"
           ]
         },
+        "github.com/sourcegraph/conc/iter": {
+          "ForEach": [
+            "input"
+          ],
+          "ForEachIdx": [
+            "input"
+          ]
+        },
         "github.com/tidwall/redcon": {
           "ReadNextCommand": [
             "argsbuf"
@@ -1358,9 +1366,6 @@
         "github.com/slack-go/slack": [
           "*.Values",
           "RTM.GetInfo"
-        ],
-        "github.com/sourcegraph/conc": [
-          "WaitGroup.WaitAndRecover"
         ],
         "github.com/spf13/cobra": [
           "Command.Flag",
