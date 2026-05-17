@@ -1,6 +1,25 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.7](https://github.com/ivov/lisette/compare/lisette-v0.2.6...lisette-v0.2.7) - 2026-05-17
+
+- fix: unwrap option at go any and honor tail-return hints [#437](https://github.com/ivov/lisette/pull/437) [`afcf72c`](https://github.com/ivov/lisette/commit/afcf72ccfc6258e0c986de233cb299485c161f05)
+- refactor: collect generic constraints before emit [#436](https://github.com/ivov/lisette/pull/436) [`7671020`](https://github.com/ivov/lisette/commit/7671020249d3b4606c31f7caa5ebc84e61b8419d)
+- refactor: centralize alias-aware emit shape queries [#435](https://github.com/ivov/lisette/pull/435) [`7fcdfc3`](https://github.com/ivov/lisette/commit/7fcdfc390b5f367a349cbbf9b66b5b68761e7ade)
+- fix: lower direct Err(...)? and None? propagation [#434](https://github.com/ivov/lisette/pull/434) [`9620f8a`](https://github.com/ivov/lisette/commit/9620f8a51e413ba67442e85c14f3924e0aa9e3f7)
+- fix: suppress unused locals in fused Result match emit [#433](https://github.com/ivov/lisette/pull/433) [`cd93588`](https://github.com/ivov/lisette/commit/cd935888a6c984434625f2bcb7660592a3121ba2)
+- fix: require screaming snake case for constants [#432](https://github.com/ivov/lisette/pull/432) [`ac5cdca`](https://github.com/ivov/lisette/commit/ac5cdca88f8ea3e1add257f9cec0c8b9fc4c663e)
+- docs: mention mise install path [#431](https://github.com/ivov/lisette/pull/431) [`046b3b0`](https://github.com/ivov/lisette/commit/046b3b0c533393207c87a6bc1230198b1c23885b)
+- docs: mention homebrew install path [#430](https://github.com/ivov/lisette/pull/430) [`19d6493`](https://github.com/ivov/lisette/commit/19d6493424cf01f7d28ac6db8786a51dbbf56f9d)
+- fix: clearer error for typed binding missing initializer [#429](https://github.com/ivov/lisette/pull/429) [`ab431c9`](https://github.com/ivov/lisette/commit/ab431c9e0740e85b6a72dd6015d1f4edd5e5b819)
+- fix: correct bindgen overrides for sourcegraph/conc [#428](https://github.com/ivov/lisette/pull/428) [`83297ba`](https://github.com/ivov/lisette/commit/83297ba35ecbcf8791d6692fad50cd8557a4b821)
+- fix: suppress unused-value cascades on errored expressions [#427](https://github.com/ivov/lisette/pull/427) [`04a5822`](https://github.com/ivov/lisette/commit/04a5822d64855f6752b337e4877d13940d1ab5ae)
+- fix: pointer receiver promotion in bindgen [#426](https://github.com/ivov/lisette/pull/426) [`96abad6`](https://github.com/ivov/lisette/commit/96abad60b42a6cbecb168c1adf97774d6ae42e2e)
+- fix: detect map literal attempts at parse time [#425](https://github.com/ivov/lisette/pull/425) [`52508e7`](https://github.com/ivov/lisette/commit/52508e748ea2f671e5993b4bda1086f6cd379221)
+- fix: suppress unused-field lint on pub fields [#424](https://github.com/ivov/lisette/pull/424) [`cc241a7`](https://github.com/ivov/lisette/commit/cc241a7b96eec4250dd77a80223278e558289546)
+- refactor: reduce emit complexity [#423](https://github.com/ivov/lisette/pull/423) [`bcc574b`](https://github.com/ivov/lisette/commit/bcc574b373d4257cb0c4eee7c2295fecdbc2e3fd)
+- docs: add section on typed nil at the boundary [#422](https://github.com/ivov/lisette/pull/422) [`045e502`](https://github.com/ivov/lisette/commit/045e502b90a54591aaffa763c366e39ba5295ea3)
+- refactor: emit idiomatic fmt verbs in interpolations [#420](https://github.com/ivov/lisette/pull/420) [`5121f0d`](https://github.com/ivov/lisette/commit/5121f0de48c9bdd8f6c00bb73f5b6311918b9834)
 ## [0.2.6](https://github.com/ivov/lisette/compare/lisette-v0.2.5...lisette-v0.2.6) - 2026-05-16
 
 - fix: resolve dotted go import paths [#419](https://github.com/ivov/lisette/pull/419) [`d22fdfa`](https://github.com/ivov/lisette/commit/d22fdfaa0bc78850c07c0130769379999294042f)
