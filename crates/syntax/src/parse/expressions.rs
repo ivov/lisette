@@ -643,6 +643,17 @@ impl<'source> Parser<'source> {
 
         self.ensure(LeftCurlyBrace);
 
+        if self.looks_like_map_literal() {
+            let key_span = self.span_from_token(self.current_token());
+            self.consume_to_matching_close_brace();
+            self.error_map_literal_not_supported(key_span);
+            return Expression::Block {
+                ty: Type::uninferred(),
+                items: vec![],
+                span: self.span_from_tokens(start),
+            };
+        }
+
         if !self.enter_recursion() {
             let span = self.span_from_token(self.current_token());
             let mut brace_depth = 1u32;
@@ -1540,6 +1551,27 @@ impl<'source> Parser<'source> {
             binding_id: None,
             qualified: None,
         }
+    }
+
+    fn looks_like_map_literal(&self) -> bool {
+        let first = self.current_token().kind;
+        let second = self.stream.peek_ahead(1).kind;
+        matches!(first, String | RawString | Integer | Float) && second == Colon
+    }
+
+    fn consume_to_matching_close_brace(&mut self) {
+        let mut brace_depth = 1u32;
+        while brace_depth > 0 && !self.at_eof() {
+            match self.current_token().kind {
+                LeftCurlyBrace => brace_depth += 1,
+                RightCurlyBrace => brace_depth -= 1,
+                _ => {}
+            }
+            if brace_depth > 0 {
+                self.next();
+            }
+        }
+        self.advance_if(RightCurlyBrace);
     }
 
     fn recover_unexpected_backtick(&mut self) -> Expression {

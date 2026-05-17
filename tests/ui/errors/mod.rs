@@ -660,6 +660,26 @@ fn test() {
 }
 
 #[test]
+fn parse_map_literal_string_keys() {
+    let input = r#"
+fn test() {
+  let m: Map<string, int> = { "a": 1, "b": 2 }
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_map_literal_int_keys() {
+    let input = r#"
+fn test() {
+  let m: Map<int, string> = { 1: "a", 2: "b" }
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_struct_instantiation_missing_comma() {
     let input = r#"
 fn test() {

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Invalid `Map` initialization
+   ╭─[test.lis:3:31]
+ 2 │ fn test() {
+ 3 │   let m: Map<string, int> = { "a": 1, "b": 2 }
+   ·                               ─┬─
+   ·                                ╰── invalid syntax
+ 4 │ }
+   ╰────
+  help: To initialize a `Map`, use `Map.new<K, V>()` then `m[key] = value` · code: [parse.invalid_map_initialization]
