@@ -289,6 +289,7 @@ fn collect_items(
                             field_id,
                             StructFieldInfo {
                                 span: struct_field.name_span,
+                                is_public: struct_field.visibility == Visibility::Public,
                                 parent_is_public: is_public,
                                 parent_has_serialization_attr: has_serialization_attr,
                                 has_tag_attribute,

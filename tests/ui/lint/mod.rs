@@ -1095,6 +1095,22 @@ fn main() {
 }
 
 #[test]
+fn public_field_on_private_struct_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+struct Person {
+  pub name: string,
+  pub age: int,
+}
+
+fn main() {
+  let _p = Person { name: "", age: 0 }
+}
+"#
+    );
+}
+
+#[test]
 fn serialization_struct_fields_not_unused() {
     assert_no_lint_warnings!(
         r#"
