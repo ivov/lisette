@@ -8,6 +8,9 @@ Prerequisite: [Go 1.25+](https://go.dev/dl/)
 # prebuilt binary
 curl -fsSL https://lisette.run/install.sh | sh
 
+# via homebrew
+brew install lisette
+
 # from source (requires Rust 1.94+)
 cargo install lisette
 ```
