@@ -1370,3 +1370,52 @@ fn test(flag: bool) -> Result<int, string> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn propagate_direct_err_lowered_result_tuple() {
+    let input = r#"
+import "go:errors"
+
+fn fail() -> Result<int, error> {
+  Err(errors.New("boom"))?
+  Ok(1)
+}
+
+fn main() {
+  let _ = fail()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_direct_none_lowered_option_comma_ok() {
+    let input = r#"
+fn missing() -> Option<int> {
+  None?
+  Some(1)
+}
+
+fn main() {
+  let _ = missing()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_direct_err_lowered_bare_error() {
+    let input = r#"
+import "go:errors"
+
+fn fail_unit() -> Result<(), error> {
+  Err(errors.New("boom"))?
+  Ok(())
+}
+
+fn main() {
+  let _ = fail_unit()
+}
+"#;
+    assert_emit_snapshot!(input);
+}

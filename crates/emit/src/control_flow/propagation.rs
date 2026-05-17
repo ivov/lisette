@@ -533,7 +533,7 @@ impl Emitter<'_> {
         write_line!(output, "return {}", ok_return);
     }
 
-    /// Optimizes `Err(...)?)` and `None?` by emitting a direct return.
+    /// Optimizes `Err(...)?` and `None?` by emitting a direct return.
     /// Returns `Some(String::new())` if handled, `None` otherwise.
     fn try_emit_error_constructor(
         &mut self,
@@ -566,13 +566,23 @@ impl Emitter<'_> {
             _ => return None,
         };
 
-        self.requirements.require_stdlib();
-        let err_return = {
-            let mut fe = FallibleEmitter::new(self, fallible);
-            fe.emit_contextual_failure(err_arg.as_deref(), return_ctx)
-        };
-
-        write_line!(output, "return {}", err_return);
+        if let Some(shape) = return_ctx.lowered_shape() {
+            let return_ty = return_ctx.expect_ty();
+            let line = if fallible.is_result() {
+                let err_expr = err_arg.as_deref().unwrap_or("");
+                abi_transition::format_lowered_err_return(self, &shape, &return_ty, err_expr)
+            } else {
+                abi_transition::format_lowered_none_return(self, &shape, &return_ty)
+            };
+            write_line!(output, "{}", line);
+        } else {
+            self.requirements.require_stdlib();
+            let err_return = {
+                let mut fe = FallibleEmitter::new(self, fallible);
+                fe.emit_contextual_failure(err_arg.as_deref(), return_ctx)
+            };
+            write_line!(output, "return {}", err_return);
+        }
         Some(String::new())
     }
 

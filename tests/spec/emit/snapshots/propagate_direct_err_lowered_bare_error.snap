@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nimport \"go:errors\"\n\nfn fail_unit() -> Result<(), error> {\n  Err(errors.New(\"boom\"))?\n  Ok(())\n}\n\nfn main() {\n  let _ = fail_unit()\n}\n"
+---
+package main
+
+import "errors"
+
+func fail_unit() error {
+	return errors.New("boom")
+	return nil
+}
+
+func main() {
+	fail_unit()
+}
