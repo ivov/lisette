@@ -251,55 +251,7 @@ impl EnumLayout {
 
         for variant in &self.variants {
             lines.push(format!("case {}:", variant.tag_constant));
-
-            if variant.fields.is_empty() {
-                lines.push(format!("return \"{}.{}\"", self.enum_name, variant.name));
-            } else if variant.is_struct_variant {
-                let format_parts: Vec<String> = variant
-                    .fields
-                    .iter()
-                    .map(|f| format!("{}: {}", f.source_name, stringer_verb(f.is_function)))
-                    .collect();
-                let args: Vec<String> = variant
-                    .fields
-                    .iter()
-                    .map(|f| format!("{receiver}.{}", f.go_name))
-                    .collect();
-                lines.push(format!(
-                    "return fmt.Sprintf(\"{}.{} {{ {} }}\", {})",
-                    self.enum_name,
-                    variant.name,
-                    format_parts.join(", "),
-                    args.join(", ")
-                ));
-            } else if variant.fields.len() == 1 {
-                let f = &variant.fields[0];
-                lines.push(format!(
-                    "return fmt.Sprintf(\"{}.{}({})\", {receiver}.{})",
-                    self.enum_name,
-                    variant.name,
-                    stringer_verb(f.is_function),
-                    f.go_name
-                ));
-            } else {
-                let placeholders: Vec<&str> = variant
-                    .fields
-                    .iter()
-                    .map(|f| stringer_verb(f.is_function))
-                    .collect();
-                let args: Vec<String> = variant
-                    .fields
-                    .iter()
-                    .map(|f| format!("{receiver}.{}", f.go_name))
-                    .collect();
-                lines.push(format!(
-                    "return fmt.Sprintf(\"{}.{}({})\", {})",
-                    self.enum_name,
-                    variant.name,
-                    placeholders.join(", "),
-                    args.join(", ")
-                ));
-            }
+            lines.push(self.build_variant_stringer_line(variant, &receiver));
         }
 
         lines.push("default:".to_string());
@@ -311,6 +263,45 @@ impl EnumLayout {
         lines.push("}".to_string());
 
         lines.join("\n")
+    }
+
+    /// Build the per-variant `return ...` line for the Stringer method. Three
+    /// shapes: no fields (string literal), struct-variant (`{ k: v, ... }`),
+    /// or positional (`(v, ...)`). Positional collapses single and multi-field
+    /// since `Sprintf("Name(%v)", x)` is the degenerate multi case.
+    fn build_variant_stringer_line(&self, variant: &VariantLayout, receiver: &str) -> String {
+        if variant.fields.is_empty() {
+            return format!("return \"{}.{}\"", self.enum_name, variant.name);
+        }
+        let args: Vec<String> = variant
+            .fields
+            .iter()
+            .map(|f| format!("{receiver}.{}", f.go_name))
+            .collect();
+        let (open, close, placeholders) = if variant.is_struct_variant {
+            let parts: Vec<String> = variant
+                .fields
+                .iter()
+                .map(|f| format!("{}: {}", f.source_name, stringer_verb(f.is_function)))
+                .collect();
+            (" { ", " }", parts.join(", "))
+        } else {
+            let parts: Vec<&str> = variant
+                .fields
+                .iter()
+                .map(|f| stringer_verb(f.is_function))
+                .collect();
+            ("(", ")", parts.join(", "))
+        };
+        format!(
+            "return fmt.Sprintf(\"{}.{}{}{}{}\", {})",
+            self.enum_name,
+            variant.name,
+            open,
+            placeholders,
+            close,
+            args.join(", ")
+        )
     }
 
     pub(crate) fn emit_json_methods(&self, receiver_generics: &str) -> String {

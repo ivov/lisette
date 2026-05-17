@@ -1,6 +1,7 @@
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Emitter;
+use crate::ReturnContext;
 use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use crate::placement::ValuePlace;
@@ -13,6 +14,16 @@ use syntax::types::Type;
 
 /// Owned param-destructure record: temp var, pattern, typed pattern, param type.
 type DeferredParamDestructure = (String, Pattern, Option<TypedPattern>, Type);
+
+/// Borrowed lambda param-destructure record. Lambdas keep references to the
+/// caller's `params` slice since they cannot outlive emission scope.
+type LambdaParamDestructure<'a> = (String, &'a Pattern, Option<&'a TypedPattern>, &'a Type);
+
+struct LambdaReturnInfo {
+    ty_string: String,
+    ctx: ReturnContext,
+    has_return: bool,
+}
 
 impl Emitter<'_> {
     pub(crate) fn emit_function_body(
@@ -64,9 +75,30 @@ impl Emitter<'_> {
     ) -> String {
         let frame = self.scope.enter_isolated_function();
 
-        let mut destructure_bindings: Vec<(String, &Pattern, Option<&TypedPattern>, &Type)> =
-            vec![];
+        let (param_pairs, destructure_bindings) = self.build_lambda_param_pairs(params);
+        let return_info = self.lambda_return_info(ty, ctx);
+        let body_string = self.emit_lambda_body_with_deferred(
+            body,
+            &destructure_bindings,
+            &return_info.ctx,
+            return_info.has_return,
+        );
 
+        self.scope.exit_isolated_function(frame);
+
+        format!(
+            "func({}){} {{\n{}}}",
+            group_params(&param_pairs),
+            return_info.ty_string,
+            body_string
+        )
+    }
+
+    fn build_lambda_param_pairs<'a>(
+        &mut self,
+        params: &'a [Binding],
+    ) -> (Vec<(String, String)>, Vec<LambdaParamDestructure<'a>>) {
+        let mut destructure_bindings: Vec<LambdaParamDestructure<'a>> = vec![];
         let param_pairs: Vec<(String, String)> = params
             .iter()
             .map(|p| {
@@ -93,19 +125,23 @@ impl Emitter<'_> {
                 (name, self.go_type_as_string(&p.ty))
             })
             .collect();
+        (param_pairs, destructure_bindings)
+    }
 
-        let argument_flows_to_unknown = ctx.argument_flows_to_unknown();
+    /// Compute the lambda's Go return-type string and `ReturnContext`. When
+    /// the lambda flows into a Go-prelude generic callback that expects the
+    /// unlowered single-return form, suppress the lambda's own return-type
+    /// lowering so signature and body match.
+    fn lambda_return_info(&mut self, ty: &Type, ctx: ExpressionContext<'_>) -> LambdaReturnInfo {
         let suppress_lowering = ctx.forces_tagged_go_function();
+        let argument_flows_to_unknown = ctx.argument_flows_to_unknown();
 
         let has_return = matches!(ty, Type::Function { return_type, .. }
             if !(return_type.is_unit()
                 || return_type.is_variable()
                 || (argument_flows_to_unknown && return_type.is_never())));
 
-        // When the lambda flows into a Go-prelude generic callback that
-        // expects the unlowered single-return form, suppress the lambda's
-        // own return-type lowering so signature and body match.
-        let return_ty_string = if has_return {
+        let ty_string = if has_return {
             match ty {
                 Type::Function { return_type, .. } => {
                     if !suppress_lowering
@@ -122,23 +158,35 @@ impl Emitter<'_> {
             String::new()
         };
 
-        let should_return = has_return;
-
-        let return_ctx = match ty {
+        let ctx = match ty {
             Type::Function { return_type, .. } => {
                 let return_ty = return_type.as_ref().clone();
                 if suppress_lowering {
-                    crate::ReturnContext::Tagged(return_ty)
+                    ReturnContext::Tagged(return_ty)
                 } else {
                     self.return_context_for_type(return_ty)
                 }
             }
-            _ => crate::ReturnContext::None,
+            _ => ReturnContext::None,
         };
 
+        LambdaReturnInfo {
+            ty_string,
+            ctx,
+            has_return,
+        }
+    }
+
+    fn emit_lambda_body_with_deferred(
+        &mut self,
+        body: &Expression,
+        destructure_bindings: &[LambdaParamDestructure<'_>],
+        return_ctx: &ReturnContext,
+        should_return: bool,
+    ) -> String {
         let mut body_string = String::new();
         self.with_scope_return_context_fallback(return_ctx.clone(), |this| {
-            for (temp_name, pattern, typed, param_ty) in &destructure_bindings {
+            for (temp_name, pattern, typed, param_ty) in destructure_bindings {
                 this.emit_irrefutable_pattern_site(
                     &mut body_string,
                     crate::patterns::sites::PatternSubject::for_value(temp_name.clone()),
@@ -147,17 +195,9 @@ impl Emitter<'_> {
                     param_ty,
                 );
             }
-            this.emit_function_body(&mut body_string, body, should_return, &return_ctx);
+            this.emit_function_body(&mut body_string, body, should_return, return_ctx);
         });
-
-        self.scope.exit_isolated_function(frame);
-
-        format!(
-            "func({}){} {{\n{}}}",
-            group_params(&param_pairs),
-            return_ty_string,
-            body_string
-        )
+        body_string
     }
 
     /// Bind and declare a parameter. If the natural post-escape Go name is
@@ -195,12 +235,10 @@ impl Emitter<'_> {
         }
 
         let directive = self.maybe_line_directive(&function_definition.name_span);
-
         let return_ctx = self.return_context_for_type(function_definition.return_type.clone());
 
         let (function_definition, receiver) =
             self.change_go_builtin_methods(function_definition, receiver);
-
         let (params_to_process, receiver_override) =
             self.extract_receiver(&function_definition, receiver.is_some());
 
@@ -212,17 +250,65 @@ impl Emitter<'_> {
             parts.push(part);
         }
 
-        let function_name = if is_public {
+        parts.push(self.pick_go_function_name(&function_definition, receiver.is_some(), is_public));
+
+        let generics_str = self.build_generics_string(&function_definition, params_to_process);
+        if !generics_str.is_empty() {
+            parts.push(generics_str);
+        }
+
+        let mut body = String::new();
+        let signature = self.with_absorbed_ref_generics(
+            params_to_process,
+            &function_definition.generics,
+            |this| {
+                let (params_string, return_ty, deferred_patterns) =
+                    this.build_signature_tail(&function_definition, params_to_process);
+                parts.push(params_string);
+                if !return_ty.is_empty() {
+                    parts.push(return_ty);
+                }
+                let signature = parts.join(" ");
+                this.emit_function_body_with_deferred_patterns(
+                    &mut body,
+                    &function_definition,
+                    deferred_patterns,
+                    &return_ctx,
+                );
+                signature
+            },
+        );
+
+        let trimmed_body = body.trim_end();
+        if trimmed_body.is_empty() {
+            format!("{}{} {{}}", directive, signature)
+        } else {
+            format!("{}{} {{\n{}\n}}", directive, signature, trimmed_body)
+        }
+    }
+
+    fn pick_go_function_name(
+        &self,
+        function_definition: &FunctionDefinition,
+        has_receiver: bool,
+        is_public: bool,
+    ) -> String {
+        if is_public {
             go_name::snake_to_camel(&function_definition.name)
-        } else if receiver.is_some() {
+        } else if has_receiver {
             go_name::escape_keyword(&function_definition.name).into_owned()
         } else if let Some(remapped) = self.module.escape_remap(function_definition.name.as_str()) {
             remapped.to_string()
         } else {
             go_name::escape_reserved(&function_definition.name).into_owned()
-        };
-        parts.push(function_name);
+        }
+    }
 
+    fn build_generics_string(
+        &mut self,
+        function_definition: &FunctionDefinition,
+        params_to_process: &[Binding],
+    ) -> String {
         let generic_names: Vec<&str> = function_definition
             .generics
             .iter()
@@ -240,67 +326,48 @@ impl Emitter<'_> {
                 map_key_generics.insert(name.to_string());
             }
         }
+        self.generics_to_string_with_map_keys(&function_definition.generics, &map_key_generics)
+    }
 
-        let generics_str =
-            self.generics_to_string_with_map_keys(&function_definition.generics, &map_key_generics);
-        if !generics_str.is_empty() {
-            parts.push(generics_str);
-        }
+    fn build_signature_tail(
+        &mut self,
+        function_definition: &FunctionDefinition,
+        params_to_process: &[Binding],
+    ) -> (String, String, Vec<DeferredParamDestructure>) {
+        let (params_string, deferred_patterns) = self.emit_function_params(params_to_process);
 
-        let mut body = String::new();
-        let signature = self.with_absorbed_ref_generics(
-            params_to_process,
-            &function_definition.generics,
-            |this| {
-                let (params_string, deferred_patterns) =
-                    this.emit_function_params(params_to_process);
-                parts.push(params_string);
-
-                let return_ty = if function_definition.return_type.is_unit() {
-                    String::new()
-                } else if let Some(shape) =
-                    this.classify_direct_emission(&function_definition.return_type)
-                {
-                    this.render_lowered_return_ty(&shape, &function_definition.return_type)
-                } else {
-                    this.go_type_as_string(&function_definition.return_type)
-                };
-
-                if !return_ty.is_empty() {
-                    parts.push(return_ty);
-                }
-
-                let signature = parts.join(" ");
-                let should_return = !function_definition.return_type.is_unit();
-
-                this.with_scope_return_context_fallback(return_ctx.clone(), |this| {
-                    for (var_name, pattern, typed, param_ty) in deferred_patterns {
-                        this.emit_irrefutable_pattern_site(
-                            &mut body,
-                            crate::patterns::sites::PatternSubject::for_value(var_name),
-                            &pattern,
-                            typed.as_ref(),
-                            &param_ty,
-                        );
-                    }
-
-                    this.emit_function_body(
-                        &mut body,
-                        &function_definition.body,
-                        should_return,
-                        &return_ctx,
-                    );
-                });
-                signature
-            },
-        );
-
-        let trimmed_body = body.trim_end();
-        if trimmed_body.is_empty() {
-            format!("{}{} {{}}", directive, signature)
+        let return_ty = if function_definition.return_type.is_unit() {
+            String::new()
+        } else if let Some(shape) = self.classify_direct_emission(&function_definition.return_type)
+        {
+            self.render_lowered_return_ty(&shape, &function_definition.return_type)
         } else {
-            format!("{}{} {{\n{}\n}}", directive, signature, trimmed_body)
-        }
+            self.go_type_as_string(&function_definition.return_type)
+        };
+
+        (params_string, return_ty, deferred_patterns)
+    }
+
+    fn emit_function_body_with_deferred_patterns(
+        &mut self,
+        body: &mut String,
+        function_definition: &FunctionDefinition,
+        deferred_patterns: Vec<DeferredParamDestructure>,
+        return_ctx: &ReturnContext,
+    ) {
+        let should_return = !function_definition.return_type.is_unit();
+        self.with_scope_return_context_fallback(return_ctx.clone(), |this| {
+            for (var_name, pattern, typed, param_ty) in deferred_patterns {
+                this.emit_irrefutable_pattern_site(
+                    body,
+                    crate::patterns::sites::PatternSubject::for_value(var_name),
+                    &pattern,
+                    typed.as_ref(),
+                    &param_ty,
+                );
+            }
+            this.emit_function_body(body, &function_definition.body, should_return, return_ctx);
+        });
     }
 
     fn change_go_builtin_methods(

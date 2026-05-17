@@ -193,50 +193,21 @@ impl Emitter<'_> {
         left: &BinaryOperand<'_>,
         right: &BinaryOperand<'_>,
     ) -> Option<NumericBinaryEmitInfo> {
-        use BinaryOperator::*;
-
-        if !matches!(
-            operator,
-            Addition
-                | Subtraction
-                | Multiplication
-                | Division
-                | Remainder
-                | LessThan
-                | LessThanOrEqual
-                | GreaterThan
-                | GreaterThanOrEqual
-                | Equal
-                | NotEqual
-        ) {
+        if !is_numeric_binary_op(operator) {
             return None;
         }
 
-        let left_underlying_ty = left.ty.underlying_numeric_type();
-        let right_underlying_ty = right.ty.underlying_numeric_type();
-
-        let (left_underlying_ty, right_underlying_ty) =
-            match (&left_underlying_ty, &right_underlying_ty) {
-                (Some(l), Some(r)) => (l, r),
-                _ => return None,
-            };
-
-        let left_family = left_underlying_ty.numeric_family()?;
-        let right_family = right_underlying_ty.numeric_family()?;
-
-        if left_family != right_family {
-            return None;
-        }
+        let left_underlying_ty = matching_underlying_numeric(&left.ty, &right.ty)?;
 
         let left_is_aliased = left.ty.is_aliased_numeric_type();
         let right_is_aliased = right.ty.is_aliased_numeric_type();
 
         if left.ty == right.ty {
-            if left_is_aliased && matches!(operator, Division) {
+            if left_is_aliased && matches!(operator, BinaryOperator::Division) {
                 return Some(NumericBinaryEmitInfo {
                     cast_left_to: None,
                     cast_right_to: None,
-                    cast_result_to: Some(left_underlying_ty.clone()),
+                    cast_result_to: Some(left_underlying_ty),
                 });
             }
             return None;
@@ -248,24 +219,14 @@ impl Emitter<'_> {
         match (left_is_aliased, right_is_aliased) {
             (true, false) => Some(NumericBinaryEmitInfo {
                 cast_left_to: None,
-                cast_right_to: if right_is_literal {
-                    None
-                } else {
-                    Some(left.ty.clone())
-                },
+                cast_right_to: cast_unless_literal(right_is_literal, &left.ty),
                 cast_result_to: None,
             }),
-
             (false, true) => Some(NumericBinaryEmitInfo {
-                cast_left_to: if left_is_literal {
-                    None
-                } else {
-                    Some(right.ty.clone())
-                },
+                cast_left_to: cast_unless_literal(left_is_literal, &right.ty),
                 cast_right_to: None,
                 cast_result_to: None,
             }),
-
             _ => None,
         }
     }
@@ -328,5 +289,43 @@ fn is_literal_expression(expression: &Expression) -> bool {
             ..
         } => is_literal_expression(expression),
         _ => false,
+    }
+}
+
+fn is_numeric_binary_op(operator: &BinaryOperator) -> bool {
+    use BinaryOperator::*;
+    matches!(
+        operator,
+        Addition
+            | Subtraction
+            | Multiplication
+            | Division
+            | Remainder
+            | LessThan
+            | LessThanOrEqual
+            | GreaterThan
+            | GreaterThanOrEqual
+            | Equal
+            | NotEqual
+    )
+}
+
+/// Common underlying numeric type when both operands lower to the same
+/// numeric family; `None` if either operand is non-numeric or the two
+/// numeric families differ.
+fn matching_underlying_numeric(left: &Type, right: &Type) -> Option<Type> {
+    let left_underlying = left.underlying_numeric_type()?;
+    let right_underlying = right.underlying_numeric_type()?;
+    if left_underlying.numeric_family()? != right_underlying.numeric_family()? {
+        return None;
+    }
+    Some(left_underlying)
+}
+
+fn cast_unless_literal(is_literal: bool, target: &Type) -> Option<Type> {
+    if is_literal {
+        None
+    } else {
+        Some(target.clone())
     }
 }

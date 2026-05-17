@@ -342,12 +342,7 @@ impl Emitter<'_> {
             Expression::DotAccess {
                 expression, member, ..
             } => {
-                let base_str = if let Expression::Unary {
-                    operator: UnaryOperator::Deref,
-                    expression: inner,
-                    ..
-                } = expression.as_ref()
-                {
+                let base_str = if let Some(inner) = expression.deref_inner() {
                     self.emit_operand(output, inner, ExpressionContext::value())
                 } else {
                     self.emit_operand(output, expression, ExpressionContext::value())
@@ -358,12 +353,7 @@ impl Emitter<'_> {
             Expression::IndexedAccess {
                 expression, index, ..
             } => {
-                let expression_string = if let Expression::Unary {
-                    operator: UnaryOperator::Deref,
-                    expression: inner,
-                    ..
-                } = expression.as_ref()
-                {
+                let expression_string = if let Some(inner) = expression.deref_inner() {
                     let inner_str = self.emit_operand(output, inner, ExpressionContext::value());
                     format!("(*{})", inner_str)
                 } else {
@@ -438,42 +428,8 @@ impl Emitter<'_> {
                 index,
                 ..
             } => {
-                let base_str = if is_order_sensitive(base) {
-                    if let Expression::Unary {
-                        operator: UnaryOperator::Deref,
-                        expression: inner,
-                        ..
-                    } = base.as_ref()
-                    {
-                        let inner_str = self.emit_force_capture(output, inner, "base");
-                        format!("(*{})", inner_str)
-                    } else {
-                        self.emit_force_capture(output, base, "base")
-                    }
-                } else if let Expression::Unary {
-                    operator: UnaryOperator::Deref,
-                    expression: inner,
-                    ..
-                } = base.as_ref()
-                {
-                    let inner_str = self.emit_operand(output, inner, ExpressionContext::value());
-                    format!("(*{})", inner_str)
-                } else {
-                    self.emit_operand(output, base, ExpressionContext::value())
-                };
-                // When the RHS produces temp statements (if/match/block used as value),
-                // the index must be captured even for simple identifiers — the RHS
-                // setup (emitted later) could mutate the index variable.
-                let index_needs_capture = if rhs_has_setup {
-                    !matches!(index.unwrap_parens(), Expression::Literal { .. })
-                } else {
-                    is_order_sensitive(index)
-                };
-                let index_str = if index_needs_capture {
-                    self.emit_force_capture(output, index, "idx")
-                } else {
-                    self.emit_operand(output, index, ExpressionContext::value())
-                };
+                let base_str = self.emit_indexed_base_lvalue(output, base);
+                let index_str = self.emit_index_lvalue(output, index, rhs_has_setup);
                 format!("{}[{}]", base_str, index_str)
             }
             Expression::DotAccess {
@@ -481,12 +437,7 @@ impl Emitter<'_> {
                 member,
                 ..
             } => {
-                let base_str = if let Expression::Unary {
-                    operator: UnaryOperator::Deref,
-                    expression: inner,
-                    ..
-                } = base.as_ref()
-                {
+                let base_str = if let Some(inner) = base.deref_inner() {
                     self.emit_operand(output, inner, ExpressionContext::value())
                 } else if is_order_sensitive(base) {
                     self.emit_left_value_capturing(output, base, rhs_has_setup)
@@ -502,6 +453,53 @@ impl Emitter<'_> {
                 ..
             } => self.emit_deref_lvalue(output, inner),
             _ => self.emit_left_value(output, expression),
+        }
+    }
+
+    /// Emit the base of an `IndexedAccess` lvalue, peeling an explicit deref
+    /// so `(*ptr)[i]` evaluates the pointer separately from the index, and
+    /// capturing the base to a temp when ordering matters.
+    fn emit_indexed_base_lvalue(&mut self, output: &mut String, base: &Expression) -> String {
+        let force = is_order_sensitive(base);
+        if let Some(inner) = base.deref_inner() {
+            let inner_str = self.emit_base_operand(output, inner, force);
+            format!("(*{})", inner_str)
+        } else {
+            self.emit_base_operand(output, base, force)
+        }
+    }
+
+    fn emit_base_operand(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        force_capture: bool,
+    ) -> String {
+        if force_capture {
+            self.emit_force_capture(output, expression, "base")
+        } else {
+            self.emit_operand(output, expression, ExpressionContext::value())
+        }
+    }
+
+    /// Emit the index of an `IndexedAccess` lvalue, capturing to a temp when
+    /// the RHS will emit setup statements that could mutate the index variable,
+    /// or when the index expression itself is order-sensitive.
+    fn emit_index_lvalue(
+        &mut self,
+        output: &mut String,
+        index: &Expression,
+        rhs_has_setup: bool,
+    ) -> String {
+        let needs_capture = if rhs_has_setup {
+            !matches!(index.unwrap_parens(), Expression::Literal { .. })
+        } else {
+            is_order_sensitive(index)
+        };
+        if needs_capture {
+            self.emit_force_capture(output, index, "idx")
+        } else {
+            self.emit_operand(output, index, ExpressionContext::value())
         }
     }
 

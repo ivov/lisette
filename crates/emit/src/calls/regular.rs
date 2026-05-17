@@ -5,9 +5,16 @@ use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
-use crate::types::coercion::{Coercion, CoercionDirection};
-use syntax::ast::{Annotation, Expression, UnaryOperator};
+use crate::types::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
+use syntax::ast::{Annotation, Expression};
 use syntax::types::Type;
+
+struct CalleeAnalysis {
+    fn_param_types: Vec<Type>,
+    pointer_indices: HashSet<usize>,
+    is_go_call: bool,
+    is_prelude_dispatch: bool,
+}
 
 struct CallArgsContext<'a> {
     fn_param_types: &'a [Type],
@@ -130,13 +137,7 @@ impl Emitter<'_> {
 
         let mut function_string = self.emit_operand(output, function, expression_ctx.callee());
 
-        if matches!(
-            function,
-            Expression::Unary {
-                operator: UnaryOperator::Deref,
-                ..
-            }
-        ) {
+        if function.deref_inner().is_some() {
             function_string = format!("({})", function_string);
         }
 
@@ -148,32 +149,12 @@ impl Emitter<'_> {
             expression_ctx,
         );
 
-        let pointer_indices = self.get_recursive_enum_pointer_indices(function);
-
-        let fn_param_types: Vec<Type> = match function.get_type().unwrap_forall() {
-            Type::Function { params, .. } => params.clone(),
-            _ => vec![],
-        };
-
-        let (is_go_call, is_prelude_dispatch) = match function.unwrap_parens() {
-            Expression::DotAccess { expression, .. } => {
-                let is_prelude = matches!(
-                    expression.get_type().strip_refs().unwrap_forall(),
-                    Type::Nominal { id, .. } if id.starts_with("prelude.")
-                );
-                (Self::is_go_receiver(expression), is_prelude)
-            }
-            Expression::Identifier {
-                qualified: Some(q), ..
-            } if q.starts_with("prelude.") => (false, true),
-            _ => (false, false),
-        };
-
+        let analysis = self.analyze_callee(function);
         let args_ctx = CallArgsContext {
-            fn_param_types: &fn_param_types,
-            pointer_indices: &pointer_indices,
-            is_go_call,
-            is_prelude_dispatch,
+            fn_param_types: &analysis.fn_param_types,
+            pointer_indices: &analysis.pointer_indices,
+            is_go_call: analysis.is_go_call,
+            is_prelude_dispatch: analysis.is_prelude_dispatch,
             spread,
             wrap_spread_to_any: Self::spread_needs_any_wrap(function, spread),
             combine_variadic: Self::variadic_combine_for(function, spread, 0),
@@ -194,6 +175,33 @@ impl Emitter<'_> {
             return wrapped;
         }
         call_str
+    }
+
+    fn analyze_callee(&mut self, function: &Expression) -> CalleeAnalysis {
+        let pointer_indices = self.get_recursive_enum_pointer_indices(function);
+        let fn_param_types: Vec<Type> = match function.get_type().unwrap_forall() {
+            Type::Function { params, .. } => params.clone(),
+            _ => vec![],
+        };
+        let (is_go_call, is_prelude_dispatch) = match function.unwrap_parens() {
+            Expression::DotAccess { expression, .. } => {
+                let is_prelude = matches!(
+                    expression.get_type().strip_refs().unwrap_forall(),
+                    Type::Nominal { id, .. } if id.starts_with("prelude.")
+                );
+                (Self::is_go_receiver(expression), is_prelude)
+            }
+            Expression::Identifier {
+                qualified: Some(q), ..
+            } if q.starts_with("prelude.") => (false, true),
+            _ => (false, false),
+        };
+        CalleeAnalysis {
+            fn_param_types,
+            pointer_indices,
+            is_go_call,
+            is_prelude_dispatch,
+        }
     }
 
     /// Materialize a Go array-returning call into a variable and reslice it,
@@ -436,10 +444,10 @@ impl Emitter<'_> {
         ))
     }
 
-    /// Bridge a Lisette `Option<T>` argument to Go's nil-accepting form: `*T`
-    /// when the param is `Option<Ref<T>>` (`is_nullable_option`), and also `*T`
-    /// when the param is `Option<scalar>` (`is_non_nilable_option`, the
-    /// pointer-bridged shape produced by bindgen's `nilable_param` config).
+    /// Bridge a Lisette `Option<T>` argument to Go's nil-accepting form when
+    /// the param and arg agree on an Option shape that Go expresses as `*T`:
+    /// either both `Nullable` (`Option<Ref<T>>`) or both `PointerBridged`
+    /// (`Option<scalar>` produced by bindgen's `nilable_param` config).
     fn try_emit_go_pointer_param_unwrap(
         &mut self,
         output: &mut String,
@@ -448,11 +456,13 @@ impl Emitter<'_> {
     ) -> Option<String> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
-        let shapes_match = (self.facts.is_nullable_option(param_ty)
-            && self.facts.is_nullable_option(&arg_ty))
-            || (self.is_non_nilable_option(param_ty) && self.is_non_nilable_option(&arg_ty));
-        if !shapes_match {
-            return None;
+        match (
+            classify_option_shape(self, param_ty),
+            classify_option_shape(self, &arg_ty),
+        ) {
+            (OptionShape::Nullable, OptionShape::Nullable)
+            | (OptionShape::PointerBridged, OptionShape::PointerBridged) => {}
+            _ => return None,
         }
         if matches!(arg, Expression::Identifier { value, .. } if value == "None") {
             return Some("nil".to_string());
@@ -470,7 +480,7 @@ impl Emitter<'_> {
     ) -> Option<String> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
-        if !self.facts.is_nullable_option(&arg_ty) {
+        if !matches!(classify_option_shape(self, &arg_ty), OptionShape::Nullable) {
             return None;
         }
         let check_ty = if param_ty.get_name() == Some("VarArgs") {

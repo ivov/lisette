@@ -1447,6 +1447,19 @@ impl Expression {
         }
     }
 
+    /// Inner expression of an explicit `x.*` deref, or `None` for anything else.
+    #[inline]
+    pub fn deref_inner(&self) -> Option<&Expression> {
+        match self {
+            Expression::Unary {
+                operator: UnaryOperator::Deref,
+                expression,
+                ..
+            } => Some(expression),
+            _ => None,
+        }
+    }
+
     pub fn as_dotted_path(&self) -> Option<String> {
         match self {
             Expression::Identifier { value, .. } => Some(value.to_string()),

@@ -1,10 +1,16 @@
 use crate::Emitter;
-use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, write_leaf};
+use crate::calls::go_interop::wrappers::{ResolvedSink, WrapperOutcome, WrapperTarget, write_leaf};
 use crate::control_flow::fallible::{Fallible, FallibleEmitter, OPTION_SOME_TAG};
 use crate::expressions::context::ExpressionContext;
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
+
+struct CollectionUnwrapShape {
+    raw_collection_ty: String,
+    is_pointer_bridged: bool,
+    emit_nil_else: bool,
+}
 
 impl Emitter<'_> {
     pub(super) fn emit_go_option_call_wrapped(
@@ -15,7 +21,7 @@ impl Emitter<'_> {
     ) -> String {
         let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         self.emit_comma_ok_wrapping(output, &call_str, option_ty, true, WrapperTarget::FreshSlot)
-            .expect_slot()
+            .expect("wrapper produced no slot")
     }
 
     pub(super) fn emit_go_sentinel_call_wrapped(
@@ -33,7 +39,7 @@ impl Emitter<'_> {
             sentinel,
             WrapperTarget::FreshSlot,
         )
-        .expect_slot()
+        .expect("wrapper produced no slot")
     }
 
     /// Capture the call's raw return into a temp, then reuse
@@ -112,7 +118,7 @@ impl Emitter<'_> {
 
         let condition = if self.is_interface_option(option_ty) {
             format!("{} && !lisette.IsNilInterface({})", ok_var, val_vars[0])
-        } else if self.facts.is_nullable_option(option_ty) {
+        } else if needs_nilable_validation {
             format!("{} && {} != nil", ok_var, val_vars[0])
         } else {
             ok_var.clone()
@@ -120,24 +126,35 @@ impl Emitter<'_> {
 
         let (sink, outcome) = self.open_wrapper_slot(output, target, &option_ty_str, "option");
         write_line!(output, "if {} {{", condition);
+        self.write_some_none_leaves(output, &sink, &fallible, &val_expression);
+        output.push_str("}\n");
 
+        outcome
+    }
+
+    /// Inside an `if cond { ... } else { ... }` block, write the success leaf
+    /// (`Some(val_expression)`) and failure leaf (`None`) for an option-shaped
+    /// wrapper. The caller is responsible for the surrounding `if`/`}`.
+    fn write_some_none_leaves(
+        &mut self,
+        output: &mut String,
+        sink: &ResolvedSink,
+        fallible: &Fallible,
+        val_expression: &str,
+    ) {
         let some_wrapper = {
-            let mut fe = FallibleEmitter::new(self, &fallible);
-            fe.emit_success(&val_expression)
+            let mut fe = FallibleEmitter::new(self, fallible);
+            fe.emit_success(val_expression)
         };
-        write_leaf(output, &sink, &some_wrapper);
+        write_leaf(output, sink, &some_wrapper);
 
         output.push_str("} else {\n");
 
         let none_wrapper = {
-            let mut fe = FallibleEmitter::new(self, &fallible);
+            let mut fe = FallibleEmitter::new(self, fallible);
             fe.emit_failure(None)
         };
-        write_leaf(output, &sink, &none_wrapper);
-
-        output.push_str("}\n");
-
-        outcome
+        write_leaf(output, sink, &none_wrapper);
     }
 
     pub(crate) fn emit_nil_check_option_wrap(
@@ -307,10 +324,68 @@ impl Emitter<'_> {
         elem_option_ty: &Type,
     ) -> String {
         self.requirements.require_stdlib();
+        let shape = self.classify_collection_unwrap_shape(collection_ty, elem_option_ty);
 
+        let src_var = self.fresh_var(Some("src"));
+        self.declare(&src_var);
+        let unwrapped_var = self.fresh_var(Some("unwrapped"));
+        self.declare(&unwrapped_var);
+        let idx_var = self.fresh_var(Some("i"));
+        self.declare(&idx_var);
+        let val_var = self.fresh_var(Some("v"));
+        self.declare(&val_var);
+
+        write_line!(output, "{} := {}", src_var, lisette_value);
+        write_line!(
+            output,
+            "{} := make({}, len({}))",
+            unwrapped_var,
+            shape.raw_collection_ty,
+            src_var
+        );
+
+        write_line!(
+            output,
+            "for {}, {} := range {} {{",
+            idx_var,
+            val_var,
+            src_var
+        );
+
+        let some_assignment = if shape.is_pointer_bridged {
+            format!("&{}.SomeVal", val_var)
+        } else {
+            format!("{}.SomeVal", val_var)
+        };
+        write_line!(output, "if {}.Tag == {} {{", val_var, OPTION_SOME_TAG);
+        write_line!(
+            output,
+            "{}[{}] = {}",
+            unwrapped_var,
+            idx_var,
+            some_assignment
+        );
+        if shape.emit_nil_else {
+            output.push_str("} else {\n");
+            write_line!(output, "{}[{}] = nil", unwrapped_var, idx_var);
+        }
+        output.push_str("}\n");
+        output.push_str("}\n");
+
+        unwrapped_var
+    }
+
+    /// Per-emission shape of a collection unwrap: the Go collection type, the
+    /// prefix that promotes the `SomeVal` to a pointer when needed, and
+    /// whether the `Some` branch needs an explicit `else nil` for the
+    /// `Option<T>` => `nil`-on-`None` projection.
+    fn classify_collection_unwrap_shape(
+        &mut self,
+        collection_ty: &Type,
+        elem_option_ty: &Type,
+    ) -> CollectionUnwrapShape {
         let is_map = collection_ty.has_name("Map");
         let is_pointer_bridged = self.is_non_nilable_option(elem_option_ty);
-
         let inner_ty = elem_option_ty.ok_type();
         let inner_ty_str = self.go_type_as_string(&inner_ty);
         let raw_elem_ty = if is_pointer_bridged {
@@ -327,56 +402,11 @@ impl Emitter<'_> {
         } else {
             format!("[]{}", raw_elem_ty)
         };
-
-        let src_var = self.fresh_var(Some("src"));
-        self.declare(&src_var);
-        let unwrapped_var = self.fresh_var(Some("unwrapped"));
-        self.declare(&unwrapped_var);
-        let idx_var = self.fresh_var(Some("i"));
-        self.declare(&idx_var);
-        let val_var = self.fresh_var(Some("v"));
-        self.declare(&val_var);
-
-        write_line!(output, "{} := {}", src_var, lisette_value);
-        write_line!(
-            output,
-            "{} := make({}, len({}))",
-            unwrapped_var,
+        CollectionUnwrapShape {
             raw_collection_ty,
-            src_var
-        );
-
-        write_line!(
-            output,
-            "for {}, {} := range {} {{",
-            idx_var,
-            val_var,
-            src_var
-        );
-
-        let some_assignment = if is_pointer_bridged {
-            format!("&{}.SomeVal", val_var)
-        } else {
-            format!("{}.SomeVal", val_var)
-        };
-
-        write_line!(output, "if {}.Tag == {} {{", val_var, OPTION_SOME_TAG);
-        write_line!(
-            output,
-            "{}[{}] = {}",
-            unwrapped_var,
-            idx_var,
-            some_assignment
-        );
-        if is_map || is_pointer_bridged {
-            output.push_str("} else {\n");
-            write_line!(output, "{}[{}] = nil", unwrapped_var, idx_var);
+            is_pointer_bridged,
+            emit_nil_else: is_map || is_pointer_bridged,
         }
-        output.push_str("}\n");
-
-        output.push_str("}\n");
-
-        unwrapped_var
     }
 
     pub(super) fn emit_go_single_return_option_wrapped(
@@ -388,6 +418,6 @@ impl Emitter<'_> {
         let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         let raw_var = self.hoist_tmp_value(output, "raw", &call_str);
         self.emit_nil_check_option_wrap(output, &raw_var, option_ty, WrapperTarget::FreshSlot)
-            .expect_slot()
+            .expect("wrapper produced no slot")
     }
 }

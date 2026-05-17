@@ -306,41 +306,7 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 bindings,
                 success,
                 failure,
-            } => {
-                let needs_pre_scope = ctx.leaf_scope_explicit() && !bindings.is_empty();
-                if needs_pre_scope {
-                    output.push_str("{\n");
-                    self.emitter.enter_scope();
-                }
-                let arm = &self.arms[*arm_index];
-                let arm_guard = arm.guard.as_deref();
-                let arm_body = &*arm.expression;
-                let mut guard_consumers: Vec<&Expression> = Vec::with_capacity(2);
-                if let Some(g) = arm_guard {
-                    guard_consumers.push(g);
-                }
-                guard_consumers.push(arm_body);
-                let inlines = self.emit_bindings(output, bindings, &guard_consumers, Some(failure));
-                if self.emit_guard_header(output, *arm_index) {
-                    self.walk(output, success, &ctx.nested());
-                    self.emitter.exit_scope();
-                    self.drop_inline_bindings(&inlines);
-                    if ctx.role == WalkRole::SwitchCase {
-                        self.walk_else_or_flat(output, failure, ctx);
-                    } else {
-                        output.push_str("}\n");
-                    }
-                } else {
-                    self.drop_inline_bindings(&inlines);
-                }
-                if needs_pre_scope {
-                    self.emitter.exit_scope();
-                    output.push_str("}\n");
-                }
-                if ctx.role == WalkRole::RetryLoopTop {
-                    self.walk(output, failure, ctx);
-                }
-            }
+            } => self.walk_guard(output, *arm_index, bindings, success, failure, ctx),
             EmitDecision::IfElse {
                 cond,
                 then_branch,
@@ -389,6 +355,49 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
                 }
             }
             EmitDecision::Unreachable => {}
+        }
+    }
+
+    fn walk_guard(
+        &mut self,
+        output: &mut String,
+        arm_index: usize,
+        bindings: &[EmitBinding],
+        success: &EmitDecision,
+        failure: &EmitDecision,
+        ctx: &WalkCtx,
+    ) {
+        let needs_pre_scope = ctx.leaf_scope_explicit() && !bindings.is_empty();
+        if needs_pre_scope {
+            output.push_str("{\n");
+            self.emitter.enter_scope();
+        }
+        let arm = &self.arms[arm_index];
+        let arm_body = &*arm.expression;
+        let mut guard_consumers: Vec<&Expression> = Vec::with_capacity(2);
+        if let Some(g) = arm.guard.as_deref() {
+            guard_consumers.push(g);
+        }
+        guard_consumers.push(arm_body);
+        let inlines = self.emit_bindings(output, bindings, &guard_consumers, Some(failure));
+        if self.emit_guard_header(output, arm_index) {
+            self.walk(output, success, &ctx.nested());
+            self.emitter.exit_scope();
+            self.drop_inline_bindings(&inlines);
+            if ctx.role == WalkRole::SwitchCase {
+                self.walk_else_or_flat(output, failure, ctx);
+            } else {
+                output.push_str("}\n");
+            }
+        } else {
+            self.drop_inline_bindings(&inlines);
+        }
+        if needs_pre_scope {
+            self.emitter.exit_scope();
+            output.push_str("}\n");
+        }
+        if ctx.role == WalkRole::RetryLoopTop {
+            self.walk(output, failure, ctx);
         }
     }
 

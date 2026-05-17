@@ -286,16 +286,11 @@ fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
     if !is_range_index {
         return false;
     }
-    let collection_ty = match expression.as_ref() {
-        Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } => {
-            let inner_ty = inner.get_type();
-            inner_ty.inner().unwrap_or(inner_ty)
-        }
-        other => other.get_type(),
+    let collection_ty = if let Some(inner) = expression.deref_inner() {
+        let inner_ty = inner.get_type();
+        inner_ty.inner().unwrap_or(inner_ty)
+    } else {
+        expression.get_type()
     };
     collection_ty.has_name("Slice")
 }

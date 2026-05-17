@@ -299,87 +299,116 @@ fn lower_switch(
     fallback: &Option<Box<Decision>>,
 ) -> EmitDecision {
     propagate_stdlib(ctx, branches);
-
     let rendered_path = path.render(&ctx.current_subject);
 
     match shape {
-        SwitchShape::TypeSwitch => {
-            let base = rendered_path;
-            ctx.with_subject(base.clone(), |ctx| {
-                let (cases, default) =
-                    lower_cases_with_default_lift(ctx, branches, fallback, /*lift=*/ true);
-                EmitDecision::TypeSwitch {
-                    base,
-                    cases,
-                    default,
-                }
-            })
-        }
-        SwitchShape::Bool => {
-            // Select branches by label so `then_branch` is always the
-            // semantic-true subtree regardless of source order.
-            let true_branch = branches
-                .iter()
-                .find(|b| b.case_label == "true")
-                .expect("Bool shape requires a true-labeled branch");
-            let false_branch = branches
-                .iter()
-                .find(|b| b.case_label == "false")
-                .expect("Bool shape requires a false-labeled branch");
-            let cond = wrap_if_struct_literal(rendered_path);
-            EmitDecision::IfElse {
-                cond,
-                then_branch: Box::new(lower_decision(ctx, &true_branch.decision)),
-                else_branch: Some(Box::new(lower_decision(ctx, &false_branch.decision))),
-            }
-        }
-        SwitchShape::Binary => {
-            let first = &branches[0];
-            let second = &branches[1];
-            let expr = render_switch_expression(&rendered_path, kind);
-            let cond = format!("{} == {}", expr, first.case_label);
-            EmitDecision::IfElse {
-                cond,
-                then_branch: Box::new(lower_decision(ctx, &first.decision)),
-                else_branch: Some(Box::new(lower_decision(ctx, &second.decision))),
-            }
-        }
+        SwitchShape::TypeSwitch => lower_type_switch(ctx, rendered_path, branches, fallback),
+        SwitchShape::Bool => lower_bool_switch(ctx, rendered_path, branches),
+        SwitchShape::Binary => lower_binary_switch(ctx, &rendered_path, kind, branches),
         SwitchShape::SingleArm => {
-            let branch = &branches[0];
-            let expr = render_switch_expression(&rendered_path, kind);
-            match fallback {
-                None => {
-                    // Exhaustive enum: inline body, no condition wrapper.
-                    EmitDecision::InlineBranch {
-                        branch: Box::new(lower_decision(ctx, &branch.decision)),
-                    }
-                }
-                Some(fb) => {
-                    let lowered_fallback = lower_decision(ctx, fb);
-                    let cond = format!("{} == {}", expr, branch.case_label);
-                    let else_branch = if is_empty_emit_decision(&lowered_fallback) {
-                        None
-                    } else {
-                        Some(Box::new(lowered_fallback))
-                    };
-                    EmitDecision::IfElse {
-                        cond,
-                        then_branch: Box::new(lower_decision(ctx, &branch.decision)),
-                        else_branch,
-                    }
-                }
-            }
+            lower_single_arm_switch(ctx, &rendered_path, kind, branches, fallback)
         }
-        SwitchShape::Multi => {
-            let expr = render_switch_expression(&rendered_path, kind);
-            let (cases, default) =
-                lower_cases_with_default_lift(ctx, branches, fallback, /*lift=*/ true);
-            EmitDecision::Switch {
-                expr,
-                cases,
-                default,
-            }
+        SwitchShape::Multi => lower_multi_switch(ctx, &rendered_path, kind, branches, fallback),
+    }
+}
+
+fn lower_type_switch(
+    ctx: &mut LoweringCtx,
+    base: String,
+    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    fallback: &Option<Box<Decision>>,
+) -> EmitDecision {
+    ctx.with_subject(base.clone(), |ctx| {
+        let (cases, default) =
+            lower_cases_with_default_lift(ctx, branches, fallback, /*lift=*/ true);
+        EmitDecision::TypeSwitch {
+            base,
+            cases,
+            default,
         }
+    })
+}
+
+fn lower_bool_switch(
+    ctx: &mut LoweringCtx,
+    rendered_path: String,
+    branches: &[crate::patterns::decision_tree::SwitchBranch],
+) -> EmitDecision {
+    // Select branches by label so `then_branch` is always the semantic-true
+    // subtree regardless of source order.
+    let true_branch = branches
+        .iter()
+        .find(|b| b.case_label == "true")
+        .expect("Bool shape requires a true-labeled branch");
+    let false_branch = branches
+        .iter()
+        .find(|b| b.case_label == "false")
+        .expect("Bool shape requires a false-labeled branch");
+    EmitDecision::IfElse {
+        cond: wrap_if_struct_literal(rendered_path),
+        then_branch: Box::new(lower_decision(ctx, &true_branch.decision)),
+        else_branch: Some(Box::new(lower_decision(ctx, &false_branch.decision))),
+    }
+}
+
+fn lower_binary_switch(
+    ctx: &mut LoweringCtx,
+    rendered_path: &str,
+    kind: &SwitchKind,
+    branches: &[crate::patterns::decision_tree::SwitchBranch],
+) -> EmitDecision {
+    let first = &branches[0];
+    let second = &branches[1];
+    let expr = render_switch_expression(rendered_path, kind);
+    EmitDecision::IfElse {
+        cond: format!("{} == {}", expr, first.case_label),
+        then_branch: Box::new(lower_decision(ctx, &first.decision)),
+        else_branch: Some(Box::new(lower_decision(ctx, &second.decision))),
+    }
+}
+
+fn lower_single_arm_switch(
+    ctx: &mut LoweringCtx,
+    rendered_path: &str,
+    kind: &SwitchKind,
+    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    fallback: &Option<Box<Decision>>,
+) -> EmitDecision {
+    let branch = &branches[0];
+    let Some(fb) = fallback else {
+        // Exhaustive enum: inline body, no condition wrapper.
+        return EmitDecision::InlineBranch {
+            branch: Box::new(lower_decision(ctx, &branch.decision)),
+        };
+    };
+    let expr = render_switch_expression(rendered_path, kind);
+    let lowered_fallback = lower_decision(ctx, fb);
+    let else_branch = if is_empty_emit_decision(&lowered_fallback) {
+        None
+    } else {
+        Some(Box::new(lowered_fallback))
+    };
+    EmitDecision::IfElse {
+        cond: format!("{} == {}", expr, branch.case_label),
+        then_branch: Box::new(lower_decision(ctx, &branch.decision)),
+        else_branch,
+    }
+}
+
+fn lower_multi_switch(
+    ctx: &mut LoweringCtx,
+    rendered_path: &str,
+    kind: &SwitchKind,
+    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    fallback: &Option<Box<Decision>>,
+) -> EmitDecision {
+    let expr = render_switch_expression(rendered_path, kind);
+    let (cases, default) =
+        lower_cases_with_default_lift(ctx, branches, fallback, /*lift=*/ true);
+    EmitDecision::Switch {
+        expr,
+        cases,
+        default,
     }
 }
 

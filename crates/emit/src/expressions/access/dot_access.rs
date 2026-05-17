@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, StructKind, UnaryOperator};
+use syntax::ast::{Expression, StructKind};
 use syntax::program::{
     Definition, DefinitionBody, DotAccessKind as SemanticDotKind, ReceiverCoercion,
 };
@@ -279,11 +279,7 @@ impl Emitter<'_> {
         coercion: Option<ReceiverCoercion>,
         ctx: ExpressionContext<'_>,
     ) -> String {
-        let (expression_string, had_explicit_deref) = if let Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } = expression
+        let (expression_string, had_explicit_deref) = if let Some(inner) = expression.deref_inner()
         {
             (self.emit_operand(output, inner, ctx), true)
         } else {
@@ -309,16 +305,7 @@ impl Emitter<'_> {
     /// Check if expression has an absorbed `Ref<T>` generic (T already emitted as `*Concrete`).
     /// When true, suppress auto-deref coercion — the pointer is already the right type.
     fn is_absorbed_ref_generic(&self, expression: &Expression) -> bool {
-        let check_expression = if let Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } = expression
-        {
-            inner.as_ref()
-        } else {
-            expression
-        };
+        let check_expression = expression.deref_inner().unwrap_or(expression);
         let expression_ty = check_expression.get_type();
         expression_ty.is_ref()
             && expression_ty.inner().is_some_and(|inner| {

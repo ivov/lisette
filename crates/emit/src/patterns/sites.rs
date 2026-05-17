@@ -8,6 +8,8 @@
 //! subject materialization, root assertions, refutable condition assembly,
 //! binding emission, and or-pattern scope policy.
 
+use std::borrow::Cow;
+
 use syntax::ast::{Binding, Expression, MatchArm, Pattern, TypedPattern};
 use syntax::types::Type;
 
@@ -18,8 +20,8 @@ use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::bindings::pattern_binds_name;
 use crate::patterns::decision_tree::{
-    self, apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
-    drop_inline_overlays, emit_tree_assignments, emit_tree_bindings,
+    self, PatternInfo, apply_refutable_root_assertion, apply_root_assertion,
+    compose_refutable_condition, drop_inline_overlays, emit_tree_assignments, emit_tree_bindings,
     emit_tree_bindings_with_consumers, render_condition,
 };
 use crate::placement::BodyPlace;
@@ -60,6 +62,12 @@ impl<'a> PatternSubject<'a> {
 struct ResolvedSubject {
     var: String,
     guard: Option<ValueTempDiscard>,
+}
+
+struct LetElseAlternatives<'s> {
+    collected: Vec<PatternInfo>,
+    hoisted: Vec<(Cow<'s, str>, Option<String>)>,
+    irrefutable_idx: Option<usize>,
 }
 
 impl Emitter<'_> {
@@ -271,62 +279,84 @@ impl Emitter<'_> {
         subject_ty: &Type,
         else_block: &Expression,
     ) {
-        let outer_snapshot = self.scope.binding_snapshot();
-
+        let pre_let_snapshot = self.scope.binding_snapshot();
         self.emit_binding_declarations_with_type(output, pattern, binding_ty, typed);
+        let post_decl_snapshot = self.scope.binding_snapshot();
 
-        let pattern_snapshot = self.scope.binding_snapshot();
+        let alts = self.collect_let_else_alternatives(output, patterns, subject_ty, subject_var);
+        self.emit_let_else_chain(output, &alts);
 
-        let collected: Vec<_> = patterns
+        if let Some(idx) = alts.irrefutable_idx {
+            self.emit_let_else_irrefutable_tail(output, &alts, idx);
+            return;
+        }
+
+        self.scope.restore_binding_snapshot(pre_let_snapshot);
+        output.push_str("} else {\n");
+        self.emit_block(output, else_block);
+        output.push_str("}\n");
+
+        self.scope.restore_binding_snapshot(post_decl_snapshot);
+    }
+
+    fn collect_let_else_alternatives<'s>(
+        &mut self,
+        output: &mut String,
+        patterns: &[Pattern],
+        subject_ty: &Type,
+        subject_var: &'s str,
+    ) -> LetElseAlternatives<'s> {
+        let collected: Vec<PatternInfo> = patterns
             .iter()
             .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
             .collect();
         for info in &collected {
             self.requirements.apply_effects(&info.effects);
         }
-
-        let hoisted: Vec<_> = collected
+        let hoisted: Vec<(Cow<'s, str>, Option<String>)> = collected
             .iter()
             .map(|info| apply_refutable_root_assertion(self, output, info, subject_var))
             .collect();
-
         let irrefutable_idx = collected
             .iter()
             .zip(hoisted.iter())
             .position(|(info, (_, ok_var))| info.checks.is_empty() && ok_var.is_none());
-        let chain_len = irrefutable_idx.unwrap_or(collected.len());
+        LetElseAlternatives {
+            collected,
+            hoisted,
+            irrefutable_idx,
+        }
+    }
 
-        for (i, info) in collected.iter().take(chain_len).enumerate() {
-            let (effective, ok_var) = &hoisted[i];
+    fn emit_let_else_chain(&mut self, output: &mut String, alts: &LetElseAlternatives<'_>) {
+        let chain_len = alts.irrefutable_idx.unwrap_or(alts.collected.len());
+        for (i, info) in alts.collected.iter().take(chain_len).enumerate() {
+            let (effective, ok_var) = &alts.hoisted[i];
             let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
             if i == 0 {
                 write_line!(output, "if {} {{", condition);
             } else {
                 write_line!(output, "}} else if {} {{", condition);
             }
-
             emit_tree_assignments(self, output, &info.bindings, effective);
         }
+    }
 
-        if let Some(idx) = irrefutable_idx {
-            let info = &collected[idx];
-            let (effective, _) = &hoisted[idx];
-            if idx == 0 {
-                emit_tree_assignments(self, output, &info.bindings, effective);
-            } else {
-                output.push_str("} else {\n");
-                emit_tree_assignments(self, output, &info.bindings, effective);
-                output.push_str("}\n");
-            }
-            return;
+    fn emit_let_else_irrefutable_tail(
+        &mut self,
+        output: &mut String,
+        alts: &LetElseAlternatives<'_>,
+        idx: usize,
+    ) {
+        let info = &alts.collected[idx];
+        let (effective, _) = &alts.hoisted[idx];
+        if idx == 0 {
+            emit_tree_assignments(self, output, &info.bindings, effective);
+        } else {
+            output.push_str("} else {\n");
+            emit_tree_assignments(self, output, &info.bindings, effective);
+            output.push_str("}\n");
         }
-
-        self.scope.restore_binding_snapshot(outer_snapshot);
-        output.push_str("} else {\n");
-        self.emit_block(output, else_block);
-        output.push_str("}\n");
-
-        self.scope.restore_binding_snapshot(pattern_snapshot);
     }
 
     fn emit_while_let_or_pattern(

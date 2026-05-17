@@ -32,26 +32,52 @@ impl Emitter<'_> {
             && let Some(result) =
                 self.try_emit_error_constructor(output, expression, &fallible, return_ctx)
         {
-            // Direct failure constructor (e.g. Err(...)? or None?) already emitted
-            // `return ...`. Declare the binding variable so any dead code after
-            // this point that references it doesn't produce "undefined" in Go.
-            if var_name != "_" {
-                let inner_ty = fallible.ok_ty();
-                let (zero, effects) = self.zero_value(inner_ty);
-                self.requirements.apply_effects(&effects);
-                if self.is_declared(var_name) {
-                    write_line!(output, "{} = {}", var_name, zero);
-                } else {
-                    let go_ty = self.go_type_as_string(inner_ty);
-                    write_line!(output, "var {} {} = {}", var_name, go_ty, zero);
-                    self.declare(var_name);
-                }
-            }
+            self.declare_zero_for_dead_path(output, var_name, &fallible);
             return result;
         }
 
         self.requirements.require_stdlib();
-        let check_var = if let Expression::Identifier { value, ty, .. } = expression {
+        let check_var = self.hoist_propagate_check_var(output, expression);
+        self.emit_propagate_failure_check(output, &check_var, &fallible, return_ctx);
+
+        let ok_access = format!("{}.{}", check_var, fallible.ok_field());
+        match result_var_name {
+            None => ok_access,
+            Some("_") => "_".to_string(),
+            Some(name) => self.bind_propagate_ok(output, name, &ok_access),
+        }
+    }
+
+    /// `Err(...)?` and `None?` already emitted `return ...`. Declare the
+    /// binding with a zero value so any dead code below that references it
+    /// stays well-typed in Go.
+    fn declare_zero_for_dead_path(
+        &mut self,
+        output: &mut String,
+        var_name: &str,
+        fallible: &Fallible,
+    ) {
+        if var_name == "_" {
+            return;
+        }
+        let inner_ty = fallible.ok_ty();
+        let (zero, effects) = self.zero_value(inner_ty);
+        self.requirements.apply_effects(&effects);
+        if self.is_declared(var_name) {
+            write_line!(output, "{} = {}", var_name, zero);
+        } else {
+            let go_ty = self.go_type_as_string(inner_ty);
+            write_line!(output, "var {} {} = {}", var_name, go_ty, zero);
+            self.declare(var_name);
+        }
+    }
+
+    fn hoist_propagate_check_var(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+    ) -> String {
+        if let Expression::Identifier { value, ty, .. } = expression {
             let go_name = self.emit_identifier(value, ty, ExpressionContext::value());
             if go_name.contains('(') {
                 self.hoist_tmp_value(output, "check", &go_name)
@@ -62,9 +88,18 @@ impl Emitter<'_> {
             let expression_string =
                 self.emit_operand(output, expression, ExpressionContext::value());
             self.hoist_tmp_value(output, "check", &expression_string)
-        };
+        }
+    }
 
+    fn emit_propagate_failure_check(
+        &mut self,
+        output: &mut String,
+        check_var: &str,
+        fallible: &Fallible,
+        return_ctx: &ReturnContext,
+    ) {
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
+        let success_tag = fallible.success_tag();
 
         if let Some(shape) = return_ctx.lowered_shape() {
             let return_ty = return_ctx.expect_ty();
@@ -80,38 +115,32 @@ impl Emitter<'_> {
                 output,
                 "if {}.Tag != {} {{\n{}\n}}",
                 check_var,
-                fallible.success_tag(),
+                success_tag,
                 lowered_failure
             );
         } else {
             let err_return = {
-                let mut fe = FallibleEmitter::new(self, &fallible);
+                let mut fe = FallibleEmitter::new(self, fallible);
                 fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)), return_ctx)
             };
             write_line!(
                 output,
                 "if {}.Tag != {} {{\nreturn {}\n}}",
                 check_var,
-                fallible.success_tag(),
+                success_tag,
                 err_return
             );
         }
+    }
 
-        let ok_access = format!("{}.{}", check_var, fallible.ok_field());
-
-        match result_var_name {
-            None => ok_access,
-            Some("_") => "_".to_string(),
-            Some(name) => {
-                let pre_declared = self.is_declared(name);
-                let op = if pre_declared { "=" } else { ":=" };
-                write_line!(output, "{} {} {}", name, op, ok_access);
-                if !pre_declared {
-                    self.declare(name);
-                }
-                name.to_string()
-            }
+    fn bind_propagate_ok(&mut self, output: &mut String, name: &str, ok_access: &str) -> String {
+        let pre_declared = self.is_declared(name);
+        let op = if pre_declared { "=" } else { ":=" };
+        write_line!(output, "{} {} {}", name, op, ok_access);
+        if !pre_declared {
+            self.declare(name);
         }
+        name.to_string()
     }
     pub(crate) fn emit_propagate_to_let(
         &mut self,
@@ -192,16 +221,15 @@ impl Emitter<'_> {
         if let Expression::Identifier { .. } = expression
             && fallible.classify_constructor(expression) == Some(ConstructorKind::Failure)
         {
-            // Only `None` reaches here — `Err` always has a payload.
-            if let Some(shape) = lowered.as_ref() {
-                let line = abi_transition::format_lowered_none_return(self, shape, &return_ty);
-                write_line!(output, "{}", line);
-            } else {
-                self.requirements.require_stdlib();
-                let mut fe = FallibleEmitter::new(self, &fallible);
-                let failure = fe.emit_failure(None);
-                write_line!(output, "return {}", failure);
-            }
+            // Only `None` reaches here — `Err` always has a payload, so an
+            // identifier failure constructor must be a payload-less Option.
+            self.emit_failure_constructor_return(
+                output,
+                &[],
+                &fallible,
+                &return_ty,
+                lowered.as_ref(),
+            );
             return true;
         }
 
@@ -222,15 +250,25 @@ impl Emitter<'_> {
         }
 
         let value = self.emit_value(output, expression, ExpressionContext::value());
+        self.emit_value_wrapped_return(output, value, &return_ty, lowered.as_ref());
+        true
+    }
+
+    fn emit_value_wrapped_return(
+        &mut self,
+        output: &mut String,
+        value: String,
+        return_ty: &Type,
+        lowered: Option<&AbiShape>,
+    ) {
         if let Some(shape) = lowered {
             // The destructure references the value multiple times (`.Tag`,
             // `.OkVal`, `.ErrVal` etc.); hoist to avoid re-evaluating.
             let temp = self.hoist_tmp_value(output, "v", &value);
-            abi_transition::emit_lowered_result_return(self, output, &temp, &return_ty, &shape);
+            abi_transition::emit_lowered_result_return(self, output, &temp, return_ty, shape);
         } else {
             write_line!(output, "return {}", value);
         }
-        true
     }
 
     /// Emit a return for a call whose result is wrapped in the function's
@@ -257,62 +295,10 @@ impl Emitter<'_> {
         };
         match fallible.classify_constructor(call_expression) {
             Some(ConstructorKind::Success) => {
-                if let Some(shape) = lowered {
-                    let ok_arg = if matches!(shape, AbiShape::BareError) {
-                        // Unit Ok — emit args[0] for side effects, then drop.
-                        if !args.is_empty() {
-                            let _ = self.emit_composite_value(
-                                output,
-                                &args[0],
-                                ExpressionContext::value(),
-                            );
-                        }
-                        String::new()
-                    } else if args.is_empty() {
-                        // `Some` with no payload wouldn't typecheck; only
-                        // possible when Ok type is unit and we still need a
-                        // value for the tuple (`Some(())` under CommaOk).
-                        "struct{}{}".to_string()
-                    } else {
-                        self.emit_composite_value(output, &args[0], ExpressionContext::value())
-                    };
-                    let line = abi_transition::format_lowered_ok_return(shape, &ok_arg);
-                    write_line!(output, "{}", line);
-                } else {
-                    let arg =
-                        self.emit_composite_value(output, &args[0], ExpressionContext::value());
-                    let mut fe = FallibleEmitter::new(self, fallible);
-                    let success = fe.emit_success(&arg);
-                    write_line!(output, "return {}", success);
-                }
+                self.emit_success_constructor_return(output, args, fallible, lowered);
             }
             Some(ConstructorKind::Failure) => {
-                if let Some(shape) = lowered {
-                    if args.is_empty() {
-                        // `None` under lowered Option (CommaOk/NullableReturn).
-                        let line =
-                            abi_transition::format_lowered_none_return(self, shape, return_ty);
-                        write_line!(output, "{}", line);
-                    } else {
-                        let err_expr =
-                            self.emit_composite_value(output, &args[0], ExpressionContext::value());
-                        let line = abi_transition::format_lowered_err_return(
-                            self, shape, return_ty, &err_expr,
-                        );
-                        write_line!(output, "{}", line);
-                    }
-                } else {
-                    let failure = if fallible.is_result() {
-                        let arg =
-                            self.emit_composite_value(output, &args[0], ExpressionContext::value());
-                        let mut fe = FallibleEmitter::new(self, fallible);
-                        fe.emit_failure(Some(&arg))
-                    } else {
-                        let mut fe = FallibleEmitter::new(self, fallible);
-                        fe.emit_failure(None)
-                    };
-                    write_line!(output, "return {}", failure);
-                }
+                self.emit_failure_constructor_return(output, args, fallible, return_ty, lowered);
             }
             None => self.emit_wrapped_passthrough_return(
                 output,
@@ -321,6 +307,71 @@ impl Emitter<'_> {
                 return_ty,
                 lowered,
             ),
+        }
+    }
+
+    fn emit_success_constructor_return(
+        &mut self,
+        output: &mut String,
+        args: &[Expression],
+        fallible: &Fallible,
+        lowered: Option<&AbiShape>,
+    ) {
+        if let Some(shape) = lowered {
+            let ok_arg = if matches!(shape, AbiShape::BareError) {
+                // Unit Ok — emit args[0] for side effects, then drop.
+                if !args.is_empty() {
+                    let _ = self.emit_composite_value(output, &args[0], ExpressionContext::value());
+                }
+                String::new()
+            } else if args.is_empty() {
+                // `Some` with no payload would not typecheck; only possible
+                // when Ok type is unit and we still need a value for the
+                // tuple (`Some(())` under CommaOk).
+                "struct{}{}".to_string()
+            } else {
+                self.emit_composite_value(output, &args[0], ExpressionContext::value())
+            };
+            let line = abi_transition::format_lowered_ok_return(shape, &ok_arg);
+            write_line!(output, "{}", line);
+        } else {
+            let arg = self.emit_composite_value(output, &args[0], ExpressionContext::value());
+            let mut fe = FallibleEmitter::new(self, fallible);
+            let success = fe.emit_success(&arg);
+            write_line!(output, "return {}", success);
+        }
+    }
+
+    fn emit_failure_constructor_return(
+        &mut self,
+        output: &mut String,
+        args: &[Expression],
+        fallible: &Fallible,
+        return_ty: &Type,
+        lowered: Option<&AbiShape>,
+    ) {
+        if let Some(shape) = lowered {
+            if args.is_empty() {
+                // `None` under lowered Option (CommaOk/NullableReturn).
+                let line = abi_transition::format_lowered_none_return(self, shape, return_ty);
+                write_line!(output, "{}", line);
+            } else {
+                let err_expr =
+                    self.emit_composite_value(output, &args[0], ExpressionContext::value());
+                let line =
+                    abi_transition::format_lowered_err_return(self, shape, return_ty, &err_expr);
+                write_line!(output, "{}", line);
+            }
+        } else {
+            let failure = if fallible.is_result() {
+                let arg = self.emit_composite_value(output, &args[0], ExpressionContext::value());
+                let mut fe = FallibleEmitter::new(self, fallible);
+                fe.emit_failure(Some(&arg))
+            } else {
+                let mut fe = FallibleEmitter::new(self, fallible);
+                fe.emit_failure(None)
+            };
+            write_line!(output, "return {}", failure);
         }
     }
 

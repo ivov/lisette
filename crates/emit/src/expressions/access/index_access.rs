@@ -1,4 +1,4 @@
-use syntax::ast::{Expression, UnaryOperator};
+use syntax::ast::Expression;
 use syntax::types::peel_to_range_type;
 
 use crate::Emitter;
@@ -45,15 +45,8 @@ impl Emitter<'_> {
         format!("{}[{}]", values[0], values[1])
     }
 
-    /// Stage an indexable base expression, unwrapping an explicit deref into
-    /// a parenthesized `(*x)` form while preserving evaluation-order setup.
     fn stage_base_with_deref(&mut self, expression: &Expression) -> EmittedExpression {
-        let Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } = expression
-        else {
+        let Some(inner) = expression.deref_inner() else {
             return self.stage_operand(expression, ExpressionContext::value());
         };
         let s = self.stage_operand(inner, ExpressionContext::value());

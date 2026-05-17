@@ -47,10 +47,34 @@ impl Emitter<'_> {
         if needs_retry_loop {
             output.push_str("for {\n");
         }
-
         self.enter_scope();
         output.push_str("select {\n");
 
+        self.emit_select_arms(output, arms, &prep, place);
+
+        output.push_str("}\n");
+        self.exit_scope();
+
+        if needs_retry_loop {
+            output.push_str("break\n}\n");
+            // Go can't see that `break` is unreachable (all select paths either
+            // return or continue), so emit panic to satisfy the compiler.
+            emit_unreachable_panic_if_needed(output, place, false);
+        } else {
+            let has_default = arms
+                .iter()
+                .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
+            emit_unreachable_panic_if_needed(output, place, has_default);
+        }
+    }
+
+    fn emit_select_arms(
+        &mut self,
+        output: &mut String,
+        arms: &[SelectArm],
+        prep: &SelectPrep,
+        place: &BodyPlace,
+    ) {
         let default_body = arms.iter().find_map(|arm| {
             if let SelectArmPattern::WildCard { body } = &arm.pattern {
                 Some(body.as_ref())
@@ -101,21 +125,6 @@ impl Emitter<'_> {
                     self.emit_body_to_place(output, body, place);
                 }
             }
-        }
-
-        output.push_str("}\n");
-        self.exit_scope();
-
-        if needs_retry_loop {
-            output.push_str("break\n}\n");
-            // Go can't see that `break` is unreachable (all select paths either
-            // return or continue), so emit panic to satisfy the compiler.
-            emit_unreachable_panic_if_needed(output, place, false);
-        } else {
-            let has_default = arms
-                .iter()
-                .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
-            emit_unreachable_panic_if_needed(output, place, has_default);
         }
     }
 
@@ -313,62 +322,81 @@ impl Emitter<'_> {
         ctx: &SelectReceiveContext,
     ) {
         let effective_pattern = unwrap_some_pattern(binding);
-        let needs_ok_check = is_some_pattern(binding);
         let inner_typed = unwrap_some_typed_pattern(typed_pattern);
 
         self.scope.push_binding_frame();
+        if is_some_pattern(binding) {
+            self.emit_receive_arm_with_ok_check(output, effective_pattern, inner_typed, ctx);
+        } else {
+            self.emit_receive_arm_simple(output, effective_pattern, inner_typed, ctx);
+        }
+    }
 
-        match effective_pattern {
-            Pattern::Identifier { identifier, .. } => {
-                if let Some(go_name) = self.go_name_for_binding(effective_pattern) {
-                    let var = self.scope.bind(identifier, go_name);
-                    if needs_ok_check {
-                        self.emit_ok_guard(output, &var, None, ctx);
-                        return;
-                    } else {
-                        write_line!(output, "case {} := <-{}:", var, ctx.channel);
-                    }
-                } else if needs_ok_check {
-                    let ok_var = self.fresh_ok_var();
-                    write_line!(output, "case _, {} := <-{}:", ok_var, ctx.channel);
-                    self.emit_ok_check(output, &ok_var, ctx);
-                    self.scope.pop_binding_frame();
-                    return;
-                } else {
-                    write_line!(output, "case <-{}:", ctx.channel);
-                }
-            }
-            Pattern::WildCard { .. } => {
-                if needs_ok_check {
-                    let ok_var = self.fresh_ok_var();
-                    write_line!(output, "case _, {} := <-{}:", ok_var, ctx.channel);
-                    self.emit_ok_check(output, &ok_var, ctx);
-                    self.scope.pop_binding_frame();
-                    return;
-                }
-                write_line!(output, "case <-{}:", ctx.channel);
-            }
-            _ => {
-                let receiver_var = self.fresh_var(Some("recv"));
-                if needs_ok_check {
-                    self.emit_ok_guard(
-                        output,
-                        &receiver_var,
-                        Some((effective_pattern, inner_typed)),
-                        ctx,
-                    );
-                    return;
-                } else {
-                    write_line!(output, "case {} := <-{}:", receiver_var, ctx.channel);
-                    self.emit_irrefutable_pattern_site(
-                        output,
-                        PatternSubject::for_value(receiver_var.clone()),
-                        effective_pattern,
-                        inner_typed,
-                        &ctx.element_ty,
-                    );
-                }
-            }
+    /// Option-binding receive: emits a `case x, ok := <-ch:` header and
+    /// either an `if ok { ... } else { ... }` guard around the body, or a
+    /// discard `if !ok { break }`. Always pops the binding frame.
+    fn emit_receive_arm_with_ok_check(
+        &mut self,
+        output: &mut String,
+        effective_pattern: &Pattern,
+        inner_typed: Option<&TypedPattern>,
+        ctx: &SelectReceiveContext,
+    ) {
+        if let Pattern::Identifier { identifier, .. } = effective_pattern
+            && let Some(go_name) = self.go_name_for_binding(effective_pattern)
+        {
+            let var = self.scope.bind(identifier, go_name);
+            self.emit_ok_guard(output, &var, None, ctx);
+            return;
+        }
+        if matches!(
+            effective_pattern,
+            Pattern::Identifier { .. } | Pattern::WildCard { .. }
+        ) {
+            let ok_var = self.fresh_ok_var();
+            write_line!(output, "case _, {} := <-{}:", ok_var, ctx.channel);
+            self.emit_ok_check(output, &ok_var, ctx);
+            self.scope.pop_binding_frame();
+            return;
+        }
+        let receiver_var = self.fresh_var(Some("recv"));
+        self.emit_ok_guard(
+            output,
+            &receiver_var,
+            Some((effective_pattern, inner_typed)),
+            ctx,
+        );
+    }
+
+    /// Plain receive (no Option semantics): emits the `case ... := <-ch:`
+    /// header, then the arm body. Always pops the binding frame.
+    fn emit_receive_arm_simple(
+        &mut self,
+        output: &mut String,
+        effective_pattern: &Pattern,
+        inner_typed: Option<&TypedPattern>,
+        ctx: &SelectReceiveContext,
+    ) {
+        if let Pattern::Identifier { identifier, .. } = effective_pattern
+            && let Some(go_name) = self.go_name_for_binding(effective_pattern)
+        {
+            let var = self.scope.bind(identifier, go_name);
+            write_line!(output, "case {} := <-{}:", var, ctx.channel);
+        } else if matches!(
+            effective_pattern,
+            Pattern::Identifier { .. } | Pattern::WildCard { .. }
+        ) {
+            write_line!(output, "case <-{}:", ctx.channel);
+        } else {
+            let receiver_var = self.fresh_var(Some("recv"));
+            write_line!(output, "case {} := <-{}:", receiver_var, ctx.channel);
+            self.emit_irrefutable_pattern_site(
+                output,
+                PatternSubject::for_value(receiver_var.clone()),
+                effective_pattern,
+                inner_typed,
+                &ctx.element_ty,
+            );
         }
         self.emit_body_to_place(output, ctx.body, ctx.place);
         self.scope.pop_binding_frame();

@@ -14,6 +14,11 @@ use syntax::types::{
     SimpleKind, SubstitutionMap, Symbol, Type, build_substitution_map, substitute, unqualified_name,
 };
 
+struct TupleStructTarget {
+    go_ty: String,
+    field_tys: Vec<Type>,
+}
+
 impl Emitter<'_> {
     /// True when Go's inference would lose this alias: function aliases (infer
     /// as `func(...)`) and non-default numeric aliases (untyped literals default
@@ -494,14 +499,49 @@ impl Emitter<'_> {
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
     ) -> Option<String> {
-        let ty = function.get_type();
+        let target = self.resolve_tuple_struct_target(function, call_ty)?;
 
+        let stages: Vec<EmittedExpression> = args
+            .iter()
+            .map(|a| self.stage_composite(a, ExpressionContext::value()))
+            .collect();
+        let values = self.sequence(output, stages, "_arg");
+
+        let field_pairs: Vec<(String, String)> = target
+            .field_tys
+            .iter()
+            .zip(args.iter())
+            .zip(values)
+            .enumerate()
+            .map(|(i, ((field_ty, arg), value))| {
+                let value_ty = arg.get_type();
+                let coercion =
+                    Coercion::resolve(self, &value_ty, field_ty, CoercionDirection::Internal);
+                let coerced = coercion.apply(self, output, value);
+                (format!("F{}", i), coerced)
+            })
+            .collect();
+
+        Some(self.emit_struct_literal(&target.go_ty, &field_pairs, ctx))
+    }
+
+    /// Drill `function`'s return type into a tuple-struct definition, then
+    /// substitute generics to produce the per-field types and the Go target
+    /// type string. Returns `None` for anything that should fall through to
+    /// regular call handling (non-Function, non-Nominal, non-tuple kind, or
+    /// single-field non-generic struct that needs the newtype-cast path).
+    fn resolve_tuple_struct_target(
+        &mut self,
+        function: &Expression,
+        call_ty: Option<&Type>,
+    ) -> Option<TupleStructTarget> {
+        let ty = function.get_type();
         let Type::Function { return_type, .. } = ty.unwrap_forall() else {
             return None;
         };
-        let return_ty = return_type.as_ref().clone();
-
-        let return_ty = call_ty.cloned().unwrap_or(return_ty);
+        let return_ty = call_ty
+            .cloned()
+            .unwrap_or_else(|| return_type.as_ref().clone());
 
         let Type::Nominal { id, params, .. } = &return_ty else {
             return None;
@@ -524,7 +564,6 @@ impl Emitter<'_> {
         if *kind != StructKind::Tuple {
             return None;
         }
-
         if fields.len() == 1 && generics.is_empty() {
             return None;
         }
@@ -540,27 +579,7 @@ impl Emitter<'_> {
         };
 
         let go_ty = self.go_type_as_string(&return_ty);
-        let stages: Vec<EmittedExpression> = args
-            .iter()
-            .map(|a| self.stage_composite(a, ExpressionContext::value()))
-            .collect();
-        let values = self.sequence(output, stages, "_arg");
-
-        let field_pairs: Vec<(String, String)> = field_tys
-            .iter()
-            .zip(args.iter())
-            .zip(values)
-            .enumerate()
-            .map(|(i, ((field_ty, arg), value))| {
-                let value_ty = arg.get_type();
-                let coercion =
-                    Coercion::resolve(self, &value_ty, field_ty, CoercionDirection::Internal);
-                let coerced = coercion.apply(self, output, value);
-                (format!("F{}", i), coerced)
-            })
-            .collect();
-
-        Some(self.emit_struct_literal(&go_ty, &field_pairs, ctx))
+        Some(TupleStructTarget { go_ty, field_tys })
     }
 
     fn emit_assert_type(

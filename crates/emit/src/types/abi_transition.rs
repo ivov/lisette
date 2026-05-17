@@ -129,29 +129,42 @@ pub(crate) fn emit_lowered_result_return(
             );
         }
         AbiShape::Tuple { arity } => {
-            let peeled = emitter.facts.peel_alias(return_ty);
-            let slot_tys = tuple_element_types(&peeled);
-            let any_nullable = slot_tys.iter().any(|t| emitter.facts.is_nullable_option(t));
-            if !any_nullable {
-                let fields: Vec<String> = (0..*arity)
-                    .map(|i| format!("{}.{}", result_value, syntax::parse::TUPLE_FIELDS[i]))
-                    .collect();
-                write_line!(output, "return {}", fields.join(", "));
-                return;
-            }
-            let fields: Vec<String> = (0..*arity)
-                .map(|i| {
-                    let raw = format!("{}.{}", result_value, syntax::parse::TUPLE_FIELDS[i]);
-                    slot_tys
-                        .get(i)
-                        .filter(|t| emitter.facts.is_nullable_option(t))
-                        .map(|t| emitter.emit_option_unwrap_to_nullable(output, &raw, t))
-                        .unwrap_or(raw)
-                })
-                .collect();
-            write_line!(output, "return {}", fields.join(", "));
+            emit_lowered_tuple_return(emitter, output, result_value, return_ty, *arity);
         }
     }
+}
+
+/// `Tuple` shape return: when no slot is nullable, project each tuple field
+/// directly; otherwise unwrap each nullable-Option slot through
+/// `emit_option_unwrap_to_nullable` while passing the rest through raw.
+fn emit_lowered_tuple_return(
+    emitter: &mut Emitter,
+    output: &mut String,
+    result_value: &str,
+    return_ty: &Type,
+    arity: usize,
+) {
+    let peeled = emitter.facts.peel_alias(return_ty);
+    let slot_tys = tuple_element_types(&peeled);
+    let any_nullable = slot_tys.iter().any(|t| emitter.facts.is_nullable_option(t));
+    if !any_nullable {
+        let fields: Vec<String> = (0..arity)
+            .map(|i| format!("{}.{}", result_value, syntax::parse::TUPLE_FIELDS[i]))
+            .collect();
+        write_line!(output, "return {}", fields.join(", "));
+        return;
+    }
+    let fields: Vec<String> = (0..arity)
+        .map(|i| {
+            let raw = format!("{}.{}", result_value, syntax::parse::TUPLE_FIELDS[i]);
+            slot_tys
+                .get(i)
+                .filter(|t| emitter.facts.is_nullable_option(t))
+                .map(|t| emitter.emit_option_unwrap_to_nullable(output, &raw, t))
+                .unwrap_or(raw)
+        })
+        .collect();
+    write_line!(output, "return {}", fields.join(", "));
 }
 
 /// Wrap a lowered-callee `call_str` (Go-shaped return) into the Lisette
@@ -166,19 +179,19 @@ pub(crate) fn emit_callee_abi_wrapping(
     match shape {
         AbiShape::PartialTuple => emitter
             .emit_partial_wrapping(output, call_str, result_ty, WrapperTarget::FreshSlot)
-            .expect_slot(),
+            .expect("wrapper produced no slot"),
         AbiShape::CommaOk => emitter
             .emit_comma_ok_wrapping(output, call_str, result_ty, false, WrapperTarget::FreshSlot)
-            .expect_slot(),
+            .expect("wrapper produced no slot"),
         AbiShape::NullableReturn => {
             let raw_var = emitter.hoist_tmp_value(output, "raw", call_str);
             emitter
                 .emit_nil_check_option_wrap(output, &raw_var, result_ty, WrapperTarget::FreshSlot)
-                .expect_slot()
+                .expect("wrapper produced no slot")
         }
         AbiShape::ResultTuple | AbiShape::BareError => emitter
             .emit_result_wrapping(output, call_str, result_ty, WrapperTarget::FreshSlot)
-            .expect_slot(),
+            .expect("wrapper produced no slot"),
         AbiShape::Tuple { arity } => {
             let temps = emitter.create_temp_vars("ret", *arity);
             write_line!(output, "{} := {}", temps.join(", "), call_str);
@@ -198,7 +211,7 @@ pub(crate) fn emit_callee_abi_wrapping(
                                     slot_ty,
                                     WrapperTarget::FreshSlot,
                                 )
-                                .expect_slot()
+                                .expect("wrapper produced no slot")
                         })
                         .unwrap_or_else(|| v.clone())
                 })

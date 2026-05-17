@@ -73,17 +73,8 @@ impl Emitter<'_> {
             value = self.wrap_recursive_enum_field(output, value, f, &ctx);
             let value_ty = f.value.get_type();
             let field_ty = self.lookup_struct_field_ty(ty, &f.name);
-            if is_go_struct {
-                let target_ty = field_ty.as_ref().unwrap_or(&value_ty);
-                let coercion =
-                    Coercion::resolve(self, &value_ty, target_ty, CoercionDirection::ToGoBoundary);
-                value = coercion.apply(self, output, value);
-            }
-            if let Some(field_ty) = field_ty.as_ref() {
-                let coercion =
-                    Coercion::resolve(self, &value_ty, field_ty, CoercionDirection::Internal);
-                value = coercion.apply(self, output, value);
-            }
+            value =
+                self.coerce_struct_field(output, value, &value_ty, field_ty.as_ref(), is_go_struct);
             field_names.push(field_name);
             field_values.push(value);
         }
@@ -115,26 +106,62 @@ impl Emitter<'_> {
                 self.emit_struct_update(output, base, &field_pairs, &field_side_effects)
             }
             StructSpread::ZeroFill { .. } if !is_go_struct => {
-                let assigned: HashSet<&str> =
-                    field_assignments.iter().map(|f| f.name.as_str()).collect();
-                let unspecified =
-                    self.lookup_unspecified_fields(ty, name, ctx.enum_ctx.as_ref(), &assigned);
-                if let Some(unspecified) = unspecified {
-                    for (field_name, field_ty) in unspecified {
-                        if field_ty.is_slice() {
-                            continue;
-                        }
-                        let go_field_name =
-                            self.resolve_struct_call_field_name(&field_name, ty, &ctx);
-                        let zero = self.lisette_zero(&field_ty);
-                        field_pairs.push((go_field_name, zero));
-                    }
-                }
+                self.append_zero_fills(&mut field_pairs, field_assignments, ty, name, &ctx);
                 self.emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx)
             }
             StructSpread::ZeroFill { .. } | StructSpread::None => {
                 self.emit_struct_literal(&ctx.go_type, &field_pairs, expression_ctx)
             }
+        }
+    }
+
+    /// Apply Go-boundary coercion followed by internal coercion. The Go-boundary
+    /// step targets `field_ty` (falling back to `value_ty` when no declared
+    /// field exists); the internal step targets `field_ty` only.
+    fn coerce_struct_field(
+        &mut self,
+        output: &mut String,
+        mut value: String,
+        value_ty: &Type,
+        field_ty: Option<&Type>,
+        is_go_struct: bool,
+    ) -> String {
+        if is_go_struct {
+            let target_ty = field_ty.unwrap_or(value_ty);
+            let coercion =
+                Coercion::resolve(self, value_ty, target_ty, CoercionDirection::ToGoBoundary);
+            value = coercion.apply(self, output, value);
+        }
+        if let Some(field_ty) = field_ty {
+            let coercion = Coercion::resolve(self, value_ty, field_ty, CoercionDirection::Internal);
+            value = coercion.apply(self, output, value);
+        }
+        value
+    }
+
+    /// Append zero-value pairs for fields the user did not assign. Slice fields
+    /// are skipped so Go's nil zero-value applies instead of `[]T{}`.
+    fn append_zero_fills(
+        &mut self,
+        field_pairs: &mut Vec<(String, String)>,
+        field_assignments: &[StructFieldAssignment],
+        ty: &Type,
+        name: &str,
+        ctx: &StructCallContext,
+    ) {
+        let assigned: HashSet<&str> = field_assignments.iter().map(|f| f.name.as_str()).collect();
+        let Some(unspecified) =
+            self.lookup_unspecified_fields(ty, name, ctx.enum_ctx.as_ref(), &assigned)
+        else {
+            return;
+        };
+        for (field_name, field_ty) in unspecified {
+            if field_ty.is_slice() {
+                continue;
+            }
+            let go_field_name = self.resolve_struct_call_field_name(&field_name, ty, ctx);
+            let zero = self.lisette_zero(&field_ty);
+            field_pairs.push((go_field_name, zero));
         }
     }
 

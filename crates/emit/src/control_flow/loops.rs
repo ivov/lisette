@@ -37,35 +37,13 @@ impl Emitter<'_> {
     ) {
         self.set_current_loop_label_if_needed(needs_label);
 
-        if let Expression::Range {
-            start,
-            end,
-            inclusive,
-            ..
-        } = iterable
-        {
-            self.emit_range_for_loop(output, binding, start, end, *inclusive, body);
+        let Some(iterable_ty) = self.try_emit_specialized_for_loop(output, binding, iterable, body)
+        else {
             return;
-        }
-
-        let iterable_ty = iterable.get_type();
-        if let Some(ty_name) = iterable_ty.get_name()
-            && matches!(ty_name, "Range" | "RangeInclusive" | "RangeFrom")
-        {
-            self.emit_stored_range_for_loop(output, binding, iterable, ty_name, body);
-            return;
-        }
-
-        if let Some((kind, receiver)) = recognize_string_view_loop(binding, iterable) {
-            match kind {
-                StringViewKind::Runes => self.emit_runes_for_loop(output, binding, receiver, body),
-                StringViewKind::Bytes => self.emit_bytes_for_loop(output, binding, receiver, body),
-            }
-            return;
-        }
+        };
 
         let iter_expression = self.emit_operand(output, iterable, ExpressionContext::value());
-        let iter_expression = if iterable.get_type().is_ref() {
+        let iter_expression = if iterable_ty.is_ref() {
             format!("*{}", iter_expression)
         } else {
             iter_expression
@@ -76,17 +54,75 @@ impl Emitter<'_> {
             .is_some_and(|n| n == "Channel" || n == "Receiver");
 
         self.enter_scope();
-
         if let Some(label) = self.current_loop_label() {
             write_line!(output, "{}:", label);
         }
+        self.emit_for_loop_pattern(
+            output,
+            binding,
+            &iter_expression,
+            is_channel,
+            &iterable_ty,
+            body,
+        );
+        self.exit_scope();
+    }
 
+    /// Try the specialized for-loop emitters. Returns the computed iterable
+    /// type when the caller still needs to fall through to the generic
+    /// `range` path; returns `None` when a specialized emitter handled it.
+    fn try_emit_specialized_for_loop(
+        &mut self,
+        output: &mut String,
+        binding: &Binding,
+        iterable: &Expression,
+        body: &Expression,
+    ) -> Option<Type> {
+        if let Expression::Range {
+            start,
+            end,
+            inclusive,
+            ..
+        } = iterable
+        {
+            self.emit_range_for_loop(output, binding, start, end, *inclusive, body);
+            return None;
+        }
+
+        let iterable_ty = iterable.get_type();
+        if let Some(ty_name) = iterable_ty.get_name()
+            && matches!(ty_name, "Range" | "RangeInclusive" | "RangeFrom")
+        {
+            self.emit_stored_range_for_loop(output, binding, iterable, ty_name, body);
+            return None;
+        }
+
+        if let Some((kind, receiver)) = recognize_string_view_loop(binding, iterable) {
+            match kind {
+                StringViewKind::Runes => self.emit_runes_for_loop(output, binding, receiver, body),
+                StringViewKind::Bytes => self.emit_bytes_for_loop(output, binding, receiver, body),
+            }
+            return None;
+        }
+
+        Some(iterable_ty)
+    }
+
+    fn emit_for_loop_pattern(
+        &mut self,
+        output: &mut String,
+        binding: &Binding,
+        iter_expression: &str,
+        is_channel: bool,
+        iterable_ty: &Type,
+        body: &Expression,
+    ) {
         match &binding.pattern {
             Pattern::Identifier { .. } => {
                 self.emit_identifier_for_loop(
                     output,
                     &binding.pattern,
-                    &iter_expression,
+                    iter_expression,
                     is_channel,
                     body,
                 );
@@ -102,20 +138,12 @@ impl Emitter<'_> {
                         n == "Map" || n == "OrderedMap" || n == "EnumeratedSlice"
                     }) =>
             {
-                self.emit_map_tuple_for_loop(output, elements, &binding.ty, &iter_expression, body);
+                self.emit_map_tuple_for_loop(output, elements, &binding.ty, iter_expression, body);
             }
             _ => {
-                self.emit_for_loop_pattern_site(
-                    output,
-                    binding,
-                    &iter_expression,
-                    is_channel,
-                    body,
-                );
+                self.emit_for_loop_pattern_site(output, binding, iter_expression, is_channel, body);
             }
         }
-
-        self.exit_scope();
     }
 
     /// For loops over an identifier-bound iterable: `for x := range xs` (or
@@ -175,38 +203,72 @@ impl Emitter<'_> {
         );
 
         if !first_is_simple || !second_is_simple {
-            let key_var = self.fresh_var(Some("key"));
-            let value_var = self.fresh_var(Some("value"));
-            write_line!(
+            self.emit_map_tuple_compound_for_loop(
                 output,
-                "for {}, {} := range {} {{",
-                key_var,
-                value_var,
-                iter_expression
-            );
-            let key_guard = DiscardGuard::new(output, &key_var);
-            let value_guard = DiscardGuard::new(output, &value_var);
-            self.emit_irrefutable_pattern_site(
-                output,
-                PatternSubject::for_value(key_var),
                 first,
-                None,
-                first_ty,
-            );
-            self.emit_irrefutable_pattern_site(
-                output,
-                PatternSubject::for_value(value_var),
                 second,
-                None,
+                first_ty,
                 second_ty,
+                iter_expression,
+                body,
             );
-            self.emit_block(output, body);
-            key_guard.finish(output);
-            value_guard.finish(output);
-            output.push_str("}\n");
-            return;
+        } else {
+            self.emit_map_tuple_simple_for_loop(output, first, second, iter_expression, body);
         }
+    }
 
+    /// Compound element pattern: capture key and value into fresh vars, then
+    /// emit pattern-site destructuring before the body.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_map_tuple_compound_for_loop(
+        &mut self,
+        output: &mut String,
+        first: &Pattern,
+        second: &Pattern,
+        first_ty: &Type,
+        second_ty: &Type,
+        iter_expression: &str,
+        body: &Expression,
+    ) {
+        let key_var = self.fresh_var(Some("key"));
+        let value_var = self.fresh_var(Some("value"));
+        write_line!(
+            output,
+            "for {}, {} := range {} {{",
+            key_var,
+            value_var,
+            iter_expression
+        );
+        let key_guard = DiscardGuard::new(output, &key_var);
+        let value_guard = DiscardGuard::new(output, &value_var);
+        self.emit_irrefutable_pattern_site(
+            output,
+            PatternSubject::for_value(key_var),
+            first,
+            None,
+            first_ty,
+        );
+        self.emit_irrefutable_pattern_site(
+            output,
+            PatternSubject::for_value(value_var),
+            second,
+            None,
+            second_ty,
+        );
+        self.emit_block(output, body);
+        key_guard.finish(output);
+        value_guard.finish(output);
+        output.push_str("}\n");
+    }
+
+    fn emit_map_tuple_simple_for_loop(
+        &mut self,
+        output: &mut String,
+        first: &Pattern,
+        second: &Pattern,
+        iter_expression: &str,
+        body: &Expression,
+    ) {
         let first_is_discard =
             matches!(first, Pattern::WildCard { .. }) || self.go_name_for_binding(first).is_none();
         let second_is_discard = matches!(second, Pattern::WildCard { .. })

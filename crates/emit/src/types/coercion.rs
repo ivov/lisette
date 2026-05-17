@@ -67,7 +67,7 @@ impl Coercion {
             }
             CoercionKind::WrapNullableOption { ty } => emitter
                 .emit_nil_check_option_wrap(output, &value, &ty, WrapperTarget::FreshSlot)
-                .expect_slot(),
+                .expect("wrapper produced no slot"),
             CoercionKind::WrapPointerOption { ty } => {
                 emitter.emit_pointer_to_option_wrap(output, &value, &ty)
             }
@@ -109,42 +109,63 @@ fn resolve_internal(emitter: &Emitter, from: &Type, to: &Type) -> CoercionKind {
     }
 }
 
-fn resolve_to_go(emitter: &Emitter, value_ty: &Type, target_ty: &Type) -> CoercionKind {
-    if emitter.is_non_nilable_option(value_ty) && emitter.is_non_nilable_option(target_ty) {
-        return CoercionKind::UnwrapPointerOption {
-            ty: value_ty.clone(),
-        };
-    }
-    if emitter.facts.is_nullable_option(value_ty) {
-        CoercionKind::UnwrapNullableOption {
-            ty: value_ty.clone(),
-        }
-    } else if let Some(elem_option_ty) = emitter.nullable_collection_element_ty(value_ty) {
-        CoercionKind::UnwrapNullableCollection {
-            ty: value_ty.clone(),
-            elem_option_ty,
+/// Option-related shape of a type at a Go boundary. Adding a new variant is
+/// a compile-time call to revisit every `match` against it.
+pub(crate) enum OptionShape {
+    Plain,
+    /// Lisette `Option<T>` where `T` is Go-nilable (interface, slice, pointer);
+    /// the Go side uses nil itself as the absence marker.
+    Nullable,
+    /// Lisette `Option<T>` where `T` is a Go non-nilable scalar; the Go side
+    /// uses `*T` and bridges nil ↔ `None`.
+    PointerBridged,
+    NullableCollection {
+        elem_option_ty: Type,
+    },
+}
+
+pub(crate) fn classify_option_shape(emitter: &Emitter, ty: &Type) -> OptionShape {
+    if emitter.facts.is_nullable_option(ty) {
+        OptionShape::Nullable
+    } else if emitter.is_non_nilable_option(ty) {
+        OptionShape::PointerBridged
+    } else if let Some(elem) = emitter.nullable_collection_element_ty(ty) {
+        OptionShape::NullableCollection {
+            elem_option_ty: elem,
         }
     } else {
-        CoercionKind::Identity
+        OptionShape::Plain
     }
 }
 
-fn resolve_from_go(emitter: &Emitter, value_ty: &Type) -> CoercionKind {
-    if emitter.facts.is_nullable_option(value_ty) {
-        CoercionKind::WrapNullableOption {
-            ty: value_ty.clone(),
+fn resolve_to_go(emitter: &Emitter, from: &Type, to: &Type) -> CoercionKind {
+    use OptionShape::*;
+    match classify_option_shape(emitter, from) {
+        Plain => CoercionKind::Identity,
+        Nullable => CoercionKind::UnwrapNullableOption { ty: from.clone() },
+        // Only unwrap to `*T` when the Go side also expects `*T`. A
+        // pointer-bridged source against any other target stays tagged.
+        PointerBridged if matches!(classify_option_shape(emitter, to), PointerBridged) => {
+            CoercionKind::UnwrapPointerOption { ty: from.clone() }
         }
-    } else if emitter.is_non_nilable_option(value_ty) {
-        CoercionKind::WrapPointerOption {
-            ty: value_ty.clone(),
-        }
-    } else if let Some(elem_option_ty) = emitter.nullable_collection_element_ty(value_ty) {
-        CoercionKind::WrapNullableCollection {
-            ty: value_ty.clone(),
+        PointerBridged => CoercionKind::Identity,
+        NullableCollection { elem_option_ty } => CoercionKind::UnwrapNullableCollection {
+            ty: from.clone(),
             elem_option_ty,
-        }
-    } else {
-        CoercionKind::Identity
+        },
+    }
+}
+
+fn resolve_from_go(emitter: &Emitter, from: &Type) -> CoercionKind {
+    use OptionShape::*;
+    match classify_option_shape(emitter, from) {
+        Plain => CoercionKind::Identity,
+        Nullable => CoercionKind::WrapNullableOption { ty: from.clone() },
+        PointerBridged => CoercionKind::WrapPointerOption { ty: from.clone() },
+        NullableCollection { elem_option_ty } => CoercionKind::WrapNullableCollection {
+            ty: from.clone(),
+            elem_option_ty,
+        },
     }
 }
 

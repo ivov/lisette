@@ -4,7 +4,7 @@ use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::write_line;
 use ecow::EcoString;
 use syntax::program::{Definition, DefinitionBody, Interface};
-use syntax::types::{Type, build_substitution_map, substitute, unqualified_name};
+use syntax::types::{SubstitutionMap, Type, build_substitution_map, substitute, unqualified_name};
 pub(crate) struct AdapterPlan {
     pub(crate) concrete_id: EcoString,
     pub(crate) interface_id: EcoString,
@@ -140,48 +140,12 @@ impl Emitter<'_> {
 
         for (method_name, _interface_method_ty, declaring_id) in &all_interface_methods {
             let impl_ty = struct_methods.get(method_name)?;
-            let Type::Function {
-                params,
-                return_type,
-                ..
-            } = impl_ty.unwrap_forall()
-            else {
-                return None;
-            };
-            let method_params: Vec<Type> = if params.is_empty() {
-                Vec::new()
-            } else {
-                params[1..]
-                    .iter()
-                    .map(|p| substitute(p, &subst_map))
-                    .collect()
-            };
-            let return_ty = substitute(return_type, &subst_map);
-
-            // Compute the natural shape once and shift it for the interface
-            // side if a `#[go(...)]` hint applies, instead of re-walking
-            // `peel_alias` twice via two `classify_direct_emission` calls.
-            let user_shape = self.classify_direct_emission(&return_ty);
-            let interface_hints = self.go_interface_method_hints(declaring_id, method_name);
-            let interface_shape = match user_shape.as_ref() {
-                Some(crate::types::abi::AbiShape::NullableReturn)
-                    if interface_hints.iter().any(|h| h == "comma_ok") =>
-                {
-                    Some(crate::types::abi::AbiShape::CommaOk)
-                }
-                other => other.cloned(),
-            };
-            if user_shape != interface_shape {
+            let (method, adapted) =
+                self.build_adapter_method(method_name, declaring_id, impl_ty, &subst_map)?;
+            if adapted {
                 any_adapted = true;
             }
-
-            methods.push(AdapterMethod {
-                name: method_name.clone(),
-                param_types: method_params,
-                return_type: return_ty,
-                user_shape,
-                interface_shape,
-            });
+            methods.push(method);
         }
 
         if !any_adapted {
@@ -194,6 +158,61 @@ impl Emitter<'_> {
             concrete_ty: source_ty.clone(),
             methods,
         })
+    }
+
+    /// Build one `AdapterMethod`, plus a flag set when the user-side natural
+    /// shape disagrees with the interface-side hint-shifted shape (in which
+    /// case the adapter is meaningful, not just structural).
+    fn build_adapter_method(
+        &self,
+        method_name: &EcoString,
+        declaring_id: &EcoString,
+        impl_ty: &Type,
+        subst_map: &SubstitutionMap,
+    ) -> Option<(AdapterMethod, bool)> {
+        let Type::Function {
+            params,
+            return_type,
+            ..
+        } = impl_ty.unwrap_forall()
+        else {
+            return None;
+        };
+        let param_types: Vec<Type> = if params.is_empty() {
+            Vec::new()
+        } else {
+            params[1..]
+                .iter()
+                .map(|p| substitute(p, subst_map))
+                .collect()
+        };
+        let return_type = substitute(return_type, subst_map);
+
+        // Compute the natural shape once and shift it for the interface side
+        // if a `#[go(...)]` hint applies, instead of re-walking `peel_alias`
+        // twice via two `classify_direct_emission` calls.
+        let user_shape = self.classify_direct_emission(&return_type);
+        let interface_hints = self.go_interface_method_hints(declaring_id, method_name);
+        let interface_shape = match user_shape.as_ref() {
+            Some(crate::types::abi::AbiShape::NullableReturn)
+                if interface_hints.iter().any(|h| h == "comma_ok") =>
+            {
+                Some(crate::types::abi::AbiShape::CommaOk)
+            }
+            other => other.cloned(),
+        };
+        let adapted = user_shape != interface_shape;
+
+        Some((
+            AdapterMethod {
+                name: method_name.clone(),
+                param_types,
+                return_type,
+                user_shape,
+                interface_shape,
+            },
+            adapted,
+        ))
     }
 
     /// `NullableReturn` → `CommaOk` bridge for `#[go(comma_ok)]` methods.
@@ -329,16 +348,12 @@ impl Emitter<'_> {
             self.declare(name);
         }
 
-        let param_type_strs: Vec<String> = method
-            .param_types
+        let params_str = param_names
             .iter()
-            .map(|t| self.go_type_as_string(t))
-            .collect();
-        let params_decl: Vec<String> = param_names
-            .iter()
-            .zip(param_type_strs.iter())
-            .map(|(n, t)| format!("{} {}", n, t))
-            .collect();
+            .zip(method.param_types.iter())
+            .map(|(n, t)| format!("{} {}", n, self.go_type_as_string(t)))
+            .collect::<Vec<_>>()
+            .join(", ");
 
         let go_method_name = if self.method_needs_export(&method.name) {
             go_name::snake_to_camel(&method.name)
@@ -347,65 +362,62 @@ impl Emitter<'_> {
         };
         let inner_call = format!("a.inner.{}({})", go_method_name, param_names.join(", "));
 
-        let user_shape = method.user_shape.clone();
-        let interface_shape = method.interface_shape.clone();
-        let params_str = params_decl.join(", ");
+        let (go_ret, body) = self.build_adapter_body(method, &inner_call);
+        self.finish_adapter_method(
+            decl,
+            adapter_name,
+            &go_method_name,
+            &params_str,
+            &go_ret,
+            &body,
+        );
+    }
+
+    fn build_adapter_body(&mut self, method: &AdapterMethod, inner_call: &str) -> (String, String) {
+        let user_shape = &method.user_shape;
+        let interface_shape = &method.interface_shape;
 
         if user_shape == interface_shape
             && let Some(shape) = user_shape
         {
-            let go_ret = self.render_lowered_return_ty(&shape, &method.return_type);
-            write_method_header(decl, adapter_name, &go_method_name, &params_str, &go_ret);
-            decl.push_str(&format!("return {}\n", inner_call));
-            write_line!(decl, "}}");
-            self.exit_scope();
-            return;
+            let go_ret = self.render_lowered_return_ty(shape, &method.return_type);
+            return (go_ret, format!("return {}\n", inner_call));
         }
 
         if let (Some(user), Some(interface)) = (user_shape, interface_shape)
             && user != interface
-            && let Some((go_ret, body)) =
-                self.emit_hint_shift_bridge(&inner_call, &method.return_type, &user, &interface)
+            && let Some(bridge) =
+                self.emit_hint_shift_bridge(inner_call, &method.return_type, user, interface)
         {
-            write_method_header(decl, adapter_name, &go_method_name, &params_str, &go_ret);
-            decl.push_str(&body);
-            write_line!(decl, "}}");
-            self.exit_scope();
-            return;
+            return bridge;
         }
 
-        let (go_ret, body) = match crate::types::abi_transition::emit_return_adapter(
-            self,
-            &inner_call,
-            &method.return_type,
-        ) {
-            Some((ret, body)) => (ret, body),
-            None => {
-                if method.return_type.is_unit() {
-                    (String::new(), format!("{}\n", inner_call))
-                } else {
-                    let ret = self.go_type_as_string(&method.return_type);
-                    (ret, format!("return {}\n", inner_call))
-                }
-            }
-        };
+        if let Some(adapter) =
+            crate::types::abi_transition::emit_return_adapter(self, inner_call, &method.return_type)
+        {
+            return adapter;
+        }
 
-        let ret_suffix = if go_ret.is_empty() {
-            String::new()
+        if method.return_type.is_unit() {
+            (String::new(), format!("{}\n", inner_call))
         } else {
-            format!(" {}", go_ret)
-        };
-        write_line!(
-            decl,
-            "func (a {}) {}({}){} {{",
-            adapter_name,
-            go_method_name,
-            params_decl.join(", "),
-            ret_suffix
-        );
-        decl.push_str(&body);
-        write_line!(decl, "}}");
+            let ret = self.go_type_as_string(&method.return_type);
+            (ret, format!("return {}\n", inner_call))
+        }
+    }
 
+    fn finish_adapter_method(
+        &mut self,
+        decl: &mut String,
+        adapter_name: &str,
+        method_name: &str,
+        params: &str,
+        go_ret: &str,
+        body: &str,
+    ) {
+        write_method_header(decl, adapter_name, method_name, params, go_ret);
+        decl.push_str(body);
+        write_line!(decl, "}}");
         self.exit_scope();
     }
 
@@ -468,12 +480,17 @@ fn write_method_header(
     params: &str,
     go_ret: &str,
 ) {
+    let ret_suffix = if go_ret.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", go_ret)
+    };
     write_line!(
         decl,
-        "func (a {}) {}({}) {} {{",
+        "func (a {}) {}({}){} {{",
         adapter_name,
         method_name,
         params,
-        go_ret
+        ret_suffix
     );
 }

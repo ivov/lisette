@@ -21,26 +21,9 @@ pub(crate) enum WrapperTarget<'a> {
     Return,
 }
 
-pub(crate) enum WrapperOutcome {
-    Slot(String),
-    Returned,
-}
-
-impl WrapperOutcome {
-    pub(crate) fn into_slot(self) -> Option<String> {
-        match self {
-            WrapperOutcome::Slot(s) => Some(s),
-            WrapperOutcome::Returned => None,
-        }
-    }
-
-    pub(crate) fn expect_slot(self) -> String {
-        match self {
-            WrapperOutcome::Slot(s) => s,
-            WrapperOutcome::Returned => unreachable!("expected slot, got Returned"),
-        }
-    }
-}
+/// `Some(slot_name)` when the wrapper wrote into a fresh or named slot; `None`
+/// when it wrote a `return` statement and the caller should not emit its own.
+pub(crate) type WrapperOutcome = Option<String>;
 
 pub(super) enum ResolvedSink {
     Slot(String),
@@ -70,18 +53,15 @@ impl Emitter<'_> {
                 let var = self.fresh_var(Some(name_hint));
                 self.declare(&var);
                 write_line!(output, "var {} {}", var, type_str);
-                (ResolvedSink::Slot(var.clone()), WrapperOutcome::Slot(var))
+                (ResolvedSink::Slot(var.clone()), Some(var))
             }
             WrapperTarget::Slot(name) => {
                 write_line!(output, "var {} {}", name, type_str);
                 self.declare(name);
                 let owned = name.to_string();
-                (
-                    ResolvedSink::Slot(owned.clone()),
-                    WrapperOutcome::Slot(owned),
-                )
+                (ResolvedSink::Slot(owned.clone()), Some(owned))
             }
-            WrapperTarget::Return => (ResolvedSink::Return, WrapperOutcome::Returned),
+            WrapperTarget::Return => (ResolvedSink::Return, None),
         }
     }
 
@@ -94,17 +74,15 @@ impl Emitter<'_> {
         value_expr: &str,
     ) -> WrapperOutcome {
         match target {
-            WrapperTarget::FreshSlot => {
-                WrapperOutcome::Slot(self.hoist_tmp_value(output, name_hint, value_expr))
-            }
+            WrapperTarget::FreshSlot => Some(self.hoist_tmp_value(output, name_hint, value_expr)),
             WrapperTarget::Slot(name) => {
                 self.declare(name);
                 write_line!(output, "{} := {}", name, value_expr);
-                WrapperOutcome::Slot(name.to_string())
+                Some(name.to_string())
             }
             WrapperTarget::Return => {
                 write_line!(output, "return {}", value_expr);
-                WrapperOutcome::Returned
+                None
             }
         }
     }
@@ -139,7 +117,7 @@ impl Emitter<'_> {
         self.requirements.require_stdlib();
         let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         self.emit_partial_wrapping(output, &call_str, partial_ty, WrapperTarget::FreshSlot)
-            .expect_slot()
+            .expect("wrapper produced no slot")
     }
 
     pub(crate) fn emit_partial_wrapping(
@@ -190,7 +168,7 @@ impl Emitter<'_> {
         self.requirements.require_stdlib();
         let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
         self.emit_result_wrapping(output, &call_str, result_ty, WrapperTarget::FreshSlot)
-            .expect_slot()
+            .expect("wrapper produced no slot")
     }
 
     pub(crate) fn emit_result_wrapping(
@@ -509,7 +487,7 @@ impl Emitter<'_> {
                 let temp_vars = self.create_temp_vars("ret", *arity);
                 write_line!(body, "{} := {}", temp_vars.join(", "), call_str);
                 let tuple_str = self.emit_tuple_from_vars(&mut body, &temp_vars, &return_type);
-                WrapperOutcome::Slot(tuple_str)
+                Some(tuple_str)
             }
             GoCallStrategy::Partial => self.emit_partial_wrapping(
                 &mut body,
@@ -526,7 +504,7 @@ impl Emitter<'_> {
             ),
         };
 
-        if let Some(result_var) = outcome.into_slot() {
+        if let Some(result_var) = outcome {
             write_line!(body, "return {}", result_var);
         }
 
