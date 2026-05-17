@@ -681,6 +681,37 @@ fn test(arr: Slice<int>) {
 }
 
 #[test]
+fn mutable_subslice_through_alias_cloned() {
+    let input = r#"
+type Numbers = Slice<int>
+
+fn test() {
+  let xs: Numbers = [1, 2, 3]
+  let mut part = xs[0..2]
+  part[0] = 99
+  let _ = xs
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn immutable_subslice_through_alias_capacity_capped() {
+    let input = r#"
+type Numbers = Slice<int>
+
+fn test() {
+  let xs: Numbers = [1, 2, 3]
+  let view = xs[0..2]
+  let grown = view.append(9)
+  let _ = grown
+  let _ = xs
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn range_field_access() {
     let input = r#"
 fn test() -> int {

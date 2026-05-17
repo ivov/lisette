@@ -57,7 +57,7 @@ impl Emitter<'_> {
             )
         });
 
-        let is_go_struct = Self::is_go_imported_type(ty);
+        let is_go_struct = self.go_imported_shape(ty).is_some();
         let kept = self.kept_struct_call_fields(field_assignments, spread, ty, is_go_struct);
 
         let stages: Vec<EmittedExpression> = kept

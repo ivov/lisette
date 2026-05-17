@@ -190,13 +190,6 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn is_go_imported_type(ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty.strip_refs() else {
-            return false;
-        };
-        go_name::is_go_import(&id)
-    }
-
     /// True for `Option<T>` where T is a concrete non-nilable Go value type
     /// (string, int32, named scalar, named struct). This is the bindgen's
     /// pointer-bridged shape: the corresponding Go layout is `*T`. Excludes
@@ -225,25 +218,7 @@ impl Emitter<'_> {
     pub(crate) fn is_go_nullable(&self, ty: &Type) -> bool {
         self.facts.is_nullable_option(ty)
             || self.is_non_nilable_option(ty)
-            || self.nullable_collection_element_ty(ty).is_some()
-    }
-
-    pub(crate) fn nullable_collection_element_ty(&self, ty: &Type) -> Option<Type> {
-        let is_pointer_bridged_option =
-            |t: &Type| self.facts.is_nullable_option(t) || self.is_non_nilable_option(t);
-        if ty.has_name("Slice") {
-            let elem_ty = ty.inner()?;
-            if is_pointer_bridged_option(&elem_ty) {
-                return Some(elem_ty);
-            }
-        } else if ty.has_name("Map") {
-            let params = ty.get_type_params()?;
-            let val_ty = params.get(1)?.clone();
-            if is_pointer_bridged_option(&val_ty) {
-                return Some(val_ty);
-            }
-        }
-        None
+            || self.nullable_collection_shape(ty).is_some()
     }
 }
 

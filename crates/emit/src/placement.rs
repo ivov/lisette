@@ -9,6 +9,7 @@ use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::coercion::{Coercion, CoercionDirection};
+use crate::types::native::NativeGoType;
 use crate::write_line;
 use syntax::ast::{Expression, Literal, UnaryOperator};
 use syntax::types::{Type, peel_to_range_type};
@@ -263,14 +264,14 @@ fn maybe_clone_subslice(
     mutable: bool,
     expression: String,
 ) -> String {
-    if !is_mutable_subslice(value, mutable) {
+    if !is_mutable_subslice(emitter, value, mutable) {
         return expression;
     }
     emitter.requirements.require_slices();
     format!("slices.Clone({})", expression)
 }
 
-fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
+fn is_mutable_subslice(emitter: &Emitter, value: &Expression, mutable: bool) -> bool {
     if !mutable {
         return false;
     }
@@ -292,7 +293,7 @@ fn is_mutable_subslice(value: &Expression, mutable: bool) -> bool {
     } else {
         expression.get_type()
     };
-    collection_ty.has_name("Slice")
+    emitter.is_native_shape(&collection_ty, NativeGoType::Slice)
 }
 
 /// Pick the Go type for a `let` binding's `var X T` temp. Diverging values
@@ -718,7 +719,7 @@ impl Emitter<'_> {
         } = func
             && (member == "append" || member == "extend")
         {
-            return expression.get_type().has_name("Slice");
+            return self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
         }
         false
     }

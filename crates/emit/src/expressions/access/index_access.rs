@@ -4,6 +4,7 @@ use syntax::types::peel_to_range_type;
 use crate::Emitter;
 use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
+use crate::types::native::NativeGoType;
 
 impl Emitter<'_> {
     pub(crate) fn emit_index_access(
@@ -34,7 +35,7 @@ impl Emitter<'_> {
         // or `r: Prefix` where `type Prefix = RangeTo<int>`).
         let index_ty = index.get_type();
         if let Some(range_kind) = peel_to_range_type(&index_ty).and_then(|t| t.get_name()) {
-            let needs_cap = expression.get_type().has_name("Slice");
+            let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
             let index_staged = self.stage_or_capture(index, "range");
             let values = self.sequence(output, vec![base_staged, index_staged], "_base");
             return self.emit_range_var_slice(&values[0], &values[1], range_kind, needs_cap);
@@ -68,7 +69,7 @@ impl Emitter<'_> {
         end: Option<&Expression>,
         inclusive: bool,
     ) -> String {
-        let needs_cap = expression.get_type().has_name("Slice");
+        let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
         let base_staged = self.stage_base_with_deref(expression);
 
         let mut all_stages = vec![base_staged];

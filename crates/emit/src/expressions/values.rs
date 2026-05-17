@@ -509,7 +509,7 @@ impl Emitter<'_> {
             ty,
             ..
         } = target
-            && Self::is_go_imported_type(&receiver.get_type())
+            && self.go_imported_shape(&receiver.get_type()).is_some()
             && self.is_go_nullable(ty)
         {
             let coercion =

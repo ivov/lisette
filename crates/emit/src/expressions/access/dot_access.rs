@@ -180,7 +180,7 @@ impl Emitter<'_> {
         expression_ty: &Type,
         result_ty: &Type,
     ) -> Option<String> {
-        if !Self::is_go_imported_type(expression_ty) || !self.is_go_nullable(result_ty) {
+        if self.go_imported_shape(expression_ty).is_none() || !self.is_go_nullable(result_ty) {
             return None;
         }
         let raw_access = format!("{}.{}", expression_string, field);

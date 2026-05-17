@@ -384,7 +384,10 @@ impl Emitter<'_> {
         collection_ty: &Type,
         elem_option_ty: &Type,
     ) -> CollectionUnwrapShape {
-        let is_map = collection_ty.has_name("Map");
+        let shape = self
+            .nullable_collection_shape(collection_ty)
+            .expect("nullable collection unwrap requires alias-aware shape");
+        let is_map = matches!(shape.kind, crate::types::shape::CollectionKind::Map);
         let is_pointer_bridged = self.is_non_nilable_option(elem_option_ty);
         let inner_ty = elem_option_ty.ok_type();
         let inner_ty_str = self.go_type_as_string(&inner_ty);
@@ -393,12 +396,9 @@ impl Emitter<'_> {
         } else {
             inner_ty_str
         };
-        let raw_collection_ty = if is_map {
-            let params = collection_ty
-                .get_type_params()
-                .expect("Map should have type params");
-            let key_ty = self.go_type_as_string(&params[0]);
-            format!("map[{}]{}", key_ty, raw_elem_ty)
+        let raw_collection_ty = if let Some(key_ty) = shape.key_ty.as_ref() {
+            let key_ty_str = self.go_type_as_string(key_ty);
+            format!("map[{}]{}", key_ty_str, raw_elem_ty)
         } else {
             format!("[]{}", raw_elem_ty)
         };

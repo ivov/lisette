@@ -1,0 +1,44 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:go/ast\"\n\ntype Objects = Map<string, Option<Ref<ast.Object>>>\n\nfn main() {\n  let obj = ast.Object {\n    Kind: ast.Bad,\n    Name: \"x\",\n    Decl: None,\n    Data: None,\n    Type: None,\n  }\n  let mut objects: Objects = Map.new<string, Option<Ref<ast.Object>>>()\n  objects[\"present\"] = Some(&obj)\n  objects[\"absent\"] = None\n  let scope = ast.Scope {\n    Outer: None,\n    Objects: objects,\n  }\n  let _ = scope\n}\n"
+---
+package main
+
+import (
+	lisette "github.com/ivov/lisette/prelude"
+	"go/ast"
+)
+
+type Objects = map[string]lisette.Option[*ast.Object]
+
+func main() {
+	obj := ast.Object{
+		Kind: ast.Bad,
+		Name: "x",
+		Decl: lisette.MakeOptionNone[any](),
+		Data: lisette.MakeOptionNone[any](),
+		Type: lisette.MakeOptionNone[any](),
+	}
+	objects := make(map[string]lisette.Option[*ast.Object])
+	objects["present"] = lisette.MakeOptionSome(&obj)
+	objects["absent"] = lisette.MakeOptionNone[*ast.Object]()
+	opt_1 := lisette.MakeOptionNone[*ast.Scope]()
+	var unwrap_2 *ast.Scope
+	if opt_1.Tag == lisette.OptionSome {
+		unwrap_2 = opt_1.SomeVal
+	}
+	src_3 := objects
+	unwrapped_4 := make(map[string]*ast.Object, len(src_3))
+	for i_5, v_6 := range src_3 {
+		if v_6.Tag == lisette.OptionSome {
+			unwrapped_4[i_5] = v_6.SomeVal
+		} else {
+			unwrapped_4[i_5] = nil
+		}
+	}
+	scope := ast.Scope{
+		Outer:   unwrap_2,
+		Objects: unwrapped_4,
+	}
+	_ = scope
+}

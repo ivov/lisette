@@ -2,6 +2,8 @@ use crate::Emitter;
 use crate::expressions::context::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::patterns::sites::PatternSubject;
+use crate::types::native::NativeGoType;
+use crate::types::shape::RangeShape;
 use crate::utils::DiscardGuard;
 use crate::write_line;
 use syntax::ast::{Binding, Expression, Pattern};
@@ -49,9 +51,9 @@ impl Emitter<'_> {
             iter_expression
         };
 
-        let is_channel = iterable_ty
-            .get_name()
-            .is_some_and(|n| n == "Channel" || n == "Receiver");
+        let is_channel = self
+            .native_shape(&iterable_ty)
+            .is_some_and(|s| matches!(s.kind, NativeGoType::Channel | NativeGoType::Receiver));
 
         self.enter_scope();
         if let Some(label) = self.current_loop_label() {
@@ -90,10 +92,13 @@ impl Emitter<'_> {
         }
 
         let iterable_ty = iterable.get_type();
-        if let Some(ty_name) = iterable_ty.get_name()
-            && matches!(ty_name, "Range" | "RangeInclusive" | "RangeFrom")
+        if let Some(range_shape) = self.range_shape(&iterable_ty)
+            && matches!(
+                range_shape,
+                RangeShape::Range | RangeShape::RangeInclusive | RangeShape::RangeFrom
+            )
         {
-            self.emit_stored_range_for_loop(output, binding, iterable, ty_name, body);
+            self.emit_stored_range_for_loop(output, binding, iterable, range_shape, body);
             return None;
         }
 
@@ -106,6 +111,11 @@ impl Emitter<'_> {
         }
 
         Some(iterable_ty)
+    }
+
+    fn is_map_tuple_iterable(&self, iterable_ty: &Type) -> bool {
+        self.native_shape(iterable_ty)
+            .is_some_and(|s| matches!(s.kind, NativeGoType::Map | NativeGoType::EnumeratedSlice))
     }
 
     fn emit_for_loop_pattern(
@@ -133,10 +143,7 @@ impl Emitter<'_> {
                 output.push_str("}\n");
             }
             Pattern::Tuple { elements, .. }
-                if elements.len() == 2
-                    && iterable_ty.get_name().is_some_and(|n| {
-                        n == "Map" || n == "OrderedMap" || n == "EnumeratedSlice"
-                    }) =>
+                if elements.len() == 2 && self.is_map_tuple_iterable(iterable_ty) =>
             {
                 self.emit_map_tuple_for_loop(output, elements, &binding.ty, iter_expression, body);
             }
@@ -366,7 +373,7 @@ impl Emitter<'_> {
         output: &mut String,
         binding: &Binding,
         iterable: &Expression,
-        ty_name: &str,
+        range_shape: RangeShape,
         body: &Expression,
     ) {
         self.enter_scope();
@@ -382,8 +389,8 @@ impl Emitter<'_> {
             write_line!(output, "{}:", label);
         }
 
-        match ty_name {
-            "Range" => {
+        match range_shape {
+            RangeShape::Range => {
                 write_line!(
                     output,
                     "for {} := {}.Start; {} < {}.End; {}++ {{",
@@ -394,7 +401,7 @@ impl Emitter<'_> {
                     loop_var
                 );
             }
-            "RangeInclusive" => {
+            RangeShape::RangeInclusive => {
                 write_line!(
                     output,
                     "for {} := {}.Start; {} <= {}.End; {}++ {{",
@@ -405,7 +412,7 @@ impl Emitter<'_> {
                     loop_var
                 );
             }
-            "RangeFrom" => {
+            RangeShape::RangeFrom => {
                 write_line!(
                     output,
                     "for {} := {}.Start; ; {}++ {{",
@@ -414,7 +421,9 @@ impl Emitter<'_> {
                     loop_var
                 );
             }
-            _ => unreachable!("unexpected range kind: {}", ty_name),
+            RangeShape::RangeTo | RangeShape::RangeToInclusive => {
+                unreachable!("RangeTo/RangeToInclusive are not iterable")
+            }
         }
 
         self.emit_block(output, body);

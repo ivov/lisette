@@ -3357,3 +3357,51 @@ fn test() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn for_loop_map_alias_tuple_destructuring() {
+    let input = r#"
+type Table = Map<string, int>
+
+fn sum(t: Table) -> int {
+  let mut total = 0
+  for (k, v) in t {
+    total = total + k.length() + v
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_loop_range_alias_uses_stored_range_form() {
+    let input = r#"
+type Span = Range<int>
+
+fn sum(r: Span) -> int {
+  let mut total = 0
+  for i in r {
+    total = total + i
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_loop_channel_alias_uses_single_var_range() {
+    let input = r#"
+type Inbox = Channel<int>
+
+fn drain(ch: Inbox) -> int {
+  let mut total = 0
+  for value in ch {
+    total = total + value
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}

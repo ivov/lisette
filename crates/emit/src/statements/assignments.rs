@@ -246,7 +246,8 @@ impl Emitter<'_> {
 
         let go_field_ty: Option<Type> = match target {
             Expression::DotAccess { expression, ty, .. }
-                if Self::is_go_imported_type(&expression.get_type()) && self.is_go_nullable(ty) =>
+                if self.go_imported_shape(&expression.get_type()).is_some()
+                    && self.is_go_nullable(ty) =>
             {
                 Some(ty.clone())
             }

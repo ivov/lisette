@@ -129,9 +129,9 @@ pub(crate) fn classify_option_shape(emitter: &Emitter, ty: &Type) -> OptionShape
         OptionShape::Nullable
     } else if emitter.is_non_nilable_option(ty) {
         OptionShape::PointerBridged
-    } else if let Some(elem) = emitter.nullable_collection_element_ty(ty) {
+    } else if let Some(shape) = emitter.nullable_collection_shape(ty) {
         OptionShape::NullableCollection {
-            elem_option_ty: elem,
+            elem_option_ty: shape.elem_option_ty,
         }
     } else {
         OptionShape::Plain
