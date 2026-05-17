@@ -22,17 +22,16 @@ const (
 )
 
 type SymbolExport struct {
-	Name                 string
-	Kind                 SymbolExportKind
-	Doc                  string
-	GoType               types.Type
-	Obj                  types.Object
-	ReceiverVariable     *types.Var
-	BaseType             *types.Named // for methods
-	IsPromoted           bool         // true if promoted from an embedded field
-	NeedsPointerReceiver bool         // for promoted methods: true if only in pointer method set
-	OriginalTypeName     string       // for promoted methods: declaring type name
-	OriginalPkgPath      string       // for promoted methods: declaring type's package path
+	Name             string
+	Kind             SymbolExportKind
+	Doc              string
+	GoType           types.Type
+	Obj              types.Object
+	ReceiverVariable *types.Var
+	BaseType         *types.Named // for methods
+	IsPromoted       bool         // true if promoted from an embedded field
+	OriginalTypeName string       // for promoted methods: declaring type name
+	OriginalPkgPath  string       // for promoted methods: declaring type's package path
 }
 
 func currentLoadConfig() *packages.Config {
@@ -204,7 +203,6 @@ func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Packa
 		declaredMethods[method.Name()] = true
 	}
 
-	valMethodSet := types.NewMethodSet(named)
 	ptrMethodSet := types.NewMethodSet(types.NewPointer(named))
 
 	docPkgCache := map[string]*doc.Package{pkg.PkgPath: docPkg}
@@ -222,7 +220,6 @@ func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Packa
 		}
 
 		isPromoted := !declaredMethods[methodObj.Name()]
-		needsPointerReceiver := valMethodSet.Lookup(methodObj.Pkg(), methodObj.Name()) == nil
 
 		sig := fn.Type().(*types.Signature)
 		recv := sig.Recv()
@@ -250,17 +247,16 @@ func extractMethods(named *types.Named, pkg *packages.Package, docPkg *doc.Packa
 		methodDoc := getMethodDoc(lookupDocPkg, docTypeName, methodObj.Name())
 
 		exports = append(exports, SymbolExport{
-			Name:                 methodObj.Name(),
-			Kind:                 ExportMethod,
-			Doc:                  methodDoc,
-			GoType:               fn.Type(),
-			Obj:                  fn,
-			ReceiverVariable:     recv,
-			BaseType:             named,
-			IsPromoted:           isPromoted,
-			NeedsPointerReceiver: needsPointerReceiver,
-			OriginalTypeName:     originalTypeName,
-			OriginalPkgPath:      originalPkgPath,
+			Name:             methodObj.Name(),
+			Kind:             ExportMethod,
+			Doc:              methodDoc,
+			GoType:           fn.Type(),
+			Obj:              fn,
+			ReceiverVariable: recv,
+			BaseType:         named,
+			IsPromoted:       isPromoted,
+			OriginalTypeName: originalTypeName,
+			OriginalPkgPath:  originalPkgPath,
 		})
 	}
 

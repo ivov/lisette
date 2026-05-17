@@ -127,7 +127,7 @@ impl Template {
   fn Clone(self: Ref<Template>) -> Result<Ref<Template>, error>
 
   /// Copy returns a copy of the [Tree]. Any parsing state is discarded.
-  fn Copy(self) -> Ref<parse.Tree>
+  fn Copy(self: Ref<Template>) -> Ref<parse.Tree>
 
   /// DefinedTemplates returns a string listing the defined templates,
   /// prefixed by the string "; defined templates are: ". If there are none,
@@ -146,7 +146,7 @@ impl Template {
   /// ErrorContext returns a textual representation of the location of the node in the input text.
   /// The receiver is only used when the node does not have a pointer to the tree inside,
   /// which can occur in old code.
-  fn ErrorContext(self, n: parse.Node) -> (string, string)
+  fn ErrorContext(self: Ref<Template>, n: parse.Node) -> (string, string)
 
   /// Execute applies a parsed template to the specified data object,
   /// and writes the output to wr.

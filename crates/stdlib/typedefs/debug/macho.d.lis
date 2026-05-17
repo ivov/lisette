@@ -619,27 +619,27 @@ impl FatArch {
   /// If the [File] was created using [NewFile] directly instead of [Open],
   /// Close has no effect.
   #[allow(unused_result)]
-  fn Close(self) -> Result<(), error>
+  fn Close(self: Ref<FatArch>) -> Result<(), error>
 
   /// DWARF returns the DWARF debug information for the Mach-O file.
-  fn DWARF(self) -> Result<Ref<dwarf.Data>, error>
+  fn DWARF(self: Ref<FatArch>) -> Result<Ref<dwarf.Data>, error>
 
   /// ImportedLibraries returns the paths of all libraries
   /// referred to by the binary f that are expected to be
   /// linked with the binary at dynamic link time.
-  fn ImportedLibraries(self) -> Result<Slice<string>, error>
+  fn ImportedLibraries(self: Ref<FatArch>) -> Result<Slice<string>, error>
 
   /// ImportedSymbols returns the names of all symbols
   /// referred to by the binary f that are expected to be
   /// satisfied by other libraries at dynamic load time.
-  fn ImportedSymbols(self) -> Result<Slice<string>, error>
+  fn ImportedSymbols(self: Ref<FatArch>) -> Result<Slice<string>, error>
 
   /// Section returns the first section with the given name, or nil if no such
   /// section exists.
-  fn Section(self, name: string) -> Option<Ref<Section>>
+  fn Section(self: Ref<FatArch>, name: string) -> Option<Ref<Section>>
 
   /// Segment returns the first Segment with the given name, or nil if no such segment exists.
-  fn Segment(self, name: string) -> Option<Ref<Segment>>
+  fn Segment(self: Ref<FatArch>, name: string) -> Option<Ref<Segment>>
 }
 
 impl FatFile {

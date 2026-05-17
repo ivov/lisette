@@ -223,7 +223,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		if symbolExport.IsPromoted {
 			typeName := symbolExport.BaseType.Obj().Name()
 			typeParams := extractReceiverTypeParams(symbolExport.BaseType, c)
-			isPointerReceiver := symbolExport.NeedsPointerReceiver
+			_, isPointerReceiver := symbolExport.ReceiverVariable.Type().(*types.Pointer)
 
 			recvLisetteType := typeName
 			if isPointerReceiver {

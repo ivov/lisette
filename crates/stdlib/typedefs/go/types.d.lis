@@ -1115,7 +1115,7 @@ impl Checker {
   /// it defines, not the type (*[TypeName]) it uses.
   /// 
   /// Precondition: the Uses and Defs maps are populated.
-  fn ObjectOf(self, id: Ref<ast.Ident>) -> Option<Object>
+  fn ObjectOf(self: Ref<Checker>, id: Ref<ast.Ident>) -> Option<Object>
 
   /// PkgNameOf returns the local package name defined by the import,
   /// or nil if not found.
@@ -1123,11 +1123,11 @@ impl Checker {
   /// For dot-imports, the package name is ".".
   /// 
   /// Precondition: the Defs and Implicts maps are populated.
-  fn PkgNameOf(self, imp: Ref<ast.ImportSpec>) -> Option<Ref<PkgName>>
+  fn PkgNameOf(self: Ref<Checker>, imp: Ref<ast.ImportSpec>) -> Option<Ref<PkgName>>
 
   /// TypeOf returns the type of expression e, or nil if not found.
   /// Precondition: the Types, Uses and Defs maps are populated.
-  fn TypeOf(self, e: ast.Expr) -> Option<Type>
+  fn TypeOf(self: Ref<Checker>, e: ast.Expr) -> Option<Type>
 }
 
 impl Config {
