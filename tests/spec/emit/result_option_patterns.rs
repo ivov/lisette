@@ -646,6 +646,63 @@ fn test() {
 }
 
 #[test]
+fn fused_result_match_ok_wildcard() {
+    let input = r#"
+import "go:errors"
+
+fn fallible(ok: bool) -> Result<int, error> {
+  if ok { Ok(1) } else { Err(errors.New("nope")) }
+}
+
+fn test() {
+  match fallible(true) {
+    Ok(_) => {},
+    Err(e) => { let _ = e },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_result_match_ok_unused_named_payload() {
+    let input = r#"
+import "go:errors"
+
+fn fallible(ok: bool) -> Result<int, error> {
+  if ok { Ok(1) } else { Err(errors.New("nope")) }
+}
+
+fn test() {
+  match fallible(true) {
+    Ok(x) => {},
+    Err(e) => { let _ = e },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_result_match_err_unused_named_payload() {
+    let input = r#"
+import "go:errors"
+
+fn fallible(ok: bool) -> Result<int, error> {
+  if ok { Ok(1) } else { Err(errors.New("nope")) }
+}
+
+fn test() {
+  match fallible(true) {
+    Ok(x) => { let _ = x },
+    Err(e) => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn while_let_option_function_call() {
     let input = r#"
 import "go:fmt"

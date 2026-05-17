@@ -78,53 +78,75 @@ impl Emitter<'_> {
         if ok_binding.is_none() && !ok_arm_payload_is_omitted(ok_arm, &shape) {
             return false;
         }
+        let ok_name = ok_binding.filter(|n| *n != "_");
+        let err_name = err_binding.filter(|n| *n != "_");
 
-        let val_var = match shape {
-            AbiShape::ResultTuple => {
-                let v = self.fresh_var(Some("ret"));
-                self.declare(&v);
-                Some(v)
-            }
-            AbiShape::BareError => None,
-            AbiShape::PartialTuple
-            | AbiShape::CommaOk
-            | AbiShape::NullableReturn
-            | AbiShape::Tuple { .. } => unreachable!("rejected above"),
+        let val_var = if matches!(shape, AbiShape::ResultTuple) && ok_name.is_some() {
+            let v = self.fresh_var(Some("ret"));
+            self.declare(&v);
+            Some(v)
+        } else {
+            None
         };
         let err_var = self.fresh_var(Some("ret"));
         self.declare(&err_var);
         let call_str = self.emit_call(output, subject, None, ExpressionContext::value());
         match &val_var {
             Some(v) => write_line!(output, "{}, {} := {}", v, err_var, call_str),
-            None => write_line!(output, "{} := {}", err_var, call_str),
+            None => match shape {
+                AbiShape::ResultTuple => write_line!(output, "_, {} := {}", err_var, call_str),
+                AbiShape::BareError => write_line!(output, "{} := {}", err_var, call_str),
+                AbiShape::PartialTuple
+                | AbiShape::CommaOk
+                | AbiShape::NullableReturn
+                | AbiShape::Tuple { .. } => unreachable!("rejected above"),
+            },
         }
 
         write_line!(output, "if {} == nil {{", err_var);
-        self.scope.push_binding_frame();
-        if let (Some(name), Some(val)) = (ok_binding, &val_var)
-            && name != "_"
-        {
-            self.bind_fused(output, name, val);
-        }
-        self.emit_body_to_place(output, &ok_arm.expression, place);
-        self.scope.pop_binding_frame();
+        self.emit_fused_arm(
+            output,
+            ok_name.zip(val_var.as_deref()),
+            &ok_arm.expression,
+            place,
+        );
         output.push_str("} else {\n");
-        self.scope.push_binding_frame();
-        if let Some(name) = err_binding
-            && name != "_"
-        {
-            self.bind_fused(output, name, &err_var);
-        }
-        self.emit_body_to_place(output, &err_arm.expression, place);
-        self.scope.pop_binding_frame();
+        self.emit_fused_arm(
+            output,
+            err_name.map(|n| (n, err_var.as_str())),
+            &err_arm.expression,
+            place,
+        );
         output.push_str("}\n");
         true
     }
 
-    fn bind_fused(&mut self, output: &mut String, name: &str, value: &str) {
+    fn emit_fused_arm(
+        &mut self,
+        output: &mut String,
+        binding: Option<(&str, &str)>,
+        body: &Expression,
+        place: &BodyPlace,
+    ) {
+        self.scope.push_binding_frame();
+        let guard = binding.map(|(name, value)| self.bind_fused_with_guard(output, name, value));
+        self.emit_body_to_place(output, body, place);
+        if let Some(g) = guard {
+            g.finish(output);
+        }
+        self.scope.pop_binding_frame();
+    }
+
+    fn bind_fused_with_guard(
+        &mut self,
+        output: &mut String,
+        name: &str,
+        value: &str,
+    ) -> DiscardGuard {
         let go_name = self.scope.bind(name, name);
         self.declare(&go_name);
         write_line!(output, "{} := {}", go_name, value);
+        DiscardGuard::new(output, &go_name)
     }
 
     fn emit_match_subject_var(
