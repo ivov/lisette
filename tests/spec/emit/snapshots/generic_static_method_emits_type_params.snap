@@ -15,7 +15,7 @@ func (s Stack[T]) String() string {
 }
 
 func Stack_new[T any]() Stack[T] {
-	return Stack[T]{items: []T{}}
+	return Stack[T]{}
 }
 
 func test() {

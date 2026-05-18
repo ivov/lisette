@@ -12,18 +12,21 @@ func test() int {
 	case val, ok := <-ch1:
 		if ok {
 			return val
+		} else {
+			return 0
 		}
-		return 0
 	case val, ok := <-ch2:
 		if ok {
 			return val
+		} else {
+			return 0
 		}
-		return 0
 	case val, ok := <-ch3:
 		if ok {
 			return val
+		} else {
+			return 0
 		}
-		return 0
 	default:
 		return 0
 	}

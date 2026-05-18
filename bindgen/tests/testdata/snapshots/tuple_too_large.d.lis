@@ -10,13 +10,19 @@ pub fn Keeper() -> (int, int, int, int, int)
 /// Result<(int, int, int, int, int), error>.
 pub fn KeeperWithError() -> Result<(int, int, int, int, int), error>
 
+// SKIPPED returns-with: tuple-too-large
+// 6-element return tuple exceeds Lisette's 5-element limit
 /// Unpack6 mirrors samber/lo's shape: 6-element return, exceeds limit, skipped.
 pub fn Unpack6() -> Unknown
 
+// SKIPPED returns-with: tuple-too-large
+// 6-element return tuple exceeds Lisette's 5-element limit
 /// Unpack6Err: 6-element inner + trailing error. Inner wrap is too large, so
 /// the function should be skipped entirely (the SkipReason propagates out of
 /// the Result<..., error> wrap via `returns.go`).
 pub fn Unpack6Err() -> Result<Unknown, error>
 
+// SKIPPED returns-with: tuple-too-large
+// 9-element return tuple exceeds Lisette's 5-element limit
 /// Unpack9 is the concrete samber/lo case from bugs.md #8.
 pub fn Unpack9() -> Unknown

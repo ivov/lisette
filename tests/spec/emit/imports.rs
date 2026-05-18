@@ -380,3 +380,117 @@ pub fn WithOption() -> Option
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/validator", typedef)]);
 }
+
+#[test]
+fn import_filter_ignores_package_alias_in_string_literal() {
+    let input = r#"
+import "go:fmt"
+import "go:example.com/lib"
+
+fn test() {
+  let s: lib.IntSlice = [1]
+  fmt.Println("lib.", s[0])
+}
+"#;
+    let typedef = r#"
+pub type IntSlice = Slice<int>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}
+
+#[test]
+fn import_filter_handles_apostrophe_in_doc_comments() {
+    let input = r#"
+import "go:fmt"
+import "go:example.com/lib"
+
+/// Doesn't do much.
+pub fn first() {
+  fmt.Println(lib.Value)
+}
+
+/// Doesn't do much either.
+pub fn second() {
+  fmt.Println("done")
+}
+"#;
+    let typedef = r#"
+pub const Value: int = 1
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/lib", typedef)]);
+}
+
+#[test]
+fn gopkg_in_dotted_version_path_resolves_module() {
+    let input = r#"
+import "go:gopkg.in/yaml.v3"
+
+fn test() {
+  let _ = yaml.Decoder{}
+}
+"#;
+    let typedef = r#"// Package: yaml
+
+pub struct Decoder {}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
+}
+
+#[test]
+fn gopkg_in_value_enum_chain_access_emits_correct_qualifier() {
+    let input = r#"
+import "go:gopkg.in/yaml.v3"
+
+fn test() {
+  let _ = yaml.Kind.ScalarNode
+}
+"#;
+    let typedef = r#"// Package: yaml
+
+pub enum Kind: uint32 {
+  ScalarNode = 8,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
+}
+
+#[test]
+fn gopkg_in_instance_method_emits_correct_qualifier() {
+    let input = r#"
+import "go:gopkg.in/yaml.v3"
+
+fn test() {
+  let mut d = yaml.Decoder{}
+  d.KnownFields(true)
+}
+"#;
+    let typedef = r#"// Package: yaml
+
+pub struct Decoder {}
+
+impl Decoder {
+  pub fn KnownFields(self: Ref<Decoder>, enable: bool)
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
+}
+
+#[test]
+fn gopkg_in_struct_pattern_match_emits_correct_qualifier() {
+    let input = r#"
+import "go:gopkg.in/yaml.v3"
+
+fn describe(e: yaml.TypeError) -> int {
+  match e {
+    yaml.TypeError { Errors: errs } => errs.length(),
+  }
+}
+"#;
+    let typedef = r#"// Package: yaml
+
+pub struct TypeError {
+  pub Errors: Slice<string>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
+}

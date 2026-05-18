@@ -34,5 +34,5 @@ func (p Person) String() string {
 }
 
 func (p Person) Greet() string {
-	return fmt.Sprintf("Hello, I'm %v", p.Name)
+	return fmt.Sprintf("Hello, I'm %s", p.Name)
 }

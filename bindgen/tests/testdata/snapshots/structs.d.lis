@@ -8,6 +8,8 @@ import "go:io"
 /// Function that returns a function
 pub fn MakeAdder(x: int) -> Option<fn(int) -> int>
 
+// SKIPPED returns-with: anonymous-struct
+// anonymous struct types are not supported
 pub fn ReturnsAnon() -> Unknown
 
 /// Function that takes a callback

@@ -16,7 +16,7 @@ func (b Box) String() string {
 
 func main() {
 	m := make(map[string]Box)
-	m["a"] = Box{items: []int{}}
+	m["a"] = Box{}
 	r := &m
 	entry := (*r)["a"]
 	entry.items = append(entry.items, 1)

@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/prelude.rs
-assertion_line: 858
 description: "input: \nfn test(s: string) -> string {\n  string.substring(s, 0..5)\n}\n"
 ---
 package main

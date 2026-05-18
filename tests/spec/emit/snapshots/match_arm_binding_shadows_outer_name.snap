@@ -18,9 +18,7 @@ func (p Point) String() string {
 func test(p Point) int {
 	var result int
 	{
-		x := p.x
-		fmt := p
-		result = fmt.x + x
+		result = p.x + p.x
 	}
 	fmt.Println(result)
 	return result

@@ -366,8 +366,8 @@ pub fn miscased_snake(span: &Span, code: &str, suggested_name: &str) -> LisetteD
 }
 
 pub fn miscased_screaming_snake(span: &Span, suggested_name: &str) -> LisetteDiagnostic {
-    LisetteDiagnostic::warn("Miscased name")
-        .with_lint_code("constant_not_screaming_snake_case")
+    LisetteDiagnostic::error("Miscased name")
+        .with_infer_code("constant_not_screaming_snake_case")
         .with_span_label(span, "expected SCREAMING_SNAKE_CASE")
         .with_help(format!("Rename to `{}`", suggested_name))
 }

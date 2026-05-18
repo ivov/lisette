@@ -7,8 +7,11 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(flag bool) lisette.Result[int, string] {
+	var result lisette.Result[int, string]
 	if flag {
-		return lisette.MakeResultOk[int, string](42)
+		result = lisette.MakeResultOk[int, string](42)
+	} else {
+		result = lisette.MakeResultErr[int, string]("nope")
 	}
-	return lisette.MakeResultErr[int, string]("nope")
+	return result
 }

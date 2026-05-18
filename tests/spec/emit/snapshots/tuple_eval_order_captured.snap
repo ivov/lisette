@@ -13,5 +13,6 @@ func bump(i *int) int {
 
 func main() {
 	i := 0
-	_ = lisette.MakeTuple2(i, bump(&i))
+	t := lisette.MakeTuple2(i, bump(&i))
+	_ = t
 }

@@ -6,7 +6,8 @@ package main
 
 func test() int {
 	f := func(x int) int {
-		return x + 10
+		x_1 := x + 10
+		return x_1
 	}
 	return f(1)
 }

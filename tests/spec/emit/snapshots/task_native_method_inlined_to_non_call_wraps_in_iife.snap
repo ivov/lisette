@@ -1,0 +1,12 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() {\n  let xs = [1]\n  task xs.is_empty()\n}\n"
+---
+package main
+
+func test() {
+	xs := []int{1}
+	go func() {
+		_ = len(xs) == 0
+	}()
+}

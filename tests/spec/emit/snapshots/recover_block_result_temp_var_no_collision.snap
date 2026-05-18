@@ -11,6 +11,7 @@ func main() {
 		return 1
 	})
 	result := recoverResult_1
-	_ = 7
+	recoverResult_1_2 := 7
+	_ = recoverResult_1_2
 	_ = result
 }

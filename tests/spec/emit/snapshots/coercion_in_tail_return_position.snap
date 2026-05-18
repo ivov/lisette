@@ -17,7 +17,8 @@ func (d Doubler) Read(_ []uint8) (int, error) {
 }
 
 func make_() io.Reader {
-	return Doubler{}
+	d := Doubler{}
+	return d
 }
 
 func main() {

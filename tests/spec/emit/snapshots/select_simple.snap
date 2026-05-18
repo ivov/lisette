@@ -11,13 +11,15 @@ func test() int {
 	case val, ok := <-ch1:
 		if ok {
 			return val + 10
+		} else {
+			return 0
 		}
-		return 0
 	case val, ok := <-ch2:
 		if ok {
 			return val + 20
+		} else {
+			return 0
 		}
-		return 0
 	default:
 		return 0
 	}

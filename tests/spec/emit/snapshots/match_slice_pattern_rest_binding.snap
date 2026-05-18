@@ -8,6 +8,5 @@ func len_(items []int) int {
 	if len(items) == 0 {
 		return 0
 	}
-	rest := items[1:]
-	return 1 + len_(rest)
+	return 1 + len_(items[1:])
 }

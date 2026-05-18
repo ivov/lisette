@@ -215,6 +215,18 @@ fn test(s: string) -> bool {
 }
 
 #[test]
+fn unary_not_does_not_flip_comparison_inside_call_argument() {
+    let input = r#"
+fn always_false(b: bool) -> bool { false }
+
+fn test(x: int, y: int) -> bool {
+  !always_false(x == y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn parenthesized_expression() {
     let input = r#"
 fn test() -> int {
@@ -284,7 +296,7 @@ fn test() -> Outer {
 }
 
 #[test]
-fn struct_zero_fill_lisette_slice_and_map_non_nil() {
+fn struct_zero_fill_lisette_slice_omitted_map_non_nil() {
     let input = r#"
 struct Conf { items: Slice<int>, lookup: Map<string, int> }
 
@@ -462,20 +474,6 @@ fn main() {
 }
 
 #[test]
-fn const_go_keyword_name() {
-    let input = r#"
-import "go:fmt"
-
-const range: int = 42
-
-fn main() {
-  fmt.Println(range)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
 fn const_reference_to_const_stays_const() {
     let input = r#"
 import "go:fmt"
@@ -484,6 +482,52 @@ const X = 10
 const Y = X + 5
 
 fn main() {
+  fmt.Println(Y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn const_eligibility_does_not_leak_out_of_block() {
+    let input = r#"
+import "go:fmt"
+
+fn make() -> int {
+  2
+}
+
+fn main() {
+  {
+    const X = 1
+    fmt.Println(X)
+  }
+  let x = make()
+  const Y = x
+  fmt.Println(Y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn const_eligibility_does_not_leak_across_functions() {
+    let input = r#"
+import "go:fmt"
+
+fn make() -> int {
+  2
+}
+
+fn a() {
+  const X = 1
+  fmt.Println(X)
+}
+
+fn main() {
+  a()
+  let x = make()
+  const Y = x
   fmt.Println(Y)
 }
 "#;
@@ -574,6 +618,19 @@ import "go:fmt"
 fn test() {
   let c = 'A';
   fmt.Print(f"char: {c}")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn format_string_solo_rune() {
+    let input = r#"
+import "go:fmt"
+
+fn test() {
+  let c = 'A';
+  fmt.Print(f"{c}")
 }
 "#;
     assert_emit_snapshot!(input);
@@ -1254,36 +1311,6 @@ fn parse(s: string) -> Result<int, error> {
     Ok(n) => Ok(n),
     Err(e) => Err(e),
   }
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn local_const_shadows_let_binding() {
-    let input = r#"
-import "go:fmt"
-
-fn main() {
-  let x = 1
-  fmt.Println(x)
-  const x = 2
-  fmt.Println(x)
-}
-"#;
-    assert_emit_snapshot!(input);
-}
-
-#[test]
-fn local_let_shadows_const_binding() {
-    let input = r#"
-import "go:fmt"
-
-fn main() {
-  const x = 1
-  fmt.Println(x)
-  let x = 2
-  fmt.Println(x)
 }
 "#;
     assert_emit_snapshot!(input);
@@ -3860,6 +3887,174 @@ fn make_int() -> int { 2 }
 
 fn test() -> int {
   takes_two(1, &make_int())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fmt_println_does_not_collapse_multi_arg_sprint() {
+    let input = r#"
+import "go:fmt"
+
+fn test() {
+  fmt.Println(fmt.Sprint("a", "b"))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fmt_println_still_collapses_single_arg_sprint() {
+    let input = r#"
+import "go:fmt"
+
+fn test(x: int) {
+  fmt.Println(fmt.Sprint(x))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_return_from_underlying_variable_casts() {
+    let input = r#"
+struct UserId(int)
+
+fn make(i: int) -> UserId {
+  i
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_typed_let_from_underlying_call_casts() {
+    let input = r#"
+struct UserId(int)
+
+fn raw() -> int { 1 }
+
+fn take(u: UserId) {
+  let _ = u
+}
+
+fn test() {
+  let id: UserId = raw()
+  take(id)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_assignment_from_underlying_value_casts() {
+    let input = r#"
+struct UserId(int)
+
+fn raw() -> int { 1 }
+
+fn take(u: UserId) {
+  let _ = u
+}
+
+fn test() {
+  let mut id = UserId(0)
+  id = raw()
+  take(id)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn newtype_struct_field_from_underlying_value_casts() {
+    let input = r#"
+struct UserId(int)
+struct Box { v: UserId }
+
+fn test(i: int) -> Box {
+  Box { v: i }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn unit_block_as_tuple_element_emits_struct_empty() {
+    let input = r#"
+import "go:fmt"
+
+fn side() {
+  fmt.Println("side")
+}
+
+fn test() -> int {
+  let t = ({ side() }, 1)
+  t.1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn typed_function_alias_from_named_function_declares_alias_type() {
+    let input = r#"
+type Handler = fn() -> int
+
+fn make_handler() -> int { 1 }
+
+fn use_ref(r: Ref<Handler>) -> int {
+  r.*()
+}
+
+fn test() -> int {
+  let h: Handler = make_handler
+  use_ref(&h)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn emitted_expr_call_before_setup_arg_capture() {
+    let input = r#"
+fn side() -> int { 1 }
+
+fn get_y() -> Result<int, error> { Ok(2) }
+
+fn add(_a: int, _b: int) -> int { 0 }
+
+fn run() -> Result<int, error> {
+  Ok(add(side(), get_y()?))
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn emitted_expr_literal_args_skip_capture() {
+    let input = r#"
+fn add3(_a: int, _b: int, _c: int) -> int { 0 }
+
+fn run() -> int {
+  add3(1, 2, 3)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn emitted_expr_call_after_setup_arg_no_capture() {
+    let input = r#"
+fn side() -> int { 1 }
+
+fn get_x() -> Result<int, error> { Ok(2) }
+
+fn add(_a: int, _b: int) -> int { 0 }
+
+fn run() -> Result<int, error> {
+  Ok(add(get_x()?, side()))
 }
 "#;
     assert_emit_snapshot!(input);

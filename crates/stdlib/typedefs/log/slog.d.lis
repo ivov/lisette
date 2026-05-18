@@ -271,8 +271,8 @@ pub struct Attr {
 /// 
 /// Before implementing your own handler, consult https://go.dev/s/slog-handler-guide.
 pub interface Handler {
-  fn Enabled(arg0: context.Context, arg1: Level) -> bool
-  fn Handle(arg0: context.Context, arg1: Record) -> Result<(), error>
+  fn Enabled(ctx: context.Context, level: Level) -> bool
+  fn Handle(ctx: context.Context, record: Record) -> Result<(), error>
   fn WithAttrs(attrs: Slice<Attr>) -> Handler
   fn WithGroup(name: string) -> Handler
 }

@@ -14,6 +14,11 @@ func writeSkippedFieldComment(w *strings.Builder, indent string, f convert.Struc
 	fmt.Fprintf(w, "%s// SKIPPED field %q: %s — %s\n", indent, f.Name, f.SkipReason.Code, f.SkipReason.Message)
 }
 
+func writeSkipNote(w *strings.Builder, indent, label string, reason *convert.SkipReason) {
+	fmt.Fprintf(w, "%s// SKIPPED %s: %s\n", indent, label, reason.Code)
+	fmt.Fprintf(w, "%s// %s\n", indent, reason.Message)
+}
+
 type stats struct {
 	functions int
 	methods   int
@@ -23,20 +28,22 @@ type stats struct {
 }
 
 type Emitter struct {
-	buf        strings.Builder
-	stats      stats
-	skipped    int
-	methods    map[string][]convert.ConvertResult // receiver type name -> methods
-	cfg        *config.Config
-	pkgPath    string
-	pkgAliases map[string]string // package path -> local prefix used in references
+	buf             strings.Builder
+	stats           stats
+	skipped         int
+	methods         map[string][]convert.ConvertResult // receiver type name -> methods
+	cfg             *config.Config
+	pkgPath         string
+	pkgAliases      map[string]string // package path -> local prefix used in references
+	bitFlagSetTypes map[string]bool   // type names emitted as #[go(bit_flag_set)] newtypes
 }
 
-func NewEmitter(cfg *config.Config, pkgPath string) *Emitter {
+func NewEmitter(cfg *config.Config, pkgPath string, bitFlagSetTypes map[string]bool) *Emitter {
 	return &Emitter{
-		methods: make(map[string][]convert.ConvertResult),
-		cfg:     cfg,
-		pkgPath: pkgPath,
+		methods:         make(map[string][]convert.ConvertResult),
+		cfg:             cfg,
+		pkgPath:         pkgPath,
+		bitFlagSetTypes: bitFlagSetTypes,
 	}
 }
 
@@ -305,6 +312,9 @@ func (e *Emitter) String() string {
 }
 
 func (e *Emitter) emitFunction(result convert.ConvertResult) {
+	if result.SkipNote != nil {
+		writeSkipNote(&e.buf, "", "returns-with", result.SkipNote)
+	}
 	e.emitDocWithIndent(result.Doc, "")
 
 	if result.CommaOk {
@@ -383,6 +393,9 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
 		return
 	}
 
+	if result.SkipNote != nil {
+		writeSkipNote(&e.buf, "  ", "returns-with", result.SkipNote)
+	}
 	e.emitDocWithIndent(result.Doc, "  ")
 
 	if result.CommaOk {
@@ -464,6 +477,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 				}
 				if m.ArrayReturn {
 					signature.WriteString("  #[go(array_return)]\n")
+				}
+				if m.BuilderMethod {
+					signature.WriteString("  #[allow(unused_value)]\n")
 				}
 				signature.WriteString("  fn ")
 				signature.WriteString(m.Name)
@@ -562,6 +578,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 			sig.WriteString(" = ")
 			sig.WriteString(result.LisetteType)
 		} else {
+			if e.bitFlagSetTypes[typeName] {
+				sig.WriteString("#[go(bit_flag_set)]\n")
+			}
 			sig.WriteString("pub struct ")
 			sig.WriteString(typeName)
 			sig.WriteString(result.TypeParams.DeclBlock())
@@ -585,6 +604,9 @@ func (e *Emitter) emitType(result convert.ConvertResult) {
 }
 
 func (e *Emitter) emitConst(result convert.ConvertResult) {
+	if result.SkipNote != nil {
+		writeSkipNote(&e.buf, "", "type-with", result.SkipNote)
+	}
 	e.emitDocWithIndent(result.Doc, "")
 
 	if result.ConstValue != "" {
@@ -627,6 +649,9 @@ func (e *Emitter) isInferredNamedType(typeStr string) bool {
 }
 
 func (e *Emitter) emitVariable(result convert.ConvertResult) {
+	if result.SkipNote != nil {
+		writeSkipNote(&e.buf, "", "type-with", result.SkipNote)
+	}
 	e.emitDocWithIndent(result.Doc, "")
 	fmt.Fprintf(&e.buf, "pub var %s: %s\n\n", result.Name, result.LisetteType)
 }

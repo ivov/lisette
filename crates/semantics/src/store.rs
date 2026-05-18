@@ -171,23 +171,10 @@ impl Store {
     }
 
     pub fn module_for_qualified_name<'a>(&'a self, qualified_name: &'a str) -> Option<&'a str> {
-        if !qualified_name.starts_with("go:") || !qualified_name.contains('/') {
-            let (module_name, _) = qualified_name.split_once('.')?;
-            return Some(module_name);
-        }
-
-        let mut best: Option<&str> = None;
-        for module_id in self.modules.keys() {
-            if qualified_name.starts_with(module_id.as_str())
-                && qualified_name.as_bytes().get(module_id.len()) == Some(&b'.')
-                && best
-                    .as_ref()
-                    .is_none_or(|prev| module_id.len() > prev.len())
-            {
-                best = Some(module_id.as_str());
-            }
-        }
-        best
+        syntax::types::module_for_qualified_name(
+            qualified_name,
+            self.modules.keys().map(String::as_str),
+        )
     }
 
     pub fn variants_of(&self, qualified_name: &str) -> Option<&[EnumVariant]> {

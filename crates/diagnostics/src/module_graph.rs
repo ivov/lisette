@@ -40,13 +40,18 @@ pub fn invalid_module_path(module_name: &str, span: Span) -> LisetteDiagnostic {
         )
 }
 
-pub fn missing_go_prefix(module_name: &str, span: Span) -> LisetteDiagnostic {
+pub fn missing_go_prefix(module_name: &str, span: Span, is_blank: bool) -> LisetteDiagnostic {
+    let suggestion = if is_blank {
+        format!("import _ \"go:{}\"", module_name)
+    } else {
+        format!("import \"go:{}\"", module_name)
+    };
     LisetteDiagnostic::error(format!("Invalid module path `{}`", module_name))
         .with_resolve_code("missing_go_prefix")
         .with_span_label(&span, "Go imports require the `go:` prefix")
         .with_help(format!(
-            "`{0}` is a declared Go dependency. Did you mean `import \"go:{0}\"`?",
-            module_name
+            "`{}` is a declared Go dependency. Did you mean `{}`?",
+            module_name, suggestion
         ))
 }
 
@@ -216,7 +221,7 @@ pub fn import_cycle(path: &[String]) -> LisetteDiagnostic {
     let help = if is_self_import {
         "Remove the self-import"
     } else {
-        "To break the cycle, remove one of imports or extract common dependencies into a separate module"
+        "To break the cycle, remove one of the imports or extract common dependencies into a separate module"
     };
 
     LisetteDiagnostic::error(format!("Import cycle detected\n\n{}", art))

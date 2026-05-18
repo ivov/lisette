@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/prelude.rs
-assertion_line: 882
 description: "input: \ntype MyString = string\n\nfn test(s: MyString) -> bool {\n  s.contains(\"foo\")\n}\n"
 ---
 package main

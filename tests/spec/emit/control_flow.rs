@@ -2310,6 +2310,24 @@ fn test() {
 }
 
 #[test]
+fn if_generic_struct_literal_method_callee_in_condition() {
+    let input = r#"
+struct Box<T> { v: T }
+
+impl<T> Box<T> {
+  fn ok(self) -> bool { true }
+}
+
+fn test() {
+  if Box { v: 1 }.ok() {
+    let _ = 1
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_guarded_catchall_unused_subject() {
     let input = r#"
 struct P { v: int }
@@ -2930,6 +2948,26 @@ fn test() {
 }
 
 #[test]
+fn match_guard_cannot_mutate_inlined_identifier_subject() {
+    let input = r#"
+fn bump_false(r: Ref<int>) -> bool {
+  r.* = 1
+  false
+}
+
+fn test() -> int {
+  let mut x = 0
+  match x {
+    0 if bump_false(&x) => -1,
+    1 => 1,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn match_in_recover_unused_subject() {
     let input = r#"
 struct P { v: int }
@@ -3293,6 +3331,76 @@ fn test() {
   while i < 3 && bump(&i) > 0 {
     let _ = i
   }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn else_if_condition_setup_emitted_in_else_scope() {
+    let input = r#"
+fn track(flag: Ref<bool>) -> Result<int, error> {
+  flag.* = true
+  Ok(1)
+}
+
+fn test() {
+  let mut ran = false
+  if true {
+    let _ = 1
+  } else if track(&ran).is_ok() {
+    let _ = 2
+  } else {
+    let _ = 3
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_loop_map_alias_tuple_destructuring() {
+    let input = r#"
+type Table = Map<string, int>
+
+fn sum(t: Table) -> int {
+  let mut total = 0
+  for (k, v) in t {
+    total = total + k.length() + v
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_loop_range_alias_uses_stored_range_form() {
+    let input = r#"
+type Span = Range<int>
+
+fn sum(r: Span) -> int {
+  let mut total = 0
+  for i in r {
+    total = total + i
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn for_loop_channel_alias_uses_single_var_range() {
+    let input = r#"
+type Inbox = Channel<int>
+
+fn drain(ch: Inbox) -> int {
+  let mut total = 0
+  for value in ch {
+    total = total + value
+  }
+  total
 }
 "#;
     assert_emit_snapshot!(input);

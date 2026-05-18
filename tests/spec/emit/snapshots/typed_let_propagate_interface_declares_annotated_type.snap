@@ -1,0 +1,47 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ninterface Printable {\n  fn text(self) -> string\n}\n\nstruct A {}\nstruct B {}\n\nimpl A { fn text(self) -> string { \"a\" } }\nimpl B { fn text(self) -> string { \"b\" } }\n\nfn make_a() -> Result<A, string> { Ok(A {}) }\n\nfn run() -> Result<(), string> {\n  let mut p: Printable = make_a()?\n  p = B {}\n  let _ = p\n  Ok(())\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Printable interface {
+	text() string
+}
+
+type A struct{}
+
+func (a A) String() string {
+	return "A"
+}
+
+type B struct{}
+
+func (b B) String() string {
+	return "B"
+}
+
+func (a A) text() string {
+	return "a"
+}
+
+func (b B) text() string {
+	return "b"
+}
+
+func make_a() lisette.Result[A, string] {
+	return lisette.MakeResultOk[A, string](A{})
+}
+
+func run() lisette.Result[struct{}, string] {
+	var p Printable
+	check_1 := make_a()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
+	}
+	p = check_1.OkVal
+	p = B{}
+	_ = p
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}

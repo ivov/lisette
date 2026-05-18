@@ -1,3 +1,6 @@
+use crate::types::abi::AbiShape;
+use syntax::types::Type;
+
 #[derive(Clone)]
 pub(crate) struct LineIndex {
     pub(crate) path: String,
@@ -29,70 +32,46 @@ impl LineIndex {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct EmitFlags {
-    pub(crate) needs_fmt: bool,
-    pub(crate) needs_stdlib: bool,
-    pub(crate) needs_errors: bool,
-    pub(crate) needs_slices: bool,
-    pub(crate) needs_strings: bool,
-    pub(crate) needs_maps: bool,
+/// Shape of the enclosing function body's return values.
+#[derive(Clone, Debug, Default)]
+pub(crate) enum ReturnContext {
+    #[default]
+    None,
+    Tagged(Type),
+    Lowered {
+        return_ty: Type,
+        shape: AbiShape,
+    },
+    TaggedBlock(Type),
 }
 
-#[derive(Clone, Debug)]
-pub(crate) enum Position {
-    Tail,
-    Statement,
-    Expression,
-    Assign(String),
-}
-
-impl Position {
-    pub(crate) fn is_tail(&self) -> bool {
-        matches!(self, Position::Tail)
-    }
-
-    pub(crate) fn is_expression(&self) -> bool {
-        matches!(self, Position::Expression)
-    }
-
-    pub(crate) fn assign_target(&self) -> Option<&str> {
+impl ReturnContext {
+    pub(crate) fn ty(&self) -> Option<&Type> {
         match self {
-            Position::Assign(var) => Some(var),
+            ReturnContext::None => None,
+            ReturnContext::Tagged(ty)
+            | ReturnContext::Lowered { return_ty: ty, .. }
+            | ReturnContext::TaggedBlock(ty) => Some(ty),
+        }
+    }
+
+    pub(crate) fn lowered_shape(&self) -> Option<AbiShape> {
+        match self {
+            ReturnContext::Lowered { shape, .. } => Some(shape.clone()),
             _ => None,
         }
+    }
+
+    /// Clone the return type, asserting the function has a return context.
+    /// Use after a `lowered_shape()` check that has already established this.
+    pub(crate) fn expect_ty(&self) -> Type {
+        self.ty()
+            .cloned()
+            .expect("lowered abi requires a return context")
     }
 }
 
 pub(crate) struct LoopContext {
     pub(crate) result_var: String,
     pub(crate) label: Option<String>,
-}
-
-pub(crate) struct ArmPosition {
-    pub(crate) position: Position,
-    pub(crate) needs_return: bool,
-    result_var: Option<String>,
-}
-
-impl ArmPosition {
-    pub(crate) fn from_position(position: Position) -> Self {
-        Self {
-            position,
-            needs_return: false,
-            result_var: None,
-        }
-    }
-
-    pub(crate) fn with_result_var(var: String) -> Self {
-        Self {
-            position: Position::Assign(var.clone()),
-            needs_return: true,
-            result_var: Some(var),
-        }
-    }
-
-    pub(crate) fn result_var(&self) -> Option<&str> {
-        self.result_var.as_deref()
-    }
 }

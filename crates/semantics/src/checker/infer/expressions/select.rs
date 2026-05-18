@@ -170,7 +170,7 @@ impl TaskState<'_> {
         if matches!(inner_binding, Pattern::Identifier { .. }) {
             self.sink
                 .push(diagnostics::infer::bare_identifier_in_select_receive(
-                    &binding.get_span(),
+                    binding.get_span(),
                 ));
         }
 
@@ -182,7 +182,7 @@ impl TaskState<'_> {
             if variant_name == "None" {
                 self.sink
                     .push(diagnostics::infer::none_pattern_in_select_receive(
-                        &binding.get_span(),
+                        binding.get_span(),
                     ));
             }
 

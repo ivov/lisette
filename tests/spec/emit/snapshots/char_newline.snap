@@ -4,6 +4,4 @@ description: "input: \nfn test() {\n  '\\n'\n}\n"
 ---
 package main
 
-func test() {
-	_ = '\n'
-}
+func test() {}

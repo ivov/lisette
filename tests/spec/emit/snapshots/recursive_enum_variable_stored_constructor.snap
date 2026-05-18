@@ -41,5 +41,6 @@ func (l List) String() string {
 func main() {
 	make_ := MakeListCons
 	ptr_1 := MakeListNil()
-	_ = make_(1, &ptr_1)
+	xs := make_(1, &ptr_1)
+	_ = xs
 }

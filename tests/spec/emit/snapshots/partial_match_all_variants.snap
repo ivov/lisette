@@ -9,12 +9,10 @@ import lisette "github.com/ivov/lisette/prelude"
 func test(p lisette.Partial[int, string]) int {
 	switch p.Tag {
 	case lisette.PartialOk:
-		n := p.OkVal
-		return n
+		return p.OkVal
 	case lisette.PartialErr:
 		return 0
 	default:
-		n := p.OkVal
-		return n
+		return p.OkVal
 	}
 }

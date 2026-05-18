@@ -37,7 +37,8 @@ func (d Dir) String() string {
 }
 
 func check(d Dir, urgent bool) string {
-	if d.Tag == DirNorth {
+	subject_1 := d
+	if subject_1.Tag == DirNorth {
 		if urgent {
 			return "NORTH!"
 		}

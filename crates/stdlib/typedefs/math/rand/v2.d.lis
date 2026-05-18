@@ -47,8 +47,10 @@ pub fn Int64N(n: int64) -> int64
 /// It panics if n <= 0.
 pub fn IntN(n: int) -> int
 
-// SKIPPED: N - constraint:comparable
-// type constraint Int cannot be represented
+/// N returns a pseudo-random number in the half-open interval [0,n) from the default Source.
+/// The type parameter Int can be any integer type.
+/// It panics if n <= 0.
+pub fn N<Int: Ordered>(n: Int) -> Int
 
 /// New returns a new Rand that uses random values from src
 /// to generate other random values.

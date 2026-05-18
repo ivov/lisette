@@ -1,6 +1,8 @@
 use syntax::program::DefinitionBody;
 
 use crate::Emitter;
+use crate::bindings::BindingValue;
+use crate::expressions::context::ExpressionContext;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use syntax::types::{Type, unqualified_name};
@@ -21,8 +23,16 @@ pub(crate) enum IdentifierKind {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn emit_identifier(&mut self, value: &str, ty: &Type) -> String {
-        match self.classify_identifier(value, ty) {
+    pub(crate) fn emit_identifier(
+        &mut self,
+        value: &str,
+        ty: &Type,
+        ctx: ExpressionContext<'_>,
+    ) -> String {
+        if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
+            return expr.as_str().to_string();
+        }
+        match self.classify_identifier(value, ty, ctx) {
             IdentifierKind::UnitValue => "struct{}{}".to_string(),
             IdentifierKind::ValueEnumVariant { go_constant } => go_constant,
             IdentifierKind::PublicFunction { capitalized } => capitalized,
@@ -38,7 +48,7 @@ impl Emitter<'_> {
                 }
                 let resolved = self.capitalize_static_method_if_public(&name);
                 let go_name = self.resolve_go_name(&resolved);
-                if !self.emitting_call_callee
+                if !ctx.is_callee()
                     && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
                 {
                     return format!("{}{}", go_name, type_args);
@@ -48,17 +58,21 @@ impl Emitter<'_> {
         }
     }
 
-    fn classify_identifier(&mut self, value: &str, ty: &Type) -> IdentifierKind {
+    fn classify_identifier(
+        &mut self,
+        value: &str,
+        ty: &Type,
+        ctx: ExpressionContext<'_>,
+    ) -> IdentifierKind {
         if value == "Unit" && ty.is_unit() {
             return IdentifierKind::UnitValue;
         }
 
         let name = self
             .scope
-            .bindings
-            .get(value)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| value.to_string());
+            .resolve_binding_go_name(value)
+            .unwrap_or(value)
+            .to_string();
 
         if let Some(go_constant) = self.try_classify_value_enum_variant(&name, ty) {
             return IdentifierKind::ValueEnumVariant { go_constant };
@@ -68,7 +82,7 @@ impl Emitter<'_> {
             return IdentifierKind::PublicFunction { capitalized };
         }
 
-        let mut make_fn = self.globals.make_function_names.get(&name);
+        let mut make_fn = self.facts.make_function_name(&name);
 
         if make_fn.is_none() {
             let enum_id = match ty {
@@ -86,18 +100,17 @@ impl Emitter<'_> {
             if let Some(id) = enum_id {
                 let enum_name = unqualified_name(id);
                 let qualified = format!("{}.{}", enum_name, value);
-                make_fn = self.globals.make_function_names.get(&qualified);
+                make_fn = self.facts.make_function_name(&qualified);
             }
         }
 
         if let Some(make_fn_value) = make_fn {
-            let name = make_fn_value.clone();
+            let name = make_fn_value.to_string();
 
             match ty {
                 Type::Nominal { params, .. } => {
-                    let slot_ty = self.current_slot_expected_ty.clone();
-                    let type_args = slot_ty
-                        .as_ref()
+                    let type_args = ctx
+                        .expected_slot_type()
                         .and_then(|t| self.prelude_container_type_args(t))
                         .unwrap_or_else(|| self.format_type_args(params));
                     return IdentifierKind::UnitConstructor { name, type_args };
@@ -112,7 +125,7 @@ impl Emitter<'_> {
                         params: ret_params, ..
                     } = return_type.as_ref()
                     {
-                        let type_args = self.constructor_fn_type_args(fn_params, ret_params);
+                        let type_args = self.constructor_fn_type_args(fn_params, ret_params, ctx);
                         return IdentifierKind::ConstructorFunction { name, type_args };
                     }
                 }
@@ -121,15 +134,20 @@ impl Emitter<'_> {
             }
         }
 
-        let resolved = make_fn.cloned().unwrap_or(name);
+        let resolved = make_fn.map(str::to_string).unwrap_or(name);
         IdentifierKind::Regular { name: resolved }
     }
 
     /// Type args for a constructor function reference (e.g. `MakeFoo[T]` used as a value).
     /// Skips type args when the callee position already supplies them or when they can be
     /// inferred from the parameter types.
-    fn constructor_fn_type_args(&mut self, fn_params: &[Type], ret_params: &[Type]) -> String {
-        let needs_type_args = !self.emitting_call_callee
+    fn constructor_fn_type_args(
+        &mut self,
+        fn_params: &[Type],
+        ret_params: &[Type],
+        ctx: ExpressionContext<'_>,
+    ) -> String {
+        let needs_type_args = !ctx.is_callee()
             || ret_params.len() > fn_params.len()
             || !ret_params
                 .iter()
@@ -152,14 +170,13 @@ impl Emitter<'_> {
         name: &str,
         instantiated_ty: &Type,
     ) -> Option<String> {
-        let qualified_name = format!("{}.{}", self.current_module, name);
+        let qualified_name = self.facts.qualified_current(name);
         let definition_ty = self
-            .ctx
-            .definitions
-            .get(qualified_name.as_str())
+            .facts
+            .definition(qualified_name.as_str())
             .or_else(|| {
                 let prelude_name = format!("{}.{}", go_name::PRELUDE_MODULE, name);
-                self.ctx.definitions.get(prelude_name.as_str())
+                self.facts.definition(prelude_name.as_str())
             })?
             .ty();
 
@@ -195,7 +212,7 @@ impl Emitter<'_> {
         qualified_name: &str,
         instantiated_ty: &Type,
     ) -> Option<String> {
-        let definition_ty = self.ctx.definitions.get(qualified_name)?.ty().clone();
+        let definition_ty = self.facts.definition(qualified_name)?.ty().clone();
 
         let Type::Forall { vars, body } = &definition_ty else {
             return None;
@@ -247,7 +264,7 @@ impl Emitter<'_> {
         let real_type_part = self
             .resolve_alias_type_name(type_part)
             .unwrap_or_else(|| type_part.to_string());
-        let qualified_name = format!("{}.{}", self.current_module, real_type_part);
+        let qualified_name = self.facts.qualified_current(&real_type_part);
         let first = fn_params.first()?;
         let stripped = first.strip_refs();
         let is_self =
@@ -259,19 +276,14 @@ impl Emitter<'_> {
 
         let is_pointer = first.is_ref();
 
-        if self
-            .ctx
-            .ufcs_methods
-            .contains(&(qualified_name.to_string(), method_part.to_string()))
-        {
+        if self.facts.is_ufcs_method(&qualified_name, method_part) {
             return None;
         }
 
-        let method_key = format!("{}.{}.{}", self.current_module, type_part, method_part);
+        let method_key = self.facts.qualified_current_member(type_part, method_part);
         let should_export = self
-            .ctx
-            .definitions
-            .get(method_key.as_str())
+            .facts
+            .definition(method_key.as_str())
             .map(|d| d.visibility().is_public())
             .unwrap_or(false)
             || self.method_needs_export(method_part);
@@ -325,7 +337,7 @@ impl Emitter<'_> {
             return None;
         };
 
-        if module_name == self.current_module {
+        if self.facts.is_current_module(&module_name) {
             return None;
         }
 
@@ -333,9 +345,8 @@ impl Emitter<'_> {
 
         let method_key = format!("{}.{}", type_id, method_name);
         let is_public = self
-            .ctx
-            .definitions
-            .get(method_key.as_str())
+            .facts
+            .definition(method_key.as_str())
             .map(|d| d.visibility().is_public())
             .unwrap_or(true)
             || self.method_needs_export(method_name);
@@ -343,7 +354,7 @@ impl Emitter<'_> {
         Some(self.qualify_method_call(&type_id, method_name, is_public))
     }
 
-    fn try_classify_value_enum_variant(&self, name: &str, ty: &Type) -> Option<String> {
+    fn try_classify_value_enum_variant(&mut self, name: &str, ty: &Type) -> Option<String> {
         if !name.contains('.') {
             return None;
         }
@@ -352,14 +363,14 @@ impl Emitter<'_> {
             return None;
         };
 
-        let definition = self.ctx.definitions.get(enum_id.as_str())?;
+        let definition = self.facts.definition(enum_id.as_str())?;
         if !matches!(definition.body, DefinitionBody::ValueEnum { .. }) {
             return None;
         }
 
         let variant_name = go_name::unqualified_name(name);
-        let module = go_name::module_of_type_id(enum_id.as_str());
-        let qualifier = self.go_pkg_qualifier(module);
+        let module = self.facts.module_for_qualified_name(enum_id.as_str())?;
+        let qualifier = self.require_module_import(module);
 
         Some(format!("{}.{}", qualifier, variant_name))
     }
@@ -373,7 +384,7 @@ impl Emitter<'_> {
             return None;
         }
 
-        if self.scope.bindings.get(name).is_some() {
+        if self.scope.resolve_identifier_binding(name).is_some() {
             return None;
         }
 
@@ -381,8 +392,8 @@ impl Emitter<'_> {
             return None;
         }
 
-        let qualified_name = format!("{}.{}", self.current_module, name);
-        let definition = self.ctx.definitions.get(qualified_name.as_str())?;
+        let qualified_name = self.facts.qualified_current(name);
+        let definition = self.facts.definition(qualified_name.as_str())?;
 
         if !definition.visibility().is_public() {
             return None;

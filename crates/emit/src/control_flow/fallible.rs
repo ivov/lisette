@@ -162,10 +162,13 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
             .map(|t| self.emitter.go_type_as_string(t))
     }
 
-    /// Get the ok type string from the current return context, falling back to the fallible's ok type.
-    pub(crate) fn contextual_ok_type_string(&mut self) -> String {
-        if let Some(ctx) = &self.emitter.current_return_context {
-            let ok_ty = ctx.ty.ok_type();
+    /// Ok type from the supplied return context, with the fallible's own ok type as fallback.
+    pub(crate) fn contextual_ok_type_string(
+        &mut self,
+        return_ctx: &crate::ReturnContext,
+    ) -> String {
+        if let Some(ty) = return_ctx.ty() {
+            let ok_ty = ty.ok_type();
             self.emitter.go_type_as_string(&ok_ty)
         } else {
             self.ok_type_string()
@@ -174,10 +177,11 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
 
     /// Format the full type string (e.g., `lisette.Result[int, error]`).
     pub(crate) fn full_type_string(&mut self) -> String {
+        self.emitter.requirements.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
-            let err_ty = self.emitter.go_type(
+            let err_ty = self.emitter.go_type_as_string(
                 self.fallible
                     .err_ty()
                     .expect("Result type must have an error type"),
@@ -196,6 +200,7 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
 
     /// Emit a success wrapper (MakeResultOk or MakeOptionSome).
     pub(crate) fn emit_success(&mut self, value: &str) -> String {
+        self.emitter.requirements.require_stdlib();
         let inner_ty = self.ok_type_string();
         let err_ty = self.err_type_string();
         self.fallible
@@ -204,6 +209,7 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
 
     /// Emit a failure wrapper (MakeResultErr or MakeOptionNone).
     pub(crate) fn emit_failure(&mut self, error_value: Option<&str>) -> String {
+        self.emitter.requirements.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
@@ -220,9 +226,14 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
     }
 
     /// Emit a failure wrapper using the contextual ok type (from return context).
-    pub(crate) fn emit_contextual_failure(&mut self, error_value: Option<&str>) -> String {
+    pub(crate) fn emit_contextual_failure(
+        &mut self,
+        error_value: Option<&str>,
+        return_ctx: &crate::ReturnContext,
+    ) -> String {
+        self.emitter.requirements.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
-        let inner_ty = self.contextual_ok_type_string();
+        let inner_ty = self.contextual_ok_type_string(return_ctx);
         if self.fallible.is_result() {
             let err_ty = self.err_type_string().expect("Result must have error type");
             format!(
@@ -245,11 +256,9 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
         let inner_ty = self.ok_type_string();
         let arg_str = arg.unwrap_or("");
         if self.fallible.is_result() {
-            let err_ty = self.emitter.go_type(
-                self.fallible
-                    .err_ty()
-                    .expect("Result type must have an error type"),
-            );
+            let err_ty = self
+                .err_type_string()
+                .expect("Result type must have an error type");
             format!("{}[{}, {}]({})", constructor, inner_ty, err_ty, arg_str)
         } else {
             format!("{}[{}]({})", constructor, inner_ty, arg_str)

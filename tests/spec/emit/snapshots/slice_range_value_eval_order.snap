@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/expressions.rs
-assertion_line: 1751
 description: "input: \nimport \"go:fmt\"\n\nfn make_items() -> Slice<int> {\n  fmt.Println(\"receiver\")\n  [10, 20, 30, 40]\n}\n\nfn make_range() -> Range<int> {\n  fmt.Println(\"range\")\n  1..3\n}\n\nfn main() {\n  let xs = make_items()[make_range()]\n  fmt.Println(xs.length())\n}\n"
 ---
 package main

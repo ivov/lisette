@@ -335,7 +335,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                 let has_module_warnings = lints.iter().any(|lint| {
                     lint.file_id()
                         .map(|fid| file_ids.contains(&fid))
-                        .unwrap_or(false)
+                        .unwrap_or(true)
                 });
                 if !has_module_warnings
                     && let Err(e) =
@@ -353,6 +353,13 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     let mut files = HashMap::default();
     let mut definitions = HashMap::default();
     let mut modules = HashMap::default();
+
+    let go_module_ids: HashSet<String> = store
+        .modules
+        .keys()
+        .filter(|id| id.starts_with(syntax::types::GO_IMPORT_PREFIX))
+        .cloned()
+        .collect();
 
     for (mod_id, module) in store.modules {
         let is_internal = module.is_internal();
@@ -394,6 +401,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         ufcs_methods,
         typedef_paths: store.typedef_paths,
         go_package_names: store.go_package_names,
+        go_module_ids,
     };
 
     (result, facts)

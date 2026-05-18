@@ -6,10 +6,7 @@ package main
 
 func test(items []int) int {
 	if len(items) == 3 {
-		a := items[0]
-		b := items[1]
-		c := items[2]
-		return a + b + c
+		return items[0] + items[1] + items[2]
 	}
 	return 0
 }

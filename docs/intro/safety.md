@@ -71,6 +71,8 @@ match FindHandler("api") {
 }
 ```
 
+📚 See [`13-go-interop.md`](../reference/13-go-interop.md#typed-nil-at-the-boundary)
+
 ### Safe access for maps and slices
 
 Go zero-values a missing key in a map, and panics on out-of-bounds index access in a slice:

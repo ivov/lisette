@@ -16,5 +16,6 @@ func (w Wrapper[T]) String() string {
 
 func main() {
 	w := Wrapper[int]{F0: 1}
-	_ = w.F0 + 1
+	z := w.F0 + 1
+	_ = z
 }

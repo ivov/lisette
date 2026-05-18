@@ -8,5 +8,5 @@ import "fmt"
 
 // A publicly exported function.
 func Greet(name string) string {
-	return fmt.Sprintf("Hello, %v!", name)
+	return fmt.Sprintf("Hello, %s!", name)
 }

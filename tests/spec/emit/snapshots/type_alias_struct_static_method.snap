@@ -21,5 +21,6 @@ func Box_new(v int) Box {
 type Alias = Box
 
 func main() {
-	_ = Box_new(1)
+	b := Box_new(1)
+	_ = b
 }

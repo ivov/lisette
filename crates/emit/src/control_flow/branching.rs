@@ -1,11 +1,9 @@
 use crate::Emitter;
-use crate::names::go_name;
-use crate::patterns::decision_tree;
-use crate::statements::assignments::is_lvalue_chain;
-use crate::types::emitter::Position;
-use crate::utils::{Staged, output_ends_with_diverge};
+use crate::expressions::context::ExpressionContext;
+use crate::placement::BodyPlace;
+use crate::utils::output_ends_with_diverge;
 use crate::write_line;
-use syntax::ast::{Expression, Pattern, TypedPattern};
+use syntax::ast::Expression;
 
 impl Emitter<'_> {
     pub(crate) fn emit_if(
@@ -14,17 +12,24 @@ impl Emitter<'_> {
         condition: &Expression,
         consequence: &Expression,
         alternative: &Expression,
+        place: &BodyPlace,
     ) {
-        let condition_string = self.emit_condition_operand(output, condition);
+        let condition_string =
+            self.emit_operand(output, condition, ExpressionContext::value().condition());
         let condition_string = wrap_if_struct_literal(condition_string);
         write_line!(output, "if {} {{", condition_string);
         self.enter_scope();
-        self.emit_in_position(output, consequence);
+        self.emit_body_to_place(output, consequence, place);
         self.exit_scope();
-        self.emit_else_chain(output, alternative);
+        self.emit_else_chain(output, alternative, place);
     }
 
-    fn emit_else_chain(&mut self, output: &mut String, alternative: &Expression) {
+    fn emit_else_chain(
+        &mut self,
+        output: &mut String,
+        alternative: &Expression,
+        place: &BodyPlace,
+    ) {
         let is_empty_alternative = match alternative {
             Expression::Unit { .. } => true,
             Expression::Block { items, .. } => items.is_empty(),
@@ -42,23 +47,57 @@ impl Emitter<'_> {
             ..
         } = alternative
         {
-            let condition_string = self.emit_condition_operand(output, condition);
+            let (setup, condition_string) = self.capture_emission(output, |this, buf| {
+                this.emit_operand(buf, condition, ExpressionContext::value().condition())
+            });
             let condition_string = wrap_if_struct_literal(condition_string);
+            if !setup.is_empty() {
+                self.emit_else_if_with_setup(
+                    output,
+                    &setup,
+                    &condition_string,
+                    consequence,
+                    next_alternative,
+                    place,
+                );
+                return;
+            }
             write_line!(output, "}} else if {} {{", condition_string);
             self.enter_scope();
-            self.emit_in_position(output, consequence);
+            self.emit_body_to_place(output, consequence, place);
             self.exit_scope();
-            self.emit_else_chain(output, next_alternative);
+            self.emit_else_chain(output, next_alternative, place);
         } else if output_ends_with_diverge(output) {
             output.push_str("}\n");
-            self.emit_in_position(output, alternative);
+            self.emit_body_to_place(output, alternative, place);
         } else {
             output.push_str("} else {\n");
             self.enter_scope();
-            self.emit_in_position(output, alternative);
+            self.emit_body_to_place(output, alternative, place);
             self.exit_scope();
             output.push_str("}\n");
         }
+    }
+
+    fn emit_else_if_with_setup(
+        &mut self,
+        output: &mut String,
+        condition_setup: &str,
+        condition_string: &str,
+        consequence: &Expression,
+        next_alternative: &Expression,
+        place: &BodyPlace,
+    ) {
+        output.push_str("} else {\n");
+        self.enter_scope();
+        output.push_str(condition_setup);
+        write_line!(output, "if {} {{", condition_string);
+        self.enter_scope();
+        self.emit_body_to_place(output, consequence, place);
+        self.exit_scope();
+        self.emit_else_chain(output, next_alternative, place);
+        self.exit_scope();
+        output.push_str("}\n");
     }
 
     /// Emit an if/else-if branch header for pattern matching chains.
@@ -90,95 +129,7 @@ impl Emitter<'_> {
         self.enter_scope();
     }
 
-    pub(crate) fn emit_while_let(
-        &mut self,
-        output: &mut String,
-        pattern: &Pattern,
-        typed_pattern: Option<&TypedPattern>,
-        scrutinee: &Expression,
-        body: &Expression,
-        needs_label: bool,
-    ) {
-        self.maybe_set_loop_label(needs_label);
-        if let Some(label) = self.current_loop_label() {
-            write_line!(output, "{}:", label);
-        }
-        output.push_str("for {\n");
-
-        let inlined = if let Expression::Identifier { value, .. } = scrutinee {
-            let name = value.to_string();
-            let has_collision = Self::pattern_binds_name(pattern, &name);
-            if !has_collision && !name.contains('.') {
-                Some(
-                    self.scope
-                        .bindings
-                        .get(&name)
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| go_name::escape_reserved(&name).into_owned()),
-                )
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        let subject_var = inlined.unwrap_or_else(|| {
-            let var = self.fresh_var(Some("subject"));
-            let expression = self.emit_operand(output, scrutinee);
-            write_line!(output, "{} := {}", var, expression);
-            var
-        });
-
-        if let Pattern::Or { patterns, .. } = pattern
-            && Self::pattern_has_bindings(pattern)
-        {
-            let mut alternatives: Vec<_> = patterns
-                .iter()
-                .map(|alt| decision_tree::collect_pattern_info(self, alt, None))
-                .collect();
-
-            let unused_names: rustc_hash::FxHashSet<String> = alternatives
-                .iter()
-                .flat_map(|(_, bindings)| bindings.iter())
-                .filter(|b| b.go_name.is_none())
-                .map(|b| b.lisette_name.clone())
-                .collect();
-            for (_, bindings) in alternatives.iter_mut() {
-                for binding in bindings.iter_mut() {
-                    if unused_names.contains(&binding.lisette_name) {
-                        binding.go_name = None;
-                    }
-                }
-            }
-
-            for (i, (checks, bindings)) in alternatives.iter().enumerate() {
-                let condition = decision_tree::render_condition(checks, &subject_var);
-
-                self.emit_branch_header(output, &condition, false, i == 0);
-
-                decision_tree::emit_tree_bindings(self, output, bindings, &subject_var);
-                self.emit_block(output, body);
-            }
-
-            self.emit_while_let_break_else(output);
-            return;
-        }
-
-        let (checks, bindings) = decision_tree::collect_pattern_info(self, pattern, typed_pattern);
-        let condition = decision_tree::render_condition(&checks, &subject_var);
-        write_line!(output, "if {} {{", condition);
-        self.enter_scope();
-
-        if !matches!(pattern, Pattern::Or { .. }) {
-            decision_tree::emit_tree_bindings(self, output, &bindings, &subject_var);
-        }
-
-        self.emit_block(output, body);
-
-        self.emit_while_let_break_else(output);
-    }
-
-    fn emit_while_let_break_else(&mut self, output: &mut String) {
+    pub(crate) fn emit_while_let_break_else(&mut self, output: &mut String) {
         self.exit_scope();
         output.push_str("} else {\n");
         self.enter_scope();
@@ -192,7 +143,12 @@ impl Emitter<'_> {
         output.push_str("}\n");
     }
 
-    pub(crate) fn emit_branching_directly(&mut self, output: &mut String, expression: &Expression) {
+    pub(crate) fn emit_branching_directly(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        place: &BodyPlace,
+    ) {
         match expression {
             Expression::If {
                 condition,
@@ -200,15 +156,13 @@ impl Emitter<'_> {
                 alternative,
                 ..
             } => {
-                self.emit_if(output, condition, consequence, alternative);
+                self.emit_if(output, condition, consequence, alternative, place);
             }
-            Expression::Match {
-                subject, arms, ty, ..
-            } => {
-                self.emit_match(output, subject, arms, ty);
+            Expression::Match { subject, arms, .. } => {
+                self.emit_match(output, subject, arms, place);
             }
             Expression::Select { arms, .. } => {
-                self.emit_select(output, arms);
+                self.emit_select(output, arms, place);
             }
             _ => unreachable!("expected if/match/select"),
         }
@@ -224,257 +178,9 @@ impl Emitter<'_> {
             self.emit_statement(output, item);
         }
     }
-
-    pub(crate) fn emit_block_to_var_with_braces(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        var: &str,
-        has_go_braces: bool,
-    ) {
-        let is_block = matches!(expression, Expression::Block { .. });
-        let items: &[Expression] = if let Expression::Block { items, .. } = expression {
-            items
-        } else {
-            std::slice::from_ref(expression)
-        };
-
-        self.enter_block_scope(is_block, has_go_braces);
-
-        if let Some((last, rest)) = items.split_last() {
-            let is_new_target = self.scope.assign_targets.insert(var.to_string());
-            for item in rest {
-                self.emit_statement(output, item);
-            }
-            self.emit_tail_to_var(output, last, var);
-            if is_new_target {
-                self.scope.assign_targets.remove(var);
-            }
-        }
-
-        self.exit_block_scope(is_block, has_go_braces);
-    }
-
-    /// Enter the scope appropriate for a block-to-var assignment.
-    /// Go-brace blocks get a full Go scope; brace-less blocks save bindings only
-    /// (variables need to remain visible after the block).
-    fn enter_block_scope(&mut self, is_block: bool, has_go_braces: bool) {
-        if !is_block {
-            return;
-        }
-        if has_go_braces {
-            self.enter_scope();
-        } else {
-            self.scope.bindings.save();
-        }
-    }
-
-    fn exit_block_scope(&mut self, is_block: bool, has_go_braces: bool) {
-        if !is_block {
-            return;
-        }
-        if has_go_braces {
-            self.exit_scope();
-        } else {
-            self.scope.bindings.restore();
-        }
-    }
-
-    /// Emit the tail expression of a block-to-var assignment, handling
-    /// statement-only forms, divergent expressions, unit calls, and append
-    /// optimizations before falling through to general branching or value
-    /// emission.
-    fn emit_tail_to_var(&mut self, output: &mut String, last: &Expression, var: &str) {
-        if matches!(
-            last,
-            Expression::Return { .. }
-                | Expression::Break { .. }
-                | Expression::Continue { .. }
-                | Expression::Let { .. }
-                | Expression::While { .. }
-                | Expression::WhileLet { .. }
-                | Expression::For { .. }
-                | Expression::Const { .. }
-        ) {
-            self.emit_statement(output, last);
-            return;
-        }
-        if last.get_type().is_never() {
-            // Never-typed expressions (panic(), blocks ending in break/continue/return)
-            // don't produce a value. Emit as a statement to avoid unused temp vars.
-            self.emit_statement(output, last);
-            if !Self::is_go_never(last) {
-                output.push_str("panic(\"unreachable\")\n");
-            }
-            return;
-        }
-        if last.get_type().is_unit() && matches!(last.unwrap_parens(), Expression::Call { .. }) {
-            // Emit as statement and assign struct{}{} to the block result var.
-            let call_str = self.emit_value(output, last);
-            if !call_str.is_empty() {
-                write_line!(output, "{call_str}");
-            }
-            write_line!(output, "{var} = struct{{}}{{}}");
-            return;
-        }
-        if self.emit_append_to_var(output, var, last) {
-            return;
-        }
-        if matches!(
-            last,
-            Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. }
-        ) {
-            self.with_position(Position::Assign(var.to_string()), |this| {
-                this.emit_branching_directly(output, last);
-            });
-            return;
-        }
-        let expression_string = self.emit_value(output, last);
-        let target_ty = self.assign_target_ty.clone();
-        let expression_string =
-            self.apply_type_coercion(output, target_ty.as_ref(), last, expression_string);
-        write_line!(output, "{} = {}", var, expression_string);
-    }
-
-    fn emit_append_to_var(&mut self, output: &mut String, var: &str, last: &Expression) -> bool {
-        let Expression::Call {
-            expression: func,
-            args,
-            spread,
-            ..
-        } = last
-        else {
-            return false;
-        };
-        if !self.is_slice_append_or_extend(func) {
-            return false;
-        }
-
-        let Expression::DotAccess {
-            expression: receiver,
-            member,
-            ..
-        } = func.as_ref()
-        else {
-            return true;
-        };
-
-        let is_extend = member == "extend";
-        let unwrapped = receiver.unwrap_parens();
-        let receiver_is_lvalue =
-            is_lvalue_chain(unwrapped) && !self.contains_newtype_access(unwrapped);
-
-        if receiver_is_lvalue {
-            // false: append args never produce RHS temp statements (if/match/block).
-            let receiver_lv = self.emit_left_value_capturing(output, unwrapped, false);
-            let args_str =
-                self.emit_append_args(output, func, args, (**spread).as_ref(), is_extend);
-            write_line!(output, "{} = append({}, {})", var, receiver_lv, args_str);
-        } else {
-            let value_str = self.emit_value(output, last);
-            write_line!(output, "{} = {}", var, value_str);
-        }
-
-        true
-    }
-
-    pub(crate) fn emit_block_to_tail(&mut self, output: &mut String, expression: &Expression) {
-        let items: &[Expression] = if let Expression::Block { items, .. } = expression {
-            items
-        } else {
-            std::slice::from_ref(expression)
-        };
-
-        let Some((last, rest)) = items.split_last() else {
-            return;
-        };
-
-        for item in rest {
-            self.emit_statement(output, item);
-        }
-
-        let return_span = last.get_span();
-
-        let last = if let Expression::Return { expression, .. } = last {
-            expression.as_ref()
-        } else {
-            last
-        };
-
-        if last.get_type().is_unit() {
-            if !matches!(last, Expression::Unit { .. }) {
-                self.emit_statement(output, last);
-            }
-            return;
-        }
-
-        if last.get_type().is_never() {
-            let directive = self.maybe_line_directive(&return_span);
-            output.push_str(&directive);
-            self.emit_statement(output, last);
-            if !Self::is_go_never(last) {
-                output.push_str("panic(\"unreachable\")\n");
-            }
-            return;
-        }
-
-        let directive = self.maybe_line_directive(&return_span);
-        match last {
-            Expression::If { .. } | Expression::Match { .. } | Expression::Select { .. } => {
-                output.push_str(&directive);
-                self.emit_branching_directly(output, last);
-            }
-            _ => {
-                output.push_str(&directive);
-                if self.emit_wrapped_return(output, last) {
-                    return;
-                }
-                let expression_string = self.emit_value(output, last);
-                let return_ty = self
-                    .current_return_context
-                    .as_ref()
-                    .map(|ctx| ctx.ty.clone());
-                let expression_string =
-                    self.apply_type_coercion(output, return_ty.as_ref(), last, expression_string);
-                write_line!(output, "return {}", expression_string);
-            }
-        }
-    }
-
-    pub(crate) fn emit_in_position(&mut self, output: &mut String, expression: &Expression) {
-        match &self.position {
-            Position::Statement | Position::Expression => {
-                self.emit_block(output, expression);
-            }
-            Position::Assign(var) => {
-                let var = var.clone();
-                if expression.get_type().is_result() || expression.get_type().is_option() {
-                    let target_ty = self.assign_target_ty.clone();
-                    self.emit_option_result_assignment(
-                        output,
-                        &var,
-                        target_ty.as_ref(),
-                        expression,
-                    );
-                } else {
-                    self.emit_block_to_var_with_braces(output, expression, &var, false);
-                }
-            }
-            Position::Tail => self.emit_block_to_tail(output, expression),
-        }
-    }
 }
 
 impl Emitter<'_> {
-    pub(crate) fn maybe_set_loop_label(&mut self, needs_label: bool) {
-        if needs_label {
-            let label = self.fresh_var(Some("loop"));
-            if let Some(ctx) = self.scope.loop_stack.last_mut() {
-                ctx.label = Some(label);
-            }
-        }
-    }
-
     pub(crate) fn emit_labeled_loop(
         &mut self,
         output: &mut String,
@@ -482,7 +188,7 @@ impl Emitter<'_> {
         body: &Expression,
         needs_label: bool,
     ) {
-        self.maybe_set_loop_label(needs_label);
+        self.set_current_loop_label_if_needed(needs_label);
         if let Some(label) = self.current_loop_label() {
             write_line!(output, "{}:", label);
         }
@@ -491,34 +197,6 @@ impl Emitter<'_> {
         self.emit_block(output, body);
         self.exit_scope();
         output.push_str("}\n");
-    }
-
-    fn is_slice_append_or_extend(&self, func: &Expression) -> bool {
-        if let Expression::DotAccess {
-            expression, member, ..
-        } = func
-            && (member == "append" || member == "extend")
-        {
-            return expression.get_type().has_name("Slice");
-        }
-        false
-    }
-
-    fn emit_append_args(
-        &mut self,
-        output: &mut String,
-        function: &Expression,
-        args: &[Expression],
-        spread: Option<&Expression>,
-        is_extend: bool,
-    ) -> String {
-        let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
-        let combine = Self::variadic_combine_for(function, spread, 0);
-        let emitted_args =
-            self.sequence_with_spread(output, stages, spread, false, "_arg", combine);
-        let args_str = emitted_args.join(", ");
-        let suffix = if is_extend { "..." } else { "" };
-        format!("{}{}", args_str, suffix)
     }
 }
 

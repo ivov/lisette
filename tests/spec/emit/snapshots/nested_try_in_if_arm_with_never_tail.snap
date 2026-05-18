@@ -12,15 +12,15 @@ func die() struct{} {
 
 func test(flag bool) lisette.Result[int, string] {
 	if flag {
-		tryResult_2 := func() lisette.Result[int, string] {
-			check_3 := lisette.MakeResultOk[int, string](1)
-			if check_3.Tag != lisette.ResultOk {
-				return lisette.MakeResultErr[int, string](check_3.ErrVal)
+		tryResult_1 := func() lisette.Result[int, string] {
+			check_2 := lisette.MakeResultOk[int, string](1)
+			if check_2.Tag != lisette.ResultOk {
+				return lisette.MakeResultErr[int, string](check_2.ErrVal)
 			}
 			die()
 			panic("unreachable")
 		}()
-		return tryResult_2
+		return tryResult_1
 	}
 	return lisette.MakeResultOk[int, string](42)
 }

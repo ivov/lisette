@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Box<T> {\n  value: T,\n}\n\nimpl<T> Box<T> {\n  fn make_map(self) -> Map<T, int> {\n    Map.new<T, int>()\n  }\n}\n\nfn main() {\n  let b = Box { value: \"a\" }\n  let _ = b.make_map()\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box[T comparable] struct {
+	value T
+}
+
+func (b Box[T]) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.value)
+}
+
+func (b Box[T]) make_map() map[T]int {
+	return make(map[T]int)
+}
+
+func main() {
+	b := Box[string]{value: "a"}
+	_ = b.make_map()
+}

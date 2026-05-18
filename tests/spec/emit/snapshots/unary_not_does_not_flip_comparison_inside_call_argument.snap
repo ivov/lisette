@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn always_false(b: bool) -> bool { false }\n\nfn test(x: int, y: int) -> bool {\n  !always_false(x == y)\n}\n"
+---
+package main
+
+func always_false(_ bool) bool {
+	return false
+}
+
+func test(x, y int) bool {
+	return !always_false(x == y)
+}

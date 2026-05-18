@@ -9,9 +9,12 @@ import lisette "github.com/ivov/lisette/prelude"
 func noop() {}
 
 func test() lisette.Result[struct{}, string] {
+	var r lisette.Result[struct{}, string]
 	if true {
 		noop()
-		return lisette.MakeResultOk[struct{}, string](struct{}{})
+		r = lisette.MakeResultOk[struct{}, string](struct{}{})
+	} else {
+		r = lisette.MakeResultOk[struct{}, string](struct{}{})
 	}
-	return lisette.MakeResultOk[struct{}, string](struct{}{})
+	return r
 }

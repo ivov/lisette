@@ -5,9 +5,12 @@ description: "input: \nfn test() -> int {\n  let val = if true {\n    let val = 
 package main
 
 func test() int {
+	var val_1 int
 	if true {
 		val := 100
-		return val + 1
+		val_1 = val + 1
+	} else {
+		val_1 = 0
 	}
-	return 0
+	return val_1
 }

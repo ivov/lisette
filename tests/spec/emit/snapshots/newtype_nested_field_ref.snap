@@ -23,5 +23,6 @@ func (w Wrap) String() string {
 func main() {
 	w := Wrap(Inner{x: 1})
 	inner := Inner(w)
-	_ = &inner.x
+	r := &inner.x
+	_ = r
 }

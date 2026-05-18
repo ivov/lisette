@@ -12,8 +12,7 @@ func handle(e events.Event) int {
 		c := e
 		return c.X + c.Y
 	case events.KeyPress:
-		k := e
-		return len(k.Key)
+		return len(e.Key)
 	default:
 		return 0
 	}

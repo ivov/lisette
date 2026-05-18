@@ -7,5 +7,6 @@ package main
 import "debug/dwarf"
 
 func main() {
-	_ = dwarf.TagArrayType
+	t := dwarf.TagArrayType
+	_ = t
 }

@@ -53,8 +53,9 @@ func test() {
 			panic("unexpected")
 		} else if e.Tag == EB {
 			panic("unexpected")
+		} else {
+			break
 		}
-		break
 	}
 	if x != 5 {
 		panic("shadow")

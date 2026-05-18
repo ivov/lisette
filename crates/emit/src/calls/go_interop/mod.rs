@@ -1,9 +1,11 @@
 mod nullable;
 mod wrappers;
 
+pub(crate) use wrappers::WrapperTarget;
+
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
-use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
@@ -35,14 +37,6 @@ impl GoCallStrategy {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn classify_go_return_type(
-        &self,
-        return_ty: &Type,
-        go_hints: &[String],
-    ) -> Option<GoCallStrategy> {
-        crate::classify_go_return_type(self.ctx.definitions, return_ty, go_hints)
-    }
-
     pub(crate) fn resolve_go_call_strategy(
         &self,
         expression: &Expression,
@@ -66,16 +60,16 @@ impl Emitter<'_> {
             && Self::is_go_receiver(receiver_expression)
         {
             if let Some(qualified_name) = self.go_qualified_name(receiver_expression, member)
-                && let Some(strategy) = self.globals.go_call_strategies.get(&qualified_name)
+                && let Some(strategy) = self.facts.go_call_strategy(&qualified_name)
             {
                 return Some(strategy.clone());
             }
             let go_hints = self
                 .go_qualified_name(receiver_expression, member)
-                .and_then(|name| self.ctx.definitions.get(name.as_str()))
+                .and_then(|name| self.facts.definition(name.as_str()))
                 .map(|d| d.go_hints())
                 .unwrap_or_default();
-            return self.classify_go_return_type(ty, go_hints);
+            return self.facts.classify_go_return_type(ty, go_hints);
         }
 
         None
@@ -110,14 +104,52 @@ impl Emitter<'_> {
         }
     }
 
+    /// Like `emit_go_wrapped_call` but writes into `target`. `None` for the
+    /// `Tuple` strategy (does not use the slot pattern).
+    pub(crate) fn emit_go_wrapped_call_to(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        strategy: &GoCallStrategy,
+        result_ty: &Type,
+        target: WrapperTarget<'_>,
+    ) -> Option<crate::calls::go_interop::wrappers::WrapperOutcome> {
+        use crate::expressions::context::ExpressionContext;
+        match strategy {
+            GoCallStrategy::Tuple { .. } => None,
+            GoCallStrategy::Result => {
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                self.requirements.require_stdlib();
+                Some(self.emit_result_wrapping(output, &call_str, result_ty, target))
+            }
+            GoCallStrategy::CommaOk => {
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                Some(self.emit_comma_ok_wrapping(output, &call_str, result_ty, true, target))
+            }
+            GoCallStrategy::NullableReturn => {
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                let raw_var = self.hoist_tmp_value(output, "raw", &call_str);
+                Some(self.emit_nil_check_option_wrap(output, &raw_var, result_ty, target))
+            }
+            GoCallStrategy::Partial => {
+                self.requirements.require_stdlib();
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                Some(self.emit_partial_wrapping(output, &call_str, result_ty, target))
+            }
+            GoCallStrategy::Sentinel { value } => {
+                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                Some(self.emit_sentinel_wrapping(output, &call_str, result_ty, *value, target))
+            }
+        }
+    }
+
     fn has_go_hint(&self, receiver_expression: &Expression, member: &str, hint: &str) -> bool {
         let Some(qualified_name) = self.go_qualified_name(receiver_expression, member) else {
             return false;
         };
 
-        self.ctx
-            .definitions
-            .get(qualified_name.as_str())
+        self.facts
+            .definition(qualified_name.as_str())
             .map(|definition| definition.go_hints().iter().any(|s| s == hint))
             .unwrap_or(false)
     }
@@ -196,9 +228,11 @@ impl Emitter<'_> {
             return None;
         }
 
-        self.skip_array_return_wrap = has_array_return;
-        let call_str = self.emit_call(output, call_expression, None);
-        self.skip_array_return_wrap = false;
+        let mut ctx = ExpressionContext::value();
+        if has_array_return {
+            ctx = ctx.with_raw_go_array_return();
+        }
+        let call_str = self.emit_call(output, call_expression, None, ctx);
 
         Some(call_str)
     }
@@ -214,7 +248,7 @@ impl Emitter<'_> {
     }
 
     pub(super) fn build_tuple_literal(&mut self, vars: &[String], _tuple_ty: &Type) -> String {
-        self.flags.needs_stdlib = true;
+        self.requirements.require_stdlib();
         format!("lisette.MakeTuple{}({})", vars.len(), vars.join(", "))
     }
 
@@ -225,9 +259,6 @@ impl Emitter<'_> {
         tuple_ty: &Type,
     ) -> String {
         let constructor = self.build_tuple_literal(vars, tuple_ty);
-        let tuple_var = self.fresh_var(Some("tup"));
-        self.declare(&tuple_var);
-        write_line!(output, "{} := {}", tuple_var, constructor);
-        tuple_var
+        self.hoist_tmp_value(output, "tup", &constructor)
     }
 }

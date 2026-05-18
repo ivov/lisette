@@ -19,7 +19,5 @@ func test(p Point) int {
 	if p.x == 0 && p.y == 0 {
 		return 0
 	}
-	x := p.x
-	y := p.y
-	return x + y
+	return p.x + p.y
 }

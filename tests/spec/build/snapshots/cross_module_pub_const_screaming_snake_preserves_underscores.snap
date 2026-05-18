@@ -1,0 +1,17 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === config/config.go ===
+package config
+
+const MAX_RETRIES int = 3
+
+
+// === main.go ===
+package main
+
+import "github.com/user/myproject/config"
+
+func main() {
+	_ = config.MAX_RETRIES
+}

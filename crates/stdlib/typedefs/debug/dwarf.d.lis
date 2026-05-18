@@ -1083,6 +1083,8 @@ impl Data {
   /// If this compilation unit has no line table, it returns nil, nil.
   fn LineReader(self: Ref<Data>, cu: Ref<Entry>) -> Result<Ref<LineReader>, error>
 
+  // SKIPPED returns-with: array-currently-not-representable
+  // fixed-size array cannot currently be represented in Lisette
   /// Ranges returns the PC ranges covered by e, a slice of [low,high) pairs.
   /// Only some entry types, such as [TagCompileUnit] or [TagSubprogram], have PC
   /// ranges; for others, this will return nil with no error.

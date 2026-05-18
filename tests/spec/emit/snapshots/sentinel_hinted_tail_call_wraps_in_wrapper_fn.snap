@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/go_interface_adapter.rs
+description: "input: \nimport \"go:example.com/idx\"\n\nfn find(haystack: string, needle: string) -> Option<int> {\n  idx.Find(haystack, needle)\n}\n\nfn main() {\n  let _ = find(\"hello\", \"z\")\n}\n"
+---
+package main
+
+import (
+	"example.com/idx"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func find(haystack, needle string) (int, bool) {
+	ret_1 := idx.Find(haystack, needle)
+	option_2 := lisette.OptionFromCommaOk[int](ret_1, ret_1 != -1)
+	if option_2.Tag == lisette.OptionSome {
+		return option_2.SomeVal, true
+	}
+	return *new(int), false
+}
+
+func main() {
+	find("hello", "z")
+}

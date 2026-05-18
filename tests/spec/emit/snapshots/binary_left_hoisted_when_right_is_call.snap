@@ -11,5 +11,6 @@ func bump(i *int) int {
 
 func main() {
 	i := 0
-	_ = i + bump(&i)
+	z := i + bump(&i)
+	_ = z
 }

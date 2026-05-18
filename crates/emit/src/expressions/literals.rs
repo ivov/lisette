@@ -1,10 +1,11 @@
 use std::fmt::Write;
 
 use crate::Emitter;
-use crate::types::coercion::Coercion;
-use crate::utils::Staged;
+use crate::expressions::context::ExpressionContext;
+use crate::expressions::emission::EmittedExpression;
+use crate::types::coercion::{Coercion, CoercionDirection};
 use syntax::ast::{FormatStringPart, Literal};
-use syntax::types::Type;
+use syntax::types::{SimpleKind, Type};
 
 impl Emitter<'_> {
     pub(super) fn emit_literal(
@@ -46,9 +47,6 @@ impl Emitter<'_> {
             }
             Literal::FormatString(parts) => self.emit_format_string(output, parts),
             Literal::Slice(elems) => {
-                let stages: Vec<Staged> = elems.iter().map(|e| self.stage_composite(e)).collect();
-                let elements = self.sequence(output, stages, "_v");
-
                 let elem_lisette_ty = ty
                     .get_type_params()
                     .expect("Slice type must have type args")
@@ -57,9 +55,27 @@ impl Emitter<'_> {
                     .clone();
                 let elem_ty = self.go_type_as_string(&elem_lisette_ty);
 
+                if elems.is_empty() {
+                    // Parens around the slice type disambiguate the conversion when
+                    // the element type itself ends in `)` (e.g. `func(int)`); Go
+                    // otherwise parses `[]func(int)(nil)` as a call expression.
+                    return format!("([]{})(nil)", elem_ty);
+                }
+
+                let stages: Vec<EmittedExpression> = elems
+                    .iter()
+                    .map(|e| self.stage_composite(e, ExpressionContext::value()))
+                    .collect();
+                let elements = self.sequence(output, stages, "_v");
+
                 let mut wrapped: Vec<String> = Vec::with_capacity(elements.len());
                 for (expr, emitted) in elems.iter().zip(elements) {
-                    let coercion = Coercion::resolve(self, &expr.get_type(), &elem_lisette_ty);
+                    let coercion = Coercion::resolve(
+                        self,
+                        &expr.get_type(),
+                        &elem_lisette_ty,
+                        CoercionDirection::Internal,
+                    );
                     wrapped.push(coercion.apply(self, output, emitted));
                 }
                 let elements = wrapped;
@@ -84,11 +100,11 @@ impl Emitter<'_> {
             .any(|p| matches!(p, FormatStringPart::Expression(_)));
 
         // Stage all expression parts for eval-order sequencing
-        let stages: Vec<Staged> = parts
+        let stages: Vec<EmittedExpression> = parts
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
-                    Some(self.stage_composite(e))
+                    Some(self.stage_composite(e, ExpressionContext::value()))
                 } else {
                     None
                 }
@@ -97,8 +113,8 @@ impl Emitter<'_> {
         let emitted = self.sequence(output, stages, "_fmtarg");
 
         let mut format_string = String::new();
-        let mut args = Vec::new();
-        let mut expression_idx = 0;
+        let mut args = Vec::with_capacity(emitted.len());
+        let mut emitted = emitted.into_iter();
 
         for part in parts {
             match part {
@@ -112,14 +128,20 @@ impl Emitter<'_> {
                     }
                 }
                 FormatStringPart::Expression(expression) => {
-                    let format_verb = if expression.get_type().is_rune() {
-                        "%c"
-                    } else {
-                        "%v"
+                    let format_verb = match expression.get_type().as_simple() {
+                        Some(SimpleKind::Rune) => "%c",
+                        Some(SimpleKind::String) => "%s",
+                        Some(SimpleKind::Bool) => "%t",
+                        Some(k) if k.is_signed_int() || k.is_unsigned_int() => "%d",
+                        Some(k) if k.is_float() => "%g",
+                        _ => "%v",
                     };
                     format_string.push_str(format_verb);
-                    args.push(emitted[expression_idx].clone());
-                    expression_idx += 1;
+                    args.push(
+                        emitted
+                            .next()
+                            .expect("emitted count matches expression parts"),
+                    );
                 }
             }
         }
@@ -128,8 +150,14 @@ impl Emitter<'_> {
             return format!("\"{}\"", format_string);
         }
 
-        self.flags.needs_fmt = true;
-        if format_string == "%v" && args.len() == 1 {
+        self.requirements.require_fmt();
+        // Solo-expression f-strings round-trip through fmt.Sprint, which skips
+        // the format-string parse. Excluded: `%c`, because Sprint on a rune
+        // prints the integer codepoint instead of the character.
+        if args.len() == 1
+            && matches!(parts, [FormatStringPart::Expression(_)])
+            && format_string != "%c"
+        {
             return format!("fmt.Sprint({})", args[0]);
         }
         format!("fmt.Sprintf(\"{}\", {})", format_string, args.join(", "))

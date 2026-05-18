@@ -1071,3 +1071,94 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn task_native_method_inlined_to_builtin_wraps_in_iife() {
+    let input = r#"
+fn test() {
+  let xs = [1]
+  task xs.length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn defer_native_method_inlined_to_builtin_wraps_in_iife() {
+    let input = r#"
+fn test() {
+  let xs = [1]
+  defer xs.length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn task_native_method_inlined_to_non_call_wraps_in_iife() {
+    let input = r#"
+fn test() {
+  let xs = [1]
+  task xs.is_empty()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn task_native_method_inlining_to_regular_call_skips_wrap() {
+    let input = r#"
+fn test() {
+  let xs = [1, 2, 3]
+  task xs.contains(2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn select_hoist_channel_temp_declared_before_user_binding() {
+    let input = r#"
+fn get_ch() -> Channel<int> {
+  Channel.buffered<int>(1)
+}
+
+fn test() -> int {
+  let result = select {
+    let Some(v) = get_ch().receive() => v,
+    _ => 0,
+  }
+  let ch_1 = result + 1
+  ch_1
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn select_hoist_send_value_temp_declared_before_user_binding() {
+    let input = r#"
+import "go:fmt"
+
+fn mark(log: Channel<int>, tag: int) -> int {
+  log.send(tag)
+  tag
+}
+
+fn test() {
+  let log = Channel.buffered<int>(8)
+  let closed = Channel.new<int>()
+  closed.close()
+  let out_ch = Channel.new<int>()
+
+  let result = select {
+    let Some(v) = closed.receive() => v,
+    out_ch.send(mark(log, 1)) => 0,
+    _ => -1,
+  }
+  let send_val_2 = result + 1
+  fmt.Println(send_val_2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}

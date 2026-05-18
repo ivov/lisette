@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·            ╰── reserved keyword
  6 │     None => 0,
    ╰────
-  help: Rename binding `type` · code: [parse.keyword_as_binding]
+  help: Rename this binding. `type` is a keyword reserved for declaring named types · code: [parse.keyword_as_binding]

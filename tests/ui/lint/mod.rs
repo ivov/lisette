@@ -1095,6 +1095,22 @@ fn main() {
 }
 
 #[test]
+fn public_field_on_private_struct_not_unused() {
+    assert_no_lint_warnings!(
+        r#"
+struct Person {
+  pub name: string,
+  pub age: int,
+}
+
+fn main() {
+  let _p = Person { name: "", age: 0 }
+}
+"#
+    );
+}
+
+#[test]
 fn serialization_struct_fields_not_unused() {
     assert_no_lint_warnings!(
         r#"
@@ -2524,19 +2540,6 @@ fn main() {
 }
 
 #[test]
-fn non_screaming_snake_case_constant() {
-    assert_lint_snapshot!(
-        r#"
-const maxRetries = 3;
-
-fn main() {
-  let _ = maxRetries;
-}
-"#
-    );
-}
-
-#[test]
 fn screaming_snake_case_constant_no_warning() {
     assert_no_lint_warnings!(
         r#"
@@ -3865,6 +3868,45 @@ fn test(c: bool) {
 }
 fn main() {
   test(true)
+}
+"#
+    );
+}
+
+#[test]
+fn interface_method_allow_unused_value_suppresses_lint() {
+    assert_no_lint_warnings!(
+        r#"
+pub interface Router {
+  #[allow(unused_value)]
+  fn Get(self, path: string) -> Router
+}
+
+pub fn register(r: Router) {
+  r.Get("/ping")
+}
+
+fn main() {
+  ()
+}
+"#
+    );
+}
+
+#[test]
+fn interface_method_without_allow_warns_on_discard() {
+    assert_lint_snapshot!(
+        r#"
+pub interface Router {
+  fn Get(self, path: string) -> Router
+}
+
+pub fn register(r: Router) {
+  r.Get("/ping")
+}
+
+fn main() {
+  ()
 }
 "#
     );

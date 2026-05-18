@@ -43,7 +43,6 @@ func count_leaves[T any](tree Tree[T]) int {
 	if tree.Tag == TreeLeaf {
 		return 1
 	}
-	left := *tree.Left
 	right := *tree.Right
-	return count_leaves(left) + count_leaves(right)
+	return count_leaves((*tree.Left)) + count_leaves(right)
 }

@@ -273,7 +273,7 @@ impl TaskState<'_> {
             } else {
                 diagnostics::infer::only_slices_indexable_by_range(
                     &resolved_collection_ty,
-                    &collection_expression.get_span(),
+                    collection_expression.get_span(),
                 )
             };
             self.sink.push(diagnostic);

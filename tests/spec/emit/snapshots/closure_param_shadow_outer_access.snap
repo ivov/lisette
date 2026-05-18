@@ -10,8 +10,8 @@ func test() string {
 	x := "outer"
 	f := func(x int) string {
 		x_1 := x * 2
-		return fmt.Sprintf("doubled: %v", x_1)
+		return fmt.Sprintf("doubled: %d", x_1)
 	}
 	result := f(5)
-	return fmt.Sprintf("%v and %v", result, x)
+	return fmt.Sprintf("%s and %s", result, x)
 }

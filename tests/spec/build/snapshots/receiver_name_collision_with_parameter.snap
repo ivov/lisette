@@ -26,5 +26,6 @@ import "github.com/user/myproject/builder"
 
 func main() {
 	sb := builder.StringBuilder{Content: "hello"}
-	_ = sb.Append(" world")
+	sb2 := sb.Append(" world")
+	_ = sb2
 }

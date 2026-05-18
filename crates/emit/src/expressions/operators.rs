@@ -1,5 +1,5 @@
 use crate::Emitter;
-use crate::utils::try_flip_comparison;
+use crate::expressions::context::ExpressionContext;
 use syntax::ast::{BinaryOperator, Expression, Literal, UnaryOperator};
 use syntax::types::Type;
 
@@ -21,6 +21,7 @@ impl Emitter<'_> {
         operator: &BinaryOperator,
         left_expression: &Expression,
         right_expression: &Expression,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         if matches!(operator, BinaryOperator::Pipeline) {
             unreachable!("Pipeline operator should have been desugared by now")
@@ -42,6 +43,7 @@ impl Emitter<'_> {
                 left_expression,
                 right_expression,
                 emit_info,
+                ctx,
             );
         }
 
@@ -56,7 +58,7 @@ impl Emitter<'_> {
                 && left_ty.is_float()
                 && !left_ty.is_complex()
             {
-                let float_expression = self.emit_operand(output, left_expression);
+                let float_expression = self.emit_operand(output, left_expression, ctx);
                 return format!("complex(0, {}*{})", float_expression, imag_coef);
             }
             if let Expression::Literal {
@@ -66,7 +68,7 @@ impl Emitter<'_> {
                 && right_ty.is_float()
                 && !right_ty.is_complex()
             {
-                let float_expression = self.emit_operand(output, right_expression);
+                let float_expression = self.emit_operand(output, right_expression, ctx);
                 return format!("complex(0, {}*{})", float_expression, imag_coef);
             }
         }
@@ -77,12 +79,13 @@ impl Emitter<'_> {
                 operator,
                 left_expression,
                 right_expression,
+                ctx,
             );
         }
 
         let stages = vec![
-            self.stage_composite(left_expression),
-            self.stage_composite(right_expression),
+            self.stage_composite(left_expression, ctx),
+            self.stage_composite(right_expression, ctx),
         ];
         let values = self.sequence(output, stages, "_left");
         let left_string = values[0].clone();
@@ -97,13 +100,14 @@ impl Emitter<'_> {
         operator: &BinaryOperator,
         left_expression: &Expression,
         right_expression: &Expression,
+        ctx: ExpressionContext<'_>,
     ) -> String {
-        let left_staged = self.stage_composite(left_expression);
+        let left_staged = self.stage_composite(left_expression, ctx);
         output.push_str(&left_staged.setup);
 
         // Wrap RHS setup in an IIFE so it runs only when control reaches the
         // RHS — hoisting it before the operator would defeat short-circuit.
-        let right_staged = self.stage_composite(right_expression);
+        let right_staged = self.stage_composite(right_expression, ctx);
         let right_string = if right_staged.setup.is_empty() {
             right_staged.value
         } else {
@@ -121,6 +125,7 @@ impl Emitter<'_> {
         output: &mut String,
         operator: &UnaryOperator,
         expression: &Expression,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         // Special case: -9223372036854775808 cannot be written as a positive literal
         // because 9223372036854775808 overflows i64. Go handles this correctly
@@ -138,16 +143,36 @@ impl Emitter<'_> {
             return "-9223372036854775808".to_string();
         }
 
-        let expression = self.emit_operand(output, expression);
-
-        // Negate comparisons by flipping the operator instead of prepending `!`.
-        // Without this, `!len(s) == 0` would be `(!len(s)) == 0` in Go
-        // because `!` binds tighter than `==`.
-        if matches!(operator, UnaryOperator::Not)
-            && let Some(flipped) = try_flip_comparison(&expression)
-        {
-            return flipped;
+        // Negate comparisons by flipping the operator instead of prepending `!`:
+        // `!` binds tighter than `==` in Go, so `!(a == b)` must not emit as `!a == b`.
+        if matches!(operator, UnaryOperator::Not) {
+            let target = expression.unwrap_parens();
+            let preserve_parens = matches!(expression, Expression::Paren { .. });
+            let wrap = |s: String| {
+                if preserve_parens {
+                    format!("({})", s)
+                } else {
+                    s
+                }
+            };
+            if let Expression::Binary {
+                operator: cmp,
+                left,
+                right,
+                ..
+            } = target
+                && let Some(flipped) = flip_comparison(cmp)
+            {
+                return wrap(self.emit_binary_expression(output, &flipped, left, right, ctx));
+            }
+            if matches!(target, Expression::Call { .. })
+                && let Some(negated) = self.try_emit_negated_call(output, target)
+            {
+                return wrap(negated);
+            }
         }
+
+        let expression = self.emit_operand(output, expression, ctx);
 
         let op_str = match operator {
             UnaryOperator::Negative => "-",
@@ -169,56 +194,21 @@ impl Emitter<'_> {
         left: &BinaryOperand<'_>,
         right: &BinaryOperand<'_>,
     ) -> Option<NumericBinaryEmitInfo> {
-        use BinaryOperator::*;
-
-        if !matches!(
-            operator,
-            Addition
-                | Subtraction
-                | Multiplication
-                | Division
-                | Remainder
-                | BitwiseAnd
-                | BitwiseOr
-                | BitwiseXor
-                | BitwiseAndNot
-                | ShiftLeft
-                | ShiftRight
-                | LessThan
-                | LessThanOrEqual
-                | GreaterThan
-                | GreaterThanOrEqual
-                | Equal
-                | NotEqual
-        ) {
+        if !is_numeric_binary_op(operator) {
             return None;
         }
 
-        let left_underlying_ty = left.ty.underlying_numeric_type();
-        let right_underlying_ty = right.ty.underlying_numeric_type();
-
-        let (left_underlying_ty, right_underlying_ty) =
-            match (&left_underlying_ty, &right_underlying_ty) {
-                (Some(l), Some(r)) => (l, r),
-                _ => return None,
-            };
-
-        let left_family = left_underlying_ty.numeric_family()?;
-        let right_family = right_underlying_ty.numeric_family()?;
-
-        if left_family != right_family {
-            return None;
-        }
+        let left_underlying_ty = matching_underlying_numeric(&left.ty, &right.ty)?;
 
         let left_is_aliased = left.ty.is_aliased_numeric_type();
         let right_is_aliased = right.ty.is_aliased_numeric_type();
 
         if left.ty == right.ty {
-            if left_is_aliased && matches!(operator, Division) {
+            if left_is_aliased && matches!(operator, BinaryOperator::Division) {
                 return Some(NumericBinaryEmitInfo {
                     cast_left_to: None,
                     cast_right_to: None,
-                    cast_result_to: Some(left_underlying_ty.clone()),
+                    cast_result_to: Some(left_underlying_ty),
                 });
             }
             return None;
@@ -230,24 +220,14 @@ impl Emitter<'_> {
         match (left_is_aliased, right_is_aliased) {
             (true, false) => Some(NumericBinaryEmitInfo {
                 cast_left_to: None,
-                cast_right_to: if right_is_literal {
-                    None
-                } else {
-                    Some(left.ty.clone())
-                },
+                cast_right_to: cast_unless_literal(right_is_literal, &left.ty),
                 cast_result_to: None,
             }),
-
             (false, true) => Some(NumericBinaryEmitInfo {
-                cast_left_to: if left_is_literal {
-                    None
-                } else {
-                    Some(right.ty.clone())
-                },
+                cast_left_to: cast_unless_literal(left_is_literal, &right.ty),
                 cast_right_to: None,
                 cast_result_to: None,
             }),
-
             _ => None,
         }
     }
@@ -259,10 +239,11 @@ impl Emitter<'_> {
         left_expression: &Expression,
         right_expression: &Expression,
         info: NumericBinaryEmitInfo,
+        ctx: ExpressionContext<'_>,
     ) -> String {
         let stages = vec![
-            self.stage_operand(left_expression),
-            self.stage_operand(right_expression),
+            self.stage_operand(left_expression, ctx),
+            self.stage_operand(right_expression, ctx),
         ];
         let values = self.sequence(output, stages, "_left");
         let left_string = values[0].clone();
@@ -287,6 +268,18 @@ impl Emitter<'_> {
     }
 }
 
+fn flip_comparison(operator: &BinaryOperator) -> Option<BinaryOperator> {
+    match operator {
+        BinaryOperator::Equal => Some(BinaryOperator::NotEqual),
+        BinaryOperator::NotEqual => Some(BinaryOperator::Equal),
+        BinaryOperator::LessThan => Some(BinaryOperator::GreaterThanOrEqual),
+        BinaryOperator::LessThanOrEqual => Some(BinaryOperator::GreaterThan),
+        BinaryOperator::GreaterThan => Some(BinaryOperator::LessThanOrEqual),
+        BinaryOperator::GreaterThanOrEqual => Some(BinaryOperator::LessThan),
+        _ => None,
+    }
+}
+
 fn is_literal_expression(expression: &Expression) -> bool {
     match expression {
         Expression::Literal { .. } => true,
@@ -297,5 +290,49 @@ fn is_literal_expression(expression: &Expression) -> bool {
             ..
         } => is_literal_expression(expression),
         _ => false,
+    }
+}
+
+fn is_numeric_binary_op(operator: &BinaryOperator) -> bool {
+    use BinaryOperator::*;
+    matches!(
+        operator,
+        Addition
+            | Subtraction
+            | Multiplication
+            | Division
+            | Remainder
+            | BitwiseAnd
+            | BitwiseOr
+            | BitwiseXor
+            | BitwiseAndNot
+            | ShiftLeft
+            | ShiftRight
+            | LessThan
+            | LessThanOrEqual
+            | GreaterThan
+            | GreaterThanOrEqual
+            | Equal
+            | NotEqual
+    )
+}
+
+/// Common underlying numeric type when both operands lower to the same
+/// numeric family; `None` if either operand is non-numeric or the two
+/// numeric families differ.
+fn matching_underlying_numeric(left: &Type, right: &Type) -> Option<Type> {
+    let left_underlying = left.underlying_numeric_type()?;
+    let right_underlying = right.underlying_numeric_type()?;
+    if left_underlying.numeric_family()? != right_underlying.numeric_family()? {
+        return None;
+    }
+    Some(left_underlying)
+}
+
+fn cast_unless_literal(is_literal: bool, target: &Type) -> Option<Type> {
+    if is_literal {
+        None
+    } else {
+        Some(target.clone())
     }
 }

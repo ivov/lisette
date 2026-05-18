@@ -1,9 +1,7 @@
-use rustc_hash::FxHashSet as HashSet;
-
 use crate::Emitter;
 use crate::names::go_name;
 use syntax::ast::{Annotation, Expression, Generic, ParentInterface, Pattern};
-use syntax::types::{Type, unqualified_name};
+use syntax::types::unqualified_name;
 
 impl Emitter<'_> {
     pub(crate) fn emit_interface(
@@ -14,30 +12,13 @@ impl Emitter<'_> {
         generics: &[Generic],
         is_public: bool,
     ) -> String {
-        if self.current_module == go_name::PRELUDE_MODULE {
+        if self.facts.is_current_module(go_name::PRELUDE_MODULE) {
             return format!("type {} struct{{}}", name);
         }
 
-        let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
-        let method_types: Vec<Type> = items.iter().map(|item| item.get_type()).collect();
-        let mut map_key_generics =
-            Self::collect_map_key_generics(method_types.iter(), &generic_names);
-
-        let mut visited = HashSet::default();
-        for parent in parents {
-            if let Type::Nominal { id, params, .. } = &parent.ty {
-                for position in self.map_key_positions(id, &mut visited) {
-                    if let Some(Type::Parameter(name)) = params.get(position)
-                        && generic_names.contains(&name.as_ref())
-                    {
-                        map_key_generics.insert(name.to_string());
-                    }
-                }
-            }
-        }
-
         let filtered = strip_self_referential_bounds(generics, name);
-        let generics_str = self.generics_to_string_with_map_keys(&filtered, &map_key_generics);
+        let symbol = self.facts.qualified_current(name);
+        let generics_str = self.generics_to_string_for_symbol(&symbol, &filtered);
 
         let mut output = Vec::new();
         output.push(format!(
@@ -87,7 +68,7 @@ impl Emitter<'_> {
             .get_function_ret()
             .expect("interface method must have return type")
             .clone();
-        let qualified_id = format!("{}.{}", self.current_module, interface_name);
+        let qualified_id = self.facts.qualified_current(interface_name);
         let hints = self.go_interface_method_hints(&qualified_id, &func.name);
         let return_type = match self.classify_with_go_hints(&raw_return_ty, &hints) {
             Some(shape) => self.render_lowered_return_ty(&shape, &raw_return_ty),

@@ -14,5 +14,6 @@ func bump(i *int) int {
 func main() {
 	i := 0
 	items := []int{10, 20, 30}
-	_ = slices.Contains(items, bump(&i))
+	v := slices.Contains(items, bump(&i))
+	_ = v
 }

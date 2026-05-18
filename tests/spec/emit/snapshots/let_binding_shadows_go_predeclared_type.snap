@@ -10,7 +10,6 @@ import (
 )
 
 func parse(s string) (int, error) {
-	_ = "context"
 	ret_1, ret_2 := strconv.Atoi(s)
 	var result lisette.Result[int, error]
 	if ret_2 != nil {
@@ -19,9 +18,7 @@ func parse(s string) (int, error) {
 		result = lisette.MakeResultOk[int, error](ret_1)
 	}
 	if result.Tag == lisette.ResultOk {
-		n := result.OkVal
-		return n, nil
+		return result.OkVal, nil
 	}
-	e := result.ErrVal
-	return *new(int), e
+	return *new(int), result.ErrVal
 }

@@ -332,6 +332,7 @@ pub struct CaseClause {
 
 /// The direction of a channel type is indicated by a bit
 /// mask including one or both of the following constants.
+#[go(bit_flag_set)]
 pub struct ChanDir(int)
 
 /// A ChanType node represents a channel type.
@@ -638,6 +639,7 @@ pub struct MapType {
 /// 
 /// Deprecated: use the type checker [go/types] instead of [Package];
 /// see [Object].
+#[go(bit_flag_set)]
 pub struct MergeMode(uint)
 
 /// All node types implement the Node interface.

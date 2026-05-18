@@ -1,0 +1,9 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn forbidden() -> Result<int, error> {\n  panic(\"boom\")\n}\n"
+---
+package main
+
+func forbidden() (int, error) {
+	panic("boom")
+}

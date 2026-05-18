@@ -16,14 +16,11 @@ impl Emitter<'_> {
         kind: &StructKind,
         struct_attrs: &[Attribute],
     ) -> String {
-        let generics = self.merge_impl_bounds(name, generics);
-        let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
-        let map_key_generics =
-            Self::collect_map_key_generics(fields.iter().map(|f| &f.ty), &generic_names);
-        let generics_string = self.generics_to_string_with_map_keys(&generics, &map_key_generics);
+        let symbol = self.facts.qualified_current(name);
+        let generics_string = self.generics_to_string_for_symbol(&symbol, generics);
 
         if *kind == StructKind::Tuple {
-            return self.emit_tuple_struct(name, &generics_string, fields, &generics);
+            return self.emit_tuple_struct(name, &generics_string, fields, generics);
         }
 
         let (field_strings, stringer_fields): (Vec<String>, Vec<StringerField>) = fields
@@ -31,7 +28,7 @@ impl Emitter<'_> {
             .map(|f| self.emit_struct_field(f, name, struct_attrs))
             .unzip();
 
-        let receiver_generics = receiver_generics_string(&generics);
+        let receiver_generics = receiver_generics_string(generics);
         let go_type_name = go_name::escape_keyword(name);
 
         let definition = if field_strings.is_empty() {
@@ -53,7 +50,7 @@ impl Emitter<'_> {
                 stringer_name,
             );
             if !stringer_fields.is_empty() {
-                self.ensure_imported.insert("fmt".to_string());
+                self.requirements.require_fmt();
             }
             format!("{definition}\n\n{string_method}")
         } else {
@@ -89,7 +86,7 @@ impl Emitter<'_> {
             return definition;
         }
         if string_method.contains("fmt.") {
-            self.ensure_imported.insert("fmt".to_string());
+            self.requirements.require_fmt();
         }
         format!("{definition}\n\n{string_method}")
     }
@@ -115,8 +112,8 @@ impl Emitter<'_> {
         };
 
         if has_tags && !f.visibility.is_public() {
-            let key = format!("{}.{}.{}", self.current_module, struct_name, f.name);
-            self.module.tag_exported_fields.insert(key);
+            let key = self.facts.qualified_current_member(struct_name, &f.name);
+            self.module.record_tag_exported_field(key);
         }
 
         let field_definition = if let Some(tags) = tag_string {
@@ -238,11 +235,10 @@ impl Emitter<'_> {
     /// impl blocks) become free functions in Go and do not satisfy Go
     /// interfaces, so they do not count.
     pub(super) fn stringer_method_name(&self, name: &str) -> Option<&'static str> {
-        let qualified = format!("{}.{}", self.current_module, name);
+        let qualified = self.facts.qualified_current(name);
         let methods = self
-            .ctx
-            .definitions
-            .get(qualified.as_str())
+            .facts
+            .definition(qualified.as_str())
             .and_then(|def| match &def.body {
                 DefinitionBody::Struct { methods, .. }
                 | DefinitionBody::Enum { methods, .. }
@@ -253,10 +249,7 @@ impl Emitter<'_> {
 
         let is_user_stringer = |method_name: &str| {
             methods.is_some_and(|m| is_stringer_signature(m.get(method_name)))
-                && !self
-                    .ctx
-                    .ufcs_methods
-                    .contains(&(qualified.clone(), method_name.to_string()))
+                && !self.facts.is_ufcs_method(&qualified, method_name)
         };
 
         let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);

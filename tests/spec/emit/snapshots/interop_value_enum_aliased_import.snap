@@ -7,5 +7,6 @@ package main
 import t "time"
 
 func main() {
-	_ = t.Second
+	d := t.Second
+	_ = d
 }

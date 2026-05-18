@@ -9,5 +9,6 @@ import "crypto/sha256"
 func main() {
 	data := []uint8("hello")
 	arr_1 := sha256.Sum256(data)
-	_ = arr_1[:]
+	hash := arr_1[:]
+	_ = hash
 }

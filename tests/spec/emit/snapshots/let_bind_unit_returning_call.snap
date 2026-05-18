@@ -8,5 +8,6 @@ func do_nothing() {}
 
 func test() {
 	do_nothing()
-	_ = struct{}{}
+	r := struct{}{}
+	_ = r
 }

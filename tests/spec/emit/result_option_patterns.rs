@@ -646,6 +646,63 @@ fn test() {
 }
 
 #[test]
+fn fused_result_match_ok_wildcard() {
+    let input = r#"
+import "go:errors"
+
+fn fallible(ok: bool) -> Result<int, error> {
+  if ok { Ok(1) } else { Err(errors.New("nope")) }
+}
+
+fn test() {
+  match fallible(true) {
+    Ok(_) => {},
+    Err(e) => { let _ = e },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_result_match_ok_unused_named_payload() {
+    let input = r#"
+import "go:errors"
+
+fn fallible(ok: bool) -> Result<int, error> {
+  if ok { Ok(1) } else { Err(errors.New("nope")) }
+}
+
+fn test() {
+  match fallible(true) {
+    Ok(x) => {},
+    Err(e) => { let _ = e },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn fused_result_match_err_unused_named_payload() {
+    let input = r#"
+import "go:errors"
+
+fn fallible(ok: bool) -> Result<int, error> {
+  if ok { Ok(1) } else { Err(errors.New("nope")) }
+}
+
+fn test() {
+  match fallible(true) {
+    Ok(x) => { let _ = x },
+    Err(e) => {},
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn while_let_option_function_call() {
     let input = r#"
 import "go:fmt"
@@ -1343,6 +1400,16 @@ fn test() -> Option<int> {
 }
 
 #[test]
+fn tail_panic_in_result_returning_function() {
+    let input = r#"
+fn forbidden() -> Result<int, error> {
+  panic("boom")
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn nested_try_in_if_arm_with_never_tail() {
     let input = r#"
 fn die() -> Never { panic("dead") }
@@ -1356,6 +1423,55 @@ fn test(flag: bool) -> Result<int, string> {
   } else {
     Ok(42)
   }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_direct_err_lowered_result_tuple() {
+    let input = r#"
+import "go:errors"
+
+fn fail() -> Result<int, error> {
+  Err(errors.New("boom"))?
+  Ok(1)
+}
+
+fn main() {
+  let _ = fail()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_direct_none_lowered_option_comma_ok() {
+    let input = r#"
+fn missing() -> Option<int> {
+  None?
+  Some(1)
+}
+
+fn main() {
+  let _ = missing()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_direct_err_lowered_bare_error() {
+    let input = r#"
+import "go:errors"
+
+fn fail_unit() -> Result<(), error> {
+  Err(errors.New("boom"))?
+  Ok(())
+}
+
+fn main() {
+  let _ = fail_unit()
 }
 "#;
     assert_emit_snapshot!(input);

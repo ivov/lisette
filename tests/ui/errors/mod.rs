@@ -660,6 +660,36 @@ fn test() {
 }
 
 #[test]
+fn parse_map_literal_string_keys() {
+    let input = r#"
+fn test() {
+  let m: Map<string, int> = { "a": 1, "b": 2 }
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_map_literal_int_keys() {
+    let input = r#"
+fn test() {
+  let m: Map<int, string> = { 1: "a", 2: "b" }
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_typed_binding_missing_initializer() {
+    let input = r#"
+fn test() {
+  let mut x: atomic.Int64
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_struct_instantiation_missing_comma() {
     let input = r#"
 fn test() {
@@ -1452,6 +1482,30 @@ fn infer_member_not_found_expect_method_on_partial() {
     let input = r#"
 fn test(p: Partial<int, error>) -> int {
   p.expect("must be ok")
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unresolved_receiver_in_lambda_to_unknown_varargs() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Println(|c| c.foo)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_unresolved_receiver_in_lambda_method_call() {
+    let input = r#"
+import "go:fmt"
+
+fn main() {
+  fmt.Println(|c| c.Next())
 }
 "#;
     assert_infer_error_snapshot!(input);
@@ -4042,6 +4096,56 @@ fn walk_dir(root: string, fn: string) {}
 }
 
 #[test]
+fn parse_keyword_as_binding_task() {
+    let input = r#"
+fn main() {
+  let task = || {}
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_keyword_as_binding_select() {
+    let input = r#"
+fn main() {
+  let select = "SELECT * FROM users"
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_keyword_as_binding_match_kw() {
+    let input = r#"
+fn main() {
+  let match = 1
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_keyword_as_binding_recover() {
+    let input = r#"
+fn main() {
+  let recover = 1
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_keyword_as_binding_defer() {
+    let input = r#"
+fn main() {
+  let defer = 1
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_keyword_as_binding_in_for_loop() {
     let input = r#"
 fn main() {
@@ -6060,6 +6164,18 @@ const VALUE = {
 }
 
 #[test]
+fn infer_const_not_screaming_snake_case() {
+    let input = r#"
+const maxRetries = 3
+
+fn main() {
+  let _ = maxRetries
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_const_self_reference_cycle() {
     let input = r#"
 const SELF = SELF
@@ -7119,4 +7235,63 @@ fn main() {
 }
 "#;
     assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn infer_error_type_does_not_cascade_to_unused_value_lint() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Counter { pub n: int }
+
+impl Counter {
+  fn tick(self: Ref<Counter>) { () }
+}
+
+fn make() -> Result<Counter, error> { Ok(Counter { n: 0 }) }
+
+fn main() {
+  let c = make().unwrap()
+  c.tick()
+  ()
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .lints
+            .iter()
+            .any(|l| l.code_str() == Some("lint.unused_value")),
+        "Expected no lint.unused_value on c.tick() after .unwrap() poisoned the receiver type, got: {:?}",
+        result.lints
+    );
+}
+
+#[test]
+fn infer_error_type_does_not_cascade_to_mismatched_return_value() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+struct Counter { pub n: int }
+
+impl Counter {
+  fn tick(self: Ref<Counter>) { () }
+}
+
+fn make() -> Result<Counter, error> { Ok(Counter { n: 0 }) }
+
+fn main() {
+  let c = make().unwrap()
+  c.tick()
+}
+"#;
+    fs.add_file(ENTRY_MODULE_ID, "main.lis", source);
+    let result = compile_check(fs);
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|e| e.code_str() == Some("infer.mismatched_return_value")),
+        "Expected no infer.mismatched_return_value on tail c.tick() after .unwrap() poisoned the receiver type, got: {:?}",
+        result.errors
+    );
 }

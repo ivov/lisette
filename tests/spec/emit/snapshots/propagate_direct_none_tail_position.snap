@@ -11,10 +11,9 @@ func f() (int, bool) {
 	if check_1.Tag != lisette.OptionSome {
 		return *new(int), false
 	}
-	result_2 := check_1.SomeVal
-	v_3 := result_2
-	if v_3.Tag == lisette.OptionSome {
-		return v_3.SomeVal, true
+	v_2 := check_1.SomeVal
+	if v_2.Tag == lisette.OptionSome {
+		return v_2.SomeVal, true
 	}
 	return *new(int), false
 }

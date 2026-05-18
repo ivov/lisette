@@ -9,7 +9,6 @@ use syntax::types::{Type, unqualified_name};
 use crate::Emitter;
 use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
 use crate::names::generics;
-use crate::patterns::decision_tree::{collect_pattern_info, emit_tree_bindings};
 use crate::write_line;
 
 /// Shared access to a named, typed field — implemented for both
@@ -71,31 +70,50 @@ pub(crate) fn emit_pattern_literal(literal: &Literal) -> String {
     }
 }
 
-impl Emitter<'_> {
-    pub(crate) fn emit_pattern_bindings(
-        &mut self,
-        output: &mut String,
-        subject: &str,
-        pattern: &Pattern,
-        typed: Option<&TypedPattern>,
-    ) {
-        let (_, bindings) = collect_pattern_info(self, pattern, typed);
-        emit_tree_bindings(self, output, &bindings, subject);
-    }
-
-    pub(crate) fn fresh_var(&mut self, hint: Option<&str>) -> String {
-        loop {
-            self.scope.next_var += 1;
-            let name = match hint {
-                Some(h) => format!("{}_{}", h, self.scope.next_var),
-                None => format!("tmp_{}", self.scope.next_var),
-            };
-            if !self.scope.bindings.has_go_name(&name) && !self.is_declared(&name) {
-                return name;
-            }
+pub(crate) fn is_catchall_pattern(pattern: &Pattern) -> bool {
+    match pattern {
+        Pattern::WildCard { .. } | Pattern::Identifier { .. } | Pattern::Unit { .. } => true,
+        Pattern::Literal { .. } | Pattern::EnumVariant { .. } => false,
+        Pattern::Struct { fields, rest, .. } => {
+            *rest && fields.iter().all(|f| is_catchall_pattern(&f.value))
         }
+        Pattern::Tuple { elements, .. } => elements.iter().all(is_catchall_pattern),
+        Pattern::Slice { prefix, rest, .. } => prefix.is_empty() && rest.is_present(),
+        Pattern::Or { patterns, .. } => patterns.iter().any(is_catchall_pattern),
+        Pattern::AsBinding { pattern, .. } => is_catchall_pattern(pattern),
     }
+}
 
+/// Like `is_catchall_pattern`, but Or-patterns require EVERY alternative
+/// to be catchall (rather than ANY).
+pub(crate) fn is_unconditional_catchall(pattern: &Pattern) -> bool {
+    match pattern {
+        Pattern::Or { patterns, .. } => patterns.iter().all(is_catchall_pattern),
+        other => is_catchall_pattern(other),
+    }
+}
+
+pub(crate) fn pattern_binds_name(pattern: &Pattern, name: &str) -> bool {
+    match pattern {
+        Pattern::Identifier { identifier, .. } => identifier == name,
+        Pattern::Tuple { elements, .. } => elements.iter().any(|e| pattern_binds_name(e, name)),
+        Pattern::EnumVariant { fields, .. } => fields.iter().any(|f| pattern_binds_name(f, name)),
+        Pattern::Struct { fields, .. } => fields.iter().any(|f| pattern_binds_name(&f.value, name)),
+        Pattern::Slice { prefix, rest, .. } => {
+            prefix.iter().any(|e| pattern_binds_name(e, name))
+                || matches!(rest, RestPattern::Bind { name: n, .. } if n == name)
+        }
+        Pattern::Or { patterns, .. } => patterns.iter().any(|p| pattern_binds_name(p, name)),
+        Pattern::AsBinding {
+            pattern,
+            name: as_name,
+            ..
+        } => as_name == name || pattern_binds_name(pattern, name),
+        Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
+    }
+}
+
+impl Emitter<'_> {
     pub(crate) fn pattern_has_bindings(pattern: &Pattern) -> bool {
         match pattern {
             Pattern::Identifier { .. } => true,
@@ -110,34 +128,6 @@ impl Emitter<'_> {
             }
             Pattern::Or { patterns, .. } => patterns.iter().any(Self::pattern_has_bindings),
             Pattern::AsBinding { .. } => true,
-            Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
-        }
-    }
-
-    pub(crate) fn pattern_binds_name(pattern: &Pattern, name: &str) -> bool {
-        match pattern {
-            Pattern::Identifier { identifier, .. } => identifier == name,
-            Pattern::Tuple { elements, .. } => {
-                elements.iter().any(|e| Self::pattern_binds_name(e, name))
-            }
-            Pattern::EnumVariant { fields, .. } => {
-                fields.iter().any(|f| Self::pattern_binds_name(f, name))
-            }
-            Pattern::Struct { fields, .. } => fields
-                .iter()
-                .any(|f| Self::pattern_binds_name(&f.value, name)),
-            Pattern::Slice { prefix, rest, .. } => {
-                prefix.iter().any(|e| Self::pattern_binds_name(e, name))
-                    || matches!(rest, RestPattern::Bind { name: n, .. } if n == name)
-            }
-            Pattern::Or { patterns, .. } => {
-                patterns.iter().any(|p| Self::pattern_binds_name(p, name))
-            }
-            Pattern::AsBinding {
-                pattern,
-                name: as_name,
-                ..
-            } => as_name == name || Self::pattern_binds_name(pattern, name),
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
         }
     }
@@ -159,7 +149,7 @@ impl Emitter<'_> {
                     .iter()
                     .any(|e| self.pattern_has_binding_collisions(e))
                     || if let RestPattern::Bind { name, .. } = rest {
-                        !self.ctx.unused.is_unused_rest_binding(rest) && self.is_declared(name)
+                        !self.facts.is_unused_rest_binding(rest) && self.is_declared(name)
                     } else {
                         false
                     }
@@ -173,23 +163,9 @@ impl Emitter<'_> {
                 ..
             } => {
                 self.pattern_has_binding_collisions(inner)
-                    || (!self.ctx.unused.is_unused_binding(p) && self.is_declared(name))
+                    || (!self.facts.is_unused_binding(p) && self.is_declared(name))
             }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
-        }
-    }
-
-    pub(crate) fn is_catchall_pattern(pattern: &Pattern) -> bool {
-        match pattern {
-            Pattern::WildCard { .. } | Pattern::Identifier { .. } | Pattern::Unit { .. } => true,
-            Pattern::Literal { .. } | Pattern::EnumVariant { .. } => false,
-            Pattern::Struct { fields, rest, .. } => {
-                *rest && fields.iter().all(|f| Self::is_catchall_pattern(&f.value))
-            }
-            Pattern::Tuple { elements, .. } => elements.iter().all(Self::is_catchall_pattern),
-            Pattern::Slice { prefix, rest, .. } => prefix.is_empty() && rest.is_present(),
-            Pattern::Or { patterns, .. } => patterns.iter().any(Self::is_catchall_pattern),
-            Pattern::AsBinding { pattern, .. } => Self::is_catchall_pattern(pattern),
         }
     }
 
@@ -258,7 +234,7 @@ impl Emitter<'_> {
         resolved: &Type,
     ) {
         let Some(go_name) = self.go_name_for_binding(pattern) else {
-            self.scope.bindings.add(lisette_name, "_");
+            self.scope.bind(lisette_name, "_");
             return;
         };
         self.declare_var_decl(output, lisette_name, go_name, resolved);
@@ -278,7 +254,7 @@ impl Emitter<'_> {
         } else {
             go_name
         };
-        let go_name = self.scope.bindings.add(lisette_name, go_name);
+        let go_name = self.scope.bind(lisette_name, go_name);
         self.declare(&go_name);
         let go_ty = self.go_type_as_string(resolved);
         write_line!(output, "var {} {}", go_name, go_ty);
@@ -331,7 +307,7 @@ impl Emitter<'_> {
                 let Some(Definition {
                     body: DefinitionBody::Struct { generics, .. },
                     ..
-                }) = self.ctx.definitions.get(struct_name.as_str())
+                }) = self.facts.definition(struct_name.as_str())
                 else {
                     return;
                 };
@@ -356,7 +332,7 @@ impl Emitter<'_> {
                 let Some(Definition {
                     body: DefinitionBody::Enum { generics, .. },
                     ..
-                }) = self.ctx.definitions.get(enum_name.as_str())
+                }) = self.facts.definition(enum_name.as_str())
                 else {
                     return;
                 };
@@ -385,7 +361,7 @@ impl Emitter<'_> {
         let Type::Nominal { id, params, .. } = resolved else {
             return;
         };
-        match self.ctx.definitions.get(id.as_str()).map(|d| &d.body) {
+        match self.facts.definition(id.as_str()).map(|d| &d.body) {
             Some(DefinitionBody::Struct {
                 fields: field_defs,
                 generics,
@@ -446,7 +422,7 @@ impl Emitter<'_> {
             let Some(Definition {
                 body: DefinitionBody::Enum { generics, .. },
                 ..
-            }) = self.ctx.definitions.get(enum_name.as_str())
+            }) = self.facts.definition(enum_name.as_str())
             else {
                 return;
             };
@@ -469,7 +445,7 @@ impl Emitter<'_> {
                 variants, generics, ..
             },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return;
         };
@@ -508,7 +484,7 @@ impl Emitter<'_> {
                     ..
                 },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return;
         };

@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·           ╰── not inside a function
  6 │     }
    ╰────
-  help: Use `return` inside a function, or use `Err(...)? ` to exit the `try` block early · code: [infer.try_block_return]
+  help: Use `return` inside a function, or use `Err(...)?` to exit the `try` block early · code: [infer.try_block_return]

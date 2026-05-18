@@ -20,5 +20,6 @@ func apply(f func(string) *flag.Flag, name string) bool {
 }
 
 func main() {
-	_ = apply(flag.Lookup, "verbose")
+	r := apply(flag.Lookup, "verbose")
+	_ = r
 }

@@ -10,7 +10,8 @@ import (
 )
 
 func main() {
-	_ = "hi"
+	x := "hi"
+	_ = x
 	x_1, y := math.Modf(1.25)
 	_ = lisette.MakeTuple2(x_1, y)
 }

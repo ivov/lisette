@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \ntype Table<T> = Map<T, int>\n\ninterface Uses<T> {\n  fn id(self, table: Table<T>) -> Table<T>\n}\n\nfn main() {\n  let _ = 1\n}\n"
+---
+package main
+
+type Table[T comparable] = map[T]int
+
+type Uses[T comparable] interface {
+	id(Table[T]) Table[T]
+}
+
+func main() {}

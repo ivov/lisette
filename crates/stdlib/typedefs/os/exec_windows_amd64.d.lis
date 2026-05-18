@@ -211,37 +211,37 @@ impl ExitError {
 
   /// ExitCode returns the exit code of the exited process, or -1
   /// if the process hasn't exited or was terminated by a signal.
-  fn ExitCode(self) -> int
+  fn ExitCode(self: Ref<ExitError>) -> int
 
   /// Exited reports whether the program has exited.
   /// On Unix systems this reports true if the program exited due to calling exit,
   /// but false if the program terminated due to a signal.
-  fn Exited(self) -> bool
+  fn Exited(self: Ref<ExitError>) -> bool
 
   /// Pid returns the process id of the exited process.
-  fn Pid(self) -> int
+  fn Pid(self: Ref<ExitError>) -> int
 
-  fn String(self) -> string
+  fn String(self: Ref<ExitError>) -> string
 
   /// Success reports whether the program exited successfully,
   /// such as with exit status 0 on Unix.
-  fn Success(self) -> bool
+  fn Success(self: Ref<ExitError>) -> bool
 
   /// Sys returns system-dependent exit information about
   /// the process. Convert it to the appropriate underlying
   /// type, such as [syscall.WaitStatus] on Unix, to access its contents.
-  fn Sys(self) -> Unknown
+  fn Sys(self: Ref<ExitError>) -> Unknown
 
   /// SysUsage returns system-dependent resource usage information about
   /// the exited process. Convert it to the appropriate underlying
   /// type, such as [*syscall.Rusage] on Unix, to access its contents.
   /// (On Unix, *syscall.Rusage matches struct rusage as defined in the
   /// getrusage(2) manual page.)
-  fn SysUsage(self) -> Unknown
+  fn SysUsage(self: Ref<ExitError>) -> Unknown
 
   /// SystemTime returns the system CPU time of the exited process and its children.
-  fn SystemTime(self) -> time.Duration
+  fn SystemTime(self: Ref<ExitError>) -> time.Duration
 
   /// UserTime returns the user CPU time of the exited process and its children.
-  fn UserTime(self) -> time.Duration
+  fn UserTime(self: Ref<ExitError>) -> time.Duration
 }

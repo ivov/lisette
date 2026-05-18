@@ -35,67 +35,85 @@ pub fn build_module_graph(
 ) -> ModuleGraphResult {
     let mut edges: HashMap<ModuleId, HashSet<ModuleId>> = HashMap::default();
     let mut to_visit = vec![entry_module.to_string()];
-    let mut visited = HashSet::default();
+    let mut visited: HashSet<ModuleId> = HashSet::default();
     let mut files: HashMap<ModuleId, Vec<File>> = HashMap::default();
     let mut import_spans: HashMap<ModuleId, Span> = HashMap::default();
     let mut blank_tracker = BlankTracker::default();
 
-    while let Some(module_id) = to_visit.pop() {
-        if visited.contains(&module_id) {
-            continue;
-        }
-        visited.insert(module_id.clone());
-
-        let (imports_with_spans, module_files) = collect_imports(
-            &module_id,
-            store,
-            loader,
-            sink,
-            standalone_mode,
-            locator,
-            &mut blank_tracker,
-        );
-
-        let module_exists = !module_files.is_empty()
-            || store.has(&module_id)
-            || module_id == entry_module
-            || module_id.starts_with("go:"); // go modules are virtual
-
-        if !module_exists {
-            if let Some(span) = import_spans.get(&module_id) {
-                let is_go_stdlib =
-                    stdlib::get_go_stdlib_typedef(&module_id, locator.target()).is_some();
-
-                let src_prefix_hint = module_id
-                    .strip_prefix("src/")
-                    .filter(|stripped| {
-                        loader.is_some_and(|fs| !fs.scan_folder(stripped).is_empty())
-                    })
-                    .map(String::from);
-
-                sink.push(diagnostics::module_graph::module_not_found(
-                    &module_id,
-                    *span,
-                    is_go_stdlib,
-                    standalone_mode,
-                    src_prefix_hint,
-                ));
+    while !to_visit.is_empty() {
+        let drained: Vec<ModuleId> = std::mem::take(&mut to_visit);
+        let mut batch: Vec<ModuleId> = Vec::with_capacity(drained.len());
+        for module_id in drained {
+            if visited.insert(module_id.clone()) {
+                batch.push(module_id);
             }
+        }
+        if batch.is_empty() {
             continue;
         }
 
-        files.insert(module_id.clone(), module_files);
+        batch.sort();
 
-        let imports: HashSet<_> = imports_with_spans.keys().cloned().collect();
+        let mut parsed = batch_parse_modules(&batch, store, loader, sink);
 
-        for (import, span) in imports_with_spans {
-            if !visited.contains(&import) {
-                to_visit.push(import.clone());
+        for module_id in &batch {
+            let module_files = parsed.remove(module_id).unwrap_or_default();
+            let file_imports: Vec<_> = if !module_files.is_empty() {
+                module_files.iter().flat_map(|f| f.imports()).collect()
+            } else if let Some(module) = store.get_module(module_id) {
+                module.all_imports()
+            } else {
+                Vec::new()
+            };
+            let imports_with_spans = process_file_imports(
+                file_imports,
+                sink,
+                standalone_mode,
+                locator,
+                &mut blank_tracker,
+            );
+
+            let module_exists = !module_files.is_empty()
+                || store.has(module_id)
+                || module_id == entry_module
+                || module_id.starts_with("go:");
+
+            if !module_exists {
+                if let Some(span) = import_spans.get(module_id) {
+                    let is_go_stdlib =
+                        stdlib::get_go_stdlib_typedef(module_id, locator.target()).is_some();
+
+                    let src_prefix_hint = module_id
+                        .strip_prefix("src/")
+                        .filter(|stripped| {
+                            loader.is_some_and(|fs| !fs.scan_folder(stripped).is_empty())
+                        })
+                        .map(String::from);
+
+                    sink.push(diagnostics::module_graph::module_not_found(
+                        module_id,
+                        *span,
+                        is_go_stdlib,
+                        standalone_mode,
+                        src_prefix_hint,
+                    ));
+                }
+                continue;
             }
-            import_spans.entry(import).or_insert(span);
-        }
 
-        edges.insert(module_id, imports);
+            files.insert(module_id.clone(), module_files);
+
+            let imports: HashSet<_> = imports_with_spans.keys().cloned().collect();
+
+            for (import, span) in imports_with_spans {
+                if !visited.contains(&import) {
+                    to_visit.push(import.clone());
+                }
+                import_spans.entry(import).or_insert(span);
+            }
+
+            edges.insert(module_id.clone(), imports);
+        }
     }
 
     let (order, cycles) = kahn::topological_sort(&edges);
@@ -136,63 +154,85 @@ impl BlankTracker {
     }
 }
 
-fn parse_module_files(
-    module_id: &ModuleId,
-    store: &mut Store,
-    loader: Option<&dyn Loader>,
-    sink: &LocalSink,
-) -> Vec<File> {
-    let Some(fs) = loader else {
-        return vec![];
-    };
-    let mut files = Vec::new();
-    for (filename, source) in fs.scan_folder(module_id) {
-        if filename.ends_with("_test.lis") {
-            sink.push(diagnostics::module_graph::test_file_not_supported(
-                &filename,
-            ));
-            continue;
-        }
-        // Ensure the module exists in the store before adding the first file
-        if files.is_empty() {
-            store.add_module(module_id);
-        }
-        let file_id = store.new_file_id();
-        let result = syntax::build_ast(&source, file_id);
-        sink.extend_parse_errors(result.errors);
-        let file = File::new(module_id, &filename, &source, result.ast, file_id);
-        // Register the file immediately so diagnostic rendering works
-        store.store_file(module_id, file.clone());
-        files.push(file);
-    }
-    files
+struct ParseJob {
+    module_id: ModuleId,
+    file_id: u32,
+    filename: String,
+    source: String,
 }
 
-fn collect_imports(
-    module_id: &ModuleId,
-    store: &mut Store,
+fn batch_parse_modules(
+    modules: &[ModuleId],
+    store: &Store,
     loader: Option<&dyn Loader>,
+    sink: &LocalSink,
+) -> HashMap<ModuleId, Vec<File>> {
+    let Some(fs) = loader else {
+        return HashMap::default();
+    };
+
+    let mut jobs: Vec<ParseJob> = Vec::new();
+    for module_id in modules {
+        if store.has(module_id) {
+            continue;
+        }
+        let mut entries: Vec<(String, String)> = fs.scan_folder(module_id).into_iter().collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        for (filename, source) in entries {
+            if filename.ends_with("_test.lis") {
+                sink.push(diagnostics::module_graph::test_file_not_supported(
+                    &filename,
+                ));
+                continue;
+            }
+            let file_id = store.new_file_id();
+            jobs.push(ParseJob {
+                module_id: module_id.clone(),
+                file_id,
+                filename,
+                source,
+            });
+        }
+    }
+
+    const PARALLEL_THRESHOLD: usize = 4;
+    let parsed: Vec<(ModuleId, File, Vec<syntax::ParseError>)> = if jobs.len() < PARALLEL_THRESHOLD
+    {
+        jobs.into_iter().map(parse_one).collect()
+    } else {
+        use rayon::prelude::*;
+        jobs.into_par_iter().map(parse_one).collect()
+    };
+
+    let mut grouped: HashMap<ModuleId, Vec<File>> = HashMap::default();
+    for (module_id, file, errors) in parsed {
+        sink.extend_parse_errors(errors);
+        grouped.entry(module_id).or_default().push(file);
+    }
+    grouped
+}
+
+fn parse_one(job: ParseJob) -> (ModuleId, File, Vec<syntax::ParseError>) {
+    let result = syntax::build_ast(&job.source, job.file_id);
+    let file = File::new(
+        &job.module_id,
+        &job.filename,
+        &job.source,
+        result.ast,
+        job.file_id,
+    );
+    (job.module_id, file, result.errors)
+}
+
+fn process_file_imports(
+    file_imports: Vec<syntax::program::FileImport>,
     sink: &LocalSink,
     standalone_mode: bool,
     locator: &TypedefLocator,
     blank_tracker: &mut BlankTracker,
-) -> (HashMap<ModuleId, Span>, Vec<File>) {
+) -> HashMap<ModuleId, Span> {
     let mut imports = HashMap::default();
     let mut seen_go_imports: HashMap<String, SeenLookup> = HashMap::default();
-
-    let (files, file_imports): (Vec<File>, Vec<_>) =
-        if let Some(module) = store.get_module(module_id) {
-            // Module already in store (entry module or prelude): get imports from stored files
-            let lis_imports = module.files.values().flat_map(|f| f.imports());
-            let typedef_imports = module.all_typedefs().flat_map(|f| f.imports());
-            let all_imports: Vec<_> = lis_imports.chain(typedef_imports).collect();
-            (vec![], all_imports)
-        } else {
-            // Module not in store: parse from filesystem
-            let parsed = parse_module_files(module_id, store, loader, sink);
-            let file_imports = parsed.iter().flat_map(|f| f.imports()).collect();
-            (parsed, file_imports)
-        };
 
     for file_import in file_imports {
         if file_import.name == "prelude" {
@@ -273,18 +313,31 @@ fn collect_imports(
             continue;
         }
 
-        if file_import.name.contains('.') {
-            if locator.is_declared_go_dep(&file_import.name) {
-                sink.push(diagnostics::module_graph::missing_go_prefix(
-                    &file_import.name,
-                    file_import.name_span,
-                ));
-            } else {
-                sink.push(diagnostics::module_graph::invalid_module_path(
-                    &file_import.name,
-                    file_import.name_span,
-                ));
-            }
+        let blank_span = match &file_import.alias {
+            Some(ImportAlias::Blank(span)) => Some(*span),
+            _ => None,
+        };
+        let is_dotted = file_import.name.contains('.');
+
+        if is_dotted && locator.is_declared_go_dep(&file_import.name) {
+            sink.push(diagnostics::module_graph::missing_go_prefix(
+                &file_import.name,
+                file_import.name_span,
+                blank_span.is_some(),
+            ));
+            continue;
+        }
+
+        if is_dotted {
+            sink.push(diagnostics::module_graph::invalid_module_path(
+                &file_import.name,
+                file_import.name_span,
+            ));
+        }
+        if let Some(span) = blank_span {
+            sink.push(diagnostics::infer::blank_import_non_go(span));
+        }
+        if is_dotted || blank_span.is_some() {
             continue;
         }
 
@@ -293,5 +346,5 @@ fn collect_imports(
             .or_insert(file_import.name_span);
     }
 
-    (imports, files)
+    imports
 }

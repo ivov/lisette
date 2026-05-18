@@ -5,6 +5,5 @@ description: "input: \nfn test() -> () {\n  let x = 42;\n  return ()\n}\n"
 package main
 
 func test() {
-	_ = 42
 	return
 }

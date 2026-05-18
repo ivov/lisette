@@ -31,11 +31,9 @@ func main() {
 	}()
 	result = tryResult_2
 	if result.Tag == lisette.ResultOk {
-		v := result.OkVal
-		fmt.Println(v)
+		fmt.Println(result.OkVal)
 	} else {
-		e := result.ErrVal
-		fmt.Println(e)
+		fmt.Println(result.ErrVal)
 	}
 	fmt.Println(x_1)
 }

@@ -308,7 +308,7 @@ impl TaskState<'_> {
             .map(|s| self.convert_to_type(&*store, &s.annotation, &s.span))
             .collect();
 
-        let mut method_defs: Vec<(EcoString, Type, Vec<String>)> = Vec::new();
+        let mut method_defs: Vec<(EcoString, Type, Vec<String>, Vec<String>)> = Vec::new();
         let methods = fn_expressions
             .iter()
             .map(|fe| {
@@ -358,6 +358,7 @@ impl TaskState<'_> {
                     method_sig.name.clone(),
                     fn_ty.clone(),
                     extract_attribute_flags(fn_attrs, "go"),
+                    extract_attribute_flags(fn_attrs, "allow"),
                 ));
                 (method_sig.name, fn_ty)
             })
@@ -405,7 +406,7 @@ impl TaskState<'_> {
         // can look up their go_hints (e.g., comma_ok) by qualified name.
         // Methods inherit the interface's visibility — a `pub interface`'s methods are implicitly public.
         let module_id = self.cursor.module_id.clone();
-        for (method_name, method_ty, go_hints) in method_defs {
+        for (method_name, method_ty, go_hints, allowed_lints) in method_defs {
             let method_qualified_name = format!("{}.{}.{}", module_id, interface_name, method_name);
             module.definitions.insert(
                 method_qualified_name.into(),
@@ -416,7 +417,7 @@ impl TaskState<'_> {
                     name_span: None, // Interface method signatures; span tracked in Interface definition
                     doc: None,
                     body: DefinitionBody::Value {
-                        allowed_lints: vec![],
+                        allowed_lints,
                         go_hints,
                         go_name: None,
                     },

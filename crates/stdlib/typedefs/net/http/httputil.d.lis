@@ -105,7 +105,7 @@ pub fn NewSingleHostReverseProxy(target: Ref<url.URL>) -> Ref<ReverseProxy>
 /// byte slices for use by [io.CopyBuffer].
 pub interface BufferPool {
   fn Get() -> Slice<byte>
-  fn Put(arg0: Slice<byte>)
+  fn Put(b: Slice<byte>)
 }
 
 /// ClientConn is an artifact of Go's early HTTP implementation.

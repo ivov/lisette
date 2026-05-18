@@ -11,5 +11,5 @@ source: tests/ui/errors/mod.rs
     ╰────
   help: Incompatible methods:
           From `Writer`
-            - write: found `fn (string) -> string`, expected `fn (string) -> int`
+            - write: expected `fn (string) -> int`, found `fn (string) -> string`
         code: [infer.interface_not_implemented]

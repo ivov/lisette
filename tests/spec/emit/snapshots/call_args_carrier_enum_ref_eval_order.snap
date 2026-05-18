@@ -47,5 +47,6 @@ func main() {
 		Tag: CarrierC,
 		P:   &i,
 	}
-	_ = first(m[i][0], []int{bump(c)}[0])
+	x := first(m[i][0], []int{bump(c)}[0])
+	_ = x
 }

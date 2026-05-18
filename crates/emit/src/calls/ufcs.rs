@@ -1,11 +1,11 @@
-use crate::write_line;
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
+use crate::expressions::emission::EmittedExpression;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
-use crate::utils::Staged;
 use syntax::ast::{Annotation, Expression, Literal};
 use syntax::program::ReceiverCoercion;
 use syntax::types::Type;
@@ -19,7 +19,7 @@ impl Emitter<'_> {
         receiver_ty: &Type,
     ) -> Option<String> {
         let method_key = format!("{}.{}", qualified_name, member);
-        let definition_ty = self.ctx.definitions.get(method_key.as_str())?.ty().clone();
+        let definition_ty = self.facts.definition(method_key.as_str())?.ty().clone();
 
         let Type::Forall { vars, body } = &definition_ty else {
             return None;
@@ -96,19 +96,48 @@ impl Emitter<'_> {
             unreachable!("UFCS receiver must be a constructor type");
         };
 
-        let coercion = *coercion;
+        let (receiver_arg, emitted_args) =
+            self.stage_ufcs_call_args(output, function, receiver, args, spread);
+        let receiver_arg = self.apply_receiver_coercion(output, receiver, receiver_arg, *coercion);
 
-        // The DotAccess function type curries `self` out, so its params
-        // line up 1:1 with the user args. Pair each so a function-typed
-        // param suppresses the Go-fn-value identity short-circuit before
-        // dispatch into prelude helpers like `lisette.OptionAndThen`.
+        if let Some(inlined) =
+            self.try_inline_native_ufcs(receiver, member, &receiver_arg, &emitted_args)
+        {
+            return inlined;
+        }
+
+        let mut new_args = vec![receiver_arg];
+        new_args.extend(emitted_args);
+
+        let fn_name = self.build_ufcs_qualified_call(
+            function,
+            type_args,
+            &receiver_ty,
+            qualified_name,
+            member,
+        );
+        format!("{}({})", fn_name, new_args.join(", "))
+    }
+
+    fn stage_ufcs_call_args(
+        &mut self,
+        output: &mut String,
+        function: &Expression,
+        receiver: &Expression,
+        args: &[Expression],
+        spread: Option<&Expression>,
+    ) -> (String, Vec<String>) {
+        // The DotAccess function type curries `self` out, so its params line
+        // up 1:1 with the user args. Pair each so a function-typed param
+        // suppresses the Go-fn-value identity short-circuit before dispatch
+        // into prelude helpers like `lisette.OptionAndThen`.
         let formal_params: Vec<Type> = match function.get_type().unwrap_forall() {
             Type::Function { params, .. } => params.clone(),
             _ => Vec::new(),
         };
-        let mut all_stages: Vec<Staged> =
+        let mut all_stages: Vec<EmittedExpression> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
-        all_stages.push(self.stage_operand(receiver));
+        all_stages.push(self.stage_operand(receiver, ExpressionContext::value()));
         for (i, arg) in args.iter().enumerate() {
             all_stages.push(self.stage_prelude_arg(arg, formal_params.get(i)));
         }
@@ -117,13 +146,47 @@ impl Emitter<'_> {
             self.sequence_with_spread(output, all_stages, spread, false, "_arg", combine);
         let receiver_arg = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
+        (receiver_arg, emitted_args)
+    }
 
-        let receiver_arg = match coercion {
+    fn build_ufcs_qualified_call(
+        &mut self,
+        function: &Expression,
+        type_args: &[Annotation],
+        receiver_ty: &Type,
+        qualified_name: &str,
+        member: &str,
+    ) -> String {
+        let type_args_string = if !type_args.is_empty() {
+            self.format_type_args_with_receiver(receiver_ty, type_args)
+        } else {
+            self.infer_ufcs_return_only_type_args(function, qualified_name, member, receiver_ty)
+                .unwrap_or_default()
+        };
+
+        let method_key = format!("{}.{}", qualified_name, member);
+        let is_public = self
+            .facts
+            .definition(method_key.as_str())
+            .map(|d| d.visibility().is_public())
+            .unwrap_or(false)
+            || self.method_needs_export(member);
+
+        let qualified_method_name = self.qualify_method_call(qualified_name, member, is_public);
+        format!("{}{}", qualified_method_name, type_args_string)
+    }
+
+    fn apply_receiver_coercion(
+        &mut self,
+        output: &mut String,
+        receiver: &Expression,
+        receiver_arg: String,
+        coercion: Option<ReceiverCoercion>,
+    ) -> String {
+        match coercion {
             Some(ReceiverCoercion::AutoAddress) => {
                 if matches!(receiver.unwrap_parens(), Expression::Call { .. }) {
-                    let tmp = self.fresh_var(Some("ref"));
-                    self.declare(&tmp);
-                    write_line!(output, "{} := {}", tmp, receiver_arg);
+                    let tmp = self.hoist_tmp_value(output, "ref", &receiver_arg);
                     format!("&{}", tmp)
                 } else {
                     format!("&{}", receiver_arg)
@@ -131,43 +194,26 @@ impl Emitter<'_> {
             }
             Some(ReceiverCoercion::AutoDeref) => format!("*{}", receiver_arg),
             None => receiver_arg,
-        };
-
-        if let Some(native_type) = NativeGoType::from_type(&receiver.get_type())
-            && let Some((inlined, extra_import)) = super::native::try_inline_native_method(
-                &native_type,
-                member,
-                &receiver_arg,
-                &emitted_args,
-            )
-        {
-            self.apply_inline_import(extra_import);
-            return inlined;
         }
+    }
 
-        let mut new_args = vec![receiver_arg];
-        new_args.extend(emitted_args);
-
-        let type_args_string = if !type_args.is_empty() {
-            self.format_type_args_with_receiver(&receiver_ty, type_args)
-        } else {
-            self.infer_ufcs_return_only_type_args(function, qualified_name, member, &receiver_ty)
-                .unwrap_or_default()
-        };
-
-        let method_key = format!("{}.{}", qualified_name, member);
-        let is_public = self
-            .ctx
-            .definitions
-            .get(method_key.as_str())
-            .map(|d| d.visibility().is_public())
-            .unwrap_or(false)
-            || self.method_needs_export(member);
-
-        let qualified_method_name = self.qualify_method_call(qualified_name, member, is_public);
-        let fn_name = format!("{}{}", qualified_method_name, type_args_string);
-
-        format!("{}({})", fn_name, new_args.join(", "))
+    fn try_inline_native_ufcs(
+        &mut self,
+        receiver: &Expression,
+        member: &str,
+        receiver_arg: &str,
+        emitted_args: &[String],
+    ) -> Option<String> {
+        let native_type = NativeGoType::from_type(&receiver.get_type())?;
+        let (inlined, extra_import) = super::native::try_inline_native_method(
+            &native_type,
+            member,
+            receiver_arg,
+            emitted_args,
+            false,
+        )?;
+        self.apply_inline_import(extra_import);
+        Some(inlined)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -187,7 +233,10 @@ impl Emitter<'_> {
             go_name::escape_keyword(method).into_owned()
         };
 
-        let stages: Vec<Staged> = args.iter().map(|a| self.stage_composite(a)).collect();
+        let stages: Vec<EmittedExpression> = args
+            .iter()
+            .map(|a| self.stage_composite(a, ExpressionContext::value()))
+            .collect();
 
         let combine = Self::variadic_combine_for(function, spread, 0);
         let emitted_all = self.sequence_with_spread(output, stages, spread, false, "_arg", combine);

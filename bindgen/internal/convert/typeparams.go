@@ -91,6 +91,16 @@ func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, o
 		return "Comparable", true
 	}
 
+	// Comparable type-set unions with no methods (e.g. math/rand/v2.intType =
+	// `~int | ~int8 | ...`). Loses term precision; Go enforces the original
+	// constraint on the generated call.
+	if iface.NumMethods() == 0 && iface.NumEmbeddeds() > 0 && iface.IsComparable() {
+		if allOrderedBasicTerms(iface) {
+			return "Ordered", true
+		}
+		return "Comparable", true
+	}
+
 	// Excludes inline interface literals (bare *types.Interface, never Named
 	// or Alias) and type-set unions (NumEmbeddeds > 0 from embedded *types.Union).
 	if iface.NumMethods() > 0 && iface.NumEmbeddeds() == 0 {
@@ -103,6 +113,36 @@ func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, o
 	}
 
 	return "", false
+}
+
+func allOrderedBasicTerms(iface *types.Interface) bool {
+	for etyp := range iface.EmbeddedTypes() {
+		union, ok := etyp.(*types.Union)
+		if !ok {
+			return false
+		}
+		for term := range union.Terms() {
+			basic, ok := term.Type().Underlying().(*types.Basic)
+			if !ok {
+				return false
+			}
+			if !isOrderedBasicKind(basic.Kind()) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func isOrderedBasicKind(kind types.BasicKind) bool {
+	switch kind {
+	case types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
+		types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64, types.Uintptr,
+		types.Float32, types.Float64,
+		types.String:
+		return true
+	}
+	return false
 }
 
 // Renders a Named or Alias bound by its TypeName, qualifying with the package

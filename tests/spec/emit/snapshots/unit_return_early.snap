@@ -8,5 +8,4 @@ func test(flag bool) {
 	if flag {
 		return
 	}
-	_ = 10
 }

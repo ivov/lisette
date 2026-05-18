@@ -91,6 +91,7 @@ pub struct EmitInput {
     pub cached_modules: HashSet<String>,
     pub ufcs_methods: HashSet<(String, String)>,
     pub go_package_names: HashMap<String, String>,
+    pub go_module_ids: HashSet<String>,
 }
 
 #[cfg(test)]

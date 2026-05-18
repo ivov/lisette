@@ -242,6 +242,36 @@ pub fn Ints(mut x: Slice<int>)
 
 📚 See [`05-functions.md`](../reference/05-functions.md#mutable-parameters)
 
+## Typed `nil` at the boundary
+
+Go interfaces have three states, not two:
+
+```go
+var h1 http.Handler                 // untyped nil
+var p *MyHandler = nil
+var h2 http.Handler = p             // typed nil
+var h3 http.Handler = &MyHandler{}  // populated
+```
+
+A literal encoding would distinguish all three with `Option<Option<T>>`:
+
+```rs
+match handler {
+  None => fmt.Println("untyped nil"),
+  Some(None) => fmt.Println("typed nil"),
+  Some(Some(h)) => h.ServeHTTP(w, r),
+}
+```
+
+Lisette collapses both typed `nil` and untyped `nil` into `None`, because the distinction rarely matters in practice. For both `nil` flavors, method calls that touch the receiver panic, and there is no value to extract. A method that never reads through its receiver works on a typed `nil`, but this Go pattern is discouraged, so Lisette converts it to `None` at the boundary.
+
+```rs
+match FindHandler("api") {
+  Some(h) => h.ServeHTTP(w, r),
+  None => fmt.Println("no handler"),
+}
+```
+
 ## Panic recovery
 
 To catch panics at runtime, Go uses `recover` in a deferred anonymous function:

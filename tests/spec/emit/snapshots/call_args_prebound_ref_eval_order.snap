@@ -17,5 +17,6 @@ func main() {
 	i := 0
 	m := [][]int{[]int{10}, []int{20}}
 	ip := &i
-	_ = first(m[i][0], []int{bump(ip)}[0])
+	x := first(m[i][0], []int{bump(ip)}[0])
+	_ = x
 }

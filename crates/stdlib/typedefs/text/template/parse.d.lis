@@ -190,6 +190,7 @@ pub struct ListNode {
 }
 
 /// A mode value is a set of flags (or 0). Modes control parser behavior.
+#[go(bit_flag_set)]
 pub struct Mode(uint)
 
 /// NilNode holds the special identifier 'nil' representing an untyped nil constant.

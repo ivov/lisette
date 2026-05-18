@@ -49,13 +49,10 @@ func (s Shape) String() string {
 func shape_size(s Shape) int {
 	switch s.Tag {
 	case ShapeCircle:
-		r := s.Circle
-		return r
+		return s.Circle
 	case ShapeSquare:
-		r := s.Square
-		return r
+		return s.Square
 	default:
-		r := s.Triangle
-		return r
+		return s.Triangle
 	}
 }

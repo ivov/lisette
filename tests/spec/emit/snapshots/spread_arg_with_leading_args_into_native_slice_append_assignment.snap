@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/functions.rs
-assertion_line: 1557
 description: "input: \nfn test(mut s: Slice<int>, extra: int, more: Slice<int>) -> Slice<int> {\n  s = s.append(extra, more...)\n  s\n}\n"
 ---
 package main

@@ -5,11 +5,14 @@ description: "input: \nfn test() -> int {\n  let x = loop {\n    loop { break 42
 package main
 
 func test() int {
+	var x int
 	for {
 		for {
 			_ = 42
 			break
 		}
-		return 0
+		x = 0
+		break
 	}
+	return x
 }

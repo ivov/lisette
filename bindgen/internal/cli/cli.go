@@ -156,7 +156,9 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 		results = append(results, converter.Convert(exp))
 	}
 
-	valueEnums, constantTypes, valueEnumTypeNames := convert.DetectValueEnums(results, exports)
+	converter.FinalizeInterfaceBuilders(results)
+
+	valueEnums, constantTypes, valueEnumTypeNames, bitFlagSetTypeNames := convert.DetectValueEnums(results, exports, cfg, pkg.PkgPath)
 
 	enumConstants := make(map[string][]convert.ConvertResult)
 	for i, result := range results {
@@ -165,7 +167,7 @@ func generateFromPackage(pkg *packages.Package, displayPath, lisetteVersion, goV
 		}
 	}
 
-	emitter := emit.NewEmitter(cfg, pkg.PkgPath)
+	emitter := emit.NewEmitter(cfg, pkg.PkgPath, bitFlagSetTypeNames)
 	emitter.EmitHeader(displayPath, pkg.Name, lisetteVersion, goVersion)
 
 	emitter.EmitImports(converter.ExternalPkgs())

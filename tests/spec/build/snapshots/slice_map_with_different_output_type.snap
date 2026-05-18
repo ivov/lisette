@@ -12,7 +12,7 @@ import (
 func main() {
 	nums := []int{1, 2, 3}
 	strs := lisette.SliceMap[int, string](nums, func(x int) string {
-		return fmt.Sprintf("n=%v", x)
+		return fmt.Sprintf("n=%d", x)
 	})
 	for _, s := range strs {
 		fmt.Println(s)

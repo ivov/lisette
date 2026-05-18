@@ -6,9 +6,7 @@ package main
 
 func sum_pair(pair []int) int {
 	if len(pair) == 2 {
-		a := pair[0]
-		b := pair[1]
-		return a + b
+		return pair[0] + pair[1]
 	}
 	return 0
 }

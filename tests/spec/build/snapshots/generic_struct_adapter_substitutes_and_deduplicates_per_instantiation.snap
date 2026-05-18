@@ -1,0 +1,60 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+type Entry[T any] struct {
+	value T
+}
+
+func (e Entry[T]) String() string {
+	return fmt.Sprintf("Entry { value: %v }", e.value)
+}
+
+type Cache[T any] interface {
+	Get(string) (*Entry[T], bool)
+}
+
+type MyCache[T any] struct {
+	entry Entry[T]
+}
+
+func (m MyCache[T]) String() string {
+	return fmt.Sprintf("MyCache { entry: %v }", m.entry)
+}
+
+func (m MyCache[T]) Get(_ string) *Entry[T] {
+	return nil
+}
+
+func use_int(_ Cache[int]) {}
+
+func use_string(_ Cache[string]) {}
+
+func main() {
+	ci := MyCache[int]{entry: Entry[int]{value: 1}}
+	cs := MyCache[string]{entry: Entry[string]{value: "x"}}
+	use_int(_lisAdapter_MyCache_Cache_0{inner: ci})
+	use_string(_lisAdapter_MyCache_Cache_1{inner: cs})
+}
+
+type _lisAdapter_MyCache_Cache_0 struct {
+	inner MyCache[int]
+}
+
+func (a _lisAdapter_MyCache_Cache_0) Get(arg0 string) (*Entry[int], bool) {
+	val_1 := a.inner.Get(arg0)
+	return val_1, val_1 != nil
+}
+
+type _lisAdapter_MyCache_Cache_1 struct {
+	inner MyCache[string]
+}
+
+func (a _lisAdapter_MyCache_Cache_1) Get(arg0 string) (*Entry[string], bool) {
+	val_2 := a.inner.Get(arg0)
+	return val_2, val_2 != nil
+}

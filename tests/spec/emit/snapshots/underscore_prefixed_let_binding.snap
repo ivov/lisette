@@ -7,6 +7,7 @@ package main
 import "fmt"
 
 func test() {
-	_ = "hello, world"
+	s := "hello, world"
+	_ = s
 	fmt.Print("Done\n")
 }

@@ -22,7 +22,7 @@ impl Emitter<'_> {
             receiver_name,
             ty,
             generics,
-            qualified_type: format!("{}.{}", self.current_module, receiver_name),
+            qualified_type: self.facts.qualified_current(receiver_name),
         };
 
         methods
@@ -45,7 +45,7 @@ impl Emitter<'_> {
         else {
             return None;
         };
-        if self.ctx.unused.is_unused_definition(name_span) {
+        if self.facts.is_unused_definition(name_span) {
             return None;
         }
 
@@ -58,9 +58,8 @@ impl Emitter<'_> {
             matches!(p.pattern, Pattern::Identifier { ref identifier, .. } if identifier == "self")
         });
         let is_ufcs = self
-            .ctx
-            .ufcs_methods
-            .contains(&(ctx.qualified_type.clone(), function.name.to_string()));
+            .facts
+            .is_ufcs_method(&ctx.qualified_type, &function.name);
         let should_export = is_public || self.method_needs_export(&function.name);
         let is_free_function = !has_self || is_ufcs;
 

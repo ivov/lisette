@@ -9,6 +9,6 @@ import "fmt"
 func test() {
 	go func() {
 		x := 42
-		fmt.Printf("Got %v", x)
+		fmt.Printf("Got %d", x)
 	}()
 }

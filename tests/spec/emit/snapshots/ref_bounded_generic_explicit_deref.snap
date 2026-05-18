@@ -19,7 +19,7 @@ func (p Person) String() string {
 }
 
 func (p Person) greet() string {
-	return fmt.Sprintf("Hello, %v", p.name)
+	return fmt.Sprintf("Hello, %s", p.name)
 }
 
 func greet_ref[T Greetable](item T) string {

@@ -8,5 +8,6 @@ func noop() {}
 
 func main() {
 	(noop())
-	_ = struct{}{}
+	x := struct{}{}
+	_ = x
 }

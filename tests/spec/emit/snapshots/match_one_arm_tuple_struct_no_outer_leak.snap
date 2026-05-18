@@ -24,9 +24,7 @@ func test() int {
 	}
 	var sum int
 	{
-		a_1 := p.F0
-		b_2 := p.F1
-		sum = a_1 + b_2
+		sum = p.F0 + p.F1
 	}
 	return a + b + sum
 }

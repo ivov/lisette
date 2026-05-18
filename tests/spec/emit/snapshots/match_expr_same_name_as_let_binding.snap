@@ -7,8 +7,11 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func extract(opt lisette.Option[int]) int {
+	var x_1 int
 	if opt.Tag == lisette.OptionSome {
-		return opt.SomeVal
+		x_1 = opt.SomeVal
+	} else {
+		x_1 = 0
 	}
-	return 0
+	return x_1
 }

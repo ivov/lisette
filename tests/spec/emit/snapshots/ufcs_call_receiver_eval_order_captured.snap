@@ -29,5 +29,6 @@ func sum(a, b int) int {
 
 func main() {
 	c := Counter{n: 0}
-	_ = sum(c.get(), bump_and_get(&c))
+	v := sum(c.get(), bump_and_get(&c))
+	_ = v
 }

@@ -18,8 +18,7 @@ impl Emitter<'_> {
                     for method in method_signatures {
                         let func = method.to_function_definition();
                         self.module
-                            .exported_method_names
-                            .insert(func.name.to_string());
+                            .record_exported_method_name(func.name.to_string());
                     }
                 }
 
@@ -31,7 +30,7 @@ impl Emitter<'_> {
                             ..
                         } = method
                         {
-                            self.module.exported_method_names.insert(name.to_string());
+                            self.module.record_exported_method_name(name.to_string());
                         }
                     }
                 }
@@ -79,54 +78,25 @@ impl Emitter<'_> {
                 .find(|c| !taken.contains(c))
                 .expect("freshening counter is unbounded");
             taken.insert(fresh.clone());
-            self.module.escape_remap.insert((*name).to_string(), fresh);
+            self.module.record_escape_remap((*name).to_string(), fresh);
         }
     }
 
     pub(crate) fn collect_module_aliases(&mut self, files: &[&File]) {
         for file in files {
             for import in file.imports() {
-                let Some(alias) = import.effective_alias(self.ctx.go_package_names) else {
+                let Some(alias) = import.effective_alias(self.facts.go_package_names()) else {
                     continue;
                 };
                 self.module
-                    .reverse_module_aliases
-                    .insert(alias.clone(), import.name.to_string());
-                self.module
-                    .module_aliases
-                    .insert(import.name.to_string(), alias);
-            }
-        }
-    }
-
-    pub(crate) fn collect_impl_bounds(&mut self, files: &[&File]) {
-        use syntax::ast::Expression;
-
-        for file in files {
-            for item in &file.items {
-                let Expression::ImplBlock {
-                    receiver_name,
-                    generics,
-                    ..
-                } = item
-                else {
-                    continue;
-                };
-                if !generics.iter().any(|g| !g.bounds.is_empty()) {
-                    self.module
-                        .unconstrained_impl_receivers
-                        .insert(receiver_name.to_string());
-                    continue;
-                }
-                self.record_bound_imports(generics);
-                self.extend_impl_bounds(receiver_name, generics);
+                    .record_module_alias(import.name.to_string(), alias);
             }
         }
     }
 
     /// Register cross-module imports for any bound types referenced in these generics.
     /// In-module, Go-imported, and prelude modules don't need explicit imports.
-    fn record_bound_imports(&mut self, generics: &[syntax::ast::Generic]) {
+    pub(crate) fn record_bound_imports(&mut self, generics: &[syntax::ast::Generic]) {
         for generic in generics {
             for bound in &generic.bounds {
                 let syntax::ast::Annotation::Constructor { name, .. } = bound else {
@@ -135,51 +105,29 @@ impl Emitter<'_> {
                 let Some((module, _)) = name.split_once('.') else {
                     continue;
                 };
-                if module == self.current_module
+                if self.facts.is_current_module(module)
                     || go_name::is_go_import(module)
                     || module == go_name::PRELUDE_MODULE
                 {
                     continue;
                 }
-                let canonical = self.resolve_alias_to_module(module).to_string();
+                let canonical = self
+                    .module
+                    .module_for_alias(module)
+                    .unwrap_or(module)
+                    .to_string();
                 self.require_module_import(&canonical);
             }
         }
     }
 
-    /// Merge new generic bounds into an existing impl_bounds entry, or insert fresh.
-    /// Go requires type parameter constraints on the type definition itself, so
-    /// multiple impl blocks with the same receiver must contribute their bounds.
-    fn extend_impl_bounds(&mut self, receiver_name: &str, generics: &[syntax::ast::Generic]) {
-        let Some(existing_generics) = self.module.impl_bounds.get_mut(receiver_name) else {
-            self.module
-                .impl_bounds
-                .insert(receiver_name.to_string(), generics.to_vec());
-            return;
-        };
-        for new_gen in generics {
-            let Some(existing_gen) = existing_generics
-                .iter_mut()
-                .find(|g| g.name == new_gen.name)
-            else {
-                continue;
-            };
-            for bound in &new_gen.bounds {
-                if !existing_gen.bounds.contains(bound) {
-                    existing_gen.bounds.push(bound.clone());
-                }
-            }
-        }
-    }
-
     pub(crate) fn collect_local_make_function_code(&mut self) -> HashMap<u32, Vec<String>> {
-        let module_prefix = format!("{}.", self.current_module);
+        let module_prefix = format!("{}.", self.facts.current_module());
         let mut code: HashMap<u32, Vec<String>> = HashMap::default();
 
         let local_enums: Vec<_> = self
-            .ctx
-            .definitions
-            .iter()
+            .facts
+            .iter_definitions()
             .filter_map(|(key, definition)| {
                 let syntax::program::Definition {
                     name: Some(name),

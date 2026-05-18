@@ -35,6 +35,7 @@ impl StructFieldId {
 #[derive(Debug, Clone)]
 pub struct StructFieldInfo {
     pub span: Span,
+    pub is_public: bool,
     pub parent_is_public: bool,
     pub parent_has_serialization_attr: bool,
     pub has_tag_attribute: bool,
@@ -161,7 +162,8 @@ impl ReferenceGraph {
         self.struct_fields
             .iter()
             .filter(|(id, info)| {
-                !info.parent_is_public
+                !info.is_public
+                    && !info.parent_is_public
                     && !info.parent_has_serialization_attr
                     && !info.has_tag_attribute
                     && !self.used_struct_fields.contains(*id)

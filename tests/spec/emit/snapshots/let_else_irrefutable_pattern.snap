@@ -7,6 +7,7 @@ package main
 import lisette "github.com/ivov/lisette/prelude"
 
 func test(opt lisette.Option[int]) int {
-	_ = opt
+	x := opt
+	_ = x
 	return 42
 }

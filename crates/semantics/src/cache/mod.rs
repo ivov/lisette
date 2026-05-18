@@ -311,13 +311,6 @@ fn extract_public_definitions(
 pub fn register_cached_module(store: &mut Store, module_id: &str, cached: ModuleInterface) {
     store.add_module(module_id);
 
-    // Clear files stored during module graph construction (parse_module_files stores files
-    // eagerly for diagnostic rendering). These have full ASTs but un-inferred typed_patterns,
-    // which would cause pattern analysis to panic.
-    if let Some(module) = store.get_module_mut(module_id) {
-        module.files.clear();
-    }
-
     let mut file_ids: Vec<u32> = vec![];
     for cached_file in &cached.files {
         let file_id = store.new_file_id();

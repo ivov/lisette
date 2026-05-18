@@ -5,7 +5,11 @@ description: "input: \nfn test() -> int {\n  let x = {\n    let a = 10;\n    let
 package main
 
 func test() int {
-	a := 10
-	b := 20
-	return a + b
+	var x int
+	{
+		a := 10
+		b := 20
+		x = a + b
+	}
+	return x
 }

@@ -1,9 +1,10 @@
-use syntax::ast::{Expression, UnaryOperator};
+use syntax::ast::Expression;
 use syntax::types::peel_to_range_type;
 
 use crate::Emitter;
-use crate::utils::Staged;
-use crate::write_line;
+use crate::expressions::context::ExpressionContext;
+use crate::expressions::emission::EmittedExpression;
+use crate::types::native::NativeGoType;
 
 impl Emitter<'_> {
     pub(crate) fn emit_index_access(
@@ -34,33 +35,26 @@ impl Emitter<'_> {
         // or `r: Prefix` where `type Prefix = RangeTo<int>`).
         let index_ty = index.get_type();
         if let Some(range_kind) = peel_to_range_type(&index_ty).and_then(|t| t.get_name()) {
-            let needs_cap = expression.get_type().has_name("Slice");
+            let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
             let index_staged = self.stage_or_capture(index, "range");
             let values = self.sequence(output, vec![base_staged, index_staged], "_base");
             return self.emit_range_var_slice(&values[0], &values[1], range_kind, needs_cap);
         }
 
-        let index_staged = self.stage_composite(index);
+        let index_staged = self.stage_composite(index, ExpressionContext::value());
         let values = self.sequence(output, vec![base_staged, index_staged], "_base");
         format!("{}[{}]", values[0], values[1])
     }
 
-    /// Stage an indexable base expression, unwrapping an explicit deref into
-    /// a parenthesized `(*x)` form while preserving evaluation-order setup.
-    fn stage_base_with_deref(&mut self, expression: &Expression) -> Staged {
-        let Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } = expression
-        else {
-            return self.stage_operand(expression);
+    fn stage_base_with_deref(&mut self, expression: &Expression) -> EmittedExpression {
+        let Some(inner) = expression.deref_inner() else {
+            return self.stage_operand(expression, ExpressionContext::value());
         };
-        let s = self.stage_operand(inner);
-        Staged {
+        let s = self.stage_operand(inner, ExpressionContext::value());
+        EmittedExpression {
             value: format!("(*{})", s.value),
             setup: s.setup,
-            needs_capture: s.needs_capture,
+            capture: s.capture,
         }
     }
 
@@ -75,15 +69,15 @@ impl Emitter<'_> {
         end: Option<&Expression>,
         inclusive: bool,
     ) -> String {
-        let needs_cap = expression.get_type().has_name("Slice");
+        let needs_cap = self.is_native_shape(&expression.get_type(), NativeGoType::Slice);
         let base_staged = self.stage_base_with_deref(expression);
 
         let mut all_stages = vec![base_staged];
         if let Some(s) = start {
-            all_stages.push(self.stage_operand(s));
+            all_stages.push(self.stage_operand(s, ExpressionContext::value()));
         }
         if let Some(e) = end {
-            all_stages.push(self.stage_operand(e));
+            all_stages.push(self.stage_operand(e, ExpressionContext::value()));
         }
         let values = self.sequence(output, all_stages, "_base");
         let base_str = &values[0];
@@ -105,16 +99,12 @@ impl Emitter<'_> {
         }
 
         if end_str.is_empty() {
-            let len_var = self.fresh_var(Some("len"));
-            self.declare(&len_var);
-            write_line!(output, "{} := len({})", len_var, base_str);
+            let len_var = self.hoist_tmp_value(output, "len", &format!("len({})", base_str));
             return format!("{}[{}:{}:{}]", base_str, start_str, len_var, len_var);
         }
 
         if end_str.contains('(') {
-            let end_var = self.fresh_var(Some("end"));
-            self.declare(&end_var);
-            write_line!(output, "{} := {}", end_var, end_str);
+            let end_var = self.hoist_tmp_value(output, "end", &end_str);
             return format!("{}[{}:{}:{}]", base_str, start_str, end_var, end_var);
         }
 

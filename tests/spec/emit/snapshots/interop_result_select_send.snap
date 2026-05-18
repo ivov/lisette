@@ -10,8 +10,6 @@ func main() {
 	ch := make(chan func(string) (int, error))
 	select {
 	case ch <- strconv.Atoi:
-		_ = 0
 	default:
-		_ = 1
 	}
 }

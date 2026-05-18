@@ -13,11 +13,9 @@ import (
 func main() {
 	src, db := migrate.Close()
 	if src.Tag == lisette.OptionSome {
-		e := src.SomeVal
-		fmt.Println("source:", e)
+		fmt.Println("source:", src.SomeVal)
 	}
 	if db.Tag == lisette.OptionSome {
-		e := db.SomeVal
-		fmt.Println("db:", e)
+		fmt.Println("db:", db.SomeVal)
 	}
 }

@@ -18,7 +18,7 @@ func main() {
 	} else {
 		n = lisette.MakeResultOk[int, error](ret_1)
 	}
-	ret_1_4 := 7
+	ret_1_3 := 7
 	fmt.Println(n)
-	fmt.Println(ret_1_4)
+	fmt.Println(ret_1_3)
 }

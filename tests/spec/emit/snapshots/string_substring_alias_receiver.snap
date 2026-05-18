@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/prelude.rs
-assertion_line: 870
 description: "input: \ntype MyString = string\n\nfn test(s: MyString, r: RangeTo<int>) -> string {\n  s.substring(r)\n}\n"
 ---
 package main

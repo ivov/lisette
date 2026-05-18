@@ -654,6 +654,32 @@ impl<'source> Parser<'source> {
         self.errors.push(error);
     }
 
+    pub(super) fn error_map_literal_not_supported(&mut self, span: ast::Span) {
+        if self.too_many_errors() {
+            return;
+        }
+        let error = ParseError::new("Invalid `Map` initialization", span, "invalid syntax")
+            .with_parse_code("invalid_map_initialization")
+            .with_help("To initialize a `Map`, use `Map.new<K, V>()` then `m[key] = value`");
+
+        self.errors.push(error);
+    }
+
+    pub(super) fn error_missing_initializer(&mut self, span: ast::Span) {
+        if self.too_many_errors() {
+            return;
+        }
+        let error = ParseError::new(
+            "Missing initializer",
+            span,
+            "annotated binding needs a value",
+        )
+        .with_parse_code("missing_initializer")
+        .with_help("Bindings must be initialized");
+
+        self.errors.push(error);
+    }
+
     fn track_ensure_error(&mut self, expected_token: TokenKind) {
         if self.too_many_errors() {
             return;

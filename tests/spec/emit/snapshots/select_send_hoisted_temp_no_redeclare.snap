@@ -13,9 +13,8 @@ func main() {
 	ref_1 := get(ch)
 	select {
 	case ref_1 <- 1:
-		_ = 0
 	default:
-		_ = 1
 	}
-	_ = 2
+	ref_1_2 := 2
+	_ = ref_1_2
 }

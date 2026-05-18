@@ -139,3 +139,88 @@ pub fn compile(
         user_file_count,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fs::LocalFileSystem;
+    use std::fs as stdfs;
+    use tempfile::tempdir;
+
+    fn check_diagnostics(project_dir: &std::path::Path) -> Vec<(bool, Option<String>)> {
+        let (_, locator) = TypedefLocator::from_project_with_manifest(project_dir).unwrap();
+        let src_main = project_dir.join("src").join("main.lis");
+        let source = stdfs::read_to_string(&src_main).unwrap();
+        let config = CompileConfig {
+            target_phase: CompilePhase::Check,
+            go_module: "test".to_string(),
+            standalone_mode: false,
+            load_siblings: true,
+            debug: false,
+            project_root: Some(project_dir.to_path_buf()),
+            locator,
+        };
+        let working_dir = src_main
+            .parent()
+            .and_then(|p| p.to_str())
+            .expect("temp project path is valid utf-8");
+        let fs_loader = LocalFileSystem::new(working_dir);
+        let result = compile(&source, "main.lis", &config, &fs_loader);
+
+        let mut diags: Vec<(bool, Option<String>)> = result
+            .errors
+            .iter()
+            .chain(result.lints.iter())
+            .map(|d| (d.is_error(), d.code_str().map(|s| s.to_string())))
+            .collect();
+        diags.sort();
+        diags
+    }
+
+    #[test]
+    fn warm_diagnostics_match_cold_for_param_position_leak() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        stdfs::create_dir_all(root.join("src").join("leaky")).unwrap();
+        stdfs::write(
+            root.join("lisette.toml"),
+            "[project]\nname = \"github.com/test/cache\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("main.lis"),
+            "import \"leaky\"\n\nfn main() {\n  let _ = leaky.make_item(42)\n}\n",
+        )
+        .unwrap();
+        stdfs::write(
+            root.join("src").join("leaky").join("leaky.lis"),
+            "struct Item {\n  pub id: int,\n}\n\n\
+             pub fn extract_id(it: Item) -> int {\n  it.id\n}\n\n\
+             pub fn make_item(id: int) -> int {\n  let it = Item { id: id }\n  it.id\n}\n",
+        )
+        .unwrap();
+
+        let cold = check_diagnostics(root);
+        let warm = check_diagnostics(root);
+        let warm_again = check_diagnostics(root);
+
+        assert!(
+            cold.iter()
+                .any(|(_, code)| code.as_deref() == Some("lint.internal_type_leak")),
+            "cold run must produce internal_type_leak; otherwise the test is not exercising the bug. got: {:?}",
+            cold
+        );
+        assert_eq!(
+            cold, warm,
+            "diagnostics diverge between cold and first warm build"
+        );
+        assert_eq!(
+            cold, warm_again,
+            "diagnostics diverge between cold and second warm build"
+        );
+        assert!(
+            !root.join("target/cache/leaky.cache").exists(),
+            "leaky has warnings; cache must not write it"
+        );
+    }
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot infer receiver type
+   ╭─[test.lis:5:19]
+ 4 │ fn main() {
+ 5 │   fmt.Println(|c| c.Next())
+   ·                   ───┬──
+   ·                      ╰── cannot resolve `.Next` because the receiver type is unknown
+ 6 │ }
+   ╰────
+  help: Annotate the receiver's binding, e.g. `let x: SomeType = ...` or `|param: SomeType| ...` · code: [infer.unresolved_receiver_type]

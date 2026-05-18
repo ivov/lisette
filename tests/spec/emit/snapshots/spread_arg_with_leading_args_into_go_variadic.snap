@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/functions.rs
-assertion_line: 1493
 description: "input: \nimport filepath \"go:path/filepath\"\n\nfn test(base: string, rest: Slice<string>) -> string {\n  filepath.Join(base, rest...)\n}\n"
 ---
 package main

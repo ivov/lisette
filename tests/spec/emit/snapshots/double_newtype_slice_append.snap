@@ -19,6 +19,6 @@ func (b B) String() string {
 }
 
 func main() {
-	w := B(A([]int{}))
+	w := B(A(([]int)(nil)))
 	w = B(A(append([]int(A(w)), 1)))
 }

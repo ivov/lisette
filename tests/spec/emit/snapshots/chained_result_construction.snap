@@ -11,5 +11,6 @@ func get_value() lisette.Result[int, string] {
 }
 
 func test() lisette.Result[int, string] {
-	return get_value()
+	x := get_value()
+	return x
 }

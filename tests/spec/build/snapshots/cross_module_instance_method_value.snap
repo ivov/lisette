@@ -31,5 +31,6 @@ func main() {
 		Y: 2,
 	}
 	g := lib.Point.Sum
-	_ = g(p)
+	val := g(p)
+	_ = val
 }

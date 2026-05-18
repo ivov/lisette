@@ -151,6 +151,16 @@ fn test() {
 }
 
 #[test]
+fn empty_slice_of_function_type() {
+    let input = r#"
+fn test() {
+  let x: Slice<fn(int) -> int> = [];
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn hex_literal() {
     let input = r#"
 fn test() -> int {

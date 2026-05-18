@@ -19,5 +19,6 @@ func apply(f func(string) (string, bool), key string) string {
 }
 
 func main() {
-	_ = apply(os.LookupEnv, "HOME")
+	r := apply(os.LookupEnv, "HOME")
+	_ = r
 }

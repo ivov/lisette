@@ -8,7 +8,9 @@ func test() {
 	for {
 		var tmp_1 int
 		if true {
-			continue
+			{
+				continue
+			}
 			panic("unreachable")
 		}
 		var tmp_2 int

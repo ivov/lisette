@@ -46,12 +46,10 @@ func test() int {
 	sum := 0
 	for {
 		if current.Tag == lisette.OptionSome && current.SomeVal.Tag == EA {
-			x := current.SomeVal.A
-			sum += x
+			sum += current.SomeVal.A
 			current = lisette.MakeOptionNone[E]()
 		} else if current.Tag == lisette.OptionSome && current.SomeVal.Tag == EB {
-			x := current.SomeVal.B
-			sum += x
+			sum += current.SomeVal.B
 			current = lisette.MakeOptionNone[E]()
 		} else {
 			break

@@ -20,7 +20,7 @@ func get_map(m map[string]Box) map[string]Box {
 
 func main() {
 	m := make(map[string]Box)
-	m["a"] = Box{items: []int{}}
+	m["a"] = Box{}
 	map_ := get_map(m)
 	entry := map_["a"]
 	entry.items = append(entry.items, 1)

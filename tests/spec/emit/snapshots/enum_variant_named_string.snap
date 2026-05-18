@@ -49,10 +49,10 @@ func visit(node ASTNode) string {
 	switch node.Tag {
 	case ASTNodeNumber:
 		n := node.Number
-		return fmt.Sprintf("number:%v", n)
+		return fmt.Sprintf("number:%d", n)
 	case ASTNodeString:
 		s := node.ASTNodeString_
-		return fmt.Sprintf("string:%v", s)
+		return fmt.Sprintf("string:%s", s)
 	default:
 		return "null"
 	}

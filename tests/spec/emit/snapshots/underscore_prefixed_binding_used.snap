@@ -5,5 +5,6 @@ description: "input: \nfn test() -> int {\n  let _x = 42;\n  _x\n}\n"
 package main
 
 func test() int {
-	return 42
+	_x := 42
+	return _x
 }

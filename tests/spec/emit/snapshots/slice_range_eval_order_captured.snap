@@ -13,5 +13,6 @@ func main() {
 	items := []int{10, 20, 30, 40, 50}
 	i := 1
 	end_1 := bump(&i)
-	_ = items[i:end_1:end_1]
+	s := items[i:end_1:end_1]
+	_ = s
 }

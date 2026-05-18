@@ -15,5 +15,6 @@ package main
 import L "github.com/user/myproject/lib"
 
 func main() {
-	_ = L.Make[int]()
+	x := L.Make[int]()
+	_ = x
 }

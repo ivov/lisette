@@ -29,5 +29,6 @@ func (w Wrapper) String() string {
 
 func main() {
 	d := Doubler{}
-	_ = Wrapper{reader: d}
+	w := Wrapper{reader: d}
+	_ = w
 }

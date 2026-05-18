@@ -23,5 +23,6 @@ func make_box() Box {
 }
 
 func main() {
-	_ = make_box().add(1)
+	v := make_box().add(1)
+	_ = v
 }

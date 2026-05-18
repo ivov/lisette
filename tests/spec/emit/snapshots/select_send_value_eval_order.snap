@@ -17,6 +17,5 @@ func main() {
 	}
 	select {
 	case make_ch() <- to_send:
-		_ = 0
 	}
 }

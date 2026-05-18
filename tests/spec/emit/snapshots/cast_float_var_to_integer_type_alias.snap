@@ -8,5 +8,6 @@ type MyInt = int
 
 func main() {
 	f := 3.14
-	_ = MyInt(f)
+	x := MyInt(f)
+	_ = x
 }

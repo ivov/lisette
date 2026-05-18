@@ -95,9 +95,9 @@ pub type Client
 /// See [NewClient]'s comment for information about concurrent access.
 pub interface ClientCodec {
   fn Close() -> Result<(), error>
-  fn ReadResponseBody(arg0: Unknown) -> Result<(), error>
-  fn ReadResponseHeader(arg0: Ref<Response>) -> Result<(), error>
-  fn WriteRequest(arg0: Ref<Request>, arg1: Unknown) -> Result<(), error>
+  fn ReadResponseBody(any: Unknown) -> Result<(), error>
+  fn ReadResponseHeader(response: Ref<Response>) -> Result<(), error>
+  fn WriteRequest(request: Ref<Request>, any: Unknown) -> Result<(), error>
 }
 
 /// Request is a header written before every RPC call. It is used internally
@@ -130,9 +130,9 @@ pub type Server
 /// See [NewClient]'s comment for information about concurrent access.
 pub interface ServerCodec {
   fn Close() -> Result<(), error>
-  fn ReadRequestBody(arg0: Unknown) -> Result<(), error>
-  fn ReadRequestHeader(arg0: Ref<Request>) -> Result<(), error>
-  fn WriteResponse(arg0: Ref<Response>, arg1: Unknown) -> Result<(), error>
+  fn ReadRequestBody(any: Unknown) -> Result<(), error>
+  fn ReadRequestHeader(request: Ref<Request>) -> Result<(), error>
+  fn WriteResponse(response: Ref<Response>, any: Unknown) -> Result<(), error>
 }
 
 /// ServerError represents an error that has been returned from

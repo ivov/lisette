@@ -44,10 +44,6 @@ pub(crate) fn go_package_name(module: &str) -> &str {
     module.rsplit('/').next().unwrap_or(module)
 }
 
-pub(crate) fn module_of_type_id(id: &str) -> &str {
-    syntax::types::module_part(id)
-}
-
 pub(crate) fn sanitize_package_name(name: &str) -> Cow<'_, str> {
     let has_bad_chars = name.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_');
     let starts_with_digit = name.starts_with(|c: char| c.is_ascii_digit());
@@ -148,6 +144,7 @@ pub(crate) fn resolve(name: &str) -> ResolvedName {
 pub(crate) fn variant(
     identifier: &str,
     ty: &Type,
+    enum_module: &str,
     current_module: &str,
     module_alias: Option<&str>,
 ) -> ResolvedName {
@@ -155,17 +152,17 @@ pub(crate) fn variant(
         return ResolvedName::local(identifier.replace('.', "_"));
     };
 
-    variant_by_id(identifier, id, current_module, module_alias)
+    variant_by_id(identifier, id, enum_module, current_module, module_alias)
 }
 
 pub(crate) fn variant_by_id(
     identifier: &str,
     enum_id: &str,
+    enum_module: &str,
     current_module: &str,
     module_alias: Option<&str>,
 ) -> ResolvedName {
     let is_prelude = enum_id.starts_with(PRELUDE_PREFIX);
-    let enum_module = module_of_type_id(enum_id);
     let enum_name = unqualified_name(enum_id);
     let variant_name = unqualified_name(identifier);
 
@@ -276,19 +273,20 @@ pub(crate) fn escape_reserved(name: &str) -> Cow<'_, str> {
 }
 
 pub(crate) fn qualify_method(
-    type_id: &str,
+    module: Option<&str>,
+    type_name: &str,
     method: &str,
     current_module: &str,
     is_public: bool,
     module_alias: Option<&str>,
 ) -> ResolvedName {
-    let Some((module, type_name)) = type_id.split_once('.') else {
+    let Some(module) = module else {
         let method_name = if is_public {
             snake_to_camel(method)
         } else {
             method.to_string()
         };
-        return ResolvedName::local(format!("{}_{}", type_id, method_name));
+        return ResolvedName::local(format!("{}_{}", type_name, method_name));
     };
 
     if module == PRELUDE_MODULE {

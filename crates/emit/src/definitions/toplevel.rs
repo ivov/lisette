@@ -1,4 +1,6 @@
 use crate::Emitter;
+use crate::bindings::BindingValue;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::types::Type;
@@ -40,18 +42,17 @@ impl Emitter<'_> {
         let ty_string = self.go_type_as_string(underlying);
 
         if let Type::Nominal { id, .. } = underlying
-            && let Some((module, _)) = id.split_once('.')
-            && module != self.current_module
+            && let Some(module) = self.facts.module_for_qualified_name(id.as_str())
+            && !self.facts.is_current_module(module)
             && module != go_name::PRELUDE_MODULE
             && !go_name::is_go_import(module)
         {
-            self.require_module_import(module);
+            let module = module.to_string();
+            self.require_module_import(&module);
         }
 
-        let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
-        let map_key_generics =
-            Self::collect_map_key_generics(std::iter::once(underlying), &generic_names);
-        let generics_string = self.generics_to_string_with_map_keys(generics, &map_key_generics);
+        let symbol = self.facts.qualified_current(name);
+        let generics_string = self.generics_to_string_for_symbol(&symbol, generics);
 
         let separator = if is_fn_alias { " " } else { " = " };
         format!(
@@ -69,30 +70,32 @@ impl Emitter<'_> {
         expression: &Expression,
         ty: &Type,
     ) -> String {
-        let target_name = match self.module.escape_remap.get(identifier) {
-            Some(remapped) => remapped.clone(),
-            None => identifier.to_string(),
-        };
-        let initial_go_name = self.scope.bindings.add(identifier, target_name);
+        let target_name = self
+            .module
+            .escape_remap(identifier)
+            .unwrap_or(identifier)
+            .to_string();
+        let initial_go_name = self.scope.bind(identifier, target_name);
         let go_identifier = if self.try_declare(&initial_go_name) {
             initial_go_name
         } else {
             let fresh = self.fresh_var(Some(identifier));
-            self.scope.bindings.add(identifier, &fresh);
+            self.scope.bind(identifier, &fresh);
             self.try_declare(&fresh);
             fresh
         };
         let ty_str = self.go_type_as_string(ty);
 
         let mut output = String::new();
-        let expression_string = self.emit_operand(&mut output, expression);
+        let expression_string =
+            self.emit_operand(&mut output, expression, ExpressionContext::value());
         let value = if expression_string.is_empty() {
             "struct{}{}"
         } else {
             &expression_string
         };
         let keyword = if self.is_go_const_eligible(expression) {
-            self.scope.go_const_bindings.insert(go_identifier.clone());
+            self.record_go_const(go_identifier.clone());
             "const"
         } else {
             "var"
@@ -112,7 +115,11 @@ impl Emitter<'_> {
                     | Literal::Char(_)
             ),
             Expression::Identifier { value, .. } => {
-                self.scope.go_const_bindings.contains(value.as_str())
+                match self.scope.resolve_identifier_binding(value.as_str()) {
+                    Some(BindingValue::GoName(name)) => self.is_go_const_binding(name),
+                    Some(BindingValue::InlineExpr(_)) => false,
+                    None => self.is_go_const_binding(value.as_str()),
+                }
             }
             Expression::Binary { left, right, .. } => {
                 self.is_go_const_eligible(left) && self.is_go_const_eligible(right)

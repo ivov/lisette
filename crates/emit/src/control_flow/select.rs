@@ -1,6 +1,10 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
-use crate::patterns::decision_tree;
+use crate::patterns::sites::{
+    self, PatternSubject, is_some_pattern, unwrap_some_pattern, unwrap_some_typed_pattern,
+};
+use crate::placement::{BodyPlace, emit_unreachable_panic_if_needed};
 use crate::utils::{DiscardGuard, contains_call};
 use crate::write_line;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, TypedPattern};
@@ -17,6 +21,8 @@ struct SelectReceiveContext<'a> {
     body: &'a Expression,
     default_body: Option<&'a Expression>,
     retry_var: Option<&'a str>,
+    element_ty: syntax::types::Type,
+    place: &'a BodyPlace<'a>,
 }
 
 struct SelectPrep {
@@ -26,9 +32,14 @@ struct SelectPrep {
 }
 
 impl Emitter<'_> {
-    pub(crate) fn emit_select(&mut self, output: &mut String, arms: &[SelectArm]) {
+    pub(crate) fn emit_select(
+        &mut self,
+        output: &mut String,
+        arms: &[SelectArm],
+        place: &BodyPlace,
+    ) {
         let needs_retry_loop = arms.iter().any(|arm| {
-            matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if Self::is_some_pattern(binding))
+            matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if is_some_pattern(binding))
         });
 
         let prep = self.preprocess_select_arms(output, arms, needs_retry_loop);
@@ -36,10 +47,34 @@ impl Emitter<'_> {
         if needs_retry_loop {
             output.push_str("for {\n");
         }
-
         self.enter_scope();
         output.push_str("select {\n");
 
+        self.emit_select_arms(output, arms, &prep, place);
+
+        output.push_str("}\n");
+        self.exit_scope();
+
+        if needs_retry_loop {
+            output.push_str("break\n}\n");
+            // Go can't see that `break` is unreachable (all select paths either
+            // return or continue), so emit panic to satisfy the compiler.
+            emit_unreachable_panic_if_needed(output, place, false);
+        } else {
+            let has_default = arms
+                .iter()
+                .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
+            emit_unreachable_panic_if_needed(output, place, has_default);
+        }
+    }
+
+    fn emit_select_arms(
+        &mut self,
+        output: &mut String,
+        arms: &[SelectArm],
+        prep: &SelectPrep,
+        place: &BodyPlace,
+    ) {
         let default_body = arms.iter().find_map(|arm| {
             if let SelectArmPattern::WildCard { body } = &arm.pattern {
                 Some(body.as_ref())
@@ -53,8 +88,8 @@ impl Emitter<'_> {
                 SelectArmPattern::Receive {
                     binding,
                     typed_pattern,
+                    receive_expression,
                     body,
-                    ..
                 } => {
                     let (channel, retry_var) = if let Some(shadow) =
                         prep.channel_shadows.get(i).and_then(|s| s.as_ref())
@@ -68,41 +103,28 @@ impl Emitter<'_> {
                         body,
                         default_body,
                         retry_var,
+                        element_ty: receive_expression.get_type().ok_type(),
+                        place,
                     };
                     self.emit_receive_arm(output, binding, typed_pattern.as_ref(), &receiver_ctx);
                 }
                 SelectArmPattern::Send { body, .. } => {
                     let parts = prep.send_parts[i].as_ref().unwrap();
-                    self.emit_send_arm_case(output, parts, body);
+                    self.emit_send_arm_case(output, parts, body, place);
                 }
                 SelectArmPattern::MatchReceive {
-                    arms: match_arms, ..
+                    arms: match_arms,
+                    receive_expression,
                 } => {
                     let channel = prep.channel_operands[i].as_ref().unwrap();
-                    self.emit_match_receive_arm(output, match_arms, channel);
+                    let element_ty = receive_expression.get_type().ok_type();
+                    self.emit_match_receive_arm(output, match_arms, channel, &element_ty, place);
                 }
                 SelectArmPattern::WildCard { body } => {
                     output.push_str("default:\n");
-                    self.emit_in_position(output, body);
+                    self.emit_body_to_place(output, body, place);
                 }
             }
-        }
-
-        output.push_str("}\n");
-        self.exit_scope();
-
-        if needs_retry_loop {
-            output.push_str("break\n}\n");
-            // Go can't see that `break` is unreachable (all select paths either
-            // return or continue), so emit panic to satisfy the compiler.
-            if self.position.is_tail() {
-                output.push_str("panic(\"unreachable\")\n");
-            }
-        } else {
-            let has_default = arms
-                .iter()
-                .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
-            self.emit_unreachable_if_needed(output, has_default);
         }
     }
 
@@ -136,16 +158,13 @@ impl Emitter<'_> {
                 } => {
                     let channel_has_call = Self::channel_expression_has_call(receive_expression);
                     let ch = self.emit_channel_operand(output, receive_expression);
-                    if Self::is_some_pattern(binding) && needs_retry_loop {
-                        let shadow = self.fresh_var(Some("ch"));
-                        write_line!(output, "{} := {}", shadow, ch);
+                    if is_some_pattern(binding) && needs_retry_loop {
+                        let shadow = self.hoist_tmp_value(output, "ch", &ch);
                         channel_operands.push(Some(ch));
                         channel_shadows.push(Some(shadow));
                     } else {
                         let ch = if needs_retry_loop && channel_has_call {
-                            let tmp = self.fresh_var(Some("ch"));
-                            write_line!(output, "{} := {}", tmp, ch);
-                            tmp
+                            self.hoist_tmp_value(output, "ch", &ch)
                         } else {
                             ch
                         };
@@ -160,9 +179,7 @@ impl Emitter<'_> {
                     let channel_has_call = Self::channel_expression_has_call(receive_expression);
                     let ch = self.emit_channel_operand(output, receive_expression);
                     let ch = if needs_retry_loop && channel_has_call {
-                        let tmp = self.fresh_var(Some("ch"));
-                        write_line!(output, "{} := {}", tmp, ch);
-                        tmp
+                        self.hoist_tmp_value(output, "ch", &ch)
                     } else {
                         ch
                     };
@@ -202,18 +219,18 @@ impl Emitter<'_> {
     ) -> String {
         let unwrapped = receive_expression.unwrap_parens();
         if let Some((channel, "receive", _)) = Self::extract_channel_op(unwrapped) {
-            let ch = self.emit_value(output, channel);
+            let ch = self.emit_value(output, channel, ExpressionContext::value());
             return if channel.get_type().is_ref() {
                 cancel_deref_of_address(ch)
             } else {
                 ch
             };
         }
-        self.emit_value(output, receive_expression)
+        self.emit_value(output, receive_expression, ExpressionContext::value())
     }
 
     fn fresh_ok_var(&mut self) -> String {
-        if self.scope.bindings.has_go_name("ok") || self.is_declared("ok") {
+        if self.scope.has_binding_for_go_name("ok") || self.is_declared("ok") {
             self.fresh_var(Some("ok"))
         } else {
             "ok".to_string()
@@ -221,10 +238,10 @@ impl Emitter<'_> {
     }
 
     fn emit_ok_check(&mut self, output: &mut String, ok_var: &str, ctx: &SelectReceiveContext) {
-        let pre = output.len();
-        self.emit_in_position(output, ctx.body);
-        let body_empty = output.len() == pre;
-
+        let (body_content, ()) = self.capture_emission(output, |this, buf| {
+            this.emit_body_to_place(buf, ctx.body, ctx.place);
+        });
+        let body_empty = body_content.is_empty();
         let has_else = ctx.retry_var.is_some() || ctx.default_body.is_some();
 
         if body_empty && has_else {
@@ -234,8 +251,6 @@ impl Emitter<'_> {
         } else if body_empty {
             // Both branches empty, omit if/else entirely
         } else {
-            let body_content = output[pre..].to_string();
-            output.truncate(pre);
             write_line!(output, "if {} {{", ok_var);
             output.push_str(&body_content);
             if has_else {
@@ -252,15 +267,12 @@ impl Emitter<'_> {
             write_line!(output, "{} = nil", retry_var);
             output.push_str("continue\n");
         } else if let Some(default_body) = ctx.default_body {
-            self.emit_in_position(output, default_body);
+            self.emit_body_to_place(output, default_body, ctx.place);
         }
     }
 
-    /// Emit the ok-check guard pattern for channel receives with Option semantics.
+    /// Emit the ok-check guard for channel receives with Option semantics.
     /// Produces: `case {receiver_var}, {ok_var} := <-{channel}: if {ok_var} { ... } else { ... }`
-    ///
-    /// When `inner_pattern` is provided, uses `collect_pattern_info` to emit both
-    /// runtime checks (literals, enum tags) and bindings, not just bindings.
     fn emit_ok_guard(
         &mut self,
         output: &mut String,
@@ -279,26 +291,21 @@ impl Emitter<'_> {
         );
         let guard = DiscardGuard::new(output, receiver_var);
         if let Some((pattern, typed)) = inner_pattern {
-            let (checks, bindings) = decision_tree::collect_pattern_info(self, pattern, typed);
-            if checks.is_empty() {
-                decision_tree::emit_tree_bindings(self, output, &bindings, receiver_var);
-                self.emit_in_position(output, ctx.body);
-            } else {
-                let condition = decision_tree::render_condition(&checks, receiver_var);
-                write_line!(output, "if {} {{", condition);
-                decision_tree::emit_tree_bindings(self, output, &bindings, receiver_var);
-                self.emit_in_position(output, ctx.body);
-                if let Some(default_body) = ctx.default_body {
-                    output.push_str("} else {\n");
-                    self.emit_in_position(output, default_body);
-                }
-                output.push_str("}\n");
-            }
+            self.emit_select_receive_pattern_site(
+                output,
+                receiver_var,
+                pattern,
+                typed,
+                &ctx.element_ty,
+                ctx.body,
+                ctx.default_body,
+                ctx.place,
+            );
         } else {
-            self.emit_in_position(output, ctx.body);
+            self.emit_body_to_place(output, ctx.body, ctx.place);
         }
         guard.finish(output);
-        self.scope.bindings.restore();
+        self.scope.pop_binding_frame();
         let has_else = ctx.retry_var.is_some() || ctx.default_body.is_some();
         if has_else {
             output.push_str("} else {\n");
@@ -314,65 +321,85 @@ impl Emitter<'_> {
         typed_pattern: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
     ) {
-        let effective_pattern = Self::unwrap_some_pattern(binding);
-        let needs_ok_check = Self::is_some_pattern(binding);
-        let inner_typed = Self::unwrap_some_typed_pattern(typed_pattern);
+        let effective_pattern = unwrap_some_pattern(binding);
+        let inner_typed = unwrap_some_typed_pattern(typed_pattern);
 
-        self.scope.bindings.save();
-
-        match effective_pattern {
-            Pattern::Identifier { identifier, .. } => {
-                if let Some(go_name) = self.go_name_for_binding(effective_pattern) {
-                    let var = self.scope.bindings.add(identifier, go_name);
-                    if needs_ok_check {
-                        self.emit_ok_guard(output, &var, None, ctx);
-                        return;
-                    } else {
-                        write_line!(output, "case {} := <-{}:", var, ctx.channel);
-                    }
-                } else if needs_ok_check {
-                    let ok_var = self.fresh_ok_var();
-                    write_line!(output, "case _, {} := <-{}:", ok_var, ctx.channel);
-                    self.emit_ok_check(output, &ok_var, ctx);
-                    self.scope.bindings.restore();
-                    return;
-                } else {
-                    write_line!(output, "case <-{}:", ctx.channel);
-                }
-            }
-            Pattern::WildCard { .. } => {
-                if needs_ok_check {
-                    let ok_var = self.fresh_ok_var();
-                    write_line!(output, "case _, {} := <-{}:", ok_var, ctx.channel);
-                    self.emit_ok_check(output, &ok_var, ctx);
-                    self.scope.bindings.restore();
-                    return;
-                }
-                write_line!(output, "case <-{}:", ctx.channel);
-            }
-            _ => {
-                let receiver_var = self.fresh_var(Some("recv"));
-                if needs_ok_check {
-                    self.emit_ok_guard(
-                        output,
-                        &receiver_var,
-                        Some((effective_pattern, inner_typed)),
-                        ctx,
-                    );
-                    return;
-                } else {
-                    write_line!(output, "case {} := <-{}:", receiver_var, ctx.channel);
-                    self.emit_pattern_bindings(
-                        output,
-                        &receiver_var,
-                        effective_pattern,
-                        inner_typed,
-                    );
-                }
-            }
+        self.scope.push_binding_frame();
+        if is_some_pattern(binding) {
+            self.emit_receive_arm_with_ok_check(output, effective_pattern, inner_typed, ctx);
+        } else {
+            self.emit_receive_arm_simple(output, effective_pattern, inner_typed, ctx);
         }
-        self.emit_in_position(output, ctx.body);
-        self.scope.bindings.restore();
+    }
+
+    /// Option-binding receive: emits a `case x, ok := <-ch:` header and
+    /// either an `if ok { ... } else { ... }` guard around the body, or a
+    /// discard `if !ok { break }`. Always pops the binding frame.
+    fn emit_receive_arm_with_ok_check(
+        &mut self,
+        output: &mut String,
+        effective_pattern: &Pattern,
+        inner_typed: Option<&TypedPattern>,
+        ctx: &SelectReceiveContext,
+    ) {
+        if let Pattern::Identifier { identifier, .. } = effective_pattern
+            && let Some(go_name) = self.go_name_for_binding(effective_pattern)
+        {
+            let var = self.scope.bind(identifier, go_name);
+            self.emit_ok_guard(output, &var, None, ctx);
+            return;
+        }
+        if matches!(
+            effective_pattern,
+            Pattern::Identifier { .. } | Pattern::WildCard { .. }
+        ) {
+            let ok_var = self.fresh_ok_var();
+            write_line!(output, "case _, {} := <-{}:", ok_var, ctx.channel);
+            self.emit_ok_check(output, &ok_var, ctx);
+            self.scope.pop_binding_frame();
+            return;
+        }
+        let receiver_var = self.fresh_var(Some("recv"));
+        self.emit_ok_guard(
+            output,
+            &receiver_var,
+            Some((effective_pattern, inner_typed)),
+            ctx,
+        );
+    }
+
+    /// Plain receive (no Option semantics): emits the `case ... := <-ch:`
+    /// header, then the arm body. Always pops the binding frame.
+    fn emit_receive_arm_simple(
+        &mut self,
+        output: &mut String,
+        effective_pattern: &Pattern,
+        inner_typed: Option<&TypedPattern>,
+        ctx: &SelectReceiveContext,
+    ) {
+        if let Pattern::Identifier { identifier, .. } = effective_pattern
+            && let Some(go_name) = self.go_name_for_binding(effective_pattern)
+        {
+            let var = self.scope.bind(identifier, go_name);
+            write_line!(output, "case {} := <-{}:", var, ctx.channel);
+        } else if matches!(
+            effective_pattern,
+            Pattern::Identifier { .. } | Pattern::WildCard { .. }
+        ) {
+            write_line!(output, "case <-{}:", ctx.channel);
+        } else {
+            let receiver_var = self.fresh_var(Some("recv"));
+            write_line!(output, "case {} := <-{}:", receiver_var, ctx.channel);
+            self.emit_irrefutable_pattern_site(
+                output,
+                PatternSubject::for_value(receiver_var.clone()),
+                effective_pattern,
+                inner_typed,
+                &ctx.element_ty,
+            );
+        }
+        self.emit_body_to_place(output, ctx.body, ctx.place);
+        self.scope.pop_binding_frame();
     }
 
     fn prepare_send_arm(
@@ -384,23 +411,20 @@ impl Emitter<'_> {
         let unwrapped = send_expression.unwrap_parens();
         if let Some((channel, member, args)) = Self::extract_channel_op(unwrapped) {
             let ch_has_call = needs_hoist && contains_call(channel);
-            let mut ch = self.emit_value(output, channel);
+            let mut ch = self.emit_value(output, channel, ExpressionContext::value());
             if channel.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
             if ch_has_call {
-                let tmp = self.fresh_var(Some("ch"));
-                write_line!(output, "{} := {}", tmp, ch);
-                ch = tmp;
+                ch = self.hoist_tmp_value(output, "ch", &ch);
             }
             match member {
                 "send" if !args.is_empty() => {
                     let val_has_call = needs_hoist && contains_call(&args[0]);
-                    let mut val = self.emit_composite_value(output, &args[0]);
+                    let mut val =
+                        self.emit_composite_value(output, &args[0], ExpressionContext::value());
                     if val_has_call {
-                        let tmp = self.fresh_var(Some("send_val"));
-                        write_line!(output, "{} := {}", tmp, val);
-                        val = tmp;
+                        val = self.hoist_tmp_value(output, "send_val", &val);
                     }
                     SendArmParts::Send(ch, val)
                 }
@@ -409,21 +433,25 @@ impl Emitter<'_> {
             }
         } else {
             let expression_has_call = needs_hoist && contains_call(send_expression);
-            let mut ch = self.emit_value(output, send_expression);
+            let mut ch = self.emit_value(output, send_expression, ExpressionContext::value());
             if send_expression.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
             if expression_has_call {
-                let tmp = self.fresh_var(Some("ch"));
-                write_line!(output, "{} := {}", tmp, ch);
-                ch = tmp;
+                ch = self.hoist_tmp_value(output, "ch", &ch);
             }
             SendArmParts::Receive(ch)
         }
     }
 
     /// Emit the `case` line and body for a pre-processed send arm.
-    fn emit_send_arm_case(&mut self, output: &mut String, parts: &SendArmParts, body: &Expression) {
+    fn emit_send_arm_case(
+        &mut self,
+        output: &mut String,
+        parts: &SendArmParts,
+        body: &Expression,
+        place: &BodyPlace,
+    ) {
         match parts {
             SendArmParts::Send(ch, val) => {
                 write_line!(output, "case {} <- {}:", ch, val);
@@ -435,7 +463,7 @@ impl Emitter<'_> {
                 output.push_str("default:\n");
             }
         }
-        self.emit_in_position(output, body);
+        self.emit_body_to_place(output, body, place);
     }
 
     fn emit_match_receive_arm(
@@ -443,8 +471,10 @@ impl Emitter<'_> {
         output: &mut String,
         match_arms: &[MatchArm],
         channel: &str,
+        element_ty: &syntax::types::Type,
+        place: &BodyPlace,
     ) {
-        self.scope.bindings.save();
+        self.scope.push_binding_frame();
 
         let (receiver_var_pattern, some_arm) = match_arms
             .iter()
@@ -477,9 +507,11 @@ impl Emitter<'_> {
             receiver_var_pattern,
             &case_var,
             needs_receiver_destructure,
+            element_ty,
+            place,
         );
         let none_content = self.capture_scoped(output, |this, output| {
-            Emitter::emit_none_arm_body(this, output, match_arms);
+            sites::emit_none_arm_body(this, output, match_arms, place);
         });
 
         self.write_receive_arms(
@@ -494,32 +526,13 @@ impl Emitter<'_> {
         }
         ok_guard.finish(output);
 
-        self.scope.bindings.restore();
-    }
-
-    /// Map a `Some(pattern)` payload pattern to a case-variable name and a
-    /// flag indicating whether the payload needs decision-tree destructuring
-    /// inside the arm body (as opposed to being bound directly by the
-    /// receive-case header).
-    fn classify_receive_var_pattern(&mut self, pattern: &Pattern) -> (String, bool) {
-        match pattern {
-            Pattern::WildCard { .. } => ("_".to_string(), false),
-            Pattern::Identifier { identifier, .. } => {
-                let Some(go_name) = self.go_name_for_binding(pattern) else {
-                    return ("_".to_string(), false);
-                };
-                if self.scope.bindings.get(identifier).is_some() {
-                    return (self.fresh_var(Some("recv")), true);
-                }
-                (self.scope.bindings.add(identifier, go_name), false)
-            }
-            _ => (self.fresh_var(Some("recv")), true),
-        }
+        self.scope.pop_binding_frame();
     }
 
     /// Render the Some arm's body (including payload destructure when
     /// needed), returning the captured content so the caller can wrap it in
     /// an `if ok` guard alongside the None arm.
+    #[allow(clippy::too_many_arguments)]
     fn render_receive_some_arm(
         &mut self,
         output: &mut String,
@@ -528,49 +541,26 @@ impl Emitter<'_> {
         receiver_var_pattern: &Pattern,
         case_var: &str,
         needs_receiver_destructure: bool,
+        element_ty: &syntax::types::Type,
+        place: &BodyPlace,
     ) -> Option<String> {
         self.capture_scoped(output, |this, output| {
             if !needs_receiver_destructure {
-                this.emit_in_position(output, &some_arm.expression);
+                this.emit_body_to_place(output, &some_arm.expression, place);
                 return;
             }
-            let inner_typed = Self::unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
-            let (checks, bindings) =
-                decision_tree::collect_pattern_info(this, receiver_var_pattern, inner_typed);
-            if checks.is_empty() {
-                decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
-                this.emit_in_position(output, &some_arm.expression);
-                return;
-            }
-            let condition = decision_tree::render_condition(&checks, case_var);
-            write_line!(output, "if {} {{", condition);
-            decision_tree::emit_tree_bindings(this, output, &bindings, case_var);
-            this.emit_in_position(output, &some_arm.expression);
-            output.push_str("} else {\n");
-            Emitter::emit_none_arm_body(this, output, match_arms);
-            output.push_str("}\n");
+            let inner_typed = unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
+            this.emit_select_match_receive_some_site(
+                output,
+                case_var,
+                receiver_var_pattern,
+                inner_typed,
+                element_ty,
+                &some_arm.expression,
+                match_arms,
+                place,
+            );
         })
-    }
-
-    /// Emit into a scoped buffer, returning the appended content (or `None`
-    /// if nothing was written). Used when the combine step needs to know
-    /// whether each arm produced any output before emitting the `if ok { ... }`
-    /// scaffolding around it.
-    fn capture_scoped<F>(&mut self, output: &mut String, f: F) -> Option<String>
-    where
-        F: FnOnce(&mut Self, &mut String),
-    {
-        let before = output.len();
-        self.enter_scope();
-        f(self, output);
-        self.exit_scope();
-        if output.len() > before {
-            let s = output[before..].to_string();
-            output.truncate(before);
-            Some(s)
-        } else {
-            None
-        }
     }
 
     /// Combine the rendered Some/None arm contents into `if ok { ... } else { ... }`
@@ -605,18 +595,6 @@ impl Emitter<'_> {
         }
     }
 
-    fn emit_none_arm_body(emitter: &mut Emitter, output: &mut String, match_arms: &[MatchArm]) {
-        for match_arm in match_arms {
-            if let Pattern::EnumVariant { identifier, .. } = &match_arm.pattern {
-                let variant_name = go_name::unqualified_name(identifier);
-                if variant_name == "None" {
-                    emitter.emit_in_position(output, &match_arm.expression);
-                    return;
-                }
-            }
-        }
-    }
-
     fn extract_channel_op(expression: &Expression) -> Option<(&Expression, &str, &[Expression])> {
         let Expression::Call {
             expression, args, ..
@@ -642,53 +620,6 @@ impl Emitter<'_> {
             }
         }
 
-        None
-    }
-
-    fn peel_as_binding(pattern: &Pattern) -> &Pattern {
-        match pattern {
-            Pattern::AsBinding { pattern, .. } => pattern.as_ref(),
-            p => p,
-        }
-    }
-
-    fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
-        let pattern = Self::peel_as_binding(pattern);
-        if let Pattern::EnumVariant {
-            identifier, fields, ..
-        } = pattern
-        {
-            let variant_name = go_name::unqualified_name(identifier);
-            if variant_name == "Some" && fields.len() == 1 {
-                return &fields[0];
-            }
-        }
-        pattern
-    }
-
-    fn is_some_pattern(pattern: &Pattern) -> bool {
-        let pattern = Self::peel_as_binding(pattern);
-        if let Pattern::EnumVariant {
-            identifier, fields, ..
-        } = pattern
-        {
-            let variant_name = go_name::unqualified_name(identifier);
-            return variant_name == "Some" && fields.len() == 1;
-        }
-        false
-    }
-
-    fn unwrap_some_typed_pattern(typed: Option<&TypedPattern>) -> Option<&TypedPattern> {
-        if let Some(TypedPattern::EnumVariant {
-            variant_name,
-            fields,
-            ..
-        }) = typed
-            && variant_name == "Some"
-            && fields.len() == 1
-        {
-            return Some(&fields[0]);
-        }
         None
     }
 }

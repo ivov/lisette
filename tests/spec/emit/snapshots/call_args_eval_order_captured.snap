@@ -15,5 +15,6 @@ func sum(a, b int) int {
 
 func main() {
 	i := 0
-	_ = sum(i, bump(&i))
+	z := sum(i, bump(&i))
+	_ = z
 }

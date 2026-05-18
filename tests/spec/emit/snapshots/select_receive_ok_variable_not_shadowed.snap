@@ -16,8 +16,8 @@ func test() {
 	select {
 	case val, ok_1 := <-ch:
 		if ok_1 {
-			fmt.Printf("received: %v\n", val)
-			fmt.Printf("ok is: %v\n", ok)
+			fmt.Printf("received: %d\n", val)
+			fmt.Printf("ok is: %s\n", ok)
 		} else {
 			fmt.Println("closed")
 		}

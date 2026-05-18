@@ -1,0 +1,11 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"go:gopkg.in/yaml.v3\"\n\nfn test() {\n  let _ = yaml.Kind.ScalarNode\n}\n"
+---
+package main
+
+import yaml "gopkg.in/yaml.v3"
+
+func test() {
+	_ = yaml.ScalarNode
+}

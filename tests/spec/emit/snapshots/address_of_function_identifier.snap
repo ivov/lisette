@@ -10,5 +10,6 @@ func add1(x int) int {
 
 func main() {
 	ref_1 := add1
-	_ = &ref_1
+	f := &ref_1
+	_ = f
 }

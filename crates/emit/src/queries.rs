@@ -4,7 +4,6 @@ use crate::Emitter;
 use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
-use crate::names::go_name;
 use syntax::ast::{Pattern, RestPattern, StructKind};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute};
@@ -16,7 +15,7 @@ impl Emitter<'_> {
             Pattern::AsBinding { name, .. } => name.as_str(),
             _ => return None,
         };
-        if self.ctx.unused.is_unused_binding(pattern) {
+        if self.facts.is_unused_binding(pattern) {
             None
         } else {
             Some(name.to_string())
@@ -25,7 +24,7 @@ impl Emitter<'_> {
 
     pub(crate) fn go_name_for_rest_binding(&self, rest: &RestPattern) -> Option<String> {
         if let RestPattern::Bind { name, .. } = rest {
-            if self.ctx.unused.is_unused_rest_binding(rest) {
+            if self.facts.is_unused_rest_binding(rest) {
                 None
             } else {
                 Some(name.to_string())
@@ -36,13 +35,13 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn field_is_public(&self, struct_ty: &Type, field_name: &str) -> bool {
-        let resolved = self.peel_alias(&struct_ty.strip_refs());
+        let resolved = self.facts.peel_alias(&struct_ty.strip_refs());
 
         let Type::Nominal { id, .. } = &resolved else {
             return false;
         };
 
-        match self.ctx.definitions.get(id.as_str()) {
+        match self.facts.definition(id.as_str()) {
             Some(Definition {
                 body: DefinitionBody::Struct { fields, .. },
                 ..
@@ -53,12 +52,11 @@ impl Emitter<'_> {
                     }
                     // Also export fields that have serialization tags (e.g. #[json])
                     let tag_key = format!("{}.{}", id, field_name);
-                    return self.module.tag_exported_fields.contains(&tag_key);
+                    return self.module.is_tag_exported_field(&tag_key);
                 }
                 let method_key = format!("{}.{}", id, field_name);
-                self.ctx
-                    .definitions
-                    .get(method_key.as_str())
+                self.facts
+                    .definition(method_key.as_str())
                     .map(|d| d.visibility().is_public())
                     .unwrap_or(false)
             }
@@ -67,9 +65,8 @@ impl Emitter<'_> {
                 ..
             }) => {
                 let method_key = format!("{}.{}", id, field_name);
-                self.ctx
-                    .definitions
-                    .get(method_key.as_str())
+                self.facts
+                    .definition(method_key.as_str())
                     .map(|d| d.visibility().is_public())
                     .unwrap_or(false)
             }
@@ -88,8 +85,8 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn method_needs_export(&self, method_name: &str) -> bool {
-        self.globals.exported_method_names.contains(method_name)
-            || self.module.exported_method_names.contains(method_name)
+        self.facts.has_global_exported_method_name(method_name)
+            || self.module.has_local_exported_method_name(method_name)
             || matches!(method_name, "string" | "goString" | "error")
     }
 
@@ -98,7 +95,7 @@ impl Emitter<'_> {
             return false;
         };
         matches!(
-            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+            self.facts.definition(id.as_str()).map(|d| &d.body),
             Some(DefinitionBody::Struct { fields, .. })
                 if fields.iter().any(|f| f.name == field_name)
         )
@@ -110,7 +107,7 @@ impl Emitter<'_> {
         };
 
         matches!(
-            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+            self.facts.definition(id.as_str()).map(|d| &d.body),
             Some(DefinitionBody::Struct {
                 kind: StructKind::Tuple,
                 ..
@@ -125,9 +122,8 @@ impl Emitter<'_> {
         if !params.is_empty() {
             return false;
         }
-        self.ctx
-            .definitions
-            .get(id.as_str())
+        self.facts
+            .definition(id.as_str())
             .is_some_and(|d| d.is_newtype())
     }
 
@@ -136,7 +132,7 @@ impl Emitter<'_> {
             return false;
         };
         matches!(
-            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+            self.facts.definition(id.as_str()).map(|d| &d.body),
             Some(DefinitionBody::ValueEnum { .. })
         )
     }
@@ -155,7 +151,7 @@ impl Emitter<'_> {
                     ..
                 },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
             && fields.len() == 1
             && generics.is_empty()
         {
@@ -165,13 +161,9 @@ impl Emitter<'_> {
         None
     }
 
-    pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
-        crate::peel_alias(self.ctx.definitions, ty)
-    }
-
     pub(crate) fn peel_alias_id(&self, id: &str) -> String {
         syntax::types::peel_alias_id(id, |current| {
-            let def = self.ctx.definitions.get(current)?;
+            let def = self.facts.definition(current)?;
             if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
                 return None;
             }
@@ -183,40 +175,18 @@ impl Emitter<'_> {
     }
 
     pub(crate) fn as_enum(&self, ty: &Type) -> Option<String> {
-        let Type::Nominal { id, .. } = self.peel_alias(ty) else {
+        let Type::Nominal { id, .. } = self.facts.peel_alias(ty) else {
             return None;
         };
 
         if matches!(
-            self.ctx.definitions.get(id.as_str()).map(|d| &d.body),
+            self.facts.definition(id.as_str()).map(|d| &d.body),
             Some(DefinitionBody::Enum { .. })
         ) {
             Some(id.to_string())
         } else {
             None
         }
-    }
-
-    pub(crate) fn as_interface(&self, ty: &Type) -> Option<String> {
-        crate::as_interface(self.ctx.definitions, ty)
-    }
-
-    pub(crate) fn is_go_imported_type(ty: &Type) -> bool {
-        let Type::Nominal { id, .. } = ty.strip_refs() else {
-            return false;
-        };
-        go_name::is_go_import(&id)
-    }
-
-    /// True for types whose Go materialisation is nilable: `Ref<T>` →
-    /// `*T`, Lisette/Go interfaces, and function aliases (Go's
-    /// function types are themselves nilable).
-    pub(crate) fn is_nilable_go_type(&self, ty: &Type) -> bool {
-        crate::is_nilable_go_type(self.ctx.definitions, ty)
-    }
-
-    pub(crate) fn is_nullable_option(&self, ty: &Type) -> bool {
-        crate::is_nullable_option(self.ctx.definitions, ty)
     }
 
     /// True for `Option<T>` where T is a concrete non-nilable Go value type
@@ -231,7 +201,7 @@ impl Emitter<'_> {
         if inner.contains_unknown() || inner.has_name("any") {
             return false;
         }
-        !self.is_nilable_go_type(&inner)
+        !self.facts.is_nilable_go_type(&inner)
     }
 
     /// Returns true if the Option wraps a Go interface type (not a pointer).
@@ -241,31 +211,13 @@ impl Emitter<'_> {
             return false;
         }
         let inner = ty.ok_type();
-        self.as_interface(&inner).is_some()
+        self.facts.is_interface(&inner)
     }
 
     pub(crate) fn is_go_nullable(&self, ty: &Type) -> bool {
-        self.is_nullable_option(ty)
+        self.facts.is_nullable_option(ty)
             || self.is_non_nilable_option(ty)
-            || self.nullable_collection_element_ty(ty).is_some()
-    }
-
-    pub(crate) fn nullable_collection_element_ty(&self, ty: &Type) -> Option<Type> {
-        let is_pointer_bridged_option =
-            |t: &Type| self.is_nullable_option(t) || self.is_non_nilable_option(t);
-        if ty.has_name("Slice") {
-            let elem_ty = ty.inner()?;
-            if is_pointer_bridged_option(&elem_ty) {
-                return Some(elem_ty);
-            }
-        } else if ty.has_name("Map") {
-            let params = ty.get_type_params()?;
-            let val_ty = params.get(1)?.clone();
-            if is_pointer_bridged_option(&val_ty) {
-                return Some(val_ty);
-            }
-        }
-        None
+            || self.nullable_collection_shape(ty).is_some()
     }
 }
 
@@ -273,14 +225,13 @@ impl Emitter<'_> {
 
 impl Emitter<'_> {
     /// Pre-compute enum layouts for all known enum definitions.
-    ///
-    /// Must be called after `collect_impl_bounds()` since layouts need merged bounds.
-    /// Replaces the previous lazy `ensure_enum_layout()` pattern.
+    /// Replaces the previous lazy `ensure_enum_layout()` pattern. Generic
+    /// constraints are looked up from the constraint table at render time,
+    /// so layouts only need to store the source-AST generics.
     pub(crate) fn collect_enum_layouts(&mut self) {
         let enum_defs: Vec<_> = self
-            .ctx
-            .definitions
-            .iter()
+            .facts
+            .iter_definitions()
             .filter_map(|(id, definition)| {
                 if let Definition {
                     name: Some(name),
@@ -305,7 +256,7 @@ impl Emitter<'_> {
             let mut field_types = FieldTypeMap::default();
             for (vi, variant) in variants.iter().enumerate() {
                 for (fi, field) in variant.fields.iter().enumerate() {
-                    let mut go_type = self.go_type_as_string(&field.ty);
+                    let mut go_type = self.go_type(&field.ty).code;
                     let recursive = Self::is_recursive_type(&field.ty, &enum_id);
 
                     if recursive {
@@ -323,11 +274,8 @@ impl Emitter<'_> {
                 }
             }
 
-            let enum_name = go_name::unqualified_name(&enum_id);
-            let generics = self.merge_impl_bounds(enum_name, &generics);
-
             let layout = EnumLayout::new(&enum_id, &generics, &variants, &field_types);
-            self.module.enum_layouts.insert(enum_id, layout);
+            self.module.record_enum_layout(enum_id, layout);
         }
     }
 
@@ -345,8 +293,7 @@ impl Emitter<'_> {
         field_name: &str,
     ) -> Option<String> {
         self.module
-            .enum_layouts
-            .get(enum_id)?
+            .enum_layout(enum_id)?
             .struct_field_name(variant_name, field_name)
     }
 
@@ -357,8 +304,7 @@ impl Emitter<'_> {
         field_index: usize,
     ) -> Option<String> {
         self.module
-            .enum_layouts
-            .get(enum_id)?
+            .enum_layout(enum_id)?
             .tuple_field_name(variant_name, field_index)
     }
 
@@ -408,7 +354,7 @@ impl Emitter<'_> {
 
     pub(crate) fn is_enum_field_pointer(&self, ty: &Type, variant: &str, index: usize) -> bool {
         if let Type::Nominal { id, .. } = ty
-            && let Some(layout) = self.module.enum_layouts.get(id.as_ref())
+            && let Some(layout) = self.module.enum_layout(id.as_ref())
             && let Some(variant_layout) = layout.get_variant(variant)
             && let Some(field) = variant_layout.fields.get(index)
         {
@@ -428,7 +374,7 @@ impl Emitter<'_> {
             && let Some(Definition {
                 body: DefinitionBody::Enum { variants, .. },
                 ..
-            }) = self.ctx.definitions.get(id.as_str())
+            }) = self.facts.definition(id.as_str())
         {
             for v in variants {
                 if v.name == variant
@@ -451,7 +397,7 @@ impl Emitter<'_> {
                         generics, variants, ..
                     },
                 ..
-            }) = self.ctx.definitions.get(id.as_str())
+            }) = self.facts.definition(id.as_str())
         {
             let sub_map: HashMap<_, _> = generics
                 .iter()
@@ -480,7 +426,7 @@ impl Emitter<'_> {
             && let Some(Definition {
                 body: DefinitionBody::Enum { variants, .. },
                 ..
-            }) = self.ctx.definitions.get(id.as_str())
+            }) = self.facts.definition(id.as_str())
         {
             for v in variants {
                 if v.name == variant {

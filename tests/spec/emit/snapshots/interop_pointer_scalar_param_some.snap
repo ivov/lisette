@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-assertion_line: 1265
 description: "input: \nimport \"go:example.com/cfg\"\n\nfn main() {\n  cfg.Configure(Some(\"custom\"))\n}\n"
 ---
 package main

@@ -13,5 +13,7 @@ func (u UserId) String() string {
 }
 
 func test(uid UserId) int {
-	return int(uid)
+	{
+		return int(uid)
+	}
 }

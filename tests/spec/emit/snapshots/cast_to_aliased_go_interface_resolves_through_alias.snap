@@ -21,12 +21,13 @@ func (l Loader) Load(_ string) (int, error) {
 
 func run(s svc.Alias) int {
 	ret_2, ret_3 := s.Load("k")
-	var subject_1 lisette.Result[int, error]
+	var result_4 lisette.Result[int, error]
 	if ret_3 != nil {
-		subject_1 = lisette.MakeResultErr[int, error](ret_3)
+		result_4 = lisette.MakeResultErr[int, error](ret_3)
 	} else {
-		subject_1 = lisette.MakeResultOk[int, error](ret_2)
+		result_4 = lisette.MakeResultOk[int, error](ret_2)
 	}
+	subject_1 := result_4
 	if subject_1.Tag == lisette.ResultOk {
 		return subject_1.OkVal
 	}

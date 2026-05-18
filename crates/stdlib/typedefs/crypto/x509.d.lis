@@ -96,6 +96,42 @@ pub const TooManyIntermediates: InvalidReason = 3
 
 pub const UnconstrainedName: InvalidReason = 7
 
+pub enum PEMCipher: int {
+  PEMCipher3DES = 2,
+  PEMCipherAES128 = 3,
+  PEMCipherAES192 = 4,
+  PEMCipherAES256 = 5,
+  PEMCipherDES = 1,
+}
+
+pub const PEMCipher3DES: PEMCipher = 2
+
+pub const PEMCipherAES128: PEMCipher = 3
+
+pub const PEMCipherAES192: PEMCipher = 4
+
+pub const PEMCipherAES256: PEMCipher = 5
+
+pub const PEMCipherDES: PEMCipher = 1
+
+pub enum PublicKeyAlgorithm: int {
+  DSA = 2,
+  ECDSA = 3,
+  Ed25519 = 4,
+  RSA = 1,
+  UnknownPublicKeyAlgorithm = 0,
+}
+
+pub const DSA: PublicKeyAlgorithm = 2
+
+pub const ECDSA: PublicKeyAlgorithm = 3
+
+pub const Ed25519: PublicKeyAlgorithm = 4
+
+pub const RSA: PublicKeyAlgorithm = 1
+
+pub const UnknownPublicKeyAlgorithm: PublicKeyAlgorithm = 0
+
 pub enum SignatureAlgorithm: int {
   DSAWithSHA1 = 7,
   DSAWithSHA256 = 8,
@@ -563,20 +599,17 @@ pub struct InsecureAlgorithmError(int)
 
 /// KeyUsage represents the set of actions that are valid for a given key. It's
 /// a bitmap of the KeyUsage* constants.
+#[go(bit_flag_set)]
 pub struct KeyUsage(int)
 
 /// An OID represents an ASN.1 OBJECT IDENTIFIER.
 pub type OID
-
-pub struct PEMCipher(int)
 
 /// PolicyMapping represents a policy mapping entry in the policyMappings extension.
 pub struct PolicyMapping {
   pub IssuerDomainPolicy: OID,
   pub SubjectDomainPolicy: OID,
 }
-
-pub struct PublicKeyAlgorithm(int)
 
 /// RevocationList represents a [Certificate] Revocation List (CRL) as specified
 /// by RFC 5280.
@@ -631,12 +664,6 @@ pub struct VerifyOptions {
   pub CertificatePolicies: Slice<OID>,
 }
 
-pub const DSA: PublicKeyAlgorithm = 2
-
-pub const ECDSA: PublicKeyAlgorithm = 3
-
-pub const Ed25519: PublicKeyAlgorithm = 4
-
 pub const KeyUsageCRLSign: KeyUsage = 64
 
 pub const KeyUsageCertSign: KeyUsage = 32
@@ -654,20 +681,6 @@ pub const KeyUsageEncipherOnly: KeyUsage = 128
 pub const KeyUsageKeyAgreement: KeyUsage = 16
 
 pub const KeyUsageKeyEncipherment: KeyUsage = 4
-
-pub const PEMCipher3DES: PEMCipher = 2
-
-pub const PEMCipherAES128: PEMCipher = 3
-
-pub const PEMCipherAES192: PEMCipher = 4
-
-pub const PEMCipherAES256: PEMCipher = 5
-
-pub const PEMCipherDES: PEMCipher = 1
-
-pub const RSA: PublicKeyAlgorithm = 1
-
-pub const UnknownPublicKeyAlgorithm: PublicKeyAlgorithm = 0
 
 /// ErrUnsupportedAlgorithm results from attempting to perform an operation that
 /// involves algorithms that are not currently implemented.

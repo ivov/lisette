@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/interop_matrix.rs
-assertion_line: 1290
 description: "input: \nimport \"go:example.com/aws\"\n\nfn main() {\n  let input = aws.ListInput { .. }\n  let n = input.MaxItems\n  let _ = n\n}\n"
 ---
 package main
@@ -14,5 +13,6 @@ func main() {
 	input := aws.ListInput{}
 	raw_1 := input.MaxItems
 	option_2 := lisette.OptionFromPointer[int32](raw_1)
-	_ = option_2
+	n := option_2
+	_ = n
 }

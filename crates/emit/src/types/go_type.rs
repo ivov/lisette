@@ -113,33 +113,24 @@ impl Emitter<'_> {
             .join(", ");
 
         if kind == CompoundKind::EnumeratedSlice {
-            let mut result = GoType::new(format!("[]{}", type_args));
-            result.merge_all(&param_types);
-            return result;
+            return build_param_typed(format!("[]{}", type_args), &param_types);
         }
-
         if kind == CompoundKind::VarArgs {
-            let mut result = GoType::new(format!("...{}", type_args));
-            result.merge_all(&param_types);
-            return result;
+            return build_param_typed(format!("...{}", type_args), &param_types);
         }
-
         if args.is_empty() {
             return GoType::new(kind.leaf_name().to_string());
         }
-
-        let mut result = GoType::new(format!("{}[{}]", kind.leaf_name(), type_args));
-        result.merge_all(&param_types);
-        result
+        build_param_typed(format!("{}[{}]", kind.leaf_name(), type_args), &param_types)
     }
 
     pub(crate) fn go_type_as_string(&mut self, ty: &Type) -> String {
         let result = self.go_type(ty);
         if result.needs_stdlib {
-            self.flags.needs_stdlib = true;
+            self.requirements.require_stdlib();
         }
         for go_import in &result.go_imports {
-            self.ensure_imported.insert(go_import.clone());
+            self.requirements.require_go_import(go_import.clone());
         }
         result.code
     }
@@ -198,42 +189,19 @@ impl Emitter<'_> {
             .join(", ");
 
         if name == "EnumeratedSlice" {
-            let mut result = GoType::new(format!("[]{}", type_args));
-            result.merge_all(&param_types);
-            return result;
+            return build_param_typed(format!("[]{}", type_args), &param_types);
         }
-
         if name == "VarArgs" {
-            let mut result = GoType::new(format!("...{}", type_args));
-            result.merge_all(&param_types);
-            return result;
+            return build_param_typed(format!("...{}", type_args), &param_types);
         }
 
-        if let Some(rest) = qualified_name.strip_prefix(go_name::GO_IMPORT_PREFIX)
-            && let Some((go_path, _)) = rest.rsplit_once('.')
-        {
-            let mut result = if params.is_empty() {
-                GoType::with_go_import(name, go_path.to_string())
+        if let Some(go_path) = self.resolve_go_import_path(qualified_name) {
+            let code = if params.is_empty() {
+                name.clone()
             } else {
-                GoType::with_go_import(format!("{}[{}]", name, type_args), go_path.to_string())
+                format!("{}[{}]", name, type_args)
             };
-            result.merge_all(&param_types);
-            return result;
-        }
-
-        if let Some((module, _)) = qualified_name.split_once('.')
-            && module != self.current_module
-            && module != go_name::PRELUDE_MODULE
-            && !go_name::is_go_import(module)
-        {
-            let go_path = format!("{}/{}", self.ctx.go_module, module);
-            let mut result = if params.is_empty() {
-                GoType::with_go_import(name.clone(), go_path)
-            } else {
-                GoType::with_go_import(format!("{}[{}]", name, type_args), go_path)
-            };
-            result.merge_all(&param_types);
-            return result;
+            return build_go_import_typed(code, go_path, &param_types);
         }
 
         if let Some(name) = qualified_name.strip_prefix(go_name::PRELUDE_PREFIX)
@@ -248,10 +216,24 @@ impl Emitter<'_> {
         if params.is_empty() {
             return GoType::new(name);
         }
+        build_param_typed(format!("{}[{}]", name, type_args), &param_types)
+    }
 
-        let mut result = GoType::new(format!("{}[{}]", name, type_args));
-        result.merge_all(&param_types);
-        result
+    /// Resolve a Go-import path for a nominal constructor: either an explicit
+    /// `lisette/go/...` prefix on `qualified_name`, or an implicit one via a
+    /// foreign module mapped to a Go import. Returns `None` for prelude,
+    /// stdlib, or local nominal types.
+    fn resolve_go_import_path(&self, qualified_name: &str) -> Option<String> {
+        if let Some(rest) = qualified_name.strip_prefix(go_name::GO_IMPORT_PREFIX)
+            && let Some((go_path, _)) = rest.rsplit_once('.')
+        {
+            return Some(go_path.to_string());
+        }
+        let (module, _) = qualified_name.split_once('.')?;
+        if self.facts.is_foreign_module(module) && !go_name::is_go_import(module) {
+            return Some(self.facts.go_import_path(module));
+        }
+        None
     }
 
     fn emit_native_type(&self, native: NativeGoType, ty: &Type) -> GoType {
@@ -267,9 +249,7 @@ impl Emitter<'_> {
         let arg_types: Vec<GoType> = args.iter().map(|a| self.go_type(a)).collect();
         let type_args: Vec<String> = arg_types.iter().map(|t| t.code.clone()).collect();
 
-        let mut result = GoType::new(native.emit_type_syntax(&type_args));
-        result.merge_all(&arg_types);
-        result
+        build_param_typed(native.emit_type_syntax(&type_args), &arg_types)
     }
 
     fn emit_function_type(&self, params: &[Type], return_ty: &Type) -> GoType {
@@ -322,11 +302,11 @@ impl Emitter<'_> {
 
         let escaped = go_name::escape_keyword(unqualified);
 
-        if module == self.current_module || module == go_name::PRELUDE_MODULE {
-            escaped.into_owned()
-        } else {
+        if self.facts.is_foreign_module(module) {
             let pkg = self.go_pkg_qualifier(module);
             format!("{}.{}", pkg, escaped)
+        } else {
+            escaped.into_owned()
         }
     }
 
@@ -368,14 +348,22 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn zero_value(&self, ty: &Type) -> String {
-        if self.as_interface(ty).is_some() {
-            return "nil".to_string();
+    pub(crate) fn emit_zero_return(&mut self, output: &mut String, ty: &Type) {
+        let (zero, effects) = self.zero_value(ty);
+        self.requirements.apply_effects(&effects);
+        crate::write_line!(output, "return {}", zero);
+    }
+
+    pub(crate) fn zero_value(&self, ty: &Type) -> (String, crate::EmitEffects) {
+        let mut effects = crate::EmitEffects::default();
+        if self.facts.is_interface(ty) {
+            return ("nil".to_string(), effects);
         }
 
         let go_ty = self.go_type(ty);
+        effects.merge_from_go_type(&go_ty);
 
-        match go_ty.code.as_str() {
+        let value = match go_ty.code.as_str() {
             "int" | "int8" | "int16" | "int32" | "int64" | "uint" | "uint8" | "uint16"
             | "uint32" | "uint64" | "uintptr" | "byte" | "rune" => "0".to_string(),
             "float32" | "float64" => "0.0".to_string(),
@@ -393,16 +381,17 @@ impl Emitter<'_> {
                 "nil".to_string()
             }
             _ => format!("*new({})", go_ty.code),
-        }
+        };
+        (value, effects)
     }
 
     pub(crate) fn annotation_to_go_type(&mut self, annotation: &Annotation) -> String {
         let result = self.go_type_from_annotation(annotation);
         if result.needs_stdlib {
-            self.flags.needs_stdlib = true;
+            self.requirements.require_stdlib();
         }
         for go_import in &result.go_imports {
-            self.ensure_imported.insert(go_import.clone());
+            self.requirements.require_go_import(go_import.clone());
         }
         result.code
     }
@@ -510,13 +499,33 @@ impl Emitter<'_> {
             return result;
         }
 
+        let go_import = self.annotation_go_import(name);
+
         if params.is_empty() {
-            return GoType::new(base_name);
+            return match go_import {
+                Some(path) => GoType::with_go_import(base_name, path),
+                None => GoType::new(base_name),
+            };
         }
         let (param_types, type_params) = self.lower_annotation_params(params);
-        let mut result = GoType::new(format!("{}[{}]", base_name, type_params.join(", ")));
+        let code = format!("{}[{}]", base_name, type_params.join(", "));
+        let mut result = match go_import {
+            Some(path) => GoType::with_go_import(code, path),
+            None => GoType::new(code),
+        };
         result.merge_all(&param_types);
         result
+    }
+
+    fn annotation_go_import(&self, name: &str) -> Option<String> {
+        if let Some(rest) = name.strip_prefix(go_name::GO_IMPORT_PREFIX) {
+            return rest.rsplit_once('.').map(|(path, _)| path.to_string());
+        }
+        let module = self.facts.module_for_qualified_name(name)?;
+        if !self.facts.is_foreign_module(module) {
+            return None;
+        }
+        Some(self.go_import_path_for_module(module))
     }
 
     /// Lower each annotation param to a `GoType`, returning both the full
@@ -530,4 +539,16 @@ impl Emitter<'_> {
         let type_params: Vec<String> = param_types.iter().map(|t| t.code.clone()).collect();
         (param_types, type_params)
     }
+}
+
+fn build_param_typed(code: String, param_types: &[GoType]) -> GoType {
+    let mut result = GoType::new(code);
+    result.merge_all(param_types);
+    result
+}
+
+fn build_go_import_typed(code: String, go_path: String, param_types: &[GoType]) -> GoType {
+    let mut result = GoType::with_go_import(code, go_path);
+    result.merge_all(param_types);
+    result
 }

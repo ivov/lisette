@@ -1,6 +1,8 @@
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
+use crate::expressions::emission::{CapturePolicy, EmittedExpression};
 use crate::names::go_name;
-use crate::utils::{Staged, observable_after_mutation};
+use crate::utils::observable_after_mutation;
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -9,25 +11,27 @@ use syntax::types::Type;
 #[derive(Clone)]
 pub(crate) struct VariadicCombine {
     pub elem_ty: Type,
-    /// Staged-value index where variadic-feeding args begin.
+    /// EmittedExpr-value index where variadic-feeding args begin.
     pub fixed_count: usize,
 }
 
 impl Emitter<'_> {
-    pub(crate) fn stage_or_capture(&mut self, expression: &Expression, prefix: &str) -> Staged {
+    pub(crate) fn stage_or_capture(
+        &mut self,
+        expression: &Expression,
+        prefix: &str,
+    ) -> EmittedExpression {
         if matches!(
             expression,
             Expression::Literal { .. } | Expression::Identifier { .. }
         ) {
-            return self.stage_operand(expression);
+            return self.stage_operand(expression, ExpressionContext::value());
         }
 
         let mut setup = String::new();
-        let value_expr = self.emit_operand(&mut setup, expression);
-        let temp_var = self.fresh_var(Some(prefix));
-        self.declare(&temp_var);
-        write_line!(setup, "{} := {}", temp_var, value_expr);
-        Staged::new(setup, temp_var, expression)
+        let value_expr = self.emit_operand(&mut setup, expression, ExpressionContext::value());
+        let temp_var = self.hoist_tmp_value(&mut setup, prefix, &value_expr);
+        EmittedExpression::new(setup, temp_var, expression)
     }
 
     pub(crate) fn emit_force_capture(
@@ -37,28 +41,37 @@ impl Emitter<'_> {
         prefix: &str,
     ) -> String {
         if !observable_after_mutation(expression) {
-            return self.emit_operand(output, expression);
+            return self.emit_operand(output, expression, ExpressionContext::value());
         }
 
         let temp_var = self.fresh_var(Some(prefix));
         self.declare(&temp_var);
-        let expression_string = self.emit_composite_value(output, expression);
+        let expression_string =
+            self.emit_composite_value(output, expression, ExpressionContext::value());
         write_line!(output, "{} := {}", temp_var, expression_string);
         temp_var
     }
 
     /// Emit an expression to a separate buffer, capturing setup and value.
-    pub(crate) fn stage_operand(&mut self, expression: &Expression) -> Staged {
+    pub(crate) fn stage_operand(
+        &mut self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> EmittedExpression {
         let mut setup = String::new();
-        let value = self.emit_operand(&mut setup, expression);
-        Staged::new(setup, value, expression)
+        let value = self.emit_operand(&mut setup, expression, ctx);
+        EmittedExpression::new(setup, value, expression)
     }
 
     /// Emit an expression as a composite value to a separate buffer.
-    pub(crate) fn stage_composite(&mut self, expression: &Expression) -> Staged {
+    pub(crate) fn stage_composite(
+        &mut self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> EmittedExpression {
         let mut setup = String::new();
-        let value = self.emit_composite_value(&mut setup, expression);
-        Staged::new(setup, value, expression)
+        let value = self.emit_composite_value(&mut setup, expression, ctx);
+        EmittedExpression::new(setup, value, expression)
     }
 
     /// Suppresses the Go-fn identity short-circuit when the formal param
@@ -67,37 +80,61 @@ impl Emitter<'_> {
         &mut self,
         expression: &Expression,
         param_ty: Option<&syntax::types::Type>,
-    ) -> Staged {
+    ) -> EmittedExpression {
         let suppress = param_ty
             .is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function { .. }));
-        let saved = std::mem::replace(&mut self.suppress_go_fn_short_circuit, suppress);
-        let staged = self.stage_composite(expression);
-        self.suppress_go_fn_short_circuit = saved;
+        let arg_ctx = ExpressionContext::value().with_forced_tagged_go_function(suppress);
+        let staged = self.stage_composite(expression, arg_ctx);
 
-        if suppress
-            && !matches!(expression.unwrap_parens(), Expression::Lambda { .. })
-            && !Self::is_tagged_shape_fn_value(expression)
-            && self.classify_go_fn_value(expression).is_none()
-            && let Some(param_ty) = param_ty
-            && let syntax::types::Type::Function { return_type, .. } = param_ty.unwrap_forall()
-            && self.classify_direct_emission(return_type).is_some()
-        {
+        if suppress {
             let mut setup = staged.setup;
-            let cb_var = self.fresh_var(Some("cb"));
-            self.declare(&cb_var);
-            write_line!(setup, "{} := {}", cb_var, staged.value);
-            let tagged = self.lower_arg_to_tagged(&mut setup, &cb_var, param_ty);
-            return Staged::new(setup, tagged, expression);
+            if let Some(tagged) =
+                self.try_lower_arg_to_tagged(&mut setup, expression, &staged.value, param_ty)
+            {
+                return EmittedExpression::new(setup, tagged, expression);
+            }
+            return EmittedExpression::new(setup, staged.value, expression);
         }
 
         staged
+    }
+
+    /// Adapt a lowered-ABI Lisette callback to tagged shape when the callee
+    /// (prelude generic or otherwise) declares a function param whose return
+    /// classifies for direct (lowered) emission. Returns `None` when the arg
+    /// already has tagged shape, is a lambda literal, or is a Go fn value.
+    pub(crate) fn try_lower_arg_to_tagged(
+        &mut self,
+        output: &mut String,
+        arg: &Expression,
+        value: &str,
+        param_ty: Option<&Type>,
+    ) -> Option<String> {
+        if matches!(arg.unwrap_parens(), Expression::Lambda { .. }) {
+            return None;
+        }
+        if Self::is_tagged_shape_fn_value(arg) {
+            return None;
+        }
+        if self.classify_go_fn_value(arg).is_some() {
+            return None;
+        }
+        let param_ty = param_ty?;
+        let Type::Function { return_type, .. } = param_ty.unwrap_forall() else {
+            return None;
+        };
+        self.classify_direct_emission(return_type)?;
+        let cb_var = self.hoist_tmp_value(output, "cb", value);
+        Some(crate::types::abi_transition::lower_arg_to_tagged(
+            self, output, &cb_var, param_ty,
+        ))
     }
 
     pub(crate) fn stage_native_method_args(
         &mut self,
         function: &Expression,
         args: &[Expression],
-    ) -> Vec<Staged> {
+    ) -> Vec<EmittedExpression> {
         let fn_ty = function.get_type();
         let formal_params: &[syntax::types::Type] = match fn_ty.unwrap_forall() {
             syntax::types::Type::Function { params, .. } => params,
@@ -117,20 +154,20 @@ impl Emitter<'_> {
     pub(crate) fn sequence_with_spread(
         &mut self,
         output: &mut String,
-        mut stages: Vec<Staged>,
+        mut stages: Vec<EmittedExpression>,
         spread: Option<&Expression>,
         wrap_to_any: bool,
         prefix: &str,
         combine: Option<VariadicCombine>,
     ) -> Vec<String> {
         let spread_idx = spread.map(|s| {
-            stages.push(self.stage_operand(s));
+            stages.push(self.stage_operand(s, ExpressionContext::value()));
             stages.len() - 1
         });
         let mut values = self.sequence(output, stages, prefix);
         if let Some(i) = spread_idx {
             if wrap_to_any {
-                self.flags.needs_stdlib = true;
+                self.requirements.require_stdlib();
                 values[i] = format!("{}.SliceToAny({})", go_name::GO_STDLIB_PKG, values[i]);
             }
             match combine {
@@ -156,7 +193,7 @@ impl Emitter<'_> {
     pub(crate) fn sequence(
         &mut self,
         output: &mut String,
-        stages: Vec<Staged>,
+        stages: Vec<EmittedExpression>,
         prefix: &str,
     ) -> Vec<String> {
         // Fast path: when no element produces setup, just move the values out.
@@ -170,10 +207,8 @@ impl Emitter<'_> {
 
             output.push_str(&s.setup);
 
-            if later_has_setup && s.needs_capture {
-                let tmp = self.fresh_var(Some(prefix));
-                self.declare(&tmp);
-                write_line!(output, "{} := {}", tmp, s.value);
+            if later_has_setup && matches!(s.capture, CapturePolicy::IfLaterSetup) {
+                let tmp = self.hoist_tmp_value(output, prefix, &s.value);
                 results.push(tmp);
             } else {
                 results.push(s.value.clone());

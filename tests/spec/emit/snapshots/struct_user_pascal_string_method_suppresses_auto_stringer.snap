@@ -19,5 +19,6 @@ func (a A) String() string {
 }
 
 func main() {
-	_ = A{a: "text"}
+	a := A{a: "text"}
+	_ = a
 }

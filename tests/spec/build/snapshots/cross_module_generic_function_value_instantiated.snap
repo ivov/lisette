@@ -16,5 +16,6 @@ import "github.com/user/myproject/lib"
 
 func main() {
 	f := lib.Id[int]
-	_ = f(42)
+	result := f(42)
+	_ = result
 }

@@ -181,6 +181,21 @@ pub const X86_64_RELOC_TLV: RelocTypeX86_64 = 9
 
 pub const X86_64_RELOC_UNSIGNED: RelocTypeX86_64 = 0
 
+pub enum Type: uint32 {
+  TypeBundle = 8,
+  TypeDylib = 6,
+  TypeExec = 2,
+  TypeObj = 1,
+}
+
+pub const TypeBundle: Type = 8
+
+pub const TypeDylib: Type = 6
+
+pub const TypeExec: Type = 2
+
+pub const TypeObj: Type = 1
+
 /// NewFatFile creates a new [FatFile] for accessing all the Mach-O images in a
 /// universal binary. The Mach-O binary is expected to start at position 0 in
 /// the ReaderAt.
@@ -523,9 +538,6 @@ pub struct Thread {
   pub Data: Slice<uint32>,
 }
 
-/// A Type is the Mach-O file type, e.g. an object file, executable, or dynamic library.
-pub struct Type(uint32)
-
 pub const FlagAllModsBound = 0x1000
 
 pub const FlagAllowStackExecution = 0x20000
@@ -584,14 +596,6 @@ pub const Magic64 = 0xfeedfacf
 
 pub const MagicFat = 0xcafebabe
 
-pub const TypeBundle: Type = 8
-
-pub const TypeDylib: Type = 6
-
-pub const TypeExec: Type = 2
-
-pub const TypeObj: Type = 1
-
 /// ErrNotFat is returned from [NewFatFile] or [OpenFat] when the file is not a
 /// universal binary but may be a thin binary, based on its magic number.
 pub var ErrNotFat: Ref<FormatError>
@@ -615,27 +619,27 @@ impl FatArch {
   /// If the [File] was created using [NewFile] directly instead of [Open],
   /// Close has no effect.
   #[allow(unused_result)]
-  fn Close(self) -> Result<(), error>
+  fn Close(self: Ref<FatArch>) -> Result<(), error>
 
   /// DWARF returns the DWARF debug information for the Mach-O file.
-  fn DWARF(self) -> Result<Ref<dwarf.Data>, error>
+  fn DWARF(self: Ref<FatArch>) -> Result<Ref<dwarf.Data>, error>
 
   /// ImportedLibraries returns the paths of all libraries
   /// referred to by the binary f that are expected to be
   /// linked with the binary at dynamic link time.
-  fn ImportedLibraries(self) -> Result<Slice<string>, error>
+  fn ImportedLibraries(self: Ref<FatArch>) -> Result<Slice<string>, error>
 
   /// ImportedSymbols returns the names of all symbols
   /// referred to by the binary f that are expected to be
   /// satisfied by other libraries at dynamic load time.
-  fn ImportedSymbols(self) -> Result<Slice<string>, error>
+  fn ImportedSymbols(self: Ref<FatArch>) -> Result<Slice<string>, error>
 
   /// Section returns the first section with the given name, or nil if no such
   /// section exists.
-  fn Section(self, name: string) -> Option<Ref<Section>>
+  fn Section(self: Ref<FatArch>, name: string) -> Option<Ref<Section>>
 
   /// Segment returns the first Segment with the given name, or nil if no such segment exists.
-  fn Segment(self, name: string) -> Option<Ref<Segment>>
+  fn Segment(self: Ref<FatArch>, name: string) -> Option<Ref<Segment>>
 }
 
 impl FatFile {

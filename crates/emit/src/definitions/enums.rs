@@ -16,16 +16,16 @@ impl Emitter<'_> {
             return None;
         }
 
-        let enum_id = format!("{}.{}", self.current_module, name);
+        let enum_id = self.facts.qualified_current(name);
 
-        if !self.module.enum_layouts.contains_key(&enum_id) {
+        if !self.module.has_enum_layout(&enum_id) {
             return None;
         }
 
         let variant_field_types: Vec<Type> = if let Some(Definition {
             body: DefinitionBody::Enum { variants, .. },
             ..
-        }) = self.ctx.definitions.get(enum_id.as_str())
+        }) = self.facts.definition(enum_id.as_str())
         {
             variants
                 .iter()
@@ -38,26 +38,27 @@ impl Emitter<'_> {
             let _ = self.go_type_as_string(ty);
         }
 
-        let generics = self.merge_impl_bounds(name, generics);
-        let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
-        let map_key_generics = self.enum_map_key_generics(&enum_id, &generic_names);
-        let generics_string = self.generics_to_string_with_map_keys(&generics, &map_key_generics);
-        let receiver_generics = receiver_generics_string(&generics);
+        let generics_string = self.generics_to_string_for_symbol(&enum_id, generics);
+        let receiver_generics = receiver_generics_string(generics);
         let has_json = attributes.iter().any(|a| a.name == "json");
 
-        let layout = self.module.enum_layouts.get(&enum_id).unwrap();
+        let stringer_name = self.stringer_method_name(name);
+        let needs_fmt = stringer_name.is_some();
+        let layout = self.module.enum_layout(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);
-        if let Some(stringer_name) = self.stringer_method_name(name) {
+        if let Some(stringer_name) = stringer_name {
             result.push_str("\n\n");
             result.push_str(&layout.emit_stringer_method(&receiver_generics, stringer_name));
-            self.ensure_imported.insert("fmt".to_string());
         }
         if has_json {
             result.push_str("\n\n");
             result.push_str(&layout.emit_json_methods(&receiver_generics));
         }
+        if needs_fmt {
+            self.requirements.require_fmt();
+        }
         if has_json {
-            self.ensure_imported.insert("encoding/json".to_string());
+            self.requirements.require_go_import("encoding/json");
         }
 
         Some(result)
@@ -70,8 +71,7 @@ impl Emitter<'_> {
     ) -> String {
         let layout = self
             .module
-            .enum_layouts
-            .get(enum_id)
+            .enum_layout(enum_id)
             .expect("enum layout should exist");
         let variant = layout
             .get_variant(variant_name)
@@ -105,10 +105,7 @@ impl Emitter<'_> {
                 .map(|g| g.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            let generic_names: Vec<&str> = generics.iter().map(|g| g.name.as_ref()).collect();
-            let map_key_generics = self.enum_map_key_generics(enum_id, &generic_names);
-            let generics_string =
-                self.generics_to_string_with_map_keys(&generics, &map_key_generics);
+            let generics_string = self.generics_to_string_for_symbol(enum_id, &generics);
             (generics_string, format!("[{}]", args))
         };
 

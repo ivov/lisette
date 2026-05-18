@@ -5,9 +5,12 @@ description: "input: \nfn test() -> int {\n  let x = loop {\n    if true {\n    
 package main
 
 func test() int {
+	var x int
 	for {
 		if true {
-			return 42
+			x = 42
+			break
 		}
 	}
+	return x
 }

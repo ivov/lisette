@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/patterns.rs
-assertion_line: 596
 description: "input: \nimport \"go:fmt\"\n\nfn main() {\n  let rest = [99]\n  fmt.Println(rest[0])\n  let [x, ..rest] | [x, ..rest] = [1, 2] else {\n    return\n  }\n  fmt.Println(x, rest[0])\n}\n"
 ---
 package main

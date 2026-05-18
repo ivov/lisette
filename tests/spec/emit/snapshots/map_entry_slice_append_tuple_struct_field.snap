@@ -18,7 +18,7 @@ func (w Wrap) String() string {
 func main() {
 	m := make(map[string]Wrap)
 	m["a"] = Wrap{
-		F0: []int{},
+		F0: ([]int)(nil),
 		F1: 0,
 	}
 	entry := m["a"]

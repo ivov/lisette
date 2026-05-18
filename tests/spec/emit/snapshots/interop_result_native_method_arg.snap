@@ -15,13 +15,13 @@ func main() {
 		ret_1, ret_2 := strconv.Atoi(arg0)
 		if ret_2 != nil {
 			return lisette.MakeResultErr[int, error](ret_2)
+		} else {
+			return lisette.MakeResultOk[int, error](ret_1)
 		}
-		return lisette.MakeResultOk[int, error](ret_1)
 	})
-	subject_4 := ys[0]
-	if subject_4.Tag == lisette.ResultOk {
-		_ = subject_4.OkVal
+	subject_3 := ys[0]
+	if subject_3.Tag == lisette.ResultOk {
+		_ = subject_3.OkVal
 	} else {
-		_ = 0
 	}
 }

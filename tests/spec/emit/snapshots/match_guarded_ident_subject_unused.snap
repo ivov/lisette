@@ -15,14 +15,17 @@ func (p P) String() string {
 }
 
 func test() {
-	_ = P{v: 1}
-match_1:
+	p := P{v: 1}
+	_ = p
+match_2:
 	for {
 		{
 			if false {
-				break match_1
+				break match_2
 			}
 		}
-		break match_1
+		{
+			break match_2
+		}
 	}
 }

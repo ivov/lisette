@@ -16,8 +16,9 @@ func test() lisette.Result[struct{}, string] {
 		for {
 			if o.Tag == lisette.OptionSome {
 				break
+			} else {
+				break
 			}
-			break
 		}
 		return lisette.MakeResultOk[struct{}, string](struct{}{})
 	}()

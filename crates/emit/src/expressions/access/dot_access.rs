@@ -1,32 +1,48 @@
-use syntax::ast::{Expression, StructKind, UnaryOperator};
+use syntax::ast::{Expression, StructKind};
 use syntax::program::{
     Definition, DefinitionBody, DotAccessKind as SemanticDotKind, ReceiverCoercion,
 };
 use syntax::types::Type;
 
 use crate::Emitter;
+use crate::expressions::context::ExpressionContext;
 use crate::go_name;
-use crate::types::coercion::Coercion;
-use crate::write_line;
+use crate::types::coercion::{Coercion, CoercionDirection};
 
 impl Emitter<'_> {
     pub(crate) fn emit_dot_access(
         &mut self,
         output: &mut String,
-        expression: &Expression,
-        member: &str,
-        result_ty: &Type,
-        dot_access_kind: Option<SemanticDotKind>,
-        receiver_coercion: Option<ReceiverCoercion>,
+        dot_access: &Expression,
+        ctx: ExpressionContext<'_>,
     ) -> String {
+        let Expression::DotAccess {
+            expression,
+            member,
+            ty: result_ty,
+            dot_access_kind,
+            receiver_coercion,
+            ..
+        } = dot_access
+        else {
+            unreachable!("emit_dot_access requires a DotAccess expression");
+        };
+        let dot_access_kind = *dot_access_kind;
+        let receiver_coercion = *receiver_coercion;
+
         if let Some(s) =
-            self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind)
+            self.try_emit_pre_receiver_dot(expression, member, result_ty, dot_access_kind, ctx)
         {
             return s;
         }
 
-        let expression_string = self.emit_coerced_expression(output, expression, receiver_coercion);
+        let expression_string =
+            self.emit_coerced_expression(output, expression, receiver_coercion, ctx);
         let expression_ty = expression.get_type();
+
+        if let Some(module) = expression_ty.as_import_namespace() {
+            self.require_module_import(module);
+        }
 
         if let Some(s) = self.try_emit_tuple_member_dot(
             &expression_string,
@@ -39,7 +55,9 @@ impl Emitter<'_> {
 
         let is_exported =
             self.resolve_is_exported(expression, &expression_ty, member, dot_access_kind);
-        let field = go_field_name(&expression_ty, member, is_exported);
+        let field = self
+            .try_resolve_cross_module_const(&expression_ty, member)
+            .unwrap_or_else(|| go_field_name(&expression_ty, member, is_exported));
 
         if let Some(s) = self.try_emit_nullable_field_access(
             output,
@@ -52,7 +70,7 @@ impl Emitter<'_> {
         }
 
         let result = format!("{}.{}", expression_string, field);
-        self.append_cross_module_type_args(result, &expression_ty, member, result_ty)
+        self.append_cross_module_type_args(result, &expression_ty, member, result_ty, ctx)
     }
 
     /// Phase 1 dispatch: the semantic kind may resolve without needing the
@@ -66,6 +84,7 @@ impl Emitter<'_> {
         member: &str,
         result_ty: &Type,
         dot_access_kind: Option<SemanticDotKind>,
+        ctx: ExpressionContext<'_>,
     ) -> Option<String> {
         match dot_access_kind {
             Some(SemanticDotKind::ValueEnumVariant) => {
@@ -75,7 +94,7 @@ impl Emitter<'_> {
                 self.emit_enum_variant_dot(expression, member, result_ty)
             }
             Some(SemanticDotKind::StaticMethod { .. }) => {
-                self.emit_static_method_dot(expression, member, result_ty)
+                self.emit_static_method_dot(expression, member, result_ty, ctx)
             }
             Some(SemanticDotKind::InstanceMethodValue {
                 is_exported,
@@ -89,7 +108,7 @@ impl Emitter<'_> {
             ),
             Some(SemanticDotKind::ModuleMember) | None => self
                 .emit_enum_variant_dot(expression, member, result_ty)
-                .or_else(|| self.emit_static_method_dot(expression, member, result_ty)),
+                .or_else(|| self.emit_static_method_dot(expression, member, result_ty, ctx)),
             _ => None,
         }
     }
@@ -163,14 +182,17 @@ impl Emitter<'_> {
         expression_ty: &Type,
         result_ty: &Type,
     ) -> Option<String> {
-        if !Self::is_go_imported_type(expression_ty) || !self.is_go_nullable(result_ty) {
+        if self.go_imported_shape(expression_ty).is_none() || !self.is_go_nullable(result_ty) {
             return None;
         }
         let raw_access = format!("{}.{}", expression_string, field);
-        let raw_var = self.fresh_var(Some("raw"));
-        self.declare(&raw_var);
-        write_line!(output, "{} := {}", raw_var, raw_access);
-        let coercion = Coercion::resolve_wrap_go_nullable(self, result_ty);
+        let raw_var = self.hoist_tmp_value(output, "raw", &raw_access);
+        let coercion = Coercion::resolve(
+            self,
+            result_ty,
+            result_ty,
+            CoercionDirection::FromGoBoundary,
+        );
         Some(coercion.apply(self, output, raw_var))
     }
 
@@ -183,8 +205,9 @@ impl Emitter<'_> {
         expression_ty: &Type,
         member: &str,
         result_ty: &Type,
+        ctx: ExpressionContext<'_>,
     ) -> String {
-        if self.emitting_call_callee {
+        if ctx.is_callee() {
             return base_access;
         }
         let Some(module) = expression_ty.as_import_namespace() else {
@@ -211,7 +234,7 @@ impl Emitter<'_> {
         let Some(Definition {
             body: DefinitionBody::Struct { fields, .. },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return None;
         };
@@ -239,8 +262,9 @@ impl Emitter<'_> {
         is_import_namespace_ident
             || self.is_from_prelude(expression_ty)
             || if let Type::Nominal { id, .. } = expression_ty.strip_refs() {
-                id.split_once('.')
-                    .is_some_and(|(m, _)| m != self.current_module && m != go_name::PRELUDE_MODULE)
+                self.facts
+                    .module_for_qualified_name(id.as_str())
+                    .is_some_and(|m| self.facts.is_foreign_module(m))
             } else {
                 false
             }
@@ -255,16 +279,13 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
         coercion: Option<ReceiverCoercion>,
+        ctx: ExpressionContext<'_>,
     ) -> String {
-        let (expression_string, had_explicit_deref) = if let Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } = expression
+        let (expression_string, had_explicit_deref) = if let Some(inner) = expression.deref_inner()
         {
-            (self.emit_operand(output, inner), true)
+            (self.emit_operand(output, inner, ctx), true)
         } else {
-            (self.emit_operand(output, expression), false)
+            (self.emit_operand(output, expression, ctx), false)
         };
 
         let is_absorbed_ref = self.is_absorbed_ref_generic(expression);
@@ -273,12 +294,7 @@ impl Emitter<'_> {
             _ if is_absorbed_ref => expression_string,
             (Some(ReceiverCoercion::AutoAddress), true) => expression_string,
             (Some(ReceiverCoercion::AutoAddress), false) => match expression.unwrap_parens() {
-                Expression::Call { .. } => {
-                    let tmp = self.fresh_var(Some("ref"));
-                    self.declare(&tmp);
-                    write_line!(output, "{} := {}", tmp, expression_string);
-                    tmp
-                }
+                Expression::Call { .. } => self.hoist_tmp_value(output, "ref", &expression_string),
                 Expression::StructCall { .. } => format!("(&{})", expression_string),
                 _ => expression_string,
             },
@@ -291,21 +307,12 @@ impl Emitter<'_> {
     /// Check if expression has an absorbed `Ref<T>` generic (T already emitted as `*Concrete`).
     /// When true, suppress auto-deref coercion — the pointer is already the right type.
     fn is_absorbed_ref_generic(&self, expression: &Expression) -> bool {
-        let check_expression = if let Expression::Unary {
-            operator: UnaryOperator::Deref,
-            expression: inner,
-            ..
-        } = expression
-        {
-            inner.as_ref()
-        } else {
-            expression
-        };
+        let check_expression = expression.deref_inner().unwrap_or(expression);
         let expression_ty = check_expression.get_type();
         expression_ty.is_ref()
             && expression_ty.inner().is_some_and(|inner| {
                 matches!(inner, Type::Parameter(name)
-                    if self.module.absorbed_ref_generics.contains(name.as_ref()))
+                    if self.function_state.is_absorbed_ref_generic(name.as_ref()))
             })
     }
 
@@ -329,7 +336,7 @@ impl Emitter<'_> {
                     ..
                 },
             ..
-        }) = self.ctx.definitions.get(id.as_str())
+        }) = self.facts.definition(id.as_str())
         else {
             return None;
         };
@@ -349,6 +356,28 @@ impl Emitter<'_> {
         }
 
         Some(format!("{}.F{}", expression_string, index))
+    }
+
+    fn try_resolve_cross_module_const(&self, expression_ty: &Type, member: &str) -> Option<String> {
+        let module = expression_ty.as_import_namespace()?;
+        if go_name::is_go_import(module) {
+            return None;
+        }
+        let qualified_name = format!("{}.{}", module, member);
+        let definition = self.facts.definition(qualified_name.as_str())?;
+        if !definition.visibility().is_public() {
+            return None;
+        }
+        if !matches!(definition.body, DefinitionBody::Value { .. }) {
+            return None;
+        }
+        let ty = definition.ty();
+        let is_function = matches!(ty, Type::Function { .. })
+            || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function { .. }));
+        if is_function {
+            return None;
+        }
+        Some(member.to_string())
     }
 
     /// Whether the type resolves to a prelude-module declaration. Shared with

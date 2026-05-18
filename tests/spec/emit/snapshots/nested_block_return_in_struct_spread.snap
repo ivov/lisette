@@ -16,7 +16,9 @@ func (s S) String() string {
 
 func test() int {
 	{
-		return 1
+		{
+			return 1
+		}
 	}
 	_ = S{}.a
 	return 2

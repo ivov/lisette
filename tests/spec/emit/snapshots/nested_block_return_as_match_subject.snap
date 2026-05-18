@@ -7,7 +7,9 @@ package main
 func test() int {
 	var tmp_1 int
 	{
-		return 1
+		{
+			return 1
+		}
 	}
 	_ = tmp_1
 	return 3

@@ -9,5 +9,5 @@ import "fmt"
 func test() {
 	x := 10
 	y := 20
-	fmt.Printf("x = %v, y = %v", x, y)
+	fmt.Printf("x = %d, y = %d", x, y)
 }

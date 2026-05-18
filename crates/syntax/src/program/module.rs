@@ -62,6 +62,14 @@ impl Module {
         self.typedefs.values().flat_map(|f| f.imports()).collect()
     }
 
+    pub fn all_imports(&self) -> Vec<FileImport> {
+        self.files
+            .values()
+            .chain(self.typedefs.values())
+            .flat_map(|f| f.imports())
+            .collect()
+    }
+
     pub fn all_typedefs(&self) -> impl Iterator<Item = &File> {
         self.typedefs.values()
     }

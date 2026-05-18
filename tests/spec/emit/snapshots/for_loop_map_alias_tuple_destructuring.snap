@@ -1,0 +1,15 @@
+---
+source: tests/spec/emit/control_flow.rs
+description: "input: \ntype Table = Map<string, int>\n\nfn sum(t: Table) -> int {\n  let mut total = 0\n  for (k, v) in t {\n    total = total + k.length() + v\n  }\n  total\n}\n"
+---
+package main
+
+type Table = map[string]int
+
+func sum(t Table) int {
+	total := 0
+	for k, v := range t {
+		total = total + len(k) + v
+	}
+	return total
+}

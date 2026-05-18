@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ivov/lisette/bindgen/internal/config"
 	"github.com/ivov/lisette/bindgen/internal/extract"
 )
 
@@ -16,12 +17,14 @@ type ValueEnumInfo struct {
 	Variants       []EnumVariant
 }
 
-func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport) ([]ValueEnumInfo, map[int]string, map[string]bool) {
-	typeToConstants := make(map[string][]struct {
-		index int
-		name  string
-		value string
-	})
+type constInfo struct {
+	index int
+	name  string
+	value string
+}
+
+func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport, cfg *config.Config, pkgPath string) (valueEnums []ValueEnumInfo, constantTypes map[int]string, valueEnumTypeNames map[string]bool, bitFlagSetTypeNames map[string]bool) {
+	typeToConstants := make(map[string][]constInfo)
 	typeToUnderlying := make(map[string]string)
 
 	for i, result := range results {
@@ -51,6 +54,12 @@ func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport) (
 			continue
 		}
 
+		// Unexported types must not leak as Lisette type declarations;
+		// their typed constants leak as untyped `pub const X = N`.
+		if !typeObj.Exported() {
+			continue
+		}
+
 		underlying := namedType.Underlying()
 		basic, ok := underlying.(*types.Basic)
 		if !ok {
@@ -67,20 +76,16 @@ func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport) (
 			typeToUnderlying[typeName] = basic.Name()
 		}
 
-		typeToConstants[typeName] = append(typeToConstants[typeName], struct {
-			index int
-			name  string
-			value string
-		}{
+		typeToConstants[typeName] = append(typeToConstants[typeName], constInfo{
 			index: i,
 			name:  result.Name,
 			value: result.ConstValue,
 		})
 	}
 
-	var valueEnums []ValueEnumInfo
-	constantTypes := make(map[int]string)
-	valueEnumTypeNames := make(map[string]bool)
+	constantTypes = make(map[int]string)
+	valueEnumTypeNames = make(map[string]bool)
+	bitFlagSetTypeNames = make(map[string]bool)
 
 	typeNames := make([]string, 0, len(typeToConstants))
 	for typeName := range typeToConstants {
@@ -94,7 +99,11 @@ func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport) (
 			continue
 		}
 
-		if looksLikeBitFlags(constants) {
+		// Bit operations on a string-underlying type are not meaningful;
+		// neither H13 nor the config override applies here.
+		isInteger := typeToUnderlying[typeName] != "string"
+		if isInteger && (cfg.ShouldTreatAsBitFlagSet(pkgPath, typeName) || looksLikeBitFlags(constants)) {
+			bitFlagSetTypeNames[typeName] = true
 			continue
 		}
 
@@ -115,27 +124,52 @@ func DetectValueEnums(results []ConvertResult, exports []extract.SymbolExport) (
 		valueEnumTypeNames[typeName] = true
 	}
 
-	return valueEnums, constantTypes, valueEnumTypeNames
+	return valueEnums, constantTypes, valueEnumTypeNames, bitFlagSetTypeNames
 }
 
-func looksLikeBitFlags(constants []struct {
-	index int
-	name  string
-	value string
-}) bool {
-	if len(constants) < 2 {
+// looksLikeBitFlags classifies a named integer type as a bit-flag set.
+// Rule (H13): at least 4 constants, every nonzero value is a single bit,
+// and the values are not the sequential range 0..N-1 or 1..N. Small flag
+// types (under 4 constants) and hybrid mask/flag types pass through to
+// value-enum emission; recover them via the bit_flag_set config override.
+func looksLikeBitFlags(constants []constInfo) bool {
+	const minConstants = 4
+	if len(constants) < minConstants {
 		return false
 	}
 
-	powersOf2 := 0
-	for _, c := range constants {
-		val := parseIntValue(c.value)
-		if val > 0 && bits.OnesCount64(uint64(val)) == 1 {
-			powersOf2++
-		}
+	if isSequentialRange(constants) {
+		return false
 	}
 
-	return powersOf2 > len(constants)/2
+	for _, c := range constants {
+		val := parseIntValue(c.value)
+		if val == 0 {
+			continue
+		}
+		if val < 0 || bits.OnesCount64(uint64(val)) != 1 {
+			return false
+		}
+	}
+	return true
+}
+
+// isSequentialRange reports whether the constant values form 0..N-1 or 1..N.
+func isSequentialRange(constants []constInfo) bool {
+	vals := make([]int64, 0, len(constants))
+	for _, c := range constants {
+		vals = append(vals, parseIntValue(c.value))
+	}
+	slices.Sort(vals)
+	if vals[0] != 0 && vals[0] != 1 {
+		return false
+	}
+	for i := 1; i < len(vals); i++ {
+		if vals[i] != vals[i-1]+1 {
+			return false
+		}
+	}
+	return true
 }
 
 func parseIntValue(s string) int64 {

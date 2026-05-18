@@ -6,7 +6,9 @@ package main
 
 func f() int {
 	var x int
-	return 1
+	{
+		return 1
+	}
 	return x
 }
 

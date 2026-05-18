@@ -1424,3 +1424,142 @@ pub struct ListInput {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/aws", typedef)]);
 }
+
+#[test]
+fn interop_nullable_field_read_through_go_struct_alias_wraps() {
+    let input = r#"
+import "go:flag"
+
+type MyFlag = flag.Flag
+
+fn main() {
+  let f: MyFlag = flag.Flag { .. }
+  let v = f.Value
+  match v {
+    Some(x) => { let _ = x },
+    None => { let _ = 0 },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_nullable_field_assign_through_go_struct_alias_unwraps() {
+    let input = r#"
+import "go:flag"
+
+type MyFlag = flag.Flag
+
+fn main() {
+  let mut f: MyFlag = flag.Flag { .. }
+  f.Value = None
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_nullable_collection_field_read_through_go_struct_alias_wraps() {
+    let input = r#"
+import "go:crypto/x509"
+import "go:net/url"
+
+type Cert = x509.Certificate
+
+fn main() {
+  let u = url.URL {
+    Scheme: "https",
+    Host: "example.com",
+    ..,
+  }
+  let cert: Cert = x509.Certificate {
+    URIs: [Some(&u)],
+    ..,
+  }
+  let urls = cert.URIs
+  let first = urls[0]
+  match first {
+    Some(value) => { let _ = value },
+    None => { let _ = 0 },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_nullable_collection_field_assign_through_go_struct_alias_unwraps() {
+    let input = r#"
+import "go:crypto/x509"
+import "go:net/url"
+
+type Cert = x509.Certificate
+
+fn main() {
+  let u = url.URL {
+    Scheme: "https",
+    Host: "example.com",
+    ..,
+  }
+  let mut cert: Cert = x509.Certificate { .. }
+  let urls: Slice<Option<Ref<url.URL>>> = [Some(&u)]
+  cert.URIs = urls
+  let _ = cert
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_map_alias_value_unwrapped_at_go_struct_literal() {
+    let input = r#"
+import "go:go/ast"
+
+type Objects = Map<string, Option<Ref<ast.Object>>>
+
+fn main() {
+  let obj = ast.Object {
+    Kind: ast.Bad,
+    Name: "x",
+    Decl: None,
+    Data: None,
+    Type: None,
+  }
+  let mut objects: Objects = Map.new<string, Option<Ref<ast.Object>>>()
+  objects["present"] = Some(&obj)
+  objects["absent"] = None
+  let scope = ast.Scope {
+    Outer: None,
+    Objects: objects,
+  }
+  let _ = scope
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn interop_slice_alias_value_unwrapped_at_go_struct_literal() {
+    let input = r#"
+import "go:crypto/x509"
+import "go:net/url"
+
+type URLs = Slice<Option<Ref<url.URL>>>
+
+fn main() {
+  let u = url.URL {
+    Scheme: "https",
+    Host: "example.com",
+    ..,
+  }
+  let urls: URLs = [Some(&u), None]
+  let cert = x509.Certificate {
+    URIs: urls,
+    ..,
+  }
+  let _ = cert
+}
+"#;
+    assert_emit_snapshot!(input);
+}

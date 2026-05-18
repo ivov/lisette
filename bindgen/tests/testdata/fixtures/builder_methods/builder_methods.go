@@ -86,3 +86,13 @@ func (v *Var) Origin() *Var {
 	}
 	return v
 }
+
+type Inner struct{ routes []string }
+
+func (i *Inner) Get(path string) Router  { i.routes = append(i.routes, "GET "+path); return i }
+func (i *Inner) Post(path string) Router { i.routes = append(i.routes, "POST "+path); return i }
+func (i *Inner) NewGroup() *Group        { return &Group{} }
+
+type Engine struct{ Inner }
+
+var _ Router = (*Inner)(nil)

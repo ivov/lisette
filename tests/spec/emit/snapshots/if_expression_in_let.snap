@@ -5,8 +5,11 @@ description: "input: \nfn test(x: int) -> int {\n  let result = if x > 0 { x * 2
 package main
 
 func test(x int) int {
+	var result int
 	if x > 0 {
-		return x * 2
+		result = x * 2
+	} else {
+		result = 0
 	}
-	return 0
+	return result
 }

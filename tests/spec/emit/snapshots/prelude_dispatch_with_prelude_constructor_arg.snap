@@ -8,5 +8,6 @@ import lisette "github.com/ivov/lisette/prelude"
 
 func main() {
 	opt := lisette.MakeOptionSome(1)
-	_ = lisette.OptionAndThen(opt, lisette.MakeOptionSome[int])
+	r := lisette.OptionAndThen(opt, lisette.MakeOptionSome[int])
+	_ = r
 }

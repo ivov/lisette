@@ -121,13 +121,16 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	nilableParams := c.cfg.NilableParams(c.currentPkgPath, result.Name)
 
 	params := signature.Params()
+	usedNames := collectNamedParams(params)
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
 		name := param.Name()
 		if name == "" {
-			name = fmt.Sprintf("arg%d", i)
+			isVariadic := signature.Variadic() && i == params.Len()-1
+			name = deriveParamName(param.Type(), i, isVariadic, usedNames)
+		} else {
+			name = sanitizeParamName(name)
 		}
-		name = sanitizeParamName(name)
 
 		paramType := convertParamType(param.Type(), name, nilableParams, c)
 		if paramType.SkipReason != nil {
@@ -155,6 +158,9 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 		result.ReturnType = returnType.LisetteType
 	} else if returnType.SkipReason != nil {
 		result.ReturnType = "Unknown"
+	}
+	if returnType.SkipReason != nil {
+		result.SkipNote = returnType.SkipReason
 	}
 	result.CommaOk = returnType.CommaOk
 	result.ArrayReturn = returnType.ArrayReturn
@@ -217,7 +223,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		if symbolExport.IsPromoted {
 			typeName := symbolExport.BaseType.Obj().Name()
 			typeParams := extractReceiverTypeParams(symbolExport.BaseType, c)
-			isPointerReceiver := symbolExport.NeedsPointerReceiver
+			_, isPointerReceiver := symbolExport.ReceiverVariable.Type().(*types.Pointer)
 
 			recvLisetteType := typeName
 			if isPointerReceiver {
@@ -278,13 +284,16 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	nilableParams := c.cfg.NilableParams(c.currentPkgPath, qualifiedName)
 
 	params := signature.Params()
+	usedNames := collectNamedParams(params)
 	for i := 0; i < params.Len(); i++ {
 		param := params.At(i)
 		name := param.Name()
 		if name == "" {
-			name = fmt.Sprintf("arg%d", i)
+			isVariadic := signature.Variadic() && i == params.Len()-1
+			name = deriveParamName(param.Type(), i, isVariadic, usedNames)
+		} else {
+			name = sanitizeParamName(name)
 		}
-		name = sanitizeParamName(name)
 
 		paramType := convertParamType(param.Type(), name, nilableParams, c)
 		if paramType.SkipReason != nil {
@@ -312,6 +321,9 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		result.ReturnType = returnType.LisetteType
 	} else if returnType.SkipReason != nil {
 		result.ReturnType = "Unknown"
+	}
+	if returnType.SkipReason != nil {
+		result.SkipNote = returnType.SkipReason
 	}
 	result.CommaOk = returnType.CommaOk
 	result.ArrayReturn = returnType.ArrayReturn
@@ -377,7 +389,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 
 // isFluentBuilderCandidate gates AST inspection. Clone/Copy return new values despite the fluent shape.
 func isFluentBuilderCandidate(result *ConvertResult, exp extract.SymbolExport, sig *types.Signature) bool {
-	if result.Receiver == nil || !result.Receiver.IsPointer || exp.IsPromoted {
+	if result.Receiver == nil || !result.Receiver.IsPointer {
 		return false
 	}
 	if result.Name == "Clone" || result.Name == "Copy" {
@@ -432,6 +444,69 @@ func returnIsReceiverShaped(sig *types.Signature) bool {
 		return types.Implements(recvPtr, iface)
 	}
 	return false
+}
+
+// FinalizeInterfaceBuilders carries the BuilderMethod flag from concrete methods to matching interface methods, when a concrete implementer is itself marked.
+func (c *Converter) FinalizeInterfaceBuilders(results []ConvertResult) {
+	if c.pkg == nil || c.pkg.Types == nil {
+		return
+	}
+
+	concreteBuilders := make(map[string]map[string]bool)
+	for _, r := range results {
+		if r.Kind != extract.ExportMethod || r.Receiver == nil || !r.BuilderMethod {
+			continue
+		}
+		methods, ok := concreteBuilders[r.Receiver.BaseTypeName]
+		if !ok {
+			methods = make(map[string]bool)
+			concreteBuilders[r.Receiver.BaseTypeName] = methods
+		}
+		methods[r.Name] = true
+	}
+	if len(concreteBuilders) == 0 {
+		return
+	}
+
+	scope := c.pkg.Types.Scope()
+	for i := range results {
+		result := &results[i]
+		if result.Kind != extract.ExportType || !result.IsInterface || len(result.InterfaceMethods) == 0 {
+			continue
+		}
+		ifaceObj := scope.Lookup(result.Name)
+		if ifaceObj == nil {
+			continue
+		}
+		ifaceNamed, ok := ifaceObj.Type().(*types.Named)
+		if !ok {
+			continue
+		}
+		iface, ok := ifaceNamed.Underlying().(*types.Interface)
+		if !ok {
+			continue
+		}
+		for mi := range result.InterfaceMethods {
+			methodName := result.InterfaceMethods[mi].Name
+			for concreteName, builderMethods := range concreteBuilders {
+				if !builderMethods[methodName] {
+					continue
+				}
+				concreteObj := scope.Lookup(concreteName)
+				if concreteObj == nil {
+					continue
+				}
+				concreteNamed, ok := concreteObj.Type().(*types.Named)
+				if !ok {
+					continue
+				}
+				if types.Implements(types.NewPointer(concreteNamed), iface) {
+					result.InterfaceMethods[mi].BuilderMethod = true
+					break
+				}
+			}
+		}
+	}
 }
 
 // isFluentMethod excludes trivial `return self` getters — real fluent setters either do work before returning or delegate via a method call on the receiver.
@@ -493,6 +568,15 @@ func (c *Converter) convertType(result *ConvertResult, exp extract.SymbolExport)
 		}
 		result.LisetteType = t.LisetteType
 		result.IsTypeAlias = true
+		return
+	}
+
+	if basic, ok := exp.GoType.(*types.Basic); ok && basic.Kind() == types.UnsafePointer {
+		result.SkipReason = &SkipReason{
+			Code:           "unrepresentable-builtin",
+			Message:        "Lisette has no untyped pointer type",
+			EmitOpaqueType: true,
+		}
 		return
 	}
 
@@ -591,6 +675,7 @@ func (c *Converter) convertConstant(result *ConvertResult, exp extract.SymbolExp
 		if t.SkipReason.Code == "internal-package-ref" {
 			result.LisetteType = "Unknown"
 			result.ConstValue = ""
+			result.SkipNote = t.SkipReason
 			return
 		}
 		result.SkipReason = t.SkipReason
@@ -612,6 +697,7 @@ func (c *Converter) convertVariable(result *ConvertResult, exp extract.SymbolExp
 	}
 	if t.SkipReason != nil {
 		result.LisetteType = "Unknown"
+		result.SkipNote = t.SkipReason
 	} else {
 		result.LisetteType = t.LisetteType
 	}
@@ -1354,13 +1440,17 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 		nilableParams := c.cfg.NilableParams(c.currentPkgPath, qualifiedName)
 
 		var params []FunctionParameter
-		for j := 0; j < signature.Params().Len(); j++ {
-			param := signature.Params().At(j)
+		sigParams := signature.Params()
+		usedNames := collectNamedParams(sigParams)
+		for j := 0; j < sigParams.Len(); j++ {
+			param := sigParams.At(j)
 			name := param.Name()
 			if name == "" {
-				name = fmt.Sprintf("arg%d", j)
+				isVariadic := signature.Variadic() && j == sigParams.Len()-1
+				name = deriveParamName(param.Type(), j, isVariadic, usedNames)
+			} else {
+				name = sanitizeParamName(name)
 			}
-			name = sanitizeParamName(name)
 
 			paramType := convertParamType(param.Type(), name, nilableParams, c)
 			if paramType.SkipReason != nil {
@@ -1368,7 +1458,7 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 			}
 
 			typeStr := paramType.LisetteType
-			if signature.Variadic() && j == signature.Params().Len()-1 {
+			if signature.Variadic() && j == sigParams.Len()-1 {
 				typeStr = sliceToVarArgs(typeStr)
 			}
 

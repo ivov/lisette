@@ -17,8 +17,7 @@ func (p Point) String() string {
 
 func test(pts []Point) int {
 	if len(pts) >= 1 {
-		p := pts[0]
-		return p.x
+		return pts[0].x
 	}
 	return 0
 }

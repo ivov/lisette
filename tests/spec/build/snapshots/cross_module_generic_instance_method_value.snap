@@ -27,5 +27,6 @@ import "github.com/user/myproject/lib"
 func main() {
 	b := lib.Box[int]{Value: 42}
 	f := lib.Box[int].Get
-	_ = f(b)
+	val := f(b)
+	_ = val
 }

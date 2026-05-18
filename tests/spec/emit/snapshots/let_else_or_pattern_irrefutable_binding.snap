@@ -1,10 +1,12 @@
 ---
 source: tests/spec/emit/control_flow.rs
-assertion_line: 3012
 description: "input: \nfn test() -> int {\n  let x | x = 42 else {\n    return 0\n  }\n  x\n}\n"
 ---
 package main
 
 func test() int {
-	return 42
+	subject_1 := 42
+	var x int
+	x = subject_1
+	return x
 }

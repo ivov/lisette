@@ -25,7 +25,7 @@ pub type StringTarget
 /// by it becomes unrepresentable.
 pub interface Target<E> {
   fn Apply()
-  fn Set(arg0: Slice<E>)
+  fn Set(es: Slice<E>)
 }
 
 impl<T, S, E> SliceFlag<T, S, E> {

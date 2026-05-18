@@ -11,6 +11,7 @@ func test(items []lisette.Option[int]) {
 		if item.Tag != lisette.OptionSome {
 			continue
 		}
-		_ = item.SomeVal
+		x := item.SomeVal
+		_ = x
 	}
 }

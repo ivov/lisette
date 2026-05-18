@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nfn is_empty<T>() -> bool {\n  Map.new<T, int>().is_empty()\n}\n\nfn main() {\n  let _ = is_empty<int>()\n}\n"
+---
+package main
+
+func is_empty[T comparable]() bool {
+	return len(make(map[T]int)) == 0
+}
+
+func main() {
+	_ = is_empty[int]()
+}

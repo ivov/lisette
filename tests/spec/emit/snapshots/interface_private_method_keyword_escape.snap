@@ -23,6 +23,7 @@ func (s S) range_() int {
 }
 
 func main() {
-	var w Worker = S{value: 3}
+	s := S{value: 3}
+	var w Worker = s
 	fmt.Println(w.range_())
 }

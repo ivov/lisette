@@ -27,8 +27,5 @@ func (o Outer) String() string {
 }
 
 func test() Outer {
-	return Outer{inner: Inner{
-		opt:   lisette.MakeOptionNone[int](),
-		items: []int{},
-	}}
+	return Outer{inner: Inner{opt: lisette.MakeOptionNone[int]()}}
 }

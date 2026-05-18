@@ -47,7 +47,7 @@ pub type EncoderBuffer
 /// when encoding multiple images.
 pub interface EncoderBufferPool {
   fn Get() -> Ref<EncoderBuffer>
-  fn Put(arg0: Ref<EncoderBuffer>)
+  fn Put(encoderBuffer: Ref<EncoderBuffer>)
 }
 
 /// A FormatError reports that the input is not a valid PNG.

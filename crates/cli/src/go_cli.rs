@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 include!(concat!(env!("OUT_DIR"), "/go_version.rs"));
@@ -101,10 +101,16 @@ fn go_status() -> GoStatus {
     }
 }
 
-pub fn go_fmt(path: &Path) -> Result<(), String> {
-    let output = Command::new("gofmt")
-        .arg("-w")
-        .arg(path)
+pub fn go_fmt_paths(paths: &[PathBuf]) -> Result<(), String> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let mut cmd = Command::new("gofmt");
+    cmd.arg("-w");
+    for path in paths {
+        cmd.arg(path);
+    }
+    let output = cmd
         .output()
         .map_err(|e| format!("Failed to run `gofmt`: {}", e))?;
 
@@ -144,81 +150,241 @@ pub fn write_go_mod(dir: &Path, module_name: &str, locator: &TypedefLocator) -> 
     }
 
     let go_mod_path = dir.join("go.mod");
+    let lisette_dir = dir.join(".lisette");
+    let stamp_path = lisette_dir.join("go.mod.stamp");
 
-    // Skip write if content unchanged; invalidate go.sum if content changed
-    let content_changed = fs::read_to_string(&go_mod_path)
-        .map(|existing| existing != content)
-        .unwrap_or(true);
+    // Stamp tracks pre-tidy content; on-disk go.mod diverges after tidy prunes requires.
+    let stamp_matches = go_mod_path.exists()
+        && fs::read_to_string(&stamp_path).is_ok_and(|existing| existing == content);
 
-    if content_changed {
+    if !stamp_matches {
         fs::write(&go_mod_path, &content).map_err(|e| format!("Failed to write go.mod: {}", e))?;
         let _ = fs::remove_file(dir.join("go.sum"));
+        let _ = fs::remove_file(lisette_dir.join("go.mod.tidy"));
+        let _ = fs::create_dir_all(&lisette_dir);
+        let _ = fs::write(&stamp_path, &content);
     }
-
-    let _ = fs::remove_dir_all(dir.join("lisette"));
 
     Ok(())
 }
 
-pub fn write_go_outputs(dir: &Path, files: &[OutputFile], heading: &str) -> Result<(), i32> {
+pub struct GoCliError {
+    pub message: String,
+    pub hint: &'static str,
+}
+
+pub struct ManifestEntry {
+    pub name: String,
+    pub content_hash: u64,
+    pub imports: Vec<String>,
+}
+
+pub struct EmitWriteResult {
+    pub changed: Vec<PathBuf>,
+    pub new_manifest: Vec<ManifestEntry>,
+}
+
+pub fn write_go_outputs(dir: &Path, files: &[OutputFile]) -> Result<EmitWriteResult, GoCliError> {
+    let mut prior_manifest = read_emit_manifest(dir);
+    let mut new_manifest: Vec<ManifestEntry> = Vec::with_capacity(files.len());
+    let mut changed: Vec<PathBuf> = Vec::with_capacity(files.len());
+
     for file in files {
         let go_file_path = dir.join(&file.name);
         let go_code = file.to_go_unformatted();
+        let hash = hash_go_code(&go_code);
+        let prior = prior_manifest.remove(&file.name);
+
+        if let Some(entry) = prior
+            && entry.content_hash == hash
+            && go_file_path.exists()
+        {
+            new_manifest.push(entry);
+            continue;
+        }
 
         if let Some(parent) = go_file_path.parent()
             && let Err(e) = fs::create_dir_all(parent)
         {
-            crate::cli_error!(
-                heading,
-                format!("Failed to create directory `{}`: {}", parent.display(), e),
-                "Check directory permissions"
-            );
-            return Err(1);
+            return Err(GoCliError {
+                message: format!("Failed to create directory `{}`: {}", parent.display(), e),
+                hint: "Check directory permissions",
+            });
         }
 
         if let Err(e) = fs::write(&go_file_path, &go_code) {
-            crate::cli_error!(
-                heading,
-                format!("Failed to write `{}`: {}", go_file_path.display(), e),
-                "Check file permissions"
-            );
-            return Err(1);
+            return Err(GoCliError {
+                message: format!("Failed to write `{}`: {}", go_file_path.display(), e),
+                hint: "Check file permissions",
+            });
+        }
+
+        let mut imports: Vec<String> = file.imports.keys().cloned().collect();
+        imports.sort();
+        new_manifest.push(ManifestEntry {
+            name: file.name.clone(),
+            content_hash: hash,
+            imports,
+        });
+        changed.push(go_file_path);
+    }
+
+    // Preserve entries for files emit skipped this build but still on disk.
+    for (name, entry) in prior_manifest {
+        if dir.join(&name).exists() {
+            new_manifest.push(entry);
         }
     }
+
+    Ok(EmitWriteResult {
+        changed,
+        new_manifest,
+    })
+}
+
+/// Hash of the sorted union of external (non-stdlib, non-local) Go imports.
+pub fn compute_import_set_hash(manifest: &[ManifestEntry], go_module_name: &str) -> u64 {
+    let mut paths: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    for entry in manifest {
+        for path in &entry.imports {
+            if is_external_import(path, go_module_name) {
+                paths.insert(path.as_str());
+            }
+        }
+    }
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for path in paths {
+        for &b in path.as_bytes() {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x100_0000_01b3);
+        }
+        h ^= b'\n' as u64;
+        h = h.wrapping_mul(0x100_0000_01b3);
+    }
+    h
+}
+
+fn is_external_import(path: &str, go_module_name: &str) -> bool {
+    deps::is_third_party(path)
+        && path != go_module_name
+        && !path
+            .strip_prefix(go_module_name)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+pub fn invalidate_go_mod_stamp(dir: &Path) {
+    let _ = fs::remove_file(dir.join(".lisette").join("go.mod.stamp"));
+}
+
+fn emit_manifest_path(dir: &Path) -> PathBuf {
+    dir.join(".lisette").join("emit-manifest")
+}
+
+// FNV-1a: deterministic across Rust versions.
+fn hash_go_code(content: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in content.as_bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100_0000_01b3);
+    }
+    h
+}
+
+fn read_emit_manifest(dir: &Path) -> std::collections::HashMap<String, ManifestEntry> {
+    let Ok(content) = fs::read_to_string(emit_manifest_path(dir)) else {
+        return Default::default();
+    };
+    content
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.splitn(3, '\t');
+            let name = parts.next()?;
+            let hash = u64::from_str_radix(parts.next()?, 16).ok()?;
+            let imports = parts
+                .next()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.split(',').map(|p| p.to_string()).collect())
+                .unwrap_or_default();
+            Some((
+                name.to_string(),
+                ManifestEntry {
+                    name: name.to_string(),
+                    content_hash: hash,
+                    imports,
+                },
+            ))
+        })
+        .collect()
+}
+
+pub fn write_emit_manifest(dir: &Path, entries: &[ManifestEntry]) {
+    let path = emit_manifest_path(dir);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let content: String = entries
+        .iter()
+        .map(|e| {
+            format!(
+                "{}\t{:016x}\t{}\n",
+                e.name,
+                e.content_hash,
+                e.imports.join(",")
+            )
+        })
+        .collect();
+    let _ = fs::write(&path, content);
+}
+
+pub fn finalize_go_dir(
+    dir: &Path,
+    target: Target,
+    changed_paths: &[PathBuf],
+    import_set_hash: u64,
+) -> Result<(), GoCliError> {
+    if let Err(e) = go_fmt_paths(changed_paths) {
+        return Err(GoCliError {
+            message: format!("Go format failed: {}", e),
+            hint: "Check Go installation with `go version`",
+        });
+    }
+
+    if let Err(e) = ensure_go_sum(dir, target, import_set_hash) {
+        return Err(GoCliError {
+            message: format!("Failed to resolve Go dependencies: {}", e),
+            hint: "Check Go installation and network connectivity",
+        });
+    }
+
     Ok(())
 }
 
-pub fn finalize_go_dir(dir: &Path, heading: &str, target: Target) -> Result<(), i32> {
-    if let Err(e) = go_fmt(dir) {
-        crate::cli_error!(
-            heading,
-            format!("Go format failed: {}", e),
-            "Check Go installation with `go version`"
-        );
-        return Err(1);
-    }
-
-    if let Err(e) = ensure_go_sum(dir, target) {
-        crate::cli_error!(
-            heading,
-            format!("Failed to resolve Go dependencies: {}", e),
-            "Check Go installation and network connectivity"
-        );
-        return Err(1);
-    }
-
-    Ok(())
+fn tidy_marker_path(dir: &Path) -> PathBuf {
+    dir.join(".lisette").join("go.mod.tidy")
 }
 
-pub fn ensure_go_sum(dir: &Path, target: Target) -> Result<(), String> {
-    let go_sum_path = dir.join("go.sum");
-    if let Ok(content) = fs::read_to_string(&go_sum_path) {
-        // go.mod hash + source hash lines
-        if content.lines().count() >= 2 {
-            return Ok(());
-        }
+pub fn read_tidy_marker(dir: &Path) -> Option<u64> {
+    let s = fs::read_to_string(tidy_marker_path(dir)).ok()?;
+    u64::from_str_radix(s.trim(), 16).ok()
+}
+
+fn write_tidy_marker(dir: &Path, import_set_hash: u64) {
+    let path = tidy_marker_path(dir);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
     }
-    go_mod_tidy(dir, target)
+    let _ = fs::write(&path, format!("{:016x}\n", import_set_hash));
+}
+
+pub fn ensure_go_sum(dir: &Path, target: Target, import_set_hash: u64) -> Result<(), String> {
+    if read_tidy_marker(dir) == Some(import_set_hash) {
+        return Ok(());
+    }
+    let result = go_mod_tidy(dir, target);
+    if result.is_ok() {
+        write_tidy_marker(dir, import_set_hash);
+    }
+    result
 }
 
 pub fn prewarm_module_cache(target: Target) {

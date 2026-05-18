@@ -1,6 +1,5 @@
 ---
 source: tests/spec/emit/prelude.rs
-assertion_line: 794
 description: "input: \nfn main() {\n  let g = Some\n  let opt: Option<int> = Some(1)\n  let r = opt.and_then(g)\n  let _ = r\n}\n"
 ---
 package main
@@ -20,7 +19,9 @@ func main() {
 	_arg_6 := opt
 	cb_3 := g
 	tagged_5 := func(arg0 int) lisette.Option[int] {
-		return lisette.OptionFromCommaOk[int](cb_3(arg0))
+		option_4 := lisette.OptionFromCommaOk[int](cb_3(arg0))
+		return option_4
 	}
-	_ = lisette.OptionAndThen(_arg_6, tagged_5)
+	r := lisette.OptionAndThen(_arg_6, tagged_5)
+	_ = r
 }

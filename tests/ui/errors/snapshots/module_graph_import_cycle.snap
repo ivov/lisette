@@ -6,4 +6,4 @@ source: tests/ui/errors/mod.rs
   │ module_a -> module_b -> module_c
   │ ────┬───                ────┬───
   │     ╰───────────────────────╯
-  help: To break the cycle, remove one of imports or extract common dependencies into a separate module · code: [resolve.import_cycle]
+  help: To break the cycle, remove one of the imports or extract common dependencies into a separate module · code: [resolve.import_cycle]

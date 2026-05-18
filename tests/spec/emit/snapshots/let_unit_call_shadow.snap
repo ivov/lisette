@@ -8,7 +8,9 @@ func foo() {}
 
 func main() {
 	foo()
-	_ = struct{}{}
+	x := struct{}{}
+	_ = x
 	foo()
-	_ = struct{}{}
+	x_1 := struct{}{}
+	_ = x_1
 }
