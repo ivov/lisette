@@ -40,16 +40,6 @@ pub fn try_load_prelude_cache() -> Option<PreludeCache> {
         return None;
     }
 
-    // Guard against stale/corrupted caches produced by parser/compiler changes
-    // that did not bump package version: a valid prelude must include core symbols.
-    let has_required_symbols = cache.definitions.contains_key("prelude.string")
-        && cache.definitions.contains_key("prelude.Option")
-        && cache.definitions.contains_key("prelude.error");
-    if !has_required_symbols {
-        let _ = fs::remove_file(&path);
-        return None;
-    }
-
     Some(cache)
 }
 
