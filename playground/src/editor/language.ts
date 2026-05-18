@@ -5,101 +5,44 @@ export const LANG_ID = "lisette";
 // All keywords from the Lisette language reference + VSCode extension grammar
 export const LISETTE_KEYWORDS = [
   // control flow
-  "as",
-  "break",
-  "continue",
-  "else",
-  "for",
-  "if",
-  "in",
-  "loop",
-  "match",
-  "return",
-  "while",
+  "as", "break", "continue", "else", "for", "if", "in", "loop",
+  "match", "return", "while",
   // storage
-  "const",
-  "enum",
-  "fn",
-  "impl",
-  "interface",
-  "struct",
-  "type",
-  "var",
+  "const", "enum", "fn", "impl", "interface", "struct", "type", "var",
   // modifiers
-  "pub",
-  "mut",
+  "pub", "mut",
   // others
-  "defer",
-  "import",
-  "let",
-  "recover",
-  "select",
-  "task",
-  "try",
+  "defer", "import", "let", "recover", "select", "task", "try",
   // special variables (treated as keywords for completion purposes)
   "self",
 ];
 
 // Built-in primitive types
 export const LISETTE_PRIMITIVE_TYPES = [
-  "int",
-  "int8",
-  "int16",
-  "int32",
-  "int64",
-  "uint",
-  "uint8",
-  "uint16",
-  "uint32",
-  "uint64",
-  "uintptr",
-  "byte",
-  "rune",
-  "float32",
-  "float64",
-  "complex64",
-  "complex128",
-  "bool",
-  "string",
-  "error",
+  "int", "int8", "int16", "int32", "int64",
+  "uint", "uint8", "uint16", "uint32", "uint64",
+  "uintptr", "byte", "rune",
+  "float32", "float64",
+  "complex64", "complex128",
+  "bool", "string", "error",
   // Built-in type + built-in functions
-  "Never",
-  "panic",
-  "assert_type",
+  "Never", "panic", "assert_type",
 ];
 
 // Generic/compound types
 export const LISETTE_COMPOUND_TYPES = [
-  "Option",
-  "Result",
-  "Slice",
-  "Map",
-  "Ref",
-  "Channel",
-  "Sender",
-  "Receiver",
+  "Option", "Result", "Slice", "Map", "Ref", "Channel", "Sender", "Receiver",
   "Unknown",
-  "Range",
-  "RangeInclusive",
-  "RangeFrom",
-  "RangeTo",
-  "RangeToInclusive",
+  "Range", "RangeInclusive", "RangeFrom", "RangeTo", "RangeToInclusive",
 ];
 
 // Enum variants / value constructors
 export const LISETTE_CONSTRUCTORS = [
-  "Some",
-  "None",
-  "Ok",
-  "Err",
-  "true",
-  "false",
+  "Some", "None", "Ok", "Err",
+  "true", "false",
 ];
 
-export const ALL_TYPES = [
-  ...LISETTE_PRIMITIVE_TYPES,
-  ...LISETTE_COMPOUND_TYPES,
-];
+export const ALL_TYPES = [...LISETTE_PRIMITIVE_TYPES, ...LISETTE_COMPOUND_TYPES];
 
 export function registerLanguage(monaco: typeof Monaco): void {
   monaco.languages.register({
@@ -143,8 +86,7 @@ export function registerLanguage(monaco: typeof Monaco): void {
         action: { indentAction: monaco.languages.IndentAction.Indent },
       },
     ],
-    wordPattern:
-      /(-?\d*\.\d\w*)|([^\`\~\!\@\#\%\^\&\*\(\)\-\=\+\[\{\]\}\\\|\;\:\'\"\,\.\<\>\/\?\s]+)/,
+    wordPattern: /(-?\d*\.\d\w*)|([^\`\~\!\@\#\%\^\&\*\(\)\-\=\+\[\{\]\}\\\|\;\:\'\"\,\.\<\>\/\?\s]+)/,
   });
 
   monaco.languages.setMonarchTokensProvider(LANG_ID, {
@@ -156,47 +98,11 @@ export function registerLanguage(monaco: typeof Monaco): void {
     constructors: LISETTE_CONSTRUCTORS,
 
     operators: [
-      "|>",
-      "->",
-      "=>",
-      "?",
-      "::",
-      ":",
-      "..",
-      "..=",
-      "=",
-      "+=",
-      "-=",
-      "*=",
-      "/=",
-      "%=",
-      "&=",
-      "|=",
-      "^=",
-      "&^=",
-      "<<=",
-      ">>=",
-      "==",
-      "!=",
-      "<",
-      ">",
-      "<=",
-      ">=",
-      "&&",
-      "||",
-      "!",
-      "+",
-      "-",
-      "*",
-      "/",
-      "%",
-      "&",
-      "|",
-      "^",
-      "&^",
-      "~",
-      "<<",
-      ">>",
+      "|>", "->", "=>", "?", "::", ":", "..", "..=",
+      "=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "&^=", "<<=", ">>=",
+      "==", "!=", "<", ">", "<=", ">=",
+      "&&", "||", "!", "+", "-", "*", "/", "%",
+      "&", "|", "^", "&^", "~", "<<", ">>",
       ".*",
     ],
 
@@ -425,8 +331,7 @@ export const LISETTE_SNIPPETS: SnippetDef[] = [
   },
   {
     label: "interface",
-    insertText:
-      "interface ${1:Name} {\n\tfn ${2:method}(self) -> ${3:ReturnType}\n}",
+    insertText: "interface ${1:Name} {\n\tfn ${2:method}(self) -> ${3:ReturnType}\n}",
     documentation: "Interface definition",
   },
   {
@@ -456,12 +361,14 @@ export const LISETTE_SNIPPETS: SnippetDef[] = [
   },
   {
     label: "option_match",
-    insertText: "match ${1:opt} {\n\tSome(${2:v}) => $0,\n\tNone => ,\n}",
+    insertText:
+      "match ${1:opt} {\n\tSome(${2:v}) => $0,\n\tNone => ,\n}",
     documentation: "Match on Option",
   },
   {
     label: "result_match",
-    insertText: "match ${1:res} {\n\tOk(${2:v}) => $0,\n\tErr(${3:e}) => ,\n}",
+    insertText:
+      "match ${1:res} {\n\tOk(${2:v}) => $0,\n\tErr(${3:e}) => ,\n}",
     documentation: "Match on Result",
   },
 ];
@@ -471,8 +378,8 @@ export function registerCompletionProvider(
   monaco: typeof Monaco,
   getWasmCompletions: (
     model: Monaco.editor.ITextModel,
-    position: Monaco.Position,
-  ) => Promise<Monaco.languages.CompletionItem[]>,
+    position: Monaco.Position
+  ) => Promise<Monaco.languages.CompletionItem[]>
 ): Monaco.IDisposable {
   return monaco.languages.registerCompletionItemProvider(LANG_ID, {
     triggerCharacters: [".", ":", "(", " ", "|"],
@@ -485,14 +392,15 @@ export function registerCompletionProvider(
         endColumn: word.endColumn,
       };
 
-      const keywordItems: Monaco.languages.CompletionItem[] =
-        LISETTE_KEYWORDS.map((kw) => ({
+      const keywordItems: Monaco.languages.CompletionItem[] = LISETTE_KEYWORDS.map(
+        (kw) => ({
           label: kw,
           kind: monaco.languages.CompletionItemKind.Keyword,
           insertText: kw,
           sortText: `z_${kw}`, // sort after semantic completions
           range,
-        }));
+        })
+      );
 
       const typeItems: Monaco.languages.CompletionItem[] = ALL_TYPES.map(
         (t) => ({
@@ -501,7 +409,7 @@ export function registerCompletionProvider(
           insertText: t,
           sortText: `y_${t}`,
           range,
-        }),
+        })
       );
 
       const constructorItems: Monaco.languages.CompletionItem[] =
@@ -550,8 +458,8 @@ export function registerHoverProvider(
   monaco: typeof Monaco,
   getHover: (
     model: Monaco.editor.ITextModel,
-    position: Monaco.Position,
-  ) => Promise<Monaco.languages.Hover | null>,
+    position: Monaco.Position
+  ) => Promise<Monaco.languages.Hover | null>
 ): Monaco.IDisposable {
   return monaco.languages.registerHoverProvider(LANG_ID, {
     async provideHover(model, position) {
@@ -569,8 +477,8 @@ export function registerDefinitionProvider(
   monaco: typeof Monaco,
   getDefinition: (
     model: Monaco.editor.ITextModel,
-    position: Monaco.Position,
-  ) => Promise<Monaco.languages.Definition | null>,
+    position: Monaco.Position
+  ) => Promise<Monaco.languages.Definition | null>
 ): Monaco.IDisposable {
   return monaco.languages.registerDefinitionProvider(LANG_ID, {
     async provideDefinition(model, position) {
@@ -588,8 +496,8 @@ export function registerSignatureHelpProvider(
   monaco: typeof Monaco,
   getSignatureHelp: (
     model: Monaco.editor.ITextModel,
-    position: Monaco.Position,
-  ) => Promise<Monaco.languages.SignatureHelpResult | null>,
+    position: Monaco.Position
+  ) => Promise<Monaco.languages.SignatureHelpResult | null>
 ): Monaco.IDisposable {
   return monaco.languages.registerSignatureHelpProvider(LANG_ID, {
     signatureHelpTriggerCharacters: ["(", ","],
@@ -607,7 +515,7 @@ export function registerSignatureHelpProvider(
 // ─── Format provider ──────────────────────────────────────────────────────────
 export function registerFormatProvider(
   monaco: typeof Monaco,
-  doFormat: (code: string) => Promise<string | null>,
+  doFormat: (code: string) => Promise<string | null>
 ): Monaco.IDisposable {
   return monaco.languages.registerDocumentFormattingEditProvider(LANG_ID, {
     async provideDocumentFormattingEdits(model) {
