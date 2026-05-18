@@ -12,7 +12,7 @@ use lisette_semantics::loader::{Files, Loader};
 use lisette_semantics::analyze::{analyze, AnalyzeInput, CompilePhase, SemanticConfig};
 use lisette_semantics::facts::{BindingIdAllocator, Facts};
 use lisette_syntax::ast::{Expression, Span, StructSpread};
-use lisette_syntax::program::Definition;
+use lisette_syntax::program::{Definition, DefinitionBody};
 use lisette_syntax::types::Type;
 use rustc_hash::FxHashMap;
 
@@ -568,13 +568,13 @@ fn get_module_prefix<'a>(source: &'a str, offset: usize) -> Option<&'a str> {
 }
 
 fn definition_to_completion_kind(def: &Definition) -> &'static str {
-    match def {
-        Definition::Struct { .. } => "type",
-        Definition::Enum { .. } | Definition::ValueEnum { .. } => "enum",
-        Definition::Interface { .. } => "type",
-        Definition::TypeAlias { .. } => "type",
-        Definition::Value { ty, .. } => {
-            if matches!(ty, Type::Function { .. }) { "function" } else { "variable" }
+    match &def.body {
+        DefinitionBody::Struct { .. } => "type",
+        DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. } => "enum",
+        DefinitionBody::Interface { .. } => "type",
+        DefinitionBody::TypeAlias { .. } => "type",
+        DefinitionBody::Value { .. } => {
+            if matches!(&def.ty, Type::Function { .. }) { "function" } else { "variable" }
         }
     }
 }
@@ -644,7 +644,7 @@ fn build_dot_completions(
         if let Some(tid) = type_name(&ty) {
             // Find struct fields
             if let Some(def) = sem_result.definitions.get(tid.as_str()) {
-                if let Definition::Struct { fields, .. } = def {
+                if let DefinitionBody::Struct { fields, .. } = &def.body {
                     for field in fields {
                         items.push(JsCompletionItem {
                             label: field.name.to_string(),
@@ -673,7 +673,7 @@ fn build_dot_completions(
 
             // For enums, add variants
             if let Some(def) = sem_result.definitions.get(tid.as_str()) {
-                if let Definition::Enum { variants, .. } = def {
+                if let DefinitionBody::Enum { variants, .. } = &def.body {
                     for v in variants {
                         items.push(JsCompletionItem {
                             label: v.name.to_string(),
