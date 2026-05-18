@@ -1791,6 +1791,28 @@ fn test_compound_chain() -> int {
   x
 }
 
+// Bitwise operators
+
+struct BitwiseBox { v: int }
+
+fn test_bitwise_shift_mixed() -> int {
+  let x: int = 1
+  let n: uint = 2
+  x << n
+}
+
+fn test_bitwise_field_compound() -> int {
+  let mut b = BitwiseBox { v: 15 }
+  b.v &= 10
+  b.v
+}
+
+fn test_bitwise_index_compound() -> int {
+  let mut xs = [1, 2, 3]
+  xs[0] |= 6
+  xs[0]
+}
+
 // Index access edge cases
 
 fn returns_slice() -> Slice<int> {
@@ -2003,6 +2025,7 @@ fn test_generic_struct_direct_construction() -> int {
 // type aliases
 
 type Ints = Slice<int>
+type Mask = int
 
 fn sum_ints(nums: Ints) -> int {
   let mut total = 0
@@ -2015,6 +2038,11 @@ fn sum_ints(nums: Ints) -> int {
 fn test_type_alias_basic() -> int {
   let nums: Ints = [1, 2, 3, 4, 5]
   sum_ints(nums)
+}
+
+fn test_type_alias_bitwise() -> int {
+  let m: Mask = 0b1111
+  m & 0b0101
 }
 
 // nested generics
@@ -3796,6 +3824,11 @@ fn main() {
   report("compound_mod", test_compound_mod(), 2)
   report("compound_chain", test_compound_chain(), 20)
 
+  section("bitwise operators")
+  report("bitwise_shift_mixed", test_bitwise_shift_mixed(), 4)
+  report("bitwise_field_compound", test_bitwise_field_compound(), 10)
+  report("bitwise_index_compound", test_bitwise_index_compound(), 7)
+
   section("index access")
   report("index_on_call", test_index_on_call(), 20)
   report("index_nested", test_index_nested(), 9)
@@ -3840,6 +3873,7 @@ fn main() {
 
   section("type aliases")
   report("type_alias_basic", test_type_alias_basic(), 15)
+  report("type_alias_bitwise", test_type_alias_bitwise(), 5)
 
   section("nested generics")
   report("nested_option_some_some", test_nested_option_some_some(), 42)

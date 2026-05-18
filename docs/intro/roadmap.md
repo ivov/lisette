@@ -9,5 +9,4 @@ Status:
 Planned work:
 
 - Implement a test runner
-- Introduce bitwise operators
 - Make diagnostics configurable

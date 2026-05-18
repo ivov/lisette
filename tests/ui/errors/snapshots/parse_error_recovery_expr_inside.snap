@@ -2,11 +2,11 @@
 source: tests/ui/errors/mod.rs
 ---
   [error] Syntax error
-   ╭─[test.lis:3:11]
+   ╭─[test.lis:3:12]
  2 │ fn test() {
  3 │   foo(1 + ^);
-   ·           ┬
-   ·           ╰── expected expression, found `^`
+   ·            ┬
+   ·            ╰── expected expression, found `)`
  4 │ }
    ╰────
   help: Check your syntax · code: [parse.expected_expression]

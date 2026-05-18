@@ -257,6 +257,12 @@ compound_div: PASS
 compound_mod: PASS
 compound_chain: PASS
 
+// bitwise operators
+
+bitwise_shift_mixed: PASS
+bitwise_field_compound: PASS
+bitwise_index_compound: PASS
+
 // index access
 
 index_on_call: PASS
@@ -306,6 +312,7 @@ go_keyword_as_variable: PASS
 // type aliases
 
 type_alias_basic: PASS
+type_alias_bitwise: PASS
 
 // nested generics
 

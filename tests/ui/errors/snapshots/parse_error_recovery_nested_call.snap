@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Unsupported operator
-   ╭─[test.lis:3:16]
+  [error] Syntax error
+   ╭─[test.lis:3:17]
  2 │ fn test() {
  3 │   foo(bar(baz()^));
-   ·                ┬
-   ·                ╰── `^` is not a supported binary operator
+   ·                 ┬
+   ·                 ╰── expected expression, found `)`
  4 │ }
    ╰────
-  help: Lisette does not support bitwise operators · code: [parse.unsupported_operator]
+  help: Check your syntax · code: [parse.expected_expression]

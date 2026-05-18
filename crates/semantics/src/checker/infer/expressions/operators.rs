@@ -153,7 +153,7 @@ impl TaskState<'_> {
                     operand_expected_ty.clone()
                 } else {
                     self.sink
-                        .push(diagnostics::infer::not_numeric(&resolved, operand_span));
+                        .push(diagnostics::infer::not_integer(&resolved, operand_span));
                     operand_expected_ty.clone()
                 }
             }
@@ -549,7 +549,7 @@ impl TaskState<'_> {
                 }
             }
 
-            BitwiseAnd | BitwiseOr | BitwiseXor | BitwiseAndNot | ShiftLeft | ShiftRight => {
+            BitwiseAnd | BitwiseOr | BitwiseXor | BitwiseAndNot => {
                 let left_resolved = left_operand_ty.resolve_in(&self.env);
                 let right_resolved = right_operand_ty.resolve_in(&self.env);
 
@@ -576,6 +576,12 @@ impl TaskState<'_> {
                     }
                     left_operand_ty.clone()
                 }
+            }
+
+            ShiftLeft | ShiftRight => {
+                self.ensure_integer_for_binary(operator, left_operand_ty, left_span);
+                self.ensure_integer_for_binary(operator, right_operand_ty, right_span);
+                left_operand_ty.clone()
             }
 
             Pipeline => {
@@ -625,7 +631,7 @@ impl TaskState<'_> {
             return true;
         }
         if !is_integer_type(&resolved_ty, &self.env) {
-            self.sink.push(diagnostics::infer::not_numeric_for_binary(
+            self.sink.push(diagnostics::infer::not_integer_for_binary(
                 operator,
                 &resolved_ty,
                 *span,
@@ -861,8 +867,9 @@ fn is_float_literal(expression: &Expression) -> bool {
 }
 
 fn is_integer_type(ty: &Type, env: &crate::checker::TypeEnv) -> bool {
-    matches!(
-        ty.resolve_in(env).get_name(),
+    let resolved = ty.resolve_in(env);
+    let direct_match = matches!(
+        resolved.get_name(),
         Some(
             "int"
                 | "int8"
@@ -874,10 +881,38 @@ fn is_integer_type(ty: &Type, env: &crate::checker::TypeEnv) -> bool {
                 | "uint16"
                 | "uint32"
                 | "uint64"
+                | "uintptr"
                 | "byte"
                 | "rune"
         )
-    )
+    );
+
+    if direct_match {
+        return true;
+    }
+
+    resolved
+        .underlying_numeric_type()
+        .is_some_and(|underlying| {
+            matches!(
+                underlying.get_name(),
+                Some(
+                    "int"
+                        | "int8"
+                        | "int16"
+                        | "int32"
+                        | "int64"
+                        | "uint"
+                        | "uint8"
+                        | "uint16"
+                        | "uint32"
+                        | "uint64"
+                        | "uintptr"
+                        | "byte"
+                        | "rune"
+                )
+            )
+        })
 }
 
 fn is_cast_expression(expression: &Expression) -> bool {

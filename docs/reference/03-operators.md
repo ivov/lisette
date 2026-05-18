@@ -4,18 +4,18 @@
 
 From lowest to highest:
 
-| Precedence | Operators                   | Description                                     |
-| ---------- | --------------------------- | ----------------------------------------------- |
-| 1          | `\|>`                       | Pipeline                                        |
-| 2          | `\|\|`                      | Logical or                                      |
-| 3          | `&&`                        | Logical and                                     |
-| 4          | `==` `!=` `<` `>` `<=` `>=` | Comparison                                      |
-| 5          | `..` `..=`                  | Range                                           |
-| 6          | `+` `-`                     | Addition, subtraction                           |
-| 7          | `*` `/` `%`                 | Multiplication, division                        |
-| 8          | `as`                        | Type cast                                       |
-| 9          | `-` `!` `&`                 | Prefix (negation, not, reference)               |
-| 10         | `.` `()` `[]` `?` `.*`      | Postfix (access, call, index, propagate, deref) |
+| Precedence | Operators                      | Description                                     |
+| ---------- | ------------------------------ | ----------------------------------------------- |
+| 1          | `\|>`                          | Pipeline                                        |
+| 2          | `\|\|`                         | Logical or                                      |
+| 3          | `&&`                           | Logical and                                     |
+| 4          | `==` `!=` `<` `>` `<=` `>=`    | Comparison                                      |
+| 5          | `..` `..=`                     | Range                                           |
+| 6          | `+` `-` `\|` `^`               | Add/subtract, bitwise or/xor                    |
+| 7          | `*` `/` `%` `<<` `>>` `&` `&^` | Multiply/divide, shifts, bitwise and/and-not    |
+| 8          | `as`                           | Type cast                                       |
+| 9          | `-` `!` `^` `&`                | Prefix (negation, not, bitwise not, reference)  |
+| 10         | `.` `()` `[]` `?` `.*`         | Postfix (access, call, index, propagate, deref) |
 
 All binary operators are left-associative.
 
@@ -48,7 +48,6 @@ Unary `-` negates a number. Disallowed for unsigned types:
 let greeting = "hello" + ", " + "world"
 ```
 
-
 ## Comparison
 
 `==` and `!=` compare any two values of the same type.
@@ -65,6 +64,20 @@ All comparison operators return `bool`.
 if is_valid && count > 0 {
   process()
 }
+```
+
+## Bitwise
+
+`&`, `|`, `^`, and `&^` operate on integer values. Shifts (`<<`, `>>`) require an integer left operand and any integer right operand; the result has the left operand's type.
+
+```rust
+let mask = 0b1111
+let value = 0b1010
+
+let masked = value & mask
+let toggled = value ^ mask
+let shifted = value << 2
+let inverted = ^value
 ```
 
 ## Pipeline
@@ -116,7 +129,7 @@ for i in 0..=5 {
 let slice = items[1..4]       // elements at indices 1, 2, 3
 ```
 
-Slice sub-slicing is safe by default. The resulting sub-slice has its capacity capped to its length, so `append` on a sub-slice always allocates a new backing array and never silently mutates the original. 
+Slice sub-slicing is safe by default. The resulting sub-slice has its capacity capped to its length, so `append` on a sub-slice always allocates a new backing array and never silently mutates the original.
 
 🧿 See [`safety.md`](../intro/safety.md)
 
@@ -154,7 +167,7 @@ let missing = nums.get(99)   // None
 
 ## Compound assignment
 
-`+=`, `-=`, `*=`, `/=`, `%=` combine an operation with an assignment. The target must be mutable:
+`+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `&^=`, `<<=`, `>>=` combine an operation with an assignment. The target must be mutable:
 
 ```rust
 let mut count = 0

@@ -49,9 +49,7 @@
           "name": "string.quoted.double.lisette",
           "begin": "\"",
           "end": "\"",
-          "patterns": [
-            { "include": "#escape-sequences" }
-          ]
+          "patterns": [{ "include": "#escape-sequences" }]
         }
       ]
     },
@@ -85,9 +83,7 @@
       "endCaptures": {
         "0": { "name": "punctuation.section.interpolation.end.lisette" }
       },
-      "patterns": [
-        { "include": "source.lisette" }
-      ]
+      "patterns": [{ "include": "source.lisette" }]
     },
     "characters": {
       "patterns": [
@@ -254,7 +250,7 @@
         },
         {
           "name": "keyword.operator.assignment.lisette",
-          "match": "\\+=|-=|\\*=|/=|%=|="
+          "match": "<<=|>>=|&\\^=|\\^=|\\|=|&=|\\+=|-=|\\*=|/=|%=|="
         },
         {
           "name": "keyword.operator.arithmetic.lisette",

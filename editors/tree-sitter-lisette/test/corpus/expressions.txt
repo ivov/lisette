@@ -144,7 +144,6 @@ Shift operators
 
 let x = a << 2 >> 1
 
---------------------------------------------------------------------------------
 
 (source_file
   (let_declaration
@@ -157,6 +156,20 @@ let x = a << 2 >> 1
 
 ================================================================================
 Field access
+
+================================================================================
+Unary bitwise not
+================================================================================
+
+let x = ^y
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (let_declaration
+    pattern: (identifier)
+    value: (unary_expression
+      (identifier))))
 ================================================================================
 
 let x = obj.field
@@ -164,7 +177,6 @@ let x = obj.field
 --------------------------------------------------------------------------------
 
 (source_file
-  (let_declaration
     pattern: (identifier)
     value: (field_expression
       value: (identifier)
@@ -176,13 +188,40 @@ Index
 
 let x = items[0]
 
+================================================================================
+Compound bitwise assignment
+================================================================================
+
+x &= 1
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (compound_assignment_expression
+      left: (identifier)
+      right: (integer_literal))))
+
+================================================================================
+Compound shift assignment
+================================================================================
+
+x <<= 2
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (compound_assignment_expression
+      left: (identifier)
+      right: (integer_literal))))
+
 --------------------------------------------------------------------------------
 
 (source_file
   (let_declaration
     pattern: (identifier)
     value: (index_expression
-      (identifier)
       (integer_literal))))
 
 ================================================================================
@@ -193,6 +232,30 @@ let x = foo(1, 2)
 
 --------------------------------------------------------------------------------
 
+
+================================================================================
+Nested generic call with >> close
+================================================================================
+
+identity<Map<string, Vec<int>>>(42)
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (expression_statement
+    (generic_call_expression
+      function: (identifier)
+      type_arguments: (call_type_arguments
+        (generic_type
+          type: (type_identifier)
+          type_arguments: (type_arguments
+            (type_identifier)
+            (generic_type
+              type: (type_identifier)
+              type_arguments: (type_arguments
+                (type_identifier))))))
+      arguments: (arguments
+        (integer_literal)))))
 (source_file
   (let_declaration
     pattern: (identifier)
