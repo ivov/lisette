@@ -1030,6 +1030,21 @@ fn circular_type_alias_result_param() {
 }
 
 #[test]
+fn circular_type_alias_mutual_function_allowed() {
+    infer(
+        r#"
+    type A = fn(B) -> ()
+    type B = fn(A) -> ()
+
+    fn test(a: A) -> A {
+      return a;
+    }
+        "#,
+    )
+    .assert_no_errors();
+}
+
+#[test]
 fn reference_to_int() {
     infer(
         r#"

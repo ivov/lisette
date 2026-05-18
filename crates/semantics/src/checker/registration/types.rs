@@ -663,13 +663,14 @@ impl TaskState<'_> {
         self.validate_generic_bounds(&*store, generics, span);
 
         let body_ty = self.convert_to_type(&*store, annotation, span);
+        let is_function_body = matches!(body_ty, Type::Function { .. });
 
-        if self.is_alias_body_circular(&*store, &body_ty, &qualified_name) {
+        if !is_function_body && self.is_alias_body_circular(&*store, &body_ty, &qualified_name) {
             self.sink
                 .push(diagnostics::infer::circular_type_alias(name, *span));
         }
 
-        let body_ty = if matches!(body_ty, Type::Function { .. }) {
+        let body_ty = if is_function_body {
             let params: Vec<Type> = generics
                 .iter()
                 .map(|g| Type::Parameter(g.name.clone()))
