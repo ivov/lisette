@@ -11,6 +11,7 @@ concurrency:
 
 jobs:
   publish:
+    if: github.repository == 'ivov/lisette'
     runs-on: ubuntu-latest
     permissions:
       contents: read

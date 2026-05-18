@@ -12,7 +12,7 @@ concurrency:
 jobs:
   publish:
     name: Publish prelude, bindgen, compiler
-    if: "${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: release') }}"
+    if: "${{ github.repository == 'ivov/lisette' && (github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: release')) }}"
     runs-on: ubuntu-latest
     permissions:
       contents: write
