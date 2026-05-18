@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·         ╰── not found
  8 │   }
    ╰────
-  help: Did you mean `Shape.Circle`? · code: [resolve.variant_not_found]
+  help: Did you mean `shapes.Shape.Circle`? · code: [resolve.variant_not_found]

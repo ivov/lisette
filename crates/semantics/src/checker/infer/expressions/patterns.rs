@@ -739,8 +739,25 @@ impl TaskState<'_> {
         };
         let variants = store.variants_of(&id)?;
         let variant_names: Vec<String> = variants.iter().map(|v| v.name.to_string()).collect();
-        let simple_name = unqualified_name(&id);
-        Some((simple_name.to_string(), variant_names))
+        let display_name = self.enum_display_name(store, id.as_str());
+        Some((display_name, variant_names))
+    }
+
+    fn enum_display_name(&self, store: &Store, id: &str) -> String {
+        let simple = unqualified_name(id);
+        let Some(module_id) = store.module_for_qualified_name(id) else {
+            return simple.to_string();
+        };
+        if module_id == self.cursor.module_id || self.imports.unprefixed_imports.contains(module_id)
+        {
+            return simple.to_string();
+        }
+        for (prefix, imported_module_id) in &self.imports.prefix_to_module {
+            if imported_module_id == module_id {
+                return format!("{}.{}", prefix, simple);
+            }
+        }
+        simple.to_string()
     }
 
     /// Tries to resolve an identifier like `api.UIEvent.Click` through a type alias.
