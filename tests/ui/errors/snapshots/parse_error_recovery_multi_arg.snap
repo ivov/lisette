@@ -1,12 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
 ---
-  [error] Unsupported operator
+  [error] Syntax error
    ╭─[test.lis:3:11]
  2 │ fn test() {
- 3 │   foo(a, b^c, d);
-   ·           ┬
-   ·           ╰── `^` is not a supported binary operator
+ 3 │   foo(a, b@c, d);
+   ·           ─┬
+   ·            ╰── expected `,` or `)`
  4 │ }
    ╰────
-  help: Lisette does not support bitwise operators · code: [parse.unsupported_operator]
+  help: Add a comma between elements · code: [parse.syntax_error]
