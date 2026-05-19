@@ -166,23 +166,38 @@ impl Emitter<'_> {
         });
         let mut values = self.sequence(output, stages, prefix);
         if let Some(i) = spread_idx {
-            if wrap_to_any {
-                self.requirements.require_stdlib();
-                values[i] = format!("{}.SliceToAny({})", go_name::GO_STDLIB_PKG, values[i]);
-            }
-            match combine {
-                Some(c) if i > c.fixed_count => {
-                    let elem_go = self.go_type_as_string(&c.elem_ty);
-                    let leading = values[c.fixed_count..i].join(", ");
-                    let spread_value = &values[i];
-                    let combined =
-                        format!("append([]{elem_go}{{{leading}}}, {spread_value}...)...");
-                    values.splice(c.fixed_count..=i, std::iter::once(combined));
-                }
-                _ => values[i].push_str("..."),
-            }
+            self.finalize_spread_stage(&mut values, i, wrap_to_any, combine);
         }
         values
+    }
+
+    /// Post-staging fix-up for the spread slot: optional `any`-wrap, then
+    /// either `append([]T{leading...}, spread...)...` or plain `value...`.
+    pub(crate) fn finalize_spread_stage(
+        &mut self,
+        values: &mut Vec<String>,
+        spread_idx: usize,
+        wrap_to_any: bool,
+        combine: Option<VariadicCombine>,
+    ) {
+        if wrap_to_any {
+            self.requirements.require_stdlib();
+            values[spread_idx] = format!(
+                "{}.SliceToAny({})",
+                go_name::GO_STDLIB_PKG,
+                values[spread_idx]
+            );
+        }
+        match combine {
+            Some(c) if spread_idx > c.fixed_count => {
+                let elem_go = self.go_type_as_string(&c.elem_ty);
+                let leading = values[c.fixed_count..spread_idx].join(", ");
+                let spread_value = &values[spread_idx];
+                let combined = format!("append([]{elem_go}{{{leading}}}, {spread_value}...)...");
+                values.splice(c.fixed_count..=spread_idx, std::iter::once(combined));
+            }
+            _ => values[spread_idx].push_str("..."),
+        }
     }
 
     /// Sequence N staged emissions preserving left-to-right eval order.

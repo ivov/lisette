@@ -4519,6 +4519,192 @@ fn main() {
 }
 
 #[test]
+fn lowered_result_fn_arg_adapts_to_tagged_generic_param() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn resultant(arg: int) -> Result<int, Face> {
+  Ok(arg)
+}
+
+pub fn resolve<T, R, E>(a: T, f: fn(T) -> Result<R, E>) -> Result<R, E> {
+  f(a)
+}
+
+fn main() {
+  let _ = resolve(42, resultant)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn lowered_pointer_err_fn_arg_adapts_to_tagged_generic_param() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:strconv"
+
+pub fn parser(arg: int) -> Result<int, Ref<strconv.NumError>> {
+  Ok(arg)
+}
+
+pub fn resolve<T, R, E>(a: T, f: fn(T) -> Result<R, E>) -> Result<R, E> {
+  f(a)
+}
+
+fn main() {
+  let _ = resolve(0, parser)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn lowered_result_lambda_arg_adapts_to_tagged_generic_param() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn resolve<T, R, E>(a: T, f: fn(T) -> Result<R, E>) -> Result<R, E> {
+  f(a)
+}
+
+fn main() {
+  let _ = resolve(42, |x| -> Result<int, Face> { Ok(x) })
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn lowered_partial_fn_arg_adapts_to_tagged_generic_param() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn fallible(arg: int) -> Partial<int, Face> {
+  Partial.Ok(arg)
+}
+
+pub fn resolve<T, R, E>(a: T, f: fn(T) -> Partial<R, E>) -> Partial<R, E> {
+  f(a)
+}
+
+fn main() {
+  let _ = resolve(42, fallible)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn lowered_result_fn_arg_adapts_through_variadic_generic_param() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn resultant(arg: int) -> Result<int, Face> {
+  Ok(arg)
+}
+
+pub fn resolve<R, E>(default: R, _fs: VarArgs<fn(int) -> Result<R, E>>) -> Result<R, E> {
+  Ok(default)
+}
+
+fn main() {
+  let _ = resolve(0, resultant)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn spread_slice_into_variadic_generic_param_adapts_each_element() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn resultant(arg: int) -> Result<int, Face> {
+  Ok(arg)
+}
+
+pub fn resolve<R, E>(default: R, _fs: VarArgs<fn(int) -> Result<R, E>>) -> Result<R, E> {
+  Ok(default)
+}
+
+fn main() {
+  let fns = [resultant]
+  let _ = resolve<int, Face>(0, fns...)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn nullable_option_fn_arg_adapts_to_comma_ok_generic_param() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn lookup(_arg: int) -> Option<Face> {
+  None
+}
+
+pub fn resolve<T, R>(a: T, f: fn(T) -> Option<R>) -> Option<R> {
+  f(a)
+}
+
+fn main() {
+  let _ = resolve(0, lookup)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn fused_match_arm_bindings_dont_leak() {
     let mut fs = MockFileSystem::new();
 

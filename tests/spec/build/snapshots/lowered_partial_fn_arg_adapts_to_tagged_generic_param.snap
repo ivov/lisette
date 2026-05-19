@@ -1,0 +1,33 @@
+---
+source: tests/spec/build/mod.rs
+assertion_line: 4632
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Face interface {
+}
+
+func Fallible(arg int) (int, Face) {
+	return arg, nil
+}
+
+func Resolve[T any, R any, E any](a T, f func(T) lisette.Partial[R, E]) lisette.Partial[R, E] {
+	return f(a)
+}
+
+func main() {
+	cb_1 := Fallible
+	Resolve(42, func(arg0 int) lisette.Partial[int, Face] {
+		ret_2, ret_3 := cb_1(arg0)
+		var result_4 lisette.Partial[int, Face]
+		if ret_3 != nil {
+			result_4 = lisette.MakePartialBoth[int, Face](ret_2, ret_3)
+		} else {
+			result_4 = lisette.MakePartialOk[int, Face](ret_2)
+		}
+		return result_4
+	})
+}

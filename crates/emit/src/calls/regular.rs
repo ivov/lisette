@@ -5,12 +5,14 @@ use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
+use crate::types::abi_transition::emit_fn_arg_shape_adapter;
 use crate::types::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
 use syntax::ast::{Annotation, Expression};
 use syntax::types::Type;
 
-struct CalleeAnalysis {
+struct CalleeAnalysis<'a> {
     fn_param_types: Vec<Type>,
+    generic_fn_param_types: Option<&'a [Type]>,
     pointer_indices: HashSet<usize>,
     is_go_call: bool,
     is_prelude_dispatch: bool,
@@ -18,6 +20,7 @@ struct CalleeAnalysis {
 
 struct CallArgsContext<'a> {
     fn_param_types: &'a [Type],
+    generic_fn_param_types: Option<&'a [Type]>,
     pointer_indices: &'a HashSet<usize>,
     is_go_call: bool,
     /// Suppresses the Go-fn identity short-circuit on fn-typed params
@@ -102,7 +105,7 @@ fn collapse_fmt_print(
     call_str
 }
 
-impl Emitter<'_> {
+impl<'a> Emitter<'a> {
     pub(super) fn emit_regular_call(
         &mut self,
         output: &mut String,
@@ -152,6 +155,7 @@ impl Emitter<'_> {
         let analysis = self.analyze_callee(function);
         let args_ctx = CallArgsContext {
             fn_param_types: &analysis.fn_param_types,
+            generic_fn_param_types: analysis.generic_fn_param_types,
             pointer_indices: &analysis.pointer_indices,
             is_go_call: analysis.is_go_call,
             is_prelude_dispatch: analysis.is_prelude_dispatch,
@@ -177,12 +181,15 @@ impl Emitter<'_> {
         call_str
     }
 
-    fn analyze_callee(&mut self, function: &Expression) -> CalleeAnalysis {
+    fn analyze_callee(&mut self, function: &Expression) -> CalleeAnalysis<'a> {
         let pointer_indices = self.get_recursive_enum_pointer_indices(function);
-        let fn_param_types: Vec<Type> = match function.get_type().unwrap_forall() {
-            Type::Function { params, .. } => params.clone(),
-            _ => vec![],
-        };
+        let fn_param_types: Vec<Type> = function
+            .get_type()
+            .unwrap_forall()
+            .get_function_params()
+            .map(<[Type]>::to_vec)
+            .unwrap_or_default();
+        let generic_fn_param_types = self.callee_generic_param_types(function);
         let (is_go_call, is_prelude_dispatch) = match function.unwrap_parens() {
             Expression::DotAccess { expression, .. } => {
                 let is_prelude = matches!(
@@ -198,10 +205,26 @@ impl Emitter<'_> {
         };
         CalleeAnalysis {
             fn_param_types,
+            generic_fn_param_types,
             pointer_indices,
             is_go_call,
             is_prelude_dispatch,
         }
+    }
+
+    /// Callee's declared param types from its definition, before instantiation.
+    fn callee_generic_param_types(&self, function: &Expression) -> Option<&'a [Type]> {
+        let Expression::Identifier {
+            qualified: Some(q), ..
+        } = function.unwrap_parens()
+        else {
+            return None;
+        };
+        self.facts
+            .definition(q.as_str())?
+            .ty()
+            .unwrap_forall()
+            .get_function_params()
     }
 
     /// Materialize a Go array-returning call into a variable and reslice it,
@@ -276,7 +299,7 @@ impl Emitter<'_> {
         args: &[Expression],
         ctx: &CallArgsContext<'_>,
     ) -> Vec<String> {
-        let stages: Vec<EmittedExpression> = args
+        let mut stages: Vec<EmittedExpression> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| {
@@ -285,6 +308,22 @@ impl Emitter<'_> {
                 EmittedExpression::new(setup, value, arg)
             })
             .collect();
+
+        if let Some(spread) = ctx.spread
+            && let Some(adapter_stage) = self.try_emit_variadic_spread_adapter(spread, ctx)
+        {
+            stages.push(adapter_stage);
+            let spread_idx = stages.len() - 1;
+            let mut values = self.sequence(output, stages, "_arg");
+            self.finalize_spread_stage(
+                &mut values,
+                spread_idx,
+                ctx.wrap_spread_to_any,
+                ctx.combine_variadic.as_ref().cloned(),
+            );
+            return values;
+        }
+
         self.sequence_with_spread(
             output,
             stages,
@@ -336,10 +375,17 @@ impl Emitter<'_> {
         ctx: &CallArgsContext<'_>,
     ) -> String {
         let effective_param_ty = self.effective_param_type(index, ctx.fn_param_types);
+        let generic_param_ty = ctx
+            .generic_fn_param_types
+            .and_then(|params| self.effective_param_type(index, params));
 
         if ctx.is_go_call
             && let Some(result) = self.try_emit_callback_wrapper(output, arg, effective_param_ty)
         {
+            return result;
+        }
+
+        if let Some(result) = self.try_adapt_lowered_fn_arg_shape(output, arg, generic_param_ty) {
             return result;
         }
 
@@ -387,16 +433,140 @@ impl Emitter<'_> {
         }
     }
 
-    fn effective_param_type<'a>(
+    fn effective_param_type<'p>(
         &self,
         index: usize,
-        fn_param_types: &'a [Type],
-    ) -> Option<&'a Type> {
+        fn_param_types: &'p [Type],
+    ) -> Option<&'p Type> {
         fn_param_types.get(index).or_else(|| {
             fn_param_types
                 .last()
                 .filter(|t| t.get_name() == Some("VarArgs"))
         })
+    }
+
+    /// Adapt a lowered-return fn arg when its shape disagrees with the
+    /// callee's generic-param shape.
+    fn try_adapt_lowered_fn_arg_shape(
+        &mut self,
+        output: &mut String,
+        arg: &Expression,
+        generic_param_ty: Option<&Type>,
+    ) -> Option<String> {
+        if Self::is_tagged_shape_fn_value(arg) {
+            return None;
+        }
+
+        let raw_param_ty = generic_param_ty?;
+        let variadic_inner = (raw_param_ty.get_name() == Some("VarArgs"))
+            .then(|| raw_param_ty.inner())
+            .flatten();
+        let param_ty = variadic_inner.as_ref().unwrap_or(raw_param_ty);
+        let param_fn = self
+            .facts
+            .resolve_to_function_type(param_ty.unwrap_forall())?;
+        let param_ret = param_fn.get_function_ret()?;
+        let param_shape = self.classify_direct_emission(param_ret);
+
+        let arg_ty = arg.get_type();
+        let arg_fn = self
+            .facts
+            .resolve_to_function_type(arg_ty.unwrap_forall())?;
+        let arg_ret = arg_fn.get_function_ret()?;
+        let arg_shape = self.classify_direct_emission(arg_ret)?;
+
+        if param_shape.as_ref() == Some(&arg_shape) {
+            return None;
+        }
+
+        let value = self.emit_value(output, arg, ExpressionContext::value());
+        emit_fn_arg_shape_adapter(
+            self,
+            output,
+            &value,
+            &arg_fn,
+            &arg_shape,
+            param_shape.as_ref(),
+        )
+    }
+
+    /// Adapt `slice...` spread into a generic `VarArgs<fn(…)>` when the
+    /// slice's element fn-shape disagrees with the variadic's element.
+    fn try_emit_variadic_spread_adapter(
+        &mut self,
+        spread: &Expression,
+        ctx: &CallArgsContext<'_>,
+    ) -> Option<EmittedExpression> {
+        let generic_params = ctx.generic_fn_param_types?;
+        let raw_variadic = generic_params.last()?;
+        if raw_variadic.get_name() != Some("VarArgs") {
+            return None;
+        }
+        let variadic_inner = raw_variadic.inner()?;
+        let param_fn = self
+            .facts
+            .resolve_to_function_type(variadic_inner.unwrap_forall())?;
+        let param_ret = param_fn.get_function_ret()?;
+        let param_shape = self.classify_direct_emission(param_ret);
+
+        let spread_ty = spread.get_type();
+        let elem_ty = spread_ty.unwrap_forall().inner()?;
+        let arg_fn = self
+            .facts
+            .resolve_to_function_type(elem_ty.unwrap_forall())?;
+        let arg_ret = arg_fn.get_function_ret()?;
+        let arg_shape = self.classify_direct_emission(arg_ret)?;
+
+        if param_shape.as_ref() == Some(&arg_shape) {
+            return None;
+        }
+
+        let mut setup = String::new();
+        let src_value = self.emit_value(&mut setup, spread, ExpressionContext::value());
+        let src_var = self.hoist_tmp_value(&mut setup, "src", &src_value);
+
+        let target_elem_ret = match param_shape.as_ref() {
+            Some(shape) => self.render_lowered_return_ty(shape, arg_ret),
+            None => self.go_type_as_string(arg_ret),
+        };
+        let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
+        let param_type_strs: Vec<String> = arg_fn_params
+            .iter()
+            .map(|p| self.go_type_as_string(p))
+            .collect();
+        let target_elem_ty = format!("func({}) {}", param_type_strs.join(", "), target_elem_ret);
+
+        let adapted = self.fresh_var(Some("adapted"));
+        self.declare(&adapted);
+        let loop_cb = self.fresh_var(Some("cb"));
+
+        let mut body = String::new();
+        let closure = emit_fn_arg_shape_adapter(
+            self,
+            &mut body,
+            &loop_cb,
+            &arg_fn,
+            &arg_shape,
+            param_shape.as_ref(),
+        )?;
+        crate::write_line!(body, "{}[i] = {}", adapted, closure);
+
+        crate::write_line!(
+            setup,
+            "{} := make([]{}, len({}))",
+            adapted,
+            target_elem_ty,
+            src_var
+        );
+        crate::write_line!(
+            setup,
+            "for i, {} := range {} {{\n{}}}",
+            loop_cb,
+            src_var,
+            body
+        );
+
+        Some(EmittedExpression::new(setup, adapted, spread))
     }
 
     fn try_emit_callback_wrapper(

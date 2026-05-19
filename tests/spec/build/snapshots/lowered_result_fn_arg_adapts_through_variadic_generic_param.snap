@@ -1,0 +1,32 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Face interface {
+}
+
+func Resultant(arg int) (int, Face) {
+	return arg, nil
+}
+
+func Resolve[R any, E any](default_ R, _ ...func(int) lisette.Result[R, E]) lisette.Result[R, E] {
+	return lisette.MakeResultOk[R, E](default_)
+}
+
+func main() {
+	cb_1 := Resultant
+	Resolve(0, func(arg0 int) lisette.Result[int, Face] {
+		ret_2, ret_3 := cb_1(arg0)
+		var result_4 lisette.Result[int, Face]
+		if ret_3 != nil {
+			result_4 = lisette.MakeResultErr[int, Face](ret_3)
+		} else {
+			result_4 = lisette.MakeResultOk[int, Face](ret_2)
+		}
+		return result_4
+	})
+}

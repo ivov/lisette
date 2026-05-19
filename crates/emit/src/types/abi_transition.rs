@@ -436,6 +436,44 @@ pub(crate) fn emit_lisette_callback_wrapper(
     format!("func({params_str}) {go_ret} {{\n{prelude}{body}}}")
 }
 
+/// Wrap a lowered-return fn into a closure re-presenting the return in
+/// `target_shape` (tagged when `None`). Pipes through tagged form so any
+/// (arg, target) shape pair works.
+pub(crate) fn emit_fn_arg_shape_adapter(
+    emitter: &mut Emitter,
+    output: &mut String,
+    fn_value: &str,
+    arg_fn_type: &Type,
+    arg_shape: &AbiShape,
+    target_shape: Option<&AbiShape>,
+) -> Option<String> {
+    let params = arg_fn_type.get_function_params()?;
+    let arg_ret = arg_fn_type.get_function_ret()?;
+
+    let cb_var = emitter.hoist_tmp_value(output, "cb", fn_value);
+    let (param_strs, arg_names) = emitter.build_wrapper_params(params);
+    let inner_call = format!("{}({})", cb_var, arg_names.join(", "));
+
+    let outer_ret = match target_shape {
+        Some(shape) => emitter.render_lowered_return_ty(shape, arg_ret),
+        None => emitter.go_type_as_string(arg_ret),
+    };
+
+    let mut body = String::new();
+    let tagged = emit_callee_abi_wrapping(emitter, &mut body, arg_shape, &inner_call, arg_ret);
+    match target_shape {
+        Some(shape) => emit_lowered_result_return(emitter, &mut body, &tagged, arg_ret, shape),
+        None => write_line!(body, "return {}", tagged),
+    }
+
+    Some(format!(
+        "func({}) {} {{\n{}}}",
+        param_strs.join(", "),
+        outer_ret,
+        body
+    ))
+}
+
 /// Convert a fn-typed wrapper arg from lowered Go ABI back to tagged for
 /// the inner call. Identity for non-fn args and for fn args with no
 /// lowered return.
