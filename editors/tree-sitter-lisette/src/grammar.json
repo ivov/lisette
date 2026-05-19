@@ -2481,6 +2481,10 @@
                 "value": "-"
               },
               {
+                "type": "STRING",
+                "value": "^"
+              },
+              {
                 "type": "ALIAS",
                 "content": {
                   "type": "SYMBOL",
@@ -2740,6 +2744,14 @@
                     {
                       "type": "STRING",
                       "value": "-"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "|"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "^"
                     }
                   ]
                 }
@@ -2786,6 +2798,22 @@
                     {
                       "type": "STRING",
                       "value": "%"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "<<"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": ">>"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "&"
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "&^"
                     }
                   ]
                 }
@@ -2937,6 +2965,30 @@
                 {
                   "type": "STRING",
                   "value": "%="
+                },
+                {
+                  "type": "STRING",
+                  "value": "&="
+                },
+                {
+                  "type": "STRING",
+                  "value": "|="
+                },
+                {
+                  "type": "STRING",
+                  "value": "^="
+                },
+                {
+                  "type": "STRING",
+                  "value": "&^="
+                },
+                {
+                  "type": "STRING",
+                  "value": "<<="
+                },
+                {
+                  "type": "STRING",
+                  "value": ">>="
                 }
               ]
             }
