@@ -166,34 +166,40 @@ func (c *Converter) convertFunction(result *ConvertResult, symbolExport extract.
 	result.ArrayReturn = returnType.ArrayReturn
 	c.applySentinelInt(result, result.Name)
 
-	isSinglePointerReturn := isSinglePointerResult(signature)
-	if isSinglePointerReturn && returnType.IsDirectError {
-		isSinglePointerReturn = false
+	isSingleNilableReturn := isSingleNilableResult(signature)
+	if isSingleNilableReturn && returnType.IsDirectError {
+		isSingleNilableReturn = false
 	}
+	isSinglePointerReturn := isSingleNilableReturn && isSinglePointerResult(signature)
+
 	forceNonNilable := false
 	forceNilable := c.cfg != nil && c.cfg.ShouldWrapNilableReturn(c.currentPkgPath, result.Name)
-	if isSinglePointerReturn && looksLikeConstructor(result.Name) {
-		forceNonNilable = true
-	}
-	if !forceNonNilable && isSinglePointerReturn && isPointerBoxingFunction(signature) {
-		forceNonNilable = true
-	}
-	if !forceNonNilable && isSinglePointerReturn && isIteratorReturnType(signature) {
-		forceNonNilable = true
-	}
-	if !forceNonNilable && isSinglePointerReturn && c.isManyToOneFactory(signature) {
-		forceNonNilable = true
-	}
-	if !forceNonNilable && isSinglePointerReturn && c.hasMatchingSelfReturningMethod(result.Name, signature) {
-		forceNonNilable = true
-	}
-	if !forceNonNilable && isSinglePointerReturn {
-		forceNonNilable = c.isProvenNonNilReturn(symbolExport.Obj)
+	if isSingleNilableReturn {
+		// Body evidence outranks name heuristics.
+		if c.findFuncDecl(symbolExport.Obj) != nil {
+			forceNonNilable = c.isProvenNonNilReturn(symbolExport.Obj)
+		} else {
+			if looksLikeConstructor(result.Name) {
+				forceNonNilable = true
+			}
+			if !forceNonNilable && isSinglePointerReturn && isPointerBoxingFunction(signature) {
+				forceNonNilable = true
+			}
+			if !forceNonNilable && isSinglePointerReturn && isIteratorReturnType(signature) {
+				forceNonNilable = true
+			}
+			if !forceNonNilable && isSinglePointerReturn && c.isManyToOneFactory(signature) {
+				forceNonNilable = true
+			}
+			if !forceNonNilable && isSinglePointerReturn && c.hasMatchingSelfReturningMethod(result.Name, signature) {
+				forceNonNilable = true
+			}
+		}
 	}
 	if !forceNonNilable {
 		forceNonNilable = c.cfg != nil && c.cfg.IsNonNilableReturn(c.currentPkgPath, result.Name)
 	}
-	if (isSinglePointerReturn && !forceNonNilable) || (forceNilable && !returnType.NilableReturnApplied) {
+	if (isSingleNilableReturn && !forceNonNilable) || (forceNilable && !returnType.NilableReturnApplied) {
 		result.ReturnType = fmt.Sprintf("Option<%s>", result.ReturnType)
 	}
 }
@@ -329,28 +335,36 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 	result.ArrayReturn = returnType.ArrayReturn
 	c.applySentinelInt(result, qualifiedName)
 
-	isSinglePointerReturn := isSinglePointerResult(signature)
-	if isSinglePointerReturn && returnType.IsDirectError {
-		isSinglePointerReturn = false
+	isSingleNilableReturn := isSingleNilableResult(signature)
+	if isSingleNilableReturn && returnType.IsDirectError {
+		isSingleNilableReturn = false
 	}
-	forceNonNilable := isSinglePointerReturn && looksLikeConstructor(result.Name)
-	if !forceNonNilable && isSinglePointerReturn && result.Receiver != nil && !looksLikeNavigationMethod(result.Name) {
-		if isSelfReturning(signature, result.Receiver.BaseTypeName) ||
-			c.isUniformPointerReturnType(result.Receiver.BaseTypeName) ||
-			c.isMajorityPointerReturnType(result.Receiver.BaseTypeName) {
-			forceNonNilable = true
+	isSinglePointerReturn := isSingleNilableReturn && isSinglePointerResult(signature)
+
+	forceNonNilable := false
+	if isSingleNilableReturn {
+		if c.findFuncDecl(symbolExport.Obj) != nil {
+			forceNonNilable = c.isProvenNonNilReturn(symbolExport.Obj)
+		} else {
+			if looksLikeConstructor(result.Name) {
+				forceNonNilable = true
+			}
+			if !forceNonNilable && isSinglePointerReturn && result.Receiver != nil && !looksLikeNavigationMethod(result.Name) {
+				if isSelfReturning(signature, result.Receiver.BaseTypeName) ||
+					c.isUniformPointerReturnType(result.Receiver.BaseTypeName) ||
+					c.isMajorityPointerReturnType(result.Receiver.BaseTypeName) {
+					forceNonNilable = true
+				}
+			}
+			if !forceNonNilable && isSinglePointerReturn && symbolExport.IsPromoted && symbolExport.OriginalTypeName != "" {
+				if isSelfReturning(signature, symbolExport.OriginalTypeName) {
+					forceNonNilable = true
+				}
+			}
+			if !forceNonNilable && isSinglePointerReturn && isIteratorReturnType(signature) {
+				forceNonNilable = true
+			}
 		}
-	}
-	if !forceNonNilable && isSinglePointerReturn && symbolExport.IsPromoted && symbolExport.OriginalTypeName != "" {
-		if isSelfReturning(signature, symbolExport.OriginalTypeName) {
-			forceNonNilable = true
-		}
-	}
-	if !forceNonNilable && isSinglePointerReturn && isIteratorReturnType(signature) {
-		forceNonNilable = true
-	}
-	if !forceNonNilable && isSinglePointerReturn {
-		forceNonNilable = c.isProvenNonNilReturn(symbolExport.Obj)
 	}
 	if !forceNonNilable {
 		forceNonNilable = c.cfg != nil && c.cfg.IsNonNilableReturn(c.currentPkgPath, qualifiedName)
@@ -364,7 +378,7 @@ func (c *Converter) convertMethod(result *ConvertResult, symbolExport extract.Sy
 		originalQualified := symbolExport.OriginalTypeName + "." + result.Name
 		methodForceNilable = c.cfg != nil && c.cfg.ShouldWrapNilableReturn(symbolExport.OriginalPkgPath, originalQualified)
 	}
-	if (isSinglePointerReturn && !forceNonNilable) || (methodForceNilable && !returnType.NilableReturnApplied) {
+	if (isSingleNilableReturn && !forceNonNilable) || (methodForceNilable && !returnType.NilableReturnApplied) {
 		result.ReturnType = fmt.Sprintf("Option<%s>", result.ReturnType)
 	}
 
@@ -862,6 +876,12 @@ func isSinglePointerResult(sig *types.Signature) bool {
 	}
 	_, ok := results.At(0).Type().Underlying().(*types.Pointer)
 	return ok
+}
+
+// isSingleNilableResult reports whether sig has exactly one Go-nilable result.
+func isSingleNilableResult(sig *types.Signature) bool {
+	results := sig.Results()
+	return results.Len() == 1 && isNilableGoType(results.At(0).Type())
 }
 
 func sliceToVarArgs(typeStr string) string {
@@ -1474,10 +1494,8 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 			return nil, false
 		}
 
-		// Interface methods are contracts: any pointer return permits nil at
-		// the Go level. No body to inspect, no implementer-specific heuristics;
-		// opt out only via explicit config.
-		if isSinglePointerResult(signature) && !returnType.IsDirectError &&
+		// Interface methods are contracts; any nilable return permits nil.
+		if isSingleNilableResult(signature) && !returnType.IsDirectError &&
 			(c.cfg == nil || !c.cfg.IsNonNilableReturn(c.currentPkgPath, qualifiedName)) {
 			returnType.LisetteType = fmt.Sprintf("Option<%s>", returnType.LisetteType)
 		}

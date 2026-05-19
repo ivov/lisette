@@ -228,7 +228,7 @@ pub interface TB {
   fn Attr(key: string, value: string)
   fn Chdir(dir: string)
   fn Cleanup(f: fn() -> ())
-  fn Context() -> context.Context
+  fn Context() -> Option<context.Context>
   fn Error(args: VarArgs<Unknown>)
   fn Errorf(format: string, args: VarArgs<Unknown>)
   fn Fail()
@@ -240,7 +240,7 @@ pub interface TB {
   fn Log(args: VarArgs<Unknown>)
   fn Logf(format: string, args: VarArgs<Unknown>)
   fn Name() -> string
-  fn Output() -> io.Writer
+  fn Output() -> Option<io.Writer>
   fn Setenv(key: string, value: string)
   fn Skip(args: VarArgs<Unknown>)
   fn SkipNow()

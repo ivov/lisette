@@ -39,9 +39,9 @@ pub type Logger
 /// Interface self-return on a real fluent setter (mutates state, returns self).
 pub interface Router {
   #[allow(unused_value)]
-  fn Get(path: string) -> Router
+  fn Get(path: string) -> Option<Router>
   #[allow(unused_value)]
-  fn Post(path: string) -> Router
+  fn Post(path: string) -> Option<Router>
 }
 
 pub type Server
@@ -50,8 +50,8 @@ pub type Server
 /// the structural shape of interface-method implementations like
 /// `func (b *BasicType) Basic() *BasicType { return b }` in go/debug/dwarf.
 pub interface TypeLike {
-  fn Self() -> TypeLike
-  fn Underlying() -> TypeLike
+  fn Self() -> Option<TypeLike>
+  fn Underlying() -> Option<TypeLike>
 }
 
 /// Multi-path method where one return path is non-receiver (go/types Origin
@@ -117,5 +117,5 @@ impl Server {
 }
 
 impl Var {
-  fn Origin(self: Ref<Var>) -> Ref<Var>
+  fn Origin(self: Ref<Var>) -> Option<Ref<Var>>
 }

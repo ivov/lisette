@@ -7,7 +7,7 @@ import "go:time"
 
 /// FileInfoToDirEntry returns a [DirEntry] that returns information from info.
 /// If info is nil, FileInfoToDirEntry returns nil.
-pub fn FileInfoToDirEntry(info: FileInfo) -> DirEntry
+pub fn FileInfoToDirEntry(info: FileInfo) -> Option<DirEntry>
 
 /// FormatDirEntry returns a formatted version of dir for human readability.
 /// Implementations of [DirEntry] can call this from a String method.

@@ -529,7 +529,7 @@ pub fn NewStruct(fields: Slice<Ref<Var>>, tags: Slice<string>) -> Ref<Struct>
 pub fn NewTerm(tilde: bool, typ: Type) -> Ref<Term>
 
 /// NewTuple returns a new tuple for the given variables.
-pub fn NewTuple(x: VarArgs<Ref<Var>>) -> Ref<Tuple>
+pub fn NewTuple(x: VarArgs<Ref<Var>>) -> Option<Ref<Tuple>>
 
 /// NewTypeName returns a new type name denoting the given typ.
 /// The remaining arguments set the attributes found with all Objects.
@@ -827,7 +827,7 @@ pub interface Object {
   fn Pkg() -> Option<Ref<Package>>
   fn Pos() -> token.Pos
   fn String() -> string
-  fn Type() -> Type
+  fn Type() -> Option<Type>
 }
 
 /// A Package describes a Go package.
@@ -927,7 +927,7 @@ pub type Tuple
 /// All types implement the Type interface.
 pub interface Type {
   fn String() -> string
-  fn Underlying() -> Type
+  fn Underlying() -> Option<Type>
 }
 
 /// TypeAndValue reports the type and value (for constants)

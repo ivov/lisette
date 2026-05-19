@@ -626,7 +626,7 @@ impl Int {
   /// Modular exponentiation of inputs of a particular size is not a
   /// cryptographically constant-time operation.
   #[allow(unused_value)]
-  fn Exp(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>, m: Ref<Int>) -> Ref<Int>
+  fn Exp(self: Ref<Int>, x: Ref<Int>, y: Ref<Int>, m: Ref<Int>) -> Option<Ref<Int>>
 
   /// FillBytes sets buf to the absolute value of x, storing it as a zero-extended
   /// big-endian byte slice, and returns buf.
@@ -701,13 +701,13 @@ impl Int {
   /// and returns z. If g and n are not relatively prime, g has no multiplicative
   /// inverse in the ring ℤ/nℤ.  In this case, z is unchanged and the return value
   /// is nil. If n == 0, a division-by-zero run-time panic occurs.
-  fn ModInverse(self: Ref<Int>, g: Ref<Int>, n: Ref<Int>) -> Ref<Int>
+  fn ModInverse(self: Ref<Int>, g: Ref<Int>, n: Ref<Int>) -> Option<Ref<Int>>
 
   /// ModSqrt sets z to a square root of x mod p if such a square root exists, and
   /// returns z. The modulus p must be an odd prime. If x is not a square mod p,
   /// ModSqrt leaves z unchanged and returns nil. This function panics if p is
   /// not an odd integer, its behavior is undefined if p is odd but not prime.
-  fn ModSqrt(self: Ref<Int>, x: Ref<Int>, p: Ref<Int>) -> Ref<Int>
+  fn ModSqrt(self: Ref<Int>, x: Ref<Int>, p: Ref<Int>) -> Option<Ref<Int>>
 
   /// Mul sets z to the product x*y and returns z.
   #[allow(unused_value)]
@@ -1005,7 +1005,7 @@ impl Rat {
 
   /// SetFloat64 sets z to exactly f and returns z.
   /// If f is not finite, SetFloat returns nil.
-  fn SetFloat64(self: Ref<Rat>, f: float64) -> Ref<Rat>
+  fn SetFloat64(self: Ref<Rat>, f: float64) -> Option<Ref<Rat>>
 
   /// SetFrac sets z to a/b and returns z.
   /// If b == 0, SetFrac panics.

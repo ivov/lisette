@@ -836,7 +836,7 @@ pub struct ValueSpec {
 /// If the result visitor w is not nil, [Walk] visits each of the children
 /// of node with the visitor w, followed by a call of w.Visit(nil).
 pub interface Visitor {
-  fn Visit(node: Node) -> Visitor
+  fn Visit(node: Node) -> Option<Visitor>
 }
 
 pub const FilterFuncDuplicates: MergeMode = 1

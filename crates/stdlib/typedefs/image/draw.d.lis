@@ -43,9 +43,9 @@ pub interface Drawer {
 
 /// Image is an image.Image with a Set method to change a single pixel.
 pub interface Image {
-  fn At(x: int, y: int) -> color.Color
+  fn At(x: int, y: int) -> Option<color.Color>
   fn Bounds() -> image.Rectangle
-  fn ColorModel() -> color.Model
+  fn ColorModel() -> Option<color.Model>
   fn Set(x: int, y: int, c: color.Color)
 }
 
@@ -59,9 +59,9 @@ pub interface Quantizer {
 /// calling Set, but it can avoid allocations from converting concrete color
 /// types to the [color.Color] interface type.
 pub interface RGBA64Image {
-  fn At(x: int, y: int) -> color.Color
+  fn At(x: int, y: int) -> Option<color.Color>
   fn Bounds() -> image.Rectangle
-  fn ColorModel() -> color.Model
+  fn ColorModel() -> Option<color.Model>
   fn RGBA64At(x: int, y: int) -> color.RGBA64
   fn Set(x: int, y: int, c: color.Color)
   fn SetRGBA64(x: int, y: int, c: color.RGBA64)

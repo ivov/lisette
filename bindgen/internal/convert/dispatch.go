@@ -115,6 +115,7 @@ type Converter struct {
 	majorityPointerTypes     map[string]bool              // lazily computed; types where ≥20 methods return same *T (>90%)
 	funcDeclCache            map[token.Pos]*ast.FuncDecl  // lazily built; AST function declarations by name position
 	nonNilCache              map[token.Pos]nilCacheResult // lazily built; proven non-nil results
+	fnIfaceReturnCache       map[*ast.FuncDecl]bool       // lazily built; memoized fnReturnsInterface lookup
 	crossPkgConverters       map[string]*Converter        // lazily built; cached converters for imported packages
 	noCrossPkg               bool                         // when true, skip cross-package transitive analysis
 	reachableUnexportedTypes map[string]bool              // lazily computed; unexported type names reachable from an exported decl. nil = uncomputed

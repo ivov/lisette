@@ -31,8 +31,7 @@ func (c *Converter) isProvenNonNilReturn(obj types.Object) bool {
 	return c.analyzeReturnNilability(fn)
 }
 
-// isProvenNonNilVar returns true if AST analysis proves the package-level
-// variable is always initialized to a non-nil value (in its declaration or init()).
+// isProvenNonNilVar checks if a package-level variable is proven non-nil.
 func (c *Converter) isProvenNonNilVar(obj types.Object) bool {
 	if c.pkg == nil {
 		return false
@@ -121,14 +120,11 @@ func (c *Converter) analyzeReturnNilability(fn *ast.FuncDecl) bool {
 
 	receiverName := ncGetReceiverName(fn)
 
-	// Naked returns with named pointer results default to nil
-	hasNamedPtrResult := false
+	hasNamedNilableResult := false
 	if fn.Type.Results != nil {
 		for _, field := range fn.Type.Results.List {
-			if len(field.Names) > 0 {
-				if _, ok := field.Type.(*ast.StarExpr); ok {
-					hasNamedPtrResult = true
-				}
+			if len(field.Names) > 0 && c.isNilableTypeExpr(field.Type) {
+				hasNamedNilableResult = true
 			}
 		}
 	}
@@ -150,7 +146,7 @@ func (c *Converter) analyzeReturnNilability(fn *ast.FuncDecl) bool {
 		}
 
 		if len(ret.Results) == 0 {
-			if hasNamedPtrResult {
+			if hasNamedNilableResult {
 				proven = false
 			}
 			return true
@@ -179,6 +175,21 @@ func (c *Converter) analyzeReturnNilability(fn *ast.FuncDecl) bool {
 
 // isProvenNonNilExpr checks whether an expression is provably non-nil.
 func (c *Converter) isProvenNonNilExpr(expr ast.Expr, fn *ast.FuncDecl) bool {
+	// Concrete value into an interface position is non-nil. Excludes
+	// unsafe.Pointer and untyped nil.
+	if c.pkg.TypesInfo != nil && c.fnReturnsInterface(fn) {
+		if tv, ok := c.pkg.TypesInfo.Types[expr]; ok {
+			switch u := tv.Type.Underlying().(type) {
+			case *types.Struct, *types.Array:
+				return true
+			case *types.Basic:
+				if u.Kind() != types.UnsafePointer && u.Kind() != types.UntypedNil {
+					return true
+				}
+			}
+		}
+	}
+
 	// &T{}
 	if ncIsAddressOfLiteral(expr) {
 		return true
@@ -210,6 +221,50 @@ func (c *Converter) isProvenNonNilExpr(expr ast.Expr, fn *ast.FuncDecl) bool {
 
 	// Field access, type assertion, index, etc. — can't prove
 	return false
+}
+
+// isNilableTypeExpr reports whether an AST type expression denotes a Go-nilable type.
+func (c *Converter) isNilableTypeExpr(expr ast.Expr) bool {
+	switch t := expr.(type) {
+	case *ast.StarExpr, *ast.InterfaceType, *ast.FuncType, *ast.MapType, *ast.ChanType:
+		return true
+	case *ast.ArrayType:
+		return t.Len == nil // slice (no length) is nilable; array is not
+	}
+	if c.pkg == nil || c.pkg.TypesInfo == nil {
+		return false
+	}
+	tv, ok := c.pkg.TypesInfo.Types[expr]
+	if !ok {
+		return false
+	}
+	switch tv.Type.Underlying().(type) {
+	case *types.Pointer, *types.Interface, *types.Signature, *types.Map, *types.Slice, *types.Chan:
+		return true
+	}
+	return false
+}
+
+// fnReturnsInterface reports whether fn's single return type is a non-empty non-error interface.
+func (c *Converter) fnReturnsInterface(fn *ast.FuncDecl) bool {
+	if c.fnIfaceReturnCache == nil {
+		c.fnIfaceReturnCache = make(map[*ast.FuncDecl]bool)
+	}
+	if cached, ok := c.fnIfaceReturnCache[fn]; ok {
+		return cached
+	}
+	answer := false
+	if c.pkg != nil && c.pkg.TypesInfo != nil && fn.Name != nil {
+		if obj, ok := c.pkg.TypesInfo.Defs[fn.Name].(*types.Func); ok {
+			if sig, ok := obj.Type().(*types.Signature); ok && sig.Results().Len() == 1 {
+				if iface, ok := sig.Results().At(0).Type().Underlying().(*types.Interface); ok {
+					answer = !iface.Empty() && !isErrorInterface(iface)
+				}
+			}
+		}
+	}
+	c.fnIfaceReturnCache[fn] = answer
+	return answer
 }
 
 // isProvenNonNilExprSimple checks if an expression is provably non-nil without
@@ -269,7 +324,8 @@ func (c *Converter) isProvenNonNilIdent(ident *ast.Ident, fn *ast.FuncDecl) bool
 		}
 	}
 
-	// Def-use analysis for local variables
+	// Package-level vars are intentionally not proven: AST-level immutability
+	// cannot be verified soundly. Singletons go in non_nilable_return.
 	return c.isProvenNonNilLocalVar(obj, fn)
 }
 
@@ -324,7 +380,7 @@ func (c *Converter) isProvenNonNilLocalVar(obj types.Object, fn *ast.FuncDecl) b
 				}
 				hasInit = true
 				if i < len(s.Values) {
-					initNonNil = c.isProvenNonNilExprSimple(s.Values[i])
+					initNonNil = c.isProvenNonNilExpr(s.Values[i], fn)
 				}
 				// var x *T with no initializer: initNonNil stays false
 			}
@@ -360,14 +416,8 @@ func (c *Converter) isProvenNonNilCallResult(call *ast.CallExpr) bool {
 		return true
 	}
 
-	// Constructor name heuristic
-	if looksLikeConstructor(calleeName) {
-		return true
-	}
-
-	// Config override and same-package transitive analysis
 	if calleeObj == nil {
-		return false
+		return looksLikeConstructor(calleeName)
 	}
 	fn, ok := calleeObj.(*types.Func)
 	if !ok {
@@ -396,14 +446,19 @@ func (c *Converter) isProvenNonNilCallResult(call *ast.CallExpr) bool {
 		return true
 	}
 
-	// Same-package transitive analysis with cycle detection
+	// Body inspection outranks the constructor name heuristic.
 	if calleePkg == c.currentPkgPath {
-		return c.isProvenNonNilFunc(calleeObj)
+		if c.findFuncDecl(calleeObj) != nil {
+			return c.isProvenNonNilFunc(calleeObj)
+		}
+	} else if !c.noCrossPkg && calleePkg != "" {
+		if c.crossPkgFuncDecl(calleeObj, calleePkg) != nil {
+			return c.isProvenNonNilCrossPkgFunc(calleeObj, calleePkg)
+		}
 	}
 
-	// Cross-package transitive analysis (one level deep)
-	if !c.noCrossPkg && calleePkg != "" {
-		return c.isProvenNonNilCrossPkgFunc(calleeObj, calleePkg)
+	if looksLikeConstructor(calleeName) {
+		return true
 	}
 
 	return false
@@ -431,7 +486,7 @@ func (c *Converter) isProvenNonNilFunc(obj types.Object) bool {
 	}
 
 	sig, ok := obj.Type().(*types.Signature)
-	if !ok || !isSinglePointerResult(sig) {
+	if !ok || !isSingleNilableResult(sig) {
 		c.nonNilCache[pos] = nilCacheNotProven
 		return false
 	}
@@ -443,6 +498,31 @@ func (c *Converter) isProvenNonNilFunc(obj types.Object) bool {
 
 	c.nonNilCache[pos] = nilCacheNotProven
 	return false
+}
+
+// crossPkgFuncDecl returns the imported package's FuncDecl for obj, or nil if no source is available.
+func (c *Converter) crossPkgFuncDecl(obj types.Object, pkgPath string) *ast.FuncDecl {
+	if c.pkg == nil || c.pkg.Imports == nil {
+		return nil
+	}
+	importedPkg, ok := c.pkg.Imports[pkgPath]
+	if !ok || importedPkg == nil || importedPkg.Syntax == nil || importedPkg.TypesInfo == nil {
+		return nil
+	}
+	if c.crossPkgConverters == nil {
+		c.crossPkgConverters = make(map[string]*Converter)
+	}
+	tempConv, ok := c.crossPkgConverters[pkgPath]
+	if !ok {
+		tempConv = NewConverter(pkgPath, importedPkg, c.cfg)
+		tempConv.noCrossPkg = true
+		c.crossPkgConverters[pkgPath] = tempConv
+	}
+	fn := tempConv.findFuncDecl(obj)
+	if fn == nil || fn.Body == nil {
+		return nil
+	}
+	return fn
 }
 
 // isProvenNonNilCrossPkgFunc checks if a function in an imported package is
@@ -468,7 +548,7 @@ func (c *Converter) isProvenNonNilCrossPkgFunc(obj types.Object, pkgPath string)
 	}
 
 	sig, ok := obj.Type().(*types.Signature)
-	if !ok || !isSinglePointerResult(sig) {
+	if !ok || !isSingleNilableResult(sig) {
 		c.nonNilCache[pos] = nilCacheNotProven
 		return false
 	}
@@ -498,8 +578,7 @@ func (c *Converter) isProvenNonNilCrossPkgFunc(obj types.Object, pkgPath string)
 	return false
 }
 
-// isAssignedNonNilInInit checks if a package-level variable is assigned a
-// non-nil value in an init() function.
+// isAssignedNonNilInInit checks if a package-level variable is assigned a non-nil value in an init() function.
 func (c *Converter) isAssignedNonNilInInit(obj types.Object) bool {
 	if c.pkg == nil || c.pkg.TypesInfo == nil {
 		return false

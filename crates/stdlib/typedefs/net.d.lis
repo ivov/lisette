@@ -522,9 +522,9 @@ pub struct Buffers(Slice<Slice<byte>>)
 /// Multiple goroutines may invoke methods on a Conn simultaneously.
 pub interface Conn {
   fn Close() -> Result<(), error>
-  fn LocalAddr() -> Addr
+  fn LocalAddr() -> Option<Addr>
   fn Read(mut b: Slice<byte>) -> Partial<int, error>
-  fn RemoteAddr() -> Addr
+  fn RemoteAddr() -> Option<Addr>
   fn SetDeadline(t: time.Time) -> Result<(), error>
   fn SetReadDeadline(t: time.Time) -> Result<(), error>
   fn SetWriteDeadline(t: time.Time) -> Result<(), error>
@@ -663,7 +663,7 @@ pub struct ListenConfig {
 /// Multiple goroutines may invoke methods on a Listener simultaneously.
 pub interface Listener {
   fn Accept() -> Result<Conn, error>
-  fn Addr() -> Addr
+  fn Addr() -> Option<Addr>
   fn Close() -> Result<(), error>
 }
 
@@ -694,7 +694,7 @@ pub struct OpError {
 /// Multiple goroutines may invoke methods on a PacketConn simultaneously.
 pub interface PacketConn {
   fn Close() -> Result<(), error>
-  fn LocalAddr() -> Addr
+  fn LocalAddr() -> Option<Addr>
   fn ReadFrom(mut p: Slice<byte>) -> Result<(int, Addr), error>
   fn SetDeadline(t: time.Time) -> Result<(), error>
   fn SetReadDeadline(t: time.Time) -> Result<(), error>

@@ -273,8 +273,8 @@ pub struct Attr {
 pub interface Handler {
   fn Enabled(ctx: context.Context, level: Level) -> bool
   fn Handle(ctx: context.Context, record: Record) -> Result<(), error>
-  fn WithAttrs(attrs: Slice<Attr>) -> Handler
-  fn WithGroup(name: string) -> Handler
+  fn WithAttrs(attrs: Slice<Attr>) -> Option<Handler>
+  fn WithGroup(name: string) -> Option<Handler>
 }
 
 /// HandlerOptions are options for a [TextHandler] or [JSONHandler].

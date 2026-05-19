@@ -649,7 +649,7 @@ impl CertificateRequestInfo {
   /// Context returns the context of the handshake that is in progress.
   /// This context is a child of the context passed to HandshakeContext,
   /// if any, and is canceled when the handshake concludes.
-  fn Context(self: Ref<CertificateRequestInfo>) -> context.Context
+  fn Context(self: Ref<CertificateRequestInfo>) -> Option<context.Context>
 
   /// SupportsCertificate returns nil if the provided certificate is supported by
   /// the server that sent the CertificateRequest. Otherwise, it returns an error
@@ -671,7 +671,7 @@ impl ClientHelloInfo {
   /// Context returns the context of the handshake that is in progress.
   /// This context is a child of the context passed to HandshakeContext,
   /// if any, and is canceled when the handshake concludes.
-  fn Context(self: Ref<ClientHelloInfo>) -> context.Context
+  fn Context(self: Ref<ClientHelloInfo>) -> Option<context.Context>
 
   /// SupportsCertificate returns nil if the provided certificate is supported by
   /// the client that sent the ClientHello. Otherwise, it returns an error

@@ -4,7 +4,7 @@
 // Lisette: 0.2.1
 
 /// New creates a ring of n elements.
-pub fn New(n: int) -> Ref<Ring>
+pub fn New(n: int) -> Option<Ref<Ring>>
 
 /// A Ring is an element of a circular list, or ring.
 /// Rings do not have a beginning or end; a pointer to any ring element
@@ -55,5 +55,5 @@ impl Ring {
   /// Unlink removes n % r.Len() elements from the ring r, starting
   /// at r.Next(). If n % r.Len() == 0, r remains unchanged.
   /// The result is the removed subring. r must not be empty.
-  fn Unlink(self: Ref<Ring>, n: int) -> Ref<Ring>
+  fn Unlink(self: Ref<Ring>, n: int) -> Option<Ref<Ring>>
 }

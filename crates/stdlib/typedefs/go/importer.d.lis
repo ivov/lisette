@@ -15,13 +15,13 @@ import "go:io"
 /// [token.FileSet] from the caller; without it, all position
 /// information derived from the Importer will be incorrect and
 /// misleading. See also the package documentation.
-pub fn Default() -> types.Importer
+pub fn Default() -> Option<types.Importer>
 
 /// For calls [ForCompiler] with a new FileSet.
 /// 
 /// Deprecated: Use [ForCompiler], which populates a FileSet
 /// with the positions of objects created by the importer.
-pub fn For(compiler: string, lookup: Lookup) -> types.Importer
+pub fn For(compiler: string, lookup: Lookup) -> Option<types.Importer>
 
 /// ForCompiler returns an Importer for importing from installed packages
 /// for the compilers "gc" and "gccgo", or for importing directly
@@ -40,7 +40,7 @@ pub fn For(compiler: string, lookup: Lookup) -> types.Importer
 /// A lookup function must be provided for correct module-aware operation.
 /// Deprecated: If lookup is nil, for backwards-compatibility, the importer
 /// will attempt to resolve imports in the $GOPATH workspace.
-pub fn ForCompiler(fset: Ref<token.FileSet>, compiler: string, lookup: Lookup) -> types.Importer
+pub fn ForCompiler(fset: Ref<token.FileSet>, compiler: string, lookup: Lookup) -> Option<types.Importer>
 
 /// A Lookup function returns a reader to access package data for
 /// a given import path, or an error if no matching package is found.

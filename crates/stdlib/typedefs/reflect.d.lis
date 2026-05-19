@@ -453,16 +453,16 @@ pub interface Type {
   fn ChanDir() -> ChanDir
   fn Comparable() -> bool
   fn ConvertibleTo(u: Type) -> bool
-  fn Elem() -> Type
+  fn Elem() -> Option<Type>
   fn Field(i: int) -> StructField
   fn FieldAlign() -> int
   fn FieldByIndex(index: Slice<int>) -> StructField
   fn FieldByName(name: string) -> Option<StructField>
   fn FieldByNameFunc(match_: fn(string) -> bool) -> Option<StructField>
   fn Implements(u: Type) -> bool
-  fn In(i: int) -> Type
+  fn In(i: int) -> Option<Type>
   fn IsVariadic() -> bool
-  fn Key() -> Type
+  fn Key() -> Option<Type>
   fn Kind() -> Kind
   fn Len() -> int
   fn Method(n: int) -> Method
@@ -472,7 +472,7 @@ pub interface Type {
   fn NumIn() -> int
   fn NumMethod() -> int
   fn NumOut() -> int
-  fn Out(i: int) -> Type
+  fn Out(i: int) -> Option<Type>
   fn OverflowComplex(x: complex128) -> bool
   fn OverflowFloat(x: float64) -> bool
   fn OverflowInt(x: int64) -> bool

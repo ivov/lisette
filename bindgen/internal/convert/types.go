@@ -42,12 +42,14 @@ func convertParamType(t types.Type, name string, nilable []string, conv *Convert
 	return ToLisette(t, conv)
 }
 
-// isNilableGoType returns true if the Go type is a pointer or a named
-// non-error interface — types that can be nil in Go.
+// isNilableGoType reports whether t is a Go-nilable type (pointer or non-empty non-error interface).
 func isNilableGoType(t types.Type) bool {
+	t = types.Unalias(t)
 	switch t := t.(type) {
 	case *types.Pointer:
 		return true
+	case *types.Interface:
+		return !t.Empty() && !isErrorInterface(t)
 	case *types.Named:
 		switch u := t.Underlying().(type) {
 		case *types.Pointer:

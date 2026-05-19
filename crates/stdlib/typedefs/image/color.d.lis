@@ -58,7 +58,7 @@ pub struct Gray16 {
 /// Model can convert any [Color] to one from its own color model. The conversion
 /// may be lossy.
 pub interface Model {
-  fn Convert(c: Color) -> Color
+  fn Convert(c: Color) -> Option<Color>
 }
 
 /// NRGBA represents a non-alpha-premultiplied 32-bit color.

@@ -19,7 +19,7 @@ pub fn IsValue(v: Unknown) -> bool
 /// 
 /// Deprecated: Drivers should implement [NamedValueChecker].
 pub interface ColumnConverter {
-  fn ColumnConverter(idx: int) -> ValueConverter
+  fn ColumnConverter(idx: int) -> Option<ValueConverter>
 }
 
 /// Conn is a connection to a database. It is not used concurrently
@@ -56,7 +56,7 @@ pub interface ConnPrepareContext {
 /// method will call the Close method and return error (if any).
 pub interface Connector {
   fn Connect(ctx: context.Context) -> Result<Conn, error>
-  fn Driver() -> Driver
+  fn Driver() -> Option<Driver>
 }
 
 /// Driver is the interface that must be implemented by a database
@@ -266,7 +266,7 @@ pub interface RowsColumnTypePrecisionScale {
 /// column type "bigint" this should return "[reflect.TypeOf](int64(0))".
 pub interface RowsColumnTypeScanType {
   fn Close() -> Result<(), error>
-  fn ColumnTypeScanType(index: int) -> reflect.Type
+  fn ColumnTypeScanType(index: int) -> Option<reflect.Type>
   fn Columns() -> Slice<string>
   fn Next(mut dest: Slice<Value>) -> Result<(), error>
 }

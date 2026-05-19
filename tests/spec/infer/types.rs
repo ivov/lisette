@@ -4533,3 +4533,96 @@ fn main() { use_it(&MyBox {}) }
     infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)])
         .assert_infer_code("interface_not_implemented");
 }
+
+#[test]
+fn covariance_lifts_interface_return_for_go_interface() {
+    let typedef = r#"
+pub interface Stringer {
+  fn String() -> string
+}
+
+pub interface Source {
+  fn Get() -> Option<Stringer>
+}
+"#;
+    let input = r#"
+import "go:example.com/ui"
+
+struct MyStr {}
+
+impl MyStr {
+  fn String(self: Ref<MyStr>) -> string { "" }
+}
+
+struct MySource { value: MyStr }
+
+impl MySource {
+  fn Get(self: Ref<MySource>) -> ui.Stringer { &self.value }
+}
+
+fn use_it(_: ui.Source) {}
+
+fn main() {
+  let s = MySource { value: MyStr {} }
+  use_it(&s)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn strict_option_interface_satisfies_go_interface() {
+    let typedef = r#"
+pub interface Stringer {
+  fn String() -> string
+}
+
+pub interface Source {
+  fn Get() -> Option<Stringer>
+}
+"#;
+    let input = r#"
+import "go:example.com/ui"
+
+struct MySource {}
+
+impl MySource {
+  fn Get(self: Ref<MySource>) -> Option<ui.Stringer> { None }
+}
+
+fn use_it(_: ui.Source) {}
+
+fn main() {
+  use_it(&MySource {})
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn interface_covariance_rejects_reverse_direction() {
+    let typedef = r#"
+pub interface Stringer {
+  fn String() -> string
+}
+
+pub interface Source {
+  fn Get() -> Stringer
+}
+"#;
+    let input = r#"
+import "go:example.com/ui"
+
+struct MySource {}
+
+impl MySource {
+  fn Get(self: Ref<MySource>) -> Option<ui.Stringer> { None }
+}
+
+fn use_it(_: ui.Source) {}
+
+fn main() { use_it(&MySource {}) }
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)])
+        .assert_infer_code("interface_not_implemented");
+}

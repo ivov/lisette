@@ -147,9 +147,9 @@ pub struct Gray16 {
 /// Image is a finite rectangular grid of [color.Color] values taken from a color
 /// model.
 pub interface Image {
-  fn At(x: int, y: int) -> color.Color
+  fn At(x: int, y: int) -> Option<color.Color>
   fn Bounds() -> Rectangle
-  fn ColorModel() -> color.Model
+  fn ColorModel() -> Option<color.Model>
 }
 
 /// NRGBA is an in-memory image whose At method returns [color.NRGBA] values.
@@ -189,10 +189,10 @@ pub struct Paletted {
 /// color model is not a color.Palette, then ColorIndexAt's behavior is
 /// undefined.
 pub interface PalettedImage {
-  fn At(x: int, y: int) -> color.Color
+  fn At(x: int, y: int) -> Option<color.Color>
   fn Bounds() -> Rectangle
   fn ColorIndexAt(x: int, y: int) -> uint8
-  fn ColorModel() -> color.Model
+  fn ColorModel() -> Option<color.Model>
 }
 
 /// A Point is an X, Y coordinate pair. The axes increase right and down.
@@ -218,9 +218,9 @@ pub struct RGBA64 {
 /// RGBA64Image is an [Image] whose pixels can be converted directly to a
 /// color.RGBA64.
 pub interface RGBA64Image {
-  fn At(x: int, y: int) -> color.Color
+  fn At(x: int, y: int) -> Option<color.Color>
   fn Bounds() -> Rectangle
-  fn ColorModel() -> color.Model
+  fn ColorModel() -> Option<color.Model>
   fn RGBA64At(x: int, y: int) -> color.RGBA64
 }
 
@@ -690,13 +690,13 @@ impl Rectangle {
 }
 
 impl Uniform {
-  fn At(self: Ref<Uniform>, x: int, y: int) -> color.Color
+  fn At(self: Ref<Uniform>, x: int, y: int) -> Option<color.Color>
 
   fn Bounds(self: Ref<Uniform>) -> Rectangle
 
   fn ColorModel(self: Ref<Uniform>) -> color.Model
 
-  fn Convert(self: Ref<Uniform>, color: color.Color) -> color.Color
+  fn Convert(self: Ref<Uniform>, color: color.Color) -> Option<color.Color>
 
   /// Opaque scans the entire image and reports whether it is fully opaque.
   fn Opaque(self: Ref<Uniform>) -> bool

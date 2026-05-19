@@ -461,7 +461,7 @@ impl DB {
   fn Conn(self: Ref<DB>, ctx: context.Context) -> Result<Ref<Conn>, error>
 
   /// Driver returns the database's underlying driver.
-  fn Driver(self: Ref<DB>) -> driver.Driver
+  fn Driver(self: Ref<DB>) -> Option<driver.Driver>
 
   /// Exec executes a query without returning any rows.
   /// The args are for any placeholder parameters in the query.

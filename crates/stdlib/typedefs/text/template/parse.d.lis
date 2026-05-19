@@ -203,7 +203,7 @@ pub struct NilNode {
 /// The interface contains an unexported method so that only
 /// types local to this package can satisfy it.
 pub interface Node {
-  fn Copy() -> Node
+  fn Copy() -> Option<Node>
   fn Position() -> Pos
   fn String() -> string
   fn Type() -> NodeType
