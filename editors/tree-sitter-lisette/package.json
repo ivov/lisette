@@ -11,7 +11,7 @@
     "lisette"
   ],
   "devDependencies": {
-    "tree-sitter-cli": "^0.24.4"
+    "tree-sitter-cli": "0.25.10"
   },
   "scripts": {
     "build": "tree-sitter generate",

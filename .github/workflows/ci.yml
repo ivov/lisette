@@ -102,6 +102,31 @@ jobs:
           go: 'true'
       - run: just check-stdlib-drift
 
+  tree-sitter-check:
+    name: Tree-sitter check
+    if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/tree-sitter-lisette
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ratchet:actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editors/tree-sitter-lisette/package-lock.json
+      - run: npm ci
+      - name: Check parser-grammar sync
+        run: |
+          npx tree-sitter generate
+          if ! git diff --exit-code src/; then
+            echo "::error::tree-sitter generated artifacts are out of sync with grammar.js"
+            echo "Run 'npx tree-sitter generate' in editors/tree-sitter-lisette and commit src/."
+            exit 1
+          fi
+      - run: npx tree-sitter test
+
   e2e-smoke:
     name: E2E smoke
     if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
