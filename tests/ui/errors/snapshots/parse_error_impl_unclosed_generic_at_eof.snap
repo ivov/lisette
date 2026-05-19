@@ -1,0 +1,8 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Syntax error
+   ╭─[test.lis:1:6]
+ 1 │ impl<
+   ╰────
+  help:  · code: [parse.unexpected_token]

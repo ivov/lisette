@@ -167,7 +167,7 @@ impl<'source> Parser<'source> {
 
         let mut generics = vec![];
 
-        while !self.is_right_angle_like() {
+        while !self.is_right_angle_like() && !self.at_eof() {
             generics.push(self.parse_generic());
             self.expect_comma_or(RightAngleBracket);
         }

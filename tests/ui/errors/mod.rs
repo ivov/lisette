@@ -862,6 +862,30 @@ fn f<T: Display +>() {}
 }
 
 #[test]
+fn parse_error_function_unclosed_generic_at_eof() {
+    let input = "fn f<";
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_error_struct_unclosed_generic_at_eof() {
+    let input = "struct S<";
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_error_type_alias_unclosed_generic_at_eof() {
+    let input = "type T<";
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_error_impl_unclosed_generic_at_eof() {
+    let input = "impl<";
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_error_local_enum_in_function() {
     let input = r#"
 fn test() {
