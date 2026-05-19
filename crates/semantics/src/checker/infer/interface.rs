@@ -3,7 +3,7 @@ use crate::store::Store;
 use diagnostics::infer::InterfaceViolation;
 use syntax::ast::Span;
 use syntax::program::{DefinitionBody, Interface, MethodSignatures};
-use syntax::types::{SubstitutionMap, Type, substitute};
+use syntax::types::{GO_IMPORT_PREFIX, SubstitutionMap, Type, substitute};
 
 use super::super::TaskState;
 
@@ -13,6 +13,7 @@ impl TaskState<'_> {
         store: &Store,
         ty: &Type,
         interface: &Interface,
+        interface_qualified_id: &str,
         type_args: &[Type],
         span: &Span,
     ) -> Result<(), Vec<InterfaceViolation>> {
@@ -24,8 +25,7 @@ impl TaskState<'_> {
             .get_qualified_id()
             .map(String::from)
             .unwrap_or_else(|| ty.to_string());
-        let interface_id = interface.name.to_string();
-        let pair = (type_id, interface_id);
+        let pair = (type_id, interface_qualified_id.to_string());
 
         if !self.satisfying_stack.insert(pair.clone()) {
             return Ok(());
@@ -36,6 +36,7 @@ impl TaskState<'_> {
             store,
             ty,
             interface,
+            interface_qualified_id,
             type_args,
             None,
             span,
@@ -128,6 +129,7 @@ impl TaskState<'_> {
         store: &Store,
         ty: &Type,
         interface: &Interface,
+        interface_qualified_id: &str,
         type_args: &[Type],
         parent_of: Option<&str>,
         span: &Span,
@@ -211,17 +213,24 @@ impl TaskState<'_> {
                 other => other.clone(),
             };
 
-            // Require exact type matching for interface method signatures.
-            // Go doesn't support covariant returns or contravariant params in interfaces.
-            // Incrementing type_param_depth disables interface coercion in unify_constructors.
-            // Wrap in speculatively() so that if this method's unification fails,
-            // its type variable links are rolled back instead of leaking.
+            // Go-imported interfaces allow narrow covariance: impl returning T
+            // satisfies Option<T> in the top-level return position, when both
+            // sides lower to the same Go ABI shape.
+            let impl_for_unify = covariant_return_adjustment(
+                interface_qualified_id,
+                method_name.as_str(),
+                &substituted_method,
+                &impl_method_without_receiver,
+                store,
+            )
+            .unwrap_or_else(|| impl_method_without_receiver.clone());
+
             self.scopes.increment_type_param_depth();
             let sig_match = self.speculatively(|this| {
                 this.try_unify(
                     store,
                     &strip_bounds(&substituted_method),
-                    &strip_bounds(&impl_method_without_receiver),
+                    &strip_bounds(&impl_for_unify),
                     &Span::dummy(),
                 )
             });
@@ -272,6 +281,7 @@ impl TaskState<'_> {
                     store,
                     ty,
                     &parent_interface,
+                    &parent_name,
                     &substituted_parent_args,
                     Some(&interface.name),
                     span,
@@ -309,4 +319,64 @@ impl TaskState<'_> {
             _ => ty.clone(),
         }
     }
+}
+
+/// Lift impl return T to Option<T> when the interface is Go-imported, the
+/// interface return is Option<T>, and both lower to AbiShape::NullableReturn.
+/// Excludes comma_ok / sentinel shapes where the Go signatures differ.
+fn covariant_return_adjustment(
+    interface_qualified_id: &str,
+    method_name: &str,
+    interface_method: &Type,
+    impl_method: &Type,
+    store: &Store,
+) -> Option<Type> {
+    if !interface_qualified_id.starts_with(GO_IMPORT_PREFIX) {
+        return None;
+    }
+
+    let (
+        Type::Function {
+            return_type: iface_ret,
+            ..
+        },
+        Type::Function {
+            params,
+            param_mutability,
+            bounds,
+            return_type: impl_ret,
+        },
+    ) = (interface_method, impl_method)
+    else {
+        return None;
+    };
+
+    if !iface_ret.is_option() {
+        return None;
+    }
+    let opt_inner = iface_ret.ok_type();
+
+    if !store.is_nilable_go_type(&opt_inner) {
+        return None;
+    }
+
+    let method_qualified = format!("{}.{}", interface_qualified_id, method_name);
+    let hints = store
+        .get_definition(&method_qualified)
+        .map(|def| def.go_hints())
+        .unwrap_or(&[]);
+    if hints.iter().any(|h| h == "comma_ok") {
+        return None;
+    }
+
+    if opt_inner != **impl_ret {
+        return None;
+    }
+
+    Some(Type::Function {
+        params: params.clone(),
+        param_mutability: param_mutability.clone(),
+        bounds: bounds.clone(),
+        return_type: iface_ret.clone(),
+    })
 }

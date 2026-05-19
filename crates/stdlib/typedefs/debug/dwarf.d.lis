@@ -946,7 +946,7 @@ pub struct StructType {
 /// A Type conventionally represents a pointer to any of the
 /// specific Type structures ([CharType], [StructType], etc.).
 pub interface Type {
-  fn Common() -> Ref<CommonType>
+  fn Common() -> Option<Ref<CommonType>>
   fn Size() -> int64
   fn String() -> string
 }

@@ -78,7 +78,7 @@ impl TaskState<'_> {
         if let Type::Nominal { id, params, .. } = &peeled_target
             && let Some(interface) = store.get_interface(id).cloned()
             && self
-                .satisfies_interface(store, &source_ty, &interface, params, &span)
+                .satisfies_interface(store, &source_ty, &interface, id, params, &span)
                 .is_ok()
         {
             return;

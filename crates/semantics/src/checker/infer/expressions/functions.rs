@@ -983,7 +983,7 @@ impl TaskState<'_> {
                 continue;
             };
 
-            let _ = self.satisfies_interface(store, &resolved_ty, &interface, &params, &span);
+            let _ = self.satisfies_interface(store, &resolved_ty, &interface, &id, &params, &span);
         }
     }
 

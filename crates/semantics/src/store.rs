@@ -240,6 +240,26 @@ impl Store {
         }
     }
 
+    pub fn is_nilable_go_type(&self, ty: &Type) -> bool {
+        if ty.is_ref() || matches!(ty, Type::Function { .. }) {
+            return true;
+        }
+        let Type::Nominal { id, .. } = ty else {
+            return false;
+        };
+        if self.get_definition(id.as_str()).is_none() {
+            return false;
+        }
+        if self.get_interface(id.as_str()).is_some() {
+            return true;
+        }
+        match ty.get_underlying() {
+            Some(Type::Function { .. }) => true,
+            Some(u) if u.is_ref() => true,
+            _ => false,
+        }
+    }
+
     pub fn peel_alias(&self, ty: &Type) -> Type {
         syntax::types::peel_alias(ty, |id| {
             self.get_definition(id)

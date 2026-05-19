@@ -22,6 +22,19 @@ pub fn infer(raw_source: &str) -> InferResult {
     }
 }
 
+pub fn infer_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> InferResult {
+    let mut pipeline = TestPipeline::new(raw_source).wrapped();
+    for (name, source) in typedefs {
+        pipeline = pipeline.with_go_typedef(name, source);
+    }
+    let result = pipeline.compile().run_inference();
+
+    InferResult {
+        ast: result.ast,
+        errors: result.errors,
+    }
+}
+
 pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
     let available_folders = fs.get_folders();
 

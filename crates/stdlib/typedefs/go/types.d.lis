@@ -823,8 +823,8 @@ pub interface Object {
   fn Exported() -> bool
   fn Id() -> string
   fn Name() -> string
-  fn Parent() -> Ref<Scope>
-  fn Pkg() -> Ref<Package>
+  fn Parent() -> Option<Ref<Scope>>
+  fn Pkg() -> Option<Ref<Package>>
   fn Pos() -> token.Pos
   fn String() -> string
   fn Type() -> Type

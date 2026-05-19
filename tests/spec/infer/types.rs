@@ -4396,3 +4396,140 @@ fn main() {
     )
     .assert_no_errors();
 }
+
+#[test]
+fn covariance_lifts_ref_return_for_go_interface() {
+    let typedef = r#"
+pub struct Widget { pub id: int }
+
+pub interface HasWidget {
+  fn GetWidget() -> Option<Ref<Widget>>
+}
+"#;
+    let input = r#"
+import "go:example.com/ui"
+
+struct MyBox { value: ui.Widget }
+
+impl MyBox {
+  fn GetWidget(self: Ref<MyBox>) -> Ref<ui.Widget> { &self.value }
+}
+
+fn use_it(_: ui.HasWidget) {}
+
+fn main() {
+  let b = MyBox { value: ui.Widget { id: 0 } }
+  use_it(&b)
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn strict_option_match_satisfies_go_interface() {
+    let typedef = r#"
+pub struct Widget { pub id: int }
+
+pub interface HasWidget {
+  fn GetWidget() -> Option<Ref<Widget>>
+}
+"#;
+    let input = r#"
+import "go:example.com/ui"
+
+struct MyBox {}
+
+impl MyBox {
+  fn GetWidget(self: Ref<MyBox>) -> Option<Ref<ui.Widget>> { None }
+}
+
+fn use_it(_: ui.HasWidget) {}
+
+fn main() {
+  use_it(&MyBox {})
+}
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)]).assert_no_errors();
+}
+
+#[test]
+fn covariance_does_not_apply_to_user_interfaces() {
+    infer(
+        r#"
+    struct Widget { id: int }
+
+    interface HasWidget {
+      fn GetWidget() -> Option<Ref<Widget>>;
+    }
+
+    struct MyBox { value: Widget }
+
+    impl MyBox {
+      fn GetWidget(self: Ref<MyBox>) -> Ref<Widget> { return &self.value; }
+    }
+
+    fn use_it(_: HasWidget) {}
+
+    fn main() {
+      let b = MyBox { value: Widget { id: 0 } };
+      use_it(&b);
+    }
+        "#,
+    )
+    .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn covariance_excludes_comma_ok_interface_methods() {
+    let typedef = r#"
+pub struct Session { pub key: string }
+
+pub interface Cache {
+  #[go(comma_ok)]
+  fn Get(key: string) -> Option<Ref<Session>>
+}
+"#;
+    let input = r#"
+import "go:example.com/cache"
+
+struct MyCache {}
+
+impl MyCache {
+  fn Get(self: Ref<MyCache>, key: string) -> Ref<cache.Session> {
+    &cache.Session { key: key }
+  }
+}
+
+fn use_it(_: cache.Cache) {}
+
+fn main() { use_it(&MyCache {}) }
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/cache", typedef)])
+        .assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn covariance_rejects_reverse_direction() {
+    let typedef = r#"
+pub struct Widget { pub id: int }
+
+pub interface HasWidget {
+  fn GetWidget() -> Ref<Widget>
+}
+"#;
+    let input = r#"
+import "go:example.com/ui"
+
+struct MyBox {}
+
+impl MyBox {
+  fn GetWidget(self: Ref<MyBox>) -> Option<Ref<ui.Widget>> { None }
+}
+
+fn use_it(_: ui.HasWidget) {}
+
+fn main() { use_it(&MyBox {}) }
+"#;
+    infer_with_go_typedefs(input, &[("go:example.com/ui", typedef)])
+        .assert_infer_code("interface_not_implemented");
+}

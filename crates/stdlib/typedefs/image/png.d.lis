@@ -46,7 +46,7 @@ pub type EncoderBuffer
 /// instances of the [EncoderBuffer] struct. This can be used to reuse buffers
 /// when encoding multiple images.
 pub interface EncoderBufferPool {
-  fn Get() -> Ref<EncoderBuffer>
+  fn Get() -> Option<Ref<EncoderBuffer>>
   fn Put(encoderBuffer: Ref<EncoderBuffer>)
 }
 

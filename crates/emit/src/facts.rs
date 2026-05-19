@@ -216,9 +216,16 @@ pub(crate) fn is_nullable_option(definitions: &HashMap<Symbol, Definition>, ty: 
 }
 
 pub(crate) fn is_nilable_go_type(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
-    ty.is_ref()
+    resolves_to_pointer(definitions, ty)
         || as_interface(definitions, ty).is_some()
         || resolve_to_function_type(definitions, ty).is_some()
+}
+
+pub(crate) fn resolves_to_pointer(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> bool {
+    fn as_pointer(ty: &Type) -> bool {
+        ty.is_ref() || ty.get_underlying().is_some_and(|u| u.is_ref())
+    }
+    as_pointer(ty) || as_pointer(&peel_alias(definitions, ty))
 }
 
 pub(crate) fn as_interface(definitions: &HashMap<Symbol, Definition>, ty: &Type) -> Option<String> {

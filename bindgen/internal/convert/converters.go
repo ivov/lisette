@@ -1469,9 +1469,17 @@ func (c *Converter) extractInterfaceMethods(_interface *types.Interface, typeNam
 			})
 		}
 
-		returnType := ReturnsToLisette(signature, c, typeName+"."+method.Name())
+		returnType := ReturnsToLisette(signature, c, qualifiedName)
 		if returnType.SkipReason != nil {
 			return nil, false
+		}
+
+		// Interface methods are contracts: any pointer return permits nil at
+		// the Go level. No body to inspect, no implementer-specific heuristics;
+		// opt out only via explicit config.
+		if isSinglePointerResult(signature) && !returnType.IsDirectError &&
+			(c.cfg == nil || !c.cfg.IsNonNilableReturn(c.currentPkgPath, qualifiedName)) {
+			returnType.LisetteType = fmt.Sprintf("Option<%s>", returnType.LisetteType)
 		}
 
 		methods = append(methods, InterfaceMethod{
