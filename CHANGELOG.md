@@ -1,6 +1,20 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.8](https://github.com/ivov/lisette/compare/lisette-v0.2.7...lisette-v0.2.8) - 2026-05-19
+
+- fix: adapt lowered fn arg shape at generic call boundary [#459](https://github.com/ivov/lisette/pull/459) [`ee69def`](https://github.com/ivov/lisette/commit/ee69deff9510071418c1ac66c104606af0507f36)
+- fix: wrap go interface returns as option [#458](https://github.com/ivov/lisette/pull/458) [`79892a4`](https://github.com/ivov/lisette/commit/79892a426ed11a59df43329a0470214dfdf85e02)
+- ci: require IDE extension version bump on grammar change [#457](https://github.com/ivov/lisette/pull/457) [`d6613a0`](https://github.com/ivov/lisette/commit/d6613a072757418585868cf5a65ec10fd3bb6a60)
+- ci: add tree-sitter drift and test checks [#454](https://github.com/ivov/lisette/pull/454) [`5469274`](https://github.com/ivov/lisette/commit/5469274bebe8d452a8a10ed19233a55bd6593f1e)
+- fix: bitwise tokens missing from tree-sitter parser [#453](https://github.com/ivov/lisette/pull/453) [`1748f26`](https://github.com/ivov/lisette/commit/1748f26d221c5f2f10f86cb3f7e7bfb373d9e7dc)
+- fix: align Go interface and impl pointer-return nilability [#451](https://github.com/ivov/lisette/pull/451) [`dba4c74`](https://github.com/ivov/lisette/commit/dba4c741a38086fbae97d85e6f9f0fc170df3732)
+- fix: terminate generics parser at eof [#450](https://github.com/ivov/lisette/pull/450) [`6a8d718`](https://github.com/ivov/lisette/commit/6a8d7184ec1646d067a10819742a81fc5c0ebe7f)
+- chore: rebuild playground [#446](https://github.com/ivov/lisette/pull/446) [`126dd8e`](https://github.com/ivov/lisette/commit/126dd8e56aa62c66b6580a4b0536e8e3c30fb3c6)
+- fix: allow mutually recursive function-type aliases [#445](https://github.com/ivov/lisette/pull/445) [`14ac9f4`](https://github.com/ivov/lisette/commit/14ac9f40e7a904ae1436aae970ca46397dffaa71)
+- ci: guard release workflows from running on forks [#444](https://github.com/ivov/lisette/pull/444) [`7f9c583`](https://github.com/ivov/lisette/commit/7f9c58357fbdc4e882bc1c7c67dd6d8774554642)
+- feat: bitwise operators [#382](https://github.com/ivov/lisette/pull/382) [`bb5de34`](https://github.com/ivov/lisette/commit/bb5de3434223f0ef4fa62cabf7ed11519c87dfdc)
+- fix: qualify imported enum in variant-not-found diagnostic [#442](https://github.com/ivov/lisette/pull/442) [`4a02f60`](https://github.com/ivov/lisette/commit/4a02f60db605731729688f21644fd8b8c8754033)
 ## [0.2.7](https://github.com/ivov/lisette/compare/lisette-v0.2.6...lisette-v0.2.7) - 2026-05-17
 
 - fix: unwrap option at go any and honor tail-return hints [#437](https://github.com/ivov/lisette/pull/437) [`afcf72c`](https://github.com/ivov/lisette/commit/afcf72ccfc6258e0c986de233cb299485c161f05)
