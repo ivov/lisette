@@ -7,7 +7,5 @@ package main
 type Wrap *int
 
 func test(w Wrap) int {
-	{
-		return *(*int)(w)
-	}
+	return *(*int)(w)
 }

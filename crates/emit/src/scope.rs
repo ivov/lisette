@@ -123,6 +123,10 @@ impl ScopeState {
         self.declared.iter().any(|s| s.contains(go_name))
     }
 
+    pub(crate) fn current_block_declared_nonempty(&self) -> bool {
+        self.declared.last().is_some_and(|s| !s.is_empty())
+    }
+
     pub(crate) fn enter_block(&mut self) {
         self.scope_depth += 1;
         self.bindings.save();

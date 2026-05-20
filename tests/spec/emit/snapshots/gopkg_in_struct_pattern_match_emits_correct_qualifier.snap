@@ -7,7 +7,5 @@ package main
 import yaml "gopkg.in/yaml.v3"
 
 func describe(e yaml.TypeError) int {
-	{
-		return len(e.Errors)
-	}
+	return len(e.Errors)
 }

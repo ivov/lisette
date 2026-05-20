@@ -9,13 +9,9 @@ import lisette "github.com/ivov/lisette/prelude"
 func test() int {
 	pair := lisette.MakeTuple2(10, 20)
 	var first int
-	{
-		first = pair.First + pair.Second
-	}
+	first = pair.First + pair.Second
 	nested := lisette.MakeTuple2(lisette.MakeTuple2(1, 2), lisette.MakeTuple2(3, 4))
 	var second int
-	{
-		second = nested.First.First + nested.First.Second + nested.Second.First + nested.Second.Second
-	}
+	second = nested.First.First + nested.First.Second + nested.Second.First + nested.Second.Second
 	return first + second
 }

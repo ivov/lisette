@@ -148,20 +148,23 @@ impl<'a, 'e> TreeEmitter<'a, 'e> {
         plan: &SingleCatchallPlan,
         place: &BodyPlace,
     ) {
-        let emits_any_binding = plan.bindings.iter().any(|b| b.go_name.is_some());
-        let needs_block = emits_any_binding || plan.pattern_has_collisions;
         let arm_body = &*self.arms[plan.arm_index].expression;
+
+        self.emitter.enter_scope();
+        let mut buf = String::new();
+        let inlines = self.emit_bindings(&mut buf, &plan.bindings, &[arm_body], None);
+        self.emit_arm_body(&mut buf, plan.arm_index, place);
+        self.drop_inline_bindings(&inlines);
+        let needs_block =
+            self.emitter.scope.current_block_declared_nonempty() || plan.pattern_has_collisions;
+        self.emitter.exit_scope();
 
         if needs_block {
             output.push_str("{\n");
-            self.emitter.enter_scope();
-        }
-        let inlines = self.emit_bindings(output, &plan.bindings, &[arm_body], None);
-        self.emit_arm_body(output, plan.arm_index, place);
-        self.drop_inline_bindings(&inlines);
-        if needs_block {
-            self.emitter.exit_scope();
+            output.push_str(&buf);
             output.push_str("}\n");
+        } else {
+            output.push_str(&buf);
         }
     }
 
