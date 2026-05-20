@@ -1,6 +1,11 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.9](https://github.com/ivov/lisette/compare/lisette-v0.2.8...lisette-v0.2.9) - 2026-05-20
+
+- fix: drop redundant block around irrefutable match arm [#464](https://github.com/ivov/lisette/pull/464) [`6e3e211`](https://github.com/ivov/lisette/commit/6e3e2112860d3183ecf51757987ae9e85a3b5fc5)
+- fix: derive generic method call shapes from declarations [#463](https://github.com/ivov/lisette/pull/463) [`b4c22b5`](https://github.com/ivov/lisette/commit/b4c22b593da837f60698ea513b1c45ee4ec84ff9)
+- fix: classify generic callee shape from its declaration [#461](https://github.com/ivov/lisette/pull/461) [`07914a1`](https://github.com/ivov/lisette/commit/07914a1bda37687197c4fe254e01f567324b003b)
 ## [0.2.8](https://github.com/ivov/lisette/compare/lisette-v0.2.7...lisette-v0.2.8) - 2026-05-19
 
 - fix: adapt lowered fn arg shape at generic call boundary [#459](https://github.com/ivov/lisette/pull/459) [`ee69def`](https://github.com/ivov/lisette/commit/ee69deff9510071418c1ac66c104606af0507f36)
