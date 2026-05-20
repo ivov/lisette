@@ -1,0 +1,46 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Face interface {
+}
+
+func Resultant(arg int) (int, Face) {
+	return arg, nil
+}
+
+type Holder struct{}
+
+func (h Holder) String() string {
+	return "Holder"
+}
+
+func Holder_Resolve[R any, E any](_ Holder, default_ R, _ ...func(int) lisette.Result[R, E]) lisette.Result[R, E] {
+	return lisette.MakeResultOk[R, E](default_)
+}
+
+func main() {
+	fns := []func(int) (int, Face){Resultant}
+	_arg_8 := Holder{}
+	src_1 := fns
+	adapted_2 := make([]func(int) lisette.Result[int, Face], len(src_1))
+	for i, cb_3 := range src_1 {
+		cb_4 := cb_3
+		adapted_2[i] = func(arg0 int) lisette.Result[int, Face] {
+			ret_5, ret_6 := cb_4(arg0)
+			var result_7 lisette.Result[int, Face]
+			if ret_6 != nil {
+				result_7 = lisette.MakeResultErr[int, Face](ret_6)
+			} else {
+				result_7 = lisette.MakeResultOk[int, Face](ret_5)
+			}
+			return result_7
+		}
+	}
+	rez := Holder_Resolve[int, Face](_arg_8, 0, adapted_2...)
+	_ = rez
+}

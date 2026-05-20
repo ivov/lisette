@@ -4797,6 +4797,161 @@ fn main() {
 }
 
 #[test]
+fn bound_result_from_generic_method_keeps_tagged_return() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn resultant(arg: int) -> Result<int, Face> {
+  Ok(arg)
+}
+
+pub struct Holder { pub n: int }
+
+impl Holder {
+  pub fn resolve<R, E>(self, f: fn(int) -> Result<R, E>) -> Result<R, E> {
+    f(self.n)
+  }
+}
+
+fn main() {
+  let rez = Holder { n: 4 }.resolve(resultant)
+  let _ = rez
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn bound_partial_from_generic_method_keeps_tagged_return() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn fallible(arg: int) -> Partial<int, Face> {
+  Partial.Ok(arg)
+}
+
+pub struct Holder<T> { pub val: T }
+
+impl<T> Holder<T> {
+  pub fn resolve<R, E>(self, f: fn(T) -> Partial<R, E>) -> Partial<R, E> {
+    f(self.val)
+  }
+}
+
+fn main() {
+  let rez = Holder { val: 4 }.resolve(fallible)
+  let _ = rez
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn option_fn_arg_adapts_to_comma_ok_generic_method_param() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn lookup(_arg: int) -> Option<Face> {
+  None
+}
+
+pub struct Holder { pub n: int }
+
+impl Holder {
+  pub fn resolve<R>(self, f: fn(int) -> Option<R>) -> Option<R> {
+    f(self.n)
+  }
+}
+
+fn main() {
+  let rez = Holder { n: 4 }.resolve(lookup)
+  let _ = rez
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn comma_ok_fn_arg_emits_lowered_for_generic_method_param() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct Holder { pub n: int }
+
+impl Holder {
+  pub fn resolve<R>(self, f: fn(int) -> Option<R>) -> Option<R> {
+    f(self.n)
+  }
+}
+
+fn main() {
+  let rez = Holder { n: 5 }.resolve(|x| -> Option<int> { Some(x) })
+  let _ = rez
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn spread_slice_into_variadic_generic_method_param_adapts_each_element() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn resultant(arg: int) -> Result<int, Face> {
+  Ok(arg)
+}
+
+pub struct Holder {}
+
+impl Holder {
+  pub fn resolve<R, E>(self, default: R, _fs: VarArgs<fn(int) -> Result<R, E>>) -> Result<R, E> {
+    Ok(default)
+  }
+}
+
+fn main() {
+  let fns = [resultant]
+  let rez = Holder {}.resolve<int, Face>(0, fns...)
+  let _ = rez
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn fused_match_arm_bindings_dont_leak() {
     let mut fs = MockFileSystem::new();
 

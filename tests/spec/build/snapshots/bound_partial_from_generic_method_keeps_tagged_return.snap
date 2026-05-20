@@ -1,0 +1,45 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Face interface {
+}
+
+func Fallible(arg int) (int, Face) {
+	return arg, nil
+}
+
+type Holder[T any] struct {
+	Val T
+}
+
+func (h Holder[T]) String() string {
+	return fmt.Sprintf("Holder { val: %v }", h.Val)
+}
+
+func Holder_Resolve[T any, R any, E any](self Holder[T], f func(T) lisette.Partial[R, E]) lisette.Partial[R, E] {
+	return f(self.Val)
+}
+
+func main() {
+	_arg_5 := Holder[int]{Val: 4}
+	cb_1 := Fallible
+	rez := Holder_Resolve(_arg_5, func(arg0 int) lisette.Partial[int, Face] {
+		ret_2, ret_3 := cb_1(arg0)
+		var result_4 lisette.Partial[int, Face]
+		if ret_3 != nil {
+			result_4 = lisette.MakePartialBoth[int, Face](ret_2, ret_3)
+		} else {
+			result_4 = lisette.MakePartialOk[int, Face](ret_2)
+		}
+		return result_4
+	})
+	_ = rez
+}

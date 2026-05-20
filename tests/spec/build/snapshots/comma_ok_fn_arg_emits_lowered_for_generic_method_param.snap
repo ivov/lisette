@@ -1,0 +1,30 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Holder struct {
+	N int
+}
+
+func (h Holder) String() string {
+	return fmt.Sprintf("Holder { n: %v }", h.N)
+}
+
+func Holder_Resolve[R any](self Holder, f func(int) (R, bool)) (R, bool) {
+	return f(self.N)
+}
+
+func main() {
+	option_1 := lisette.OptionFromCommaOk[int](Holder_Resolve(Holder{N: 5}, func(x int) (int, bool) {
+		return x, true
+	}))
+	rez := option_1
+	_ = rez
+}

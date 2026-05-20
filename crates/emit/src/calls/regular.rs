@@ -226,8 +226,15 @@ impl<'a> Emitter<'a> {
                 ..
             } => {
                 let receiver_ty = receiver.get_type();
-                let module = receiver_ty.as_import_namespace()?;
-                self.facts.definition(&format!("{}.{}", module, member))
+                if let Some(module) = receiver_ty.as_import_namespace() {
+                    return self.facts.definition(&format!("{}.{}", module, member));
+                }
+                match receiver_ty.strip_refs() {
+                    Type::Nominal { id, .. } => {
+                        self.facts.definition(&format!("{}.{}", id, member))
+                    }
+                    _ => None,
+                }
             }
             _ => None,
         }
@@ -316,7 +323,8 @@ impl<'a> Emitter<'a> {
             .collect();
 
         if let Some(spread) = ctx.spread
-            && let Some(adapter_stage) = self.try_emit_variadic_spread_adapter(spread, ctx)
+            && let Some(adapter_stage) =
+                self.try_emit_variadic_spread_adapter(spread, ctx.generic_fn_param_types)
         {
             stages.push(adapter_stage);
             let spread_idx = stages.len() - 1;
@@ -439,7 +447,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn effective_param_type<'p>(
+    pub(crate) fn effective_param_type<'p>(
         &self,
         index: usize,
         fn_param_types: &'p [Type],
@@ -453,7 +461,7 @@ impl<'a> Emitter<'a> {
 
     /// Adapt a lowered-return fn arg when its shape disagrees with the
     /// callee's generic-param shape.
-    fn try_adapt_lowered_fn_arg_shape(
+    pub(crate) fn try_adapt_lowered_fn_arg_shape(
         &mut self,
         output: &mut String,
         arg: &Expression,
@@ -498,12 +506,12 @@ impl<'a> Emitter<'a> {
 
     /// Adapt `slice...` spread into a generic `VarArgs<fn(…)>` when the
     /// slice's element fn-shape disagrees with the variadic's element.
-    fn try_emit_variadic_spread_adapter(
+    pub(crate) fn try_emit_variadic_spread_adapter(
         &mut self,
         spread: &Expression,
-        ctx: &CallArgsContext<'_>,
+        generic_params: Option<&[Type]>,
     ) -> Option<EmittedExpression> {
-        let generic_params = ctx.generic_fn_param_types?;
+        let generic_params = generic_params?;
         let raw_variadic = generic_params.last()?;
         if raw_variadic.get_name() != Some("VarArgs") {
             return None;

@@ -135,18 +135,48 @@ impl Emitter<'_> {
             Type::Function { params, .. } => params.clone(),
             _ => Vec::new(),
         };
+        let declared_params =
+            self.ufcs_declared_user_params(receiver, function, formal_params.len());
         let mut all_stages: Vec<EmittedExpression> =
             Vec::with_capacity(1 + args.len() + spread.is_some() as usize);
         all_stages.push(self.stage_operand(receiver, ExpressionContext::value()));
         for (i, arg) in args.iter().enumerate() {
-            all_stages.push(self.stage_prelude_arg(arg, formal_params.get(i)));
+            let declared = declared_params.and_then(|p| self.effective_param_type(i, p));
+            all_stages.push(self.stage_ufcs_arg(arg, declared, formal_params.get(i)));
         }
         let combine = Self::variadic_combine_for(function, spread, 1);
-        let all_values =
-            self.sequence_with_spread(output, all_stages, spread, false, "_arg", combine);
+
+        let all_values = if let Some(spread) = spread
+            && let Some(adapter_stage) =
+                self.try_emit_variadic_spread_adapter(spread, declared_params)
+        {
+            all_stages.push(adapter_stage);
+            let spread_idx = all_stages.len() - 1;
+            let mut all_values = self.sequence(output, all_stages, "_arg");
+            self.finalize_spread_stage(&mut all_values, spread_idx, false, combine);
+            all_values
+        } else {
+            self.sequence_with_spread(output, all_stages, spread, false, "_arg", combine)
+        };
         let receiver_arg = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
         (receiver_arg, emitted_args)
+    }
+
+    fn stage_ufcs_arg(
+        &mut self,
+        arg: &Expression,
+        declared_param: Option<&Type>,
+        formal_param: Option<&Type>,
+    ) -> EmittedExpression {
+        let Some(declared) = declared_param else {
+            return self.stage_prelude_arg(arg, formal_param);
+        };
+        let mut setup = String::new();
+        if let Some(value) = self.try_adapt_lowered_fn_arg_shape(&mut setup, arg, Some(declared)) {
+            return EmittedExpression::new(setup, value, arg);
+        }
+        self.stage_composite(arg, ExpressionContext::value())
     }
 
     fn build_ufcs_qualified_call(
@@ -282,5 +312,29 @@ impl Emitter<'_> {
                     ..
                 }
         )
+    }
+}
+
+impl<'a> Emitter<'a> {
+    fn ufcs_declared_user_params(
+        &self,
+        receiver: &Expression,
+        function: &Expression,
+        arg_count: usize,
+    ) -> Option<&'a [Type]> {
+        let receiver_ty = receiver.get_type().strip_refs();
+        let Type::Nominal { id, .. } = &receiver_ty else {
+            return None;
+        };
+        if id.starts_with("prelude.") || go_name::is_go_import(id.as_str()) {
+            return None;
+        }
+        let declared = self
+            .callee_definition(function)?
+            .ty()
+            .unwrap_forall()
+            .get_function_params()?;
+        let self_offset = declared.len().saturating_sub(arg_count);
+        declared.get(self_offset..)
     }
 }
