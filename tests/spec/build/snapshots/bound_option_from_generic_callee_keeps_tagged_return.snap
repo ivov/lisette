@@ -1,0 +1,38 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Face interface {
+}
+
+func Lookup(_ int) Face {
+	return nil
+}
+
+func Resolve[T any, R any](a T, f func(T) (R, bool)) (R, bool) {
+	return f(a)
+}
+
+func main() {
+	cb_1 := Lookup
+	ret_4, ret_5 := Resolve(0, func(arg0 int) (Face, bool) {
+		raw_2 := cb_1(arg0)
+		option_3 := lisette.OptionFromNilable[Face](raw_2, lisette.IsNilInterface(raw_2))
+		if option_3.Tag == lisette.OptionSome {
+			return option_3.SomeVal, true
+		}
+		return *new(Face), false
+	})
+	var option_6 lisette.Option[Face]
+	if ret_5 && !lisette.IsNilInterface(ret_4) {
+		option_6 = lisette.MakeOptionSome[Face](ret_4)
+	} else {
+		option_6 = lisette.MakeOptionNone[Face]()
+	}
+	rez := option_6
+	_ = rez
+}

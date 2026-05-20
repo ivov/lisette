@@ -9,15 +9,17 @@ import lisette "github.com/ivov/lisette/prelude"
 type Face interface {
 }
 
+func Resultant(arg int) (int, Face) {
+	return arg, nil
+}
+
 func Resolve[T any, R any, E any](a T, f func(T) lisette.Result[R, E]) lisette.Result[R, E] {
 	return f(a)
 }
 
 func main() {
-	cb_1 := func(x int) (int, Face) {
-		return x, nil
-	}
-	_ = Resolve(42, func(arg0 int) lisette.Result[int, Face] {
+	cb_1 := Resultant
+	rez := Resolve(42, func(arg0 int) lisette.Result[int, Face] {
 		ret_2, ret_3 := cb_1(arg0)
 		var result_4 lisette.Result[int, Face]
 		if ret_3 != nil {
@@ -27,4 +29,5 @@ func main() {
 		}
 		return result_4
 	})
+	_ = rez
 }

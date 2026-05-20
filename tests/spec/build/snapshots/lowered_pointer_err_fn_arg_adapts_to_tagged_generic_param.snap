@@ -1,6 +1,5 @@
 ---
 source: tests/spec/build/mod.rs
-assertion_line: 4579
 ---
 // === main.go ===
 package main
@@ -20,7 +19,7 @@ func Resolve[T any, R any, E any](a T, f func(T) lisette.Result[R, E]) lisette.R
 
 func main() {
 	cb_1 := Parser
-	Resolve(0, func(arg0 int) lisette.Result[int, *strconv.NumError] {
+	_ = Resolve(0, func(arg0 int) lisette.Result[int, *strconv.NumError] {
 		ret_2, ret_3 := cb_1(arg0)
 		var result_4 lisette.Result[int, *strconv.NumError]
 		if ret_3 != nil {

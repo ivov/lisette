@@ -4705,6 +4705,98 @@ fn main() {
 }
 
 #[test]
+fn bound_result_from_generic_callee_keeps_tagged_return() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn resultant(arg: int) -> Result<int, Face> {
+  Ok(arg)
+}
+
+pub fn resolve<T, R, E>(a: T, f: fn(T) -> Result<R, E>) -> Result<R, E> {
+  f(a)
+}
+
+fn main() {
+  let rez = resolve(42, resultant)
+  let _ = rez
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn bound_option_from_generic_callee_keeps_tagged_return() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Face {}
+
+pub fn lookup(_arg: int) -> Option<Face> {
+  None
+}
+
+pub fn resolve<T, R>(a: T, f: fn(T) -> Option<R>) -> Option<R> {
+  f(a)
+}
+
+fn main() {
+  let rez = resolve(0, lookup)
+  let _ = rez
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn cross_module_result_fn_arg_adapts_to_tagged_generic_param() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "resolver",
+        "resolver.lis",
+        r#"
+pub interface Face {}
+
+pub fn resultant(arg: int) -> Result<int, Face> {
+  Ok(arg)
+}
+
+pub fn resolve<T, R, E>(a: T, f: fn(T) -> Result<R, E>) -> Result<R, E> {
+  f(a)
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "resolver"
+
+fn main() {
+  let rez = resolver.resolve(42, resolver.resultant)
+  let _ = rez
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn fused_match_arm_bindings_dont_leak() {
     let mut fs = MockFileSystem::new();
 

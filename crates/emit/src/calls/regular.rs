@@ -8,6 +8,7 @@ use crate::names::go_name;
 use crate::types::abi_transition::emit_fn_arg_shape_adapter;
 use crate::types::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
 use syntax::ast::{Annotation, Expression};
+use syntax::program::Definition;
 use syntax::types::Type;
 
 struct CalleeAnalysis<'a> {
@@ -189,7 +190,9 @@ impl<'a> Emitter<'a> {
             .get_function_params()
             .map(<[Type]>::to_vec)
             .unwrap_or_default();
-        let generic_fn_param_types = self.callee_generic_param_types(function);
+        let generic_fn_param_types = self
+            .callee_definition(function)
+            .and_then(|definition| definition.ty().unwrap_forall().get_function_params());
         let (is_go_call, is_prelude_dispatch) = match function.unwrap_parens() {
             Expression::DotAccess { expression, .. } => {
                 let is_prelude = matches!(
@@ -212,19 +215,22 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Callee's declared param types from its definition, before instantiation.
-    fn callee_generic_param_types(&self, function: &Expression) -> Option<&'a [Type]> {
-        let Expression::Identifier {
-            qualified: Some(q), ..
-        } = function.unwrap_parens()
-        else {
-            return None;
-        };
-        self.facts
-            .definition(q.as_str())?
-            .ty()
-            .unwrap_forall()
-            .get_function_params()
+    pub(crate) fn callee_definition(&self, function: &Expression) -> Option<&'a Definition> {
+        match function.unwrap_parens() {
+            Expression::Identifier {
+                qualified: Some(q), ..
+            } => self.facts.definition(q.as_str()),
+            Expression::DotAccess {
+                expression: receiver,
+                member,
+                ..
+            } => {
+                let receiver_ty = receiver.get_type();
+                let module = receiver_ty.as_import_namespace()?;
+                self.facts.definition(&format!("{}.{}", module, member))
+            }
+            _ => None,
+        }
     }
 
     /// Materialize a Go array-returning call into a variable and reslice it,

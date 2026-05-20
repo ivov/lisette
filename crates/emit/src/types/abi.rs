@@ -363,7 +363,12 @@ impl Emitter<'_> {
         {
             return None;
         }
-        self.classify_direct_emission(&return_type)
+        let declared_return = self
+            .callee_definition(callee)
+            .and_then(|definition| definition.ty().unwrap_forall().get_function_ret());
+        let classify_ty = declared_return.unwrap_or(return_type.as_ref());
+
+        self.classify_direct_emission(classify_ty)
     }
 }
 
