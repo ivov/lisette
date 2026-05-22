@@ -5591,7 +5591,7 @@ fn main() {
 "#,
     );
 
-    let files = compile_project_files(fs, "github.com/user/myproject");
+    let files = compile_project_files(fs, "github.com/user/myproject", false);
     let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(
         names,
@@ -5654,4 +5654,46 @@ fn main() {
     );
 
     assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn module_file_diagnostic_source_uses_relative_path() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"greet\"
+
+fn main() {
+  let _ = greet.value()
+}
+",
+    );
+    fs.add_file_with_display(
+        "greet",
+        "greet.lis",
+        "src/greet/greet.lis",
+        "pub fn value() -> int {
+  42
+}
+",
+    );
+
+    let result = compile_check(fs);
+
+    let displays: Vec<&str> = result
+        .files
+        .values()
+        .map(|f| f.display_path.as_str())
+        .collect();
+    assert!(
+        displays.contains(&"src/greet/greet.lis"),
+        "module file must carry its relative path on display_path; got: {displays:?}"
+    );
+
+    let names: Vec<&str> = result.files.values().map(|f| f.name.as_str()).collect();
+    assert!(
+        names.contains(&"greet.lis"),
+        "module file must keep bare identity name; got: {names:?}"
+    );
 }

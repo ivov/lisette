@@ -504,13 +504,13 @@ fn main() {
 
     struct NoLoader;
     impl Loader for NoLoader {
-        fn scan_folder(&self, _: &str) -> rustc_hash::FxHashMap<String, String> {
+        fn scan_folder(&self, _: &str) -> semantics::loader::Files {
             rustc_hash::FxHashMap::default()
         }
     }
 
     let build_result = syntax::build_ast(source, 0);
-    let (result, _) = analyze(AnalyzeInput {
+    let result = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: false,
             standalone_mode: false,
@@ -519,11 +519,15 @@ fn main() {
         loader: &NoLoader,
         source: source.to_string(),
         filename: "main.lis".to_string(),
+        display_path: "main.lis".to_string(),
         ast: build_result.ast,
         project_root: None,
         compile_phase: CompilePhase::Check,
         locator: resolver,
-    });
+        go_module: String::new(),
+        disable_cache: false,
+    })
+    .result;
 
     let impl_errors: Vec<_> = result
         .errors
@@ -592,7 +596,7 @@ fn main() {
 
     struct NoLoader;
     impl Loader for NoLoader {
-        fn scan_folder(&self, _: &str) -> rustc_hash::FxHashMap<String, String> {
+        fn scan_folder(&self, _: &str) -> semantics::loader::Files {
             rustc_hash::FxHashMap::default()
         }
     }
@@ -600,7 +604,7 @@ fn main() {
     let build_result = syntax::build_ast(source, 0);
 
     // First run — registers third-party module
-    let (result1, _) = analyze(AnalyzeInput {
+    let result1 = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: false,
             standalone_mode: false,
@@ -609,11 +613,15 @@ fn main() {
         loader: &NoLoader,
         source: source.to_string(),
         filename: "main.lis".to_string(),
+        display_path: "main.lis".to_string(),
         ast: build_result.ast.clone(),
         project_root: None,
         compile_phase: CompilePhase::Check,
         locator: resolver.clone(),
-    });
+        go_module: String::new(),
+        disable_cache: false,
+    })
+    .result;
 
     assert!(
         result1.errors.is_empty(),
@@ -622,7 +630,7 @@ fn main() {
     );
 
     // Second run — must still succeed (not load stale cache for third-party)
-    let (result2, _) = analyze(AnalyzeInput {
+    let result2 = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: false,
             standalone_mode: false,
@@ -631,11 +639,15 @@ fn main() {
         loader: &NoLoader,
         source: source.to_string(),
         filename: "main.lis".to_string(),
+        display_path: "main.lis".to_string(),
         ast: build_result.ast,
         project_root: None,
         compile_phase: CompilePhase::Check,
         locator: resolver,
-    });
+        go_module: String::new(),
+        disable_cache: false,
+    })
+    .result;
 
     assert!(
         result2.errors.is_empty(),

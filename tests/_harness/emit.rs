@@ -36,6 +36,7 @@ fn emit_inner(
         id: 0,
         module_id: result.module_id.clone(),
         name: "test.lis".to_string(),
+        display_path: "src/test.lis".to_string(),
         source: source_for_debug.unwrap_or("").to_string(),
         items: result.ast,
     };

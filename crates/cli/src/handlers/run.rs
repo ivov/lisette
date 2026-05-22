@@ -239,11 +239,6 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         return 1;
     }
 
-    let filename = file_path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("main.lis");
-
     let compile_config = CompileConfig {
         target_phase: CompilePhase::Emit,
         go_module: "lis-standalone".to_string(),
@@ -256,13 +251,26 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
 
     struct NoLoader;
     impl Loader for NoLoader {
-        fn scan_folder(&self, _folder_name: &str) -> rustc_hash::FxHashMap<String, String> {
+        fn scan_folder(&self, _folder_name: &str) -> semantics::loader::Files {
             rustc_hash::FxHashMap::default()
         }
     }
 
+    let entry_name = file_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(file)
+        .to_string();
+    let entry_display = lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| file.to_string());
+
     let no_loader = NoLoader;
-    let result = compile(&source, filename, &compile_config, &no_loader);
+    let result = compile(
+        &source,
+        &entry_name,
+        &entry_display,
+        &compile_config,
+        &no_loader,
+    );
 
     let filter = Filter {
         errors_only: false,
@@ -281,7 +289,7 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         result.user_file_count,
         &filter,
         &source,
-        file,
+        &entry_display,
     );
 
     if counts.errors > 0 {

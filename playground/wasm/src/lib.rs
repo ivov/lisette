@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 
 use std::sync::Arc;
 
-use lisette_semantics::loader::{Files, Loader};
+use lisette_semantics::loader::{FileContent, Files, Loader};
 use lisette_semantics::analyze::{analyze, AnalyzeInput, CompilePhase, SemanticConfig};
 use lisette_semantics::facts::{BindingIdAllocator, Facts};
 use lisette_syntax::ast::{Expression, Span, StructSpread};
@@ -113,8 +113,11 @@ struct MemoryLoader {
 impl Loader for MemoryLoader {
     fn scan_folder(&self, folder: &str) -> Files {
         if folder == "_entry_" {
-            let mut map: FxHashMap<String, String> = FxHashMap::default();
-            map.insert(self.filename.clone(), self.source.clone());
+            let mut map: Files = FxHashMap::default();
+            map.insert(
+                self.filename.clone(),
+                FileContent::new(self.source.clone(), self.filename.clone()),
+            );
             map
         } else {
             FxHashMap::default()
@@ -223,13 +226,18 @@ fn run_analysis(code: &str) -> AnalysisResult {
         loader: &loader,
         source: code.to_string(),
         filename: PLAYGROUND_FILE.to_string(),
+        display_path: PLAYGROUND_FILE.to_string(),
         ast: ast_result.ast,
         project_root: None,
         locator: lisette_deps::TypedefLocator::default(),
         compile_phase: CompilePhase::Check,
+        go_module: String::new(),
+        disable_cache: false,
     };
 
-    let (sem_result, facts) = analyze(input);
+    let analyze_output = analyze(input);
+    let sem_result = analyze_output.result;
+    let facts = analyze_output.facts;
 
     for e in &sem_result.errors {
         diagnostics.push(convert_lisette_diag(e, code));
@@ -276,13 +284,16 @@ fn run_pipeline(
         loader: &loader,
         source: code.to_string(),
         filename: PLAYGROUND_FILE.to_string(),
+        display_path: PLAYGROUND_FILE.to_string(),
         ast: ast_result.ast,
         project_root: None,
         compile_phase: phase.clone(),
         locator: lisette_deps::TypedefLocator::default(),
+        go_module: String::new(),
+        disable_cache: false,
     };
 
-    let (sem_result, _facts) = analyze(input);
+    let sem_result = analyze(input).result;
 
     for e in &sem_result.errors {
         diagnostics.push(convert_lisette_diag(e, code));

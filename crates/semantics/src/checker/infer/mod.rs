@@ -68,6 +68,7 @@ impl TaskState<'_> {
                     id: file_id,
                     module_id: file.module_id,
                     name: file.name,
+                    display_path: file.display_path,
                     source: file.source,
                     items: frozen_items,
                 };

@@ -6,11 +6,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use semantics::loader::{Files, Loader};
+use semantics::loader::{FileContent, Files, Loader};
+use semantics::path::relative_to_cwd_with;
 use semantics::store::ENTRY_MODULE_ID;
+
+pub use semantics::path::relative_to_cwd;
 
 pub struct LocalFileSystem {
     search_paths: Vec<PathBuf>,
+    display_cwd: Option<PathBuf>,
 }
 
 impl LocalFileSystem {
@@ -22,6 +26,7 @@ impl LocalFileSystem {
 
         Self {
             search_paths: vec![current_path, stdlib_path],
+            display_cwd: std::env::current_dir().ok(),
         }
     }
 
@@ -36,10 +41,12 @@ impl LocalFileSystem {
             let path = entry.path();
 
             if path.extension().is_some_and(|e| e == "lis")
-                && let Some(filename) = path.file_name().and_then(|s| s.to_str())
                 && let Ok(source) = read_to_string(&path)
+                && let Some(name) = path.file_name().and_then(|s| s.to_str())
             {
-                files.insert(filename.to_string(), source);
+                let display_path = relative_to_cwd_with(&path, self.display_cwd.as_deref())
+                    .unwrap_or_else(|| name.to_string());
+                files.insert(name.to_string(), FileContent::new(source, display_path));
             }
         }
 
@@ -47,10 +54,9 @@ impl LocalFileSystem {
     }
 }
 
-/// Translate module ID to filesystem path (entry module maps to current directory)
 fn to_fs_path(folder_name: &str) -> &str {
     if folder_name == ENTRY_MODULE_ID {
-        "."
+        ""
     } else {
         folder_name
     }
@@ -152,9 +158,13 @@ pub fn collect_lis_filepaths_recursive(dir: &Path) -> Vec<PathBuf> {
 
 impl Loader for LocalFileSystem {
     fn scan_folder(&self, folder_name: &str) -> Files {
-        let folder_name = to_fs_path(folder_name);
+        let fs_name = to_fs_path(folder_name);
         for search_path in &self.search_paths {
-            let folder_path = search_path.join(folder_name);
+            let folder_path = if fs_name.is_empty() {
+                search_path.clone()
+            } else {
+                search_path.join(fs_name)
+            };
             let files = self.collect_files(&folder_path);
 
             if !files.is_empty() {

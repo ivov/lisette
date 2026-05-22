@@ -10,7 +10,8 @@ use syntax::program::{File, ModuleInfo, MutationInfo, UnusedInfo};
 use deps::TypedefLocator;
 
 use crate::cache::{
-    CompiledModule, compute_module_hash, get_dependency_module_hashes,
+    CompiledModule, EmitStamp, compute_emit_artifact_hash, compute_module_hash,
+    get_dependency_module_hashes,
     go_stdlib::{self, load_cached_go_module},
     hash_module_sources, is_cache_disabled, prelude as prelude_cache, register_cached_module,
     save_module_cache, try_load_cache,
@@ -42,23 +43,46 @@ pub struct AnalyzeInput<'a> {
     pub config: SemanticConfig,
     pub loader: &'a dyn Loader,
     pub source: String,
+    /// Bare identity name of the entry file (e.g. `main.lis`).
     pub filename: String,
+    /// Cwd-relative display path for the entry file (e.g. `src/main.lis`);
+    /// equals `filename` when there is no separate display path.
+    pub display_path: String,
     pub ast: Vec<Expression>,
     pub project_root: Option<PathBuf>,
     pub compile_phase: CompilePhase,
     pub locator: TypedefLocator,
+    /// Go module path (from `lisette.toml`); folded into the cache emit-artifact
+    /// hash so a project rename invalidates Go outputs.
+    pub go_module: String,
+    /// When true, `analyze` skips both cache load and save. Set by the CLI for
+    /// `--debug` Emit so cwd-decorated Go files are not reused across cwds.
+    pub disable_cache: bool,
 }
 
-pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
+/// Wraps `SemanticResult` plus per-module emit stamps the CLI uses to update
+/// the cache after a successful artifact write.
+pub struct AnalyzeOutput {
+    pub result: SemanticResult,
+    pub facts: Facts,
+    pub emit_stamps: Vec<EmitStamp>,
+}
+
+pub fn analyze(input: AnalyzeInput) -> AnalyzeOutput {
     let mut store = Store::new();
 
     store.init_entry_module();
-    store.store_entry_file(&input.filename, &input.source, input.ast);
+    store.store_entry_file(
+        &input.filename,
+        &input.display_path,
+        &input.source,
+        input.ast,
+    );
 
     let sink = LocalSink::new();
 
     if input.config.load_siblings {
-        for (filename, source) in input.loader.scan_folder(ENTRY_MODULE_ID) {
+        for (filename, content) in input.loader.scan_folder(ENTRY_MODULE_ID) {
             if filename == input.filename
                 || !filename.ends_with(".lis")
                 || filename.ends_with(".d.lis")
@@ -66,11 +90,18 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                 continue;
             }
             let file_id = store.new_file_id();
-            let result = syntax::build_ast(&source, file_id);
+            let result = syntax::build_ast(&content.source, file_id);
             sink.extend_parse_errors(result.errors);
             store.store_file(
                 ENTRY_MODULE_ID,
-                File::new(ENTRY_MODULE_ID, &filename, &source, result.ast, file_id),
+                File::new(
+                    ENTRY_MODULE_ID,
+                    &filename,
+                    &content.display_path,
+                    &content.source,
+                    result.ast,
+                    file_id,
+                ),
             );
         }
     }
@@ -106,7 +137,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         parse_and_register_prelude(&mut store, &sink);
     }
 
-    let cache_enabled = input.project_root.is_some() && !cache_disabled;
+    let cache_enabled = input.project_root.is_some() && !cache_disabled && !input.disable_cache;
     let check_go_files = input.compile_phase == CompilePhase::Emit;
 
     let binding_ids = Arc::new(BindingIdAllocator::new());
@@ -185,6 +216,9 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
 
             let is_entry = module_id == ENTRY_MODULE_ID;
 
+            let expected_artifact_hash =
+                check_go_files.then(|| compute_emit_artifact_hash(source_hash, &input.go_module));
+
             if cache_enabled
                 && !is_entry
                 && let Some(ref project_root) = input.project_root
@@ -192,6 +226,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                     &module_id,
                     source_hash,
                     &dep_hashes,
+                    expected_artifact_hash,
                     project_root,
                     check_go_files,
                 )
@@ -199,7 +234,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
                 checker
                     .ufcs_methods
                     .extend(cached.ufcs_methods.iter().cloned());
-                register_cached_module(&mut store, &module_id, cached);
+                register_cached_module(&mut store, &module_id, cached, project_root);
                 cached_modules.insert(module_id.clone());
                 continue;
             }
@@ -207,7 +242,7 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
             store.store_module(&module_id, files);
             checker.register_module(&mut store, &module_id);
 
-            if cache_enabled && !is_entry {
+            if !is_entry {
                 compiled_modules.push(CompiledModule {
                     module_id: module_id.clone(),
                     source_hash,
@@ -323,6 +358,14 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
     all_diagnostics.sort_by(diagnostics::LisetteDiagnostic::sort_key);
     let (errors, lints): (Vec<_>, Vec<_>) = all_diagnostics.into_iter().partition(|d| d.is_error());
 
+    let emit_stamps: Vec<EmitStamp> = compiled_modules
+        .iter()
+        .map(|c| EmitStamp {
+            module_id: c.module_id.clone(),
+            artifact_hash: compute_emit_artifact_hash(c.source_hash, &input.go_module),
+        })
+        .collect();
+
     if cache_enabled && let Some(ref project_root) = input.project_root {
         let has_errors = errors.iter().any(|e| e.is_error());
         if !has_errors {
@@ -404,5 +447,9 @@ pub fn analyze(input: AnalyzeInput) -> (SemanticResult, Facts) {
         go_module_ids,
     };
 
-    (result, facts)
+    AnalyzeOutput {
+        result,
+        facts,
+        emit_stamps,
+    }
 }

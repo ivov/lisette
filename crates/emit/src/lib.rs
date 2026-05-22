@@ -235,12 +235,10 @@ impl<'a> Emitter<'a> {
                 .files
                 .iter()
                 .map(|(file_id, file)| {
-                    let path = if file.module_id == analysis.entry_module_id {
-                        format!("src/{}", file.name)
-                    } else {
-                        format!("{}/{}", file.module_id, file.name)
-                    };
-                    (*file_id, LineIndex::from_source(path, &file.source))
+                    (
+                        *file_id,
+                        LineIndex::from_source(file.display_path.clone(), &file.source),
+                    )
                 })
                 .collect()
         } else {

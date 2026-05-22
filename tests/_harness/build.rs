@@ -16,7 +16,7 @@ fn compile_with(
     let main_source = fs
         .scan_folder(ENTRY_MODULE_ID)
         .get("main.lis")
-        .cloned()
+        .map(|c| c.source.clone())
         .expect("main.lis must exist");
 
     let build_result = syntax::build_ast(&main_source, ENTRY_FILE_ID);
@@ -29,12 +29,15 @@ fn compile_with(
         loader: &fs,
         source: main_source,
         filename: "main.lis".to_string(),
+        display_path: "main.lis".to_string(),
         ast: build_result.ast,
         project_root: None,
         locator,
         compile_phase: semantics::analyze::CompilePhase::Check,
+        go_module: String::new(),
+        disable_cache: false,
     })
-    .0
+    .result
 }
 
 pub fn compile_check(fs: MockFileSystem) -> SemanticResult {
@@ -88,11 +91,15 @@ pub fn locator_with_go_dep(module_path: &str, version: &str) -> deps::TypedefLoc
     deps::TypedefLocator::new(go_deps, None, stdlib::Target::host())
 }
 
-pub fn compile_project_files(fs: MockFileSystem, go_module: &str) -> Vec<emit::OutputFile> {
+pub fn compile_project_files(
+    fs: MockFileSystem,
+    go_module: &str,
+    debug: bool,
+) -> Vec<emit::OutputFile> {
     let main_source = fs
         .scan_folder(ENTRY_MODULE_ID)
         .get("main.lis")
-        .cloned()
+        .map(|c| c.source.clone())
         .expect("main.lis must exist");
 
     let build_result = syntax::build_ast(&main_source, ENTRY_FILE_ID);
@@ -102,7 +109,7 @@ pub fn compile_project_files(fs: MockFileSystem, go_module: &str) -> Vec<emit::O
         build_result.errors
     );
 
-    let (analysis, _facts) = analyze(AnalyzeInput {
+    let analyze_output = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: true,
             standalone_mode: false,
@@ -111,11 +118,15 @@ pub fn compile_project_files(fs: MockFileSystem, go_module: &str) -> Vec<emit::O
         loader: &fs,
         source: main_source,
         filename: "main.lis".to_string(),
+        display_path: "main.lis".to_string(),
         ast: build_result.ast,
         project_root: None,
         locator: deps::TypedefLocator::default(),
         compile_phase: semantics::analyze::CompilePhase::Emit,
+        go_module: go_module.to_string(),
+        disable_cache: true,
     });
+    let analysis = analyze_output.result;
 
     assert!(
         analysis.errors.is_empty(),
@@ -126,12 +137,12 @@ pub fn compile_project_files(fs: MockFileSystem, go_module: &str) -> Vec<emit::O
     Emitter::emit(
         &analysis.into_emit_input(),
         go_module,
-        EmitOptions { debug: false },
+        EmitOptions { debug },
     )
 }
 
 pub fn compile_project(fs: MockFileSystem, go_module: &str) -> String {
-    let mut files = compile_project_files(fs, go_module);
+    let mut files = compile_project_files(fs, go_module, false);
     files.sort_by(|a, b| a.name.cmp(&b.name));
 
     use std::fmt::Write;

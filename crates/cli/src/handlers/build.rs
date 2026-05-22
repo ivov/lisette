@@ -110,12 +110,13 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
         }
     };
 
-    let display_path = std::env::current_dir()
-        .ok()
-        .and_then(|cwd| main_lis.strip_prefix(&cwd).ok().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| main_lis.to_path_buf());
-
-    let filename = "main.lis";
+    let entry_name = main_lis
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("main.lis")
+        .to_string();
+    let entry_display =
+        lisette::fs::relative_to_cwd(&main_lis).unwrap_or_else(|| entry_name.clone());
 
     let project_name = go_module_name.rsplit('/').next().unwrap_or(go_module_name);
 
@@ -146,9 +147,14 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
     let source_dir = main_lis.parent().and_then(|p| p.to_str()).unwrap_or(".");
     let local_fs = LocalFileSystem::new(source_dir);
 
-    let result = compile(&main_lis_source, filename, &compile_config, &local_fs);
+    let result = compile(
+        &main_lis_source,
+        &entry_name,
+        &entry_display,
+        &compile_config,
+        &local_fs,
+    );
 
-    let filename = display_path.display().to_string();
     let filter = Filter {
         errors_only: false,
         warnings_only: false,
@@ -166,7 +172,7 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
         result.user_file_count,
         &filter,
         &main_lis_source,
-        &filename,
+        &entry_display,
     );
 
     if counts.errors > 0 {
@@ -174,6 +180,24 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
     }
 
     let heading = "Failed to compile Lisette project to Go";
+
+    if debug
+        && let Err(e) = semantics::cache::apply_emit_stamps(
+            &prep.project_path,
+            &result
+                .emit_stamps
+                .iter()
+                .map(|s| (s.clone(), None))
+                .collect::<Vec<_>>(),
+        )
+    {
+        cli_error!(
+            heading,
+            format!("Failed to invalidate emit stamps before debug write: {e}"),
+            "Check file permissions on `target/cache`, or delete the directory and retry"
+        );
+        return 1;
+    }
 
     let emit = match go_cli::write_go_outputs(&prep.target_dir, &result.output) {
         Ok(emit) => emit,
@@ -221,6 +245,19 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
     ) {
         cli_error!(heading, e.message, e.hint);
         return 1;
+    }
+
+    if !debug
+        && let Err(e) = semantics::cache::apply_emit_stamps(
+            &prep.project_path,
+            &result
+                .emit_stamps
+                .iter()
+                .map(|s| (s.clone(), Some(s.artifact_hash)))
+                .collect::<Vec<_>>(),
+        )
+    {
+        eprintln!("warning: failed to write emit stamps: {e}");
     }
 
     // Committed only after gofmt + tidy succeed.

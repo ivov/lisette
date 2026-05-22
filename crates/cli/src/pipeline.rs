@@ -6,6 +6,7 @@ use diagnostics::LisetteDiagnostic;
 use emit::{EmitOptions, Emitter, OutputFile};
 
 use semantics::analyze::{AnalyzeInput, SemanticConfig, analyze};
+use semantics::cache::EmitStamp;
 
 pub use semantics::analyze::CompilePhase;
 use semantics::loader::Loader;
@@ -36,11 +37,13 @@ pub struct CompileResult {
     pub lints: Vec<LisetteDiagnostic>,
     pub sources: HashMap<u32, SourceInfo>,
     pub user_file_count: usize,
+    pub emit_stamps: Vec<EmitStamp>,
 }
 
 pub fn compile(
     source: &str,
     filename: &str,
+    display_path: &str,
     config: &CompileConfig,
     fs: &dyn Loader,
 ) -> CompileResult {
@@ -52,7 +55,7 @@ pub fn compile(
             ENTRY_FILE_ID,
             SourceInfo {
                 source: source.to_string(),
-                filename: filename.to_string(),
+                filename: display_path.to_string(),
             },
         );
         return CompileResult {
@@ -61,10 +64,13 @@ pub fn compile(
             lints: vec![],
             sources,
             user_file_count: 1,
+            emit_stamps: vec![],
         };
     }
 
-    let (semantic_result, _facts) = analyze(AnalyzeInput {
+    let disable_cache = config.debug && config.target_phase == CompilePhase::Emit;
+
+    let analyze_output = analyze(AnalyzeInput {
         config: SemanticConfig {
             run_lints: true,
             standalone_mode: config.standalone_mode,
@@ -73,11 +79,16 @@ pub fn compile(
         loader: fs,
         source: source.to_string(),
         filename: filename.to_string(),
+        display_path: display_path.to_string(),
         ast: syntax_result.ast,
         project_root: config.project_root.clone(),
         compile_phase: config.target_phase,
         locator: config.locator.clone(),
+        go_module: config.go_module.clone(),
+        disable_cache,
     });
+    let semantic_result = analyze_output.result;
+    let emit_stamps = analyze_output.emit_stamps;
 
     let user_file_count = semantic_result.files.len();
 
@@ -89,7 +100,7 @@ pub fn compile(
                 *file_id,
                 SourceInfo {
                     source: file.source.clone(),
-                    filename: file.name.clone(),
+                    filename: file.display_path.clone(),
                 },
             )
         })
@@ -106,6 +117,7 @@ pub fn compile(
             lints,
             sources,
             user_file_count,
+            emit_stamps,
         };
     }
 
@@ -128,6 +140,7 @@ pub fn compile(
             lints,
             sources,
             user_file_count,
+            emit_stamps,
         };
     }
 
@@ -137,6 +150,7 @@ pub fn compile(
         lints,
         sources,
         user_file_count,
+        emit_stamps,
     }
 }
 
@@ -165,7 +179,7 @@ mod tests {
             .and_then(|p| p.to_str())
             .expect("temp project path is valid utf-8");
         let fs_loader = LocalFileSystem::new(working_dir);
-        let result = compile(&source, "main.lis", &config, &fs_loader);
+        let result = compile(&source, "main.lis", "src/main.lis", &config, &fs_loader);
 
         let mut diags: Vec<(bool, Option<String>)> = result
             .errors

@@ -91,6 +91,12 @@ pub struct ModuleInterface {
 
     /// UFCS method pairs for this module, computed during registration.
     pub ufcs_methods: Vec<(String, String)>,
+
+    /// Artifact hash of the on-disk Go files produced for this module.
+    /// `None` after a Check-phase save or before the post-write stamp call;
+    /// `Some(h)` when the on-disk Go files came from a successful Emit for
+    /// artifact hash `h`.
+    pub emit_stamp: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,11 +105,25 @@ pub struct CachedFile {
     pub source: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompiledModule {
     pub module_id: String,
     pub source_hash: u64,
     pub dep_hashes: HashMap<String, u64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmitStamp {
+    pub module_id: String,
+    pub artifact_hash: u64,
+}
+
+/// Hash over the non-debug Go-artifact inputs for one module.
+pub fn compute_emit_artifact_hash(source_hash: u64, go_module: &str) -> u64 {
+    let mut hasher = FnvHasher::new();
+    source_hash.hash(&mut hasher);
+    go_module.hash(&mut hasher);
+    hasher.finish()
 }
 
 pub fn hash_module_sources(files: &[File]) -> u64 {
@@ -181,21 +201,32 @@ pub fn try_load_cache(
     module_id: &str,
     expected_source_hash: u64,
     expected_dep_hashes: &HashMap<String, u64>,
+    expected_artifact_hash: Option<u64>,
     project_root: &Path,
     check_go_files: bool,
 ) -> Option<ModuleInterface> {
     let path = cache_path(project_root, module_id);
     let bytes = fs::read(&path).ok()?;
-    let interface: ModuleInterface = bincode::deserialize(&bytes).ok()?;
+    let interface: ModuleInterface = match bincode::deserialize(&bytes) {
+        Ok(i) => i,
+        Err(_) => {
+            let _ = fs::remove_file(&path);
+            return None;
+        }
+    };
 
     if !is_cache_valid(&interface, expected_source_hash, expected_dep_hashes) {
         let _ = fs::remove_file(&path);
         return None;
     }
 
-    if check_go_files && !all_go_outputs_exist(module_id, &interface.files, project_root) {
-        let _ = fs::remove_file(&path);
-        return None;
+    if check_go_files {
+        if interface.emit_stamp != expected_artifact_hash {
+            return None;
+        }
+        if !all_go_outputs_exist(module_id, &interface.files, project_root) {
+            return None;
+        }
     }
 
     Some(interface)
@@ -268,6 +299,7 @@ pub fn save_module_cache(
                 .cloned()
                 .collect()
         },
+        emit_stamp: None,
     };
 
     let path = cache_path(project_root, &compiled.module_id);
@@ -307,8 +339,15 @@ fn extract_public_definitions(
 }
 
 /// Register a cached module in the store.
-/// This loads the cached definitions and source files without running inference.
-pub fn register_cached_module(store: &mut Store, module_id: &str, cached: ModuleInterface) {
+/// `display_path` for each cached file is recomputed from the project layout
+/// against the current cwd, so warm and cold builds render the same diagnostic
+/// paths even though the cache stores only bare names.
+pub fn register_cached_module(
+    store: &mut Store,
+    module_id: &str,
+    cached: ModuleInterface,
+    project_root: &Path,
+) {
     store.add_module(module_id);
 
     let mut file_ids: Vec<u32> = vec![];
@@ -316,7 +355,14 @@ pub fn register_cached_module(store: &mut Store, module_id: &str, cached: Module
         let file_id = store.new_file_id();
         file_ids.push(file_id);
 
-        let file = File::new_cached(module_id, &cached_file.name, &cached_file.source, file_id);
+        let display_path = cached_file_display_path(project_root, module_id, &cached_file.name);
+        let file = File::new_cached(
+            module_id,
+            &cached_file.name,
+            &display_path,
+            &cached_file.source,
+            file_id,
+        );
 
         store.store_file(module_id, file);
     }
@@ -328,6 +374,47 @@ pub fn register_cached_module(store: &mut Store, module_id: &str, cached: Module
     }
 
     store.mark_visited(module_id);
+}
+
+fn cached_file_display_path(project_root: &Path, module_id: &str, bare_name: &str) -> String {
+    let on_disk = if module_id == ENTRY_MODULE_ID {
+        project_root.join("src").join(bare_name)
+    } else {
+        project_root.join("src").join(module_id).join(bare_name)
+    };
+    crate::path::relative_to_cwd(&on_disk).unwrap_or_else(|| bare_name.to_string())
+}
+
+/// Set or clear the `emit_stamp` for each module's cache file. Missing files
+/// are skipped; undecodable (e.g. pre-bump) files are unlinked and skipped;
+/// other read errors propagate so the debug pre-write clear can hard-fail
+/// rather than leave a stale stamp over freshly-overwritten Go.
+pub fn apply_emit_stamps(
+    project_root: &Path,
+    updates: &[(EmitStamp, Option<u64>)],
+) -> io::Result<()> {
+    for (stamp, value) in updates {
+        let path = cache_path(project_root, &stamp.module_id);
+        let bytes = match fs::read(&path) {
+            Ok(b) => b,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(e),
+        };
+        let mut interface: ModuleInterface = match bincode::deserialize(&bytes) {
+            Ok(i) => i,
+            Err(_) => {
+                let _ = fs::remove_file(&path);
+                continue;
+            }
+        };
+        interface.emit_stamp = *value;
+
+        let temp_path = path.with_extension("cache.tmp");
+        let new_bytes = bincode::serialize(&interface).map_err(io::Error::other)?;
+        fs::write(&temp_path, new_bytes)?;
+        fs::rename(&temp_path, &path)?;
+    }
+    Ok(())
 }
 
 pub fn is_cache_disabled() -> bool {
@@ -343,8 +430,8 @@ mod tests {
 
     #[test]
     fn test_hash_module_sources_deterministic() {
-        let file1 = File::new_cached("mod", "a.lis", "fn foo() {}", 1);
-        let file2 = File::new_cached("mod", "b.lis", "fn bar() {}", 2);
+        let file1 = File::new_cached("mod", "a.lis", "a.lis", "fn foo() {}", 1);
+        let file2 = File::new_cached("mod", "b.lis", "b.lis", "fn bar() {}", 2);
 
         let hash1 = hash_module_sources(&[file1.clone(), file2.clone()]);
         let hash2 = hash_module_sources(&[file2.clone(), file1.clone()]);
@@ -354,8 +441,8 @@ mod tests {
 
     #[test]
     fn test_hash_module_sources_content_sensitive() {
-        let file1 = File::new_cached("mod", "a.lis", "fn foo() {}", 1);
-        let file2 = File::new_cached("mod", "a.lis", "fn bar() {}", 1);
+        let file1 = File::new_cached("mod", "a.lis", "a.lis", "fn foo() {}", 1);
+        let file2 = File::new_cached("mod", "a.lis", "a.lis", "fn bar() {}", 1);
 
         let hash1 = hash_module_sources(&[file1]);
         let hash2 = hash_module_sources(&[file2]);
@@ -403,6 +490,7 @@ mod tests {
             files: vec![],
             definitions: HashMap::default(),
             ufcs_methods: vec![],
+            emit_stamp: None,
         };
 
         assert!(!is_cache_valid(&cache, 100, &HashMap::default()));
@@ -420,6 +508,7 @@ mod tests {
             files: vec![],
             definitions: HashMap::default(),
             ufcs_methods: vec![],
+            emit_stamp: None,
         };
 
         assert!(!is_cache_valid(&cache, 100, &HashMap::default()));
@@ -437,6 +526,7 @@ mod tests {
             files: vec![],
             definitions: HashMap::default(),
             ufcs_methods: vec![],
+            emit_stamp: None,
         };
 
         assert!(!is_cache_valid(&cache, 200, &HashMap::default()));
@@ -458,6 +548,7 @@ mod tests {
             files: vec![],
             definitions: HashMap::default(),
             ufcs_methods: vec![],
+            emit_stamp: None,
         };
 
         let mut different_deps = HashMap::default();
@@ -518,5 +609,199 @@ mod tests {
         assert_eq!(result.get("go:fmt"), Some(&STDLIB_HASH));
         assert_eq!(result.get("prelude"), Some(&STDLIB_HASH));
         assert_eq!(result.get("user_mod"), Some(&12345u64));
+    }
+
+    #[test]
+    fn hash_module_sources_independent_of_display_path() {
+        let cli_file = File::new(
+            "greet",
+            "greet.lis",
+            "src/greet/greet.lis",
+            "pub fn x() -> int { 1 }",
+            vec![],
+            1,
+        );
+        let lsp_file = File::new(
+            "greet",
+            "greet.lis",
+            "greet.lis",
+            "pub fn x() -> int { 1 }",
+            vec![],
+            1,
+        );
+
+        assert_eq!(
+            hash_module_sources(&[cli_file]),
+            hash_module_sources(&[lsp_file]),
+        );
+    }
+
+    #[test]
+    fn cache_file_purity_no_src_prefix() {
+        let cached = CachedFile {
+            name: "greet.lis".to_string(),
+            source: "pub fn x() -> int { 1 }".to_string(),
+        };
+        let bytes = bincode::serialize(&cached).unwrap();
+        let serialized = String::from_utf8_lossy(&bytes);
+        assert!(
+            !serialized.contains("src/"),
+            "CachedFile must not contain `src/` prefix; got: {serialized:?}"
+        );
+    }
+
+    #[test]
+    fn artifact_hash_depends_on_go_module() {
+        let h1 = compute_emit_artifact_hash(100, "github.com/old/proj");
+        let h2 = compute_emit_artifact_hash(100, "github.com/new/proj");
+        assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn apply_emit_stamps_round_trip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("target").join("cache")).unwrap();
+
+        let interface = ModuleInterface {
+            version: CACHE_FORMAT_VERSION,
+            compiler_version: COMPILER_VERSION_HASH,
+            stdlib_hash: STDLIB_HASH,
+            module_hash: 0,
+            source_hash: 100,
+            dependency_hashes: HashMap::default(),
+            files: vec![],
+            definitions: HashMap::default(),
+            ufcs_methods: vec![],
+            emit_stamp: None,
+        };
+        let path = cache_path(root, "greet");
+        std::fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
+
+        let stamp = EmitStamp {
+            module_id: "greet".to_string(),
+            artifact_hash: 999,
+        };
+        apply_emit_stamps(root, &[(stamp.clone(), Some(999))]).unwrap();
+        let reread: ModuleInterface = bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(reread.emit_stamp, Some(999));
+        assert_eq!(reread.source_hash, 100);
+
+        apply_emit_stamps(root, &[(stamp, None)]).unwrap();
+        let reread: ModuleInterface = bincode::deserialize(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(reread.emit_stamp, None);
+    }
+
+    #[test]
+    fn apply_emit_stamps_missing_cache_is_no_op() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stamp = EmitStamp {
+            module_id: "absent".to_string(),
+            artifact_hash: 0,
+        };
+        let result = apply_emit_stamps(tmp.path(), &[(stamp, None)]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn try_load_cache_rejects_unstamped_for_emit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("target").join("cache")).unwrap();
+        std::fs::create_dir_all(root.join("target").join("greet")).unwrap();
+        std::fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
+
+        let interface = ModuleInterface {
+            version: CACHE_FORMAT_VERSION,
+            compiler_version: COMPILER_VERSION_HASH,
+            stdlib_hash: STDLIB_HASH,
+            module_hash: 0,
+            source_hash: 100,
+            dependency_hashes: HashMap::default(),
+            files: vec![CachedFile {
+                name: "greet.lis".to_string(),
+                source: String::new(),
+            }],
+            definitions: HashMap::default(),
+            ufcs_methods: vec![],
+            emit_stamp: None,
+        };
+        let path = cache_path(root, "greet");
+        std::fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
+
+        let loaded = try_load_cache("greet", 100, &HashMap::default(), None, root, false);
+        assert!(loaded.is_some(), "Check phase must accept unstamped cache");
+
+        let loaded = try_load_cache(
+            "greet",
+            100,
+            &HashMap::default(),
+            Some(compute_emit_artifact_hash(100, "github.com/test/x")),
+            root,
+            true,
+        );
+        assert!(
+            loaded.is_none(),
+            "Emit phase must reject cache with emit_stamp = None"
+        );
+    }
+
+    #[test]
+    fn try_load_cache_rejects_after_debug_invalidation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("target").join("cache")).unwrap();
+        std::fs::create_dir_all(root.join("target").join("greet")).unwrap();
+        std::fs::write(root.join("target").join("greet").join("greet.go"), "").unwrap();
+
+        let artifact_hash = compute_emit_artifact_hash(100, "github.com/test/x");
+
+        let interface = ModuleInterface {
+            version: CACHE_FORMAT_VERSION,
+            compiler_version: COMPILER_VERSION_HASH,
+            stdlib_hash: STDLIB_HASH,
+            module_hash: 0,
+            source_hash: 100,
+            dependency_hashes: HashMap::default(),
+            files: vec![CachedFile {
+                name: "greet.lis".to_string(),
+                source: String::new(),
+            }],
+            definitions: HashMap::default(),
+            ufcs_methods: vec![],
+            emit_stamp: Some(artifact_hash),
+        };
+        let path = cache_path(root, "greet");
+        std::fs::write(&path, bincode::serialize(&interface).unwrap()).unwrap();
+
+        assert!(
+            try_load_cache(
+                "greet",
+                100,
+                &HashMap::default(),
+                Some(artifact_hash),
+                root,
+                true,
+            )
+            .is_some()
+        );
+
+        let stamp = EmitStamp {
+            module_id: "greet".to_string(),
+            artifact_hash,
+        };
+        apply_emit_stamps(root, &[(stamp, None)]).unwrap();
+
+        assert!(
+            try_load_cache(
+                "greet",
+                100,
+                &HashMap::default(),
+                Some(artifact_hash),
+                root,
+                true,
+            )
+            .is_none()
+        );
     }
 }

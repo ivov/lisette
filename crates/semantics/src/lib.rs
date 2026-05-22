@@ -8,6 +8,7 @@ pub mod facts;
 pub mod loader;
 pub mod module_graph;
 pub mod passes;
+pub mod path;
 pub mod prelude;
 pub mod store;
 
