@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use semantics::loader::{Files, Loader};
+use semantics::loader::{FileContent, Files, Loader};
 
 #[derive(Clone, Default)]
 pub struct MockFileSystem {
@@ -15,10 +15,20 @@ impl MockFileSystem {
     }
 
     pub fn add_file(&mut self, folder: &str, filename: &str, content: &str) {
-        self.folders
-            .entry(folder.to_string())
-            .or_default()
-            .insert(filename.to_string(), content.to_string());
+        self.add_file_with_display(folder, filename, filename, content);
+    }
+
+    pub fn add_file_with_display(
+        &mut self,
+        folder: &str,
+        filename: &str,
+        display_path: &str,
+        content: &str,
+    ) {
+        self.folders.entry(folder.to_string()).or_default().insert(
+            filename.to_string(),
+            FileContent::new(content.to_string(), display_path.to_string()),
+        );
     }
 
     pub(super) fn get_folders(&self) -> Vec<String> {

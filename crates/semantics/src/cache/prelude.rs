@@ -94,6 +94,7 @@ pub fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
             id: PRELUDE_FILE_ID,
             module_id: PRELUDE_MODULE_ID.to_string(),
             name: "prelude.d.lis".to_string(),
+            display_path: "prelude.d.lis".to_string(),
             source: stdlib::LIS_PRELUDE_SOURCE.to_string(),
             items: vec![],
         },

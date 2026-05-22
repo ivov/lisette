@@ -147,7 +147,8 @@ impl TaskState<'_> {
         let file = File {
             id: file_id,
             module_id: module_id.to_string(),
-            name: filename,
+            name: filename.clone(),
+            display_path: filename,
             source: source.to_string(),
             items: build_result.ast,
         };

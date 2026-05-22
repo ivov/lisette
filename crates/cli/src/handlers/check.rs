@@ -161,10 +161,13 @@ fn compile_single_file(
         }
     };
 
-    let filename = file_path
+    let entry_name = file_path
         .file_name()
         .and_then(|s| s.to_str())
-        .unwrap_or("main.lis");
+        .unwrap_or("main.lis")
+        .to_string();
+    let entry_display =
+        lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| entry_name.clone());
 
     let config = CompileConfig {
         target_phase: CompilePhase::Check,
@@ -179,10 +182,9 @@ fn compile_single_file(
     let working_dir = file_path.parent().and_then(|p| p.to_str()).unwrap_or(".");
 
     let fs = LocalFileSystem::new(working_dir);
-    let result = compile(&source, filename, &config, &fs);
-    let display_filename = file_path.display().to_string();
+    let result = compile(&source, &entry_name, &entry_display, &config, &fs);
 
-    Some((result, source, display_filename))
+    Some((result, source, entry_display))
 }
 
 fn check_loose_dir(dir: &Path, filter: &Filter) -> i32 {

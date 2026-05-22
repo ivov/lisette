@@ -77,13 +77,20 @@ impl Store {
         self.register_file(ENTRY_FILE_ID, ENTRY_MODULE_ID);
     }
 
-    pub fn store_entry_file(&mut self, filename: &str, source: &str, ast: Vec<Expression>) {
+    pub fn store_entry_file(
+        &mut self,
+        filename: &str,
+        display_path: &str,
+        source: &str,
+        ast: Vec<Expression>,
+    ) {
         self.store_file(
             ENTRY_MODULE_ID,
             File {
                 id: ENTRY_FILE_ID,
                 module_id: ENTRY_MODULE_ID.to_string(),
                 name: filename.to_string(),
+                display_path: display_path.to_string(),
                 source: source.to_string(),
                 items: ast,
             },

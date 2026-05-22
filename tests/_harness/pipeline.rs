@@ -163,6 +163,7 @@ impl CompiledTest {
                 File::new(
                     TEST_MODULE_ID,
                     "test.lis",
+                    "test.lis",
                     "",
                     self.ast.clone(),
                     test_file_id,
@@ -203,6 +204,7 @@ impl CompiledTest {
                     TEST_MODULE_ID,
                     File::new(
                         TEST_MODULE_ID,
+                        "test.lis",
                         "test.lis",
                         "",
                         typed_ast.clone(),

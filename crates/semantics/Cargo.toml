@@ -22,3 +22,6 @@ ecow = "0.2"
 rustc-hash.workspace = true
 rayon.workspace = true
 
+[dev-dependencies]
+tempfile = "3"
+

@@ -61,3 +61,42 @@ fn line_directive_includes_column() {
         go_code
     );
 }
+
+#[test]
+fn module_file_line_directive_uses_relative_path_not_doubled() {
+    use crate::_harness::MockFileSystem;
+    use crate::_harness::build::compile_project_files;
+    use semantics::store::ENTRY_MODULE_ID;
+
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        "import \"greet\"\n\nfn main() {\n  let _ = greet.value()\n}\n",
+    );
+    fs.add_file_with_display(
+        "greet",
+        "greet.lis",
+        "src/greet/greet.lis",
+        "pub fn value() -> int {\n  42\n}\n",
+    );
+
+    let files = compile_project_files(fs, "github.com/user/myproject", true);
+    let greet = files
+        .iter()
+        .find(|f| f.name == "greet/greet.go")
+        .unwrap_or_else(|| {
+            let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
+            panic!("greet/greet.go must be emitted; got: {names:?}")
+        });
+    let go = greet.to_go();
+
+    assert!(
+        go.contains("//line src/greet/greet.lis:"),
+        "module file directive should use its relative path, got:\n{go}"
+    );
+    assert!(
+        !go.contains("//line greet/src/greet/greet.lis"),
+        "module file path must not be doubled, got:\n{go}"
+    );
+}

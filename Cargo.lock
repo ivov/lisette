@@ -605,6 +605,7 @@ dependencies = [
  "rayon",
  "rustc-hash",
  "serde",
+ "tempfile",
 ]
 
 [[package]]

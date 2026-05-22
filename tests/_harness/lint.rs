@@ -77,6 +77,7 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
         id: file_id,
         module_id: TEST_MODULE_ID.to_string(),
         name: "test.lis".to_string(),
+        display_path: "test.lis".to_string(),
         source: source.to_string(),
         items: typed_ast,
     };

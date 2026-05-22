@@ -2971,6 +2971,43 @@ fn main() {
 }
 
 #[test]
+fn test_file_not_supported_uses_display_path() {
+    use crate::_harness::MockFileSystem;
+    use crate::_harness::infer::infer_module;
+
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "_entry_",
+        "main.lis",
+        r#"import "math"
+
+fn main() {
+  let _ = math.add(1, 2)
+}"#,
+    );
+    fs.add_file(
+        "math",
+        "core.lis",
+        "pub fn add(a: int, b: int) -> int { a + b }",
+    );
+    fs.add_file_with_display(
+        "math",
+        "helpers_test.lis",
+        "src/math/helpers_test.lis",
+        "pub fn sub(a: int, b: int) -> int { a - b }",
+    );
+
+    let result = infer_module("_entry_", fs);
+
+    assert_eq!(result.errors.len(), 1);
+    let msg = format!("{:?}", result.errors[0]);
+    assert!(
+        msg.contains("src/math/helpers_test.lis"),
+        "diagnostic must use the loader's display_path, got: {msg}"
+    );
+}
+
+#[test]
 fn infer_pattern_missing_field() {
     let input = r#"
 struct Point { x: int, y: int }

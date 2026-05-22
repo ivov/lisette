@@ -49,6 +49,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         id: 0,
         module_id: result.module_id.clone(),
         name: "test.lis".to_string(),
+        display_path: "test.lis".to_string(),
         source: String::new(),
         items: result.ast,
     };

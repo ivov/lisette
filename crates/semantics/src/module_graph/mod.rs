@@ -7,6 +7,7 @@ use syntax::ast::{ImportAlias, Span};
 use syntax::program::File;
 
 use crate::diagnostics::{emit_for_declaration_status, emit_for_locator_result};
+use crate::loader as semantics_loader;
 use crate::loader::Loader;
 use crate::store::Store;
 use diagnostics::LocalSink;
@@ -158,6 +159,7 @@ struct ParseJob {
     module_id: ModuleId,
     file_id: u32,
     filename: String,
+    display_path: String,
     source: String,
 }
 
@@ -176,12 +178,13 @@ fn batch_parse_modules(
         if store.has(module_id) {
             continue;
         }
-        let mut entries: Vec<(String, String)> = fs.scan_folder(module_id).into_iter().collect();
+        let mut entries: Vec<(String, semantics_loader::FileContent)> =
+            fs.scan_folder(module_id).into_iter().collect();
         entries.sort_by(|a, b| a.0.cmp(&b.0));
-        for (filename, source) in entries {
+        for (filename, content) in entries {
             if filename.ends_with("_test.lis") {
                 sink.push(diagnostics::module_graph::test_file_not_supported(
-                    &filename,
+                    &content.display_path,
                 ));
                 continue;
             }
@@ -190,7 +193,8 @@ fn batch_parse_modules(
                 module_id: module_id.clone(),
                 file_id,
                 filename,
-                source,
+                display_path: content.display_path,
+                source: content.source,
             });
         }
     }
@@ -217,6 +221,7 @@ fn parse_one(job: ParseJob) -> (ModuleId, File, Vec<syntax::ParseError>) {
     let file = File::new(
         &job.module_id,
         &job.filename,
+        &job.display_path,
         &job.source,
         result.ast,
         job.file_id,

@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 use std::fs::{read_dir, read_to_string};
 use std::path::{Path, PathBuf};
 
-use semantics::loader::{Files, Loader};
+use semantics::loader::{FileContent, Files, Loader};
 
 use crate::paths::{ENTRY_MODULE_ID, module_id_to_dir};
 use crate::project::ProjectConfig;
@@ -69,7 +69,10 @@ impl Loader for OverlayLoader {
                     && filename.ends_with(".lis")
                     && let Ok(content) = read_to_string(&path)
                 {
-                    files.insert(filename.to_string(), content);
+                    files.insert(
+                        filename.to_string(),
+                        FileContent::new(content, filename.to_string()),
+                    );
                 }
             }
         }
@@ -80,17 +83,26 @@ impl Loader for OverlayLoader {
                     && let Some(module_overlays) = self.overlays.get(&actual_module_id)
                 {
                     for (filename, content) in module_overlays {
-                        files.insert(filename.clone(), content.clone());
+                        files.insert(
+                            filename.clone(),
+                            FileContent::new(content.clone(), filename.clone()),
+                        );
                     }
                 }
             } else if let Some(module_overlays) = self.overlays.get(ENTRY_MODULE_ID) {
                 for (filename, content) in module_overlays {
-                    files.insert(filename.clone(), content.clone());
+                    files.insert(
+                        filename.clone(),
+                        FileContent::new(content.clone(), filename.clone()),
+                    );
                 }
             }
         } else if let Some(module_overlays) = self.overlays.get(module_id) {
             for (filename, content) in module_overlays {
-                files.insert(filename.clone(), content.clone());
+                files.insert(
+                    filename.clone(),
+                    FileContent::new(content.clone(), filename.clone()),
+                );
             }
         }
 

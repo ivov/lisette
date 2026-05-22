@@ -124,7 +124,7 @@ impl SharedState {
                 (locator, None, None)
             };
 
-        let (mut result, facts) = analyze(AnalyzeInput {
+        let analyze_output = analyze(AnalyzeInput {
             config: SemanticConfig {
                 run_lints: !has_parse_errors,
                 standalone_mode: config.standalone_mode,
@@ -132,6 +132,7 @@ impl SharedState {
             },
             loader: &loader_clone,
             source,
+            display_path: filename.clone(),
             filename,
             ast: desugar_result.ast,
             project_root: if config.standalone_mode {
@@ -141,7 +142,11 @@ impl SharedState {
             },
             compile_phase: CompilePhase::Check,
             locator,
+            go_module: String::new(),
+            disable_cache: false,
         });
+        let mut result = analyze_output.result;
+        let facts = analyze_output.facts;
 
         if has_parse_errors {
             let mut all_errors = parse_errors;

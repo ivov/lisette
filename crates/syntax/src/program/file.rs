@@ -9,7 +9,12 @@ use crate::ast::{Expression, ImportAlias, Span};
 pub struct File {
     pub id: u32,
     pub module_id: String,
+    /// Stable bare filename (e.g. `greet.lis`); identity key for caching and
+    /// LSP path reconstruction.
     pub name: String,
+    /// Cwd-relative path for diagnostics and `--debug` directives; equals
+    /// `name` for synthetic/test loaders that have no notion of cwd.
+    pub display_path: String,
     pub source: String,
     pub items: Vec<Expression>,
 }
@@ -49,21 +54,36 @@ impl FileImport {
 }
 
 impl File {
-    pub fn new(module_id: &str, name: &str, source: &str, items: Vec<Expression>, id: u32) -> Self {
+    pub fn new(
+        module_id: &str,
+        name: &str,
+        display_path: &str,
+        source: &str,
+        items: Vec<Expression>,
+        id: u32,
+    ) -> Self {
         File {
             id,
             module_id: module_id.to_string(),
             name: name.to_string(),
+            display_path: display_path.to_string(),
             source: source.to_string(),
             items,
         }
     }
 
-    pub fn new_cached(module_id: &str, name: &str, source: &str, id: u32) -> Self {
+    pub fn new_cached(
+        module_id: &str,
+        name: &str,
+        display_path: &str,
+        source: &str,
+        id: u32,
+    ) -> Self {
         Self {
             id,
             module_id: module_id.to_string(),
             name: name.to_string(),
+            display_path: display_path.to_string(),
             source: source.to_string(),
             items: vec![],
         }

@@ -21,6 +21,7 @@ pub fn parse_and_register_prelude(store: &mut Store, sink: &LocalSink) {
             id: PRELUDE_FILE_ID,
             module_id: PRELUDE_MODULE_ID.to_string(),
             name: "prelude.d.lis".to_string(),
+            display_path: "prelude.d.lis".to_string(),
             source: LIS_PRELUDE_SOURCE.to_string(),
             items: result.ast,
         },
