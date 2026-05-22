@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nfn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {\n  s.append(..more)\n}\n"
+description: "input: \nfn test(s: Slice<int>, more: Slice<int>) -> Slice<int> {\n  s.append(more...)\n}\n"
 ---
 package main
 

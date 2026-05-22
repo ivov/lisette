@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport filepath \"go:path/filepath\"\n\nfn test(parts: Slice<string>) -> string {\n  filepath.Join(..parts)\n}\n"
+description: "input: \nimport filepath \"go:path/filepath\"\n\nfn test(parts: Slice<string>) -> string {\n  filepath.Join(parts...)\n}\n"
 ---
 package main
 

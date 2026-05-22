@@ -76,7 +76,7 @@ fn e2e_suite() {
     }
 
     eprintln!(
-        "harvested {}, included {}, skipped {} (imports), {} (deny-list), {} (no entry), {} re-emit failures (orphaned snaps or stale descriptions; investigate via `cargo insta test --unreferenced reject`)",
+        "harvested {}, included {}, skipped {} (imports), {} (deny-list), {} (no entry), {} re-emit failures",
         harvested.len(),
         included.len(),
         skipped_imports.len(),
@@ -86,10 +86,16 @@ fn e2e_suite() {
     );
 
     if !emit_failures.is_empty() {
-        for (name, err) in emit_failures.iter().take(10) {
+        for (name, err) in &emit_failures {
             eprintln!("  re-emit failed: {name}: {err}");
         }
     }
+
+    assert!(
+        emit_failures.is_empty(),
+        "{} snapshot(s) failed to re-emit (listed above); fix each snapshot or, if it cannot run as a self-contained Go test, add its stem to tests/e2e_suite/skip.txt",
+        emit_failures.len(),
+    );
 
     assert!(!included.is_empty(), "no tests included");
 
