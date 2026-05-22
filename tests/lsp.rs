@@ -8370,6 +8370,441 @@ fn main() {
 }
 
 #[tokio::test]
+async fn rename_bare_tuple_variant_preserves_payload() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Color { Red(int), Green, Blue }
+fn main() {
+  let c = Color.Red(1)
+  match c {
+    Red(x) => x,
+    _ => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let edit = client.rename(TEST_URI, 0, 13, "Crimson").await.unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    for e in edits {
+        assert_eq!(e.new_text, "Crimson");
+        let span = e.range.end.character - e.range.start.character;
+        assert_eq!(
+            span, 3,
+            "edit must span only `Red`, not its payload: {:?}",
+            e
+        );
+    }
+    let arm = edits
+        .iter()
+        .find(|e| e.range.start.line == 4)
+        .expect("bare arm should be renamed");
+    assert_eq!(arm.range.start.character, 4);
+    assert_eq!(arm.range.end.character, 7);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn rename_bare_struct_variant_preserves_payload() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x, y } => x + y,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let edit = client.rename(TEST_URI, 0, 13, "Shift").await.unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    for e in edits {
+        assert_eq!(e.new_text, "Shift");
+        let span = e.range.end.character - e.range.start.character;
+        assert_eq!(
+            span, 4,
+            "edit must span only `Move`, not its field block: {:?}",
+            e
+        );
+    }
+
+    let constructor = edits
+        .iter()
+        .find(|e| e.range.start.line == 2)
+        .expect("constructor expression `Shape.Move { ... }` should be renamed");
+    assert_eq!(
+        constructor.range.start.character, 16,
+        "constructor edit should land on the `Move` segment"
+    );
+    assert_eq!(constructor.range.end.character, 20);
+
+    let arm = edits
+        .iter()
+        .find(|e| e.range.start.line == 4)
+        .expect("bare struct arm should be renamed");
+    assert_eq!(arm.range.start.character, 4);
+    assert_eq!(arm.range.end.character, 8);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn rename_enum_variant_updates_bare_match_arms() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Color { Red, Green, Blue }
+fn main() {
+  let c = Color.Red
+  match c {
+    Red => 1,
+    Green => 2,
+    Blue => 3,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let edit = client.rename(TEST_URI, 0, 13, "Crimson").await;
+    assert!(edit.is_some(), "rename enum variant should succeed");
+
+    let edit = edit.unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    assert_eq!(edits.len(), 3, "expected 3 edits, got {}", edits.len());
+    for text_edit in edits {
+        assert_eq!(text_edit.new_text, "Crimson");
+        let char_span = text_edit.range.end.character - text_edit.range.start.character;
+        assert_eq!(char_span, 3, "edit should span only `Red`");
+    }
+
+    assert!(
+        edits.iter().any(|e| e.range.start.line == 4),
+        "rename should update the bare match arm on line 4"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_bare_struct_variant() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x, y } => x + y,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let response = client.goto_definition(TEST_URI, 4, 5).await;
+    assert!(
+        response.is_some(),
+        "goto-def on a bare struct variant should resolve"
+    );
+    let loc = definition_location(&response.unwrap()).unwrap();
+    assert_eq!(
+        loc.range.start.line, 0,
+        "should jump to the variant definition"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn references_bare_tuple_variant_excludes_payload() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Color { Red(int), Green }
+fn main() {
+  let c = Color.Red(1)
+  match c {
+    Red(x) => x,
+    _ => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let refs = client.references(TEST_URI, 0, 13, true).await.unwrap();
+
+    let arm = refs
+        .iter()
+        .find(|l| l.range.start.line == 4)
+        .expect("bare arm should be a reference");
+    assert_eq!(arm.range.start.character, 4);
+    assert_eq!(arm.range.end.character, 7);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_struct_variant_field_label_is_not_the_variant() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x: px, y: py } => px + py,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let response = client.goto_definition(TEST_URI, 4, 11).await;
+    let on_variant_def = response
+        .and_then(|r| definition_location(&r))
+        .is_some_and(|loc| loc.range.start.line == 0);
+    assert!(
+        !on_variant_def,
+        "a field label must not resolve to the variant definition"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn rename_variant_with_whitespace_in_qualifier_targets_the_variant_token() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Color { Red, Green, Blue }
+fn main() {
+  let c = Color.Red
+  match c {
+    Color . Red => 1,
+    _ => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let edit = client.rename(TEST_URI, 0, 13, "Crimson").await.unwrap();
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+    for e in edits {
+        assert_eq!(e.new_text, "Crimson");
+        let span = e.range.end.character - e.range.start.character;
+        assert_eq!(
+            span, 3,
+            "every edit must span only `Red` (3 chars), got {:?}",
+            e
+        );
+    }
+    let arm = edits
+        .iter()
+        .find(|e| e.range.start.line == 4)
+        .expect("the `Color . Red` arm must be renamed");
+    assert_eq!(arm.range.start.character, 12);
+    assert_eq!(arm.range.end.character, 15);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn rename_outer_variant_with_dotted_payload_targets_outer_name() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Color { Red, Green }
+enum Holder { Wrap(Color), Empty }
+fn main() {
+  let h = Holder.Wrap(Color.Red)
+  match h {
+    Wrap(Color.Red) => 1,
+    Empty => 0,
+    _ => 2,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let edit = client
+        .rename(TEST_URI, 1, 14, "Bag")
+        .await
+        .expect("rename Wrap should succeed");
+    let changes = edit.changes.unwrap();
+    let edits = changes.get(&Url::parse(TEST_URI).unwrap()).unwrap();
+
+    for e in edits {
+        assert_eq!(e.new_text, "Bag");
+        let span = e.range.end.character - e.range.start.character;
+        assert_eq!(
+            span, 4,
+            "edit must span only `Wrap`, not inner pattern: {:?}",
+            e
+        );
+    }
+    let arm = edits
+        .iter()
+        .find(|e| e.range.start.line == 5)
+        .expect("bare arm `Wrap(Color.Red)` should be renamed");
+    assert_eq!(arm.range.start.character, 4);
+    assert_eq!(arm.range.end.character, 8);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_qualified_struct_variant_field_label_is_not_the_variant() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Shape.Move { x: px, y: py } => px + py,
+    Shape.Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let response = client.goto_definition(TEST_URI, 4, 17).await;
+    let on_variant_def = response
+        .and_then(|r| definition_location(&r))
+        .is_some_and(|loc| loc.range.start.line == 0);
+    assert!(
+        !on_variant_def,
+        "a field label in a qualified struct-variant pattern must not resolve to the variant"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_bare_variant_inside_struct_variant_field() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Color { Red, Green }
+enum Shape { Tag { color: Color }, Stay }
+fn main() {
+  let s = Shape.Tag { color: Color.Red }
+  match s {
+    Tag { color: Red } => 0,
+    Stay => 1,
+    _ => 2,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let response = client
+        .goto_definition(TEST_URI, 5, 17)
+        .await
+        .expect("nested bare variant in a struct-variant field should resolve");
+    let loc = definition_location(&response).expect("location");
+    assert_eq!(
+        loc.range.start.line, 0,
+        "should jump to `Red` in enum Color"
+    );
+    assert_eq!(loc.range.start.character, 13);
+    assert_eq!(loc.range.end.character, 16);
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_explicit_binding_in_struct_variant_field_does_not_shadow_binding() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x: px, y: py } => px + py,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let response = client.goto_definition(TEST_URI, 4, 14).await;
+    if let Some(r) = response
+        && let Some(loc) = definition_location(&r)
+    {
+        assert_ne!(
+            loc.range.start.line, 0,
+            "binding `px` must not resolve to the unrelated field declaration on line 0"
+        );
+    }
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_qualifier_in_struct_variant_pattern_does_not_jump_to_variant() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Shape.Move { x, y } => x + y,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let r1 = client.goto_definition(TEST_URI, 4, 5).await;
+    let on_variant = r1
+        .and_then(|r| definition_location(&r))
+        .is_some_and(|loc| loc.range.start.line == 0 && loc.range.start.character == 13);
+    assert!(
+        !on_variant,
+        "cursor on `Shape` (qualifier) must not resolve to the variant `Move`"
+    );
+
+    let r2 = client.goto_definition(TEST_URI, 4, 14).await;
+    assert!(
+        r2.is_none(),
+        "cursor on trailing whitespace must not resolve to anything"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn goto_definition_explicit_same_name_field_does_not_resolve_as_shorthand() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+    let source = "\
+enum Shape { Move { x: int, y: int }, Stay }
+fn main() {
+  let s = Shape.Move { x: 1, y: 2 }
+  match s {
+    Move { x: x, y: y } => x + y,
+    Stay => 0,
+  }
+}";
+    client.open(TEST_URI, source).await;
+
+    let r = client.goto_definition(TEST_URI, 4, 14).await;
+    let on_field_decl = r
+        .and_then(|r| definition_location(&r))
+        .is_some_and(|loc| loc.range.start.line == 0 && loc.range.start.character == 20);
+    assert!(
+        !on_field_decl,
+        "binding `x` in explicit `x: x` must not resolve to the field declaration"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
 async fn goto_definition_chained_pipe_operator() {
     let mut client = TestClient::new().await;
     client.initialize().await;

@@ -44,6 +44,8 @@ pub enum BindingKind {
     Let { mutable: bool },
     Parameter { mutable: bool },
     MatchArm,
+    IfLet,
+    WhileLet,
 }
 
 impl BindingKind {
@@ -60,6 +62,13 @@ impl BindingKind {
 
     pub fn is_match_arm(&self) -> bool {
         matches!(self, BindingKind::MatchArm)
+    }
+
+    pub fn is_pattern_position(&self) -> bool {
+        matches!(
+            self,
+            BindingKind::MatchArm | BindingKind::IfLet | BindingKind::WhileLet
+        )
     }
 }
 

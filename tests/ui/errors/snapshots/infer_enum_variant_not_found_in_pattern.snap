@@ -9,4 +9,4 @@ source: tests/ui/errors/mod.rs
    ·       ╰── not found
  8 │   }
    ╰────
-  help: Available variants for `Status` are `Status.Active` and `Status.Inactive` · code: [resolve.variant_not_found]
+  help: Available variants for `Status` are `Active` and `Inactive` · code: [resolve.variant_not_found]

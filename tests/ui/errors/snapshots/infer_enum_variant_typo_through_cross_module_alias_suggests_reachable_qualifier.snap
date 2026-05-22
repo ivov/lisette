@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Variant not found
+   ╭─[main.lis:5:7]
+ 4 │ fn handle(e: api.UIEvent) -> int {
+ 5 │   let api.UIEvent.Hovr = e else { return 0 }
+   ·       ────────┬───────
+   ·               ╰── not found
+ 6 │   1
+   ╰────
+  help: Did you mean `api.UIEvent.Hover`? · code: [resolve.variant_not_found]

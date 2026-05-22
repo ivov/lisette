@@ -379,7 +379,7 @@ pub fn disallowed_mutation(
     variable_name: &str,
     span: Span,
     self_type_name: Option<&str>,
-    is_match_arm_binding: bool,
+    is_pattern_binding: bool,
     is_const_binding: bool,
 ) -> LisetteDiagnostic {
     if variable_name == "self" {
@@ -403,7 +403,7 @@ pub fn disallowed_mutation(
             .with_help(format!(
                 "`const` bindings are immutable. Rebind with `let mut {variable_name} = {variable_name}` to mutate a local copy"
             ))
-    } else if is_match_arm_binding {
+    } else if is_pattern_binding {
         LisetteDiagnostic::error("Immutable variable")
             .with_infer_code("immutable")
             .with_span_label(&span, "cannot mutate an immutable variable")
@@ -438,10 +438,15 @@ pub fn enum_variant_constructor_not_found(
     span: Span,
     enum_info: Option<(&str, &[String])>,
     variant_name: &str,
+    bare_allowed: bool,
 ) -> LisetteDiagnostic {
     let help = if let Some((enum_name, variants)) = enum_info {
         if variants.iter().any(|v| v == variant_name) {
-            format!("Use `{}.{}` to match this variant", enum_name, variant_name)
+            if bare_allowed {
+                format!("Use `{}` to match this variant", variant_name)
+            } else {
+                format!("Use `{}.{}` to match this variant", enum_name, variant_name)
+            }
         } else if let Some(closest) = variants
             .iter()
             .filter_map(|v| {
@@ -451,9 +456,17 @@ pub fn enum_variant_constructor_not_found(
             .min_by_key(|(_, d)| *d)
             .map(|(v, _)| v)
         {
-            format!("Did you mean `{}.{}`?", enum_name, closest)
+            if bare_allowed {
+                format!("Did you mean `{}`?", closest)
+            } else {
+                format!("Did you mean `{}.{}`?", enum_name, closest)
+            }
         } else {
-            let variants_fmt = format_list(variants, |v| format!("`{}.{}`", enum_name, v));
+            let variants_fmt = if bare_allowed {
+                format_list(variants, |v| format!("`{}`", v))
+            } else {
+                format_list(variants, |v| format!("`{}.{}`", enum_name, v))
+            };
             format!(
                 "Available variants for `{}` are {}",
                 enum_name, variants_fmt

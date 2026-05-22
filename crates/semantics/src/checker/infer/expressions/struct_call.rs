@@ -366,6 +366,14 @@ impl TaskState<'_> {
         enum_ty: Type,
     ) -> Expression {
         self.unify(store, expected_ty, &enum_ty, &span);
+
+        let resolved_enum = enum_ty.resolve_in(&self.env);
+        if let Type::Nominal { id, .. } = &resolved_enum {
+            let variant_last = unqualified_name(&variant_name);
+            let qualified = id.with_segment(variant_last).to_string();
+            self.track_name_usage(store, &qualified, &span, span.byte_length);
+        }
+
         let new_spread = self.infer_struct_spread(store, spread, &enum_ty);
 
         let (new_field_assignments, matched_fields) = self.infer_structish_fields(

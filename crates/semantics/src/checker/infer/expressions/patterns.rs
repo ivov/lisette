@@ -341,9 +341,18 @@ impl TaskState<'_> {
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
-        let is_bare_name = fields.is_empty() && !identifier.contains('.') && !kind.is_match_arm();
+        let is_bare_name =
+            fields.is_empty() && !identifier.contains('.') && !kind.is_pattern_position();
 
-        let ty = if let Some(ty) = self.lookup_type(store, &identifier) {
+        let bare_variant_ty = if kind.is_match_arm() {
+            self.resolve_bare_variant_type(store, &identifier, &expected_ty)
+        } else {
+            None
+        };
+
+        let ty = if let Some(ty) = bare_variant_ty {
+            ty
+        } else if let Some(ty) = self.lookup_type(store, &identifier) {
             ty
         } else if let Some((alias_ty, _)) = self.try_resolve_type_alias_variant(store, &identifier)
         {
@@ -361,6 +370,7 @@ impl TaskState<'_> {
                     span,
                     enum_info.as_ref().map(|(n, v)| (n.as_str(), v.as_slice())),
                     bare_name,
+                    kind.is_match_arm(),
                 ));
             return (Pattern::WildCard { span }, TypedPattern::Wildcard);
         };
@@ -391,7 +401,8 @@ impl TaskState<'_> {
             _ => unreachable!(),
         };
 
-        self.unify(store, &expected_ty, &pattern_ty, &span);
+        let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        self.unify(store, &unify_expected, &pattern_ty, &span);
 
         let (new_fields, mut typed_fields): (Vec<_>, Vec<_>) = fields
             .iter()
@@ -477,6 +488,23 @@ impl TaskState<'_> {
         expected_ty: Type,
         kind: BindingKind,
     ) -> (Pattern, TypedPattern) {
+        if kind.is_match_arm()
+            && self
+                .resolve_bare_variant_type(store, &identifier, &expected_ty)
+                .is_some()
+            && let Some(result) = self.try_infer_enum_struct_variant(
+                store,
+                &identifier,
+                &fields,
+                rest,
+                &span,
+                &expected_ty,
+                kind,
+            )
+        {
+            return result;
+        }
+
         let Some(qualified_name) = self.lookup_qualified_name(store, &identifier) else {
             return self
                 .try_infer_enum_struct_variant(
@@ -734,12 +762,16 @@ impl TaskState<'_> {
 
     fn get_enum_variant_info(&self, store: &Store, ty: &Type) -> Option<(String, Vec<String>)> {
         let resolved = ty.resolve_in(&self.env);
-        let Type::Nominal { id, .. } = resolved else {
+        let Type::Nominal { id: display_id, .. } = &resolved else {
             return None;
         };
-        let variants = store.variants_of(&id)?;
+        let enum_ty = self.peel_to_enum(store, &resolved)?;
+        let Type::Nominal { id: enum_id, .. } = &enum_ty else {
+            return None;
+        };
+        let variants = store.variants_of(enum_id.as_str())?;
         let variant_names: Vec<String> = variants.iter().map(|v| v.name.to_string()).collect();
-        let display_name = self.enum_display_name(store, id.as_str());
+        let display_name = self.enum_display_name(store, display_id.as_str());
         Some((display_name, variant_names))
     }
 
@@ -783,6 +815,7 @@ impl TaskState<'_> {
             Type::Forall { body, .. } => body.as_ref().clone(),
             _ => alias_ty.clone(),
         };
+        let underlying = store.deep_resolve_alias(&underlying);
 
         if let Type::Nominal { id: enum_id, .. } = &underlying
             && let Some(variants) = store.variants_of(enum_id.as_str())
@@ -800,6 +833,38 @@ impl TaskState<'_> {
         None
     }
 
+    fn peel_to_enum(&self, store: &Store, ty: &Type) -> Option<Type> {
+        let resolved = store.deep_resolve_alias(&ty.resolve_in(&self.env));
+        match &resolved {
+            Type::Nominal { id, .. } if store.variants_of(id.as_str()).is_some() => Some(resolved),
+            _ => None,
+        }
+    }
+
+    fn resolve_bare_variant_type(
+        &self,
+        store: &Store,
+        identifier: &str,
+        expected_ty: &Type,
+    ) -> Option<Type> {
+        if identifier.contains('.') || !identifier.chars().next().is_some_and(char::is_uppercase) {
+            return None;
+        }
+        let resolved = self.peel_to_enum(store, expected_ty)?;
+        let Type::Nominal { id, .. } = &resolved else {
+            return None;
+        };
+        let variant = store
+            .variants_of(id.as_str())?
+            .iter()
+            .find(|v| v.name == identifier)?;
+        let variant_qualified = id.with_segment(identifier);
+        if let Some(ty) = store.get_type(&variant_qualified) {
+            return Some(ty.clone());
+        }
+        variant.fields.is_empty().then(|| resolved.clone())
+    }
+
     /// Tries to infer an enum struct variant pattern like `Move { x, y }`.
     #[allow(clippy::too_many_arguments)]
     fn try_infer_enum_struct_variant(
@@ -812,7 +877,16 @@ impl TaskState<'_> {
         expected_ty: &Type,
         kind: BindingKind,
     ) -> Option<(Pattern, TypedPattern)> {
-        let (ty, variant_name) = if let Some(ty) = self.lookup_type(store, identifier) {
+        let bare_variant = if kind.is_match_arm() {
+            self.resolve_bare_variant_type(store, identifier, expected_ty)
+                .map(|ty| (ty, unqualified_name(identifier).to_string()))
+        } else {
+            None
+        };
+
+        let (ty, variant_name) = if let Some(resolved) = bare_variant {
+            resolved
+        } else if let Some(ty) = self.lookup_type(store, identifier) {
             let variant_name = unqualified_name(identifier);
             (ty, variant_name.to_string())
         } else if let Some((alias_ty, variant_name)) =
@@ -831,7 +905,8 @@ impl TaskState<'_> {
             _ => return None,
         };
 
-        self.unify(store, expected_ty, &pattern_ty, span);
+        let unify_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
+        self.unify(store, &unify_expected, &pattern_ty, span);
 
         let resolved_ty = pattern_ty.resolve_in(&self.env);
 

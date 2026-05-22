@@ -827,17 +827,17 @@ impl TaskState<'_> {
             } else {
                 None
             };
-            let is_match_arm = self
+            let is_pattern_binding = self
                 .scopes
                 .lookup_binding_id(&var_name)
                 .and_then(|id| self.facts.bindings.get(&id))
-                .is_some_and(|b| b.kind.is_match_arm());
+                .is_some_and(|b| b.kind.is_pattern_position());
             let is_const = self.is_const_var(store, &var_name);
             self.sink.push(diagnostics::infer::disallowed_mutation(
                 &var_name,
                 *span,
                 self_type_name.as_deref(),
-                is_match_arm,
+                is_pattern_binding,
                 is_const,
             ));
         }

@@ -1,5 +1,5 @@
 use rustc_hash::FxHashMap;
-use syntax::ast::{Expression, MatchArm, Pattern, TypedPattern};
+use syntax::ast::{Expression, MatchArm, Pattern, Span, StructFieldPattern, TypedPattern};
 use syntax::types::unqualified_name;
 
 use crate::analysis::find_module_by_alias;
@@ -348,7 +348,10 @@ pub(crate) fn resolve_enum_in_pattern(
         }
 
         Pattern::Struct {
-            identifier, fields, ..
+            identifier,
+            fields,
+            span,
+            ..
         } => {
             if let Some(field) = fields
                 .iter()
@@ -357,6 +360,44 @@ pub(crate) fn resolve_enum_in_pattern(
                 && let Some(sf) = struct_fields.iter().find(|sf| sf.name == field.name)
             {
                 return Some(sf.name_span);
+            }
+            if let Some(TypedPattern::EnumStructVariant {
+                enum_name,
+                variant_name,
+                variant_fields,
+                pattern_fields,
+                ..
+            }) = typed_pattern
+            {
+                if let Some(field) = fields
+                    .iter()
+                    .find(|f| offset_in_span(offset, &f.value.get_span()))
+                {
+                    let child_typed = pattern_fields
+                        .iter()
+                        .find(|(name, _)| name == &field.name)
+                        .map(|(_, t)| t);
+                    if let Some(result) =
+                        resolve_enum_in_pattern(&field.value, child_typed, offset, file, snapshot)
+                    {
+                        return Some(result);
+                    }
+                    if is_shorthand_field(field, *span, snapshot)
+                        && let Some(vf) = variant_fields.iter().find(|vf| vf.name == field.name)
+                    {
+                        return Some(vf.name_span);
+                    }
+                    return None;
+                }
+                if !offset_in_variant_token_span(*span, offset, snapshot) {
+                    return None;
+                }
+                let variant_last = unqualified_name(variant_name);
+                let qualified = format!("{}.{}", enum_name, variant_last);
+                return snapshot
+                    .definitions()
+                    .get(qualified.as_str())
+                    .and_then(|d| d.name_span());
             }
             lookup_definition_span(identifier, file, snapshot)
         }
@@ -478,4 +519,50 @@ pub(crate) fn resolve_definition_span(
                 other => extra_match(other),
             }
         })
+}
+
+/// True iff `offset` lies on the variant name token of an enum-struct-variant
+/// pattern head. Excludes the qualifier, dots, and surrounding whitespace.
+fn offset_in_variant_token_span(span: Span, offset: u32, snapshot: &AnalysisSnapshot) -> bool {
+    let Some(source_file) = snapshot.files().get(&span.file_id) else {
+        return false;
+    };
+    let start = span.byte_offset as usize;
+    if start > source_file.source.len() {
+        return false;
+    }
+    let end = (start + span.byte_length as usize).min(source_file.source.len());
+    let Some((token_offset, token_len)) =
+        crate::member_token_range(&source_file.source[start..end])
+    else {
+        return false;
+    };
+    let token_span = Span::new(span.file_id, span.byte_offset + token_offset, token_len);
+    offset_in_span(offset, &token_span)
+}
+
+/// True iff `field` is written as shorthand (`{ x }`) rather than explicit
+/// (`{ x: ... }`). Detected by scanning source preceding the value span: a `:`
+/// before any structural delimiter (`,` or `{`) means explicit.
+fn is_shorthand_field(
+    field: &StructFieldPattern,
+    pattern_span: Span,
+    snapshot: &AnalysisSnapshot,
+) -> bool {
+    let Some(source_file) = snapshot.files().get(&pattern_span.file_id) else {
+        return false;
+    };
+    let pattern_start = pattern_span.byte_offset as usize;
+    let value_start = field.value.get_span().byte_offset as usize;
+    if value_start <= pattern_start || value_start > source_file.source.len() {
+        return false;
+    }
+    for ch in source_file.source[pattern_start..value_start].chars().rev() {
+        match ch {
+            ':' => return false,
+            ',' | '{' => return true,
+            _ => {}
+        }
+    }
+    false
 }

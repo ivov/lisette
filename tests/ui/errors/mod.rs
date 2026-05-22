@@ -1008,7 +1008,7 @@ fn test() {
 }
 
 #[test]
-fn infer_enum_variant_not_found_in_pattern_unqualified() {
+fn infer_enum_variant_misqualified_in_pattern() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(
@@ -1025,7 +1025,7 @@ import "shapes"
 fn test() {
   let s = shapes.Shape.Circle(1.0);
   match s {
-    Circle(r) => {}
+    Shape.Circle(r) => {}
   }
 }
 "#;
@@ -1061,6 +1061,69 @@ fn test() {
 
     let result = infer_module("main", fs);
     assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_enum_variant_typo_through_alias_suggests_variants() {
+    let input = r#"
+enum Color { Red, Green, Blue }
+type Palette = Color
+
+fn f(p: Palette) -> int {
+  match p {
+    Red => 1,
+    Green => 2,
+    Bluu => 3,
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_enum_variant_typo_through_cross_module_alias_suggests_reachable_qualifier() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "events",
+        "lib.lis",
+        r#"
+pub enum Event { Click, Hover }
+"#,
+    );
+    fs.add_file(
+        "api",
+        "lib.lis",
+        r#"
+import "events"
+
+pub type UIEvent = events.Event
+"#,
+    );
+    let source = r#"
+import "api"
+
+fn handle(e: api.UIEvent) -> int {
+  let api.UIEvent.Hovr = e else { return 0 }
+  1
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert_multimodule_infer_error_snapshot!(result, source);
+}
+
+#[test]
+fn infer_enum_variant_not_found_outside_match_suggests_qualified_only() {
+    let input = r#"
+enum Color { Red, Green, Blue }
+
+fn test(c: Color) -> int {
+  let Color.Gren = c else { return 0 }
+  1
+}
+"#;
+    assert_infer_error_snapshot!(input);
 }
 
 #[test]

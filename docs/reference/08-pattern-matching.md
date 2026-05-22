@@ -111,6 +111,16 @@ match msg {
 }
 ```
 
+Inside a `match` arm, the enum qualifier can be omitted:
+
+```rs
+match msg {
+  Ready => "ready",
+  Write(text) => f"writing: {text}",
+  Move { x, y } => f"moving to ({x}, {y})",
+}
+```
+
 ### Slices
 
 Slice patterns match elements:

@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Variant not found
+   ╭─[test.lis:5:7]
+ 4 │ fn test(c: Color) -> int {
+ 5 │   let Color.Gren = c else { return 0 }
+   ·       ─────┬────
+   ·            ╰── not found
+ 6 │   1
+   ╰────
+  help: Did you mean `Color.Green`? · code: [resolve.variant_not_found]

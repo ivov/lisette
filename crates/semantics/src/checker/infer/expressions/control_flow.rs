@@ -270,6 +270,10 @@ impl TaskState<'_> {
         let needs_reconciliation =
             !arms_independent && result_ty.resolve_in(&self.env).is_variable();
 
+        let arm_kind = match origin {
+            MatchOrigin::IfLet { .. } => BindingKind::IfLet,
+            MatchOrigin::Explicit => BindingKind::MatchArm,
+        };
         let new_arms = arms
             .into_iter()
             .map(|a| {
@@ -277,7 +281,7 @@ impl TaskState<'_> {
 
                 let pattern_ty = subject_ty.resolve_in(&self.env);
                 let (new_pattern, typed_pattern) =
-                    self.infer_pattern(store, a.pattern, pattern_ty, BindingKind::MatchArm);
+                    self.infer_pattern(store, a.pattern, pattern_ty, arm_kind);
 
                 let bool_ty = self.type_bool();
                 let new_guard = a.guard.map(|guard| {
@@ -435,7 +439,7 @@ impl TaskState<'_> {
             store,
             pattern,
             scrutinee_ty.resolve_in(&self.env),
-            BindingKind::MatchArm,
+            BindingKind::WhileLet,
         );
 
         let saved_in_match_arm = self.scopes.set_in_match_arm(false);

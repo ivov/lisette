@@ -1212,3 +1212,345 @@ fn user_defined_type_named_unit() {
     )
     .assert_type(con_type("Unit", vec![]));
 }
+
+fn assert_main_module_clean(source: &str) {
+    let mut fs = MockFileSystem::new();
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        result.errors.is_empty(),
+        "expected no errors, got: {:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn bare_unit_variant_in_match_arm() {
+    assert_main_module_clean(
+        r#"
+enum Color { Red, Green, Blue }
+
+fn name(c: Color) -> string {
+  match c {
+    Red => "red",
+    Green => "green",
+    Blue => "blue",
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_tuple_variant_in_match_arm() {
+    assert_main_module_clean(
+        r#"
+enum Shape { Circle(int), Square(int) }
+
+fn measure(s: Shape) -> int {
+  match s {
+    Circle(r) => r,
+    Square(w) => w,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_struct_variant_in_match_arm() {
+    assert_main_module_clean(
+        r#"
+enum Shape { Rect { w: int, h: int }, Dot }
+
+fn area(s: Shape) -> int {
+  match s {
+    Rect { w, h } => w * h,
+    Dot => 0,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_nested_variant_in_match_arm() {
+    assert_main_module_clean(
+        r#"
+enum Color { Red, Green }
+
+fn describe(o: Option<Color>) -> int {
+  match o {
+    Some(Red) => 1,
+    Some(Green) => 2,
+    None => 0,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_variant_in_or_pattern() {
+    assert_main_module_clean(
+        r#"
+enum Color { Red, Green, Blue }
+
+fn warm(c: Color) -> bool {
+  match c {
+    Red | Green => true,
+    Blue => false,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_variant_does_not_resolve_in_if_let() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+enum Color { Red, Green, Blue }
+
+fn f(c: Color) -> int {
+  if let Red = c {
+    1
+  } else {
+    0
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        !result.errors.is_empty(),
+        "bare user variants must not resolve in if-let; expected an error"
+    );
+}
+
+#[test]
+fn bare_variant_does_not_resolve_in_while_let() {
+    let mut fs = MockFileSystem::new();
+    let source = r#"
+enum State { Running, Done }
+
+fn f(s: State) -> int {
+  while let Running = s {
+    return 1
+  }
+  0
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+    let result = infer_module("main", fs);
+    assert!(
+        !result.errors.is_empty(),
+        "bare user variants must not resolve in while-let; expected an error"
+    );
+}
+
+#[test]
+fn prelude_variant_still_resolves_in_if_let() {
+    assert_main_module_clean(
+        r#"
+fn f(o: Option<int>) -> int {
+  if let Some(x) = o {
+    x
+  } else {
+    0
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_variant_collision_resolves_to_local_enum() {
+    assert_main_module_clean(
+        r#"
+enum Maybe { Some, Nothing }
+
+fn to_int(m: Maybe) -> int {
+  match m {
+    Some => 1,
+    Nothing => 0,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_and_qualified_variants_may_be_mixed() {
+    assert_main_module_clean(
+        r#"
+enum Color { Red, Green, Blue }
+
+fn rank(c: Color) -> int {
+  match c {
+    Red => 1,
+    Color.Green => 2,
+    Blue => 3,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn lowercase_pattern_still_binds_not_variant() {
+    assert_main_module_clean(
+        r#"
+enum Color { Red, Green, Blue }
+
+fn label(c: Color) -> string {
+  match c {
+    other => "any",
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_struct_variant_wins_over_in_scope_struct_in_match_arm() {
+    assert_main_module_clean(
+        r#"
+struct Rect { w: int, h: int }
+
+enum Shape { Rect { w: int, h: int }, Dot }
+
+fn area(s: Shape) -> int {
+  match s {
+    Rect { w, h } => w * h,
+    Dot => 0,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_variant_through_type_alias_in_match_arm() {
+    assert_main_module_clean(
+        r#"
+enum Color { Red, Green, Blue }
+type Palette = Color
+
+fn name(p: Palette) -> string {
+  match p {
+    Red => "red",
+    Green => "green",
+    Blue => "blue",
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_variant_through_chained_alias_in_match_arm() {
+    assert_main_module_clean(
+        r#"
+type A = B
+type B = Color
+enum Color { Red, Green, Blue }
+
+fn f(x: A) -> int {
+  match x {
+    Red => 1,
+    Green => 2,
+    Blue => 3,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn qualified_variant_through_chained_alias_in_match_arm() {
+    assert_main_module_clean(
+        r#"
+type A = B
+type B = Color
+enum Color { Red, Green, Blue }
+
+fn f(x: A) -> int {
+  match x {
+    A.Red => 1,
+    A.Green => 2,
+    A.Blue => 3,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_variant_through_chained_alias_nested_in_option() {
+    assert_main_module_clean(
+        r#"
+type A = B
+type B = Color
+enum Color { Red, Green }
+
+fn f(o: Option<A>) -> int {
+  match o {
+    Some(Red) => 1,
+    Some(Green) => 2,
+    None => 0,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn qualified_variant_through_chained_alias_nested_in_option() {
+    assert_main_module_clean(
+        r#"
+type A = B
+type B = Color
+enum Color { Red, Green }
+
+fn f(o: Option<A>) -> int {
+  match o {
+    Some(A.Red) => 1,
+    Some(A.Green) => 2,
+    None => 0,
+  }
+}
+"#,
+    );
+}
+
+#[test]
+fn bare_variant_cross_module_in_match_arm() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "palette",
+        "lib.lis",
+        r#"
+pub enum Color { Red, Green, Blue }
+"#,
+    );
+    let source = r#"
+import "palette"
+
+fn name(c: palette.Color) -> string {
+  match c {
+    Red => "red",
+    Green => "green",
+    Blue => "blue",
+  }
+}
+"#;
+    fs.add_file("main", "main.lis", source);
+
+    let result = infer_module("main", fs);
+    assert!(
+        result.errors.is_empty(),
+        "expected no errors, got: {:?}",
+        result.errors
+    );
+}

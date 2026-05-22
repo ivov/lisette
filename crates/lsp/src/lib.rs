@@ -638,9 +638,10 @@ impl LanguageServer for Backend {
                     && let Some(usage_uri) = snap.get_uri(usage.usage_span.file_id)
                     && let Some(usage_line_index) = snap.get_line_index(usage.usage_span.file_id)
                 {
+                    let usage_span = trailing_segment_span(usage.usage_span, snap);
                     locations.push(Location {
                         uri: usage_uri.clone(),
-                        range: usage_line_index.span_to_range(usage.usage_span),
+                        range: usage_line_index.span_to_range(usage_span),
                     });
                 }
             }
@@ -1050,7 +1051,7 @@ impl LanguageServer for Backend {
                     && let Some(usage_uri) = snap.get_uri(usage.usage_span.file_id)
                     && let Some(usage_line_index) = snap.get_line_index(usage.usage_span.file_id)
                 {
-                    let replace_span = trailing_segment_span(usage.usage_span, target_span, snap);
+                    let replace_span = trailing_segment_span(usage.usage_span, snap);
 
                     edits.entry(usage_uri.clone()).or_default().push(TextEdit {
                         range: usage_line_index.span_to_range(replace_span),
@@ -1308,17 +1309,12 @@ impl LanguageServer for Backend {
     }
 }
 
-/// When a usage span is wider than the definition span (e.g. `Color.Red` usage
-/// vs `Red` definition), return the trailing segment after the last `.` so that
-/// rename preserves the qualifier.
+/// Narrows a usage span to just the trailing member token, dropping any
+/// qualifier (`Color.Red`) and any payload (`Red(x)`).
 fn trailing_segment_span(
     usage_span: syntax::ast::Span,
-    definition_span: syntax::ast::Span,
     snapshot: &AnalysisSnapshot,
 ) -> syntax::ast::Span {
-    if usage_span.byte_length <= definition_span.byte_length {
-        return usage_span;
-    }
     let Some(source_file) = snapshot.files().get(&usage_span.file_id) else {
         return usage_span;
     };
@@ -1328,12 +1324,73 @@ fn trailing_segment_span(
         return usage_span;
     }
     let usage_text = &source_file.source[start..end];
-    let Some(dot_position) = usage_text.rfind('.') else {
-        return usage_span;
-    };
-    syntax::ast::Span::new(
-        usage_span.file_id,
-        usage_span.byte_offset + dot_position as u32 + 1,
-        usage_span.byte_length - dot_position as u32 - 1,
-    )
+    match member_token_range(usage_text) {
+        Some((offset, length)) => {
+            syntax::ast::Span::new(usage_span.file_id, usage_span.byte_offset + offset, length)
+        }
+        None => usage_span,
+    }
+}
+
+/// Last identifier token in `usage_text`'s head (the run of id chars, dots and
+/// whitespace before any payload like `(` or `{`). For `Wrap(Color.Red)` the
+/// head is `Wrap`, so the inner `.Red` cannot be mistaken for the outer name.
+fn member_token_range(usage_text: &str) -> Option<(u32, u32)> {
+    let head_end = head_extent(usage_text);
+    let mut last_id_start: Option<usize> = None;
+    let mut last_id_end: usize = 0;
+    let mut byte_pos = 0;
+    let mut in_id = false;
+    for c in usage_text[..head_end].chars() {
+        let char_len = c.len_utf8();
+        if c.is_alphanumeric() || c == '_' {
+            if !in_id {
+                last_id_start = Some(byte_pos);
+                in_id = true;
+            }
+            byte_pos += char_len;
+            last_id_end = byte_pos;
+        } else {
+            in_id = false;
+            byte_pos += char_len;
+        }
+    }
+    last_id_start.map(|start| (start as u32, (last_id_end - start) as u32))
+}
+
+/// Byte length of a pattern/call head: id chars, dots, and whitespace, stopping
+/// at the first payload character.
+pub(crate) fn head_extent(text: &str) -> usize {
+    let mut byte_pos = 0;
+    for c in text.chars() {
+        if c.is_alphanumeric() || c == '_' || c == '.' || c.is_whitespace() {
+            byte_pos += c.len_utf8();
+        } else {
+            break;
+        }
+    }
+    byte_pos
+}
+
+#[cfg(test)]
+mod tests {
+    use super::member_token_range;
+
+    #[test]
+    fn member_token_range_extracts_trailing_token() {
+        assert_eq!(member_token_range("Red"), Some((0, 3)));
+        assert_eq!(member_token_range("Color.Red"), Some((6, 3)));
+        assert_eq!(member_token_range("palette.Color.Red"), Some((14, 3)));
+        assert_eq!(member_token_range("Red(x)"), Some((0, 3)));
+        assert_eq!(member_token_range("Color.Red(x)"), Some((6, 3)));
+        assert_eq!(member_token_range("Move { x, y }"), Some((0, 4)));
+        assert_eq!(member_token_range("key.0"), Some((4, 1)));
+        // Whitespace between segments must not split or truncate the token.
+        assert_eq!(member_token_range("Color . Red"), Some((8, 3)));
+        assert_eq!(member_token_range("Color . Red(x)"), Some((8, 3)));
+        assert_eq!(member_token_range("Shape . Move { x: 1 }"), Some((8, 4)));
+        // Payload delimiters bound the head: a dotted payload does not narrow the outer.
+        assert_eq!(member_token_range("Wrap(Color.Red)"), Some((0, 4)));
+        assert_eq!(member_token_range("Some(Color.Red)"), Some((0, 4)));
+    }
 }

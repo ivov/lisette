@@ -105,7 +105,7 @@ fn collect_bindings(facts: &Facts, unused: &mut UnusedInfo, out: &mut Vec<Lisett
             } else if !written_but_not_read
                 && !is_anon
                 && !b.kind.is_param()
-                && (!b.kind.is_match_arm() || b.is_as_alias)
+                && (!b.kind.is_pattern_position() || b.is_as_alias)
             {
                 out.push(diagnostics::lint::unused_variable(
                     &b.span,
