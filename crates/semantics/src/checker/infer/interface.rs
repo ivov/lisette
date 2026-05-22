@@ -48,14 +48,34 @@ impl TaskState<'_> {
         if violations.is_empty() {
             Ok(())
         } else {
-            let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
-            self.sink
-                .push(diagnostics::infer::interface_not_implemented(
-                    &interface.name,
-                    &type_name,
-                    &violations,
-                    *span,
-                ));
+            let resolved = ty.resolve_in(&self.env);
+            let wrapper = if resolved.is_result() {
+                Some(diagnostics::infer::WrapperKind::Result)
+            } else if resolved.is_option() {
+                Some(diagnostics::infer::WrapperKind::Option)
+            } else if resolved.is_partial() {
+                Some(diagnostics::infer::WrapperKind::Partial)
+            } else {
+                None
+            };
+            if let Some(wrapper) = wrapper {
+                self.sink
+                    .push(diagnostics::infer::wrapper_does_not_implement_interface(
+                        &interface.name,
+                        wrapper,
+                        &resolved,
+                        *span,
+                    ));
+            } else {
+                let type_name = ty.get_name().map_or_else(|| ty.to_string(), str::to_owned);
+                self.sink
+                    .push(diagnostics::infer::interface_not_implemented(
+                        &interface.name,
+                        &type_name,
+                        &violations,
+                        *span,
+                    ));
+            }
             Err(violations)
         }
     }

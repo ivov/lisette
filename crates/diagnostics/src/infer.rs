@@ -1747,6 +1747,33 @@ pub fn interface_not_implemented(
         .with_help(help_lines.join("\n"))
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum WrapperKind {
+    Result,
+    Option,
+    Partial,
+}
+
+pub fn wrapper_does_not_implement_interface(
+    interface_name: &str,
+    wrapper: WrapperKind,
+    wrapper_ty: &Type,
+    span: Span,
+) -> LisetteDiagnostic {
+    let help = match wrapper {
+        WrapperKind::Result => "Unwrap the `Result` with `match` or `if let` first.",
+        WrapperKind::Option => "Unwrap the `Option` with `match` or `if let` first.",
+        WrapperKind::Partial => "Unwrap the `Partial` with `match` first.",
+    };
+    LisetteDiagnostic::error("Interface not implemented")
+        .with_infer_code("interface_not_implemented")
+        .with_span_label(
+            &span,
+            format!("`{}` does not implement `{}`", wrapper_ty, interface_name),
+        )
+        .with_help(help)
+}
+
 pub fn pointer_receiver_interface_mismatch(
     interface_name: &str,
     type_name: &str,

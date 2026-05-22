@@ -2427,6 +2427,57 @@ fn test() {
 }
 
 #[test]
+fn infer_result_does_not_implement_interface() {
+    let input = r#"
+struct Ctx {}
+impl Ctx {
+  fn run(self) -> Result<(), error> { Ok(()) }
+  fn fatal(self, e: error) { let _ = e }
+}
+fn test() {
+  let c = Ctx {}
+  c.fatal(c.run())
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_option_does_not_implement_interface() {
+    let input = r#"
+interface Greeter {
+  fn greet() -> string
+}
+struct Hello {}
+impl Hello {
+  fn greet(self) -> string { "hi" }
+}
+fn use_greeter(g: Greeter) -> string { g.greet() }
+fn maybe_hello() -> Option<Hello> { Some(Hello {}) }
+fn test() {
+  let _ = use_greeter(maybe_hello())
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_partial_does_not_implement_interface() {
+    let input = r#"
+struct Ctx {}
+impl Ctx {
+  fn read(self) -> Partial<int, error> { Partial.Ok(0) }
+  fn fatal(self, e: error) { let _ = e }
+}
+fn test() {
+  let c = Ctx {}
+  c.fatal(c.read())
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn builtin_generic_type_satisfies_interface_bound() {
     let input = r#"
 interface HasLength {

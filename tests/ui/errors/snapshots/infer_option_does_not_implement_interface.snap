@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Interface not implemented
+    ╭─[test.lis:12:23]
+ 11 │ fn test() {
+ 12 │   let _ = use_greeter(maybe_hello())
+    ·                       ──────┬──────
+    ·                             ╰── `Option<Hello>` does not implement `Greeter`
+ 13 │ }
+    ╰────
+  help: Unwrap the `Option` with `match` or `if let` first · code: [infer.interface_not_implemented]
