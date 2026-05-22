@@ -26,6 +26,14 @@ impl IndexedSource {
             line_starts: Arc::from(line_starts),
         }
     }
+
+    pub fn line_col(&self, offset: usize) -> (usize, usize) {
+        let line = match self.line_starts.binary_search(&offset) {
+            Ok(exact) => exact,
+            Err(idx) => idx.saturating_sub(1),
+        };
+        (line + 1, offset - self.line_starts[line] + 1)
+    }
 }
 
 impl miette::SourceCode for IndexedSource {
@@ -433,6 +441,22 @@ impl LisetteDiagnostic {
 
     pub fn primary_offset(&self) -> usize {
         self.labels.first().map(|l| l.offset()).unwrap_or(0)
+    }
+
+    pub fn location_offset(&self) -> Option<usize> {
+        self.labels
+            .iter()
+            .find(|l| l.primary())
+            .or_else(|| self.labels.first())
+            .map(|l| l.offset())
+    }
+
+    pub fn severity_word(&self) -> &'static str {
+        match self.severity {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+            Severity::Advice => "note",
+        }
     }
 
     pub fn file_id(&self) -> Option<u32> {

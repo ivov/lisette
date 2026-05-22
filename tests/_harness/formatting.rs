@@ -36,6 +36,19 @@ pub fn format_parse_error_for_snapshot(error: &ParseError, source: &str, filenam
     format_diagnostic_for_snapshot(&diagnostic, source, filename)
 }
 
+pub fn format_diagnostic_unix(
+    diagnostic: &LisetteDiagnostic,
+    source: &str,
+    filename: &str,
+) -> String {
+    diagnostics::render::unix_line(diagnostic, &IndexedSource::new(source), filename)
+}
+
+pub fn format_parse_error_unix(error: &ParseError, source: &str, filename: &str) -> String {
+    let diagnostic: LisetteDiagnostic = error.clone().into();
+    format_diagnostic_unix(&diagnostic, source, filename)
+}
+
 pub fn format_diagnostic_standalone(diagnostic: &LisetteDiagnostic) -> String {
     let handler = GraphicalReportHandler::new()
         .with_theme(snapshot_theme())

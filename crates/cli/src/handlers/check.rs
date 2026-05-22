@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use deps::TypedefLocator;
-use diagnostics::render::{self, Filter};
+use diagnostics::render::{self, Filter, OutputFormat};
 use lisette::fs::LocalFileSystem;
 use lisette::pipeline::{CompileConfig, CompilePhase, CompileResult, compile};
 
@@ -13,7 +13,12 @@ use crate::cli_error;
 use crate::lock::acquire_target_lock;
 use crate::workspace::WorkspaceBindgen;
 
-pub fn check(path: Option<String>, errors_only: bool, warnings_only: bool) -> i32 {
+pub fn check(
+    path: Option<String>,
+    errors_only: bool,
+    warnings_only: bool,
+    format: OutputFormat,
+) -> i32 {
     let target = path.unwrap_or_else(|| ".".to_string());
     let target_path = Path::new(&target);
 
@@ -32,17 +37,23 @@ pub fn check(path: Option<String>, errors_only: bool, warnings_only: bool) -> i3
     };
 
     if !target_path.is_dir() {
-        return check_single_file(target_path, &filter, false, TypedefLocator::default());
+        return check_single_file(
+            target_path,
+            &filter,
+            false,
+            TypedefLocator::default(),
+            format,
+        );
     }
 
     if target_path.join("lisette.toml").exists() {
-        return check_project(target_path, &filter);
+        return check_project(target_path, &filter, format);
     }
 
-    check_loose_dir(target_path, &filter)
+    check_loose_dir(target_path, &filter, format)
 }
 
-fn check_project(project_path: &Path, filter: &Filter) -> i32 {
+fn check_project(project_path: &Path, filter: &Filter, format: OutputFormat) -> i32 {
     let root_main = project_path.join("main.lis");
     let src_main = project_path.join("src/main.lis");
 
@@ -104,7 +115,7 @@ fn check_project(project_path: &Path, filter: &Filter) -> i32 {
     ));
     let locator = locator.with_bindgen(bindgen);
 
-    let result = check_single_file(&src_main, filter, true, locator);
+    let result = check_single_file(&src_main, filter, true, locator, format);
     drop(target_lock);
     result
 }
@@ -114,33 +125,54 @@ fn check_single_file(
     filter: &Filter,
     load_siblings: bool,
     locator: TypedefLocator,
+    format: OutputFormat,
 ) -> i32 {
     let start = Instant::now();
-    eprintln!();
+    let unix = matches!(format, OutputFormat::Unix);
+    if !unix {
+        eprintln!();
+    }
     let Some((result, source, filename)) = compile_single_file(file_path, load_siblings, locator)
     else {
         return 1; // Read error already reported by compile_single_file
     };
-    let counts = render::render_all(
-        &result.errors,
-        &result.lints,
-        |file_id| {
-            result
-                .sources
-                .get(&file_id)
-                .map(|info| (info.source.clone(), info.filename.clone()))
-        },
-        result.user_file_count,
-        filter,
-        &source,
-        &filename,
-    );
-    render::print_summary(
-        counts.files,
-        start.elapsed(),
-        counts.errors,
-        counts.warnings,
-    );
+    let get_source = |file_id: u32| {
+        result
+            .sources
+            .get(&file_id)
+            .map(|info| (info.source.clone(), info.filename.clone()))
+    };
+    let counts = if unix {
+        let (output, counts) = render::render_unix(
+            &result.errors,
+            &result.lints,
+            get_source,
+            result.user_file_count,
+            filter,
+            &source,
+            &filename,
+        );
+        print!("{}", output);
+        counts
+    } else {
+        render::render_all(
+            &result.errors,
+            &result.lints,
+            get_source,
+            result.user_file_count,
+            filter,
+            &source,
+            &filename,
+        )
+    };
+    if !unix {
+        render::print_summary(
+            counts.files,
+            start.elapsed(),
+            counts.errors,
+            counts.warnings,
+        );
+    }
     counts.errors
 }
 
@@ -187,7 +219,7 @@ fn compile_single_file(
     Some((result, source, entry_display))
 }
 
-fn check_loose_dir(dir: &Path, filter: &Filter) -> i32 {
+fn check_loose_dir(dir: &Path, filter: &Filter, format: OutputFormat) -> i32 {
     let mut files = lisette::fs::collect_lis_filepaths_recursive(dir);
     files.sort();
 
@@ -214,8 +246,11 @@ fn check_loose_dir(dir: &Path, filter: &Filter) -> i32 {
     let mut total_files = 0;
     let mut read_failures = 0;
 
+    let unix = matches!(format, OutputFormat::Unix);
     let start = Instant::now();
-    eprintln!();
+    if !unix {
+        eprintln!();
+    }
 
     for dir_files in dirs.values() {
         let mut compiled = None;
@@ -232,20 +267,35 @@ fn check_loose_dir(dir: &Path, filter: &Filter) -> i32 {
             read_failures += dir_read_failures;
             continue;
         };
-        let counts = render::render_all(
-            &result.errors,
-            &result.lints,
-            |file_id| {
-                result
-                    .sources
-                    .get(&file_id)
-                    .map(|info| (info.source.clone(), info.filename.clone()))
-            },
-            result.user_file_count,
-            filter,
-            &source,
-            &filename,
-        );
+        let get_source = |file_id: u32| {
+            result
+                .sources
+                .get(&file_id)
+                .map(|info| (info.source.clone(), info.filename.clone()))
+        };
+        let counts = if unix {
+            let (output, counts) = render::render_unix(
+                &result.errors,
+                &result.lints,
+                get_source,
+                result.user_file_count,
+                filter,
+                &source,
+                &filename,
+            );
+            print!("{}", output);
+            counts
+        } else {
+            render::render_all(
+                &result.errors,
+                &result.lints,
+                get_source,
+                result.user_file_count,
+                filter,
+                &source,
+                &filename,
+            )
+        };
         total_errors += counts.errors;
         total_warnings += counts.warnings;
         total_files += result.user_file_count;
@@ -254,7 +304,9 @@ fn check_loose_dir(dir: &Path, filter: &Filter) -> i32 {
     let elapsed = start.elapsed();
 
     let all_errors = total_errors + read_failures;
-    render::print_summary(total_files, elapsed, all_errors, total_warnings);
+    if !unix {
+        render::print_summary(total_files, elapsed, all_errors, total_warnings);
+    }
 
     all_errors
 }

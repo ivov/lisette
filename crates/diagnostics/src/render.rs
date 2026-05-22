@@ -7,6 +7,13 @@ use crate::diagnostic::IndexedSource;
 use miette::{GraphicalReportHandler, GraphicalTheme, ThemeCharacters, ThemeStyles};
 use owo_colors::{OwoColorize, Style};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutputFormat {
+    #[default]
+    Graphical,
+    Unix,
+}
+
 pub struct Filter {
     pub errors_only: bool,
     pub warnings_only: bool,
@@ -128,6 +135,60 @@ pub struct Counts {
     pub warnings: i32,
 }
 
+/// Resolves a `file_id` to its source, falling back to the entry file.
+struct SourceCache<F> {
+    get_source: F,
+    default_source: IndexedSource,
+    default_filename: String,
+    cache: FxHashMap<u32, (IndexedSource, String)>,
+}
+
+impl<F: Fn(u32) -> Option<(String, String)>> SourceCache<F> {
+    fn new(get_source: F, default_source: &str, default_filename: &str) -> Self {
+        Self {
+            get_source,
+            default_source: IndexedSource::new(default_source),
+            default_filename: default_filename.to_string(),
+            cache: FxHashMap::default(),
+        }
+    }
+
+    fn get(&mut self, file_id: Option<u32>) -> (IndexedSource, String) {
+        let Some(fid) = file_id else {
+            return (self.default_source.clone(), self.default_filename.clone());
+        };
+        let default_source = &self.default_source;
+        let default_filename = &self.default_filename;
+        let get_source = &self.get_source;
+        let entry = self.cache.entry(fid).or_insert_with(|| {
+            get_source(fid)
+                .map(|(src, name)| (IndexedSource::new(&src), name))
+                .unwrap_or_else(|| (default_source.clone(), default_filename.clone()))
+        });
+        (entry.0.clone(), entry.1.clone())
+    }
+}
+
+fn partition_diagnostics<'a>(
+    errors: &'a [LisetteDiagnostic],
+    lints: &'a [LisetteDiagnostic],
+    filter: &Filter,
+) -> (Vec<&'a LisetteDiagnostic>, Vec<&'a LisetteDiagnostic>) {
+    let (errors, infer_warnings): (Vec<_>, Vec<_>) = if filter.show_errors() {
+        errors.iter().partition(|d| d.is_error())
+    } else {
+        (Vec::new(), Vec::new())
+    };
+
+    let warnings: Vec<_> = if filter.show_warnings() {
+        infer_warnings.into_iter().chain(lints.iter()).collect()
+    } else {
+        Vec::new()
+    };
+
+    (errors, warnings)
+}
+
 pub fn render_all(
     errors: &[LisetteDiagnostic],
     lints: &[LisetteDiagnostic],
@@ -137,20 +198,7 @@ pub fn render_all(
     default_source: &str,
     default_filename: &str,
 ) -> Counts {
-    let show_errors = filter.show_errors();
-    let show_warnings = filter.show_warnings();
-
-    let (errors, infer_warnings): (Vec<_>, Vec<_>) = if show_errors {
-        errors.iter().partition(|d| d.is_error())
-    } else {
-        (Vec::new(), Vec::new())
-    };
-
-    let warnings: Vec<_> = if show_warnings {
-        infer_warnings.into_iter().chain(lints.iter()).collect()
-    } else {
-        Vec::new()
-    };
+    let (errors, warnings) = partition_diagnostics(errors, lints, filter);
 
     let has_diagnostics = !errors.is_empty() || !warnings.is_empty();
     if has_diagnostics {
@@ -158,23 +206,7 @@ pub fn render_all(
     }
 
     let use_color = std::env::var("NO_COLOR").is_err();
-
-    let default_source = IndexedSource::new(default_source);
-    let default_filename = default_filename.to_string();
-    let mut source_cache: FxHashMap<u32, (IndexedSource, String)> = FxHashMap::default();
-    let get_cached_source =
-        |file_id: Option<u32>, cache: &mut FxHashMap<u32, (IndexedSource, String)>| {
-            if let Some(fid) = file_id {
-                let entry = cache.entry(fid).or_insert_with(|| {
-                    get_source(fid)
-                        .map(|(src, name)| (IndexedSource::new(&src), name))
-                        .unwrap_or_else(|| (default_source.clone(), default_filename.clone()))
-                });
-                (entry.0.clone(), entry.1.clone())
-            } else {
-                (default_source.clone(), default_filename.clone())
-            }
-        };
+    let mut sources = SourceCache::new(get_source, default_source, default_filename);
 
     if !errors.is_empty() {
         let handler = if use_color {
@@ -183,7 +215,7 @@ pub fn render_all(
             nocolor_handler()
         };
         for error in &errors {
-            let (src, name) = get_cached_source(error.file_id(), &mut source_cache);
+            let (src, name) = sources.get(error.file_id());
             render(&handler, error, &src, &name, use_color);
         }
     }
@@ -195,7 +227,7 @@ pub fn render_all(
             nocolor_handler()
         };
         for warning in &warnings {
-            let (src, name) = get_cached_source(warning.file_id(), &mut source_cache);
+            let (src, name) = sources.get(warning.file_id());
             render(&handler, warning, &src, &name, use_color);
         }
     }
@@ -205,4 +237,49 @@ pub fn render_all(
         errors: errors.len() as i32,
         warnings: warnings.len() as i32,
     }
+}
+
+/// Renders one diagnostic as `file:line:col: severity: message [code]`.
+pub fn unix_line(diagnostic: &LisetteDiagnostic, source: &IndexedSource, filename: &str) -> String {
+    let mut line = String::new();
+    if let Some(offset) = diagnostic.location_offset() {
+        let (lineno, col) = source.line_col(offset);
+        line.push_str(&format!("{}:{}:{}: ", filename, lineno, col));
+    }
+    line.push_str(diagnostic.severity_word());
+    line.push_str(": ");
+    line.push_str(diagnostic.plain_message());
+    if let Some(code) = diagnostic.code_str() {
+        line.push_str(&format!(" [{}]", code));
+    }
+    line
+}
+
+/// Builds the stdout text (one diagnostic per line, no color, no banner) and the
+/// counts the caller needs for the stderr summary and exit code.
+pub fn render_unix(
+    errors: &[LisetteDiagnostic],
+    lints: &[LisetteDiagnostic],
+    get_source: impl Fn(u32) -> Option<(String, String)>,
+    file_count: usize,
+    filter: &Filter,
+    default_source: &str,
+    default_filename: &str,
+) -> (String, Counts) {
+    let (errors, warnings) = partition_diagnostics(errors, lints, filter);
+
+    let mut sources = SourceCache::new(get_source, default_source, default_filename);
+    let mut output = String::new();
+    for diagnostic in errors.iter().chain(warnings.iter()) {
+        let (src, name) = sources.get(diagnostic.file_id());
+        output.push_str(&unix_line(diagnostic, &src, &name));
+        output.push('\n');
+    }
+
+    let counts = Counts {
+        files: file_count.max(1),
+        errors: errors.len() as i32,
+        warnings: warnings.len() as i32,
+    };
+    (output, counts)
 }

@@ -1,0 +1,4 @@
+---
+source: tests/ui/unix.rs
+---
+src/main.lis:2:11: error: Unclosed block [parse.unclosed_block]

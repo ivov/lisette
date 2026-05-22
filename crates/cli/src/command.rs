@@ -1,3 +1,5 @@
+use diagnostics::render::OutputFormat;
+
 #[derive(Debug)]
 pub enum Command {
     New {
@@ -20,6 +22,7 @@ pub enum Command {
         path: Option<String>,
         errors_only: bool,
         warnings_only: bool,
+        format: OutputFormat,
     },
     Overview,
     Help {
@@ -62,6 +65,17 @@ pub enum ParseError {
         reason: String,
         hint: String,
     },
+}
+
+fn parse_format(value: &str) -> Result<OutputFormat, ParseError> {
+    match value {
+        "unix" => Ok(OutputFormat::Unix),
+        other => Err(ParseError::UnexpectedArgument {
+            message: format!("unexpected value `{}` for `--format`", other),
+            reason: "`--format` accepts `unix`".to_string(),
+            hint: "Use `lis check --format unix`".to_string(),
+        }),
+    }
 }
 
 impl Command {
@@ -150,11 +164,24 @@ impl Command {
                 let mut path = None;
                 let mut errors_only = false;
                 let mut warnings_only = false;
+                let mut format = OutputFormat::Graphical;
 
-                for arg in arguments {
+                while let Some(arg) = arguments.next() {
                     match arg.as_str() {
                         "--errors-only" => errors_only = true,
                         "--warnings-only" => warnings_only = true,
+                        "--format" => {
+                            let Some(value) = arguments.next() else {
+                                return Err(ParseError::MissingArgument {
+                                    command: "check",
+                                    argument: "--format <value>",
+                                });
+                            };
+                            format = parse_format(&value)?;
+                        }
+                        s if s.starts_with("--format=") => {
+                            format = parse_format(s.split_once('=').unwrap().1)?;
+                        }
                         s if s.starts_with('-') => {
                             return Err(ParseError::UnknownFlag(s.to_string()));
                         }
@@ -166,6 +193,7 @@ impl Command {
                     path,
                     errors_only,
                     warnings_only,
+                    format,
                 })
             }
 
@@ -297,5 +325,73 @@ impl Command {
         ];
         let candidates: Vec<String> = COMMANDS.iter().map(|s| s.to_string()).collect();
         diagnostics::infer::find_similar_name(typo, &candidates)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(parts: &[&str]) -> Result<Command, ParseError> {
+        Command::parse(parts.iter().map(|s| s.to_string()).collect())
+    }
+
+    #[test]
+    fn check_defaults_to_graphical_format() {
+        let Ok(Command::Check { format, .. }) = parse(&["lis", "check"]) else {
+            panic!("expected Check command");
+        };
+        assert_eq!(format, OutputFormat::Graphical);
+    }
+
+    #[test]
+    fn check_format_unix_space_form() {
+        let Ok(Command::Check { format, .. }) = parse(&["lis", "check", "--format", "unix"]) else {
+            panic!("expected Check command");
+        };
+        assert_eq!(format, OutputFormat::Unix);
+    }
+
+    #[test]
+    fn check_format_unix_equals_form() {
+        let Ok(Command::Check { format, .. }) = parse(&["lis", "check", "--format=unix"]) else {
+            panic!("expected Check command");
+        };
+        assert_eq!(format, OutputFormat::Unix);
+    }
+
+    #[test]
+    fn check_format_missing_value() {
+        assert!(matches!(
+            parse(&["lis", "check", "--format"]),
+            Err(ParseError::MissingArgument {
+                command: "check",
+                argument: "--format <value>",
+            })
+        ));
+    }
+
+    #[test]
+    fn check_format_invalid_value() {
+        assert!(matches!(
+            parse(&["lis", "check", "--format", "json"]),
+            Err(ParseError::UnexpectedArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn check_format_composes_with_errors_only() {
+        let Ok(Command::Check {
+            format,
+            errors_only,
+            warnings_only,
+            ..
+        }) = parse(&["lis", "check", "--format", "unix", "--errors-only"])
+        else {
+            panic!("expected Check command");
+        };
+        assert_eq!(format, OutputFormat::Unix);
+        assert!(errors_only);
+        assert!(!warnings_only);
     }
 }

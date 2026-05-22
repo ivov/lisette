@@ -68,7 +68,8 @@ fn main() {
             path,
             errors_only,
             warnings_only,
-        } => handlers::check(path, errors_only, warnings_only),
+            format,
+        } => handlers::check(path, errors_only, warnings_only, format),
         Command::Overview => {
             handlers::help::print_main_help();
             0
