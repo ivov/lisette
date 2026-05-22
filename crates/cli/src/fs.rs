@@ -6,6 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use semantics::cache::cache_file_name;
 use semantics::loader::{Files, Loader};
 use semantics::store::ENTRY_MODULE_ID;
 
@@ -56,7 +57,15 @@ fn to_fs_path(folder_name: &str) -> &str {
     }
 }
 
-pub fn prune_orphan_go_files(target_dir: &Path, produced: &[&str]) -> io::Result<()> {
+/// Removes stale Go output from `target/`: stale files within live modules, and the
+/// emitted directories of modules that left the dep graph. `emitted` is the manifest
+/// of lisette-written `.go` files, so unrelated content (e.g. `vendor/`) is untouched.
+pub fn prune_orphan_go_files(
+    target_dir: &Path,
+    produced: &[&str],
+    emitted: &[&str],
+    live_modules: &[String],
+) -> io::Result<()> {
     let mut produced_by_dir: HashMap<&Path, HashSet<&OsStr>> = HashMap::new();
     for rel in produced {
         let rel = Path::new(rel);
@@ -89,6 +98,125 @@ pub fn prune_orphan_go_files(target_dir: &Path, produced: &[&str]) -> io::Result
             {
                 remove_file(entry.path())?;
             }
+        }
+    }
+
+    let (live_dirs, ancestor_dirs) = live_module_dirs(live_modules);
+    for dir in emitted_module_dirs(emitted) {
+        if live_dirs.contains(&dir) {
+            continue;
+        }
+        let path = target_dir.join(&dir);
+        // `cache/` holds interface caches and an ancestor holds a live submodule, so
+        // both keep their dir and shed only `.go`; a departed leaf dir goes entirely.
+        if dir == "cache" || ancestor_dirs.contains(&dir) {
+            remove_direct_go_files(&path)?;
+        } else {
+            remove_dir_all_if_present(&path)?;
+        }
+    }
+    prune_orphan_caches(target_dir, live_modules)?;
+
+    Ok(())
+}
+
+/// Directories lisette emitted Go output into (root entry-module files excluded).
+fn emitted_module_dirs(emitted: &[&str]) -> HashSet<String> {
+    let mut dirs = HashSet::new();
+    for file in emitted {
+        if let Some(parent) = Path::new(file).parent().and_then(|p| p.to_str())
+            && !parent.is_empty()
+        {
+            dirs.insert(parent.to_string());
+        }
+    }
+    dirs
+}
+
+/// Returns (live module dirs, ancestor-only dirs); a dir that is itself live wins.
+fn live_module_dirs(live_modules: &[String]) -> (HashSet<String>, HashSet<String>) {
+    let mut live = HashSet::new();
+    let mut ancestors = HashSet::new();
+    for module in live_modules {
+        if module == ENTRY_MODULE_ID {
+            continue;
+        }
+        let segments: Vec<&str> = module.split('/').filter(|s| !s.is_empty()).collect();
+        let mut prefix = String::new();
+        for (i, segment) in segments.iter().enumerate() {
+            if !prefix.is_empty() {
+                prefix.push('/');
+            }
+            prefix.push_str(segment);
+            if i + 1 == segments.len() {
+                live.insert(prefix.clone());
+            } else {
+                ancestors.insert(prefix.clone());
+            }
+        }
+    }
+    for dir in &live {
+        ancestors.remove(dir);
+    }
+    (live, ancestors)
+}
+
+/// Removes `.go` files (generated ones included) directly in `dir`, not recursing.
+fn remove_direct_go_files(dir: &Path) -> io::Result<()> {
+    let entries = match read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+
+    for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        let path = entry.path();
+        if file_type.is_file() && path.extension().is_some_and(|ext| ext == "go") {
+            remove_file(&path)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// `remove_dir_all` that treats an already-absent directory as success.
+fn remove_dir_all_if_present(dir: &Path) -> io::Result<()> {
+    match std::fs::remove_dir_all(dir) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+/// Removes interface caches in `target/cache/` for modules no longer in the graph.
+fn prune_orphan_caches(target_dir: &Path, live_modules: &[String]) -> io::Result<()> {
+    let cache_dir = target_dir.join("cache");
+    let live: HashSet<String> = live_modules
+        .iter()
+        .filter(|id| id.as_str() != ENTRY_MODULE_ID)
+        .map(|id| cache_file_name(id))
+        .collect();
+
+    let entries = match read_dir(&cache_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let name = entry.file_name();
+        if Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext == "cache")
+            && !live.contains(name.to_string_lossy().as_ref())
+        {
+            remove_file(entry.path())?;
         }
     }
 
@@ -187,7 +315,7 @@ mod tests {
         );
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(tmp.path().join("wire_gen.go").exists());
         assert!(tmp.path().join("main.go").exists());
@@ -206,7 +334,7 @@ mod tests {
         write_file(tmp.path(), "wire_gen.go", content);
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(tmp.path().join("wire_gen.go").exists());
     }
@@ -223,7 +351,7 @@ mod tests {
         write_file(tmp.path(), "wire_gen.go", content);
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(tmp.path().join("wire_gen.go").exists());
     }
@@ -234,7 +362,7 @@ mod tests {
         write_file(tmp.path(), "stale.go", "package main\n\nfunc Old() {}\n");
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(!tmp.path().join("stale.go").exists());
     }
@@ -249,7 +377,7 @@ mod tests {
         write_file(tmp.path(), "fake.go", content);
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(!tmp.path().join("fake.go").exists());
     }
@@ -261,7 +389,7 @@ mod tests {
         write_file(tmp.path(), "fake.go", content);
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(!tmp.path().join("fake.go").exists());
     }
@@ -273,7 +401,7 @@ mod tests {
         write_file(tmp.path(), "fake.go", content);
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(!tmp.path().join("fake.go").exists());
     }
@@ -285,7 +413,7 @@ mod tests {
         write_file(tmp.path(), "fake.go", content);
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(!tmp.path().join("fake.go").exists());
     }
@@ -295,7 +423,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(tmp.path().join("main.go").exists());
     }
@@ -307,9 +435,220 @@ mod tests {
         write_file(tmp.path(), "go.sum", "");
         write_file(tmp.path(), "main.go", "package main\n");
 
-        prune_orphan_go_files(tmp.path(), &["main.go"]).unwrap();
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &[]).unwrap();
 
         assert!(tmp.path().join("go.mod").exists());
         assert!(tmp.path().join("go.sum").exists());
+    }
+
+    #[test]
+    fn prunes_removed_module_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join("greet")).unwrap();
+        write_file(&tmp.path().join("greet"), "greet.go", "package greet\n");
+
+        prune_orphan_go_files(
+            tmp.path(),
+            &["main.go"],
+            &["main.go", "greet/greet.go"],
+            &[],
+        )
+        .unwrap();
+
+        assert!(!tmp.path().join("greet/greet.go").exists());
+        assert!(!tmp.path().join("greet").exists());
+        assert!(tmp.path().join("main.go").exists());
+    }
+
+    #[test]
+    fn keeps_live_module_directory_even_when_not_produced() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join("greet")).unwrap();
+        write_file(&tmp.path().join("greet"), "greet.go", "package greet\n");
+
+        prune_orphan_go_files(
+            tmp.path(),
+            &["main.go"],
+            &["main.go", "greet/greet.go"],
+            &["greet".to_string()],
+        )
+        .unwrap();
+
+        assert!(tmp.path().join("greet/greet.go").exists());
+    }
+
+    #[test]
+    fn keeps_nested_live_module_and_prunes_sibling() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join("deep/nested/mod")).unwrap();
+        write_file(
+            &tmp.path().join("deep/nested/mod"),
+            "mod.go",
+            "package mod\n",
+        );
+        stdfs::create_dir_all(tmp.path().join("deep/gone")).unwrap();
+        write_file(&tmp.path().join("deep/gone"), "gone.go", "package gone\n");
+
+        prune_orphan_go_files(
+            tmp.path(),
+            &["main.go"],
+            &["main.go", "deep/nested/mod/mod.go", "deep/gone/gone.go"],
+            &["deep/nested/mod".to_string()],
+        )
+        .unwrap();
+
+        assert!(tmp.path().join("deep/nested/mod/mod.go").exists());
+        assert!(!tmp.path().join("deep/gone").exists());
+    }
+
+    #[test]
+    fn prunes_orphan_parent_module_keeping_live_child() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join("deep/nested/mod")).unwrap();
+        write_file(&tmp.path().join("deep"), "deep.go", "package deep\n");
+        write_file(
+            &tmp.path().join("deep/nested/mod"),
+            "mod.go",
+            "package mod\n",
+        );
+
+        prune_orphan_go_files(
+            tmp.path(),
+            &["main.go"],
+            &["main.go", "deep/deep.go", "deep/nested/mod/mod.go"],
+            &["deep/nested/mod".to_string()],
+        )
+        .unwrap();
+
+        assert!(!tmp.path().join("deep/deep.go").exists());
+        assert!(tmp.path().join("deep/nested/mod/mod.go").exists());
+    }
+
+    #[test]
+    fn keeps_parent_module_that_is_also_live() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join("deep/nested/mod")).unwrap();
+        write_file(&tmp.path().join("deep"), "deep.go", "package deep\n");
+        write_file(
+            &tmp.path().join("deep/nested/mod"),
+            "mod.go",
+            "package mod\n",
+        );
+
+        prune_orphan_go_files(
+            tmp.path(),
+            &["main.go"],
+            &["main.go", "deep/deep.go", "deep/nested/mod/mod.go"],
+            &["deep".to_string(), "deep/nested/mod".to_string()],
+        )
+        .unwrap();
+
+        assert!(tmp.path().join("deep/deep.go").exists());
+        assert!(tmp.path().join("deep/nested/mod/mod.go").exists());
+    }
+
+    #[test]
+    fn leaves_directories_lisette_never_emitted_into() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join("vendor/dep")).unwrap();
+        write_file(&tmp.path().join("vendor/dep"), "dep.go", "package dep\n");
+
+        prune_orphan_go_files(tmp.path(), &["main.go"], &["main.go"], &[]).unwrap();
+
+        assert!(tmp.path().join("vendor/dep/dep.go").exists());
+    }
+
+    #[test]
+    fn departed_module_dir_is_removed_with_its_generated_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join("greet")).unwrap();
+        write_file(&tmp.path().join("greet"), "greet.go", "package greet\n");
+        write_file(
+            &tmp.path().join("greet"),
+            "wire_gen.go",
+            "// Code generated by Wire. DO NOT EDIT.\n\npackage greet\n",
+        );
+
+        prune_orphan_go_files(
+            tmp.path(),
+            &["main.go"],
+            &["main.go", "greet/greet.go"],
+            &[],
+        )
+        .unwrap();
+
+        assert!(!tmp.path().join("greet").exists());
+    }
+
+    #[test]
+    fn prunes_orphan_cache_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        stdfs::create_dir_all(tmp.path().join("cache")).unwrap();
+        write_file(&tmp.path().join("cache"), "greet.cache", "");
+        write_file(&tmp.path().join("cache"), "kept.cache", "");
+
+        prune_orphan_go_files(tmp.path(), &["main.go"], &[], &["kept".to_string()]).unwrap();
+
+        assert!(!tmp.path().join("cache/greet.cache").exists());
+        assert!(tmp.path().join("cache/kept.cache").exists());
+    }
+
+    #[test]
+    fn leaves_lisette_working_state_dir_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join(".lisette")).unwrap();
+        write_file(&tmp.path().join(".lisette"), "tool.go", "package lisette\n");
+
+        prune_orphan_go_files(tmp.path(), &["main.go"], &["main.go"], &[]).unwrap();
+
+        assert!(tmp.path().join(".lisette/tool.go").exists());
+    }
+
+    #[test]
+    fn dead_cache_module_go_is_pruned_but_cache_files_survive() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join("cache")).unwrap();
+        write_file(&tmp.path().join("cache"), "cache.go", "package cache\n");
+        write_file(&tmp.path().join("cache"), "kept.cache", "");
+
+        prune_orphan_go_files(
+            tmp.path(),
+            &["main.go"],
+            &["main.go", "cache/cache.go"],
+            &["kept".to_string()],
+        )
+        .unwrap();
+
+        assert!(!tmp.path().join("cache/cache.go").exists());
+        assert!(tmp.path().join("cache/kept.cache").exists());
+    }
+
+    #[test]
+    fn live_cache_module_go_is_kept() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_file(tmp.path(), "main.go", "package main\n");
+        stdfs::create_dir_all(tmp.path().join("cache")).unwrap();
+        write_file(&tmp.path().join("cache"), "cache.go", "package cache\n");
+        write_file(&tmp.path().join("cache"), "cache.cache", "");
+
+        prune_orphan_go_files(
+            tmp.path(),
+            &["main.go", "cache/cache.go"],
+            &["main.go", "cache/cache.go"],
+            &["cache".to_string()],
+        )
+        .unwrap();
+
+        assert!(tmp.path().join("cache/cache.go").exists());
+        assert!(tmp.path().join("cache/cache.cache").exists());
     }
 }

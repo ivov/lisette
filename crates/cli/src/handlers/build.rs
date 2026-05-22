@@ -175,13 +175,39 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
 
     let heading = "Failed to compile Lisette project to Go";
 
-    let emit = match go_cli::write_go_outputs(&prep.target_dir, &result.output) {
+    let mut emit = match go_cli::write_go_outputs(&prep.target_dir, &result.output) {
         Ok(emit) => emit,
         Err(e) => {
             cli_error!(heading, e.message, e.hint);
             return 1;
         }
     };
+
+    let produced: Vec<&str> = result
+        .output
+        .iter()
+        .map(|file| file.name.as_str())
+        .collect();
+    let emitted: Vec<&str> = emit
+        .new_manifest
+        .iter()
+        .map(|entry| entry.name.as_str())
+        .collect();
+    if let Err(e) =
+        prune_orphan_go_files(&prep.target_dir, &produced, &emitted, &result.live_modules)
+    {
+        cli_error!(
+            "Failed to compile Lisette project to Go",
+            format!("Failed to prune stale Go files: {}", e),
+            "Check file permissions"
+        );
+        return 1;
+    }
+
+    // Drop manifest entries whose files pruning removed, so the import-set hash below
+    // reflects only surviving output.
+    emit.new_manifest
+        .retain(|entry| prep.target_dir.join(&entry.name).exists());
 
     // Force a maximal go.mod rewrite only if a prior tidy marker exists and the
     // external import set changed since it was written.
@@ -197,20 +223,6 @@ pub(super) fn build_locked(prep: &BuildPrep, debug: bool, quiet: bool) -> i32 {
             cli_error!(heading, e, "Check file permissions on `target/go.mod`");
             return 1;
         }
-    }
-
-    let produced: Vec<&str> = result
-        .output
-        .iter()
-        .map(|file| file.name.as_str())
-        .collect();
-    if let Err(e) = prune_orphan_go_files(&prep.target_dir, &produced) {
-        cli_error!(
-            "Failed to compile Lisette project to Go",
-            format!("Failed to prune stale Go files: {}", e),
-            "Check file permissions"
-        );
-        return 1;
     }
 
     if let Err(e) = go_cli::finalize_go_dir(

@@ -174,7 +174,11 @@ pub fn cache_path(project_root: &Path, module_id: &str) -> PathBuf {
     project_root
         .join("target")
         .join("cache")
-        .join(format!("{}.cache", module_id.replace('/', "_")))
+        .join(cache_file_name(module_id))
+}
+
+pub fn cache_file_name(module_id: &str) -> String {
+    format!("{}.cache", module_id.replace('/', "_"))
 }
 
 pub fn try_load_cache(

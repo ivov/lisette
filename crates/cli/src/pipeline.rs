@@ -36,6 +36,7 @@ pub struct CompileResult {
     pub lints: Vec<LisetteDiagnostic>,
     pub sources: HashMap<u32, SourceInfo>,
     pub user_file_count: usize,
+    pub live_modules: Vec<String>,
 }
 
 pub fn compile(
@@ -61,6 +62,7 @@ pub fn compile(
             lints: vec![],
             sources,
             user_file_count: 1,
+            live_modules: vec![],
         };
     }
 
@@ -98,6 +100,7 @@ pub fn compile(
     let failed = semantic_result.failed();
     let mut errors = semantic_result.errors.clone();
     let lints = semantic_result.lints.clone();
+    let live_modules: Vec<String> = semantic_result.modules.keys().cloned().collect();
 
     if failed || config.target_phase == CompilePhase::Check {
         return CompileResult {
@@ -106,6 +109,7 @@ pub fn compile(
             lints,
             sources,
             user_file_count,
+            live_modules,
         };
     }
 
@@ -128,6 +132,7 @@ pub fn compile(
             lints,
             sources,
             user_file_count,
+            live_modules,
         };
     }
 
@@ -137,6 +142,7 @@ pub fn compile(
         lints,
         sources,
         user_file_count,
+        live_modules,
     }
 }
 
