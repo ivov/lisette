@@ -24,26 +24,30 @@ pub struct GoModuleCache {
     pub go_imports: Vec<String>,
 }
 
+fn cache_file_name(target: Target) -> String {
+    format!("stdlib_defs_{}.bin", target.cache_segment())
+}
+
 fn cache_path(target: Target) -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
     Some(
         PathBuf::from(home)
             .join(".lisette")
             .join("cache")
-            .join(format!(
-                "stdlib_defs_{:x}_compiler_{:x}_{}_{}.bin",
-                GO_STDLIB_HASH & 0xFFFFFF,
-                COMPILER_VERSION_HASH & 0xFFFFFF,
-                target.goos,
-                target.goarch,
-            )),
+            .join(cache_file_name(target)),
     )
 }
 
 pub fn try_load_go_stdlib_cache(target: Target) -> Option<GoStdlibCache> {
     let path = cache_path(target)?;
     let bytes = fs::read(&path).ok()?;
-    let cache: GoStdlibCache = bincode::deserialize(&bytes).ok()?;
+    let cache: GoStdlibCache = match bincode::deserialize(&bytes) {
+        Ok(cache) => cache,
+        Err(_) => {
+            let _ = fs::remove_file(&path);
+            return None;
+        }
+    };
 
     if cache.content_hash != GO_STDLIB_HASH || cache.compiler_version != COMPILER_VERSION_HASH {
         let _ = fs::remove_file(&path);
@@ -97,14 +101,20 @@ pub fn save_go_stdlib_cache(store: &Store, go_module_ids: &[String], target: Tar
         return;
     };
 
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    let _ = fs::create_dir_all(parent);
 
-    let temp_path = path.with_extension("bin.tmp");
-    if fs::write(&temp_path, bytes).is_ok() {
-        let _ = fs::rename(&temp_path, &path);
+    let temp_path = super::global_cache_temp_path(&path);
+    if fs::write(&temp_path, &bytes).is_err() {
+        return;
     }
+    if fs::rename(&temp_path, &path).is_err() {
+        let _ = fs::remove_file(&temp_path);
+        return;
+    }
+    super::prune_legacy_global_caches(parent, "stdlib_defs");
 }
 
 /// Load a Go module and its transitive deps from cache, recursively.
@@ -185,4 +195,15 @@ fn get_go_imports_from_source(module_id: &str, target: Target) -> Vec<String> {
             Some(format!("go:{pkg}"))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cache_file_name_includes_target_only() {
+        let target = Target::new("darwin", "arm64");
+        assert_eq!(cache_file_name(target), "stdlib_defs_darwin_arm64.bin");
+    }
 }

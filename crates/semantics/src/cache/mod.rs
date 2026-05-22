@@ -7,6 +7,7 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use syntax::program::File;
@@ -427,6 +428,26 @@ pub fn is_cache_disabled() -> bool {
         .unwrap_or(false)
 }
 
+static GLOBAL_CACHE_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub(crate) fn global_cache_temp_path(final_path: &Path) -> PathBuf {
+    let counter = GLOBAL_CACHE_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    final_path.with_extension(format!("tmp.{}.{}", std::process::id(), counter))
+}
+
+pub(crate) fn prune_legacy_global_caches(dir: &Path, prefix: &str) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with(prefix) && name.contains("_compiler_") {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -807,5 +828,48 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn prune_legacy_global_caches_removes_only_hashed_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let legacy_prelude = dir.join("prelude_defs_4330e9_compiler_f709f8.bin");
+        let legacy_stdlib = dir.join("stdlib_defs_151b6b_compiler_f709f8_darwin_arm64.bin");
+        let stable_prelude = dir.join("prelude_defs.bin");
+        let stable_stdlib = dir.join("stdlib_defs_darwin_arm64.bin");
+        let other_stdlib = dir.join("stdlib_defs_linux_amd64.bin");
+        for path in [
+            &legacy_prelude,
+            &legacy_stdlib,
+            &stable_prelude,
+            &stable_stdlib,
+            &other_stdlib,
+        ] {
+            std::fs::write(path, b"x").unwrap();
+        }
+
+        prune_legacy_global_caches(dir, "prelude_defs");
+        prune_legacy_global_caches(dir, "stdlib_defs");
+
+        assert!(!legacy_prelude.exists());
+        assert!(!legacy_stdlib.exists());
+        assert!(stable_prelude.exists());
+        assert!(stable_stdlib.exists());
+        assert!(other_stdlib.exists());
+    }
+
+    #[test]
+    fn prune_legacy_global_caches_missing_dir_is_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        prune_legacy_global_caches(&tmp.path().join("does_not_exist"), "prelude_defs");
+    }
+
+    #[test]
+    fn global_cache_temp_paths_are_unique() {
+        let base = Path::new("/cache/prelude_defs.bin");
+        let first = global_cache_temp_path(base);
+        let second = global_cache_temp_path(base);
+        assert_ne!(first, second);
     }
 }

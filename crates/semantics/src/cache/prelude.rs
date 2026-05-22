@@ -16,24 +16,30 @@ pub struct PreludeCache {
     pub definitions: HashMap<String, CachedDefinition>,
 }
 
+fn cache_file_name() -> &'static str {
+    "prelude_defs.bin"
+}
+
 fn cache_path() -> Option<PathBuf> {
     let home = std::env::var("HOME").ok()?;
     Some(
         PathBuf::from(home)
             .join(".lisette")
             .join("cache")
-            .join(format!(
-                "prelude_defs_{:x}_compiler_{:x}.bin",
-                PRELUDE_HASH & 0xFFFFFF,
-                COMPILER_VERSION_HASH & 0xFFFFFF
-            )),
+            .join(cache_file_name()),
     )
 }
 
 pub fn try_load_prelude_cache() -> Option<PreludeCache> {
     let path = cache_path()?;
     let bytes = fs::read(&path).ok()?;
-    let cache: PreludeCache = bincode::deserialize(&bytes).ok()?;
+    let cache: PreludeCache = match bincode::deserialize(&bytes) {
+        Ok(cache) => cache,
+        Err(_) => {
+            let _ = fs::remove_file(&path);
+            return None;
+        }
+    };
 
     if cache.content_hash != PRELUDE_HASH || cache.compiler_version != COMPILER_VERSION_HASH {
         let _ = fs::remove_file(&path);
@@ -72,14 +78,20 @@ pub fn save_prelude_cache(store: &Store) {
         return;
     };
 
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    let _ = fs::create_dir_all(parent);
 
-    let temp_path = path.with_extension("bin.tmp");
-    if fs::write(&temp_path, bytes).is_ok() {
-        let _ = fs::rename(&temp_path, &path);
+    let temp_path = super::global_cache_temp_path(&path);
+    if fs::write(&temp_path, &bytes).is_err() {
+        return;
     }
+    if fs::rename(&temp_path, &path).is_err() {
+        let _ = fs::remove_file(&temp_path);
+        return;
+    }
+    super::prune_legacy_global_caches(parent, "prelude_defs");
 }
 
 pub fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
@@ -107,5 +119,15 @@ pub fn register_cached_prelude(store: &mut Store, cached: PreludeCache) {
     for (qualified_name, cached_definition) in cached.definitions {
         let definition = cached_definition.to_definition(file_ids);
         module.definitions.insert(qualified_name.into(), definition);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cache_file_name_is_stable() {
+        assert_eq!(cache_file_name(), "prelude_defs.bin");
     }
 }
