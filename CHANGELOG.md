@@ -1,6 +1,18 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.10](https://github.com/ivov/lisette/compare/lisette-v0.2.9...lisette-v0.2.10) - 2026-05-23
+
+- fix: bind more value-plus-error returns as Partial [#475](https://github.com/ivov/lisette/pull/475) [`e1c3772`](https://github.com/ivov/lisette/commit/e1c377254a1bd844d49fb5d4297fc362fb76b70c)
+- fix: bind WriteString, ReadFrom and WriteTo as Partial [#474](https://github.com/ivov/lisette/pull/474) [`36ab5d3`](https://github.com/ivov/lisette/commit/36ab5d33b4907b8f92073bbc2e4e0bc658191e38)
+- fix: interface not implemented diagnostic for wrapper types [#473](https://github.com/ivov/lisette/pull/473) [`25b2035`](https://github.com/ivov/lisette/commit/25b20359005700d4676b65e5652b5375a780612a)
+- test: gate e2e suite on zero re-emit failures [#472](https://github.com/ivov/lisette/pull/472) [`2dfb714`](https://github.com/ivov/lisette/commit/2dfb714a3fb56107ad8f7923aa2b00ca3da8cccb)
+- fix: bound global prelude and stdlib defs cache [#471](https://github.com/ivov/lisette/pull/471) [`bb0bf4f`](https://github.com/ivov/lisette/commit/bb0bf4ffab25bd397ea3b9d4186510ee40d502f0)
+- feat: unix diagnostic format for lis check [#470](https://github.com/ivov/lisette/pull/470) [`308e859`](https://github.com/ivov/lisette/commit/308e85939326a85e0b5caf053c4dbac0e60462dd)
+- fix: prune go output and caches for removed modules [#469](https://github.com/ivov/lisette/pull/469) [`d6a2232`](https://github.com/ivov/lisette/commit/d6a2232f88a03f12a06863c982ce53756ddbd729)
+- ci: skip fuzz and release workflows on forks [#468](https://github.com/ivov/lisette/pull/468) [`2a8a152`](https://github.com/ivov/lisette/commit/2a8a152290163a86faa7b5086415f4448ade0a49)
+- feat: relative paths in diagnostics [#467](https://github.com/ivov/lisette/pull/467) [`39830a0`](https://github.com/ivov/lisette/commit/39830a045e3c9c1023fadf69f975e028d9450b31)
+- feat: bare variants in match arms [#465](https://github.com/ivov/lisette/pull/465) [`2faa0f6`](https://github.com/ivov/lisette/commit/2faa0f6bbcecefc20bcdb7cfb767c8335a72260a)
 ## [0.2.9](https://github.com/ivov/lisette/compare/lisette-v0.2.8...lisette-v0.2.9) - 2026-05-20
 
 - fix: drop redundant block around irrefutable match arm [#464](https://github.com/ivov/lisette/pull/464) [`6e3e211`](https://github.com/ivov/lisette/commit/6e3e2112860d3183ecf51757987ae9e85a3b5fc5)
