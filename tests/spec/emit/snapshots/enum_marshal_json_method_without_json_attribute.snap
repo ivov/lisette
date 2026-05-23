@@ -1,0 +1,34 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nenum Status {\n  Ready,\n}\n\nimpl Status {\n  fn MarshalJSON(self) -> int {\n    1\n  }\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeStatusReady() Status {
+	return Status{Tag: StatusReady}
+}
+
+type StatusTag int
+
+const (
+	StatusReady StatusTag = iota
+)
+
+type Status struct {
+	Tag StatusTag
+}
+
+func (s Status) String() string {
+	switch s.Tag {
+	case StatusReady:
+		return "Status.Ready"
+	default:
+		return fmt.Sprintf("Status(%d)", s.Tag)
+	}
+}
+
+func (s Status) MarshalJSON() int {
+	return 1
+}

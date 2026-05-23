@@ -3,6 +3,7 @@ pub(crate) mod duplicate_bindings;
 pub(crate) mod enum_variant_value;
 pub(crate) mod generics;
 pub(crate) mod irrefutable_patterns;
+pub(crate) mod json_methods;
 pub(crate) mod native_value_usage;
 pub(crate) mod newtype;
 mod pattern_analysis;
@@ -29,6 +30,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
     module_ids.sort_unstable();
     for module_id in &module_ids {
         visibility::run_module(module_id, store, sink);
+        json_methods::run_module(module_id, store, sink);
     }
 
     let mut work: Vec<(&Module, &File)> = store

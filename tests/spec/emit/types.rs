@@ -2111,6 +2111,22 @@ enum Message {
 }
 
 #[test]
+fn enum_marshal_json_method_without_json_attribute() {
+    let input = r#"
+enum Status {
+  Ready,
+}
+
+impl Status {
+  fn MarshalJSON(self) -> int {
+    1
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn generic_return_only_type_param_string_vs_int() {
     let input = r#"
 enum Validated<T> { Valid(T), Invalid(string) }

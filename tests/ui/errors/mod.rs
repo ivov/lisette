@@ -1937,6 +1937,40 @@ impl A {
 }
 
 #[test]
+fn infer_json_marshal_method_override() {
+    let input = r#"
+#[json]
+enum Status {
+  Ready,
+}
+
+impl Status {
+  fn MarshalJSON(self) -> int {
+    1
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_json_unmarshal_method_override() {
+    let input = r#"
+#[json]
+enum Status {
+  Ready,
+}
+
+impl Status {
+  fn UnmarshalJSON(self) -> int {
+    1
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_unknown_in_const_annotation() {
     let input = r#"
 const X: Unknown = 42;
