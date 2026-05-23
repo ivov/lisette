@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot shadow Go predeclared identifier
+   ╭─[test.lis:2:7]
+ 1 │ 
+ 2 │ fn id<any>(x: any) -> any {
+   ·       ─┬─
+   ·        ╰── `any` is a Go predeclared identifier
+ 3 │   x
+   ╰────
+  help: Lisette emits `any` directly in the generated Go, so a user declaration with this name shadows the builtin and the output fails to compile. Choose a different name · code: [infer.predeclared_type_shadowed]

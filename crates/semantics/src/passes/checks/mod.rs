@@ -7,6 +7,7 @@ pub(crate) mod json_methods;
 pub(crate) mod native_value_usage;
 pub(crate) mod newtype;
 mod pattern_analysis;
+pub(crate) mod predeclared_shadowing;
 pub(crate) mod prelude_shadowing;
 pub(crate) mod receivers;
 pub(crate) mod stringer_signature;
@@ -88,6 +89,7 @@ fn run_file_checks(
     irrefutable_patterns::run(&file.items, sink);
     receivers::run(&file.items, sink);
     stringer_signature::run(&file.items, sink);
+    predeclared_shadowing::run(&file.items, sink);
     prelude_shadowing::run(&file.items, store, sink);
     generics::run(&file.items, &module.id, store, sink);
     newtype::run(&file.items, store, sink);
