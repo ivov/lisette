@@ -1,6 +1,12 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.11](https://github.com/ivov/lisette/compare/lisette-v0.2.10...lisette-v0.2.11) - 2026-05-23
+
+- fix: reject public types with non-exportable names [#480](https://github.com/ivov/lisette/pull/480) [`2226da8`](https://github.com/ivov/lisette/commit/2226da8489f515d510048cb6cd9bf69dc65d3476)
+- fix: reject any/comparable as type or generic names [#479](https://github.com/ivov/lisette/pull/479) [`d3ed928`](https://github.com/ivov/lisette/commit/d3ed9280f8ff6a11cd4563eda66c316d87c0f791)
+- fix: diagnose duplicate json methods on #[json] enums [#477](https://github.com/ivov/lisette/pull/477) [`5fcc6b0`](https://github.com/ivov/lisette/commit/5fcc6b08c6c0bef2172f99325d0c686fe88d4b89)
+- ci: drop release.yml fork guard [#476](https://github.com/ivov/lisette/pull/476) [`865b74c`](https://github.com/ivov/lisette/commit/865b74c4af9329d36f1ccf7134fd927c2eb06a1d)
 ## [0.2.10](https://github.com/ivov/lisette/compare/lisette-v0.2.9...lisette-v0.2.10) - 2026-05-23
 
 - fix: bind more value-plus-error returns as Partial [#475](https://github.com/ivov/lisette/pull/475) [`e1c3772`](https://github.com/ivov/lisette/commit/e1c377254a1bd844d49fb5d4297fc362fb76b70c)
