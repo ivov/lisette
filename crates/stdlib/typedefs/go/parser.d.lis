@@ -29,7 +29,7 @@ pub fn ParseDir(
   path: string,
   filter: fn(fs.FileInfo) -> bool,
   mode: Mode,
-) -> Result<Map<string, Ref<ast.Package>>, error>
+) -> Partial<Map<string, Ref<ast.Package>>, error>
 
 /// ParseExpr is a convenience function for obtaining the AST of an expression x.
 /// The position information recorded in the AST is undefined. The filename used
@@ -38,7 +38,7 @@ pub fn ParseDir(
 /// If syntax errors were found, the result is a partial AST (with [ast.Bad]* nodes
 /// representing the fragments of erroneous source code). Multiple errors are
 /// returned via a scanner.ErrorList which is sorted by source position.
-pub fn ParseExpr(x: string) -> Result<ast.Expr, error>
+pub fn ParseExpr(x: string) -> Partial<ast.Expr, error>
 
 /// ParseExprFrom is a convenience function for parsing an expression.
 /// The arguments have the same meaning as for [ParseFile], but the source must
@@ -55,7 +55,7 @@ pub fn ParseExprFrom(
   filename: string,
   src: Unknown,
   mode: Mode,
-) -> Result<ast.Expr, error>
+) -> Partial<ast.Expr, error>
 
 /// ParseFile parses the source code of a single Go source file and returns
 /// the corresponding [ast.File] node. The source code may be provided via
@@ -86,7 +86,7 @@ pub fn ParseFile(
   filename: string,
   src: Unknown,
   mode: Mode,
-) -> Result<Ref<ast.File>, error>
+) -> Partial<Ref<ast.File>, error>
 
 /// A Mode value is a set of flags (or 0).
 /// They control the amount of source code parsed and other optional

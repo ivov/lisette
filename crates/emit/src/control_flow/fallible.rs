@@ -19,6 +19,7 @@ const RESULT_ERR_CTOR: &str = "lisette.MakeResultErr";
 const OPTION_NONE_CTOR: &str = "lisette.MakeOptionNone";
 pub(crate) const PARTIAL_OK_CTOR: &str = "lisette.MakePartialOk";
 pub(crate) const PARTIAL_BOTH_CTOR: &str = "lisette.MakePartialBoth";
+pub(crate) const PARTIAL_ERR_CTOR: &str = "lisette.MakePartialErr";
 
 pub(crate) struct Fallible {
     kind: FallibleKind,

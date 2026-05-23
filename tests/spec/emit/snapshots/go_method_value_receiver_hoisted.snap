@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/functions.rs
-description: "input: \nimport \"go:bytes\"\nimport \"go:fmt\"\n\nfn make(counter: Ref<int>) -> Ref<bytes.Buffer> {\n  counter.* = counter.* + 1\n  bytes.NewBufferString(\"a\\nb\\n\")\n}\n\nfn use_fn(f: fn(uint8) -> Result<string, error>) {\n  let _ = f(10)\n  let _ = f(10)\n}\n\nfn main() {\n  let mut count = 0\n  use_fn(make(&count).ReadString)\n  fmt.Println(count)\n}\n"
+description: "input: \nimport \"go:bytes\"\nimport \"go:fmt\"\n\nfn make(counter: Ref<int>) -> Ref<bytes.Buffer> {\n  counter.* = counter.* + 1\n  bytes.NewBufferString(\"a\\nb\\n\")\n}\n\nfn use_fn(f: fn(uint8) -> Partial<string, error>) {\n  let _ = f(10)\n  let _ = f(10)\n}\n\nfn main() {\n  let mut count = 0\n  use_fn(make(&count).ReadString)\n  fmt.Println(count)\n}\n"
 ---
 package main
 

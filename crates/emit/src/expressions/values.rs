@@ -5,6 +5,7 @@ use crate::bindings::BindingValue;
 use crate::expressions::context::ExpressionContext;
 use crate::expressions::emission::EmittedExpression;
 use crate::is_order_sensitive;
+use crate::types::abi::AbiShape;
 use crate::types::coercion::{Coercion, CoercionDirection};
 use crate::write_line;
 use syntax::ast::{Expression, Visibility};
@@ -145,6 +146,9 @@ impl Emitter<'_> {
             if self.go_fn_matches_lowered_slot(expression, &strategy, ctx) {
                 return self.emit_operand(output, expression, ctx);
             }
+            if self.go_fn_needs_lowered_tuple_adapter(expression, ctx) {
+                return self.emit_go_fn_lowered_tuple_adapter(output, expression);
+            }
             return self.emit_go_fn_wrapper(output, expression, &strategy);
         }
 
@@ -199,7 +203,39 @@ impl Emitter<'_> {
         let Some(shape) = self.classify_direct_emission(return_type) else {
             return false;
         };
+        if self.fallible_tuple_return(return_type) {
+            return false;
+        }
         shape.matches_go_strategy(strategy)
+    }
+
+    /// True for a `Result`/`Partial` whose ok-type is a multi-element tuple, which lowers to one bundled value.
+    fn fallible_tuple_return(&self, return_type: &Type) -> bool {
+        matches!(
+            self.classify_direct_emission(return_type),
+            Some(AbiShape::ResultTuple | AbiShape::PartialTuple)
+        ) && self
+            .facts
+            .peel_alias(return_type)
+            .ok_type()
+            .tuple_arity()
+            .is_some_and(|arity| arity >= 2)
+    }
+
+    /// True when a tuple-ok fallible Go function value must be wrapped to match a lowered slot.
+    fn go_fn_needs_lowered_tuple_adapter(
+        &self,
+        expression: &Expression,
+        ctx: ExpressionContext<'_>,
+    ) -> bool {
+        if ctx.forces_tagged_go_function() {
+            return false;
+        }
+        let fn_ty = expression.get_type();
+        let Type::Function { return_type, .. } = fn_ty.unwrap_forall() else {
+            return false;
+        };
+        self.fallible_tuple_return(return_type)
     }
 
     pub(crate) fn emit_composite_value(

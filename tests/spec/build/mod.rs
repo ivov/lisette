@@ -170,10 +170,60 @@ import "go:fmt"
 
 fn main() {
   let reader = bufio.NewReader(strings.NewReader("hello\nworld"))
-  let line = reader.ReadString(10)
-  match line {
-    Ok(s) => fmt.Print(s),
+  let b = reader.ReadByte()
+  match b {
+    Ok(c) => fmt.Print(c),
     Err(_) => fmt.Print("error"),
+  }
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn go_partial_wrap_nil_guards_nilable_ok() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:go/parser"
+import "go:fmt"
+
+fn main() {
+  match parser.ParseExpr("1 + 2") {
+    Partial.Ok(_) => fmt.Print("ok"),
+    Partial.Both(_, _) => fmt.Print("both"),
+    Partial.Err(_) => fmt.Print("err"),
+  }
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn go_partial_wrap_nil_guards_nilable_collection() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:io"
+import "go:strings"
+import "go:fmt"
+
+fn main() {
+  let reader = strings.NewReader("hello")
+  match io.ReadAll(reader) {
+    Partial.Ok(_) => fmt.Print("ok"),
+    Partial.Both(_, _) => fmt.Print("both"),
+    Partial.Err(_) => fmt.Print("err"),
   }
 }
 "#,

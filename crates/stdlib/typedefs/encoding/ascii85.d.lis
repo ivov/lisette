@@ -18,7 +18,7 @@ import "go:io"
 /// than wait for the completion of another 32-bit block.
 /// 
 /// [NewDecoder] wraps an [io.Reader] interface around Decode.
-pub fn Decode(mut dst: Slice<byte>, src: Slice<byte>, flush: bool) -> Result<(int, int), error>
+pub fn Decode(mut dst: Slice<byte>, src: Slice<byte>, flush: bool) -> Partial<(int, int), error>
 
 /// Encode encodes src into at most [MaxEncodedLen](len(src))
 /// bytes of dst, returning the actual number of bytes written.

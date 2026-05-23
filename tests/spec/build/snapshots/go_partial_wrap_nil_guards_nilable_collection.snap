@@ -1,0 +1,36 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+	"io"
+	"strings"
+)
+
+func main() {
+	reader := strings.NewReader("hello")
+	ret_2, ret_3 := io.ReadAll(reader)
+	var result_4 lisette.Partial[[]byte, error]
+	if ret_3 != nil {
+		if ret_2 == nil {
+			result_4 = lisette.MakePartialErr[[]byte, error](ret_3)
+		} else {
+			result_4 = lisette.MakePartialBoth[[]byte, error](ret_2, ret_3)
+		}
+	} else {
+		result_4 = lisette.MakePartialOk[[]byte, error](ret_2)
+	}
+	subject_1 := result_4
+	switch subject_1.Tag {
+	case lisette.PartialOk:
+		fmt.Print("ok")
+	case lisette.PartialBoth:
+		fmt.Print("both")
+	default:
+		fmt.Print("err")
+	}
+}

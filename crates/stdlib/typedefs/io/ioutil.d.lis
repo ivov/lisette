@@ -19,7 +19,7 @@ pub fn NopCloser(r: io.Reader) -> io.ReadCloser
 /// as an error to be reported.
 /// 
 /// Deprecated: As of Go 1.16, this function simply calls [io.ReadAll].
-pub fn ReadAll(r: io.Reader) -> Result<Slice<byte>, error>
+pub fn ReadAll(r: io.Reader) -> Partial<Slice<byte>, error>
 
 /// ReadDir reads the directory named by dirname and returns
 /// a list of fs.FileInfo for the directory's contents,

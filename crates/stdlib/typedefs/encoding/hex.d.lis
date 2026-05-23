@@ -8,7 +8,7 @@ import "go:io"
 /// AppendDecode appends the hexadecimally decoded src to dst
 /// and returns the extended buffer.
 /// If the input is malformed, it returns the partially decoded src and an error.
-pub fn AppendDecode(mut dst: Slice<byte>, src: Slice<byte>) -> Result<Slice<byte>, error>
+pub fn AppendDecode(mut dst: Slice<byte>, src: Slice<byte>) -> Partial<Slice<byte>, error>
 
 /// AppendEncode appends the hexadecimally encoded src to dst
 /// and returns the extended buffer.
@@ -21,7 +21,7 @@ pub fn AppendEncode(mut dst: Slice<byte>, src: Slice<byte>) -> Slice<byte>
 /// characters and that src has even length.
 /// If the input is malformed, Decode returns the number
 /// of bytes decoded before the error.
-pub fn Decode(mut dst: Slice<byte>, src: Slice<byte>) -> Result<int, error>
+pub fn Decode(mut dst: Slice<byte>, src: Slice<byte>) -> Partial<int, error>
 
 /// DecodeString returns the bytes represented by the hexadecimal string s.
 /// 
@@ -29,7 +29,7 @@ pub fn Decode(mut dst: Slice<byte>, src: Slice<byte>) -> Result<int, error>
 /// characters and that src has even length.
 /// If the input is malformed, DecodeString returns
 /// the bytes decoded before the error.
-pub fn DecodeString(s: string) -> Result<Slice<byte>, error>
+pub fn DecodeString(s: string) -> Partial<Slice<byte>, error>
 
 /// DecodedLen returns the length of a decoding of x source bytes.
 /// Specifically, it returns x / 2.

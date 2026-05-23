@@ -406,7 +406,7 @@ impl Buffer {
   /// it returns the data read before the error and the error itself (often [io.EOF]).
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
-  fn ReadBytes(self: Ref<Buffer>, delim: byte) -> Result<Slice<byte>, error>
+  fn ReadBytes(self: Ref<Buffer>, delim: byte) -> Partial<Slice<byte>, error>
 
   /// ReadFrom reads data from r until EOF and appends it to the buffer, growing
   /// the buffer as needed. The return value n is the number of bytes read. Any
@@ -427,7 +427,7 @@ impl Buffer {
   /// it returns the data read before the error and the error itself (often [io.EOF]).
   /// ReadString returns err != nil if and only if the returned data does not end
   /// in delim.
-  fn ReadString(self: Ref<Buffer>, delim: byte) -> Result<string, error>
+  fn ReadString(self: Ref<Buffer>, delim: byte) -> Partial<string, error>
 
   /// Reset resets the buffer to be empty,
   /// but it retains the underlying storage for use by future writes.

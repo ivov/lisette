@@ -1,6 +1,6 @@
 use crate::Emitter;
 use crate::control_flow::fallible::{
-    Fallible, FallibleEmitter, PARTIAL_BOTH_CTOR, PARTIAL_OK_CTOR,
+    Fallible, FallibleEmitter, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR,
 };
 use crate::expressions::context::ExpressionContext;
 use crate::is_order_sensitive;
@@ -134,20 +134,28 @@ impl Emitter<'_> {
         let pkg = go_name::GO_STDLIB_PKG;
 
         let (err_var, val_var) = self.extract_go_returns(output, call_str, &ok_ty);
+        let nil_check = self.partial_ok_nil_check(&ok_ty, &val_var);
 
         let type_params = format!("{}, {}", ok_ty_str, err_ty_str);
         let result_ty_str = format!("{pkg}.Partial[{type_params}]");
         let (sink, outcome) = self.open_wrapper_slot(output, target, &result_ty_str, "result");
 
+        let both = format!("{PARTIAL_BOTH_CTOR}[{type_params}]({val_var}, {err_var})");
+
         write_line!(output, "if {} != nil {{", err_var);
-        write_leaf(
-            output,
-            &sink,
-            &format!(
-                "{PARTIAL_BOTH_CTOR}[{type_params}]({}, {})",
-                val_var, err_var
-            ),
-        );
+        if let Some(check) = &nil_check {
+            write_line!(output, "if {} {{", check);
+            write_leaf(
+                output,
+                &sink,
+                &format!("{PARTIAL_ERR_CTOR}[{type_params}]({err_var})"),
+            );
+            output.push_str("} else {\n");
+            write_leaf(output, &sink, &both);
+            output.push_str("}\n");
+        } else {
+            write_leaf(output, &sink, &both);
+        }
         output.push_str("} else {\n");
         write_leaf(
             output,
@@ -157,6 +165,20 @@ impl Emitter<'_> {
         output.push_str("}\n");
 
         outcome
+    }
+
+    /// Nil check for a `Partial` ok value; `None` when the type cannot be nil.
+    fn partial_ok_nil_check(&mut self, ok_ty: &Type, val: &str) -> Option<String> {
+        if self.facts.as_interface(ok_ty).is_some() {
+            self.requirements.require_stdlib();
+            return Some(format!("lisette.IsNilInterface({val})"));
+        }
+        let peeled = self.facts.peel_alias(ok_ty);
+        let nilable = self.facts.is_nilable_go_type(ok_ty)
+            || peeled.is_map()
+            || peeled.is_slice()
+            || peeled.is_channel();
+        nilable.then(|| format!("{val} == nil"))
     }
 
     pub(super) fn emit_go_result_call_wrapped(
@@ -507,6 +529,51 @@ impl Emitter<'_> {
         if let Some(result_var) = outcome {
             write_line!(body, "return {}", result_var);
         }
+
+        format!(
+            "func({}) {} {{\n{}}}",
+            param_strs.join(", "),
+            ret_ty_str,
+            body
+        )
+    }
+
+    /// Closure that bundles a raw `(T1, T2, error)` return into the slot's `(Tuple, error)` shape.
+    pub(crate) fn emit_go_fn_lowered_tuple_adapter(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+    ) -> String {
+        self.requirements.require_stdlib();
+
+        let fn_type = expression.get_type();
+        let (params, return_type) = match fn_type.unwrap_forall() {
+            Type::Function {
+                params,
+                return_type,
+                ..
+            } => (params.clone(), (**return_type).clone()),
+            _ => unreachable!("expected function type"),
+        };
+
+        let go_fn_str = self.hoist_go_fn_if_needed(output, expression);
+        let (param_strs, arg_names) = self.build_wrapper_params(&params);
+
+        let ok_ty = return_type.ok_type();
+        let err_ty = return_type.err_type();
+        let ret_ty_str = format!(
+            "({}, {})",
+            self.go_type_as_string(&ok_ty),
+            self.go_type_as_string(&err_ty)
+        );
+        let call_str = format!("{}({})", go_fn_str, arg_names.join(", "));
+        let arity = ok_ty.tuple_arity().expect("tuple ok type");
+
+        let mut body = String::new();
+        let temp_vars = self.create_temp_vars("ret", arity + 1);
+        write_line!(body, "{} := {}", temp_vars.join(", "), call_str);
+        let tuple_str = self.emit_tuple_from_vars(&mut body, &temp_vars[..arity], &ok_ty);
+        write_line!(body, "return {}, {}", tuple_str, temp_vars[arity]);
 
         format!(
             "func({}) {} {{\n{}}}",

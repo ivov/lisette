@@ -430,5 +430,5 @@ impl Replacer {
   fn Replace(self: Ref<Replacer>, s: string) -> string
 
   /// WriteString writes s to w with all replacements performed.
-  fn WriteString(self: Ref<Replacer>, w: io.Writer, s: string) -> Result<int, error>
+  fn WriteString(self: Ref<Replacer>, w: io.Writer, s: string) -> Partial<int, error>
 }

@@ -15,10 +15,10 @@ import "go:io/fs"
 pub fn ArchChar(goarch: string) -> Result<string, error>
 
 /// Import is shorthand for Default.Import.
-pub fn Import(path: string, srcDir: string, mode: ImportMode) -> Result<Ref<Package>, error>
+pub fn Import(path: string, srcDir: string, mode: ImportMode) -> Partial<Ref<Package>, error>
 
 /// ImportDir is shorthand for Default.ImportDir.
-pub fn ImportDir(dir: string, mode: ImportMode) -> Result<Ref<Package>, error>
+pub fn ImportDir(dir: string, mode: ImportMode) -> Partial<Ref<Package>, error>
 
 /// IsLocalImport reports whether the import path is
 /// a local import path, like ".", "..", "./foo", or "../foo".
@@ -157,11 +157,11 @@ impl Context {
   /// 
   /// If an error occurs, Import returns a non-nil error and a non-nil
   /// *[Package] containing partial information.
-  fn Import(self: Ref<Context>, path: string, srcDir: string, mode: ImportMode) -> Result<Ref<Package>, error>
+  fn Import(self: Ref<Context>, path: string, srcDir: string, mode: ImportMode) -> Partial<Ref<Package>, error>
 
   /// ImportDir is like [Import] but processes the Go package found in
   /// the named directory.
-  fn ImportDir(self: Ref<Context>, dir: string, mode: ImportMode) -> Result<Ref<Package>, error>
+  fn ImportDir(self: Ref<Context>, dir: string, mode: ImportMode) -> Partial<Ref<Package>, error>
 
   /// MatchFile reports whether the file with the given name in the given directory
   /// matches the context and would be included in a [Package] created by [ImportDir]

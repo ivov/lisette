@@ -3570,8 +3570,9 @@ fn test_pointer_receiver_struct_literal() -> int {
 fn test_pointer_receiver_constructor() -> int {
   let buf = bytes.NewBufferString("hello")
   match buf.ReadString(111) {
-    Ok(s) => if s == "hello" { 100 } else { 0 },
-    Err(_) => 100,
+    Partial.Ok(s) => if s == "hello" { 100 } else { 0 },
+    Partial.Both(s, _) => if s == "hello" { 100 } else { 0 },
+    Partial.Err(_) => 100,
   } // EOF is expected, but we still read "hello"
 }
 

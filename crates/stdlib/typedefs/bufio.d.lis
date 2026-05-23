@@ -168,7 +168,7 @@ impl ReadWriter {
   /// If Discard skips fewer than n bytes, it also returns an error.
   /// If 0 <= n <= b.Buffered(), Discard is guaranteed to succeed without
   /// reading from the underlying io.Reader.
-  fn Discard(self: Ref<ReadWriter>, n: int) -> Result<int, error>
+  fn Discard(self: Ref<ReadWriter>, n: int) -> Partial<int, error>
 
   /// Flush writes any buffered data to the underlying [io.Writer].
   #[allow(unused_result)]
@@ -182,7 +182,7 @@ impl ReadWriter {
   /// 
   /// Calling Peek prevents a [Reader.UnreadByte] or [Reader.UnreadRune] call from succeeding
   /// until the next read operation.
-  fn Peek(self: Ref<ReadWriter>, n: int) -> Result<Slice<byte>, error>
+  fn Peek(self: Ref<ReadWriter>, n: int) -> Partial<Slice<byte>, error>
 
   /// Read reads data into p.
   /// It returns the number of bytes read into p.
@@ -204,7 +204,7 @@ impl ReadWriter {
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadBytes(self: Ref<ReadWriter>, delim: byte) -> Result<Slice<byte>, error>
+  fn ReadBytes(self: Ref<ReadWriter>, delim: byte) -> Partial<Slice<byte>, error>
 
   /// ReadFrom implements [io.ReaderFrom]. If the underlying writer
   /// supports the ReadFrom method, this calls the underlying ReadFrom.
@@ -245,7 +245,7 @@ impl ReadWriter {
   /// by the next I/O operation, most clients should use
   /// [Reader.ReadBytes] or ReadString instead.
   /// ReadSlice returns err != nil if and only if line does not end in delim.
-  fn ReadSlice(self: Ref<ReadWriter>, delim: byte) -> Result<Slice<byte>, error>
+  fn ReadSlice(self: Ref<ReadWriter>, delim: byte) -> Partial<Slice<byte>, error>
 
   /// ReadString reads until the first occurrence of delim in the input,
   /// returning a string containing the data up to and including the delimiter.
@@ -254,7 +254,7 @@ impl ReadWriter {
   /// ReadString returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadString(self: Ref<ReadWriter>, delim: byte) -> Result<string, error>
+  fn ReadString(self: Ref<ReadWriter>, delim: byte) -> Partial<string, error>
 
   /// UnreadByte unreads the last byte. Only the most recently read byte can be unread.
   /// 
@@ -280,7 +280,7 @@ impl ReadWriter {
 
   /// WriteRune writes a single Unicode code point, returning
   /// the number of bytes written and any error.
-  fn WriteRune(self: Ref<ReadWriter>, r: rune) -> Result<int, error>
+  fn WriteRune(self: Ref<ReadWriter>, r: rune) -> Partial<int, error>
 
   /// WriteString writes a string.
   /// It returns the number of bytes written.
@@ -304,7 +304,7 @@ impl Reader {
   /// If Discard skips fewer than n bytes, it also returns an error.
   /// If 0 <= n <= b.Buffered(), Discard is guaranteed to succeed without
   /// reading from the underlying io.Reader.
-  fn Discard(self: Ref<Reader>, n: int) -> Result<int, error>
+  fn Discard(self: Ref<Reader>, n: int) -> Partial<int, error>
 
   /// Peek returns the next n bytes without advancing the reader. The bytes stop
   /// being valid at the next read call. If necessary, Peek will read more bytes
@@ -314,7 +314,7 @@ impl Reader {
   /// 
   /// Calling Peek prevents a [Reader.UnreadByte] or [Reader.UnreadRune] call from succeeding
   /// until the next read operation.
-  fn Peek(self: Ref<Reader>, n: int) -> Result<Slice<byte>, error>
+  fn Peek(self: Ref<Reader>, n: int) -> Partial<Slice<byte>, error>
 
   /// Read reads data into p.
   /// It returns the number of bytes read into p.
@@ -336,7 +336,7 @@ impl Reader {
   /// ReadBytes returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadBytes(self: Ref<Reader>, delim: byte) -> Result<Slice<byte>, error>
+  fn ReadBytes(self: Ref<Reader>, delim: byte) -> Partial<Slice<byte>, error>
 
   /// ReadLine is a low-level line-reading primitive. Most callers should use
   /// [Reader.ReadBytes]('\n') or [Reader.ReadString]('\n') instead or use a [Scanner].
@@ -371,7 +371,7 @@ impl Reader {
   /// by the next I/O operation, most clients should use
   /// [Reader.ReadBytes] or ReadString instead.
   /// ReadSlice returns err != nil if and only if line does not end in delim.
-  fn ReadSlice(self: Ref<Reader>, delim: byte) -> Result<Slice<byte>, error>
+  fn ReadSlice(self: Ref<Reader>, delim: byte) -> Partial<Slice<byte>, error>
 
   /// ReadString reads until the first occurrence of delim in the input,
   /// returning a string containing the data up to and including the delimiter.
@@ -380,7 +380,7 @@ impl Reader {
   /// ReadString returns err != nil if and only if the returned data does not end in
   /// delim.
   /// For simple uses, a Scanner may be more convenient.
-  fn ReadString(self: Ref<Reader>, delim: byte) -> Result<string, error>
+  fn ReadString(self: Ref<Reader>, delim: byte) -> Partial<string, error>
 
   /// Reset discards any buffered data, resets all state, and switches
   /// the buffered reader to read from r.
@@ -501,7 +501,7 @@ impl Writer {
 
   /// WriteRune writes a single Unicode code point, returning
   /// the number of bytes written and any error.
-  fn WriteRune(self: Ref<Writer>, r: rune) -> Result<int, error>
+  fn WriteRune(self: Ref<Writer>, r: rune) -> Partial<int, error>
 
   /// WriteString writes a string.
   /// It returns the number of bytes written.

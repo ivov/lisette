@@ -1289,7 +1289,7 @@ fn make(counter: Ref<int>) -> Ref<bytes.Buffer> {
   bytes.NewBufferString("a\nb\n")
 }
 
-fn use_fn(f: fn(uint8) -> Result<string, error>) {
+fn use_fn(f: fn(uint8) -> Partial<string, error>) {
   let _ = f(10)
   let _ = f(10)
 }
@@ -1298,6 +1298,22 @@ fn main() {
   let mut count = 0
   use_fn(make(&count).ReadString)
   fmt.Println(count)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn go_tuple_partial_fn_value_adapts_to_lowered_slot() {
+    let input = r#"
+import "go:mime"
+
+fn use_fn(f: fn(string) -> Partial<(string, Map<string, string>), error>) {
+  let _ = f("text/plain")
+}
+
+fn main() {
+  use_fn(mime.ParseMediaType)
 }
 "#;
     assert_emit_snapshot!(input);

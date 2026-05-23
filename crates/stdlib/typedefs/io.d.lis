@@ -15,7 +15,7 @@
 /// the copy is implemented by calling src.WriteTo(dst).
 /// Otherwise, if dst implements [ReaderFrom],
 /// the copy is implemented by calling dst.ReadFrom(src).
-pub fn Copy(dst: Writer, src: Reader) -> Result<int64, error>
+pub fn Copy(dst: Writer, src: Reader) -> Partial<int64, error>
 
 /// CopyBuffer is identical to Copy except that it stages through the
 /// provided buffer (if one is required) rather than allocating a
@@ -24,7 +24,7 @@ pub fn Copy(dst: Writer, src: Reader) -> Result<int64, error>
 /// 
 /// If either src implements [WriterTo] or dst implements [ReaderFrom],
 /// buf will not be used to perform the copy.
-pub fn CopyBuffer(dst: Writer, src: Reader, mut buf: Slice<byte>) -> Result<int64, error>
+pub fn CopyBuffer(dst: Writer, src: Reader, mut buf: Slice<byte>) -> Partial<int64, error>
 
 /// CopyN copies n bytes (or until an error) from src to dst.
 /// It returns the number of bytes copied and the earliest
@@ -32,7 +32,7 @@ pub fn CopyBuffer(dst: Writer, src: Reader, mut buf: Slice<byte>) -> Result<int6
 /// On return, written == n if and only if err == nil.
 /// 
 /// If dst implements [ReaderFrom], the copy is implemented using it.
-pub fn CopyN(dst: Writer, src: Reader, n: int64) -> Result<int64, error>
+pub fn CopyN(dst: Writer, src: Reader, n: int64) -> Partial<int64, error>
 
 /// LimitReader returns a Reader that reads from r
 /// but stops with EOF after n bytes.
@@ -88,7 +88,7 @@ pub fn Pipe() -> (Ref<PipeReader>, Ref<PipeWriter>)
 /// A successful call returns err == nil, not err == EOF. Because ReadAll is
 /// defined to read from src until EOF, it does not treat an EOF from Read
 /// as an error to be reported.
-pub fn ReadAll(r: Reader) -> Result<Slice<byte>, error>
+pub fn ReadAll(r: Reader) -> Partial<Slice<byte>, error>
 
 /// ReadAtLeast reads from r into buf until it has read at least min bytes.
 /// It returns the number of bytes copied and an error if fewer bytes were read.

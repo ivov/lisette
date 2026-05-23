@@ -294,7 +294,7 @@ pub fn ListenUnixgram(network: string, laddr: Ref<UnixAddr>) -> Result<Ref<UnixC
 /// 
 /// LookupAddr uses [context.Background] internally; to specify the context, use
 /// [Resolver.LookupAddr].
-pub fn LookupAddr(addr: string) -> Result<Slice<string>, error>
+pub fn LookupAddr(addr: string) -> Partial<Slice<string>, error>
 
 /// LookupCNAME returns the canonical name for the given host.
 /// Callers that do not care about the canonical name can call
@@ -334,7 +334,7 @@ pub fn LookupIP(host: string) -> Result<Slice<IP>, error>
 /// 
 /// LookupMX uses [context.Background] internally; to specify the context, use
 /// [Resolver.LookupMX].
-pub fn LookupMX(name: string) -> Result<Slice<Ref<MX>>, error>
+pub fn LookupMX(name: string) -> Partial<Slice<Ref<MX>>, error>
 
 /// LookupNS returns the DNS NS records for the given domain name.
 /// 
@@ -345,7 +345,7 @@ pub fn LookupMX(name: string) -> Result<Slice<Ref<MX>>, error>
 /// 
 /// LookupNS uses [context.Background] internally; to specify the context, use
 /// [Resolver.LookupNS].
-pub fn LookupNS(name: string) -> Result<Slice<Ref<NS>>, error>
+pub fn LookupNS(name: string) -> Partial<Slice<Ref<NS>>, error>
 
 /// LookupPort looks up the port for the given network and service.
 /// 
@@ -367,7 +367,7 @@ pub fn LookupPort(network: string, service: string) -> Result<int, error>
 /// formatted presentation-format domain names. If the response contains
 /// invalid names, those records are filtered out and an error
 /// will be returned alongside the remaining results, if any.
-pub fn LookupSRV(service: string, proto: string, name: string) -> Result<(string, Slice<Ref<SRV>>), error>
+pub fn LookupSRV(service: string, proto: string, name: string) -> Partial<(string, Slice<Ref<SRV>>), error>
 
 /// LookupTXT returns the DNS TXT records for the given domain name.
 /// 
@@ -699,7 +699,7 @@ pub interface PacketConn {
   fn SetDeadline(t: time.Time) -> Result<(), error>
   fn SetReadDeadline(t: time.Time) -> Result<(), error>
   fn SetWriteDeadline(t: time.Time) -> Result<(), error>
-  fn WriteTo(p: Slice<byte>, addr: Addr) -> Result<int, error>
+  fn WriteTo(p: Slice<byte>, addr: Addr) -> Partial<int, error>
 }
 
 /// A ParseError is the error type of literal network address parsers.
@@ -1112,10 +1112,10 @@ impl IPConn {
   ) -> Result<(int, int), error>
 
   /// WriteTo implements the [PacketConn] WriteTo method.
-  fn WriteTo(self: Ref<IPConn>, b: Slice<byte>, addr: Addr) -> Result<int, error>
+  fn WriteTo(self: Ref<IPConn>, b: Slice<byte>, addr: Addr) -> Partial<int, error>
 
   /// WriteToIP acts like [IPConn.WriteTo] but takes an [IPAddr].
-  fn WriteToIP(self: Ref<IPConn>, b: Slice<byte>, addr: Ref<IPAddr>) -> Result<int, error>
+  fn WriteToIP(self: Ref<IPConn>, b: Slice<byte>, addr: Ref<IPAddr>) -> Partial<int, error>
 }
 
 impl IPMask {
@@ -1231,7 +1231,7 @@ impl Resolver {
   /// The returned names are validated to be properly formatted presentation-format
   /// domain names. If the response contains invalid names, those records are filtered
   /// out and an error will be returned alongside the remaining results, if any.
-  fn LookupAddr(self: Ref<Resolver>, ctx: context.Context, addr: string) -> Result<Slice<string>, error>
+  fn LookupAddr(self: Ref<Resolver>, ctx: context.Context, addr: string) -> Partial<Slice<string>, error>
 
   /// LookupCNAME returns the canonical name for the given host.
   /// Callers that do not care about the canonical name can call
@@ -1273,7 +1273,7 @@ impl Resolver {
   /// formatted presentation-format domain names, or numeric IP addresses.
   /// If the response contains invalid names, those records are filtered out
   /// and an error will be returned alongside the remaining results, if any.
-  fn LookupMX(self: Ref<Resolver>, ctx: context.Context, name: string) -> Result<Slice<Ref<MX>>, error>
+  fn LookupMX(self: Ref<Resolver>, ctx: context.Context, name: string) -> Partial<Slice<Ref<MX>>, error>
 
   /// LookupNS returns the DNS NS records for the given domain name.
   /// 
@@ -1281,7 +1281,7 @@ impl Resolver {
   /// formatted presentation-format domain names. If the response contains
   /// invalid names, those records are filtered out and an error
   /// will be returned alongside the remaining results, if any.
-  fn LookupNS(self: Ref<Resolver>, ctx: context.Context, name: string) -> Result<Slice<Ref<NS>>, error>
+  fn LookupNS(self: Ref<Resolver>, ctx: context.Context, name: string) -> Partial<Slice<Ref<NS>>, error>
 
   /// LookupNetIP looks up host using the local resolver.
   /// It returns a slice of that host's IP addresses of the type specified by
@@ -1324,7 +1324,7 @@ impl Resolver {
     service: string,
     proto: string,
     name: string,
-  ) -> Result<(string, Slice<Ref<SRV>>), error>
+  ) -> Partial<(string, Slice<Ref<SRV>>), error>
 
   /// LookupTXT returns the DNS TXT records for the given domain name.
   /// 
@@ -1627,17 +1627,17 @@ impl UDPConn {
   ) -> Result<(int, int), error>
 
   /// WriteTo implements the [PacketConn] WriteTo method.
-  fn WriteTo(self: Ref<UDPConn>, b: Slice<byte>, addr: Addr) -> Result<int, error>
+  fn WriteTo(self: Ref<UDPConn>, b: Slice<byte>, addr: Addr) -> Partial<int, error>
 
   /// WriteToUDP acts like [UDPConn.WriteTo] but takes a [UDPAddr].
-  fn WriteToUDP(self: Ref<UDPConn>, b: Slice<byte>, addr: Ref<UDPAddr>) -> Result<int, error>
+  fn WriteToUDP(self: Ref<UDPConn>, b: Slice<byte>, addr: Ref<UDPAddr>) -> Partial<int, error>
 
   /// WriteToUDPAddrPort acts like [UDPConn.WriteTo] but takes a [netip.AddrPort].
   fn WriteToUDPAddrPort(
     self: Ref<UDPConn>,
     b: Slice<byte>,
     addr: netip.AddrPort,
-  ) -> Result<int, error>
+  ) -> Partial<int, error>
 }
 
 impl UnixAddr {
@@ -1739,10 +1739,10 @@ impl UnixConn {
   ) -> Result<(int, int), error>
 
   /// WriteTo implements the [PacketConn].WriteTo method.
-  fn WriteTo(self: Ref<UnixConn>, b: Slice<byte>, addr: Addr) -> Result<int, error>
+  fn WriteTo(self: Ref<UnixConn>, b: Slice<byte>, addr: Addr) -> Partial<int, error>
 
   /// WriteToUnix acts like [UnixConn.WriteTo] but takes a [UnixAddr].
-  fn WriteToUnix(self: Ref<UnixConn>, b: Slice<byte>, addr: Ref<UnixAddr>) -> Result<int, error>
+  fn WriteToUnix(self: Ref<UnixConn>, b: Slice<byte>, addr: Ref<UnixAddr>) -> Partial<int, error>
 }
 
 impl UnixListener {
