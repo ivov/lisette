@@ -3580,8 +3580,9 @@ fn test_pointer_receiver_method_expr() -> int {
   let f = bytes.Buffer.WriteString
   let mut buf = bytes.Buffer {}
   match f(&buf, "hello") {
-    Ok(n) => if n == 5 { 100 } else { 0 },
-    Err(_) => 0,
+    Partial.Ok(n) => if n == 5 { 100 } else { 0 },
+    Partial.Both(n, _) => if n == 5 { 100 } else { 0 },
+    Partial.Err(_) => 0,
   }
 }
 

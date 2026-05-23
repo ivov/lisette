@@ -119,7 +119,7 @@ pub fn TeeReader(r: Reader, w: Writer) -> Reader
 /// WriteString writes the contents of the string s to w, which accepts a slice of bytes.
 /// If w implements [StringWriter], [StringWriter.WriteString] is invoked directly.
 /// Otherwise, [Writer.Write] is called exactly once.
-pub fn WriteString(w: Writer, s: string) -> Result<int, error>
+pub fn WriteString(w: Writer, s: string) -> Partial<int, error>
 
 /// ByteReader is the interface that wraps the ReadByte method.
 /// 
@@ -291,7 +291,7 @@ pub interface ReaderAt {
 /// 
 /// The [Copy] function uses [ReaderFrom] if available.
 pub interface ReaderFrom {
-  fn ReadFrom(r: Reader) -> Result<int64, error>
+  fn ReadFrom(r: Reader) -> Partial<int64, error>
 }
 
 /// RuneReader is the interface that wraps the ReadRune method.
@@ -341,7 +341,7 @@ pub interface Seeker {
 
 /// StringWriter is the interface that wraps the WriteString method.
 pub interface StringWriter {
-  fn WriteString(s: string) -> Result<int, error>
+  fn WriteString(s: string) -> Partial<int, error>
 }
 
 /// WriteCloser is the interface that groups the basic Write and Close methods.
@@ -396,7 +396,7 @@ pub interface WriterAt {
 /// 
 /// The Copy function uses WriterTo if available.
 pub interface WriterTo {
-  fn WriteTo(w: Writer) -> Result<int64, error>
+  fn WriteTo(w: Writer) -> Partial<int64, error>
 }
 
 /// Seek whence values.

@@ -122,5 +122,5 @@ impl Hash {
 
   /// WriteString adds the bytes of s to the sequence of bytes hashed by h.
   /// It always writes all of s and never fails; the count and error result are for implementing [io.StringWriter].
-  fn WriteString(self: Ref<Hash>, s: string) -> Result<int, error>
+  fn WriteString(self: Ref<Hash>, s: string) -> Partial<int, error>
 }

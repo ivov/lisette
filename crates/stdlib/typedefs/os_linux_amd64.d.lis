@@ -900,7 +900,7 @@ impl File {
   fn ReadDir(self: Ref<File>, n: int) -> Result<Slice<fs.DirEntry>, error>
 
   /// ReadFrom implements io.ReaderFrom.
-  fn ReadFrom(self: Ref<File>, r: io.Reader) -> Result<int64, error>
+  fn ReadFrom(self: Ref<File>, r: io.Reader) -> Partial<int64, error>
 
   /// Readdir reads the contents of the directory associated with file and
   /// returns a slice of up to n [FileInfo] values, as would be returned
@@ -1017,10 +1017,10 @@ impl File {
 
   /// WriteString is like Write, but writes the contents of string s rather than
   /// a slice of bytes.
-  fn WriteString(self: Ref<File>, s: string) -> Result<int, error>
+  fn WriteString(self: Ref<File>, s: string) -> Partial<int, error>
 
   /// WriteTo implements io.WriterTo.
-  fn WriteTo(self: Ref<File>, w: io.Writer) -> Result<int64, error>
+  fn WriteTo(self: Ref<File>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl LinkError {

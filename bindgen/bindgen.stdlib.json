@@ -68,7 +68,7 @@
       },
       "partial_result": {
         "bufio": ["Scanner.Bytes", "Scanner.Text"],
-        "io": ["ReadAtLeast", "ReadFull"]
+        "io": ["ReadAtLeast", "ReadFull", "WriteString"]
       },
       "nilable_return": {
         "crypto/tls": ["Conn.LocalAddr", "Conn.NetConn", "Conn.RemoteAddr"],

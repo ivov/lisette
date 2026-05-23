@@ -124,7 +124,7 @@ impl FlightRecorder {
   /// Only one goroutine may execute WriteTo at a time.
   /// An error is returned upon failure to write to w, if another WriteTo call is already in-progress,
   /// or if the flight recorder is inactive.
-  fn WriteTo(self: Ref<FlightRecorder>, w: io.Writer) -> Result<int64, error>
+  fn WriteTo(self: Ref<FlightRecorder>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl Region {

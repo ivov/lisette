@@ -382,8 +382,8 @@ impl Builder {
 
   /// WriteString appends the contents of s to b's buffer.
   /// It returns the length of s and a nil error.
-  #[allow(unused_result)]
-  fn WriteString(self: Ref<Builder>, s: string) -> Result<int, error>
+  #[allow(unused_partial)]
+  fn WriteString(self: Ref<Builder>, s: string) -> Partial<int, error>
 }
 
 impl Reader {
@@ -422,7 +422,7 @@ impl Reader {
   fn UnreadRune(self: Ref<Reader>) -> Result<(), error>
 
   /// WriteTo implements the [io.WriterTo] interface.
-  fn WriteTo(self: Ref<Reader>, w: io.Writer) -> Result<int64, error>
+  fn WriteTo(self: Ref<Reader>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl Replacer {

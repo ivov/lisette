@@ -853,7 +853,7 @@ impl Buffers {
   /// 
   /// WriteTo modifies the slice v as well as v[i] for 0 <= i < len(v),
   /// but does not modify v[i][j] for any i, j.
-  fn WriteTo(self: Ref<Buffers>, w: io.Writer) -> Result<int64, error>
+  fn WriteTo(self: Ref<Buffers>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl DNSConfigError {
@@ -1392,7 +1392,7 @@ impl TCPConn {
   fn Read(self: Ref<TCPConn>, mut b: Slice<byte>) -> Partial<int, error>
 
   /// ReadFrom implements the [io.ReaderFrom] ReadFrom method.
-  fn ReadFrom(self: Ref<TCPConn>, r: io.Reader) -> Result<int64, error>
+  fn ReadFrom(self: Ref<TCPConn>, r: io.Reader) -> Partial<int64, error>
 
   /// RemoteAddr returns the remote network address.
   /// The Addr returned is shared by all invocations of RemoteAddr, so
@@ -1460,7 +1460,7 @@ impl TCPConn {
   fn Write(self: Ref<TCPConn>, b: Slice<byte>) -> Partial<int, error>
 
   /// WriteTo implements the io.WriterTo WriteTo method.
-  fn WriteTo(self: Ref<TCPConn>, w: io.Writer) -> Result<int64, error>
+  fn WriteTo(self: Ref<TCPConn>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl TCPListener {

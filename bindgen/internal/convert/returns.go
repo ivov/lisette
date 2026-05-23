@@ -8,6 +8,35 @@ import (
 	"sync"
 )
 
+func ioInterfaceFromPackage(pkg *types.Package, name string) *types.Interface {
+	if pkg == nil {
+		return nil
+	}
+	seen := make(map[*types.Package]bool)
+	var walk func(*types.Package) *types.Interface
+	walk = func(p *types.Package) *types.Interface {
+		if p == nil || seen[p] {
+			return nil
+		}
+		seen[p] = true
+		if p.Path() == "io" {
+			obj := p.Scope().Lookup(name)
+			if obj == nil {
+				return nil
+			}
+			iface, _ := obj.Type().Underlying().(*types.Interface)
+			return iface
+		}
+		for _, imp := range p.Imports() {
+			if iface := walk(imp); iface != nil {
+				return iface
+			}
+		}
+		return nil
+	}
+	return walk(pkg)
+}
+
 // ReturnsToLisette converts a Go function's return types to Lisette.
 // The qualifiedName is used for config lookups (e.g. "LookupEnv" or "Rat.Float64").
 func ReturnsToLisette(signature *types.Signature, conv *Converter, qualifiedName string) TypeResult {
@@ -289,14 +318,17 @@ func universeErrorInterface() *types.Interface {
 // partialIOMethod maps io interface names to their methods that return
 // non-exclusive (T, error) results.
 var partialIOMethods = map[string]string{
-	"io.Reader":   "Read",
-	"io.Writer":   "Write",
-	"io.ReaderAt": "ReadAt",
-	"io.WriterAt": "WriteAt",
+	"io.Reader":       "Read",
+	"io.Writer":       "Write",
+	"io.ReaderAt":     "ReadAt",
+	"io.WriterAt":     "WriteAt",
+	"io.StringWriter": "WriteString",
+	"io.ReaderFrom":   "ReadFrom",
+	"io.WriterTo":     "WriteTo",
 }
 
-// isPartialIOMethod returns true if the method's receiver type implements
-// io.Reader, io.Writer, io.ReaderAt, or io.WriterAt, and the method is the
+// isPartialIOMethod returns true if the method's receiver type implements one
+// of the io partial-progress interfaces and the method name matches the
 // corresponding interface method. These methods return (T, error) where both
 // values may be simultaneously meaningful.
 func isPartialIOMethod(signature *types.Signature, qualifiedName string) bool {
@@ -324,11 +356,15 @@ func isPartialIOMethod(signature *types.Signature, qualifiedName string) bool {
 		if methodName != ifaceMethod {
 			continue
 		}
-		iface := lookupIOInterface(ifacePath)
-		if iface == nil {
-			continue
+		// ReaderFrom/WriterTo reference other io types, so the importer-loaded
+		// interface fails types.Implements; fall back to the receiver's import graph.
+		if iface := lookupIOInterface(ifacePath); iface != nil &&
+			(types.Implements(named, iface) || types.Implements(types.NewPointer(named), iface)) {
+			return true
 		}
-		if types.Implements(named, iface) || types.Implements(types.NewPointer(named), iface) {
+		ifaceName := ifacePath[strings.LastIndexByte(ifacePath, '.')+1:]
+		if iface := ioInterfaceFromPackage(named.Obj().Pkg(), ifaceName); iface != nil &&
+			(types.Implements(named, iface) || types.Implements(types.NewPointer(named), iface)) {
 			return true
 		}
 	}

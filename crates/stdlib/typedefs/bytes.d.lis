@@ -412,7 +412,7 @@ impl Buffer {
   /// the buffer as needed. The return value n is the number of bytes read. Any
   /// error except io.EOF encountered during the read is also returned. If the
   /// buffer becomes too large, ReadFrom will panic with [ErrTooLarge].
-  fn ReadFrom(self: Ref<Buffer>, r: io.Reader) -> Result<int64, error>
+  fn ReadFrom(self: Ref<Buffer>, r: io.Reader) -> Partial<int64, error>
 
   /// ReadRune reads and returns the next UTF-8-encoded
   /// Unicode code point from the buffer.
@@ -480,14 +480,14 @@ impl Buffer {
   /// WriteString appends the contents of s to the buffer, growing the buffer as
   /// needed. The return value n is the length of s; err is always nil. If the
   /// buffer becomes too large, WriteString will panic with [ErrTooLarge].
-  #[allow(unused_result)]
-  fn WriteString(self: Ref<Buffer>, s: string) -> Result<int, error>
+  #[allow(unused_partial)]
+  fn WriteString(self: Ref<Buffer>, s: string) -> Partial<int, error>
 
   /// WriteTo writes data to w until the buffer is drained or an error occurs.
   /// The return value n is the number of bytes written; it always fits into an
   /// int, but it is int64 to match the [io.WriterTo] interface. Any error
   /// encountered during the write is also returned.
-  fn WriteTo(self: Ref<Buffer>, w: io.Writer) -> Result<int64, error>
+  fn WriteTo(self: Ref<Buffer>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl Reader {
@@ -525,5 +525,5 @@ impl Reader {
   fn UnreadRune(self: Ref<Reader>) -> Result<(), error>
 
   /// WriteTo implements the [io.WriterTo] interface.
-  fn WriteTo(self: Ref<Reader>, w: io.Writer) -> Result<int64, error>
+  fn WriteTo(self: Ref<Reader>, w: io.Writer) -> Partial<int64, error>
 }

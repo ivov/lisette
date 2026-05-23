@@ -210,7 +210,7 @@ impl ReadWriter {
   /// supports the ReadFrom method, this calls the underlying ReadFrom.
   /// If there is buffered data and an underlying ReadFrom, this fills
   /// the buffer and writes it before calling ReadFrom.
-  fn ReadFrom(self: Ref<ReadWriter>, r: io.Reader) -> Result<int64, error>
+  fn ReadFrom(self: Ref<ReadWriter>, r: io.Reader) -> Partial<int64, error>
 
   /// ReadLine is a low-level line-reading primitive. Most callers should use
   /// [Reader.ReadBytes]('\n') or [Reader.ReadString]('\n') instead or use a [Scanner].
@@ -286,13 +286,13 @@ impl ReadWriter {
   /// It returns the number of bytes written.
   /// If the count is less than len(s), it also returns an error explaining
   /// why the write is short.
-  fn WriteString(self: Ref<ReadWriter>, s: string) -> Result<int, error>
+  fn WriteString(self: Ref<ReadWriter>, s: string) -> Partial<int, error>
 
   /// WriteTo implements io.WriterTo.
   /// This may make multiple calls to the [Reader.Read] method of the underlying [Reader].
   /// If the underlying reader supports the [Reader.WriteTo] method,
   /// this calls the underlying [Reader.WriteTo] without buffering.
-  fn WriteTo(self: Ref<ReadWriter>, w: io.Writer) -> Result<int64, error>
+  fn WriteTo(self: Ref<ReadWriter>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl Reader {
@@ -409,7 +409,7 @@ impl Reader {
   /// This may make multiple calls to the [Reader.Read] method of the underlying [Reader].
   /// If the underlying reader supports the [Reader.WriteTo] method,
   /// this calls the underlying [Reader.WriteTo] without buffering.
-  fn WriteTo(self: Ref<Reader>, w: io.Writer) -> Result<int64, error>
+  fn WriteTo(self: Ref<Reader>, w: io.Writer) -> Partial<int64, error>
 }
 
 impl Scanner {
@@ -478,7 +478,7 @@ impl Writer {
   /// supports the ReadFrom method, this calls the underlying ReadFrom.
   /// If there is buffered data and an underlying ReadFrom, this fills
   /// the buffer and writes it before calling ReadFrom.
-  fn ReadFrom(self: Ref<Writer>, r: io.Reader) -> Result<int64, error>
+  fn ReadFrom(self: Ref<Writer>, r: io.Reader) -> Partial<int64, error>
 
   /// Reset discards any unflushed buffered data, clears any error, and
   /// resets b to write its output to w.
@@ -507,5 +507,5 @@ impl Writer {
   /// It returns the number of bytes written.
   /// If the count is less than len(s), it also returns an error explaining
   /// why the write is short.
-  fn WriteString(self: Ref<Writer>, s: string) -> Result<int, error>
+  fn WriteString(self: Ref<Writer>, s: string) -> Partial<int, error>
 }

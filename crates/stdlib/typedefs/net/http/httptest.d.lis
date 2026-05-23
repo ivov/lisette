@@ -123,7 +123,7 @@ impl ResponseRecorder {
 
   /// WriteString implements [io.StringWriter]. The data in str is written
   /// to rw.Body, if not nil.
-  fn WriteString(self: Ref<ResponseRecorder>, str: string) -> Result<int, error>
+  fn WriteString(self: Ref<ResponseRecorder>, str: string) -> Partial<int, error>
 }
 
 impl Server {

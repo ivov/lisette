@@ -85,7 +85,7 @@ Other Go types map to Lisette types based on context.
 | `(T, error)` (non-exclusive)  | `Partial<T, error>`         |
 | `(T1, T2, error)`             | `Result<(T1, T2), error>`   |
 
-Some Go functions return `(T, error)` where both values may be simultaneously meaningful, such as `io.Reader.Read`. These map to `Partial<T, error>` instead of `Result<T, error>`. Bindgen detects this automatically for methods on types implementing `io.Reader`, `io.Writer`, `io.ReaderAt`, and `io.WriterAt`. Other functions can be marked manually via the `partial_result` config override.
+Some Go functions return `(T, error)` where both values may be simultaneously meaningful, such as `io.Reader.Read`. These map to `Partial<T, error>` instead of `Result<T, error>`. Bindgen detects this automatically for methods on types implementing `io.Reader`, `io.Writer`, `io.ReaderAt`, `io.WriterAt`, `io.StringWriter`, `io.ReaderFrom`, and `io.WriterTo`. Other functions can be marked manually via the `partial_result` config override.
 
 When `error` is the sole return type, it typically maps to `Result<(), error>`. Two exceptions: functions that create errors (e.g. `errors.New`) return `error` directly, and methods that unwrap errors (e.g. `Unwrap`, `Err`, `Cause`) return `Option<error>`.
 

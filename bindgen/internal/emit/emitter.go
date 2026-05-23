@@ -327,7 +327,7 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 		e.buf.WriteString(sentinelFlag(*result.SentinelInt) + "\n")
 	}
 	if e.shouldAllowUnusedResult(result.Name, "", result) {
-		e.buf.WriteString("#[allow(unused_result)]\n")
+		fmt.Fprintf(&e.buf, "#[allow(%s)]\n", allowDiscardLint(result.ReturnType))
 	}
 	if result.HasReturn() && e.cfg.ShouldAllowUnusedValue(e.pkgPath, result.Name) {
 		e.buf.WriteString("#[allow(unused_value)]\n")
@@ -359,12 +359,18 @@ func (e *Emitter) emitFunction(result convert.ConvertResult) {
 	e.buf.WriteString("\n\n")
 }
 
+func allowDiscardLint(returnType string) string {
+	if strings.HasPrefix(returnType, "Partial<") {
+		return "unused_partial"
+	}
+	return "unused_result"
+}
+
 // shouldAllowUnusedResult returns true if the function/method should be annotated
-// with #[allow(unused_result)]. Checks config first, then applies signature-based
-// heuristics for common Go interface methods:
+// with a discard-suppression attribute. Checks config first, then applies
+// signature-based heuristics for common Go interface methods:
 //   - Close() error
 //   - Flush() error
-//   - Write([]byte) (int, error)  [io.Writer signature]
 func (e *Emitter) shouldAllowUnusedResult(qualifiedName, methodName string, result convert.ConvertResult) bool {
 	if e.cfg != nil && e.cfg.ShouldAllowUnusedResult(e.pkgPath, qualifiedName) {
 		return true
@@ -378,10 +384,6 @@ func (e *Emitter) shouldAllowUnusedResult(qualifiedName, methodName string, resu
 	switch name {
 	case "Close", "Flush":
 		return len(result.Params) == 0 && result.ReturnType == "Result<(), error>"
-	case "Write":
-		return len(result.Params) == 1 &&
-			(result.Params[0].Type == "Slice<byte>" || result.Params[0].Type == "Slice<uint8>") &&
-			result.ReturnType == "Result<int, error>"
 	}
 
 	return false
@@ -410,7 +412,7 @@ func (e *Emitter) emitMethodInImpl(result convert.ConvertResult) {
 	if result.Receiver != nil {
 		qualifiedName := result.Receiver.BaseTypeName + "." + result.Name
 		if e.shouldAllowUnusedResult(qualifiedName, result.Name, result) {
-			e.buf.WriteString("  #[allow(unused_result)]\n")
+			fmt.Fprintf(&e.buf, "  #[allow(%s)]\n", allowDiscardLint(result.ReturnType))
 		}
 	}
 	allowUnusedValue := result.BuilderMethod
