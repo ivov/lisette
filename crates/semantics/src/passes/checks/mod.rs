@@ -9,6 +9,7 @@ pub(crate) mod newtype;
 mod pattern_analysis;
 pub(crate) mod predeclared_shadowing;
 pub(crate) mod prelude_shadowing;
+pub(crate) mod pub_type_export;
 pub(crate) mod receivers;
 pub(crate) mod stringer_signature;
 pub(crate) mod temp_producing;
@@ -91,6 +92,7 @@ fn run_file_checks(
     stringer_signature::run(&file.items, sink);
     predeclared_shadowing::run(&file.items, sink);
     prelude_shadowing::run(&file.items, store, sink);
+    pub_type_export::run(&file.items, sink);
     generics::run(&file.items, &module.id, store, sink);
     newtype::run(&file.items, store, sink);
     native_value_usage::run(&file.items, &module.id, store, sink);

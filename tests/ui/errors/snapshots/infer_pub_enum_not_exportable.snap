@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Public type is not exportable
+   ╭─[test.lis:2:10]
+ 1 │ 
+ 2 │ pub enum status {
+   ·          ───┬──
+   ·             ╰── `status` cannot be exported from Go
+ 3 │   Ready,
+   ╰────
+  help: Public types become exported Go identifiers, which must start with an uppercase letter. Rename to `Status` · code: [infer.pub_type_not_exportable]

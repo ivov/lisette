@@ -583,9 +583,12 @@ pub fn check_expression_naming(
             name_span,
             generics,
             fields,
+            visibility,
             ..
         } => {
-            check_pascal_case(name, name_span, "non_pascal_case_type", diagnostics);
+            if !visibility.is_public() {
+                check_pascal_case(name, name_span, "non_pascal_case_type", diagnostics);
+            }
 
             for generic in generics {
                 check_type_parameter(generic, diagnostics);
@@ -608,9 +611,12 @@ pub fn check_expression_naming(
             name_span,
             generics,
             variants,
+            visibility,
             ..
         } => {
-            check_pascal_case(name, name_span, "non_pascal_case_type", diagnostics);
+            if !visibility.is_public() {
+                check_pascal_case(name, name_span, "non_pascal_case_type", diagnostics);
+            }
 
             for generic in generics {
                 check_type_parameter(generic, diagnostics);
@@ -630,9 +636,12 @@ pub fn check_expression_naming(
             name,
             name_span,
             generics,
+            visibility,
             ..
         } => {
-            check_pascal_case(name, name_span, "non_pascal_case_type", diagnostics);
+            if !visibility.is_public() {
+                check_pascal_case(name, name_span, "non_pascal_case_type", diagnostics);
+            }
 
             for generic in generics {
                 check_type_parameter(generic, diagnostics);
@@ -643,9 +652,12 @@ pub fn check_expression_naming(
             name,
             name_span,
             generics,
+            visibility,
             ..
         } => {
-            check_pascal_case(name, name_span, "non_pascal_case_type", diagnostics);
+            if !visibility.is_public() {
+                check_pascal_case(name, name_span, "non_pascal_case_type", diagnostics);
+            }
 
             for generic in generics {
                 check_type_parameter(generic, diagnostics);

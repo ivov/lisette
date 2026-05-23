@@ -2010,6 +2010,58 @@ fn main() {
 }
 
 #[test]
+fn infer_pub_struct_not_exportable() {
+    let input = r#"
+pub struct widget {
+  pub x: int,
+}
+
+fn main() {
+  let w = widget { x: 1 }
+  let _ = w.x
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_pub_type_alias_not_exportable() {
+    let input = r#"
+pub type widget = int
+
+fn main() {
+  let w: widget = 1
+  let _ = w
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_pub_enum_not_exportable() {
+    let input = r#"
+pub enum status {
+  Ready,
+}
+
+fn main() {
+  let _ = status.Ready
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_pub_interface_not_exportable() {
+    let input = r#"
+pub interface reader {
+  fn read() -> int
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_unknown_in_const_annotation() {
     let input = r#"
 const X: Unknown = 42;

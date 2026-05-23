@@ -2517,6 +2517,16 @@ pub fn prelude_function_shadowed(name: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn pub_type_not_exportable(name: &str, suggested: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Public type is not exportable")
+        .with_infer_code("pub_type_not_exportable")
+        .with_span_label(&span, format!("`{}` cannot be exported from Go", name))
+        .with_help(format!(
+            "Public types become exported Go identifiers, which must start with an uppercase letter. Rename to `{}`",
+            suggested
+        ))
+}
+
 pub fn predeclared_type_shadowed(name: &str, span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot shadow Go predeclared identifier")
         .with_infer_code("predeclared_type_shadowed")
