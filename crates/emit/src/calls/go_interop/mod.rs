@@ -3,27 +3,31 @@ mod wrappers;
 
 pub(crate) use wrappers::WrapperTarget;
 
-use crate::Emitter;
-use crate::expressions::context::ExpressionContext;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::calls::CallBoundary;
+use crate::calls::go_interop::wrappers::WrapperOutcome;
+use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
+use crate::plan::bodies::LoweredStatement;
 use syntax::ast::Expression;
 use syntax::types::Type;
 
 #[derive(Debug, Clone)]
 pub(crate) enum GoCallStrategy {
-    /// (T1, T2, ...) → Tuple struct. Arity ≥ 2, no error/bool suffix.
+    /// `(T1, T2, ...)` → tuple struct (arity ≥ 2, no error/bool suffix).
     Tuple { arity: usize },
-    /// (T, error) → Result<T, Error>.
+    /// `(T, error)` → `Result<T, Error>`.
     Result,
-    /// (T, bool) → Option<T>. Comma-ok pattern (non-nullable or `#[go(comma_ok)]`).
+    /// `(T, bool)` → `Option<T>` (non-nullable or `#[go(comma_ok)]`).
     CommaOk,
-    /// Single return of pointer/interface type → Option<Ref<T>> via nil check.
+    /// Single pointer/interface return → `Option<Ref<T>>` via nil check.
     NullableReturn,
-    /// (T, error) → Partial<T, error>. Non-exclusive returns where both value and error
-    /// may be simultaneously meaningful (e.g. io.Reader.Read).
+    /// `(T, error)` → `Partial<T, error>` (value and error not exclusive,
+    /// e.g. `io.Reader.Read`).
     Partial,
-    /// Single return of T → Option<T> via `val != sentinel` check
-    /// (e.g. `#[go(sentinel_minus_one)]` on `Option<int>`).
+    /// Single `T` return → `Option<T>` via `val != sentinel`.
     Sentinel { value: i64 },
 }
 
@@ -36,76 +40,52 @@ impl GoCallStrategy {
     }
 }
 
-impl Emitter<'_> {
-    pub(crate) fn resolve_go_call_strategy(
-        &self,
-        expression: &Expression,
-    ) -> Option<GoCallStrategy> {
-        let Expression::Call {
-            expression: callee,
-            ty,
-            ..
-        } = expression
-        else {
-            return None;
-        };
-
-        let inner = callee.unwrap_parens();
-
-        if let Expression::DotAccess {
-            expression: receiver_expression,
-            member,
-            ..
-        } = inner
-            && Self::is_go_receiver(receiver_expression)
-        {
-            if let Some(qualified_name) = self.go_qualified_name(receiver_expression, member)
-                && let Some(strategy) = self.facts.go_call_strategy(&qualified_name)
-            {
-                return Some(strategy.clone());
-            }
-            let go_hints = self
-                .go_qualified_name(receiver_expression, member)
-                .and_then(|name| self.facts.definition(name.as_str()))
-                .map(|d| d.go_hints())
-                .unwrap_or_default();
-            return self.facts.classify_go_return_type(ty, go_hints);
-        }
-
-        None
-    }
-
+impl Planner<'_> {
+    /// String-context bridge over `lower_go_wrapped_call`.
     pub(crate) fn emit_go_wrapped_call(
         &mut self,
         output: &mut String,
         expression: &Expression,
         strategy: &GoCallStrategy,
         result_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> String {
+        let (statements, value) = self.lower_go_wrapped_call(expression, strategy, result_ty, fx);
+        output.push_str(&Renderer.render_setup(&statements));
+        value
+    }
+
+    /// Lower a Go-imported callee through its ABI bridge.
+    pub(crate) fn lower_go_wrapped_call(
+        &mut self,
+        call_expression: &Expression,
+        strategy: &GoCallStrategy,
+        result_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
         match strategy {
             GoCallStrategy::Tuple { arity } => {
-                self.emit_go_tuple_call_wrapped(output, expression, *arity)
+                self.lower_go_tuple_call_wrapped(call_expression, *arity, fx)
             }
             GoCallStrategy::Result => {
-                self.emit_go_result_call_wrapped(output, expression, result_ty)
-            }
-            GoCallStrategy::CommaOk => {
-                self.emit_go_option_call_wrapped(output, expression, result_ty)
-            }
-            GoCallStrategy::NullableReturn => {
-                self.emit_go_single_return_option_wrapped(output, expression, result_ty)
+                self.lower_go_result_call_wrapped(call_expression, result_ty, fx)
             }
             GoCallStrategy::Partial => {
-                self.emit_go_partial_call_wrapped(output, expression, result_ty)
+                self.lower_go_partial_call_wrapped(call_expression, result_ty, fx)
+            }
+            GoCallStrategy::CommaOk => {
+                self.lower_go_option_call_wrapped(call_expression, result_ty, fx)
+            }
+            GoCallStrategy::NullableReturn => {
+                self.lower_go_single_return_option_wrapped(call_expression, result_ty, fx)
             }
             GoCallStrategy::Sentinel { value } => {
-                self.emit_go_sentinel_call_wrapped(output, expression, result_ty, *value)
+                self.lower_go_sentinel_call_wrapped(call_expression, result_ty, *value, fx)
             }
         }
     }
 
-    /// Like `emit_go_wrapped_call` but writes into `target`. `None` for the
-    /// `Tuple` strategy (does not use the slot pattern).
+    /// `emit_go_wrapped_call` writing into `target`. `None` for `Tuple`.
     pub(crate) fn emit_go_wrapped_call_to(
         &mut self,
         output: &mut String,
@@ -113,38 +93,43 @@ impl Emitter<'_> {
         strategy: &GoCallStrategy,
         result_ty: &Type,
         target: WrapperTarget<'_>,
-    ) -> Option<crate::calls::go_interop::wrappers::WrapperOutcome> {
-        use crate::expressions::context::ExpressionContext;
+        fx: &mut EmitEffects,
+    ) -> Option<WrapperOutcome> {
         match strategy {
             GoCallStrategy::Tuple { .. } => None,
             GoCallStrategy::Result => {
-                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
-                self.requirements.require_stdlib();
-                Some(self.emit_result_wrapping(output, &call_str, result_ty, target))
+                let call_str =
+                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
+                fx.require_stdlib();
+                Some(self.emit_result_wrapping(output, &call_str, result_ty, target, fx))
             }
             GoCallStrategy::CommaOk => {
-                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
-                Some(self.emit_comma_ok_wrapping(output, &call_str, result_ty, true, target))
+                let call_str =
+                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
+                Some(self.emit_comma_ok_wrapping(output, &call_str, result_ty, true, target, fx))
             }
             GoCallStrategy::NullableReturn => {
-                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
+                let call_str =
+                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
                 let raw_var = self.hoist_tmp_value(output, "raw", &call_str);
-                Some(self.emit_nil_check_option_wrap(output, &raw_var, result_ty, target))
+                Some(self.emit_nil_check_option_wrap(output, &raw_var, result_ty, target, fx))
             }
             GoCallStrategy::Partial => {
-                self.requirements.require_stdlib();
-                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
-                Some(self.emit_partial_wrapping(output, &call_str, result_ty, target))
+                fx.require_stdlib();
+                let call_str =
+                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
+                Some(self.emit_partial_wrapping(output, &call_str, result_ty, target, fx))
             }
             GoCallStrategy::Sentinel { value } => {
-                let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
-                Some(self.emit_sentinel_wrapping(output, &call_str, result_ty, *value, target))
+                let call_str =
+                    self.emit_call(output, expression, None, ExpressionContext::value(), fx);
+                Some(self.emit_sentinel_wrapping(output, &call_str, result_ty, *value, target, fx))
             }
         }
     }
 
     fn has_go_hint(&self, receiver_expression: &Expression, member: &str, hint: &str) -> bool {
-        let Some(qualified_name) = self.go_qualified_name(receiver_expression, member) else {
+        let Some(qualified_name) = go_qualified_name(receiver_expression, member) else {
             return false;
         };
 
@@ -162,45 +147,11 @@ impl Emitter<'_> {
         self.has_go_hint(receiver_expression, member, "array_return")
     }
 
-    fn go_qualified_name(&self, receiver_expression: &Expression, member: &str) -> Option<String> {
-        let ty = receiver_expression.get_type();
-
-        if let Some(module_path) = ty.as_import_namespace() {
-            return Some(format!("{}.{}", module_path, member));
-        }
-
-        if let Type::Nominal { id, .. } = ty.strip_refs()
-            && go_name::is_go_import(&id)
-        {
-            return Some(format!("{}.{}", id, member));
-        }
-
-        None
-    }
-
-    pub(crate) fn is_go_receiver(expression: &Expression) -> bool {
-        let ty = expression.get_type();
-
-        if let Some(module_id) = ty.as_import_namespace()
-            && module_id.starts_with(go_name::GO_IMPORT_PREFIX)
-        {
-            return true;
-        }
-
-        // Check for Go object pattern: type is go:* (possibly wrapped in Ref<>)
-        if let Type::Nominal { id, .. } = ty.strip_refs()
-            && go_name::is_go_import(&id)
-        {
-            return true;
-        }
-
-        false
-    }
-
     pub(crate) fn emit_go_call_discarded(
         &mut self,
         output: &mut String,
         call_expression: &Expression,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Expression::Call {
             expression: callee, ..
@@ -209,22 +160,21 @@ impl Emitter<'_> {
             return None;
         };
 
-        let has_strategy = self.resolve_go_call_strategy(call_expression).is_some();
-        let has_lowered_callee = self.classify_callee_abi(callee).is_some();
+        let boundary = self.classify_call(call_expression);
 
         let has_array_return = if let Expression::DotAccess {
             expression: receiver_expression,
             member,
             ..
         } = callee.unwrap_parens()
-            && Self::is_go_receiver(receiver_expression)
+            && is_go_receiver(receiver_expression)
         {
             self.has_go_array_return(receiver_expression, member)
         } else {
             false
         };
 
-        if !has_strategy && !has_array_return && !has_lowered_callee {
+        if matches!(boundary, CallBoundary::Plain) && !has_array_return {
             return None;
         }
 
@@ -232,7 +182,7 @@ impl Emitter<'_> {
         if has_array_return {
             ctx = ctx.with_raw_go_array_return();
         }
-        let call_str = self.emit_call(output, call_expression, None, ctx);
+        let call_str = self.emit_call(output, call_expression, None, ctx, fx);
 
         Some(call_str)
     }
@@ -247,18 +197,57 @@ impl Emitter<'_> {
             .collect()
     }
 
-    pub(super) fn build_tuple_literal(&mut self, vars: &[String], _tuple_ty: &Type) -> String {
-        self.requirements.require_stdlib();
-        format!("lisette.MakeTuple{}({})", vars.len(), vars.join(", "))
-    }
-
     pub(crate) fn emit_tuple_from_vars(
         &mut self,
         output: &mut String,
         vars: &[String],
         tuple_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> String {
-        let constructor = self.build_tuple_literal(vars, tuple_ty);
+        let constructor = build_tuple_literal(vars, tuple_ty, fx);
         self.hoist_tmp_value(output, "tup", &constructor)
     }
+}
+
+pub(crate) fn go_qualified_name(receiver_expression: &Expression, member: &str) -> Option<String> {
+    let ty = receiver_expression.get_type();
+
+    if let Some(module_path) = ty.as_import_namespace() {
+        return Some(format!("{}.{}", module_path, member));
+    }
+
+    if let Type::Nominal { id, .. } = ty.strip_refs()
+        && go_name::is_go_import(&id)
+    {
+        return Some(format!("{}.{}", id, member));
+    }
+
+    None
+}
+
+pub(crate) fn is_go_receiver(expression: &Expression) -> bool {
+    let ty = expression.get_type();
+
+    if let Some(module_id) = ty.as_import_namespace()
+        && module_id.starts_with(go_name::GO_IMPORT_PREFIX)
+    {
+        return true;
+    }
+
+    if let Type::Nominal { id, .. } = ty.strip_refs()
+        && go_name::is_go_import(&id)
+    {
+        return true;
+    }
+
+    false
+}
+
+pub(super) fn build_tuple_literal(
+    vars: &[String],
+    _tuple_ty: &Type,
+    fx: &mut EmitEffects,
+) -> String {
+    fx.require_stdlib();
+    format!("lisette.MakeTuple{}({})", vars.len(), vars.join(", "))
 }

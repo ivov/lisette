@@ -1,9 +1,10 @@
 use syntax::ast::MatchArm;
 
+use crate::EmitEffects;
 use crate::control_flow::branching::wrap_if_struct_literal;
-use crate::patterns::bindings::{is_catchall_pattern, is_unconditional_catchall};
+use crate::patterns::binding_decls::{is_catchall_pattern, is_unconditional_catchall};
 use crate::patterns::decision_tree::{
-    AccessPath, ChainTest, Decision, PatternBinding, SwitchKind, SwitchShape,
+    AccessPath, ChainTest, Decision, PatternBinding, SwitchBranch, SwitchKind, SwitchShape,
     decision_is_exhaustive, render_condition, tree_has_unguarded_terminal,
 };
 
@@ -33,7 +34,7 @@ pub(crate) struct SingleCatchallPlan {
 #[derive(Debug)]
 pub(crate) struct ChainPlan {
     pub tree: EmitDecision,
-    /// Renderer emits trailing `panic("unreachable")` iff
+    /// Planner emits trailing `panic("unreachable")` iff
     /// `destination.is_tail() && !chain_tail_is_exhaustive`.
     pub chain_tail_is_exhaustive: bool,
 }
@@ -60,7 +61,7 @@ pub(crate) enum EmitDecision {
         failure: Box<EmitDecision>,
     },
     IfElse {
-        cond: String,
+        condition: String,
         then_branch: Box<EmitDecision>,
         else_branch: Option<Box<EmitDecision>>,
     },
@@ -89,7 +90,7 @@ pub(crate) enum EmitDecision {
 #[derive(Debug)]
 pub(crate) struct EmitChainTest {
     /// `None` marks a catchall test (empty `checks` in the source).
-    pub cond: Option<String>,
+    pub condition: Option<String>,
     pub decision: Box<EmitDecision>,
 }
 
@@ -99,7 +100,7 @@ pub(crate) struct EmitCase {
     pub decision: Box<EmitDecision>,
 }
 
-pub(crate) type MatchPlanEffects = crate::EmitEffects;
+pub(crate) type MatchPlanEffects = EmitEffects;
 
 #[derive(Debug)]
 pub(crate) struct LoweredMatch {
@@ -248,7 +249,6 @@ pub(crate) fn lower_decision(ctx: &mut LoweringCtx, decision: &Decision) -> Emit
                 .map(|test| lower_chain_test(ctx, test))
                 .collect::<Vec<_>>();
             let fallback = Box::new(lower_decision(ctx, fallback));
-            // Last test is reachable as `else` when fallback is unreachable.
             let last_is_catchall =
                 matches!(fallback.as_ref(), EmitDecision::Unreachable) && tests.len() > 1;
             EmitDecision::Chain {
@@ -269,13 +269,16 @@ pub(crate) fn lower_decision(ctx: &mut LoweringCtx, decision: &Decision) -> Emit
 }
 
 fn lower_chain_test(ctx: &mut LoweringCtx, test: &ChainTest) -> EmitChainTest {
-    let cond = if test.checks.is_empty() {
+    let condition = if test.checks.is_empty() {
         None
     } else {
         Some(render_condition(&test.checks, &ctx.current_subject))
     };
     let decision = Box::new(lower_decision(ctx, &test.decision));
-    EmitChainTest { cond, decision }
+    EmitChainTest {
+        condition,
+        decision,
+    }
 }
 
 fn lower_bindings(ctx: &mut LoweringCtx, bindings: &[PatternBinding]) -> Vec<EmitBinding> {
@@ -295,7 +298,7 @@ fn lower_switch(
     path: &AccessPath,
     kind: &SwitchKind,
     shape: &SwitchShape,
-    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    branches: &[SwitchBranch],
     fallback: &Option<Box<Decision>>,
 ) -> EmitDecision {
     propagate_stdlib(ctx, branches);
@@ -315,7 +318,7 @@ fn lower_switch(
 fn lower_type_switch(
     ctx: &mut LoweringCtx,
     base: String,
-    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    branches: &[SwitchBranch],
     fallback: &Option<Box<Decision>>,
 ) -> EmitDecision {
     ctx.with_subject(base.clone(), |ctx| {
@@ -332,7 +335,7 @@ fn lower_type_switch(
 fn lower_bool_switch(
     ctx: &mut LoweringCtx,
     rendered_path: String,
-    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    branches: &[SwitchBranch],
 ) -> EmitDecision {
     // Select branches by label so `then_branch` is always the semantic-true
     // subtree regardless of source order.
@@ -345,7 +348,7 @@ fn lower_bool_switch(
         .find(|b| b.case_label == "false")
         .expect("Bool shape requires a false-labeled branch");
     EmitDecision::IfElse {
-        cond: wrap_if_struct_literal(rendered_path),
+        condition: wrap_if_struct_literal(rendered_path),
         then_branch: Box::new(lower_decision(ctx, &true_branch.decision)),
         else_branch: Some(Box::new(lower_decision(ctx, &false_branch.decision))),
     }
@@ -355,13 +358,13 @@ fn lower_binary_switch(
     ctx: &mut LoweringCtx,
     rendered_path: &str,
     kind: &SwitchKind,
-    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    branches: &[SwitchBranch],
 ) -> EmitDecision {
     let first = &branches[0];
     let second = &branches[1];
     let expr = render_switch_expression(rendered_path, kind);
     EmitDecision::IfElse {
-        cond: format!("{} == {}", expr, first.case_label),
+        condition: format!("{} == {}", expr, first.case_label),
         then_branch: Box::new(lower_decision(ctx, &first.decision)),
         else_branch: Some(Box::new(lower_decision(ctx, &second.decision))),
     }
@@ -371,12 +374,11 @@ fn lower_single_arm_switch(
     ctx: &mut LoweringCtx,
     rendered_path: &str,
     kind: &SwitchKind,
-    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    branches: &[SwitchBranch],
     fallback: &Option<Box<Decision>>,
 ) -> EmitDecision {
     let branch = &branches[0];
     let Some(fb) = fallback else {
-        // Exhaustive enum: inline body, no condition wrapper.
         return EmitDecision::InlineBranch {
             branch: Box::new(lower_decision(ctx, &branch.decision)),
         };
@@ -389,7 +391,7 @@ fn lower_single_arm_switch(
         Some(Box::new(lowered_fallback))
     };
     EmitDecision::IfElse {
-        cond: format!("{} == {}", expr, branch.case_label),
+        condition: format!("{} == {}", expr, branch.case_label),
         then_branch: Box::new(lower_decision(ctx, &branch.decision)),
         else_branch,
     }
@@ -399,7 +401,7 @@ fn lower_multi_switch(
     ctx: &mut LoweringCtx,
     rendered_path: &str,
     kind: &SwitchKind,
-    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    branches: &[SwitchBranch],
     fallback: &Option<Box<Decision>>,
 ) -> EmitDecision {
     let expr = render_switch_expression(rendered_path, kind);
@@ -420,10 +422,7 @@ fn render_switch_expression(rendered_path: &str, kind: &SwitchKind) -> String {
     }
 }
 
-fn propagate_stdlib(
-    ctx: &mut LoweringCtx,
-    branches: &[crate::patterns::decision_tree::SwitchBranch],
-) {
+fn propagate_stdlib(ctx: &mut LoweringCtx, branches: &[SwitchBranch]) {
     if branches.iter().any(|b| b.needs_stdlib) {
         ctx.effects.needs_stdlib = true;
     }
@@ -431,7 +430,7 @@ fn propagate_stdlib(
 
 fn lower_cases_with_default_lift(
     ctx: &mut LoweringCtx,
-    branches: &[crate::patterns::decision_tree::SwitchBranch],
+    branches: &[SwitchBranch],
     fallback: &Option<Box<Decision>>,
     lift: bool,
 ) -> (Vec<EmitCase>, Option<Box<EmitDecision>>) {

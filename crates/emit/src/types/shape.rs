@@ -1,6 +1,6 @@
 use syntax::types::{CompoundKind, Symbol, Type};
 
-use crate::Emitter;
+use crate::Planner;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
 
@@ -35,10 +35,10 @@ pub(crate) enum CollectionKind {
 pub(crate) struct NullableCollectionShape {
     pub(crate) kind: CollectionKind,
     pub(crate) key_ty: Option<Type>,
-    pub(crate) elem_option_ty: Type,
+    pub(crate) element_option_ty: Type,
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     /// Normalize a type for emit decisions by walking aliases and reference
     /// wrappers to a fixed point. Only peels real type aliases (not newtypes).
     pub(crate) fn emit_shape_ty(&self, ty: &Type) -> Type {
@@ -127,12 +127,12 @@ impl Emitter<'_> {
         let shape = self.native_shape(ty)?;
         match shape.kind {
             NativeGoType::Slice => {
-                let elem_ty = shape.params.into_iter().next()?;
-                let resolved_option = self.pointer_bridged_option_ty(&elem_ty)?;
+                let element_ty = shape.params.into_iter().next()?;
+                let resolved_option = self.pointer_bridged_option_ty(&element_ty)?;
                 Some(NullableCollectionShape {
                     kind: CollectionKind::Slice,
                     key_ty: None,
-                    elem_option_ty: resolved_option,
+                    element_option_ty: resolved_option,
                 })
             }
             NativeGoType::Map => {
@@ -143,18 +143,13 @@ impl Emitter<'_> {
                 Some(NullableCollectionShape {
                     kind: CollectionKind::Map,
                     key_ty: Some(key_ty),
-                    elem_option_ty: resolved_option,
+                    element_option_ty: resolved_option,
                 })
             }
             _ => None,
         }
     }
 
-    /// Alias-aware option classifier used by `nullable_collection_shape`.
-    /// Matches `is_nullable_option`/`is_non_nilable_option` semantics but
-    /// peels aliases over the option type itself first. Returns the peeled
-    /// option type when matched so downstream consumers that call
-    /// `is_option()` / `ok_type()` / `Fallible::from_type` work correctly.
     fn pointer_bridged_option_ty(&self, ty: &Type) -> Option<Type> {
         let resolved = self.emit_shape_ty(ty);
         if !resolved.is_option() {

@@ -6,14 +6,21 @@ use syntax::ast::{
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, unqualified_name};
 
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
 use crate::expressions::literals::{convert_escape_sequences, emit_raw_string};
 use crate::names::generics;
 use crate::write_line;
 
-/// Shared access to a named, typed field — implemented for both
-/// `StructFieldDefinition` and `EnumFieldDefinition` so the recursion
-/// helpers can iterate either shape without duplication.
+/// Generic vars paired with their concrete instantiation arguments; inputs
+/// to field-type substitution.
+#[derive(Clone, Copy)]
+pub(crate) struct GenericArgs<'a> {
+    pub(crate) generics: &'a [Generic],
+    pub(crate) params: &'a [Type],
+}
+
+/// Shared view over `StructFieldDefinition` and `EnumFieldDefinition`.
 trait FieldDef {
     fn name(&self) -> &EcoString;
     fn ty(&self) -> &Type;
@@ -37,8 +44,7 @@ impl FieldDef for EnumFieldDefinition {
     }
 }
 
-/// View an enum variant's fields as a slice. `Unit` variants yield an empty
-/// slice, so callers can treat all variant shapes uniformly.
+/// `Unit` variants yield an empty slice so callers handle all shapes uniformly.
 fn variant_fields_slice(fields: &VariantFields) -> &[EnumFieldDefinition] {
     match fields {
         VariantFields::Unit => &[],
@@ -113,25 +119,7 @@ pub(crate) fn pattern_binds_name(pattern: &Pattern, name: &str) -> bool {
     }
 }
 
-impl Emitter<'_> {
-    pub(crate) fn pattern_has_bindings(pattern: &Pattern) -> bool {
-        match pattern {
-            Pattern::Identifier { .. } => true,
-            Pattern::Tuple { elements, .. } => elements.iter().any(Self::pattern_has_bindings),
-            Pattern::EnumVariant { fields, .. } => fields.iter().any(Self::pattern_has_bindings),
-            Pattern::Struct { fields, .. } => {
-                fields.iter().any(|f| Self::pattern_has_bindings(&f.value))
-            }
-            Pattern::Slice { prefix, rest, .. } => {
-                prefix.iter().any(Self::pattern_has_bindings)
-                    || matches!(rest, RestPattern::Bind { .. })
-            }
-            Pattern::Or { patterns, .. } => patterns.iter().any(Self::pattern_has_bindings),
-            Pattern::AsBinding { .. } => true,
-            Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
-        }
-    }
-
+impl Planner<'_> {
     pub(crate) fn pattern_has_binding_collisions(&self, pattern: &Pattern) -> bool {
         match pattern {
             Pattern::Identifier { .. } => false,
@@ -175,18 +163,19 @@ impl Emitter<'_> {
         pattern: &Pattern,
         ty: &Type,
         typed: Option<&TypedPattern>,
+        fx: &mut EmitEffects,
     ) {
         match pattern {
             Pattern::Identifier { identifier, .. } => {
-                self.declare_pattern_var(output, pattern, identifier, ty);
+                self.declare_pattern_var(output, pattern, identifier, ty, fx);
             }
             Pattern::Tuple { elements, .. } => {
-                self.emit_tuple_pattern_decls(output, elements, ty, typed);
+                self.emit_tuple_pattern_declarations(output, elements, ty, typed, fx);
             }
             Pattern::Struct {
                 fields, identifier, ..
             } => {
-                self.emit_struct_pattern_decls(output, fields, identifier, ty, typed);
+                self.emit_struct_pattern_declarations(output, fields, identifier, ty, typed, fx);
             }
             Pattern::EnumVariant {
                 fields,
@@ -194,12 +183,12 @@ impl Emitter<'_> {
                 ty: pattern_ty,
                 ..
             } => {
-                self.emit_enum_variant_pattern_decls(
-                    output, fields, identifier, pattern_ty, ty, typed,
+                self.emit_enum_variant_pattern_declarations(
+                    output, fields, identifier, pattern_ty, ty, typed, fx,
                 );
             }
             Pattern::Slice { prefix, rest, .. } => {
-                self.emit_slice_pattern_decls(output, prefix, rest, ty, typed);
+                self.emit_slice_pattern_declarations(output, prefix, rest, ty, typed, fx);
             }
             Pattern::Or { patterns, .. } => {
                 let Some(first) = patterns.first() else {
@@ -209,45 +198,44 @@ impl Emitter<'_> {
                     Some(TypedPattern::Or { alternatives }) => alternatives.first(),
                     _ => None,
                 };
-                self.emit_binding_declarations_with_type(output, first, ty, alt);
+                self.emit_binding_declarations_with_type(output, first, ty, alt, fx);
             }
             p @ Pattern::AsBinding {
                 pattern: inner,
                 name,
                 ..
             } => {
-                self.emit_binding_declarations_with_type(output, inner, ty, typed);
-                self.declare_pattern_var(output, p, name, ty);
+                self.emit_binding_declarations_with_type(output, inner, ty, typed, fx);
+                self.declare_pattern_var(output, p, name, ty, fx);
             }
             Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => {}
         }
     }
 
-    /// Declare a Go `var X T` binding for an identifier-shaped pattern, falling
-    /// back to `_` when the binding is unused and to a fresh name when the
-    /// desired Go name is already taken in the current scope.
+    /// Declare a `var X T` for an identifier pattern; binds `_` when unused.
     fn declare_pattern_var(
         &mut self,
         output: &mut String,
         pattern: &Pattern,
         lisette_name: &EcoString,
         resolved: &Type,
+        fx: &mut EmitEffects,
     ) {
         let Some(go_name) = self.go_name_for_binding(pattern) else {
             self.scope.bind(lisette_name, "_");
             return;
         };
-        self.declare_var_decl(output, lisette_name, go_name, resolved);
+        self.declare_var_declaration(output, lisette_name, go_name, resolved, fx);
     }
 
-    /// Freshen `go_name` against the current scope, register the binding, and
-    /// emit `var X T`. Used for both identifier and slice-rest declarations.
-    fn declare_var_decl(
+    /// Freshen `go_name`, register the binding, emit `var X T`.
+    fn declare_var_declaration(
         &mut self,
         output: &mut String,
         lisette_name: &EcoString,
         go_name: String,
         resolved: &Type,
+        fx: &mut EmitEffects,
     ) {
         let go_name = if self.is_declared(&go_name) {
             self.fresh_var(Some(lisette_name))
@@ -256,43 +244,49 @@ impl Emitter<'_> {
         };
         let go_name = self.scope.bind(lisette_name, go_name);
         self.declare(&go_name);
-        let go_ty = self.go_type_as_string(resolved);
+        let go_ty = self.go_type_string(resolved, fx);
         write_line!(output, "var {} {}", go_name, go_ty);
     }
 
-    /// Recurse into tuple-pattern elements, pairing each with the matching
-    /// tuple-slot type from the resolved tuple (or constructor with tuple args).
-    fn emit_tuple_pattern_decls(
+    /// Recurse into tuple-pattern elements paired with their slot types.
+    fn emit_tuple_pattern_declarations(
         &mut self,
         output: &mut String,
         elements: &[Pattern],
         resolved: &Type,
         typed: Option<&TypedPattern>,
+        fx: &mut EmitEffects,
     ) {
-        let typed_elems: &[TypedPattern] = match typed {
+        let typed_elements: &[TypedPattern] = match typed {
             Some(TypedPattern::Tuple { elements: te, .. }) => te.as_slice(),
             _ => &[],
         };
         let types: &[Type] = match resolved {
             Type::Nominal { params, .. } => params,
-            Type::Tuple(elems) => elems,
+            Type::Tuple(elements) => elements,
             _ => return,
         };
-        for (i, (elem, elem_ty)) in elements.iter().zip(types.iter()).enumerate() {
-            self.emit_binding_declarations_with_type(output, elem, elem_ty, typed_elems.get(i));
+        for (i, (element, element_ty)) in elements.iter().zip(types.iter()).enumerate() {
+            self.emit_binding_declarations_with_type(
+                output,
+                element,
+                element_ty,
+                typed_elements.get(i),
+                fx,
+            );
         }
     }
 
-    /// Recurse into named struct-pattern fields. The pattern may be matching
-    /// a plain struct or an enum's struct variant, discovered via the typed
-    /// pattern when present and via the definitions table as a fallback.
-    fn emit_struct_pattern_decls(
+    /// Recurse into named struct-pattern fields (plain struct or enum's
+    /// struct variant, resolved via the typed pattern or definitions table).
+    fn emit_struct_pattern_declarations(
         &mut self,
         output: &mut String,
         fields: &[StructFieldPattern],
         identifier: &EcoString,
         resolved: &Type,
         typed: Option<&TypedPattern>,
+        fx: &mut EmitEffects,
     ) {
         match typed {
             Some(TypedPattern::Struct {
@@ -315,9 +309,9 @@ impl Emitter<'_> {
                     output,
                     fields,
                     struct_fields,
-                    generics,
-                    params,
+                    GenericArgs { generics, params },
                     Some(pattern_fields),
+                    fx,
                 );
             }
             Some(TypedPattern::EnumStructVariant {
@@ -340,34 +334,41 @@ impl Emitter<'_> {
                     output,
                     fields,
                     variant_fields,
-                    generics,
-                    params,
+                    GenericArgs { generics, params },
                     Some(pattern_fields),
+                    fx,
                 );
             }
-            _ => self.emit_struct_pattern_fallback(output, fields, identifier, resolved),
+            _ => self.emit_struct_pattern_fallback(output, fields, identifier, resolved, fx),
         }
     }
 
-    /// Untyped struct-pattern fallback: look up the definition by id, then
-    /// dispatch to the same field-recursion helper with `typed_pf = None`.
+    /// Untyped struct-pattern fallback via the definitions table.
     fn emit_struct_pattern_fallback(
         &mut self,
         output: &mut String,
         fields: &[StructFieldPattern],
         identifier: &EcoString,
         resolved: &Type,
+        fx: &mut EmitEffects,
     ) {
         let Type::Nominal { id, params, .. } = resolved else {
             return;
         };
         match self.facts.definition(id.as_str()).map(|d| &d.body) {
             Some(DefinitionBody::Struct {
-                fields: field_defs,
+                fields: field_definitions,
                 generics,
                 ..
             }) => {
-                self.recurse_named_fields(output, fields, field_defs, generics, params, None);
+                self.recurse_named_fields(
+                    output,
+                    fields,
+                    field_definitions,
+                    GenericArgs { generics, params },
+                    None,
+                    fx,
+                );
             }
             Some(DefinitionBody::Enum {
                 variants, generics, ..
@@ -378,9 +379,9 @@ impl Emitter<'_> {
                         output,
                         fields,
                         variant_fields_slice(&variant.fields),
-                        generics,
-                        params,
+                        GenericArgs { generics, params },
                         None,
+                        fx,
                     );
                 }
             }
@@ -388,10 +389,10 @@ impl Emitter<'_> {
         }
     }
 
-    /// Recurse into positional enum-variant-pattern fields. Tuple-struct
-    /// matches route through the struct definition; everything else routes
-    /// through the enum variant's positional fields.
-    fn emit_enum_variant_pattern_decls(
+    /// Recurse into positional enum-variant fields (tuple-struct matches
+    /// route through the struct definition).
+    #[allow(clippy::too_many_arguments)]
+    fn emit_enum_variant_pattern_declarations(
         &mut self,
         output: &mut String,
         fields: &[Pattern],
@@ -399,9 +400,10 @@ impl Emitter<'_> {
         pattern_ty: &Type,
         resolved: &Type,
         typed: Option<&TypedPattern>,
+        fx: &mut EmitEffects,
     ) {
         if self.is_tuple_struct_type(pattern_ty) {
-            self.emit_tuple_struct_variant_decls(output, fields, resolved, typed);
+            self.emit_tuple_struct_variant_declarations(output, fields, resolved, typed, fx);
             return;
         }
 
@@ -430,9 +432,9 @@ impl Emitter<'_> {
                 output,
                 fields,
                 variant_fields,
-                generics,
-                params,
+                GenericArgs { generics, params },
                 typed_fields,
+                fx,
             );
             return;
         }
@@ -457,20 +459,20 @@ impl Emitter<'_> {
             output,
             fields,
             variant_fields_slice(&variant.fields),
-            generics,
-            params,
+            GenericArgs { generics, params },
             None,
+            fx,
         );
     }
 
-    /// Enum-variant-shaped pattern matching a tuple struct (newtype): use the
-    /// struct's own positional fields with `Tuple` kind, not the enum path.
-    fn emit_tuple_struct_variant_decls(
+    /// Newtype-tuple-struct match via the struct's own positional fields.
+    fn emit_tuple_struct_variant_declarations(
         &mut self,
         output: &mut String,
         fields: &[Pattern],
         resolved: &Type,
         typed: Option<&TypedPattern>,
+        fx: &mut EmitEffects,
     ) {
         let Type::Nominal { id, params, .. } = resolved else {
             return;
@@ -478,7 +480,7 @@ impl Emitter<'_> {
         let Some(Definition {
             body:
                 DefinitionBody::Struct {
-                    fields: field_defs,
+                    fields: field_definitions,
                     generics,
                     kind: StructKind::Tuple,
                     ..
@@ -492,20 +494,27 @@ impl Emitter<'_> {
             Some(TypedPattern::EnumVariant { fields: tf, .. }) => Some(tf.as_slice()),
             _ => None,
         };
-        self.recurse_positional_fields(output, fields, field_defs, generics, params, typed_fields);
+        self.recurse_positional_fields(
+            output,
+            fields,
+            field_definitions,
+            GenericArgs { generics, params },
+            typed_fields,
+            fx,
+        );
     }
 
-    /// Recurse into a slice pattern's prefix elements and (optionally) bind
-    /// the rest variable as a slice of the full element type.
-    fn emit_slice_pattern_decls(
+    /// Recurse into a slice pattern's prefix and bind any rest variable.
+    fn emit_slice_pattern_declarations(
         &mut self,
         output: &mut String,
         prefix: &[Pattern],
         rest: &RestPattern,
         resolved: &Type,
         typed: Option<&TypedPattern>,
+        fx: &mut EmitEffects,
     ) {
-        let (elem_ty, typed_prefix): (Type, Option<&[TypedPattern]>) = match typed {
+        let (element_ty, typed_prefix): (Type, Option<&[TypedPattern]>) = match typed {
             Some(TypedPattern::Slice {
                 prefix: tp,
                 element_type,
@@ -515,42 +524,42 @@ impl Emitter<'_> {
                 let Type::Nominal { params, .. } = resolved else {
                     return;
                 };
-                let Some(elem) = params.first().cloned() else {
+                let Some(element) = params.first().cloned() else {
                     return;
                 };
-                (elem, None)
+                (element, None)
             }
         };
 
-        for (i, elem) in prefix.iter().enumerate() {
+        for (i, element) in prefix.iter().enumerate() {
             let typed_child = typed_prefix.and_then(|tp| tp.get(i));
-            self.emit_binding_declarations_with_type(output, elem, &elem_ty, typed_child);
+            self.emit_binding_declarations_with_type(output, element, &element_ty, typed_child, fx);
         }
 
         if let RestPattern::Bind { name, .. } = rest
             && let Some(go_name) = self.go_name_for_rest_binding(rest)
         {
-            self.declare_var_decl(output, name, go_name, resolved);
+            self.declare_var_declaration(output, name, go_name, resolved, fx);
         }
     }
 
-    /// For each named pattern field, look up its definition, resolve the
-    /// field's type against the enclosing type's generics, and recurse with
-    /// the matching typed child when available.
+    /// For each named field, resolve its type against the enclosing generics
+    /// and recurse with the matching typed child.
     fn recurse_named_fields<F: FieldDef>(
         &mut self,
         output: &mut String,
         patterns: &[StructFieldPattern],
-        defs: &[F],
-        generics: &[Generic],
-        params: &[Type],
+        definitions: &[F],
+        generic_args: GenericArgs,
         typed_pf: Option<&[(EcoString, TypedPattern)]>,
+        fx: &mut EmitEffects,
     ) {
+        let GenericArgs { generics, params } = generic_args;
         for pattern in patterns {
-            let Some(def) = defs.iter().find(|d| d.name() == &pattern.name) else {
+            let Some(definition) = definitions.iter().find(|d| d.name() == &pattern.name) else {
                 continue;
             };
-            let field_ty = generics::resolve_field_type(generics, params, def.ty());
+            let field_ty = generics::resolve_field_type(generics, params, definition.ty());
             let typed_child = typed_pf.and_then(|pf| {
                 pf.iter()
                     .find(|(n, _)| n == &pattern.name)
@@ -561,26 +570,41 @@ impl Emitter<'_> {
                 &pattern.value,
                 &field_ty,
                 typed_child,
+                fx,
             );
         }
     }
 
-    /// For each positional pattern slot, zip with the definition slots and
-    /// recurse. Positional fields short of the definitions list are skipped
-    /// silently (parser already validates arity).
+    /// Zip positional pattern slots with definition slots and recurse.
     fn recurse_positional_fields<F: FieldDef>(
         &mut self,
         output: &mut String,
         patterns: &[Pattern],
-        defs: &[F],
-        generics: &[Generic],
-        params: &[Type],
+        definitions: &[F],
+        generic_args: GenericArgs,
         typed_fields: Option<&[TypedPattern]>,
+        fx: &mut EmitEffects,
     ) {
-        for (i, (pattern, def)) in patterns.iter().zip(defs.iter()).enumerate() {
-            let field_ty = generics::resolve_field_type(generics, params, def.ty());
+        let GenericArgs { generics, params } = generic_args;
+        for (i, (pattern, definition)) in patterns.iter().zip(definitions.iter()).enumerate() {
+            let field_ty = generics::resolve_field_type(generics, params, definition.ty());
             let typed_child = typed_fields.and_then(|tf| tf.get(i));
-            self.emit_binding_declarations_with_type(output, pattern, &field_ty, typed_child);
+            self.emit_binding_declarations_with_type(output, pattern, &field_ty, typed_child, fx);
         }
+    }
+}
+
+pub(crate) fn pattern_has_bindings(pattern: &Pattern) -> bool {
+    match pattern {
+        Pattern::Identifier { .. } => true,
+        Pattern::Tuple { elements, .. } => elements.iter().any(pattern_has_bindings),
+        Pattern::EnumVariant { fields, .. } => fields.iter().any(pattern_has_bindings),
+        Pattern::Struct { fields, .. } => fields.iter().any(|f| pattern_has_bindings(&f.value)),
+        Pattern::Slice { prefix, rest, .. } => {
+            prefix.iter().any(pattern_has_bindings) || matches!(rest, RestPattern::Bind { .. })
+        }
+        Pattern::Or { patterns, .. } => patterns.iter().any(pattern_has_bindings),
+        Pattern::AsBinding { .. } => true,
+        Pattern::WildCard { .. } | Pattern::Literal { .. } | Pattern::Unit { .. } => false,
     }
 }

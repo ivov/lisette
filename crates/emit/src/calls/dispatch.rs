@@ -1,12 +1,18 @@
+use crate::EmitEffects;
+use crate::expressions::access::struct_call::emit_struct_literal;
 use crate::names::generics::extract_type_mapping;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use super::NativeCallContext;
-use crate::Emitter;
-use crate::expressions::context::ExpressionContext;
-use crate::expressions::emission::EmittedExpression;
+use crate::Planner;
+use crate::Renderer;
+use crate::ReturnContext;
+use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::context::expression::ExpressionContext;
+use crate::expressions::emission::StagedExpression;
 use crate::names::go_name;
-use crate::types::coercion::{Coercion, CoercionDirection};
+use crate::plan::bodies::LoweredStatement;
+use crate::plan::calls::CalleePlan;
 use crate::types::native::NativeGoType;
 use syntax::ast::{Annotation, Expression, StructKind};
 use syntax::program::{CallKind, Definition, DefinitionBody};
@@ -19,7 +25,7 @@ struct TupleStructTarget {
     field_tys: Vec<Type>,
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     /// True when Go's inference would lose this alias: function aliases (infer
     /// as `func(...)`) and non-default numeric aliases (untyped literals default
     /// to `int`/`float64`/`complex128`).
@@ -33,14 +39,14 @@ impl Emitter<'_> {
             if !seen.insert(id.clone()) {
                 break;
             }
-            let Some(def) = self.facts.definition(id.as_str()) else {
+            let Some(definition) = self.facts.definition(id.as_str()) else {
                 break;
             };
-            if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
+            if !matches!(definition.body, DefinitionBody::TypeAlias { .. }) {
                 break;
             }
-            let def_ty = &def.ty;
-            let (vars, body) = match def_ty {
+            let definition_ty = &definition.ty;
+            let (vars, body) = match definition_ty {
                 Type::Forall { vars, body } => (vars.clone(), body.as_ref().clone()),
                 other => (vec![], other.clone()),
             };
@@ -72,26 +78,27 @@ fn extract_return_type_param(function: &Expression) -> Option<Type> {
     params.first().cloned()
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     fn resolve_element_type(
         &mut self,
         function: &Expression,
         type_args: &[Annotation],
         call_ty: Option<&Type>,
+        fx: &mut EmitEffects,
     ) -> String {
         if !type_args.is_empty() {
-            return self.annotation_to_go_type(&type_args[0]);
+            return self.annotation_to_go_type(&type_args[0], fx);
         }
         if let Some(call_result_ty) = call_ty
             && let Some(first) = call_result_ty
                 .get_type_params()
                 .and_then(|ps| ps.first().cloned())
         {
-            return self.go_type_as_string(&first);
+            return self.go_type_string(&first, fx);
         }
         let param = extract_return_type_param(function)
             .expect("constructor must have constructor return type");
-        self.go_type_as_string(&param)
+        self.go_type_string(&param, fx)
     }
 
     fn resolve_map_types(
@@ -99,11 +106,12 @@ impl Emitter<'_> {
         function: &Expression,
         type_args: &[Annotation],
         call_ty: Option<&Type>,
+        fx: &mut EmitEffects,
     ) -> (String, String) {
         if type_args.len() >= 2 {
             return (
-                self.annotation_to_go_type(&type_args[0]),
-                self.annotation_to_go_type(&type_args[1]),
+                self.annotation_to_go_type(&type_args[0], fx),
+                self.annotation_to_go_type(&type_args[1], fx),
             );
         }
         if let Some(call_result_ty) = call_ty
@@ -111,8 +119,8 @@ impl Emitter<'_> {
             && params.len() >= 2
         {
             return (
-                self.go_type_as_string(&params[0]),
-                self.go_type_as_string(&params[1]),
+                self.go_type_string(&params[0], fx),
+                self.go_type_string(&params[1], fx),
             );
         }
         let ty = function.get_type();
@@ -123,37 +131,43 @@ impl Emitter<'_> {
             .get_type_params()
             .expect("MapNew must return a type with type arguments");
         (
-            self.go_type_as_string(&params[0]),
-            self.go_type_as_string(&params[1]),
+            self.go_type_string(&params[0], fx),
+            self.go_type_string(&params[1], fx),
         )
     }
 
-    fn try_emit_native_constructor(
+    fn try_lower_native_constructor(
         &mut self,
-        output: &mut String,
         ctx: &NativeCallContext,
-    ) -> Option<String> {
+        fx: &mut EmitEffects,
+    ) -> Option<(Vec<LoweredStatement>, String)> {
         match (ctx.native_type, ctx.method) {
             (NativeGoType::Channel, "new") => {
-                let elem = self.resolve_element_type(ctx.function, ctx.type_args, ctx.call_ty);
-                Some(format!("make(chan {})", elem))
+                let element =
+                    self.resolve_element_type(ctx.function, ctx.type_args, ctx.call_ty, fx);
+                Some((Vec::new(), format!("make(chan {})", element)))
             }
             (NativeGoType::Channel, "buffered") => {
-                let elem = self.resolve_element_type(ctx.function, ctx.type_args, ctx.call_ty);
-                let capacity = ctx
-                    .args
-                    .first()
-                    .map(|a| self.emit_operand(output, a, ExpressionContext::value()))
-                    .unwrap_or_else(|| "0".to_string());
-                Some(format!("make(chan {}, {})", elem, capacity))
+                let element =
+                    self.resolve_element_type(ctx.function, ctx.type_args, ctx.call_ty, fx);
+                let (setup, capacity) = match ctx.args.first() {
+                    Some(a) => {
+                        let staged = self.stage_operand(a, ExpressionContext::value(), fx);
+                        (staged.setup, staged.value)
+                    }
+                    None => (Vec::new(), "0".to_string()),
+                };
+                Some((setup, format!("make(chan {}, {})", element, capacity)))
             }
             (NativeGoType::Map, "new") => {
-                let (key, val) = self.resolve_map_types(ctx.function, ctx.type_args, ctx.call_ty);
-                Some(format!("make(map[{}]{})", key, val))
+                let (key, val) =
+                    self.resolve_map_types(ctx.function, ctx.type_args, ctx.call_ty, fx);
+                Some((Vec::new(), format!("make(map[{}]{})", key, val)))
             }
             (NativeGoType::Slice, "new") => {
-                let elem = self.resolve_element_type(ctx.function, ctx.type_args, ctx.call_ty);
-                Some(format!("[]{}{{}}", elem))
+                let element =
+                    self.resolve_element_type(ctx.function, ctx.type_args, ctx.call_ty, fx);
+                Some((Vec::new(), format!("[]{}{{}}", element)))
             }
             _ => None,
         }
@@ -167,6 +181,8 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         call_expression: &Expression,
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Expression::Call {
             expression: callee,
@@ -188,7 +204,7 @@ impl Emitter<'_> {
             _ => return None,
         };
         let native_type = NativeGoType::from_kind(kind);
-        let method = self.extract_native_method_name(function);
+        let method = extract_native_method_name(function);
         let native_ctx = NativeCallContext {
             function,
             args,
@@ -197,13 +213,14 @@ impl Emitter<'_> {
             call_ty: None,
             native_type: &native_type,
             method,
+            ambient_return_ctx: ambient,
         };
         match call_kind {
             CallKind::NativeMethod(_) => {
-                self.try_emit_negated_native_method_dot_access(output, &native_ctx)
+                self.try_emit_negated_native_method_dot_access(output, &native_ctx, fx)
             }
             CallKind::NativeMethodIdentifier(_) => {
-                self.try_emit_negated_native_method_identifier(output, &native_ctx)
+                self.try_emit_negated_native_method_identifier(output, &native_ctx, fx)
             }
             _ => unreachable!(),
         }
@@ -215,44 +232,64 @@ impl Emitter<'_> {
         call_expression: &Expression,
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
+        fx: &mut EmitEffects,
     ) -> String {
+        let (setup, value) = self.lower_call(call_expression, call_ty, ctx, fx);
+        output.push_str(&Renderer.render_setup(&setup));
+        value
+    }
+
+    /// Structured form of `emit_call`: typed setup plus the value text.
+    pub(crate) fn lower_call(
+        &mut self,
+        call_expression: &Expression,
+        call_ty: Option<&Type>,
+        ctx: ExpressionContext<'_>,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
         let Expression::Call {
             expression: callee,
             args,
             type_args,
             spread,
-            call_kind,
             ..
         } = call_expression
         else {
-            unreachable!("emit_call requires a Call expression");
+            unreachable!("lower_call requires a Call expression");
         };
         let function = callee.unwrap_parens();
         let spread = (**spread).as_ref();
 
-        let call_kind = call_kind.filter(|_| !self.is_local_binding(function));
+        let plan = self
+            .plan_call(call_expression)
+            .expect("plan_call yields Some for a Call expression");
 
-        match call_kind {
-            Some(CallKind::TupleStructConstructor) => {
+        match &plan.callee {
+            CalleePlan::TupleStructConstructor => {
                 if let Some(result) =
-                    self.try_emit_tuple_struct_call(output, function, args, call_ty, ctx)
+                    self.try_lower_tuple_struct_call(function, args, call_ty, ctx, fx)
                 {
                     return result;
                 }
             }
-            Some(CallKind::AssertType) => {
-                return self.emit_assert_type(output, function, args, type_args);
+            CalleePlan::AssertType => {
+                return self.lower_assert_type(function, args, type_args, fx);
             }
-            Some(CallKind::UfcsMethod) => {
-                return self.emit_ufcs_call(output, function, args, type_args, spread);
+            CalleePlan::UfcsMethod => {
+                return self.lower_ufcs_call(
+                    function,
+                    args,
+                    type_args,
+                    spread,
+                    ctx.ambient_return_ctx(),
+                    fx,
+                );
             }
-            Some(
-                CallKind::NativeConstructor(kind)
-                | CallKind::NativeMethod(kind)
-                | CallKind::NativeMethodIdentifier(kind),
-            ) => {
-                let native_type = NativeGoType::from_kind(kind);
-                let method = self.extract_native_method_name(function);
+            CalleePlan::NativeConstructor(kind)
+            | CalleePlan::NativeMethod(kind)
+            | CalleePlan::NativeMethodIdentifier(kind) => {
+                let native_type = NativeGoType::from_kind(*kind);
+                let method = extract_native_method_name(function);
                 let native_ctx = NativeCallContext {
                     function,
                     args,
@@ -261,52 +298,49 @@ impl Emitter<'_> {
                     call_ty,
                     native_type: &native_type,
                     method,
+                    ambient_return_ctx: ctx.ambient_return_ctx(),
                 };
-                return self.emit_native_call(output, &native_ctx);
+                return self.lower_native_call(&native_ctx, fx);
             }
-            Some(CallKind::ReceiverMethodUfcs { is_public }) => {
-                let method = self.extract_receiver_ufcs_method(function);
-                return self.emit_receiver_method_ufcs(
-                    output, function, args, type_args, &method, is_public, spread,
+            CalleePlan::ReceiverMethodUfcs { is_public } => {
+                let method = extract_receiver_ufcs_method(function);
+                return self.lower_receiver_method_ufcs(
+                    function,
+                    args,
+                    type_args,
+                    &method,
+                    *is_public,
+                    spread,
+                    ctx.ambient_return_ctx(),
+                    fx,
                 );
             }
-            _ => {}
+            CalleePlan::GoInterop(_) | CalleePlan::Regular => {}
         }
 
-        self.emit_regular_call(output, call_expression, call_ty, ctx)
+        self.lower_regular_call(call_expression, &plan, call_ty, ctx, fx)
     }
 
-    fn extract_native_method_name<'a>(&self, function: &'a Expression) -> &'a str {
-        match function {
-            Expression::DotAccess { member, .. } => member,
-            Expression::Identifier { value, .. } => {
-                value.split_once('.').map(|(_, m)| m).unwrap_or(value)
-            }
-            _ => "",
-        }
-    }
-
-    fn extract_receiver_ufcs_method(&self, function: &Expression) -> String {
-        if let Expression::Identifier { value, .. } = function
-            && let Some(last_dot) = value.rfind('.')
-        {
-            return value[last_dot + 1..].to_string();
-        }
-        String::new()
-    }
-
-    fn emit_native_call(&mut self, output: &mut String, ctx: &NativeCallContext) -> String {
-        if let Some(result) = self.try_emit_native_constructor(output, ctx) {
+    fn lower_native_call(
+        &mut self,
+        ctx: &NativeCallContext,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        if let Some(result) = self.try_lower_native_constructor(ctx, fx) {
             return result;
         }
         if let Expression::DotAccess { .. } = ctx.function {
-            self.emit_native_method_dot_access(output, ctx)
+            self.lower_native_method_dot_access(ctx, fx)
         } else {
-            self.emit_native_method_identifier(output, ctx)
+            self.lower_native_method_identifier(ctx, fx)
         }
     }
 
-    pub(super) fn infer_return_only_type_args(&mut self, function: &Expression) -> Option<String> {
+    pub(super) fn infer_return_only_type_args(
+        &mut self,
+        function: &Expression,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
         let definition_ty = self.get_callee_definition_type(function)?;
         let Type::Forall { vars, body } = definition_ty else {
             return None;
@@ -348,7 +382,7 @@ impl Emitter<'_> {
             return None;
         }
 
-        Some(self.format_type_args(&resolved))
+        Some(self.format_type_args(&resolved, fx))
     }
 
     fn lookup_definition_type(&self, primary: &str, fallback: Option<&str>) -> Option<Type> {
@@ -371,7 +405,6 @@ impl Emitter<'_> {
                 if let Expression::Identifier { value, .. } = expression.as_ref() {
                     let module_name = self.module.module_for_alias(value).unwrap_or(value);
                     let qualified = format!("{}.{}", module_name, member);
-                    // Try as Type.method in current module (e.g. Box.make → main.Box.make)
                     let local = self.facts.qualified_current_member(value, member);
                     return self.lookup_definition_type(&qualified, Some(&local));
                 }
@@ -487,53 +520,51 @@ impl Emitter<'_> {
         }
     }
 
-    /// Attempts to emit a tuple struct constructor as a struct literal.
-    ///
-    /// Returns `None` if this isn't a tuple struct or should fall through
-    /// to regular call handling.
-    fn try_emit_tuple_struct_call(
+    /// Plan a tuple-struct constructor as a struct literal. `None` when this
+    /// is not a tuple struct or should fall through to regular call handling.
+    fn try_lower_tuple_struct_call(
         &mut self,
-        output: &mut String,
         function: &Expression,
         args: &[Expression],
         call_ty: Option<&Type>,
         ctx: ExpressionContext<'_>,
-    ) -> Option<String> {
-        let target = self.resolve_tuple_struct_target(function, call_ty)?;
+        fx: &mut EmitEffects,
+    ) -> Option<(Vec<LoweredStatement>, String)> {
+        let target = self.resolve_tuple_struct_target(function, call_ty, fx)?;
 
-        let stages: Vec<EmittedExpression> = args
+        let stages: Vec<StagedExpression> = args
             .iter()
-            .map(|a| self.stage_composite(a, ExpressionContext::value()))
+            .map(|a| self.stage_composite(a, ExpressionContext::value(), fx))
             .collect();
-        let values = self.sequence(output, stages, "_arg");
+        let (mut setup, values) = self.sequence_structured(stages, "_arg");
 
-        let field_pairs: Vec<(String, String)> = target
+        let mut field_pairs: Vec<(String, String)> = Vec::with_capacity(target.field_tys.len());
+        for (i, ((field_ty, arg), value)) in target
             .field_tys
             .iter()
             .zip(args.iter())
             .zip(values)
             .enumerate()
-            .map(|(i, ((field_ty, arg), value))| {
-                let value_ty = arg.get_type();
-                let coercion =
-                    Coercion::resolve(self, &value_ty, field_ty, CoercionDirection::Internal);
-                let coerced = coercion.apply(self, output, value);
-                (format!("F{}", i), coerced)
-            })
-            .collect();
+        {
+            let value_ty = arg.get_type();
+            let coercion =
+                Coercion::resolve(self, &value_ty, field_ty, CoercionDirection::Internal);
+            let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+            setup.extend(coercion_setup);
+            field_pairs.push((format!("F{}", i), coerced));
+        }
 
-        Some(self.emit_struct_literal(&target.go_ty, &field_pairs, ctx))
+        Some((setup, emit_struct_literal(&target.go_ty, &field_pairs, ctx)))
     }
 
-    /// Drill `function`'s return type into a tuple-struct definition, then
-    /// substitute generics to produce the per-field types and the Go target
-    /// type string. Returns `None` for anything that should fall through to
-    /// regular call handling (non-Function, non-Nominal, non-tuple kind, or
-    /// single-field non-generic struct that needs the newtype-cast path).
+    /// Drill the function's return type into a tuple-struct definition,
+    /// returning per-field types and the Go target type. `None` falls through
+    /// to regular call handling.
     fn resolve_tuple_struct_target(
         &mut self,
         function: &Expression,
         call_ty: Option<&Type>,
+        fx: &mut EmitEffects,
     ) -> Option<TupleStructTarget> {
         let ty = function.get_type();
         let Type::Function { return_type, .. } = ty.unwrap_forall() else {
@@ -578,34 +609,37 @@ impl Emitter<'_> {
                 .collect()
         };
 
-        let go_ty = self.go_type_as_string(&return_ty);
+        let go_ty = self.go_type_string(&return_ty, fx);
         Some(TupleStructTarget { go_ty, field_tys })
     }
 
-    fn emit_assert_type(
+    fn lower_assert_type(
         &mut self,
-        output: &mut String,
         function: &Expression,
         args: &[Expression],
         type_args: &[Annotation],
-    ) -> String {
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
         let target_ty = if !type_args.is_empty() {
-            self.annotation_to_go_type(&type_args[0])
+            self.annotation_to_go_type(&type_args[0], fx)
         } else {
             let param = extract_return_type_param(function)
                 .expect("AssertType must have constructor return type");
-            self.go_type_as_string(&param)
+            self.go_type_string(&param, fx)
         };
-        let arg_expression = args
-            .first()
-            .map(|a| self.emit_composite_value(output, a, ExpressionContext::value()))
-            .unwrap_or_default();
-        self.requirements.require_stdlib();
-        format!(
-            "{}.AssertType[{}]({})",
-            go_name::GO_STDLIB_PKG,
-            target_ty,
-            arg_expression
+        let (setup, arg_expression) = match args.first() {
+            Some(a) => self.lower_composite_value(a, ExpressionContext::value(), fx),
+            None => (Vec::new(), String::new()),
+        };
+        fx.require_stdlib();
+        (
+            setup,
+            format!(
+                "{}.AssertType[{}]({})",
+                go_name::GO_STDLIB_PKG,
+                target_ty,
+                arg_expression
+            ),
         )
     }
 
@@ -625,7 +659,7 @@ impl Emitter<'_> {
             .and_then(|d| d.go_name())
     }
 
-    fn is_local_binding(&self, function: &Expression) -> bool {
+    pub(crate) fn is_local_binding(&self, function: &Expression) -> bool {
         if let Expression::Identifier { value, .. } = function {
             self.scope.resolve_identifier_binding(value).is_some()
         } else {
@@ -633,7 +667,11 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn prelude_container_type_args(&mut self, ty: &Type) -> Option<String> {
+    pub(crate) fn prelude_container_type_args(
+        &mut self,
+        ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
         if !ty.is_option() && !ty.is_result() && !ty.is_partial() {
             return None;
         }
@@ -646,18 +684,37 @@ impl Emitter<'_> {
         params
             .iter()
             .any(|p| self.facts.is_interface(p) || self.is_function_alias(p))
-            .then(|| self.format_type_args(params))
+            .then(|| self.format_type_args(params, fx))
     }
+}
 
-    pub(super) fn is_prelude_variant_constructor(callee: &Expression) -> bool {
-        match callee {
-            Expression::Identifier { value, .. } => {
-                matches!(value.as_str(), "Some" | "Ok" | "Err")
-            }
-            Expression::DotAccess { member, .. } => {
-                matches!(member.as_str(), "Some" | "Ok" | "Err")
-            }
-            _ => false,
+fn extract_native_method_name(function: &Expression) -> &str {
+    match function {
+        Expression::DotAccess { member, .. } => member,
+        Expression::Identifier { value, .. } => {
+            value.split_once('.').map(|(_, m)| m).unwrap_or(value)
         }
+        _ => "",
+    }
+}
+
+fn extract_receiver_ufcs_method(function: &Expression) -> String {
+    if let Expression::Identifier { value, .. } = function
+        && let Some(last_dot) = value.rfind('.')
+    {
+        return value[last_dot + 1..].to_string();
+    }
+    String::new()
+}
+
+pub(super) fn is_prelude_variant_constructor(callee: &Expression) -> bool {
+    match callee {
+        Expression::Identifier { value, .. } => {
+            matches!(value.as_str(), "Some" | "Ok" | "Err")
+        }
+        Expression::DotAccess { member, .. } => {
+            matches!(member.as_str(), "Some" | "Ok" | "Err")
+        }
+        _ => false,
     }
 }

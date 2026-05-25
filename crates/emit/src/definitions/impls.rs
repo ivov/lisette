@@ -1,4 +1,6 @@
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::expressions::top_items::emit_doc;
 use crate::names::go_name;
 use syntax::ast::{Expression, Generic, Pattern, Visibility};
 use syntax::types::Type;
@@ -10,13 +12,14 @@ struct ImplContext<'a> {
     qualified_type: String,
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn emit_impl_block(
         &mut self,
         receiver_name: &str,
         ty: &Type,
         methods: &[Expression],
         generics: &[Generic],
+        fx: &mut EmitEffects,
     ) -> String {
         let ctx = ImplContext {
             receiver_name,
@@ -27,15 +30,18 @@ impl Emitter<'_> {
 
         methods
             .iter()
-            .filter_map(|method| self.emit_impl_method(method, &ctx))
+            .filter_map(|method| self.emit_impl_method(method, &ctx, fx))
             .collect::<Vec<_>>()
             .join("\n\n")
     }
 
-    /// Emit one method of an `impl` block, producing either a receiver method
-    /// (`func (r Recv) m(...)`) or a free function (`func Recv_m(r Recv, ...)`)
-    /// depending on whether the method has `self` and whether it's UFCS-declared.
-    fn emit_impl_method(&mut self, method: &Expression, ctx: &ImplContext<'_>) -> Option<String> {
+    /// Emit one impl method as a receiver method or a UFCS free function.
+    fn emit_impl_method(
+        &mut self,
+        method: &Expression,
+        ctx: &ImplContext<'_>,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
         let Expression::Function {
             doc,
             visibility,
@@ -74,19 +80,20 @@ impl Emitter<'_> {
             let mut combined_generics = ctx.generics.to_vec();
             combined_generics.extend(free_function.generics.iter().cloned());
             free_function.generics = combined_generics;
-            self.emit_function(&free_function, None, false)
+            self.emit_function(&free_function, None, false, fx)
         } else {
             self.emit_function(
                 &function,
                 Some((ctx.receiver_name.to_string(), ctx.ty.clone())),
                 should_export,
+                fx,
             )
         };
 
         if code.is_empty() {
             return None;
         }
-        let method_doc_comment = self.emit_doc(doc);
+        let method_doc_comment = emit_doc(doc);
         Some(format!("{}{}", method_doc_comment, code))
     }
 }

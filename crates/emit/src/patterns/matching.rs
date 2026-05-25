@@ -1,45 +1,97 @@
-use crate::Emitter;
-use crate::bindings::BindingValue;
-use crate::expressions::context::ExpressionContext;
-use crate::patterns::bindings::pattern_binds_name;
-use crate::patterns::tree_emitter::TreeEmitter;
-use crate::placement::BodyPlace;
-use crate::types::abi::AbiShape;
-use crate::utils::{DiscardGuard, ValueTempDiscard};
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::abi::AbiShape;
+use crate::context::expression::ExpressionContext;
+use crate::patterns::binding_decls::pattern_binds_name;
+use crate::patterns::tree_emitter::TreePlanner;
+use crate::plan::bodies::{LoweredBlock, LoweredStatement, PlacePlan};
+use crate::plan::calls::CallReturnShape;
+use crate::state::bindings::BindingValue;
 use crate::write_line;
 use syntax::ast::{Expression, MatchArm, Pattern};
 
-impl Emitter<'_> {
-    pub(crate) fn emit_match(
+/// How to render the subject declaration line, based on body usage.
+enum SubjectDeclaration {
+    /// Identifier path: emit `_ = <var>` when unused, else nothing.
+    PlainDiscard {
+        var: String,
+    },
+    /// Composite path: `<var> := <expression>` if used, `_ = <expression>` if not.
+    Deferred {
+        var: String,
+        expression: String,
+    },
+    None,
+}
+
+impl Planner<'_> {
+    pub(crate) fn lower_match_to_block(
         &mut self,
-        output: &mut String,
         subject: &Expression,
         arms: &[MatchArm],
-        place: &BodyPlace,
-    ) {
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+    ) -> LoweredBlock {
+        let mut statements: Vec<LoweredStatement> = Vec::new();
+
         if subject.get_type().is_never() {
-            self.emit_statement(output, subject);
-            return;
+            let mut buffer = String::new();
+            self.emit_statement(&mut buffer, subject, place.return_ctx(), fx);
+            statements.push(LoweredStatement::RawGo(buffer));
+            return LoweredBlock { statements };
         }
-        if self.try_emit_fused_lowered_match(output, subject, arms, place) {
-            return;
+
+        let mut fusion_buffer = String::new();
+        if self.try_emit_fused_lowered_match(&mut fusion_buffer, subject, arms, place, fx) {
+            statements.push(LoweredStatement::RawGo(fusion_buffer));
+            return LoweredBlock { statements };
         }
+
         let subject_ty = subject.get_type();
-        let (subject_var, value_guard) = self.emit_match_subject_var(output, subject, arms);
-        let plain_guard = if value_guard.is_some() || matches!(subject, Expression::Literal { .. })
-        {
-            None
-        } else {
-            Some(DiscardGuard::new(output, &subject_var))
-        };
-        let tree_emitter = TreeEmitter::new(self, arms, subject_var, subject_ty);
-        tree_emitter.emit(output, place);
-        if let Some(g) = value_guard {
-            g.finish(output);
+        let mut setup_buffer = String::new();
+        let (subject_var, declaration) =
+            self.emit_match_subject_var(&mut setup_buffer, subject, arms, fx);
+        if !setup_buffer.is_empty() {
+            statements.push(LoweredStatement::RawGo(setup_buffer));
         }
-        if let Some(g) = plain_guard {
-            g.finish(output);
+
+        let block = self.lower_match_tree(arms, subject_var.clone(), subject_ty, place, fx);
+        let used = block.references_var(&subject_var);
+
+        match declaration {
+            SubjectDeclaration::PlainDiscard { var } => {
+                if !used {
+                    statements.push(LoweredStatement::RawGo(format!("_ = {}\n", var)));
+                }
+            }
+            SubjectDeclaration::Deferred { var, expression } => {
+                if used {
+                    statements.push(LoweredStatement::RawGo(format!(
+                        "{} := {}\n",
+                        var, expression
+                    )));
+                } else {
+                    statements.push(LoweredStatement::RawGo(format!("_ = {}\n", expression)));
+                }
+            }
+            SubjectDeclaration::None => {}
         }
+        statements.extend(block.statements);
+
+        LoweredBlock { statements }
+    }
+
+    fn lower_match_tree(
+        &mut self,
+        arms: &[MatchArm],
+        subject_var: String,
+        subject_ty: syntax::types::Type,
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+    ) -> LoweredBlock {
+        let tree_emitter = TreePlanner::new(self, arms, subject_var, subject_ty, fx);
+        tree_emitter.lower(place)
     }
 
     /// Fuse the lift+match into one `if err == nil { ... } else { ... }`
@@ -49,15 +101,13 @@ impl Emitter<'_> {
         output: &mut String,
         subject: &Expression,
         arms: &[MatchArm],
-        place: &BodyPlace,
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
     ) -> bool {
-        let Expression::Call {
-            expression: callee, ..
-        } = subject
-        else {
+        let Some(plan) = self.plan_call(subject) else {
             return false;
         };
-        let Some(shape) = self.classify_callee_abi(callee) else {
+        let CallReturnShape::Lowered(shape) = plan.return_shape else {
             return false;
         };
         // Match-fusion only handles `Result`'s binary `Ok`/`Err` arms;
@@ -90,7 +140,7 @@ impl Emitter<'_> {
         };
         let err_var = self.fresh_var(Some("ret"));
         self.declare(&err_var);
-        let call_str = self.emit_call(output, subject, None, ExpressionContext::value());
+        let call_str = self.emit_call(output, subject, None, ExpressionContext::value(), fx);
         match &val_var {
             Some(v) => write_line!(output, "{}, {} := {}", v, err_var, call_str),
             None => match shape {
@@ -109,6 +159,7 @@ impl Emitter<'_> {
             ok_name.zip(val_var.as_deref()),
             &ok_arm.expression,
             place,
+            fx,
         );
         output.push_str("} else {\n");
         self.emit_fused_arm(
@@ -116,6 +167,7 @@ impl Emitter<'_> {
             err_name.map(|n| (n, err_var.as_str())),
             &err_arm.expression,
             place,
+            fx,
         );
         output.push_str("}\n");
         true
@@ -126,27 +178,24 @@ impl Emitter<'_> {
         output: &mut String,
         binding: Option<(&str, &str)>,
         body: &Expression,
-        place: &BodyPlace,
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
     ) {
         self.scope.push_binding_frame();
-        let guard = binding.map(|(name, value)| self.bind_fused_with_guard(output, name, value));
-        self.emit_body_to_place(output, body, place);
-        if let Some(g) = guard {
-            g.finish(output);
+        let bound = binding.map(|(name, value)| {
+            let go_name = self.scope.bind(name, name);
+            self.declare(&go_name);
+            (go_name, value.to_string())
+        });
+        let body_block = self.lower_block_to_place(body, place, fx);
+        if let Some((go_name, value)) = &bound {
+            write_line!(output, "{} := {}", go_name, value);
+            if !body_block.references_var(go_name) {
+                write_line!(output, "_ = {}", go_name);
+            }
         }
+        Renderer.render_lowered_block(output, &body_block);
         self.scope.pop_binding_frame();
-    }
-
-    fn bind_fused_with_guard(
-        &mut self,
-        output: &mut String,
-        name: &str,
-        value: &str,
-    ) -> DiscardGuard {
-        let go_name = self.scope.bind(name, name);
-        self.declare(&go_name);
-        write_line!(output, "{} := {}", go_name, value);
-        DiscardGuard::new(output, &go_name)
     }
 
     fn emit_match_subject_var(
@@ -154,7 +203,8 @@ impl Emitter<'_> {
         output: &mut String,
         subject: &Expression,
         arms: &[MatchArm],
-    ) -> (String, Option<ValueTempDiscard>) {
+        fx: &mut EmitEffects,
+    ) -> (String, SubjectDeclaration) {
         let any_guard = arms.iter().any(|arm| arm.has_guard());
         if let Expression::Identifier { value, .. } = subject
             && !any_guard
@@ -168,23 +218,24 @@ impl Emitter<'_> {
                 Some(BindingValue::InlineExpr(_))
             );
             if !has_collision && !name.contains('.') && !bound_to_inline {
-                return (self.scope.resolve_or_escape_go_name(&name), None);
+                let var = self.scope.resolve_or_escape_go_name(&name);
+                return (var.clone(), SubjectDeclaration::PlainDiscard { var });
             }
         }
         if matches!(subject, Expression::Literal { .. }) {
             return (
-                self.emit_operand(output, subject, ExpressionContext::value()),
-                None,
+                self.emit_operand(output, subject, ExpressionContext::value(), fx),
+                SubjectDeclaration::None,
             );
         }
         let var = self.fresh_var(Some("subject"));
         self.declare(&var);
-        let subject_expression =
-            self.emit_composite_value(output, subject, ExpressionContext::value());
-        let decl_start = output.len();
-        write_line!(output, "{} := {}", var, subject_expression);
-        let guard = ValueTempDiscard::new(output, decl_start, &var, &subject_expression);
-        (var, Some(guard))
+        let expression = self.emit_composite_value(output, subject, ExpressionContext::value(), fx);
+        let declaration = SubjectDeclaration::Deferred {
+            var: var.clone(),
+            expression,
+        };
+        (var, declaration)
     }
 }
 
@@ -218,7 +269,7 @@ fn classify_result_arms(arms: &[MatchArm]) -> Option<(&MatchArm, &MatchArm)> {
     }
 }
 
-/// `Some(name)` for `Variant(ident)`, `Some("_")` for `Variant(_)`, `None`
+/// `Some(name)` for `Variant(identifier)`, `Some("_")` for `Variant(_)`, `None`
 /// for empty/unit/complex payloads.
 fn simple_payload_binding(arm: &MatchArm) -> Option<&str> {
     let Pattern::EnumVariant { fields, .. } = &arm.pattern else {

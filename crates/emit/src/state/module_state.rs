@@ -7,8 +7,6 @@ use crate::names::constraints::{GenericConstraintTable, ParamConstraintSet};
 #[derive(Default)]
 pub(crate) struct ModuleState {
     enum_layouts: HashMap<String, EnumLayout>,
-    /// Key is `TypeId.field_name`; capitalization must match the struct
-    /// definition because Go cares about exported-vs-private field casing.
     tag_exported_fields: HashSet<String>,
     exported_method_names: HashSet<String>,
     module_aliases: HashMap<String, String>,

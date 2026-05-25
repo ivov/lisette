@@ -1,2 +1,2 @@
 pub(crate) mod assignments;
-mod let_bindings;
+pub(crate) mod let_binding;

@@ -1,5 +1,8 @@
 use syntax::ast::Expression;
 
+use crate::Renderer;
+use crate::plan::bodies::LoweredStatement;
+use crate::plan::values::{ValuePlan, setup_from_string};
 use crate::utils::observable_after_mutation;
 
 /// Whether an inline-valued emission needs to be captured to a temp when a
@@ -11,18 +14,34 @@ pub(crate) enum CapturePolicy {
     IfLaterSetup,
 }
 
-/// Result of emitting a sub-expression to a separate buffer.
-pub(crate) struct EmittedExpression {
-    pub setup: String,
+/// Result of staging a sub-expression to a separate buffer.
+pub(crate) struct StagedExpression {
+    pub setup: Vec<LoweredStatement>,
     pub value: String,
     pub capture: CapturePolicy,
 }
 
-impl EmittedExpression {
-    /// Construct from raw setup + value, deriving the capture policy from
-    /// the source expression (inline values that are observable after
-    /// mutation require capture before any later sibling's setup runs).
+impl StagedExpression {
+    /// From raw setup + value; derives capture policy from `expression`.
     pub(crate) fn new(setup: String, value: String, expression: &Expression) -> Self {
+        let capture = if setup.is_empty() && observable_after_mutation(expression) {
+            CapturePolicy::IfLaterSetup
+        } else {
+            CapturePolicy::Never
+        };
+        Self {
+            setup: setup_from_string(setup),
+            value,
+            capture,
+        }
+    }
+
+    /// From typed setup + value, for sites that built their setup directly.
+    pub(crate) fn from_typed_setup(
+        setup: Vec<LoweredStatement>,
+        value: String,
+        expression: &Expression,
+    ) -> Self {
         let capture = if setup.is_empty() && observable_after_mutation(expression) {
             CapturePolicy::IfLaterSetup
         } else {
@@ -35,34 +54,31 @@ impl EmittedExpression {
         }
     }
 
-    /// Inline value with no setup. Caller has verified the value does not
-    /// need capture (e.g. literal, identifier, or already-temp).
-    #[allow(dead_code)]
-    pub(crate) fn inline(value: String) -> Self {
-        Self {
-            setup: String::new(),
-            value,
-            capture: CapturePolicy::Never,
+    /// From a planned value, preserving its typed setup.
+    pub(crate) fn from_plan(plan: ValuePlan, expression: &Expression) -> Self {
+        match plan {
+            ValuePlan::Composite { setup, value } => Self {
+                setup,
+                value,
+                capture: CapturePolicy::Never,
+            },
+            ValuePlan::Operand(value) => {
+                let capture = if observable_after_mutation(expression) {
+                    CapturePolicy::IfLaterSetup
+                } else {
+                    CapturePolicy::Never
+                };
+                Self {
+                    setup: Vec::new(),
+                    value,
+                    capture,
+                }
+            }
+            other => {
+                let mut setup = String::new();
+                let value = Renderer.render_value(&mut setup, &other);
+                Self::new(setup, value, expression)
+            }
         }
-    }
-
-    /// Value already pinned by `setup` (typically a temp binding). Capture
-    /// is never needed because setup is what isolates the value.
-    #[allow(dead_code)]
-    pub(crate) fn with_setup(setup: String, value: String) -> Self {
-        Self {
-            setup,
-            value,
-            capture: CapturePolicy::Never,
-        }
-    }
-
-    /// Append `setup` to `output` and return the value. Convenience for
-    /// single-expression sites that do not need the sibling-aware
-    /// `sequence` machinery.
-    #[allow(dead_code)]
-    pub(crate) fn write_setup_into(self, output: &mut String) -> String {
-        output.push_str(&self.setup);
-        self.value
     }
 }

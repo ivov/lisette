@@ -1,16 +1,21 @@
-use crate::Emitter;
-use crate::bindings::BindingValue;
-use crate::expressions::context::ExpressionContext;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
+use crate::plan::bodies::ConstPlan;
+use crate::plan::values::ValuePlan;
+use crate::state::bindings::BindingValue;
 use syntax::ast::{Expression, Generic, Literal, UnaryOperator};
 use syntax::types::Type;
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn emit_type_alias(
         &mut self,
         name: &str,
         generics: &[Generic],
         ty: &Type,
+        fx: &mut EmitEffects,
     ) -> String {
         let is_fn_alias;
         let underlying = match ty {
@@ -39,7 +44,7 @@ impl Emitter<'_> {
                 ty
             }
         };
-        let ty_string = self.go_type_as_string(underlying);
+        let ty_string = self.go_type_string(underlying, fx);
 
         if let Type::Nominal { id, .. } = underlying
             && let Some(module) = self.facts.module_for_qualified_name(id.as_str())
@@ -48,11 +53,11 @@ impl Emitter<'_> {
             && !go_name::is_go_import(module)
         {
             let module = module.to_string();
-            self.require_module_import(&module);
+            self.require_module_import_fx(&module, fx);
         }
 
         let symbol = self.facts.qualified_current(name);
-        let generics_string = self.generics_to_string_for_symbol(&symbol, generics);
+        let generics_string = self.generics_to_string_for_symbol(&symbol, generics, fx);
 
         let separator = if is_fn_alias { " " } else { " = " };
         format!(
@@ -64,12 +69,14 @@ impl Emitter<'_> {
         )
     }
 
-    pub(crate) fn emit_const(
+    pub(crate) fn build_const_plan(
         &mut self,
         identifier: &str,
         expression: &Expression,
         ty: &Type,
-    ) -> String {
+        directive: String,
+        fx: &mut EmitEffects,
+    ) -> ConstPlan {
         let target_name = self
             .module
             .escape_remap(identifier)
@@ -84,23 +91,41 @@ impl Emitter<'_> {
             self.try_declare(&fresh);
             fresh
         };
-        let ty_str = self.go_type_as_string(ty);
+        let ty_str = self.go_type_string(ty, fx);
 
-        let mut output = String::new();
-        let expression_string =
-            self.emit_operand(&mut output, expression, ExpressionContext::value());
-        let value = if expression_string.is_empty() {
-            "struct{}{}"
+        // `is_go_const_eligible` admits only literals, identifiers, and
+        // constexpr unary/binary — none of which carry setup statements.
+        let raw_value = self.plan_value(expression, ExpressionContext::value(), fx);
+        let value_text = raw_value.operand_text().unwrap_or_default().to_string();
+        let value = if value_text.is_empty() {
+            ValuePlan::Operand("struct{}{}".to_string())
         } else {
-            &expression_string
+            ValuePlan::Operand(value_text)
         };
-        let keyword = if self.is_go_const_eligible(expression) {
+        let is_const = self.is_go_const_eligible(expression);
+        if is_const {
             self.record_go_const(go_identifier.clone());
-            "const"
-        } else {
-            "var"
-        };
-        format!("{} {} {} = {}", keyword, go_identifier, ty_str, value)
+        }
+        ConstPlan {
+            directive,
+            is_const,
+            name: go_identifier,
+            ty_str,
+            value,
+        }
+    }
+
+    pub(crate) fn emit_const(
+        &mut self,
+        identifier: &str,
+        expression: &Expression,
+        ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> String {
+        let plan = self.build_const_plan(identifier, expression, ty, String::new(), fx);
+        let mut out = String::new();
+        Renderer.render_const_declaration(&mut out, &plan);
+        out.trim_end_matches('\n').to_string()
     }
 
     fn is_go_const_eligible(&self, expression: &Expression) -> bool {

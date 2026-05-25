@@ -1,11 +1,12 @@
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use super::names::go_name;
-use crate::{Emitter, PreludeType};
+use crate::EmitEffects;
+use crate::names::go_name;
+use crate::{Planner, PreludeType};
 use syntax::ast::{Expression, Visibility};
 use syntax::program::{DefinitionBody, File};
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn collect_local_exported_method_names(&mut self, files: &[&File]) {
         for file in files {
             for item in &file.items {
@@ -96,7 +97,11 @@ impl Emitter<'_> {
 
     /// Register cross-module imports for any bound types referenced in these generics.
     /// In-module, Go-imported, and prelude modules don't need explicit imports.
-    pub(crate) fn record_bound_imports(&mut self, generics: &[syntax::ast::Generic]) {
+    pub(crate) fn record_bound_imports(
+        &mut self,
+        generics: &[syntax::ast::Generic],
+        fx: &mut EmitEffects,
+    ) {
         for generic in generics {
             for bound in &generic.bounds {
                 let syntax::ast::Annotation::Constructor { name, .. } = bound else {
@@ -116,12 +121,15 @@ impl Emitter<'_> {
                     .module_for_alias(module)
                     .unwrap_or(module)
                     .to_string();
-                self.require_module_import(&canonical);
+                self.require_module_import_fx(&canonical, fx);
             }
         }
     }
 
-    pub(crate) fn collect_local_make_function_code(&mut self) -> HashMap<u32, Vec<String>> {
+    pub(crate) fn collect_local_make_function_code(
+        &mut self,
+        fx: &mut EmitEffects,
+    ) -> HashMap<u32, Vec<String>> {
         let module_prefix = format!("{}.", self.facts.current_module());
         let mut code: HashMap<u32, Vec<String>> = HashMap::default();
 
@@ -154,7 +162,7 @@ impl Emitter<'_> {
 
         for (key, variants, file_id) in local_enums {
             for variant in &variants {
-                let fn_code = self.create_make_function_code(&key, &variant.name);
+                let fn_code = self.create_make_function_code(&key, &variant.name, fx);
                 code.entry(file_id).or_default().push(fn_code);
             }
         }

@@ -1,4 +1,4 @@
-use emit::{Emitter, OutputFile, TestEmitConfig};
+use emit::{OutputFile, Planner, TestEmitConfig};
 use syntax::program::File;
 
 use super::pipeline::TestPipeline;
@@ -51,7 +51,7 @@ fn emit_inner(
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
     };
-    let mut emitter = Emitter::new_for_tests(&config, source_for_debug);
+    let mut emitter = Planner::new_for_tests(&config, source_for_debug);
     let emitted_files = emitter.emit_files(&[&file], &result.module_id);
 
     EmitResult {

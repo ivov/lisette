@@ -1,4 +1,5 @@
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
 use crate::names::go_name;
 use crate::types::native::NativeGoType;
 use crate::types::prelude::PreludeType;
@@ -37,13 +38,9 @@ impl GoType {
         }
     }
 
-    fn merge(&mut self, other: &GoType) {
+    pub(crate) fn merge(&mut self, other: &GoType) {
         self.needs_stdlib = self.needs_stdlib || other.needs_stdlib;
         self.go_imports.extend(other.go_imports.iter().cloned());
-    }
-
-    pub(crate) fn merge_from(&mut self, other: &GoType) {
-        self.merge(other);
     }
 
     fn merge_all<'a>(&mut self, others: impl IntoIterator<Item = &'a GoType>) {
@@ -59,7 +56,7 @@ impl std::fmt::Display for GoType {
     }
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn go_type(&self, ty: &Type) -> GoType {
         match ty {
             Type::Nominal { id, params, .. } => self.emit_constructor(id, params, ty),
@@ -124,22 +121,18 @@ impl Emitter<'_> {
         build_param_typed(format!("{}[{}]", kind.leaf_name(), type_args), &param_types)
     }
 
-    pub(crate) fn go_type_as_string(&mut self, ty: &Type) -> String {
+    /// Render a type to Go text, recording stdlib + Go-import effects in `fx`.
+    pub(crate) fn go_type_string(&self, ty: &Type, fx: &mut EmitEffects) -> String {
         let result = self.go_type(ty);
-        if result.needs_stdlib {
-            self.requirements.require_stdlib();
-        }
-        for go_import in &result.go_imports {
-            self.requirements.require_go_import(go_import.clone());
-        }
+        fx.merge_from_go_type(&result);
         result.code
     }
 
-    pub(crate) fn format_type_args(&mut self, params: &[Type]) -> String {
+    pub(crate) fn format_type_args(&mut self, params: &[Type], fx: &mut EmitEffects) -> String {
         if params.is_empty() {
             return String::new();
         }
-        let args: Vec<String> = params.iter().map(|p| self.go_type_as_string(p)).collect();
+        let args: Vec<String> = params.iter().map(|p| self.go_type_string(p, fx)).collect();
         format!("[{}]", args.join(", "))
     }
 
@@ -310,52 +303,50 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn format_type_args_from_annotations(&mut self, type_args: &[Annotation]) -> String {
+    pub(crate) fn format_type_args_from_annotations(
+        &mut self,
+        type_args: &[Annotation],
+        fx: &mut EmitEffects,
+    ) -> String {
         if type_args.is_empty() {
             return String::new();
         }
 
         let args: Vec<String> = type_args
             .iter()
-            .map(|ta| self.annotation_to_go_type(ta))
+            .map(|ta| self.annotation_to_go_type(ta, fx))
             .collect();
 
         format!("[{}]", args.join(", "))
     }
 
-    /// Format type args by combining receiver type params with explicit type args.
-    /// Used by native method and UFCS call sites where the receiver's generic
-    /// params must be prepended to the explicit type args.
+    /// Prepend the receiver's generic params to the explicit type args (for
+    /// native-method and UFCS call sites).
     pub(crate) fn format_type_args_with_receiver(
         &mut self,
         receiver_ty: &Type,
         type_args: &[Annotation],
+        fx: &mut EmitEffects,
     ) -> String {
         let mut go_type_strs = Vec::new();
         if let Some(params) = receiver_ty.get_type_params() {
             let params = params.to_vec();
             for param in &params {
-                go_type_strs.push(self.go_type_as_string(param));
+                go_type_strs.push(self.go_type_string(param, fx));
             }
         }
         for ta in type_args {
-            go_type_strs.push(self.annotation_to_go_type(ta));
+            go_type_strs.push(self.annotation_to_go_type(ta, fx));
         }
         if go_type_strs.is_empty() {
-            self.format_type_args_from_annotations(type_args)
+            self.format_type_args_from_annotations(type_args, fx)
         } else {
             format!("[{}]", go_type_strs.join(", "))
         }
     }
 
-    pub(crate) fn emit_zero_return(&mut self, output: &mut String, ty: &Type) {
-        let (zero, effects) = self.zero_value(ty);
-        self.requirements.apply_effects(&effects);
-        crate::write_line!(output, "return {}", zero);
-    }
-
-    pub(crate) fn zero_value(&self, ty: &Type) -> (String, crate::EmitEffects) {
-        let mut effects = crate::EmitEffects::default();
+    pub(crate) fn zero_value(&self, ty: &Type) -> (String, EmitEffects) {
+        let mut effects = EmitEffects::default();
         if self.facts.is_interface(ty) {
             return ("nil".to_string(), effects);
         }
@@ -385,14 +376,13 @@ impl Emitter<'_> {
         (value, effects)
     }
 
-    pub(crate) fn annotation_to_go_type(&mut self, annotation: &Annotation) -> String {
+    pub(crate) fn annotation_to_go_type(
+        &mut self,
+        annotation: &Annotation,
+        fx: &mut EmitEffects,
+    ) -> String {
         let result = self.go_type_from_annotation(annotation);
-        if result.needs_stdlib {
-            self.requirements.require_stdlib();
-        }
-        for go_import in &result.go_imports {
-            self.requirements.require_go_import(go_import.clone());
-        }
+        fx.merge_from_go_type(&result);
         result.code
     }
 
@@ -473,8 +463,6 @@ impl Emitter<'_> {
     }
 
     /// Lower a non-unit `Annotation::Constructor` into its Go equivalent.
-    /// Checks in order: native Go types (slice/map/etc.), `Ref<T>` as `*T`,
-    /// prelude containers (Option/Result/...), then generic instantiation.
     fn constructor_annotation_to_go(&self, name: &str, params: &[Annotation]) -> GoType {
         let base_name = self.unqualify_name(name);
 

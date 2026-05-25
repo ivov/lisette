@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::Emitter;
+use crate::Planner;
 use crate::control_flow::fallible;
 use crate::definitions::enum_layout::{EnumLayout, FieldTypeInfo, FieldTypeMap};
 use crate::definitions::structs::is_raw_function_type;
@@ -8,7 +8,7 @@ use syntax::ast::{Pattern, RestPattern, StructKind};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Type, substitute};
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn go_name_for_binding(&self, pattern: &Pattern) -> Option<String> {
         let name = match pattern {
             Pattern::Identifier { identifier, .. } => identifier.as_str(),
@@ -163,11 +163,11 @@ impl Emitter<'_> {
 
     pub(crate) fn peel_alias_id(&self, id: &str) -> String {
         syntax::types::peel_alias_id(id, |current| {
-            let def = self.facts.definition(current)?;
-            if !matches!(def.body, DefinitionBody::TypeAlias { .. }) {
+            let definition = self.facts.definition(current)?;
+            if !matches!(definition.body, DefinitionBody::TypeAlias { .. }) {
                 return None;
             }
-            let Type::Nominal { id: next, .. } = def.ty.unwrap_forall() else {
+            let Type::Nominal { id: next, .. } = definition.ty.unwrap_forall() else {
                 return None;
             };
             Some(next.to_string())
@@ -189,10 +189,8 @@ impl Emitter<'_> {
         }
     }
 
-    /// True for `Option<T>` where T is a concrete non-nilable Go value type
-    /// (string, int32, named scalar, named struct). This is the bindgen's
-    /// pointer-bridged shape: the corresponding Go layout is `*T`. Excludes
-    /// `Option<Unknown>` / `Option<any>` (Go layout `interface{}`, not bridged).
+    /// `Option<T>` where T is a concrete non-nilable Go value type, bridged
+    /// as `*T`. Excludes `Option<Unknown>`/`Option<any>` (`interface{}`).
     pub(crate) fn is_non_nilable_option(&self, ty: &Type) -> bool {
         if !ty.is_option() {
             return false;
@@ -221,15 +219,10 @@ impl Emitter<'_> {
     }
 }
 
-// -- Enum layout queries ---------------------------------------------------
-
-impl Emitter<'_> {
+impl Planner<'_> {
     /// Pre-compute enum layouts for all known enum definitions.
-    /// Replaces the previous lazy `ensure_enum_layout()` pattern. Generic
-    /// constraints are looked up from the constraint table at render time,
-    /// so layouts only need to store the source-AST generics.
     pub(crate) fn collect_enum_layouts(&mut self) {
-        let enum_defs: Vec<_> = self
+        let enum_definitions: Vec<_> = self
             .facts
             .iter_definitions()
             .filter_map(|(id, definition)| {
@@ -252,12 +245,12 @@ impl Emitter<'_> {
             })
             .collect();
 
-        for (enum_id, generics, variants) in enum_defs {
+        for (enum_id, generics, variants) in enum_definitions {
             let mut field_types = FieldTypeMap::default();
             for (vi, variant) in variants.iter().enumerate() {
                 for (fi, field) in variant.fields.iter().enumerate() {
                     let mut go_type = self.go_type(&field.ty).code;
-                    let recursive = Self::is_recursive_type(&field.ty, &enum_id);
+                    let recursive = is_recursive_type(&field.ty, &enum_id);
 
                     if recursive {
                         go_type = format!("*{}", go_type);
@@ -276,13 +269,6 @@ impl Emitter<'_> {
 
             let layout = EnumLayout::new(&enum_id, &generics, &variants, &field_types);
             self.module.record_enum_layout(enum_id, layout);
-        }
-    }
-
-    fn is_recursive_type(ty: &Type, enum_id: &str) -> bool {
-        match ty.unwrap_forall() {
-            Type::Nominal { id, .. } => id == enum_id,
-            _ => false,
         }
     }
 
@@ -363,12 +349,8 @@ impl Emitter<'_> {
         false
     }
 
-    /// Check if an enum field's pointer is due to an explicit `Ref<T>` in the source,
-    /// as opposed to an auto-pointer added for recursive enum support.
-    ///
-    /// When the user writes `Ref<T>` explicitly, the binding should remain a pointer
-    /// so the user's `.*` (postfix deref) works correctly. When the pointer is added
-    /// automatically for recursion, the binding should be dereferenced transparently.
+    /// True when the field's pointer comes from an explicit `Ref<T>` (not
+    /// from auto-pointer recursion support). User `.*` deref relies on this.
     pub(crate) fn is_enum_field_source_ref(&self, ty: &Type, variant: &str, index: usize) -> bool {
         if let Type::Nominal { id, .. } = ty
             && let Some(Definition {
@@ -435,5 +417,12 @@ impl Emitter<'_> {
             }
         }
         None
+    }
+}
+
+fn is_recursive_type(ty: &Type, enum_id: &str) -> bool {
+    match ty.unwrap_forall() {
+        Type::Nominal { id, .. } => id == enum_id,
+        _ => false,
     }
 }

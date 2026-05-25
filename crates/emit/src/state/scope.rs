@@ -2,8 +2,9 @@ use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Bindings;
-use crate::bindings::{BindingValue, InlineExpr};
-use crate::types::emitter::LoopContext;
+use crate::context::lowering::LoopContext;
+use crate::escape_reserved;
+use crate::state::bindings::{BindingValue, InlineExpr};
 
 pub(crate) struct ScopeState {
     next_var: usize,
@@ -70,13 +71,12 @@ impl ScopeState {
     }
 
     /// Falls back to the keyword-escaped form when the name is unbound or
-    /// bound to an inline expression — callers needing a usable local Go
-    /// identifier must materialize a fresh temp in that case.
+    /// inline-bound; callers needing a usable local must hoist a fresh temp.
     pub(crate) fn resolve_or_escape_go_name(&self, lisette_name: &str) -> String {
         self.bindings
             .get_go_name(lisette_name)
             .map(String::from)
-            .unwrap_or_else(|| crate::escape_reserved(lisette_name).into_owned())
+            .unwrap_or_else(|| escape_reserved(lisette_name).into_owned())
     }
 
     pub(crate) fn has_binding_for_go_name(&self, go_name: &str) -> bool {

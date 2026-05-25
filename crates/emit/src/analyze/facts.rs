@@ -7,7 +7,9 @@ use syntax::ast::{BindingId, Pattern, RestPattern, Span};
 use syntax::program::{Definition, DefinitionBody, ModuleId, MutationInfo, UnusedInfo};
 use syntax::types::{Symbol, Type};
 
-use crate::types::emitter::LineIndex;
+use crate::classify_go_return_type;
+use crate::context::lowering::LineIndex;
+use crate::names::go_name;
 use crate::{EmitOptions, GlobalEmitData, GoCallStrategy};
 
 pub(crate) struct EmitFactsConfig<'a> {
@@ -78,7 +80,7 @@ impl<'a> EmitFacts<'a> {
         return_ty: &Type,
         go_hints: &[String],
     ) -> Option<GoCallStrategy> {
-        crate::classify_go_return_type(self.definitions, return_ty, go_hints)
+        classify_go_return_type(self.definitions, return_ty, go_hints)
     }
 
     pub(crate) fn peel_alias(&self, ty: &Type) -> Type {
@@ -148,7 +150,7 @@ impl<'a> EmitFacts<'a> {
     }
 
     pub(crate) fn is_foreign_module(&self, module: &str) -> bool {
-        !self.is_current_module(module) && module != crate::names::go_name::PRELUDE_MODULE
+        !self.is_current_module(module) && module != go_name::PRELUDE_MODULE
     }
 
     pub(crate) fn is_entry_module(&self, module: &str) -> bool {

@@ -1,4 +1,4 @@
-use crate::types::abi::AbiShape;
+use crate::abi::AbiShape;
 use syntax::types::Type;
 
 #[derive(Clone)]
@@ -62,8 +62,6 @@ impl ReturnContext {
         }
     }
 
-    /// Clone the return type, asserting the function has a return context.
-    /// Use after a `lowered_shape()` check that has already established this.
     pub(crate) fn expect_ty(&self) -> Type {
         self.ty()
             .cloned()

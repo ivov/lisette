@@ -1,4 +1,5 @@
-pub(crate) mod bindings;
+pub(crate) mod binding_decls;
+pub(crate) mod binding_emit;
 pub(crate) mod decision_tree;
 pub(crate) mod emit_plan;
 mod matching;

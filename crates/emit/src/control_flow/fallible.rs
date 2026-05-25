@@ -1,4 +1,6 @@
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::ReturnContext;
 use crate::names::go_name;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -137,55 +139,57 @@ impl Fallible {
     }
 }
 
-/// Helper for emitting fallible type wrappers with access to type strings.
-///
-/// This struct consolidates the duplicated wrapper emission logic by providing
-/// a unified interface for generating Result/Option constructors.
-pub(crate) struct FallibleEmitter<'a, 'e> {
-    pub(crate) emitter: &'a mut Emitter<'e>,
+/// Emits Result/Option success and failure constructors with resolved Go
+/// type strings.
+pub(crate) struct FalliblePlanner<'a, 'e> {
+    pub(crate) planner: &'a mut Planner<'e>,
     fallible: &'a Fallible,
+    pub(crate) fx: &'a mut EmitEffects,
 }
 
-impl<'a, 'e> FallibleEmitter<'a, 'e> {
-    pub(crate) fn new(emitter: &'a mut Emitter<'e>, fallible: &'a Fallible) -> Self {
-        Self { emitter, fallible }
+impl<'a, 'e> FalliblePlanner<'a, 'e> {
+    pub(crate) fn new(
+        planner: &'a mut Planner<'e>,
+        fallible: &'a Fallible,
+        fx: &'a mut EmitEffects,
+    ) -> Self {
+        Self {
+            planner,
+            fallible,
+            fx,
+        }
     }
 
-    /// Get the Go type string for the ok type.
     pub(crate) fn ok_type_string(&mut self) -> String {
-        self.emitter.go_type_as_string(self.fallible.ok_ty())
+        self.planner.go_type_string(self.fallible.ok_ty(), self.fx)
     }
 
-    /// Get the Go type string for the error type (Result only).
     pub(crate) fn err_type_string(&mut self) -> Option<String> {
         self.fallible
             .err_ty()
-            .map(|t| self.emitter.go_type_as_string(t))
+            .map(|t| self.planner.go_type_string(t, self.fx))
     }
 
     /// Ok type from the supplied return context, with the fallible's own ok type as fallback.
-    pub(crate) fn contextual_ok_type_string(
-        &mut self,
-        return_ctx: &crate::ReturnContext,
-    ) -> String {
+    pub(crate) fn contextual_ok_type_string(&mut self, return_ctx: &ReturnContext) -> String {
         if let Some(ty) = return_ctx.ty() {
             let ok_ty = ty.ok_type();
-            self.emitter.go_type_as_string(&ok_ty)
+            self.planner.go_type_string(&ok_ty, self.fx)
         } else {
             self.ok_type_string()
         }
     }
 
-    /// Format the full type string (e.g., `lisette.Result[int, error]`).
     pub(crate) fn full_type_string(&mut self) -> String {
-        self.emitter.requirements.require_stdlib();
+        self.fx.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
-            let err_ty = self.emitter.go_type_as_string(
+            let err_ty = self.planner.go_type_string(
                 self.fallible
                     .err_ty()
                     .expect("Result type must have an error type"),
+                self.fx,
             );
             format!(
                 "{}.{}[{}, {}]",
@@ -199,18 +203,16 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
         }
     }
 
-    /// Emit a success wrapper (MakeResultOk or MakeOptionSome).
     pub(crate) fn emit_success(&mut self, value: &str) -> String {
-        self.emitter.requirements.require_stdlib();
+        self.fx.require_stdlib();
         let inner_ty = self.ok_type_string();
         let err_ty = self.err_type_string();
         self.fallible
             .make_success(value, &inner_ty, err_ty.as_deref())
     }
 
-    /// Emit a failure wrapper (MakeResultErr or MakeOptionNone).
     pub(crate) fn emit_failure(&mut self, error_value: Option<&str>) -> String {
-        self.emitter.requirements.require_stdlib();
+        self.fx.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.ok_type_string();
         if self.fallible.is_result() {
@@ -230,9 +232,9 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
     pub(crate) fn emit_contextual_failure(
         &mut self,
         error_value: Option<&str>,
-        return_ctx: &crate::ReturnContext,
+        return_ctx: &ReturnContext,
     ) -> String {
-        self.emitter.requirements.require_stdlib();
+        self.fx.require_stdlib();
         let pkg = go_name::GO_STDLIB_PKG;
         let inner_ty = self.contextual_ok_type_string(return_ctx);
         if self.fallible.is_result() {
@@ -248,7 +250,6 @@ impl<'a, 'e> FallibleEmitter<'a, 'e> {
         }
     }
 
-    /// Format a constructor call with the appropriate type parameters.
     pub(crate) fn format_constructor_call(
         &mut self,
         constructor: &str,

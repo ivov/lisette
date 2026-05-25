@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use deps::TypedefLocator;
 use diagnostics::LisetteDiagnostic;
-use emit::{EmitOptions, Emitter, OutputFile};
+use emit::{EmitOptions, OutputFile, Planner};
 
 use semantics::analyze::{AnalyzeInput, SemanticConfig, analyze};
 use semantics::cache::EmitStamp;
@@ -125,7 +125,7 @@ pub fn compile(
         };
     }
 
-    let mut output = Emitter::emit(
+    let mut output = Planner::emit(
         &semantic_result.into_emit_input(),
         &config.go_module,
         EmitOptions {

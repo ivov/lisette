@@ -1,16 +1,18 @@
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
 use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
 use syntax::ast::{Attribute, Generic};
 use syntax::program::{Definition, DefinitionBody};
 use syntax::types::{Symbol, Type};
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn emit_enum(
         &mut self,
         name: &str,
         generics: &[Generic],
         attributes: &[Attribute],
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         if matches!(name, "Option" | "Result" | "Partial") {
             return None;
@@ -35,10 +37,10 @@ impl Emitter<'_> {
             Vec::new()
         };
         for ty in &variant_field_types {
-            let _ = self.go_type_as_string(ty);
+            let _ = self.go_type_string(ty, fx);
         }
 
-        let generics_string = self.generics_to_string_for_symbol(&enum_id, generics);
+        let generics_string = self.generics_to_string_for_symbol(&enum_id, generics, fx);
         let receiver_generics = receiver_generics_string(generics);
         let has_json = attributes.iter().any(|a| a.name == "json");
 
@@ -55,10 +57,10 @@ impl Emitter<'_> {
             result.push_str(&layout.emit_json_methods(&receiver_generics));
         }
         if needs_fmt {
-            self.requirements.require_fmt();
+            fx.require_fmt();
         }
         if has_json {
-            self.requirements.require_go_import("encoding/json");
+            fx.require_go_import("encoding/json");
         }
 
         Some(result)
@@ -68,6 +70,7 @@ impl Emitter<'_> {
         &mut self,
         enum_id: &str,
         variant_name: &str,
+        fx: &mut EmitEffects,
     ) -> String {
         let layout = self
             .module
@@ -105,7 +108,7 @@ impl Emitter<'_> {
                 .map(|g| g.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            let generics_string = self.generics_to_string_for_symbol(enum_id, &generics);
+            let generics_string = self.generics_to_string_for_symbol(enum_id, &generics, fx);
             (generics_string, format!("[{}]", args))
         };
 
@@ -122,7 +125,7 @@ impl Emitter<'_> {
             underlying_ty: None,
         };
 
-        let return_type = self.go_type_as_string(&return_type);
+        let return_type = self.go_type_string(&return_type, fx);
 
         format!(
             "func {} {} ({}) {} {{\n    return {} {} {{ Tag: {}, {} }}\n}}",

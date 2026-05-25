@@ -1,10 +1,18 @@
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
 use crate::ReturnContext;
-use crate::control_flow::fallible::{ConstructorKind, Fallible, FallibleEmitter};
-use crate::expressions::context::ExpressionContext;
-use crate::placement::BodyPlace;
-use crate::types::abi::AbiShape;
-use crate::types::abi_transition;
+use crate::abi::AbiShape;
+use crate::abi::transition;
+use crate::context::expression::ExpressionContext;
+use crate::control_flow::fallible::{ConstructorKind, Fallible, FalliblePlanner};
+use crate::definitions::functions::is_go_never;
+use crate::plan::bodies::{
+    AssignForm, AssignPlan, LoweredBlock, LoweredStatement, PlacePlan, ReturnForm,
+    ReturnStatementPlan,
+};
+use crate::plan::calls::{CallReturnShape, CalleePlan};
+use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -14,38 +22,86 @@ struct WrappedReturnInfo<'a> {
     fallible: &'a Fallible,
     return_ty: &'a Type,
     lowered: Option<&'a AbiShape>,
+    return_ctx: &'a ReturnContext,
 }
 
-impl Emitter<'_> {
+pub(crate) fn plain_return(value: String) -> LoweredStatement {
+    LoweredStatement::Return(ReturnStatementPlan {
+        directive: String::new(),
+        form: ReturnForm::Plain {
+            value: ValuePlan::Operand(value),
+        },
+    })
+}
+
+fn simple_assign(target: String, value: String) -> LoweredStatement {
+    LoweredStatement::Assign(AssignPlan {
+        directive: String::new(),
+        form: AssignForm::Simple {
+            target_capture: Vec::new(),
+            target_str: target,
+            value: ValuePlan::Operand(value),
+        },
+    })
+}
+
+impl Planner<'_> {
+    /// Lower `?` into structured IR plus the ok-access value. `result_var_name`:
+    /// `None` returns `check.OkVal`, `Some("_")` discards, `Some(name)` binds
+    /// `name := check.OkVal`.
+    pub(crate) fn lower_propagate(
+        &mut self,
+        expression: &Expression,
+        result_var_name: Option<&str>,
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        let expression_ty = expression.get_type();
+        let fallible = Fallible::from_type(&expression_ty)
+            .expect("lower_propagate called on non-Result/Option type");
+
+        let mut statements = Vec::new();
+
+        // `Err(...)?` / `None?` literal already emits its own return.
+        if let Some(var_name) = result_var_name
+            && let Some(head) =
+                self.try_lower_error_constructor(expression, &fallible, return_ctx, fx)
+        {
+            statements.extend(head);
+            self.declare_zero_for_dead_path(&mut statements, var_name, &fallible, fx);
+            return (statements, String::new());
+        }
+
+        fx.require_stdlib();
+        let (check_setup, check_var) = self.hoist_propagate_check_var(expression, fx);
+        statements.extend(check_setup);
+        statements.push(self.build_propagate_failure_check(&check_var, &fallible, return_ctx, fx));
+
+        let ok_access = format!("{}.{}", check_var, fallible.ok_field());
+        let value = match result_var_name {
+            None => ok_access,
+            Some("_") => "_".to_string(),
+            Some(name) => {
+                statements.push(self.bind_propagate_ok(name, &ok_access));
+                name.to_string()
+            }
+        };
+        (statements, value)
+    }
+
+    /// String-context bridge over `lower_propagate`.
     pub(crate) fn emit_propagate(
         &mut self,
         output: &mut String,
         expression: &Expression,
         result_var_name: Option<&str>,
         return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
     ) -> String {
-        let expression_ty = expression.get_type();
-        let fallible = Fallible::from_type(&expression_ty)
-            .expect("emit_propagate called on non-Result/Option type");
-
-        if let Some(var_name) = result_var_name
-            && let Some(result) =
-                self.try_emit_error_constructor(output, expression, &fallible, return_ctx)
-        {
-            self.declare_zero_for_dead_path(output, var_name, &fallible);
-            return result;
-        }
-
-        self.requirements.require_stdlib();
-        let check_var = self.hoist_propagate_check_var(output, expression);
-        self.emit_propagate_failure_check(output, &check_var, &fallible, return_ctx);
-
-        let ok_access = format!("{}.{}", check_var, fallible.ok_field());
-        match result_var_name {
-            None => ok_access,
-            Some("_") => "_".to_string(),
-            Some(name) => self.bind_propagate_ok(output, name, &ok_access),
-        }
+        let (statements, value) = self.lower_propagate(expression, result_var_name, return_ctx, fx);
+        let block = LoweredBlock { statements };
+        Renderer.render_lowered_block(output, &block);
+        value
     }
 
     /// `Err(...)?` and `None?` already emitted `return ...`. Declare the
@@ -53,106 +109,106 @@ impl Emitter<'_> {
     /// stays well-typed in Go.
     fn declare_zero_for_dead_path(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         var_name: &str,
         fallible: &Fallible,
+        fx: &mut EmitEffects,
     ) {
         if var_name == "_" {
             return;
         }
         let inner_ty = fallible.ok_ty();
         let (zero, effects) = self.zero_value(inner_ty);
-        self.requirements.apply_effects(&effects);
+        fx.extend(&effects);
         if self.is_declared(var_name) {
-            write_line!(output, "{} = {}", var_name, zero);
+            statements.push(simple_assign(var_name.to_string(), zero));
         } else {
-            let go_ty = self.go_type_as_string(inner_ty);
-            write_line!(output, "var {} {} = {}", var_name, go_ty, zero);
+            // Kept as `RawGo`: a `var name ty = value` declaration reuse (`ConstPlan`)
+            // would drop `name`/`ty` from `references_var`, flipping queries on
+            // this dead-path binding.
+            let go_ty = self.go_type_string(inner_ty, fx);
+            statements.push(LoweredStatement::RawGo(format!(
+                "var {} {} = {}\n",
+                var_name, go_ty, zero
+            )));
             self.declare(var_name);
         }
     }
 
     fn hoist_propagate_check_var(
         &mut self,
-        output: &mut String,
         expression: &Expression,
-    ) -> String {
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
         if let Expression::Identifier { value, ty, .. } = expression {
-            let go_name = self.emit_identifier(value, ty, ExpressionContext::value());
+            let go_name = self.emit_identifier(value, ty, ExpressionContext::value(), fx);
             if go_name.contains('(') {
-                self.hoist_tmp_value(output, "check", &go_name)
+                let mut setup = Vec::new();
+                let check = self.hoist_tmp_value_statement(&mut setup, "check", &go_name);
+                (setup, check)
             } else {
-                go_name
+                (Vec::new(), go_name)
             }
         } else {
-            let expression_string =
-                self.emit_operand(output, expression, ExpressionContext::value());
-            self.hoist_tmp_value(output, "check", &expression_string)
+            let staged = self.stage_operand(expression, ExpressionContext::value(), fx);
+            let mut setup = staged.setup;
+            let check = self.hoist_tmp_value_statement(&mut setup, "check", &staged.value);
+            (setup, check)
         }
     }
 
-    fn emit_propagate_failure_check(
+    /// The `if check.Tag != <success> { return <failure> }` failure guard.
+    fn build_propagate_failure_check(
         &mut self,
-        output: &mut String,
         check_var: &str,
         fallible: &Fallible,
         return_ctx: &ReturnContext,
-    ) {
+        fx: &mut EmitEffects,
+    ) -> LoweredStatement {
         let err_field = if fallible.is_result() { ".ErrVal" } else { "" };
         let success_tag = fallible.success_tag();
 
-        if let Some(shape) = return_ctx.lowered_shape() {
+        let values = if let Some(shape) = return_ctx.lowered_shape() {
             let return_ty = return_ctx.expect_ty();
-            // Option propagation: failure carries no payload, so emit a
-            // shape-specific `None` return rather than an err-return.
-            let lowered_failure = if fallible.is_result() {
+            // Option propagation: failure carries no payload, so return a
+            // shape-specific `None` rather than an err-return.
+            if fallible.is_result() {
                 let err_expr = format!("{}{}", check_var, err_field);
-                abi_transition::format_lowered_err_return(self, &shape, &return_ty, &err_expr)
+                transition::lowered_err_values(self, &shape, &return_ty, &err_expr, fx)
             } else {
-                abi_transition::format_lowered_none_return(self, &shape, &return_ty)
-            };
-            write_line!(
-                output,
-                "if {}.Tag != {} {{\n{}\n}}",
-                check_var,
-                success_tag,
-                lowered_failure
-            );
+                transition::lowered_none_values(self, &shape, &return_ty, fx)
+            }
         } else {
             let err_return = {
-                let mut fe = FallibleEmitter::new(self, fallible);
+                let mut fe = FalliblePlanner::new(self, fallible, fx);
                 fe.emit_contextual_failure(Some(&format!("{}{}", check_var, err_field)), return_ctx)
             };
-            write_line!(
-                output,
-                "if {}.Tag != {} {{\nreturn {}\n}}",
-                check_var,
-                success_tag,
-                err_return
-            );
-        }
+            vec![err_return]
+        };
+
+        transition::tag_check(format!("{}.Tag != {}", check_var, success_tag), values)
     }
 
-    fn bind_propagate_ok(&mut self, output: &mut String, name: &str, ok_access: &str) -> String {
-        let pre_declared = self.is_declared(name);
-        let op = if pre_declared { "=" } else { ":=" };
-        write_line!(output, "{} {} {}", name, op, ok_access);
-        if !pre_declared {
-            self.declare(name);
-        }
-        name.to_string()
-    }
-    pub(crate) fn emit_propagate_to_let(
+    /// Statement-position `inner?` (discards the ok value).
+    pub(crate) fn lower_propagate_statement(
         &mut self,
-        output: &mut String,
-        var_name: &str,
-        expression: &Expression,
+        inner: &Expression,
         return_ctx: &ReturnContext,
-    ) {
-        let Expression::Propagate { expression, .. } = expression else {
-            return;
-        };
-        self.emit_propagate(output, expression, Some(var_name), return_ctx);
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        self.lower_propagate(inner, Some("_"), return_ctx, fx).0
+    }
+
+    fn bind_propagate_ok(&mut self, name: &str, ok_access: &str) -> LoweredStatement {
+        if self.is_declared(name) {
+            simple_assign(name.to_string(), ok_access.to_string())
+        } else {
+            self.declare(name);
+            LoweredStatement::TempBind {
+                name: name.to_string(),
+                value: ok_access.to_string(),
+            }
+        }
     }
 
     pub(crate) fn emit_return(
@@ -160,6 +216,7 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
         return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
     ) {
         let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
 
@@ -171,33 +228,109 @@ impl Emitter<'_> {
                     | Expression::Literal { .. }
             );
             if !is_pure {
-                self.emit_statement(output, expression);
+                self.emit_statement(output, expression, return_ctx, fx);
             }
             output.push_str("return\n");
-        } else if !abi_transition::try_emit_lowered_tail_return(
-            self, output, expression, return_ctx,
-        ) && !self.emit_wrapped_return(output, expression, return_ctx)
+        } else if !transition::render_lowered_tail_return(self, output, expression, return_ctx, fx)
+            && !self.emit_wrapped_return(output, expression, return_ctx, fx)
         {
-            let expression_string = self.emit_value(output, expression, ExpressionContext::value());
+            let expression_string =
+                self.emit_value(output, expression, ExpressionContext::value(), fx);
             let return_ty = return_ctx.ty();
             let expression_string =
-                self.apply_type_coercion(output, return_ty, expression, expression_string);
+                self.apply_type_coercion(output, return_ty, expression, expression_string, fx);
             write_line!(output, "return {}", expression_string);
         }
     }
 
-    /// Emit a return statement with Result/Option wrapping if applicable.
-    ///
-    /// Returns `false` only when the return type is NOT Result/Option (i.e., Fallible::from_type
-    /// returns None). Once a Result/Option return type is identified, this function is exhaustive:
-    /// all code paths emit the return and return `true`. The non-Result/Option case is handled
-    /// by the caller emitting a plain return.
-    pub(crate) fn emit_wrapped_return(
+    /// Build a `ReturnStatementPlan`, dispatching on return shape.
+    pub(crate) fn build_return_plan(
         &mut self,
-        output: &mut String,
         expression: &Expression,
         return_ctx: &ReturnContext,
-    ) -> bool {
+        directive: String,
+        fx: &mut EmitEffects,
+    ) -> ReturnStatementPlan {
+        let body_block = |body_text: String| LoweredBlock {
+            statements: vec![LoweredStatement::RawGo(body_text)],
+        };
+
+        let is_unit = return_ctx.ty().is_some_and(Type::is_unit);
+        if is_unit {
+            // Mirror emit_return's unit path: impure expressions run as a
+            // statement before the bare `return`; pure ones (Unit, Identifier,
+            // Literal) emit nothing.
+            let is_pure = matches!(
+                expression,
+                Expression::Unit { .. }
+                    | Expression::Identifier { .. }
+                    | Expression::Literal { .. }
+            );
+            let side_effect = if is_pure {
+                None
+            } else {
+                let mut buffer = String::new();
+                self.emit_statement(&mut buffer, expression, return_ctx, fx);
+                (!buffer.is_empty()).then(|| body_block(buffer))
+            };
+            return ReturnStatementPlan {
+                directive,
+                form: ReturnForm::Unit { side_effect },
+            };
+        }
+
+        if let Some(statements) =
+            transition::try_emit_lowered_tail_return(self, expression, return_ctx, fx)
+        {
+            return ReturnStatementPlan {
+                directive,
+                form: ReturnForm::LoweredAbi {
+                    body: LoweredBlock { statements },
+                },
+            };
+        }
+
+        if let Some(statements) = self.lower_wrapped_return(expression, return_ctx, fx) {
+            return ReturnStatementPlan {
+                directive,
+                form: ReturnForm::Wrapped {
+                    body: LoweredBlock { statements },
+                },
+            };
+        }
+
+        let (mut setup, raw_value) = self.lower_value(expression, ExpressionContext::value(), fx);
+        let mut coercion_buffer = String::new();
+        let final_value = self.apply_type_coercion(
+            &mut coercion_buffer,
+            return_ctx.ty(),
+            expression,
+            raw_value,
+            fx,
+        );
+        if !coercion_buffer.is_empty() {
+            setup.push(LoweredStatement::RawGo(coercion_buffer));
+        }
+        ReturnStatementPlan {
+            directive,
+            form: ReturnForm::Plain {
+                value: value_plan_from_statements(setup, final_value),
+            },
+        }
+    }
+
+    /// Lower a Result/Option-wrapped return into structured statement IR.
+    ///
+    /// Returns `None` only when the return type is NOT Result/Option
+    /// (`Fallible::from_type` returns `None`); the caller then emits a plain
+    /// return. Once a Result/Option return type is identified this is
+    /// exhaustive: every path yields the wrapped-return statements.
+    pub(crate) fn lower_wrapped_return(
+        &mut self,
+        expression: &Expression,
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
+    ) -> Option<Vec<LoweredStatement>> {
         let expression_ty = expression.get_type();
 
         let return_ty = return_ctx
@@ -206,14 +339,19 @@ impl Emitter<'_> {
             .cloned()
             .unwrap_or(expression_ty);
 
-        let Some(fallible) = Fallible::from_type(&return_ty) else {
-            return false;
-        };
+        let fallible = Fallible::from_type(&return_ty)?;
 
-        if Self::is_go_never(expression) {
-            let call_str = self.emit_call(output, expression, None, ExpressionContext::value());
-            write_line!(output, "{}", call_str);
-            return true;
+        let mut statements = Vec::new();
+
+        if is_go_never(expression) {
+            let (setup, call_str) =
+                self.lower_call(expression, None, ExpressionContext::value(), fx);
+            statements.extend(setup);
+            // Kept as `RawGo`: this is a Go-never call (`panic(...)`) whose
+            // `ends_with_diverge` must stay true; `ExpressionStatementForm::Async`
+            // reports false.
+            statements.push(LoweredStatement::RawGo(format!("{}\n", call_str)));
+            return Some(statements);
         }
 
         let lowered = return_ctx.lowered_shape();
@@ -221,69 +359,111 @@ impl Emitter<'_> {
         if let Expression::Identifier { .. } = expression
             && fallible.classify_constructor(expression) == Some(ConstructorKind::Failure)
         {
-            // Only `None` reaches here — `Err` always has a payload, so an
+            // Only `None` reaches here. `Err` always has a payload, so an
             // identifier failure constructor must be a payload-less Option.
-            self.emit_failure_constructor_return(
-                output,
+            statements.extend(self.lower_failure_constructor_return(
                 &[],
                 &fallible,
                 &return_ty,
                 lowered.as_ref(),
-            );
-            return true;
+                return_ctx,
+                fx,
+            ));
+            return Some(statements);
         }
 
         let info = WrappedReturnInfo {
             fallible: &fallible,
             return_ty: &return_ty,
             lowered: lowered.as_ref(),
+            return_ctx,
         };
 
         if matches!(expression, Expression::Call { .. }) {
-            self.emit_wrapped_call_return(output, expression, info);
-            return true;
+            statements.extend(self.lower_wrapped_call_return(expression, info, fx));
+            return Some(statements);
         }
 
         if matches!(expression, Expression::If { .. } | Expression::Match { .. }) {
-            self.emit_branching_directly(output, expression, &BodyPlace::Return(return_ctx));
-            return true;
+            let block =
+                self.lower_branching_to_block(expression, &PlacePlan::Return(return_ctx), fx);
+            statements.extend(block.statements);
+            return Some(statements);
         }
 
-        let value = self.emit_value(output, expression, ExpressionContext::value());
-        self.emit_value_wrapped_return(output, value, &return_ty, lowered.as_ref());
-        true
-    }
-
-    fn emit_value_wrapped_return(
-        &mut self,
-        output: &mut String,
-        value: String,
-        return_ty: &Type,
-        lowered: Option<&AbiShape>,
-    ) {
-        if let Some(shape) = lowered {
-            // The destructure references the value multiple times (`.Tag`,
-            // `.OkVal`, `.ErrVal` etc.); hoist to avoid re-evaluating.
-            let temp = self.hoist_tmp_value(output, "v", &value);
-            abi_transition::emit_lowered_result_return(self, output, &temp, return_ty, shape);
-        } else {
-            write_line!(output, "return {}", value);
+        if let Expression::Propagate {
+            expression: inner, ..
+        } = expression
+        {
+            let (setup, value) = self.lower_propagate(inner, None, return_ctx, fx);
+            statements.extend(setup);
+            statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref(), fx));
+            return Some(statements);
         }
+
+        let (setup, value) = self.lower_value(
+            expression,
+            ExpressionContext::value().with_ambient_return_ctx(return_ctx),
+            fx,
+        );
+        statements.extend(setup);
+        statements.extend(self.wrapped_value_return(value, &return_ty, lowered.as_ref(), fx));
+        Some(statements)
     }
 
-    /// Emit a return for a call whose result is wrapped in the function's
-    /// Result/Option return type. Success/Failure constructors collapse
-    /// directly; other calls emit normally and return the call expression.
-    fn emit_wrapped_call_return(
+    /// String-context bridge over `lower_wrapped_return`. Returns `true`
+    /// when a wrapped return was emitted.
+    pub(crate) fn emit_wrapped_return(
         &mut self,
         output: &mut String,
         expression: &Expression,
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
+    ) -> bool {
+        match self.lower_wrapped_return(expression, return_ctx, fx) {
+            Some(statements) => {
+                let block = LoweredBlock { statements };
+                Renderer.render_lowered_block(output, &block);
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn wrapped_value_return(
+        &mut self,
+        value: String,
+        return_ty: &Type,
+        lowered: Option<&AbiShape>,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        let Some(shape) = lowered else {
+            return vec![plain_return(value)];
+        };
+        // The destructure references the value multiple times (`.Tag`,
+        // `.OkVal`, `.ErrVal` etc.); hoist to avoid re-evaluating.
+        let mut statements = Vec::new();
+        let temp = self.hoist_tmp_value_statement(&mut statements, "v", &value);
+        statements.extend(transition::emit_lowered_result_return(
+            self, &temp, return_ty, shape, fx,
+        ));
+        statements
+    }
+
+    /// Lower a return for a call whose result is wrapped in the function's
+    /// Result/Option return type. Success/Failure constructors collapse
+    /// directly; other calls return the call expression.
+    fn lower_wrapped_call_return(
+        &mut self,
+        expression: &Expression,
         info: WrappedReturnInfo<'_>,
-    ) {
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
         let WrappedReturnInfo {
             fallible,
             return_ty,
             lowered,
+            return_ctx,
         } = info;
         let Expression::Call {
             expression: call_expression,
@@ -291,129 +471,165 @@ impl Emitter<'_> {
             ..
         } = expression
         else {
-            unreachable!("emit_wrapped_call_return requires a Call expression");
+            unreachable!("lower_wrapped_call_return requires a Call expression");
         };
         match fallible.classify_constructor(call_expression) {
             Some(ConstructorKind::Success) => {
-                self.emit_success_constructor_return(output, args, fallible, lowered);
+                self.lower_success_constructor_return(args, fallible, lowered, return_ctx, fx)
             }
-            Some(ConstructorKind::Failure) => {
-                self.emit_failure_constructor_return(output, args, fallible, return_ty, lowered);
-            }
-            None => self.emit_wrapped_passthrough_return(
-                output,
-                expression,
-                call_expression,
-                return_ty,
-                lowered,
+            Some(ConstructorKind::Failure) => self.lower_failure_constructor_return(
+                args, fallible, return_ty, lowered, return_ctx, fx,
             ),
+            None => self.lower_wrapped_passthrough_return(expression, return_ty, lowered, fx),
         }
     }
 
-    fn emit_success_constructor_return(
+    fn lower_success_constructor_return(
         &mut self,
-        output: &mut String,
         args: &[Expression],
         fallible: &Fallible,
         lowered: Option<&AbiShape>,
-    ) {
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        let mut statements = Vec::new();
         if let Some(shape) = lowered {
             let ok_arg = if matches!(shape, AbiShape::BareError) {
-                // Unit Ok — emit args[0] for side effects, then drop.
                 if !args.is_empty() {
-                    let _ = self.emit_composite_value(output, &args[0], ExpressionContext::value());
+                    let (setup, _) = self.lower_composite_value(
+                        &args[0],
+                        ExpressionContext::value().with_ambient_return_ctx(return_ctx),
+                        fx,
+                    );
+                    statements.extend(setup);
                 }
                 String::new()
             } else if args.is_empty() {
-                // `Some` with no payload would not typecheck; only possible
-                // when Ok type is unit and we still need a value for the
-                // tuple (`Some(())` under CommaOk).
                 "struct{}{}".to_string()
             } else {
-                self.emit_composite_value(output, &args[0], ExpressionContext::value())
+                let (setup, value) = self.lower_composite_value(
+                    &args[0],
+                    ExpressionContext::value().with_ambient_return_ctx(return_ctx),
+                    fx,
+                );
+                statements.extend(setup);
+                value
             };
-            let line = abi_transition::format_lowered_ok_return(shape, &ok_arg);
-            write_line!(output, "{}", line);
+            statements.push(transition::multi_value_return(
+                transition::lowered_ok_values(shape, &ok_arg),
+            ));
         } else {
-            let arg = self.emit_composite_value(output, &args[0], ExpressionContext::value());
-            let mut fe = FallibleEmitter::new(self, fallible);
-            let success = fe.emit_success(&arg);
-            write_line!(output, "return {}", success);
+            let (setup, arg) = self.lower_composite_value(
+                &args[0],
+                ExpressionContext::value().with_ambient_return_ctx(return_ctx),
+                fx,
+            );
+            let success = {
+                let mut fe = FalliblePlanner::new(self, fallible, fx);
+                fe.emit_success(&arg)
+            };
+            statements.extend(setup);
+            statements.push(plain_return(success));
         }
+        statements
     }
 
-    fn emit_failure_constructor_return(
+    fn lower_failure_constructor_return(
         &mut self,
-        output: &mut String,
         args: &[Expression],
         fallible: &Fallible,
         return_ty: &Type,
         lowered: Option<&AbiShape>,
-    ) {
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        let mut statements = Vec::new();
         if let Some(shape) = lowered {
             if args.is_empty() {
-                // `None` under lowered Option (CommaOk/NullableReturn).
-                let line = abi_transition::format_lowered_none_return(self, shape, return_ty);
-                write_line!(output, "{}", line);
+                statements.push(transition::multi_value_return(
+                    transition::lowered_none_values(self, shape, return_ty, fx),
+                ));
             } else {
-                let err_expr =
-                    self.emit_composite_value(output, &args[0], ExpressionContext::value());
-                let line =
-                    abi_transition::format_lowered_err_return(self, shape, return_ty, &err_expr);
-                write_line!(output, "{}", line);
+                let (setup, err_expr) = self.lower_composite_value(
+                    &args[0],
+                    ExpressionContext::value().with_ambient_return_ctx(return_ctx),
+                    fx,
+                );
+                let values = transition::lowered_err_values(self, shape, return_ty, &err_expr, fx);
+                statements.extend(setup);
+                statements.push(transition::multi_value_return(values));
             }
         } else {
             let failure = if fallible.is_result() {
-                let arg = self.emit_composite_value(output, &args[0], ExpressionContext::value());
-                let mut fe = FallibleEmitter::new(self, fallible);
+                let (setup, arg) = self.lower_composite_value(
+                    &args[0],
+                    ExpressionContext::value().with_ambient_return_ctx(return_ctx),
+                    fx,
+                );
+                statements.extend(setup);
+                let mut fe = FalliblePlanner::new(self, fallible, fx);
                 fe.emit_failure(Some(&arg))
             } else {
-                let mut fe = FallibleEmitter::new(self, fallible);
+                let mut fe = FalliblePlanner::new(self, fallible, fx);
                 fe.emit_failure(None)
             };
-            write_line!(output, "return {}", failure);
+            statements.push(plain_return(failure));
         }
+        statements
     }
 
     /// Tail return for a non-constructor call.
-    fn emit_wrapped_passthrough_return(
+    fn lower_wrapped_passthrough_return(
         &mut self,
-        output: &mut String,
         expression: &Expression,
-        call_expression: &Expression,
         return_ty: &Type,
         lowered: Option<&AbiShape>,
-    ) {
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        let mut statements = Vec::new();
         if let Some(shape) = lowered
-            && self.callee_matches_lowered_shape(expression, call_expression, shape)
+            && self.callee_matches_lowered_shape(expression, shape)
         {
-            let call = self.emit_call(output, expression, None, ExpressionContext::value());
-            write_line!(output, "return {}", call);
-            return;
+            let (setup, call) = self.lower_call(expression, None, ExpressionContext::value(), fx);
+            statements.extend(setup);
+            statements.push(plain_return(call));
+            return statements;
         }
-        if let Some(strategy) = self.resolve_go_call_strategy(expression) {
-            let result_var = self.emit_go_wrapped_call(output, expression, &strategy, return_ty);
+        if let Some(plan) = self.plan_call(expression)
+            && let CalleePlan::GoInterop(strategy) = plan.callee
+        {
+            let mut setup = String::new();
+            let result_var =
+                self.emit_go_wrapped_call(&mut setup, expression, &strategy, return_ty, fx);
+            if !setup.is_empty() {
+                statements.push(LoweredStatement::RawGo(setup));
+            }
             if let Some(shape) = lowered {
-                abi_transition::emit_lowered_result_return(
+                statements.extend(transition::emit_lowered_result_return(
                     self,
-                    output,
                     &result_var,
                     return_ty,
                     shape,
-                );
+                    fx,
+                ));
             } else {
-                write_line!(output, "return {}", result_var);
+                statements.push(plain_return(result_var));
             }
-            return;
+            return statements;
         }
         if let Some(shape) = lowered {
-            let value = self.emit_value(output, expression, ExpressionContext::value());
-            let temp = self.hoist_tmp_value(output, "v", &value);
-            abi_transition::emit_lowered_result_return(self, output, &temp, return_ty, shape);
-            return;
+            let (setup, value) = self.lower_value(expression, ExpressionContext::value(), fx);
+            statements.extend(setup);
+            let temp = self.hoist_tmp_value_statement(&mut statements, "v", &value);
+            statements.extend(transition::emit_lowered_result_return(
+                self, &temp, return_ty, shape, fx,
+            ));
+            return statements;
         }
-        let call = self.emit_call(output, expression, None, ExpressionContext::value());
-        write_line!(output, "return {}", call);
+        let (setup, call) = self.lower_call(expression, None, ExpressionContext::value(), fx);
+        statements.extend(setup);
+        statements.push(plain_return(call));
+        statements
     }
 
     /// True when the callee already has the enclosing shape, so a tail
@@ -421,212 +637,16 @@ impl Emitter<'_> {
     fn callee_matches_lowered_shape(
         &self,
         call_expression: &Expression,
-        callee: &Expression,
         enclosing_shape: &AbiShape,
     ) -> bool {
-        if let Some(strategy) = self.resolve_go_call_strategy(call_expression) {
-            return enclosing_shape.matches_go_strategy(&strategy);
-        }
-        if let Some(callee_shape) = self.classify_callee_abi(callee) {
-            return callee_shape == *enclosing_shape;
-        }
-        false
-    }
-
-    pub(crate) fn emit_try_block(
-        &mut self,
-        output: &mut String,
-        items: &[Expression],
-        ty: &Type,
-    ) -> String {
-        self.requirements.require_stdlib();
-
-        let effective_ty = self.resolve_fallible_block_type(items, ty);
-        let fallible = Fallible::from_type(&effective_ty)
-            .expect("`try` block must have Result or Option type");
-
-        let result_var = self.fresh_var(Some("tryResult"));
-        self.declare(&result_var);
-        let full_ty = {
-            let mut fe = FallibleEmitter::new(self, &fallible);
-            fe.full_type_string()
+        let Some(plan) = self.plan_call(call_expression) else {
+            return false;
         };
-
-        write_line!(output, "{} := func() {} {{", result_var, full_ty);
-
-        self.with_scope_return_context_fallback(ReturnContext::TaggedBlock(effective_ty), |this| {
-            this.with_fresh_scope(|emitter| {
-                emitter.emit_try_body(output, items, &fallible);
-            });
-        });
-
-        output.push_str("}()\n");
-
-        result_var
-    }
-
-    /// Prefer the function's return context type when the block's own ok_ty
-    /// is a type variable (e.g. `Result[any, ...]` when tail is a statement),
-    /// or when the tail is Never-typed (ok_ty resolves to unit/Never because
-    /// nothing constrains it).
-    fn resolve_fallible_block_type(&self, items: &[Expression], ty: &Type) -> Type {
-        let tail_is_never = items.last().is_some_and(|last| {
-            let t = last.get_type();
-            t.is_never() || last.diverges().is_some()
-        });
-        let base = Fallible::from_type(ty);
-        let needs_return_context = tail_is_never
-            || base
-                .as_ref()
-                .is_some_and(|f| f.ok_ty().is_variable() || f.ok_ty().is_never());
-        if !needs_return_context {
-            return ty.clone();
-        }
-        self.scope_return_context_fallback()
-            .ty()
-            .filter(|ty| Fallible::from_type(ty).is_some())
-            .cloned()
-            .unwrap_or_else(|| ty.clone())
-    }
-
-    fn emit_try_body(&mut self, output: &mut String, items: &[Expression], fallible: &Fallible) {
-        let Some((last, rest)) = items.split_last() else {
-            self.emit_try_unit_return(output, fallible);
-            return;
-        };
-        for item in rest {
-            self.emit_statement(output, item);
-        }
-        self.emit_to_place(
-            output,
-            last,
-            crate::placement::ValuePlace::FallibleSuccess(fallible),
-        );
-    }
-
-    pub(crate) fn emit_try_unit_return(&mut self, output: &mut String, fallible: &Fallible) {
-        let (unit_val, effects) = self.zero_value(fallible.ok_ty());
-        self.requirements.apply_effects(&effects);
-        self.emit_try_success_return(output, &unit_val, fallible);
-    }
-
-    pub(crate) fn emit_try_success_return(
-        &mut self,
-        output: &mut String,
-        value: &str,
-        fallible: &Fallible,
-    ) {
-        let ok_return = {
-            let mut fe = FallibleEmitter::new(self, fallible);
-            fe.emit_success(value)
-        };
-        write_line!(output, "return {}", ok_return);
-    }
-
-    /// Optimizes `Err(...)?` and `None?` by emitting a direct return.
-    /// Returns `Some(String::new())` if handled, `None` otherwise.
-    fn try_emit_error_constructor(
-        &mut self,
-        output: &mut String,
-        expression: &Expression,
-        fallible: &Fallible,
-        return_ctx: &ReturnContext,
-    ) -> Option<String> {
-        let err_arg = match expression {
-            Expression::Call {
-                expression: func,
-                args,
-                ..
-            } => {
-                if fallible.classify_constructor(func) != Some(ConstructorKind::Failure) {
-                    return None;
-                }
-                if !args.is_empty() {
-                    Some(self.emit_value(output, &args[0], ExpressionContext::value()))
-                } else {
-                    Some(String::new())
-                }
+        match &plan.callee {
+            CalleePlan::GoInterop(strategy) => enclosing_shape.matches_go_strategy(strategy),
+            _ => {
+                matches!(&plan.return_shape, CallReturnShape::Lowered(shape) if shape == enclosing_shape)
             }
-            Expression::Identifier { .. } => {
-                if fallible.classify_constructor(expression) != Some(ConstructorKind::Failure) {
-                    return None;
-                }
-                Some(String::new())
-            }
-            _ => return None,
-        };
-
-        if let Some(shape) = return_ctx.lowered_shape() {
-            let return_ty = return_ctx.expect_ty();
-            let line = if fallible.is_result() {
-                let err_expr = err_arg.as_deref().unwrap_or("");
-                abi_transition::format_lowered_err_return(self, &shape, &return_ty, err_expr)
-            } else {
-                abi_transition::format_lowered_none_return(self, &shape, &return_ty)
-            };
-            write_line!(output, "{}", line);
-        } else {
-            self.requirements.require_stdlib();
-            let err_return = {
-                let mut fe = FallibleEmitter::new(self, fallible);
-                fe.emit_contextual_failure(err_arg.as_deref(), return_ctx)
-            };
-            write_line!(output, "return {}", err_return);
         }
-        Some(String::new())
-    }
-
-    pub(crate) fn emit_recover_block(
-        &mut self,
-        output: &mut String,
-        items: &[Expression],
-        ty: &Type,
-    ) -> String {
-        self.requirements.require_stdlib();
-
-        let effective_ty = self.resolve_fallible_block_type(items, ty);
-        let fallible = Fallible::from_type(&effective_ty)
-            .expect("recover block type must be Result<T, PanicValue>");
-
-        let result_var = self.fresh_var(Some("recoverResult"));
-        self.declare(&result_var);
-        let inner_ty_str = self.go_type_as_string(fallible.ok_ty());
-
-        write_line!(
-            output,
-            "{} := lisette.RecoverBlock(func() {} {{",
-            result_var,
-            inner_ty_str
-        );
-
-        let body_return_ctx = self.return_context_for_type(fallible.ok_ty().clone());
-        self.with_scope_return_context_fallback(body_return_ctx, |this| {
-            this.with_fresh_scope(|emitter| {
-                emitter.emit_recover_body(output, items, &fallible);
-            });
-        });
-
-        output.push_str("})\n");
-        result_var
-    }
-
-    fn emit_recover_body(
-        &mut self,
-        output: &mut String,
-        items: &[Expression],
-        fallible: &Fallible,
-    ) {
-        let Some((last, rest)) = items.split_last() else {
-            self.emit_zero_return(output, fallible.ok_ty());
-            return;
-        };
-        for item in rest {
-            self.emit_statement(output, item);
-        }
-        self.emit_to_place(
-            output,
-            last,
-            crate::placement::ValuePlace::RecoverSuccess(fallible),
-        );
     }
 }

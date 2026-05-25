@@ -1,5 +1,6 @@
 use crate::_harness::build::{
-    compile_check, compile_check_standalone, compile_check_with_locator, locator_with_go_dep,
+    compile_check, compile_check_standalone, compile_check_with_locator, compile_project_files,
+    locator_with_go_dep,
 };
 use crate::_harness::filesystem::MockFileSystem;
 use crate::_harness::infer::infer;
@@ -5501,12 +5502,10 @@ fn main() {
 
 #[test]
 fn go_import_collision_flags_shared_last_segment() {
-    use ecow::EcoString;
-    use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+    use rustc_hash::FxHashMap as HashMap;
 
-    let unused: HashSet<EcoString> = HashSet::default();
     let go_package_names: HashMap<String, String> = HashMap::default();
-    let mut builder = emit::imports::ImportBuilder::new("project", &unused, &go_package_names);
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names);
     builder.extend_with_modules(
         &["database/sql", "entgo.io/ent/dialect/sql"]
             .iter()
@@ -5527,17 +5526,15 @@ fn go_import_collision_flags_shared_last_segment() {
 
 #[test]
 fn go_import_collision_silent_when_aliases_differ() {
-    use ecow::EcoString;
-    use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+    use rustc_hash::FxHashMap as HashMap;
 
-    let unused: HashSet<EcoString> = HashSet::default();
     let mut go_package_names: HashMap<String, String> = HashMap::default();
     go_package_names.insert(
         "go:entgo.io/ent/dialect/sql".to_string(),
         "entsql".to_string(),
     );
 
-    let mut builder = emit::imports::ImportBuilder::new("project", &unused, &go_package_names);
+    let mut builder = emit::imports::ImportBuilder::new(&go_package_names);
     builder.extend_with_modules(
         &["database/sql", "entgo.io/ent/dialect/sql"]
             .iter()
@@ -5653,7 +5650,7 @@ fn main() {
             "echo/echo.go",
             "main.go",
         ],
-        "Emitter::emit must return files alphabetically sorted by name",
+        "Planner::emit must return files alphabetically sorted by name",
     );
 }
 
@@ -5745,5 +5742,436 @@ fn main() {
     assert!(
         names.contains(&"greet.lis"),
         "module file must keep bare identity name; got: {names:?}"
+    );
+}
+
+fn emit_diagnostic_codes(fs: MockFileSystem) -> Vec<String> {
+    compile_project_files(fs, "github.com/user/myproject", false)
+        .iter()
+        .flat_map(|file| file.diagnostics.iter())
+        .filter_map(|diagnostic| diagnostic.code_str().map(str::to_string))
+        .collect()
+}
+
+#[test]
+fn go_name_collision_public_private_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub fn foo_bar() -> int {
+  1
+}
+
+fn FooBar() -> int {
+  2
+}
+
+fn main() {
+  let _ = foo_bar()
+  let _ = FooBar()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "snake and Pascal functions both become FooBar; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_type_vs_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct FooBar {}
+
+pub fn foo_bar() -> int {
+  1
+}
+
+fn main() {
+  let _ = FooBar {}
+  let _ = foo_bar()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "type FooBar and exported foo_bar share the package block; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_function_vs_generated_constructor() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub enum Token {
+  Word(string),
+}
+
+pub fn make_token_word(s: string) -> Token {
+  Token.Word(s)
+}
+
+fn main() {
+  let _ = make_token_word("x")
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "make_token_word collides with generated MakeTokenWord; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_struct_vs_generated_tag_type() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+enum Status {
+  Ready,
+}
+
+struct StatusTag {}
+
+fn main() {
+  let _ = Status.Ready
+  let _ = StatusTag {}
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "user StatusTag collides with the generated tag type; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_silent_for_distinct_names() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct User {
+  name: string,
+}
+
+pub fn make_user(n: string) -> User {
+  User { name: n }
+}
+
+fn main() {
+  let _ = make_user("x")
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        !codes.iter().any(|code| code == "emit.go_name_collision"),
+        "a valid program must not be flagged; got: {codes:?}"
+    );
+}
+
+#[test]
+fn reserved_go_prefix_rejects_adapter_namespace() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+struct _lisAdapter_Foo {
+  x: int,
+}
+
+fn main() {
+  let f = _lisAdapter_Foo { x: 1 }
+  let _ = f.x
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.reserved_go_prefix"),
+        "the _lisAdapter_ prefix is reserved; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_silent_for_unused_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub fn foo_bar() -> int {
+  1
+}
+
+fn FooBar() -> int {
+  2
+}
+
+fn main() {
+  let _ = foo_bar()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        !codes.iter().any(|code| code == "emit.go_name_collision"),
+        "FooBar is private and unused, so it is not emitted and cannot collide; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_impl_free_function_vs_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct Foo {
+  x: int,
+}
+
+impl Foo {
+  fn make() -> Foo {
+    Foo { x: 0 }
+  }
+}
+
+fn Foo_make() -> int {
+  99
+}
+
+fn main() {
+  let _ = Foo.make()
+  let _ = Foo_make()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "a self-less impl method becomes Foo_make and collides with the free function; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_struct_field_vs_method() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct User {
+  pub foo_bar: int,
+}
+
+impl User {
+  fn FooBar(self) -> int {
+    self.foo_bar
+  }
+}
+
+fn main() {
+  let u = User { foo_bar: 7 }
+  let _ = u.FooBar()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "field foo_bar and method FooBar share the selector namespace as FooBar; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_field_vs_generated_stringer() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct Thing {
+  pub string: int,
+}
+
+fn main() {
+  let t = Thing { string: 1 }
+  let _ = t.string
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "field string exports to String, colliding with the generated String() method; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_interface_methods() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub interface Shape {
+  fn foo_bar(self) -> int
+  fn FooBar(self) -> int
+}
+
+fn main() {
+  let _ = 1
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "interface methods foo_bar and FooBar both become FooBar; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_import_alias_vs_function() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import FooBar "go:fmt"
+
+pub fn foo_bar() -> int {
+  1
+}
+
+fn main() {
+  let _ = FooBar.Println("x")
+  let _ = foo_bar()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "import alias FooBar collides with the package-block function FooBar; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_tuple_field_vs_method() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct Pair(int, int)
+
+impl Pair {
+  fn F0(self) -> int {
+    self.0
+  }
+}
+
+fn main() {
+  let p = Pair(1, 2)
+  let _ = p.F0()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "tuple field F0 collides with the method F0; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_enum_field_vs_method() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+enum Shape {
+  Circle { radius: int },
+}
+
+impl Shape {
+  fn Radius(self) -> int {
+    0
+  }
+}
+
+fn main() {
+  let _ = Shape.Circle { radius: 1 }
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        codes.iter().any(|code| code == "emit.go_name_collision"),
+        "enum payload field Radius collides with the method Radius; got: {codes:?}"
+    );
+}
+
+#[test]
+fn go_name_collision_silent_for_newtype() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+pub struct Meters(int)
+
+impl Meters {
+  fn doubled(self) -> int {
+    1
+  }
+}
+
+fn main() {
+  let m = Meters(5)
+  let _ = m.doubled()
+}
+"#,
+    );
+
+    let codes = emit_diagnostic_codes(fs);
+    assert!(
+        !codes.iter().any(|code| code == "emit.go_name_collision"),
+        "a single-field tuple is a newtype with no F0 field; got: {codes:?}"
     );
 }

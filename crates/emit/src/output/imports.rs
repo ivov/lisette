@@ -6,9 +6,50 @@ use ecow::EcoString;
 use syntax::ast::ImportAlias;
 use syntax::program::{File, FileImport, ModuleId};
 
+/// Source-derived imports resolved during the plan phase: path -> chosen
+/// alias, plus the aliases of imports dropped as unused (still needed so a
+/// later generated reference to the same module reuses the source alias).
+pub(crate) struct ImportPlan {
+    imports: HashMap<String, String>,
+    dropped_aliases: HashMap<String, String>,
+}
+
+impl ImportPlan {
+    pub(crate) fn build(
+        file: &File,
+        go_module: &str,
+        unused_imports: &HashSet<EcoString>,
+        go_package_names: &HashMap<String, String>,
+    ) -> Self {
+        let mut imports = HashMap::default();
+        let mut dropped_aliases = HashMap::default();
+
+        for import in file.imports() {
+            let is_blank = matches!(import.alias, Some(ImportAlias::Blank(_)));
+
+            if !is_blank
+                && let Some(ref alias) = import.effective_alias(go_package_names)
+                && unused_imports.contains(alias.as_str())
+            {
+                let (path, go_alias) = resolve_import(&import, go_module, go_package_names);
+                if !go_alias.is_empty() {
+                    dropped_aliases.insert(path, go_alias);
+                }
+                continue;
+            }
+
+            let (path, alias) = resolve_import(&import, go_module, go_package_names);
+            imports.insert(path, alias);
+        }
+
+        Self {
+            imports,
+            dropped_aliases,
+        }
+    }
+}
+
 pub struct ImportBuilder<'a> {
-    go_module: &'a str,
-    unused_imports: &'a HashSet<EcoString>,
     go_package_names: &'a HashMap<String, String>,
     imports: HashMap<String, String>,
     dropped_aliases: HashMap<String, String>,
@@ -16,14 +57,8 @@ pub struct ImportBuilder<'a> {
 }
 
 impl<'a> ImportBuilder<'a> {
-    pub fn new(
-        go_module: &'a str,
-        unused_imports: &'a HashSet<EcoString>,
-        go_package_names: &'a HashMap<String, String>,
-    ) -> Self {
+    pub fn new(go_package_names: &'a HashMap<String, String>) -> Self {
         Self {
-            go_module,
-            unused_imports,
             go_package_names,
             imports: HashMap::default(),
             dropped_aliases: HashMap::default(),
@@ -31,24 +66,15 @@ impl<'a> ImportBuilder<'a> {
         }
     }
 
-    pub fn collect_from_file(&mut self, file: &File) {
-        for import in file.imports() {
-            let is_blank = matches!(import.alias, Some(ImportAlias::Blank(_)));
-
-            if !is_blank
-                && let Some(ref alias) = import.effective_alias(self.go_package_names)
-                && self.unused_imports.contains(alias.as_str())
-            {
-                let (path, go_alias) =
-                    resolve_import(&import, self.go_module, self.go_package_names);
-                if !go_alias.is_empty() {
-                    self.dropped_aliases.insert(path, go_alias);
-                }
-                continue;
-            }
-
-            let (path, alias) = resolve_import(&import, self.go_module, self.go_package_names);
-            self.imports.insert(path, alias);
+    pub(crate) fn from_plan(
+        plan: &ImportPlan,
+        go_package_names: &'a HashMap<String, String>,
+    ) -> Self {
+        Self {
+            go_package_names,
+            imports: plan.imports.clone(),
+            dropped_aliases: plan.dropped_aliases.clone(),
+            used_modules: HashSet::default(),
         }
     }
 

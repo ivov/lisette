@@ -1,7 +1,13 @@
-use crate::Emitter;
-use crate::expressions::context::ExpressionContext;
-use crate::expressions::emission::{CapturePolicy, EmittedExpression};
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::ReturnContext;
+use crate::abi::is_tagged_shape_fn_value;
+use crate::abi::transition::lower_arg_to_tagged;
+use crate::context::expression::ExpressionContext;
+use crate::expressions::emission::{CapturePolicy, StagedExpression};
 use crate::names::go_name;
+use crate::plan::bodies::LoweredStatement;
 use crate::utils::observable_after_mutation;
 use crate::write_line;
 use syntax::ast::Expression;
@@ -10,28 +16,33 @@ use syntax::types::Type;
 /// Folds `f(leading, spread...)` into `f(append([]T{leading}, spread...)...)` — Go rejects the former.
 #[derive(Clone)]
 pub(crate) struct VariadicCombine {
-    pub elem_ty: Type,
+    pub element_ty: Type,
     /// EmittedExpr-value index where variadic-feeding args begin.
     pub fixed_count: usize,
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn stage_or_capture(
         &mut self,
         expression: &Expression,
         prefix: &str,
-    ) -> EmittedExpression {
+        fx: &mut EmitEffects,
+    ) -> StagedExpression {
         if matches!(
             expression,
             Expression::Literal { .. } | Expression::Identifier { .. }
         ) {
-            return self.stage_operand(expression, ExpressionContext::value());
+            return self.stage_operand(expression, ExpressionContext::value(), fx);
         }
 
-        let mut setup = String::new();
-        let value_expr = self.emit_operand(&mut setup, expression, ExpressionContext::value());
-        let temp_var = self.hoist_tmp_value(&mut setup, prefix, &value_expr);
-        EmittedExpression::new(setup, temp_var, expression)
+        let staged = self.stage_operand(expression, ExpressionContext::value(), fx);
+        let mut setup = staged.setup;
+        let temp_var = self.hoist_tmp_value_statement(&mut setup, prefix, &staged.value);
+        StagedExpression {
+            setup,
+            value: temp_var,
+            capture: CapturePolicy::Never,
+        }
     }
 
     pub(crate) fn emit_force_capture(
@@ -39,39 +50,54 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
         prefix: &str,
+        fx: &mut EmitEffects,
     ) -> String {
         if !observable_after_mutation(expression) {
-            return self.emit_operand(output, expression, ExpressionContext::value());
+            return self.emit_operand(output, expression, ExpressionContext::value(), fx);
         }
 
         let temp_var = self.fresh_var(Some(prefix));
         self.declare(&temp_var);
         let expression_string =
-            self.emit_composite_value(output, expression, ExpressionContext::value());
+            self.emit_composite_value(output, expression, ExpressionContext::value(), fx);
         write_line!(output, "{} := {}", temp_var, expression_string);
         temp_var
     }
 
-    /// Emit an expression to a separate buffer, capturing setup and value.
+    /// Plan an expression and capture its typed setup and value.
     pub(crate) fn stage_operand(
         &mut self,
         expression: &Expression,
         ctx: ExpressionContext<'_>,
-    ) -> EmittedExpression {
-        let mut setup = String::new();
-        let value = self.emit_operand(&mut setup, expression, ctx);
-        EmittedExpression::new(setup, value, expression)
+        fx: &mut EmitEffects,
+    ) -> StagedExpression {
+        let plan = self.plan_operand(expression, ctx, fx);
+        StagedExpression::from_plan(plan, expression)
     }
 
-    /// Emit an expression as a composite value to a separate buffer.
+    /// Stage an expression as a composite value, capturing typed setup.
     pub(crate) fn stage_composite(
         &mut self,
         expression: &Expression,
         ctx: ExpressionContext<'_>,
-    ) -> EmittedExpression {
-        let mut setup = String::new();
-        let value = self.emit_composite_value(&mut setup, expression, ctx);
-        EmittedExpression::new(setup, value, expression)
+        fx: &mut EmitEffects,
+    ) -> StagedExpression {
+        let needs_string_bridge = (expression.get_type().is_unit()
+            && matches!(
+                expression.unwrap_parens(),
+                Expression::Call { .. } | Expression::Block { .. }
+            ))
+            || self.classify_go_fn_value(expression).is_some()
+            || self.is_go_array_return_value(expression);
+
+        if needs_string_bridge {
+            let mut setup = String::new();
+            let value = self.emit_composite_value(&mut setup, expression, ctx, fx);
+            return StagedExpression::new(setup, value, expression);
+        }
+
+        let plan = self.plan_operand(expression, ctx, fx);
+        StagedExpression::from_plan(plan, expression)
     }
 
     /// Suppresses the Go-fn identity short-circuit when the formal param
@@ -80,20 +106,26 @@ impl Emitter<'_> {
         &mut self,
         expression: &Expression,
         param_ty: Option<&syntax::types::Type>,
-    ) -> EmittedExpression {
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
+    ) -> StagedExpression {
         let suppress = param_ty
             .is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function { .. }));
-        let arg_ctx = ExpressionContext::value().with_forced_tagged_go_function(suppress);
-        let staged = self.stage_composite(expression, arg_ctx);
+        let arg_ctx = ExpressionContext::value()
+            .with_forced_tagged_go_function(suppress)
+            .with_ambient_return_ctx_opt(ambient);
+        let staged = self.stage_composite(expression, arg_ctx, fx);
 
         if suppress {
-            let mut setup = staged.setup;
+            // `try_lower_arg_to_tagged` mutates a `String` setup; render the
+            // staged setup down for it, then re-wrap on the way out.
+            let mut setup = Renderer.render_setup(&staged.setup);
             if let Some(tagged) =
-                self.try_lower_arg_to_tagged(&mut setup, expression, &staged.value, param_ty)
+                self.try_lower_arg_to_tagged(&mut setup, expression, &staged.value, param_ty, fx)
             {
-                return EmittedExpression::new(setup, tagged, expression);
+                return StagedExpression::new(setup, tagged, expression);
             }
-            return EmittedExpression::new(setup, staged.value, expression);
+            return StagedExpression::new(setup, staged.value, expression);
         }
 
         staged
@@ -109,11 +141,22 @@ impl Emitter<'_> {
         arg: &Expression,
         value: &str,
         param_ty: Option<&Type>,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
+        self.detect_lower_arg_to_tagged(arg, param_ty)?;
+        Some(self.emit_lower_arg_to_tagged(output, value, param_ty.unwrap(), fx))
+    }
+
+    /// Detect whether a tagged-Go lowering applies. Pure: no emission.
+    pub(crate) fn detect_lower_arg_to_tagged(
+        &self,
+        arg: &Expression,
+        param_ty: Option<&Type>,
+    ) -> Option<()> {
         if matches!(arg.unwrap_parens(), Expression::Lambda { .. }) {
             return None;
         }
-        if Self::is_tagged_shape_fn_value(arg) {
+        if is_tagged_shape_fn_value(arg) {
             return None;
         }
         if self.classify_go_fn_value(arg).is_some() {
@@ -124,17 +167,27 @@ impl Emitter<'_> {
             return None;
         };
         self.classify_direct_emission(return_type)?;
+        Some(())
+    }
+
+    pub(crate) fn emit_lower_arg_to_tagged(
+        &mut self,
+        output: &mut String,
+        value: &str,
+        param_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> String {
         let cb_var = self.hoist_tmp_value(output, "cb", value);
-        Some(crate::types::abi_transition::lower_arg_to_tagged(
-            self, output, &cb_var, param_ty,
-        ))
+        lower_arg_to_tagged(self, output, &cb_var, param_ty, fx)
     }
 
     pub(crate) fn stage_native_method_args(
         &mut self,
         function: &Expression,
         args: &[Expression],
-    ) -> Vec<EmittedExpression> {
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
+    ) -> Vec<StagedExpression> {
         let fn_ty = function.get_type();
         let formal_params: &[syntax::types::Type] = match fn_ty.unwrap_forall() {
             syntax::types::Type::Function { params, .. } => params,
@@ -142,33 +195,8 @@ impl Emitter<'_> {
         };
         args.iter()
             .enumerate()
-            .map(|(i, arg)| self.stage_prelude_arg(arg, formal_params.get(i)))
+            .map(|(i, arg)| self.stage_prelude_arg(arg, formal_params.get(i), ambient, fx))
             .collect()
-    }
-
-    /// Like `sequence`, but also stages the spread as a sibling (so its
-    /// setup participates in eval-order) and appends `...` to its value.
-    /// When `combine` is `Some`, leading args feeding the variadic are folded
-    /// with the spread into a single `append([]T{...}, spread...)...` value
-    /// so the resulting Go is well-formed.
-    pub(crate) fn sequence_with_spread(
-        &mut self,
-        output: &mut String,
-        mut stages: Vec<EmittedExpression>,
-        spread: Option<&Expression>,
-        wrap_to_any: bool,
-        prefix: &str,
-        combine: Option<VariadicCombine>,
-    ) -> Vec<String> {
-        let spread_idx = spread.map(|s| {
-            stages.push(self.stage_operand(s, ExpressionContext::value()));
-            stages.len() - 1
-        });
-        let mut values = self.sequence(output, stages, prefix);
-        if let Some(i) = spread_idx {
-            self.finalize_spread_stage(&mut values, i, wrap_to_any, combine);
-        }
-        values
     }
 
     /// Post-staging fix-up for the spread slot: optional `any`-wrap, then
@@ -176,59 +204,97 @@ impl Emitter<'_> {
     pub(crate) fn finalize_spread_stage(
         &mut self,
         values: &mut Vec<String>,
-        spread_idx: usize,
+        spread_index: usize,
         wrap_to_any: bool,
         combine: Option<VariadicCombine>,
+        fx: &mut EmitEffects,
     ) {
         if wrap_to_any {
-            self.requirements.require_stdlib();
-            values[spread_idx] = format!(
+            fx.require_stdlib();
+            values[spread_index] = format!(
                 "{}.SliceToAny({})",
                 go_name::GO_STDLIB_PKG,
-                values[spread_idx]
+                values[spread_index]
             );
         }
         match combine {
-            Some(c) if spread_idx > c.fixed_count => {
-                let elem_go = self.go_type_as_string(&c.elem_ty);
-                let leading = values[c.fixed_count..spread_idx].join(", ");
-                let spread_value = &values[spread_idx];
-                let combined = format!("append([]{elem_go}{{{leading}}}, {spread_value}...)...");
-                values.splice(c.fixed_count..=spread_idx, std::iter::once(combined));
+            Some(c) if spread_index > c.fixed_count => {
+                let element_go = self.go_type_string(&c.element_ty, fx);
+                let leading = values[c.fixed_count..spread_index].join(", ");
+                let spread_value = &values[spread_index];
+                let combined = format!("append([]{element_go}{{{leading}}}, {spread_value}...)...");
+                values.splice(c.fixed_count..=spread_index, std::iter::once(combined));
             }
-            _ => values[spread_idx].push_str("..."),
+            _ => values[spread_index].push_str("..."),
         }
     }
 
-    /// Sequence N staged emissions preserving left-to-right eval order.
-    ///
-    /// When a later sibling produces setup statements (temp vars from if/match/block
-    /// used as values), earlier siblings that contain calls are captured to temp vars
-    /// to prevent the setup from running before the earlier call.
-    pub(crate) fn sequence(
+    /// Sequence N staged emissions preserving left-to-right eval order,
+    /// accumulating setup into a `Vec<LoweredStatement>` so a value plan can
+    /// carry it as structured setup. A later sibling with setup forces an
+    /// earlier inline-but-observable value to be captured to a `TempBind`.
+    /// Returns `(setup_statements, values)`.
+    pub(crate) fn sequence_structured(
         &mut self,
-        output: &mut String,
-        stages: Vec<EmittedExpression>,
+        mut stages: Vec<StagedExpression>,
         prefix: &str,
-    ) -> Vec<String> {
-        // Fast path: when no element produces setup, just move the values out.
+    ) -> (Vec<LoweredStatement>, Vec<String>) {
         if stages.iter().all(|s| s.setup.is_empty()) {
-            return stages.into_iter().map(|s| s.value).collect();
+            return (Vec::new(), stages.into_iter().map(|s| s.value).collect());
         }
 
+        let mut setup: Vec<LoweredStatement> = Vec::new();
         let mut results = Vec::with_capacity(stages.len());
-        for (i, s) in stages.iter().enumerate() {
+        for i in 0..stages.len() {
             let later_has_setup = stages[i + 1..].iter().any(|s| !s.setup.is_empty());
+            let s_capture = stages[i].capture;
+            let s_value = std::mem::take(&mut stages[i].value);
+            let s_setup = std::mem::take(&mut stages[i].setup);
 
-            output.push_str(&s.setup);
+            setup.extend(s_setup);
 
-            if later_has_setup && matches!(s.capture, CapturePolicy::IfLaterSetup) {
-                let tmp = self.hoist_tmp_value(output, prefix, &s.value);
+            if later_has_setup && matches!(s_capture, CapturePolicy::IfLaterSetup) {
+                let tmp = self.fresh_var(Some(prefix));
+                self.declare(&tmp);
+                setup.push(LoweredStatement::TempBind {
+                    name: tmp.clone(),
+                    value: s_value,
+                });
                 results.push(tmp);
             } else {
-                results.push(s.value.clone());
+                results.push(s_value);
             }
         }
-        results
+        (setup, results)
+    }
+
+    /// Structured counterpart of `sequence_with_spread`: stages the spread as a
+    /// sibling, sequences via `sequence_structured` (so setup is structured
+    /// statements, not flushed to a buffer), then applies the spread fix-up to
+    /// the value slot. Returns `(setup_statements, values)`.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn sequence_with_spread_structured(
+        &mut self,
+        mut stages: Vec<StagedExpression>,
+        spread: Option<&Expression>,
+        wrap_to_any: bool,
+        prefix: &str,
+        combine: Option<VariadicCombine>,
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, Vec<String>) {
+        let spread_index = spread.map(|s| {
+            stages.push(self.stage_operand(
+                s,
+                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                fx,
+            ));
+            stages.len() - 1
+        });
+        let (setup, mut values) = self.sequence_structured(stages, prefix);
+        if let Some(i) = spread_index {
+            self.finalize_spread_stage(&mut values, i, wrap_to_any, combine, fx);
+        }
+        (setup, values)
     }
 }

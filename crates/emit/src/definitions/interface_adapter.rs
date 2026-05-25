@@ -1,4 +1,8 @@
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::ReturnContext;
+use crate::abi::AbiShape;
+use crate::abi::transition::emit_return_adapter;
 use crate::names::go_name;
 use crate::names::go_name::GO_IMPORT_PREFIX;
 use crate::write_line;
@@ -16,11 +20,11 @@ pub(crate) struct AdapterMethod {
     pub(crate) name: EcoString,
     pub(crate) param_types: Vec<Type>,
     pub(crate) return_type: Type,
-    pub(crate) user_shape: Option<crate::types::abi::AbiShape>,
-    pub(crate) interface_shape: Option<crate::types::abi::AbiShape>,
+    pub(crate) user_shape: Option<AbiShape>,
+    pub(crate) interface_shape: Option<AbiShape>,
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn lookup_struct_field_ty(
         &self,
         struct_ty: &Type,
@@ -79,12 +83,12 @@ impl Emitter<'_> {
                 if let Some(Definition {
                     body:
                         DefinitionBody::Interface {
-                            definition: parent_def,
+                            definition: parent_definition,
                         },
                     ..
                 }) = self.facts.definition(id.as_str())
                 {
-                    queue.push((parent_def, id.as_eco().clone()));
+                    queue.push((parent_definition, id.as_eco().clone()));
                 }
             }
         }
@@ -160,9 +164,8 @@ impl Emitter<'_> {
         })
     }
 
-    /// Build one `AdapterMethod`, plus a flag set when the user-side natural
-    /// shape disagrees with the interface-side hint-shifted shape (in which
-    /// case the adapter is meaningful, not just structural).
+    /// Returns `(method, meaningful)`; `meaningful` is set when the user
+    /// shape differs from the hint-shifted interface shape.
     fn build_adapter_method(
         &self,
         method_name: &EcoString,
@@ -194,10 +197,8 @@ impl Emitter<'_> {
         let user_shape = self.classify_direct_emission(&return_type);
         let interface_hints = self.go_interface_method_hints(declaring_id, method_name);
         let interface_shape = match user_shape.as_ref() {
-            Some(crate::types::abi::AbiShape::NullableReturn)
-                if interface_hints.iter().any(|h| h == "comma_ok") =>
-            {
-                Some(crate::types::abi::AbiShape::CommaOk)
+            Some(AbiShape::NullableReturn) if interface_hints.iter().any(|h| h == "comma_ok") => {
+                Some(AbiShape::CommaOk)
             }
             other => other.cloned(),
         };
@@ -220,11 +221,11 @@ impl Emitter<'_> {
         &mut self,
         inner_call: &str,
         return_ty: &Type,
-        user_shape: &crate::types::abi::AbiShape,
-        interface_shape: &crate::types::abi::AbiShape,
+        user_shape: &AbiShape,
+        interface_shape: &AbiShape,
+        fx: &mut EmitEffects,
     ) -> Option<(String, String)> {
-        use crate::types::abi::AbiShape as A;
-        let (A::NullableReturn, A::CommaOk) = (user_shape, interface_shape) else {
+        let (AbiShape::NullableReturn, AbiShape::CommaOk) = (user_shape, interface_shape) else {
             return None;
         };
         let inner = self.facts.peel_alias(return_ty).ok_type();
@@ -232,12 +233,12 @@ impl Emitter<'_> {
         let val = self.fresh_var(Some("val"));
         self.declare(&val);
         let nil_check = if is_interface {
-            self.requirements.require_stdlib();
+            fx.require_stdlib();
             format!("!lisette.IsNilInterface({})", val)
         } else {
             format!("{} != nil", val)
         };
-        let go_ret = self.render_lowered_return_ty(&A::CommaOk, return_ty);
+        let go_ret = self.render_lowered_return_ty(&AbiShape::CommaOk, return_ty, fx);
         let body = format!("{val} := {inner_call}\nreturn {val}, {nil_check}\n");
         Some((go_ret, body))
     }
@@ -262,82 +263,54 @@ impl Emitter<'_> {
         &self,
         return_ty: &Type,
         hints: &[String],
-    ) -> Option<crate::types::abi::AbiShape> {
+    ) -> Option<AbiShape> {
         let base = self.classify_direct_emission(return_ty)?;
-        if matches!(base, crate::types::abi::AbiShape::NullableReturn)
-            && hints.iter().any(|h| h == "comma_ok")
-        {
-            return Some(crate::types::abi::AbiShape::CommaOk);
+        if matches!(base, AbiShape::NullableReturn) && hints.iter().any(|h| h == "comma_ok") {
+            return Some(AbiShape::CommaOk);
         }
         Some(base)
     }
 
-    fn concrete_dedup_key(concrete_ty: &Type, concrete_id: &EcoString) -> EcoString {
-        let mut depth = 0usize;
-        let mut t = concrete_ty.clone();
-        while t.is_ref() {
-            depth += 1;
-            t = t.inner().expect("Ref<T> must have inner").clone();
-        }
-        let params = match &t {
-            Type::Nominal { params, .. } if !params.is_empty() => Some(params),
-            _ => None,
-        };
-        let params_suffix = params
-            .map(|ps| {
-                let joined = ps
-                    .iter()
-                    .map(|p| p.to_string())
-                    .collect::<Vec<_>>()
-                    .join(",");
-                format!("<{joined}>")
-            })
-            .unwrap_or_default();
-
-        EcoString::from(format!(
-            "{}{}{}",
-            "*".repeat(depth),
-            concrete_id.as_str(),
-            params_suffix
-        ))
-    }
-
-    pub(crate) fn ensure_adapter_type(&mut self, plan: AdapterPlan) -> String {
+    pub(crate) fn ensure_adapter_type(
+        &mut self,
+        plan: AdapterPlan,
+        fx: &mut EmitEffects,
+    ) -> String {
         let key = (
-            Self::concrete_dedup_key(&plan.concrete_ty, &plan.concrete_id),
+            concrete_dedup_key(&plan.concrete_ty, &plan.concrete_id),
             plan.interface_id.clone(),
         );
-        if let Some(name) = self.synthesized_adapter_types.get(&key) {
+        if let Some(name) = self.adapter_registry.lookup(&key) {
             return name.clone();
         }
 
-        let index = self.synthesized_adapter_types.len();
-        let adapter_name = Self::adapter_type_name(&plan, index);
-        self.synthesized_adapter_types
-            .insert(key, adapter_name.clone());
+        let index = self.adapter_registry.next_index();
+        let adapter_name = adapter_type_name(&plan, index);
 
-        let concrete_go_ty = self.go_type_as_string(&plan.concrete_ty);
+        let concrete_go_ty = self.go_type_string(&plan.concrete_ty, fx);
 
-        let mut decl = String::new();
-        write_line!(decl, "type {} struct {{", adapter_name);
-        write_line!(decl, "inner {}", concrete_go_ty);
-        write_line!(decl, "}}");
-        decl.push('\n');
+        let mut declaration = String::new();
+        write_line!(declaration, "type {} struct {{", adapter_name);
+        write_line!(declaration, "inner {}", concrete_go_ty);
+        write_line!(declaration, "}}");
+        declaration.push('\n');
 
         for method in &plan.methods {
-            self.emit_adapter_method(&mut decl, &adapter_name, method);
-            decl.push('\n');
+            self.emit_adapter_method(&mut declaration, &adapter_name, method, fx);
+            declaration.push('\n');
         }
 
-        self.pending_adapter_types.push(decl);
+        self.adapter_registry
+            .insert(key, adapter_name.clone(), declaration);
         adapter_name
     }
 
     fn emit_adapter_method(
         &mut self,
-        decl: &mut String,
+        declaration: &mut String,
         adapter_name: &str,
         method: &AdapterMethod,
+        fx: &mut EmitEffects,
     ) {
         self.enter_scope();
 
@@ -351,7 +324,7 @@ impl Emitter<'_> {
         let params_str = param_names
             .iter()
             .zip(method.param_types.iter())
-            .map(|(n, t)| format!("{} {}", n, self.go_type_as_string(t)))
+            .map(|(n, t)| format!("{} {}", n, self.go_type_string(t, fx)))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -362,9 +335,9 @@ impl Emitter<'_> {
         };
         let inner_call = format!("a.inner.{}({})", go_method_name, param_names.join(", "));
 
-        let (go_ret, body) = self.build_adapter_body(method, &inner_call);
+        let (go_ret, body) = self.build_adapter_body(method, &inner_call, fx);
         self.finish_adapter_method(
-            decl,
+            declaration,
             adapter_name,
             &go_method_name,
             &params_str,
@@ -373,51 +346,55 @@ impl Emitter<'_> {
         );
     }
 
-    fn build_adapter_body(&mut self, method: &AdapterMethod, inner_call: &str) -> (String, String) {
+    fn build_adapter_body(
+        &mut self,
+        method: &AdapterMethod,
+        inner_call: &str,
+        fx: &mut EmitEffects,
+    ) -> (String, String) {
         let user_shape = &method.user_shape;
         let interface_shape = &method.interface_shape;
 
         if user_shape == interface_shape
             && let Some(shape) = user_shape
         {
-            let go_ret = self.render_lowered_return_ty(shape, &method.return_type);
+            let go_ret = self.render_lowered_return_ty(shape, &method.return_type, fx);
             return (go_ret, format!("return {}\n", inner_call));
         }
 
         if let (Some(user), Some(interface)) = (user_shape, interface_shape)
             && user != interface
             && let Some(bridge) =
-                self.emit_hint_shift_bridge(inner_call, &method.return_type, user, interface)
+                self.emit_hint_shift_bridge(inner_call, &method.return_type, user, interface, fx)
         {
             return bridge;
         }
 
-        if let Some(adapter) =
-            crate::types::abi_transition::emit_return_adapter(self, inner_call, &method.return_type)
-        {
+        let adapter = emit_return_adapter(self, inner_call, &method.return_type, fx);
+        if let Some(adapter) = adapter {
             return adapter;
         }
 
         if method.return_type.is_unit() {
             (String::new(), format!("{}\n", inner_call))
         } else {
-            let ret = self.go_type_as_string(&method.return_type);
+            let ret = self.go_type_string(&method.return_type, fx);
             (ret, format!("return {}\n", inner_call))
         }
     }
 
     fn finish_adapter_method(
         &mut self,
-        decl: &mut String,
+        declaration: &mut String,
         adapter_name: &str,
         method_name: &str,
         params: &str,
         go_ret: &str,
         body: &str,
     ) {
-        write_method_header(decl, adapter_name, method_name, params, go_ret);
-        decl.push_str(body);
-        write_line!(decl, "}}");
+        write_method_header(declaration, adapter_name, method_name, params, go_ret);
+        declaration.push_str(body);
+        write_line!(declaration, "}}");
         self.exit_scope();
     }
 
@@ -425,8 +402,12 @@ impl Emitter<'_> {
         &mut self,
         inferred: Vec<Type>,
         in_tail: bool,
+        ambient: Option<&ReturnContext>,
     ) -> Vec<Type> {
-        let return_slots = self.scope_return_context_fallback().ty().and_then(|ty| {
+        let Some(resolved) = ambient.cloned() else {
+            return inferred;
+        };
+        let return_slots = resolved.ty().and_then(|ty| {
             let Type::Tuple(slots) = ty else {
                 return None;
             };
@@ -457,24 +438,10 @@ impl Emitter<'_> {
             })
             .collect()
     }
-
-    fn adapter_type_name(plan: &AdapterPlan, index: usize) -> String {
-        let concrete_name = plan
-            .concrete_id
-            .rsplit('.')
-            .next()
-            .unwrap_or(plan.concrete_id.as_str());
-        let go_path = plan
-            .interface_id
-            .strip_prefix(GO_IMPORT_PREFIX)
-            .unwrap_or(plan.interface_id.as_str());
-        let iface_name = unqualified_name(go_path);
-        format!("_lisAdapter_{}_{}_{}", concrete_name, iface_name, index)
-    }
 }
 
 fn write_method_header(
-    decl: &mut String,
+    declaration: &mut String,
     adapter_name: &str,
     method_name: &str,
     params: &str,
@@ -486,11 +453,61 @@ fn write_method_header(
         format!(" {}", go_ret)
     };
     write_line!(
-        decl,
+        declaration,
         "func (a {}) {}({}){} {{",
         adapter_name,
         method_name,
         params,
         ret_suffix
     );
+}
+
+fn concrete_dedup_key(concrete_ty: &Type, concrete_id: &EcoString) -> EcoString {
+    let mut depth = 0usize;
+    let mut t = concrete_ty.clone();
+    while t.is_ref() {
+        depth += 1;
+        t = t.inner().expect("Ref<T> must have inner").clone();
+    }
+    let params = match &t {
+        Type::Nominal { params, .. } if !params.is_empty() => Some(params),
+        _ => None,
+    };
+    let params_suffix = params
+        .map(|ps| {
+            let joined = ps
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("<{joined}>")
+        })
+        .unwrap_or_default();
+
+    EcoString::from(format!(
+        "{}{}{}",
+        "*".repeat(depth),
+        concrete_id.as_str(),
+        params_suffix
+    ))
+}
+
+fn adapter_type_name(plan: &AdapterPlan, index: usize) -> String {
+    let concrete_name = plan
+        .concrete_id
+        .rsplit('.')
+        .next()
+        .unwrap_or(plan.concrete_id.as_str());
+    let go_path = plan
+        .interface_id
+        .strip_prefix(GO_IMPORT_PREFIX)
+        .unwrap_or(plan.interface_id.as_str());
+    let iface_name = unqualified_name(go_path);
+    format!(
+        "{}{}_{}_{}",
+        go_name::ADAPTER_TYPE_PREFIX,
+        concrete_name,
+        iface_name,
+        index
+    )
 }

@@ -1,12 +1,21 @@
+use crate::abi::is_tagged_shape_fn_value;
+use crate::calls::dispatch::is_prelude_variant_constructor;
+use crate::calls::go_interop::is_go_receiver;
 use rustc_hash::FxHashSet as HashSet;
 
-use crate::Emitter;
-use crate::expressions::context::ExpressionContext;
-use crate::expressions::emission::EmittedExpression;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::ReturnContext;
+use crate::abi::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
+use crate::abi::transition::{emit_fn_arg_shape_adapter, emit_lisette_callback_wrapper};
+use crate::context::expression::ExpressionContext;
+use crate::expressions::emission::StagedExpression;
 use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
-use crate::types::abi_transition::emit_fn_arg_shape_adapter;
-use crate::types::coercion::{Coercion, CoercionDirection, OptionShape, classify_option_shape};
+use crate::plan::bodies::LoweredStatement;
+use crate::plan::calls::{ArgumentPlan, CallPlan, CallbackWrapperKind, NullableCoerceKind};
+use crate::write_line;
 use syntax::ast::{Annotation, Expression};
 use syntax::program::Definition;
 use syntax::types::Type;
@@ -30,6 +39,7 @@ struct CallArgsContext<'a> {
     spread: Option<&'a Expression>,
     wrap_spread_to_any: bool,
     combine_variadic: Option<VariadicCombine>,
+    ambient_return_ctx: Option<&'a ReturnContext>,
 }
 
 /// Escape-aware close-quote search; plain `find` would collide with `\"` inside the literal.
@@ -106,14 +116,16 @@ fn collapse_fmt_print(
     call_str
 }
 
-impl<'a> Emitter<'a> {
-    pub(super) fn emit_regular_call(
+impl<'a> Planner<'a> {
+    /// Lower a regular call: typed setup plus the call value text.
+    pub(super) fn lower_regular_call(
         &mut self,
-        output: &mut String,
         call_expression: &Expression,
+        call_plan: &CallPlan,
         call_ty: Option<&Type>,
         expression_ctx: ExpressionContext<'_>,
-    ) -> String {
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
         let Expression::Call {
             expression: callee,
             args,
@@ -122,24 +134,32 @@ impl<'a> Emitter<'a> {
             ..
         } = call_expression
         else {
-            unreachable!("emit_regular_call requires a Call expression");
+            unreachable!("lower_regular_call requires a Call expression");
         };
         let function = callee.unwrap_parens();
         let spread = (**spread).as_ref();
 
         if let Some(go_name) = self.get_callee_go_name(function).map(str::to_string) {
-            let stages: Vec<EmittedExpression> = args
+            let stages: Vec<StagedExpression> = args
                 .iter()
-                .map(|a| self.stage_operand(a, ExpressionContext::value()))
+                .map(|a| self.stage_operand(a, ExpressionContext::value(), fx))
                 .collect();
-            let wrap_to_any = Self::spread_needs_any_wrap(function, spread);
-            let combine = Self::variadic_combine_for(function, spread, 0);
-            let args_strings =
-                self.sequence_with_spread(output, stages, spread, wrap_to_any, "_arg", combine);
-            return format!("{}({})", go_name, args_strings.join(", "));
+            let wrap_to_any = spread_needs_any_wrap(function, spread);
+            let combine = call_plan.variadic_combine(0);
+            let (setup, args_strings) = self.sequence_with_spread_structured(
+                stages,
+                spread,
+                wrap_to_any,
+                "_arg",
+                combine,
+                expression_ctx.ambient_return_ctx(),
+                fx,
+            );
+            return (setup, format!("{}({})", go_name, args_strings.join(", ")));
         }
 
-        let mut function_string = self.emit_operand(output, function, expression_ctx.callee());
+        let callee_staged = self.stage_operand(function, expression_ctx.callee(), fx);
+        let mut function_string = callee_staged.value;
 
         if function.deref_inner().is_some() {
             function_string = format!("({})", function_string);
@@ -151,6 +171,7 @@ impl<'a> Emitter<'a> {
             call_ty,
             &mut function_string,
             expression_ctx,
+            fx,
         );
 
         let analysis = self.analyze_callee(function);
@@ -161,10 +182,11 @@ impl<'a> Emitter<'a> {
             is_go_call: analysis.is_go_call,
             is_prelude_dispatch: analysis.is_prelude_dispatch,
             spread,
-            wrap_spread_to_any: Self::spread_needs_any_wrap(function, spread),
-            combine_variadic: Self::variadic_combine_for(function, spread, 0),
+            wrap_spread_to_any: spread_needs_any_wrap(function, spread),
+            combine_variadic: call_plan.variadic_combine(0),
+            ambient_return_ctx: expression_ctx.ambient_return_ctx(),
         };
-        let args_strings = self.emit_call_args(output, args, &args_ctx);
+        let (args_setup, args_strings) = self.emit_call_args(args, &args_ctx, fx);
 
         let call_str = format!(
             "{}{}({})",
@@ -174,12 +196,20 @@ impl<'a> Emitter<'a> {
         );
         let call_str = collapse_fmt_print(&function_string, args, &args_strings, call_str);
 
-        if let Some(wrapped) =
-            self.wrap_go_array_return(output, function, &call_str, expression_ctx)
-        {
-            return wrapped;
-        }
-        call_str
+        let mut setup = callee_staged.setup;
+        setup.extend(args_setup);
+
+        let has_array_return = call_plan.has_go_array_return();
+        let value = match self.wrap_go_array_return(
+            &mut setup,
+            has_array_return,
+            &call_str,
+            expression_ctx,
+        ) {
+            Some(wrapped) => wrapped,
+            None => call_str,
+        };
+        (setup, value)
     }
 
     fn analyze_callee(&mut self, function: &Expression) -> CalleeAnalysis<'a> {
@@ -199,7 +229,7 @@ impl<'a> Emitter<'a> {
                     expression.get_type().strip_refs().unwrap_forall(),
                     Type::Nominal { id, .. } if id.starts_with("prelude.")
                 );
-                (Self::is_go_receiver(expression), is_prelude)
+                (is_go_receiver(expression), is_prelude)
             }
             Expression::Identifier {
                 qualified: Some(q), ..
@@ -240,33 +270,19 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Materialize a Go array-returning call into a variable and reslice it,
-    /// so the caller sees a `[]T` slice instead of a fixed-size array.
-    /// Skipped in discarded-call contexts via raw-array-return context.
+    /// Hoist a Go array-return call into a temp and reslice as `[]T`. Skipped
+    /// for discarded calls.
     fn wrap_go_array_return(
         &mut self,
-        output: &mut String,
-        function: &Expression,
+        setup: &mut Vec<LoweredStatement>,
+        has_array_return: bool,
         call_str: &str,
         ctx: ExpressionContext<'_>,
     ) -> Option<String> {
-        if ctx.keeps_raw_go_array_return() {
+        if !has_array_return || ctx.keeps_raw_go_array_return() {
             return None;
         }
-        let Expression::DotAccess {
-            expression: receiver_expression,
-            member,
-            ..
-        } = function.unwrap_parens()
-        else {
-            return None;
-        };
-        if !Self::is_go_receiver(receiver_expression)
-            || !self.has_go_array_return(receiver_expression, member)
-        {
-            return None;
-        }
-        let temp = self.hoist_tmp_value(output, "arr", call_str);
+        let temp = self.hoist_tmp_value_statement(setup, "arr", call_str);
         Some(format!("{}[:]", temp))
     }
 
@@ -277,23 +293,26 @@ impl<'a> Emitter<'a> {
         call_ty: Option<&Type>,
         function_string: &mut String,
         ctx: ExpressionContext<'_>,
+        fx: &mut EmitEffects,
     ) -> String {
-        let mut type_args_string = self.format_type_args_from_annotations(type_args);
+        let mut type_args_string = self.format_type_args_from_annotations(type_args, fx);
 
         let slot_ty = ctx.expected_slot_type();
 
         if type_args_string.is_empty()
-            && let Some(inferred) = self.infer_return_only_type_args(function)
+            && let Some(inferred) = self.infer_return_only_type_args(function, fx)
         {
-            type_args_string = slot_ty
-                .and_then(|t| self.prelude_container_type_args(t))
-                .unwrap_or(inferred);
+            type_args_string = match slot_ty {
+                Some(t) => self.prelude_container_type_args(t, fx).unwrap_or(inferred),
+                None => inferred,
+            };
         }
 
-        if type_args_string.is_empty() && Self::is_prelude_variant_constructor(function) {
-            let candidate = call_ty
-                .and_then(|t| self.prelude_container_type_args(t))
-                .or_else(|| slot_ty.and_then(|t| self.prelude_container_type_args(t)));
+        if type_args_string.is_empty() && is_prelude_variant_constructor(function) {
+            let mut candidate = call_ty.and_then(|t| self.prelude_container_type_args(t, fx));
+            if candidate.is_none() {
+                candidate = slot_ty.and_then(|t| self.prelude_container_type_args(t, fx));
+            }
             type_args_string = candidate.unwrap_or_default();
         }
 
@@ -306,157 +325,192 @@ impl<'a> Emitter<'a> {
         type_args_string
     }
 
+    /// Stage and sequence the call arguments, returning the structured setup
+    /// (per-arg setup plus eval-order temp captures) and the rendered arg
+    /// values. The caller flushes the setup before the call expression.
     fn emit_call_args(
         &mut self,
-        output: &mut String,
         args: &[Expression],
         ctx: &CallArgsContext<'_>,
-    ) -> Vec<String> {
-        let mut stages: Vec<EmittedExpression> = args
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, Vec<String>) {
+        let mut stages: Vec<StagedExpression> = args
             .iter()
             .enumerate()
             .map(|(i, arg)| {
-                let mut setup = String::new();
-                let value = self.emit_call_arg(&mut setup, arg, i, ctx);
-                EmittedExpression::new(setup, value, arg)
+                let (setup, value) = self.lower_call_arg(arg, i, ctx, fx);
+                StagedExpression::from_typed_setup(setup, value, arg)
             })
             .collect();
 
         if let Some(spread) = ctx.spread
             && let Some(adapter_stage) =
-                self.try_emit_variadic_spread_adapter(spread, ctx.generic_fn_param_types)
+                self.try_emit_variadic_spread_adapter(spread, ctx.generic_fn_param_types, fx)
         {
             stages.push(adapter_stage);
-            let spread_idx = stages.len() - 1;
-            let mut values = self.sequence(output, stages, "_arg");
+            let spread_index = stages.len() - 1;
+            let (setup, mut values) = self.sequence_structured(stages, "_arg");
             self.finalize_spread_stage(
                 &mut values,
-                spread_idx,
+                spread_index,
                 ctx.wrap_spread_to_any,
                 ctx.combine_variadic.as_ref().cloned(),
+                fx,
             );
-            return values;
+            return (setup, values);
         }
 
-        self.sequence_with_spread(
-            output,
+        self.sequence_with_spread_structured(
             stages,
             ctx.spread,
             ctx.wrap_spread_to_any,
             "_arg",
             ctx.combine_variadic.as_ref().cloned(),
+            ctx.ambient_return_ctx,
+            fx,
         )
     }
 
-    pub(crate) fn variadic_combine_for(
-        function: &Expression,
-        spread: Option<&Expression>,
-        extra_leading: usize,
-    ) -> Option<VariadicCombine> {
-        spread?;
-        let fn_ty = function.get_type();
-        let unwrapped = fn_ty.unwrap_forall();
-        let elem_ty = unwrapped.is_variadic()?;
-        let fixed_in_signature = unwrapped.get_function_params()?.len().saturating_sub(1);
-        Some(VariadicCombine {
-            elem_ty,
-            fixed_count: fixed_in_signature + extra_leading,
-        })
-    }
-
-    fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> bool {
-        let Some(spread_expr) = spread else {
-            return false;
-        };
-        let Some(variadic_elem) = function.get_type().unwrap_forall().is_variadic() else {
-            return false;
-        };
-        if !variadic_elem.is_unknown() {
-            return false;
-        }
-        spread_expr
-            .get_type()
-            .inner()
-            .is_some_and(|t| !t.is_unknown())
-    }
-
-    /// Classify and emit a single call argument.
-    fn emit_call_arg(
+    /// Classify and lower a single call argument: dispatch is plan-driven and
+    /// returns typed setup. The plain `Direct` / `RecursiveEnumPointer` /
+    /// `TaggedGoLowering` paths produce typed `TempBind` setup; the remaining
+    /// adapter paths (`GoCallbackAdapter`, `LoweredFnShapeAdapter`,
+    /// `NullableCoercion`, `GoPointerUnwrap`) capture their string emission as
+    /// a single `RawGo` until each is individually converted.
+    fn lower_call_arg(
         &mut self,
-        output: &mut String,
         arg: &Expression,
         index: usize,
         ctx: &CallArgsContext<'_>,
-    ) -> String {
-        let effective_param_ty = self.effective_param_type(index, ctx.fn_param_types);
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        let effective_param_ty = effective_param_type(index, ctx.fn_param_types);
         let generic_param_ty = ctx
             .generic_fn_param_types
-            .and_then(|params| self.effective_param_type(index, params));
+            .and_then(|params| effective_param_type(index, params));
 
-        if ctx.is_go_call
-            && let Some(result) = self.try_emit_callback_wrapper(output, arg, effective_param_ty)
-        {
-            return result;
-        }
+        let plan = self.plan_argument(arg, index, ctx, effective_param_ty, generic_param_ty);
 
-        if let Some(result) = self.try_adapt_lowered_fn_arg_shape(output, arg, generic_param_ty) {
-            return result;
-        }
-
-        if let Some(result) = self.try_emit_nullable_coercion(output, arg, effective_param_ty) {
-            return result;
-        }
-
-        if ctx.is_go_call
-            && let Some(result) =
-                self.try_emit_go_pointer_param_unwrap(output, arg, effective_param_ty)
-        {
-            return result;
-        }
-
-        if ctx.pointer_indices.contains(&index) {
-            let value = self.emit_value(output, arg, ExpressionContext::value());
-            if matches!(arg, Expression::Reference { .. }) || arg.get_type().is_ref() {
-                return value;
+        match plan {
+            ArgumentPlan::GoCallbackAdapter(kind) => self.lower_callback_wrapper(
+                arg,
+                effective_param_ty.expect("GoCallbackAdapter requires effective_param_ty"),
+                kind,
+                fx,
+            ),
+            ArgumentPlan::LoweredFnShapeAdapter => self
+                .lower_adapt_lowered_fn_arg_shape(
+                    arg,
+                    generic_param_ty.expect("LoweredFnShapeAdapter requires generic_param_ty"),
+                    fx,
+                )
+                .expect("detect_lowered_fn_arg_shape ensures Some"),
+            ArgumentPlan::NullableCoercion(kind) => self.lower_nullable_coercion(
+                arg,
+                effective_param_ty.expect("NullableCoercion requires effective_param_ty"),
+                kind,
+                fx,
+            ),
+            ArgumentPlan::GoPointerUnwrap => self.lower_go_pointer_param_unwrap(
+                arg,
+                effective_param_ty.expect("GoPointerUnwrap requires effective_param_ty"),
+                fx,
+            ),
+            ArgumentPlan::RecursiveEnumPointer => {
+                let (mut setup, value) = self.lower_value(
+                    arg,
+                    ExpressionContext::value().with_ambient_return_ctx_opt(ctx.ambient_return_ctx),
+                    fx,
+                );
+                if matches!(arg, Expression::Reference { .. }) || arg.get_type().is_ref() {
+                    return (setup, value);
+                }
+                let temp = self.hoist_tmp_value_statement(&mut setup, "ptr", &value);
+                (setup, format!("&{}", temp))
             }
-            let temp = self.hoist_tmp_value(output, "ptr", &value);
-            return format!("&{}", temp);
-        }
-
-        let unwrapped_param_ty = effective_param_ty.map(|p| p.unwrap_forall());
-        let suppress = ctx.is_prelude_dispatch
-            && unwrapped_param_ty.is_some_and(|p| matches!(p, Type::Function { .. }));
-        let flows_to_unknown = unwrapped_param_ty.is_some_and(|p| p.resolves_to_unknown());
-        let arg_ctx = ExpressionContext::value()
-            .with_forced_tagged_go_function(suppress)
-            .with_unknown_argument_target(flows_to_unknown);
-        let value = self.emit_composite_value(output, arg, arg_ctx);
-        if suppress
-            && let Some(tagged) =
-                self.try_lower_arg_to_tagged(output, arg, &value, effective_param_ty)
-        {
-            return tagged;
-        }
-        match effective_param_ty {
-            Some(target) => {
-                let coercion =
-                    Coercion::resolve(self, &arg.get_type(), target, CoercionDirection::Internal);
-                coercion.apply(self, output, value)
+            ArgumentPlan::TaggedGoLowering => {
+                let target =
+                    effective_param_ty.expect("TaggedGoLowering requires effective_param_ty");
+                let arg_ctx = direct_arg_emit_ctx(ctx, Some(target), true);
+                let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx);
+                let mut buffer = String::new();
+                let lowered = self.emit_lower_arg_to_tagged(&mut buffer, &value, target, fx);
+                if !buffer.is_empty() {
+                    setup.push(LoweredStatement::RawGo(buffer));
+                }
+                (setup, lowered)
             }
-            None => value,
+            ArgumentPlan::Direct => self.lower_direct_arg(arg, ctx, effective_param_ty, fx),
         }
     }
 
-    pub(crate) fn effective_param_type<'p>(
+    /// Pre-plan adaptations for a single argument. Mirrors the prior
+    /// `try_emit_*` chain in order; the first hit wins. Returns `Direct` for
+    /// the fallback path (which still handles tagged-Go suppression inline).
+    fn plan_argument(
         &self,
+        arg: &Expression,
         index: usize,
-        fn_param_types: &'p [Type],
-    ) -> Option<&'p Type> {
-        fn_param_types.get(index).or_else(|| {
-            fn_param_types
-                .last()
-                .filter(|t| t.get_name() == Some("VarArgs"))
-        })
+        ctx: &CallArgsContext<'_>,
+        effective_param_ty: Option<&Type>,
+        generic_param_ty: Option<&Type>,
+    ) -> ArgumentPlan {
+        if ctx.is_go_call
+            && let Some(kind) = self.detect_callback_wrapper(arg, effective_param_ty)
+        {
+            return ArgumentPlan::GoCallbackAdapter(kind);
+        }
+        if self
+            .detect_lowered_fn_arg_shape(arg, generic_param_ty)
+            .is_some()
+        {
+            return ArgumentPlan::LoweredFnShapeAdapter;
+        }
+        if let Some(kind) = self.detect_nullable_coercion(arg, effective_param_ty) {
+            return ArgumentPlan::NullableCoercion(kind);
+        }
+        if ctx.is_go_call
+            && self
+                .detect_go_pointer_param_unwrap(arg, effective_param_ty)
+                .is_some()
+        {
+            return ArgumentPlan::GoPointerUnwrap;
+        }
+        if ctx.pointer_indices.contains(&index) {
+            return ArgumentPlan::RecursiveEnumPointer;
+        }
+        let suppress = would_suppress_tagged_go(ctx, effective_param_ty);
+        if suppress
+            && self
+                .detect_lower_arg_to_tagged(arg, effective_param_ty)
+                .is_some()
+        {
+            return ArgumentPlan::TaggedGoLowering;
+        }
+        ArgumentPlan::Direct
+    }
+
+    fn lower_direct_arg(
+        &mut self,
+        arg: &Expression,
+        ctx: &CallArgsContext<'_>,
+        effective_param_ty: Option<&Type>,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        let suppress = would_suppress_tagged_go(ctx, effective_param_ty);
+        let arg_ctx = direct_arg_emit_ctx(ctx, effective_param_ty, suppress);
+        let (mut setup, value) = self.lower_composite_value(arg, arg_ctx, fx);
+        let final_value = match effective_param_ty {
+            Some(target) => {
+                let coercion =
+                    Coercion::resolve(self, &arg.get_type(), target, CoercionDirection::Internal);
+                let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+                setup.extend(coercion_setup);
+                coerced
+            }
+            None => value,
+        };
+        (setup, final_value)
     }
 
     /// Adapt a lowered-return fn arg when its shape disagrees with the
@@ -466,11 +520,25 @@ impl<'a> Emitter<'a> {
         output: &mut String,
         arg: &Expression,
         generic_param_ty: Option<&Type>,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
-        if Self::is_tagged_shape_fn_value(arg) {
+        self.detect_lowered_fn_arg_shape(arg, generic_param_ty)?;
+        let (setup, value) =
+            self.lower_adapt_lowered_fn_arg_shape(arg, generic_param_ty.unwrap(), fx)?;
+        output.push_str(&Renderer.render_setup(&setup));
+        Some(value)
+    }
+
+    /// Detect whether `arg`'s fn-shape disagrees with the callee's generic
+    /// param shape (Lisette callback adapter trigger). Pure detection.
+    pub(crate) fn detect_lowered_fn_arg_shape(
+        &self,
+        arg: &Expression,
+        generic_param_ty: Option<&Type>,
+    ) -> Option<()> {
+        if is_tagged_shape_fn_value(arg) {
             return None;
         }
-
         let raw_param_ty = generic_param_ty?;
         let variadic_inner = (raw_param_ty.get_name() == Some("VarArgs"))
             .then(|| raw_param_ty.inner())
@@ -492,25 +560,58 @@ impl<'a> Emitter<'a> {
         if param_shape.as_ref() == Some(&arg_shape) {
             return None;
         }
+        Some(())
+    }
 
-        let value = self.emit_value(output, arg, ExpressionContext::value());
-        emit_fn_arg_shape_adapter(
+    fn lower_adapt_lowered_fn_arg_shape(
+        &mut self,
+        arg: &Expression,
+        generic_param_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> Option<(Vec<LoweredStatement>, String)> {
+        let raw_param_ty = generic_param_ty;
+        let variadic_inner = (raw_param_ty.get_name() == Some("VarArgs"))
+            .then(|| raw_param_ty.inner())
+            .flatten();
+        let param_ty = variadic_inner.as_ref().unwrap_or(raw_param_ty);
+        let param_fn = self
+            .facts
+            .resolve_to_function_type(param_ty.unwrap_forall())?;
+        let param_ret = param_fn.get_function_ret()?;
+        let param_shape = self.classify_direct_emission(param_ret);
+
+        let arg_ty = arg.get_type();
+        let arg_fn = self
+            .facts
+            .resolve_to_function_type(arg_ty.unwrap_forall())?;
+        let arg_ret = arg_fn.get_function_ret()?;
+        let arg_shape = self.classify_direct_emission(arg_ret)?;
+
+        let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
+        let mut buffer = String::new();
+        let adapted = emit_fn_arg_shape_adapter(
             self,
-            output,
+            &mut buffer,
             &value,
             &arg_fn,
             &arg_shape,
             param_shape.as_ref(),
-        )
+            fx,
+        )?;
+        if !buffer.is_empty() {
+            setup.push(LoweredStatement::RawGo(buffer));
+        }
+        Some((setup, adapted))
     }
 
-    /// Adapt `slice...` spread into a generic `VarArgs<fn(…)>` when the
+    /// Adapt `slice...` spread into a generic `VarArgs<fn(...)>` when the
     /// slice's element fn-shape disagrees with the variadic's element.
     pub(crate) fn try_emit_variadic_spread_adapter(
         &mut self,
         spread: &Expression,
         generic_params: Option<&[Type]>,
-    ) -> Option<EmittedExpression> {
+        fx: &mut EmitEffects,
+    ) -> Option<StagedExpression> {
         let generic_params = generic_params?;
         let raw_variadic = generic_params.last()?;
         if raw_variadic.get_name() != Some("VarArgs") {
@@ -524,10 +625,10 @@ impl<'a> Emitter<'a> {
         let param_shape = self.classify_direct_emission(param_ret);
 
         let spread_ty = spread.get_type();
-        let elem_ty = spread_ty.unwrap_forall().inner()?;
+        let element_ty = spread_ty.unwrap_forall().inner()?;
         let arg_fn = self
             .facts
-            .resolve_to_function_type(elem_ty.unwrap_forall())?;
+            .resolve_to_function_type(element_ty.unwrap_forall())?;
         let arg_ret = arg_fn.get_function_ret()?;
         let arg_shape = self.classify_direct_emission(arg_ret)?;
 
@@ -536,19 +637,23 @@ impl<'a> Emitter<'a> {
         }
 
         let mut setup = String::new();
-        let src_value = self.emit_value(&mut setup, spread, ExpressionContext::value());
+        let src_value = self.emit_value(&mut setup, spread, ExpressionContext::value(), fx);
         let src_var = self.hoist_tmp_value(&mut setup, "src", &src_value);
 
-        let target_elem_ret = match param_shape.as_ref() {
-            Some(shape) => self.render_lowered_return_ty(shape, arg_ret),
-            None => self.go_type_as_string(arg_ret),
+        let target_element_ret = match param_shape.as_ref() {
+            Some(shape) => self.render_lowered_return_ty(shape, arg_ret, fx),
+            None => self.go_type_string(arg_ret, fx),
         };
         let arg_fn_params = arg_fn.get_function_params().unwrap_or(&[]);
         let param_type_strs: Vec<String> = arg_fn_params
             .iter()
-            .map(|p| self.go_type_as_string(p))
+            .map(|p| self.go_type_string(p, fx))
             .collect();
-        let target_elem_ty = format!("func({}) {}", param_type_strs.join(", "), target_elem_ret);
+        let target_element_ty = format!(
+            "func({}) {}",
+            param_type_strs.join(", "),
+            target_element_ret
+        );
 
         let adapted = self.fresh_var(Some("adapted"));
         self.declare(&adapted);
@@ -562,17 +667,18 @@ impl<'a> Emitter<'a> {
             &arg_fn,
             &arg_shape,
             param_shape.as_ref(),
+            fx,
         )?;
-        crate::write_line!(body, "{}[i] = {}", adapted, closure);
+        write_line!(body, "{}[i] = {}", adapted, closure);
 
-        crate::write_line!(
+        write_line!(
             setup,
             "{} := make([]{}, len({}))",
             adapted,
-            target_elem_ty,
+            target_element_ty,
             src_var
         );
-        crate::write_line!(
+        write_line!(
             setup,
             "for i, {} := range {} {{\n{}}}",
             loop_cb,
@@ -580,15 +686,17 @@ impl<'a> Emitter<'a> {
             body
         );
 
-        Some(EmittedExpression::new(setup, adapted, spread))
+        Some(StagedExpression::new(setup, adapted, spread))
     }
 
-    fn try_emit_callback_wrapper(
-        &mut self,
-        output: &mut String,
+    /// Detect whether a Go-call argument needs a callback wrapper. Returns
+    /// `Identity` when the shapes already agree (no wrapping, just emit) and
+    /// `Wrap` when the Lisette callback ABI must be wrapped for the Go param.
+    pub(crate) fn detect_callback_wrapper(
+        &self,
         arg: &Expression,
         effective_param_ty: Option<&Type>,
-    ) -> Option<String> {
+    ) -> Option<CallbackWrapperKind> {
         let param_fn_ty = effective_param_ty
             .and_then(|param_ty| {
                 self.facts
@@ -616,28 +724,49 @@ impl<'a> Emitter<'a> {
             && self.classify_direct_emission(arg_ret).is_some()
             && self.classify_direct_emission(param_ret).is_some()
         {
-            return Some(self.emit_value(output, arg, ExpressionContext::value()));
+            return Some(CallbackWrapperKind::Identity);
         }
-
-        let value = self.emit_value(output, arg, ExpressionContext::value());
-        Some(crate::types::abi_transition::emit_lisette_callback_wrapper(
-            self,
-            output,
-            &value,
-            &param_fn_ty,
-        ))
+        Some(CallbackWrapperKind::Wrap)
     }
 
-    /// Bridge a Lisette `Option<T>` argument to Go's nil-accepting form when
-    /// the param and arg agree on an Option shape that Go expresses as `*T`:
+    fn lower_callback_wrapper(
+        &mut self,
+        arg: &Expression,
+        effective_param_ty: &Type,
+        kind: CallbackWrapperKind,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
+        let result = match kind {
+            CallbackWrapperKind::Identity => value,
+            CallbackWrapperKind::Wrap => {
+                let param_fn_ty = self
+                    .facts
+                    .resolve_to_function_type(effective_param_ty.unwrap_forall())
+                    .expect("Wrap kind only reached when param resolves to a fn type");
+                let mut buffer = String::new();
+                let wrapped =
+                    emit_lisette_callback_wrapper(self, &mut buffer, &value, &param_fn_ty, fx);
+                if !buffer.is_empty() {
+                    setup.push(LoweredStatement::RawGo(buffer));
+                }
+                wrapped
+            }
+        };
+        (setup, result)
+    }
+
+    /// Detect whether `arg`/`param_ty` form a Go pointer-param unwrap pair.
+    /// Bridges a Lisette `Option<T>` argument to Go's nil-accepting form when
+    /// the param and arg agree on an Option shape Go expresses as `*T`:
     /// either both `Nullable` (`Option<Ref<T>>`) or both `PointerBridged`
     /// (`Option<scalar>` produced by bindgen's `nilable_param` config).
-    fn try_emit_go_pointer_param_unwrap(
-        &mut self,
-        output: &mut String,
+    /// Pure: no emission, callable from the planning layer.
+    pub(crate) fn detect_go_pointer_param_unwrap(
+        &self,
         arg: &Expression,
         effective_param_ty: Option<&Type>,
-    ) -> Option<String> {
+    ) -> Option<()> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
         match (
@@ -645,23 +774,35 @@ impl<'a> Emitter<'a> {
             classify_option_shape(self, &arg_ty),
         ) {
             (OptionShape::Nullable, OptionShape::Nullable)
-            | (OptionShape::PointerBridged, OptionShape::PointerBridged) => {}
-            _ => return None,
+            | (OptionShape::PointerBridged, OptionShape::PointerBridged) => Some(()),
+            _ => None,
         }
-        if arg.is_none_literal() {
-            return Some("nil".to_string());
-        }
-        let value = self.emit_value(output, arg, ExpressionContext::value());
-        let coercion = Coercion::resolve(self, &arg_ty, param_ty, CoercionDirection::ToGoBoundary);
-        Some(coercion.apply(self, output, value))
     }
 
-    fn try_emit_nullable_coercion(
+    fn lower_go_pointer_param_unwrap(
         &mut self,
-        output: &mut String,
+        arg: &Expression,
+        param_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        if arg.is_none_literal() {
+            return (Vec::new(), "nil".to_string());
+        }
+        let arg_ty = arg.get_type();
+        let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
+        let coercion = Coercion::resolve(self, &arg_ty, param_ty, CoercionDirection::ToGoBoundary);
+        let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+        setup.extend(coercion_setup);
+        (setup, coerced)
+    }
+
+    /// Detect which nullable-coercion strategy (if any) applies to this
+    /// argument. Pure: no emission, callable from the planning layer.
+    pub(crate) fn detect_nullable_coercion(
+        &self,
         arg: &Expression,
         effective_param_ty: Option<&Type>,
-    ) -> Option<String> {
+    ) -> Option<NullableCoerceKind> {
         let param_ty = effective_param_ty?;
         let arg_ty = arg.get_type();
         let check_ty = if param_ty.get_name() == Some("VarArgs") {
@@ -671,13 +812,7 @@ impl<'a> Emitter<'a> {
         };
 
         if arg_ty.is_option() && check_ty.resolves_to_unknown() {
-            if arg.is_none_literal() {
-                return Some("nil".to_string());
-            }
-            let value = self.emit_value(output, arg, ExpressionContext::value());
-            let coercion =
-                Coercion::resolve(self, &arg_ty, &check_ty, CoercionDirection::ToGoBoundary);
-            return Some(coercion.apply(self, output, value));
+            return Some(NullableCoerceKind::OptionToUnknown);
         }
 
         if !matches!(classify_option_shape(self, &arg_ty), OptionShape::Nullable) {
@@ -692,20 +827,102 @@ impl<'a> Emitter<'a> {
             return None;
         }
 
-        Some(self.emit_unwrap_go_nullable_arg(output, arg, &arg_ty))
+        Some(NullableCoerceKind::NullableInterface)
     }
 
-    fn emit_unwrap_go_nullable_arg(
+    fn lower_nullable_coercion(
         &mut self,
-        output: &mut String,
+        arg: &Expression,
+        effective_param_ty: &Type,
+        kind: NullableCoerceKind,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        let arg_ty = arg.get_type();
+        match kind {
+            NullableCoerceKind::OptionToUnknown => {
+                let check_ty = if effective_param_ty.get_name() == Some("VarArgs") {
+                    effective_param_ty
+                        .inner()
+                        .unwrap_or_else(|| effective_param_ty.clone())
+                } else {
+                    effective_param_ty.clone()
+                };
+                if arg.is_none_literal() {
+                    return (Vec::new(), "nil".to_string());
+                }
+                let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
+                let coercion =
+                    Coercion::resolve(self, &arg_ty, &check_ty, CoercionDirection::ToGoBoundary);
+                let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+                setup.extend(coercion_setup);
+                (setup, coerced)
+            }
+            NullableCoerceKind::NullableInterface => {
+                self.lower_unwrap_go_nullable_arg(arg, &arg_ty, fx)
+            }
+        }
+    }
+
+    fn lower_unwrap_go_nullable_arg(
+        &mut self,
         arg: &Expression,
         arg_ty: &Type,
-    ) -> String {
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
         if arg.is_none_literal() {
-            return "nil".to_string();
+            return (Vec::new(), "nil".to_string());
         }
-        let value = self.emit_value(output, arg, ExpressionContext::value());
+        let (mut setup, value) = self.lower_value(arg, ExpressionContext::value(), fx);
         let coercion = Coercion::resolve(self, arg_ty, arg_ty, CoercionDirection::ToGoBoundary);
-        coercion.apply(self, output, value)
+        let (coercion_setup, coerced) = coercion.lower(self, value, fx);
+        setup.extend(coercion_setup);
+        (setup, coerced)
     }
+}
+
+fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> bool {
+    let Some(spread_expr) = spread else {
+        return false;
+    };
+    let Some(variadic_element) = function.get_type().unwrap_forall().is_variadic() else {
+        return false;
+    };
+    if !variadic_element.is_unknown() {
+        return false;
+    }
+    spread_expr
+        .get_type()
+        .inner()
+        .is_some_and(|t| !t.is_unknown())
+}
+
+/// True when a prelude-dispatch call's param is a function type — the
+/// condition that triggers `with_forced_tagged_go_function` and gates the
+/// tagged-Go lowering wrap.
+fn would_suppress_tagged_go(ctx: &CallArgsContext<'_>, effective_param_ty: Option<&Type>) -> bool {
+    let unwrapped = effective_param_ty.map(|p| p.unwrap_forall());
+    ctx.is_prelude_dispatch && unwrapped.is_some_and(|p| matches!(p, Type::Function { .. }))
+}
+
+/// Compute the `ExpressionContext` for emitting a Direct or TaggedGoLowering
+/// argument's underlying value via `emit_composite_value`.
+fn direct_arg_emit_ctx<'b>(
+    ctx: &CallArgsContext<'b>,
+    effective_param_ty: Option<&'b Type>,
+    suppress: bool,
+) -> ExpressionContext<'b> {
+    let unwrapped = effective_param_ty.map(|p| p.unwrap_forall());
+    let flows_to_unknown = unwrapped.is_some_and(|p| p.resolves_to_unknown());
+    ExpressionContext::value()
+        .with_forced_tagged_go_function(suppress)
+        .with_unknown_argument_target(flows_to_unknown)
+        .with_ambient_return_ctx_opt(ctx.ambient_return_ctx)
+}
+
+pub(crate) fn effective_param_type(index: usize, fn_param_types: &[Type]) -> Option<&Type> {
+    fn_param_types.get(index).or_else(|| {
+        fn_param_types
+            .last()
+            .filter(|t| t.get_name() == Some("VarArgs"))
+    })
 }

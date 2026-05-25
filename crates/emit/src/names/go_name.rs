@@ -17,6 +17,8 @@ pub(crate) const PRELUDE_ERROR_ID: &str = "prelude.error";
 
 pub(crate) const GO_STDLIB_PKG: &str = "lisette";
 
+pub(crate) const ADAPTER_TYPE_PREFIX: &str = "_lisAdapter_";
+
 pub const PRELUDE_IMPORT_PATH: &str = "github.com/ivov/lisette/prelude";
 
 pub(crate) use syntax::types::unqualified_name;

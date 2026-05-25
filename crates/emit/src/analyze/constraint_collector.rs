@@ -1,20 +1,21 @@
 use rustc_hash::FxHashSet as HashSet;
 
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
 use crate::names::constraints::{GenericConstraintTable, classify_bound_annotation};
 use crate::names::go_name;
 use syntax::EcoString;
-use syntax::ast::{Annotation, Expression, Generic, Pattern, Visibility};
+use syntax::ast::{Annotation, Binding, Expression, Generic, Pattern, Visibility};
 use syntax::program::{DefinitionBody, File, Interface};
 use syntax::types::{CompoundKind, Symbol, Type, unqualified_name};
 
-impl Emitter<'_> {
-    pub(crate) fn collect_generic_constraints(&mut self, files: &[&File]) {
+impl Planner<'_> {
+    pub(crate) fn collect_generic_constraints(&mut self, files: &[&File], fx: &mut EmitEffects) {
         let mut table = GenericConstraintTable::default();
 
         self.seed_global_definitions(&mut table);
         self.seed_local_functions(files, &mut table);
-        self.seed_local_impl_blocks(files, &mut table);
+        self.seed_local_impl_blocks(files, &mut table, fx);
 
         self.for_each_definition_type(|key, names, ty| {
             collect_demands_from_type(ty, key, names, &mut table);
@@ -28,9 +29,9 @@ impl Emitter<'_> {
     }
 
     fn seed_global_definitions(&self, table: &mut GenericConstraintTable) {
-        for (id, def) in self.facts.iter_definitions() {
+        for (id, definition) in self.facts.iter_definitions() {
             let key = id.as_str();
-            match &def.body {
+            match &definition.body {
                 DefinitionBody::Struct { generics, .. }
                 | DefinitionBody::Enum { generics, .. }
                 | DefinitionBody::TypeAlias { generics, .. } => {
@@ -60,10 +61,12 @@ impl Emitter<'_> {
         }
     }
 
-    fn seed_local_impl_blocks(&mut self, files: &[&File], table: &mut GenericConstraintTable) {
-        // Pull out the bound-imports work first so the side-effectful
-        // `record_bound_imports` (&mut self) doesn't conflict with the rest
-        // of the iteration which calls `&self` methods.
+    fn seed_local_impl_blocks(
+        &mut self,
+        files: &[&File],
+        table: &mut GenericConstraintTable,
+        fx: &mut EmitEffects,
+    ) {
         let impl_generics_lists: Vec<Vec<Generic>> = files
             .iter()
             .flat_map(|f| &f.items)
@@ -76,7 +79,7 @@ impl Emitter<'_> {
             })
             .collect();
         for impl_generics in &impl_generics_lists {
-            self.record_bound_imports(impl_generics);
+            self.record_bound_imports(impl_generics, fx);
         }
 
         for file in files {
@@ -183,9 +186,9 @@ impl Emitter<'_> {
     where
         F: FnMut(&str, &[&str], &Type),
     {
-        for (id, def) in self.facts.iter_definitions() {
+        for (id, definition) in self.facts.iter_definitions() {
             let key = id.as_str();
-            match &def.body {
+            match &definition.body {
                 DefinitionBody::Struct {
                     generics, fields, ..
                 } => {
@@ -206,7 +209,7 @@ impl Emitter<'_> {
                 }
                 DefinitionBody::TypeAlias { generics, .. } => {
                     let names = generic_names(generics);
-                    let body = def.ty.unwrap_forall();
+                    let body = definition.ty.unwrap_forall();
                     visit(key, &names, body);
                 }
                 DefinitionBody::Interface {
@@ -293,34 +296,17 @@ impl Emitter<'_> {
                     match layout {
                         ImplMethodLayout::Receiver { method_key } => {
                             let method_names = generic_names(method_generics);
-                            for p in params {
-                                collect_demands_from_type(
-                                    &p.ty,
-                                    &receiver_key,
-                                    &receiver_names,
-                                    table,
-                                );
-                                collect_demands_from_type(&p.ty, &method_key, &method_names, table);
-                            }
-                            collect_demands_from_type(
+                            self.collect_signature_demands(
+                                params,
                                 return_type,
-                                &receiver_key,
-                                &receiver_names,
-                                table,
-                            );
-                            collect_demands_from_type(
-                                return_type,
-                                &method_key,
-                                &method_names,
-                                table,
-                            );
-                            self.collect_demands_from_expression(
                                 body,
                                 &receiver_key,
                                 &receiver_names,
                                 table,
                             );
-                            self.collect_demands_from_expression(
+                            self.collect_signature_demands(
+                                params,
+                                return_type,
                                 body,
                                 &method_key,
                                 &method_names,
@@ -332,21 +318,9 @@ impl Emitter<'_> {
                             combined_generics,
                         } => {
                             let combined_names = generic_names(&combined_generics);
-                            for p in params {
-                                collect_demands_from_type(
-                                    &p.ty,
-                                    &free_fn_key,
-                                    &combined_names,
-                                    table,
-                                );
-                            }
-                            collect_demands_from_type(
+                            self.collect_signature_demands(
+                                params,
                                 return_type,
-                                &free_fn_key,
-                                &combined_names,
-                                table,
-                            );
-                            self.collect_demands_from_expression(
                                 body,
                                 &free_fn_key,
                                 &combined_names,
@@ -357,6 +331,24 @@ impl Emitter<'_> {
                 }
             }
         }
+    }
+
+    /// Collect generic demands from a function signature (params, return type,
+    /// body) against one `symbol`/`local_generics` pair.
+    fn collect_signature_demands(
+        &self,
+        params: &[Binding],
+        return_type: &Type,
+        body: &Expression,
+        symbol: &str,
+        local_generics: &[&str],
+        table: &mut GenericConstraintTable,
+    ) {
+        for p in params {
+            collect_demands_from_type(&p.ty, symbol, local_generics, table);
+        }
+        collect_demands_from_type(return_type, symbol, local_generics, table);
+        self.collect_demands_from_expression(body, symbol, local_generics, table);
     }
 
     fn collect_demands_from_expression(

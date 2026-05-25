@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap as HashMap;
 
-use super::escape_reserved;
+use crate::escape_reserved;
 
 #[derive(Clone, Debug)]
 pub(crate) struct InlineExpr(String);

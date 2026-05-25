@@ -15,7 +15,6 @@ pub(crate) enum PreludeType {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct VariantInfo {
-    /// The variant name (e.g., "Some", "None", "Ok", "Err")
     pub(crate) name: &'static str,
 }
 

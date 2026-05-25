@@ -307,7 +307,7 @@ fn run_pipeline(
     }
 
     let emit_input = lisette_diagnostics::SemanticResult::into_emit_input(sem_result);
-    let go_files = lisette_emit::Emitter::emit(
+    let go_files = lisette_emit::Planner::emit(
         &emit_input,
         "lisette_playground",
         lisette_emit::EmitOptions { debug: false },

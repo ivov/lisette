@@ -1,9 +1,14 @@
 use super::NativeCallContext;
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::ReturnContext;
+use crate::context::expression::ExpressionContext;
 use crate::expressions::access::index_access::range_var_bounds;
-use crate::expressions::context::ExpressionContext;
-use crate::expressions::emission::EmittedExpression;
+use crate::expressions::emission::StagedExpression;
 use crate::names::go_name;
+use crate::plan::bodies::LoweredStatement;
+use crate::plan::calls::plan_variadic_spread;
 use crate::types::native::NativeGoType;
 use syntax::ast::Expression;
 use syntax::types::peel_to_range_type;
@@ -249,11 +254,8 @@ fn lookup_inline_rule(
     })
 }
 
-/// Try to inline a native type method call to raw Go.
-///
-/// `negated=true` selects each rule's `negated_template`, returning `None`
-/// when the rule does not define one. Many native type methods are thin
-/// wrappers around Go builtins; inlining them avoids function call overhead.
+/// Try to inline a native-type method call. `negated` picks the rule's
+/// `negated_template` (returning `None` when the rule lacks one).
 pub(super) fn try_inline_native_method(
     native_type: &NativeGoType,
     method: &str,
@@ -261,8 +263,8 @@ pub(super) fn try_inline_native_method(
     args: &[String],
     negated: bool,
 ) -> Option<(String, InlineImport)> {
-    // Special case: append with 0 args returns receiver unchanged
-    // (Go's append requires at least 2 args).
+    // Go's `append` requires at least 2 args, so zero-arg `append` returns
+    // the receiver unchanged.
     if !negated && method == "append" && args.is_empty() {
         return Some((receiver.to_string(), InlineImport::None));
     }
@@ -275,8 +277,7 @@ pub(super) fn try_inline_native_method(
     Some((render_inline(template, receiver, args), rule.import))
 }
 
-/// Whether some rule for this (type, method, arity) defines a negated template.
-/// Used as a cheap pre-check before staging arguments.
+/// Whether a rule for `(type, method, arity)` defines a negated template.
 pub(super) fn has_inline_negation(native_type: &NativeGoType, method: &str, arity: usize) -> bool {
     lookup_inline_rule(native_type, method, arity)
         .and_then(|r| r.negated_template)
@@ -286,24 +287,24 @@ pub(super) fn has_inline_negation(native_type: &NativeGoType, method: &str, arit
 /// Resolve the inline rule for a dot-access form, applying the static-receiver
 /// fallback when the standard receiver shape does not match.
 fn apply_inline_lookup(
-    emitter: &mut Emitter,
     native_type: &NativeGoType,
     method: &str,
     receiver: &str,
     emitted_args: &[String],
     negated: bool,
+    fx: &mut EmitEffects,
 ) -> Option<String> {
     if let Some((inlined, import)) =
         try_inline_native_method(native_type, method, receiver, emitted_args, negated)
     {
-        emitter.apply_inline_import(import);
+        apply_inline_import(import, fx);
         return Some(inlined);
     }
     if let Some((static_receiver, remaining)) = emitted_args.split_first()
         && let Some((inlined, import)) =
             try_inline_native_method(native_type, method, static_receiver, remaining, negated)
     {
-        emitter.apply_inline_import(import);
+        apply_inline_import(import, fx);
         return Some(inlined);
     }
     None
@@ -311,58 +312,48 @@ fn apply_inline_lookup(
 
 /// Resolve the inline rule for an identifier-form call (args[0] is the receiver).
 fn apply_inline_identifier_lookup(
-    emitter: &mut Emitter,
     ctx: &NativeCallContext,
     emitted_args: &[String],
     negated: bool,
+    fx: &mut EmitEffects,
 ) -> Option<String> {
     let (receiver, remaining) = emitted_args.split_first()?;
     let (inlined, import) =
         try_inline_native_method(ctx.native_type, ctx.method, receiver, remaining, negated)?;
-    emitter.apply_inline_import(import);
+    apply_inline_import(import, fx);
     Some(inlined)
 }
 
-impl Emitter<'_> {
-    pub(super) fn apply_inline_import(&mut self, import: InlineImport) {
-        match import {
-            InlineImport::Slices => self.requirements.require_slices(),
-            InlineImport::Strings => self.requirements.require_strings(),
-            InlineImport::Maps => self.requirements.require_maps(),
-            InlineImport::Stdlib => self.requirements.require_stdlib(),
-            InlineImport::None => {}
-        }
-    }
-
-    pub(super) fn emit_native_method_dot_access(
+impl Planner<'_> {
+    pub(super) fn lower_native_method_dot_access(
         &mut self,
-        output: &mut String,
         ctx: &NativeCallContext,
-    ) -> String {
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
         let Expression::DotAccess { expression, .. } = ctx.function else {
             unreachable!("expected DotAccess for native method call")
         };
 
         if matches!(ctx.native_type, NativeGoType::String) && ctx.method == "substring" {
-            return self.emit_string_substring(output, expression, ctx.args);
+            return self.lower_string_substring(expression, ctx.args, ctx.ambient_return_ctx, fx);
         }
 
-        let (receiver, emitted_args) = self.stage_native_dot_access_call(output, ctx);
+        let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
 
         if let Some(inlined) = apply_inline_lookup(
-            self,
             ctx.native_type,
             ctx.method,
             &receiver,
             &emitted_args,
             false,
+            fx,
         ) {
-            return inlined;
+            return (setup, inlined);
         }
 
         let mut new_args = vec![receiver];
         new_args.extend(emitted_args);
-        self.requirements.require_stdlib();
+        fx.require_stdlib();
         let fn_name = format!(
             "{}.{}{}",
             go_name::GO_STDLIB_PKG,
@@ -371,11 +362,14 @@ impl Emitter<'_> {
         );
         let type_args_string = if !ctx.type_args.is_empty() && ctx.call_ty.is_some() {
             let receiver_ty = expression.get_type();
-            self.format_type_args_with_receiver(&receiver_ty, ctx.type_args)
+            self.format_type_args_with_receiver(&receiver_ty, ctx.type_args, fx)
         } else {
-            self.format_type_args_from_annotations(ctx.type_args)
+            self.format_type_args_from_annotations(ctx.type_args, fx)
         };
-        format!("{}{}({})", fn_name, type_args_string, new_args.join(", "))
+        (
+            setup,
+            format!("{}{}({})", fn_name, type_args_string, new_args.join(", ")),
+        )
     }
 
     /// Negated counterpart for dot-access native method calls. Returns
@@ -385,38 +379,56 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         ctx: &NativeCallContext,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         if !has_inline_negation(ctx.native_type, ctx.method, ctx.args.len()) {
             return None;
         }
-        let (receiver, emitted_args) = self.stage_native_dot_access_call(output, ctx);
+        let (setup, receiver, emitted_args) = self.stage_native_dot_access_call(ctx, fx);
+        output.push_str(&Renderer.render_setup(&setup));
         apply_inline_lookup(
-            self,
             ctx.native_type,
             ctx.method,
             &receiver,
             &emitted_args,
             true,
+            fx,
         )
     }
 
     fn stage_native_dot_access_call(
         &mut self,
-        output: &mut String,
         ctx: &NativeCallContext,
-    ) -> (String, Vec<String>) {
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String, Vec<String>) {
         let Expression::DotAccess { expression, .. } = ctx.function else {
             unreachable!("expected DotAccess for native method call")
         };
 
-        let mut all_stages: Vec<EmittedExpression> =
+        let mut all_stages: Vec<StagedExpression> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
-        all_stages.push(self.stage_operand(expression, ExpressionContext::value()));
-        all_stages.extend(self.stage_native_method_args(ctx.function, ctx.args));
+        all_stages.push(self.stage_operand(
+            expression,
+            ExpressionContext::value().with_ambient_return_ctx_opt(ctx.ambient_return_ctx),
+            fx,
+        ));
+        all_stages.extend(self.stage_native_method_args(
+            ctx.function,
+            ctx.args,
+            ctx.ambient_return_ctx,
+            fx,
+        ));
 
-        let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 1);
-        let all_values =
-            self.sequence_with_spread(output, all_stages, ctx.spread, false, "_arg", combine);
+        let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(1));
+        let (setup, all_values) = self.sequence_with_spread_structured(
+            all_stages,
+            ctx.spread,
+            false,
+            "_arg",
+            combine,
+            ctx.ambient_return_ctx,
+            fx,
+        );
 
         let raw_receiver = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
@@ -426,40 +438,48 @@ impl Emitter<'_> {
         } else {
             raw_receiver
         };
-        (receiver, emitted_args)
+        (setup, receiver, emitted_args)
     }
 
-    pub(super) fn emit_native_method_identifier(
+    pub(super) fn lower_native_method_identifier(
         &mut self,
-        output: &mut String,
         ctx: &NativeCallContext,
-    ) -> String {
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
         if matches!(ctx.native_type, NativeGoType::String)
             && ctx.method == "substring"
             && ctx.args.len() >= 2
         {
-            return self.emit_string_substring(output, &ctx.args[0], &ctx.args[1..]);
+            return self.lower_string_substring(
+                &ctx.args[0],
+                &ctx.args[1..],
+                ctx.ambient_return_ctx,
+                fx,
+            );
         }
 
-        let emitted_args = self.stage_native_identifier_args(output, ctx);
+        let (setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
 
-        if let Some(inlined) = apply_inline_identifier_lookup(self, ctx, &emitted_args, false) {
-            return inlined;
+        if let Some(inlined) = apply_inline_identifier_lookup(ctx, &emitted_args, false, fx) {
+            return (setup, inlined);
         }
 
-        self.requirements.require_stdlib();
+        fx.require_stdlib();
         let fn_name = format!(
             "{}.{}{}",
             go_name::GO_STDLIB_PKG,
             ctx.native_type.method_prefix(),
             go_name::snake_to_camel(ctx.method)
         );
-        let type_args_string = self.format_type_args_from_annotations(ctx.type_args);
-        format!(
-            "{}{}({})",
-            fn_name,
-            type_args_string,
-            emitted_args.join(", ")
+        let type_args_string = self.format_type_args_from_annotations(ctx.type_args, fx);
+        (
+            setup,
+            format!(
+                "{}{}({})",
+                fn_name,
+                type_args_string,
+                emitted_args.join(", ")
+            ),
         )
     }
 
@@ -468,32 +488,44 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         ctx: &NativeCallContext,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let receiver_arity = ctx.args.len().saturating_sub(1);
         if !has_inline_negation(ctx.native_type, ctx.method, receiver_arity) {
             return None;
         }
-        let emitted_args = self.stage_native_identifier_args(output, ctx);
-        apply_inline_identifier_lookup(self, ctx, &emitted_args, true)
+        let (setup, emitted_args) = self.stage_native_identifier_args(ctx, fx);
+        output.push_str(&Renderer.render_setup(&setup));
+        apply_inline_identifier_lookup(ctx, &emitted_args, true, fx)
     }
 
     fn stage_native_identifier_args(
         &mut self,
-        output: &mut String,
         ctx: &NativeCallContext,
-    ) -> Vec<String> {
-        let stages = self.stage_native_method_args(ctx.function, ctx.args);
-        let combine = Self::variadic_combine_for(ctx.function, ctx.spread, 0);
-        self.sequence_with_spread(output, stages, ctx.spread, false, "_arg", combine)
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, Vec<String>) {
+        let stages =
+            self.stage_native_method_args(ctx.function, ctx.args, ctx.ambient_return_ctx, fx);
+        let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(0));
+        self.sequence_with_spread_structured(
+            stages,
+            ctx.spread,
+            false,
+            "_arg",
+            combine,
+            ctx.ambient_return_ctx,
+            fx,
+        )
     }
 
-    fn emit_string_substring(
+    fn lower_string_substring(
         &mut self,
-        output: &mut String,
         receiver_expr: &Expression,
         args: &[Expression],
-    ) -> String {
-        self.requirements.require_stdlib();
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        fx.require_stdlib();
         let arg = &args[0];
         let is_ref_receiver = receiver_expr.get_type().is_ref();
         let deref = |raw: &str| -> String {
@@ -511,14 +543,26 @@ impl Emitter<'_> {
             ..
         } = arg
         {
-            let mut stages = vec![self.stage_operand(receiver_expr, ExpressionContext::value())];
+            let mut stages = vec![self.stage_operand(
+                receiver_expr,
+                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                fx,
+            )];
             if let Some(s) = start.as_deref() {
-                stages.push(self.stage_operand(s, ExpressionContext::value()));
+                stages.push(self.stage_operand(
+                    s,
+                    ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                    fx,
+                ));
             }
             if let Some(e) = end.as_deref() {
-                stages.push(self.stage_operand(e, ExpressionContext::value()));
+                stages.push(self.stage_operand(
+                    e,
+                    ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                    fx,
+                ));
             }
-            let values = self.sequence(output, stages, "_arg");
+            let (setup, values) = self.sequence_structured(stages, "_arg");
             let mut bounds = values.iter().skip(1);
             let start_bound = start.is_some().then(|| bounds.next().unwrap().clone());
             let end_bound = end.is_some().then(|| {
@@ -529,10 +573,13 @@ impl Emitter<'_> {
                     e.clone()
                 }
             });
-            return format_substring_call(
-                &deref(&values[0]),
-                start_bound.as_deref(),
-                end_bound.as_deref(),
+            return (
+                setup,
+                format_substring_call(
+                    &deref(&values[0]),
+                    start_bound.as_deref(),
+                    end_bound.as_deref(),
+                ),
             );
         }
 
@@ -540,20 +587,37 @@ impl Emitter<'_> {
         let range_kind = peel_to_range_type(&arg_ty)
             .and_then(|t| t.get_name())
             .expect("substring arg should resolve to a known range type");
-        let receiver_staged = self.stage_operand(receiver_expr, ExpressionContext::value());
-        let range_staged = self.stage_or_capture(arg, "range");
-        let values = self.sequence(output, vec![receiver_staged, range_staged], "_arg");
+        let receiver_staged = self.stage_operand(
+            receiver_expr,
+            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+            fx,
+        );
+        let range_staged = self.stage_or_capture(arg, "range", fx);
+        let (setup, values) = self.sequence_structured(vec![receiver_staged, range_staged], "_arg");
         let (start, end) = range_var_bounds(&values[1], range_kind);
-        format_substring_call(&deref(&values[0]), start.as_deref(), end.as_deref())
+        (
+            setup,
+            format_substring_call(&deref(&values[0]), start.as_deref(), end.as_deref()),
+        )
     }
 }
 
-fn format_substring_call(recv: &str, start: Option<&str>, end: Option<&str>) -> String {
+fn format_substring_call(receiver: &str, start: Option<&str>, end: Option<&str>) -> String {
     let pkg = go_name::GO_STDLIB_PKG;
     match (start, end) {
-        (Some(s), Some(e)) => format!("{}.Substring({}, {}, {})", pkg, recv, s, e),
-        (Some(s), None) => format!("{}.SubstringFrom({}, {})", pkg, recv, s),
-        (None, Some(e)) => format!("{}.SubstringTo({}, {})", pkg, recv, e),
+        (Some(s), Some(e)) => format!("{}.Substring({}, {}, {})", pkg, receiver, s, e),
+        (Some(s), None) => format!("{}.SubstringFrom({}, {})", pkg, receiver, s),
+        (None, Some(e)) => format!("{}.SubstringTo({}, {})", pkg, receiver, e),
         (None, None) => unreachable!("`s.substring(..)` is rejected upstream"),
+    }
+}
+
+pub(super) fn apply_inline_import(import: InlineImport, fx: &mut EmitEffects) {
+    match import {
+        InlineImport::Slices => fx.require_slices(),
+        InlineImport::Strings => fx.require_strings(),
+        InlineImport::Maps => fx.require_maps(),
+        InlineImport::Stdlib => fx.require_stdlib(),
+        InlineImport::None => {}
     }
 }

@@ -1,10 +1,12 @@
+pub mod imports;
+
 use rustc_hash::FxHashMap as HashMap;
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
 
 use diagnostics::LisetteDiagnostic;
 
-use super::imports::format_import;
+use self::imports::format_import;
 
 #[derive(Clone, Debug)]
 pub struct OutputFile {
@@ -18,7 +20,7 @@ pub struct OutputFile {
 impl OutputFile {
     pub fn to_go(&self) -> String {
         let unformatted = self.render_unformatted();
-        self.gofmt(&unformatted).unwrap_or(unformatted)
+        gofmt(&unformatted).unwrap_or(unformatted)
     }
 
     pub fn to_go_unformatted(&self) -> String {
@@ -52,29 +54,29 @@ impl OutputFile {
         output.collect(&self.source);
         output.render()
     }
+}
 
-    fn gofmt(&self, code: &str) -> Result<String, io::Error> {
-        let mut child = Command::new("gofmt")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
+fn gofmt(code: &str) -> Result<String, io::Error> {
+    let mut child = Command::new("gofmt")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
 
-        let Some(mut stdin) = child.stdin.take() else {
-            return Err(io::Error::other("Failed to open stdin"));
-        };
+    let Some(mut stdin) = child.stdin.take() else {
+        return Err(io::Error::other("Failed to open stdin"));
+    };
 
-        stdin.write_all(code.as_bytes())?;
-        drop(stdin);
+    stdin.write_all(code.as_bytes())?;
+    drop(stdin);
 
-        let output = child.wait_with_output()?;
+    let output = child.wait_with_output()?;
 
-        if !output.status.success() {
-            return Err(io::Error::other("gofmt failed"));
-        }
-
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    if !output.status.success() {
+        return Err(io::Error::other("gofmt failed"));
     }
+
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 #[derive(Default)]

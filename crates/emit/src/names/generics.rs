@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap as HashMap;
 
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
 use crate::names::constraints::{ConstraintAtom, ParamConstraintSet, classify_builtin_name};
 use syntax::EcoString;
 use syntax::ast::{Annotation, Generic};
@@ -17,9 +18,6 @@ fn build_type_map(generics: &[Generic], type_args: &[Type]) -> HashMap<EcoString
 pub(crate) use syntax::types::substitute;
 
 /// Substitute a field's type using generics and their concrete type arguments.
-///
-/// Convenience wrapper around `build_type_map` + `substitute` for the common
-/// pattern of resolving a field's declared type with concrete type args.
 pub(crate) fn resolve_field_type(
     generics: &[Generic],
     type_args: &[Type],
@@ -29,8 +27,6 @@ pub(crate) fn resolve_field_type(
     substitute(field_ty, &type_map)
 }
 
-/// Go receiver generics: just the type parameter names, no constraints.
-/// Unlike the full generics string (`[T any]`), the receiver uses bare names (`[T]`).
 pub(crate) fn receiver_generics_string(generics: &[Generic]) -> String {
     if generics.is_empty() {
         String::new()
@@ -40,11 +36,12 @@ pub(crate) fn receiver_generics_string(generics: &[Generic]) -> String {
     }
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn generics_to_string_for_symbol(
         &mut self,
         symbol: &str,
         generics: &[Generic],
+        fx: &mut EmitEffects,
     ) -> String {
         if generics.is_empty() {
             return String::new();
@@ -60,7 +57,7 @@ impl Emitter<'_> {
                 let set = constraints
                     .as_ref()
                     .and_then(|sets| sets.iter().find(|s| s.name == g.name));
-                let constraint = self.render_constraint(g, set);
+                let constraint = self.render_constraint(g, set, fx);
                 format!("{} {}", g.name, constraint)
             })
             .collect::<Vec<_>>()
@@ -73,6 +70,7 @@ impl Emitter<'_> {
         &mut self,
         generic: &Generic,
         constraint_set: Option<&ParamConstraintSet>,
+        fx: &mut EmitEffects,
     ) -> String {
         let (explicit_atoms, inferred_comparable) = match constraint_set {
             Some(set) => (set.explicit.clone(), set.inferred_comparable),
@@ -109,11 +107,11 @@ impl Emitter<'_> {
                     comparable_seen = true;
                 }
                 ConstraintAtom::Ordered => {
-                    self.requirements.require_go_import("cmp");
+                    fx.require_go_import("cmp");
                     named_bounds.push("cmp.Ordered".to_string());
                 }
                 ConstraintAtom::Named(ann) => {
-                    named_bounds.push(self.annotation_to_go_type(ann));
+                    named_bounds.push(self.annotation_to_go_type(ann, fx));
                 }
             }
         }
@@ -171,8 +169,8 @@ pub(crate) fn extract_type_mapping(
             }
             extract_type_mapping(gen_ret, conc_ret, mapping);
         }
-        (Type::Tuple(generic_elems), Type::Tuple(conc)) => {
-            for (g, c) in generic_elems.iter().zip(conc.iter()) {
+        (Type::Tuple(generic_elements), Type::Tuple(conc)) => {
+            for (g, c) in generic_elements.iter().zip(conc.iter()) {
                 extract_type_mapping(g, c, mapping);
             }
         }

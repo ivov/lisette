@@ -1,16 +1,18 @@
-use crate::Emitter;
-use crate::expressions::context::ExpressionContext;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use syntax::ast::Expression;
 use syntax::program::DefinitionBody;
 use syntax::types::{Type, unqualified_name};
 
-impl Emitter<'_> {
+impl Planner<'_> {
     /// Emit a value enum variant as a Go constant (e.g., `reflect.String`).
     pub(crate) fn emit_value_enum_variant(
         &mut self,
         expression: &Expression,
         member: &str,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let expression_ty = expression.get_type();
         let enum_id = match expression_ty.unwrap_forall() {
@@ -27,61 +29,58 @@ impl Emitter<'_> {
 
         let module_key = self.facts.module_for_qualified_name(&enum_id)?;
 
-        let qualifier = self.require_module_import(module_key);
+        let qualifier = self.require_module_import_fx(module_key, fx);
 
         Some(format!("{}.{}", qualifier, member))
     }
 
-    /// Emit an ADT enum variant dot access (constructor or unit variant).
-    ///
-    /// Consolidates enum variant constructor, unit variant via alias, and
-    /// type alias unit variant sub-cases.
+    /// ADT enum variant dot access (constructor or unit variant).
     pub(crate) fn emit_enum_variant_dot(
         &mut self,
         expression: &Expression,
         member: &str,
         result_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
-        if let Some(s) = self.emit_enum_variant_constructor(member, result_ty) {
+        if let Some(s) = self.emit_enum_variant_constructor(member, result_ty, fx) {
             return Some(s);
         }
-        if let Some(s) = self.emit_unit_variant_via_alias(expression, member, result_ty) {
+        if let Some(s) = self.emit_unit_variant_via_alias(expression, member, result_ty, fx) {
             return Some(s);
         }
-        if let Some(s) = self.emit_type_alias_unit_variant(expression, member, result_ty) {
+        if let Some(s) = self.emit_type_alias_unit_variant(expression, member, result_ty, fx) {
             return Some(s);
         }
         None
     }
 
-    /// Emit a static method dot access (cross-module or alias).
-    ///
-    /// Consolidates cross-module static methods, alias static methods,
-    /// and instance method value references.
+    /// Static method dot access (cross-module, alias, or instance-as-value).
     pub(crate) fn emit_static_method_dot(
         &mut self,
         expression: &Expression,
         member: &str,
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
-        if let Some(s) = self.emit_cross_module_static_method(expression, member, result_ty, ctx) {
+        if let Some(s) =
+            self.emit_cross_module_static_method(expression, member, result_ty, ctx, fx)
+        {
             return Some(s);
         }
-        if let Some(s) = self.emit_alias_static_method(expression, member, result_ty) {
+        if let Some(s) = self.emit_alias_static_method(expression, member, result_ty, fx) {
             return Some(s);
         }
         None
     }
 
-    /// Emit an enum variant constructor reference.
-    ///
-    /// Handles cross-module enum variant access like `shapes.ShapeKind.CircleKind`
-    /// which should emit the make function `shapes.makeShapeKindCircleKind`.
+    /// Enum variant constructor reference (e.g.
+    /// `shapes.ShapeKind.CircleKind` → `shapes.makeShapeKindCircleKind`).
     fn emit_enum_variant_constructor(
         &mut self,
         variant_name: &str,
         result_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Type::Function {
             return_type,
@@ -111,7 +110,7 @@ impl Emitter<'_> {
 
         let needs_type_args = ret_params.len() > fn_params.len();
         let type_args = if needs_type_args {
-            self.format_type_args(ret_params)
+            self.format_type_args(ret_params, fx)
         } else {
             String::new()
         };
@@ -120,11 +119,11 @@ impl Emitter<'_> {
             if make_fn_name.starts_with(go_name::PRELUDE_PREFIX) {
                 let resolved = go_name::resolve(&make_fn_name);
                 if resolved.needs_stdlib {
-                    self.requirements.require_stdlib();
+                    fx.require_stdlib();
                 }
                 format!("{}{}", resolved.name, type_args)
             } else {
-                let pkg = self.require_module_import(enum_module);
+                let pkg = self.require_module_import_fx(enum_module, fx);
                 format!("{}.{}{}", pkg, make_fn_name, type_args)
             }
         } else {
@@ -138,6 +137,7 @@ impl Emitter<'_> {
         expression: &Expression,
         variant_name: &str,
         result_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Type::Nominal {
             id: enum_id,
@@ -169,31 +169,30 @@ impl Emitter<'_> {
         let enum_name = unqualified_name(enum_id);
         let key = format!("{}.{}", enum_name, variant_name);
         let make_fn = self.facts.make_function_name(&key)?.to_string();
-        let type_args = self.format_type_args(params);
+        let type_args = self.format_type_args(params, fx);
 
         if is_prelude {
             let resolved = go_name::resolve(&make_fn);
             if resolved.needs_stdlib {
-                self.requirements.require_stdlib();
+                fx.require_stdlib();
             }
             Some(format!("{}{}()", resolved.name, type_args))
         } else if is_cross_module {
-            let pkg = self.require_module_import(enum_module);
+            let pkg = self.require_module_import_fx(enum_module, fx);
             Some(format!("{}.{}{}()", pkg, make_fn, type_args))
         } else {
             Some(format!("{}{}()", make_fn, type_args))
         }
     }
 
-    /// Emit a unit variant access through a type alias.
-    ///
-    /// Handles cases like `api.UIEvent.Close` where `UIEvent` is a type alias to an enum
-    /// and `Close` is a unit variant. Should emit `api.UIEvent{Tag: events.EventClose}`.
+    /// Unit variant access through a type alias (e.g. `api.UIEvent.Close`
+    /// where `UIEvent = events.EventKind` → `api.UIEvent{Tag: events.EventClose}`).
     fn emit_type_alias_unit_variant(
         &mut self,
         expression: &Expression,
         variant_name: &str,
         result_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Type::Nominal {
             id: enum_id,
@@ -229,12 +228,12 @@ impl Emitter<'_> {
 
         let enum_module = self.facts.module_for_qualified_name(enum_id)?.to_string();
 
-        self.require_module_import(&enum_module);
+        self.require_module_import_fx(&enum_module, fx);
 
-        let type_args = self.format_type_args(params);
+        let type_args = self.format_type_args(params, fx);
 
-        let alias_pkg = self.require_module_import(alias_module);
-        let tag_value = self.resolve_variant(variant_name, enum_id);
+        let alias_pkg = self.require_module_import_fx(alias_module, fx);
+        let tag_value = self.resolve_variant(variant_name, enum_id, fx);
         let literal = format!(
             "{}.{}{}{{ Tag: {} }}",
             alias_pkg,
@@ -258,6 +257,7 @@ impl Emitter<'_> {
         expression: &Expression,
         member: &str,
         result_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let func_ty = result_ty.unwrap_forall();
         if !matches!(func_ty, Type::Function { .. }) {
@@ -273,18 +273,13 @@ impl Emitter<'_> {
         let resolved_name = format!("{}.{}", real_type, member);
 
         let capitalized = self.capitalize_static_method_if_public(&resolved_name);
-        let go_name = self.resolve_go_name(&capitalized);
+        let go_name = self.resolve_go_name(&capitalized, fx);
 
         Some(go_name)
     }
 
-    /// Emit an instance method used as a first-class value (not called).
-    ///
-    /// Handles cases like `lib.Point.area` used as a callback, emitting Go method
-    /// expression syntax like `lib.Point.Area` or `(*lib.Point).Area`.
-    ///
-    /// Pre-classified by semantics as `InstanceMethodValue`, so no need to re-derive
-    /// static vs instance or pointer receiver status.
+    /// Instance method used as a value (e.g. `lib.Point.area` callback →
+    /// `lib.Point.Area` Go method expression).
     pub(crate) fn emit_instance_method_value_dot(
         &mut self,
         expression: &Expression,
@@ -292,6 +287,7 @@ impl Emitter<'_> {
         result_ty: &Type,
         is_exported: bool,
         is_pointer_receiver: bool,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let Expression::DotAccess {
             expression: inner_expression,
@@ -321,7 +317,7 @@ impl Emitter<'_> {
             go_name::escape_keyword(member).into_owned()
         };
 
-        let pkg = self.require_module_import(module_name);
+        let pkg = self.require_module_import_fx(module_name, fx);
         let go_type_name = go_name::snake_to_camel(type_name);
 
         // Extract type args from the receiver parameter
@@ -337,7 +333,7 @@ impl Emitter<'_> {
                 if receiver_params.is_empty() {
                     String::new()
                 } else {
-                    self.format_type_args(&receiver_params)
+                    self.format_type_args(&receiver_params, fx)
                 }
             } else {
                 String::new()
@@ -355,17 +351,15 @@ impl Emitter<'_> {
         Some(method_expression)
     }
 
-    /// Emit a cross-module static method access.
-    ///
-    /// Handles cases like `shapes.Point.new` which should become `shapes.Point_new`.
-    /// The expression is a cross-module type reference (e.g., `shapes.Point`) and
-    /// the member is a static method (no self parameter).
+    /// Cross-module static method access (`shapes.Point.new` →
+    /// `shapes.Point_new`).
     fn emit_cross_module_static_method(
         &mut self,
         expression: &Expression,
         member: &str,
         result_ty: &Type,
         ctx: ExpressionContext<'_>,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         if !matches!(result_ty.unwrap_forall(), Type::Function { .. }) {
             return None;
@@ -422,10 +416,10 @@ impl Emitter<'_> {
         let qualified_method = format!("{}.{}", qualified_type, member);
 
         let is_public = definition.visibility().is_public() || self.method_needs_export(member);
-        let qualified_name = self.qualify_method_call(&qualified_type, member, is_public);
+        let qualified_name = self.qualify_method_call(&qualified_type, member, is_public, fx);
 
         let type_args = if !ctx.is_callee() {
-            self.format_cross_module_type_args(&qualified_method, result_ty)
+            self.format_cross_module_type_args(&qualified_method, result_ty, fx)
                 .unwrap_or_default()
         } else {
             String::new()

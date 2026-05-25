@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use emit::{Emitter, TestEmitConfig};
+use emit::{Planner, TestEmitConfig};
 use syntax::program::File;
 
 use crate::_harness::pipeline::TestPipeline;
@@ -64,7 +64,7 @@ pub fn compile_e2e_suite_test(input: &str, package_name: &str) -> Result<Emitted
         go_package_names: &result.go_package_names,
         go_module_ids: &result.go_module_ids,
     };
-    let mut emitter = Emitter::new_for_tests(&config, None);
+    let mut emitter = Planner::new_for_tests(&config, None);
     let mut emitted_files = emitter.emit_files(&[&file], &result.module_id);
 
     if emitted_files.is_empty() {

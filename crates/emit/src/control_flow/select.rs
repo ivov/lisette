@@ -1,12 +1,18 @@
-use crate::Emitter;
-use crate::expressions::context::ExpressionContext;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::ReturnContext;
+use crate::context::expression::ExpressionContext;
 use crate::names::go_name;
 use crate::patterns::sites::{
-    self, PatternSubject, is_some_pattern, unwrap_some_pattern, unwrap_some_typed_pattern,
+    self, AnnotatedPattern, PatternSubject, TypedSubject, is_some_pattern, unwrap_some_pattern,
+    unwrap_some_typed_pattern,
 };
-use crate::placement::{BodyPlace, emit_unreachable_panic_if_needed};
-use crate::utils::{DiscardGuard, contains_call};
-use crate::write_line;
+use crate::plan::bodies::{
+    ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan, SelectArmPlan, SelectStatementPlan,
+};
+use crate::plan::placement::emit_unreachable_panic_if_needed;
+use crate::utils::contains_call;
 use syntax::ast::{Expression, MatchArm, Pattern, SelectArm, SelectArmPattern, TypedPattern};
 use syntax::types::unqualified_name;
 
@@ -22,7 +28,7 @@ struct SelectReceiveContext<'a> {
     default_body: Option<&'a Expression>,
     retry_var: Option<&'a str>,
     element_ty: syntax::types::Type,
-    place: &'a BodyPlace<'a>,
+    place: &'a PlacePlan<'a>,
 }
 
 struct SelectPrep {
@@ -31,50 +37,62 @@ struct SelectPrep {
     channel_shadows: Vec<Option<String>>,
 }
 
-impl Emitter<'_> {
-    pub(crate) fn emit_select(
+impl Planner<'_> {
+    /// Lower a `select` expression to a structured `SelectStatementPlan`.
+    pub(crate) fn lower_select(
         &mut self,
-        output: &mut String,
         arms: &[SelectArm],
-        place: &BodyPlace,
-    ) {
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+    ) -> SelectStatementPlan {
         let needs_retry_loop = arms.iter().any(|arm| {
             matches!(&arm.pattern, SelectArmPattern::Receive { binding, .. } if is_some_pattern(binding))
         });
 
-        let prep = self.preprocess_select_arms(output, arms, needs_retry_loop);
-
-        if needs_retry_loop {
-            output.push_str("for {\n");
+        let mut setup: Vec<LoweredStatement> = Vec::new();
+        let mut setup_buffer = String::new();
+        let prep = self.preprocess_select_arms(
+            &mut setup_buffer,
+            arms,
+            needs_retry_loop,
+            Some(place.return_ctx()),
+            fx,
+        );
+        if !setup_buffer.is_empty() {
+            setup.push(LoweredStatement::RawGo(setup_buffer));
         }
+
         self.enter_scope();
-        output.push_str("select {\n");
-
-        self.emit_select_arms(output, arms, &prep, place);
-
-        output.push_str("}\n");
+        let arm_plans = self.lower_select_arms(arms, &prep, place, fx);
         self.exit_scope();
 
-        if needs_retry_loop {
-            output.push_str("break\n}\n");
-            // Go can't see that `break` is unreachable (all select paths either
-            // return or continue), so emit panic to satisfy the compiler.
-            emit_unreachable_panic_if_needed(output, place, false);
-        } else {
-            let has_default = arms
-                .iter()
-                .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
-            emit_unreachable_panic_if_needed(output, place, has_default);
+        let has_default = arms
+            .iter()
+            .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
+        let exhaustive = if needs_retry_loop { false } else { has_default };
+        let mut postlude: Vec<LoweredStatement> = Vec::new();
+        let mut panic_buffer = String::new();
+        emit_unreachable_panic_if_needed(&mut panic_buffer, place, exhaustive);
+        if !panic_buffer.is_empty() {
+            postlude.push(LoweredStatement::RawGo(panic_buffer));
+        }
+
+        SelectStatementPlan {
+            directive: String::new(),
+            setup,
+            retry_loop: needs_retry_loop,
+            arms: arm_plans,
+            postlude,
         }
     }
 
-    fn emit_select_arms(
+    fn lower_select_arms(
         &mut self,
-        output: &mut String,
         arms: &[SelectArm],
         prep: &SelectPrep,
-        place: &BodyPlace,
-    ) {
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+    ) -> Vec<SelectArmPlan> {
         let default_body = arms.iter().find_map(|arm| {
             if let SelectArmPattern::WildCard { body } = &arm.pattern {
                 Some(body.as_ref())
@@ -83,8 +101,9 @@ impl Emitter<'_> {
             }
         });
 
+        let mut arm_plans = Vec::with_capacity(arms.len());
         for (i, arm) in arms.iter().enumerate() {
-            match &arm.pattern {
+            let plan = match &arm.pattern {
                 SelectArmPattern::Receive {
                     binding,
                     typed_pattern,
@@ -106,11 +125,11 @@ impl Emitter<'_> {
                         element_ty: receive_expression.get_type().ok_type(),
                         place,
                     };
-                    self.emit_receive_arm(output, binding, typed_pattern.as_ref(), &receiver_ctx);
+                    self.lower_receive_arm(binding, typed_pattern.as_ref(), &receiver_ctx, fx)
                 }
                 SelectArmPattern::Send { body, .. } => {
                     let parts = prep.send_parts[i].as_ref().unwrap();
-                    self.emit_send_arm_case(output, parts, body, place);
+                    self.lower_send_arm(parts, body, place, fx)
                 }
                 SelectArmPattern::MatchReceive {
                     arms: match_arms,
@@ -118,24 +137,26 @@ impl Emitter<'_> {
                 } => {
                     let channel = prep.channel_operands[i].as_ref().unwrap();
                     let element_ty = receive_expression.get_type().ok_type();
-                    self.emit_match_receive_arm(output, match_arms, channel, &element_ty, place);
+                    self.lower_match_receive_arm(match_arms, channel, &element_ty, place, fx)
                 }
-                SelectArmPattern::WildCard { body } => {
-                    output.push_str("default:\n");
-                    self.emit_body_to_place(output, body, place);
-                }
-            }
+                SelectArmPattern::WildCard { body } => SelectArmPlan::Default {
+                    body: self.lower_block_to_place(body, place, fx),
+                },
+            };
+            arm_plans.push(plan);
         }
+        arm_plans
     }
 
-    /// Pre-process ALL arms in source order. Side-effectful expressions
-    /// (channel operands, send values) are hoisted into temps so they
-    /// evaluate here — not deferred to select entry or re-evaluated on retry.
+    /// Hoist all side-effectful arm expressions into temps so they evaluate
+    /// in source order, not on each retry.
     fn preprocess_select_arms(
         &mut self,
         output: &mut String,
         arms: &[SelectArm],
         needs_retry_loop: bool,
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
     ) -> SelectPrep {
         let mut send_parts: Vec<Option<SendArmParts>> = Vec::with_capacity(arms.len());
         let mut channel_operands: Vec<Option<String>> = Vec::with_capacity(arms.len());
@@ -146,7 +167,13 @@ impl Emitter<'_> {
                 SelectArmPattern::Send {
                     send_expression, ..
                 } => {
-                    let parts = self.prepare_send_arm(output, send_expression, needs_retry_loop);
+                    let parts = self.prepare_send_arm(
+                        output,
+                        send_expression,
+                        needs_retry_loop,
+                        ambient,
+                        fx,
+                    );
                     send_parts.push(Some(parts));
                     channel_operands.push(None);
                     channel_shadows.push(None);
@@ -156,8 +183,8 @@ impl Emitter<'_> {
                     binding,
                     ..
                 } => {
-                    let channel_has_call = Self::channel_expression_has_call(receive_expression);
-                    let ch = self.emit_channel_operand(output, receive_expression);
+                    let channel_has_call = channel_expression_has_call(receive_expression);
+                    let ch = self.emit_channel_operand(output, receive_expression, ambient, fx);
                     if is_some_pattern(binding) && needs_retry_loop {
                         let shadow = self.hoist_tmp_value(output, "ch", &ch);
                         channel_operands.push(Some(ch));
@@ -176,8 +203,8 @@ impl Emitter<'_> {
                 SelectArmPattern::MatchReceive {
                     receive_expression, ..
                 } => {
-                    let channel_has_call = Self::channel_expression_has_call(receive_expression);
-                    let ch = self.emit_channel_operand(output, receive_expression);
+                    let channel_has_call = channel_expression_has_call(receive_expression);
+                    let ch = self.emit_channel_operand(output, receive_expression, ambient, fx);
                     let ch = if needs_retry_loop && channel_has_call {
                         self.hoist_tmp_value(output, "ch", &ch)
                     } else {
@@ -202,31 +229,33 @@ impl Emitter<'_> {
         }
     }
 
-    /// Check whether the channel sub-expression of a receive expression has calls.
-    fn channel_expression_has_call(receive_expression: &Expression) -> bool {
-        let unwrapped = receive_expression.unwrap_parens();
-        if let Some((channel, "receive", _)) = Self::extract_channel_op(unwrapped) {
-            contains_call(channel)
-        } else {
-            contains_call(receive_expression)
-        }
-    }
-
     fn emit_channel_operand(
         &mut self,
         output: &mut String,
         receive_expression: &Expression,
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
     ) -> String {
         let unwrapped = receive_expression.unwrap_parens();
-        if let Some((channel, "receive", _)) = Self::extract_channel_op(unwrapped) {
-            let ch = self.emit_value(output, channel, ExpressionContext::value());
+        if let Some((channel, "receive", _)) = extract_channel_op(unwrapped) {
+            let ch = self.emit_value(
+                output,
+                channel,
+                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                fx,
+            );
             return if channel.get_type().is_ref() {
                 cancel_deref_of_address(ch)
             } else {
                 ch
             };
         }
-        self.emit_value(output, receive_expression, ExpressionContext::value())
+        self.emit_value(
+            output,
+            receive_expression,
+            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+            fx,
+        )
     }
 
     fn fresh_ok_var(&mut self) -> String {
@@ -237,169 +266,233 @@ impl Emitter<'_> {
         }
     }
 
-    fn emit_ok_check(&mut self, output: &mut String, ok_var: &str, ctx: &SelectReceiveContext) {
-        let (body_content, ()) = self.capture_emission(output, |this, buf| {
-            this.emit_body_to_place(buf, ctx.body, ctx.place);
-        });
-        let body_empty = body_content.is_empty();
-        let has_else = ctx.retry_var.is_some() || ctx.default_body.is_some();
-
-        if body_empty && has_else {
-            write_line!(output, "if !{} {{", ok_var);
-            self.emit_ok_else(output, ctx);
-            output.push_str("}\n");
-        } else if body_empty {
-            // Both branches empty, omit if/else entirely
-        } else {
-            write_line!(output, "if {} {{", ok_var);
-            output.push_str(&body_content);
-            if has_else {
-                output.push_str("} else {\n");
-                self.emit_ok_else(output, ctx);
-            }
-            output.push_str("}\n");
-        }
-    }
-
-    /// Emit the else-branch content for an ok-check: retry logic or default body.
-    fn emit_ok_else(&mut self, output: &mut String, ctx: &SelectReceiveContext) {
-        if let Some(retry_var) = ctx.retry_var {
-            write_line!(output, "{} = nil", retry_var);
-            output.push_str("continue\n");
-        } else if let Some(default_body) = ctx.default_body {
-            self.emit_body_to_place(output, default_body, ctx.place);
-        }
-    }
-
-    /// Emit the ok-check guard for channel receives with Option semantics.
-    /// Produces: `case {receiver_var}, {ok_var} := <-{channel}: if {ok_var} { ... } else { ... }`
-    fn emit_ok_guard(
+    fn lower_ok_check(
         &mut self,
-        output: &mut String,
+        ok_var: &str,
+        ctx: &SelectReceiveContext,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        // Decide scaffolding on rendered emptiness, not `is_empty`: some lowered
+        // statements (e.g. a discard `let _`) render to empty text even when the
+        // IR is structurally non-empty.
+        let body_block = self.lower_block_to_place(ctx.body, ctx.place, fx);
+        let body_empty = Renderer.renders_empty(&body_block);
+        let else_block = self.build_ok_else_block(ctx, fx);
+        let has_else = else_block.is_some();
+
+        if body_empty && !has_else {
+            return Vec::new();
+        }
+
+        let plan = if body_empty {
+            IfPlan {
+                directive: String::new(),
+                condition_setup: String::new(),
+                condition: format!("!{}", ok_var),
+                then_body: else_block.expect("body_empty && has_else"),
+                else_arm: ElseArm::None,
+            }
+        } else {
+            let else_arm = match else_block {
+                Some(body) => ElseArm::Else {
+                    body,
+                    inline: false,
+                },
+                None => ElseArm::None,
+            };
+            IfPlan {
+                directive: String::new(),
+                condition_setup: String::new(),
+                condition: ok_var.to_string(),
+                then_body: body_block,
+                else_arm,
+            }
+        };
+        vec![LoweredStatement::If(plan)]
+    }
+
+    /// Else branch for an ok-check: retry (`v = nil; continue`) or default
+    /// body. `None` when neither applies or the default lowers empty.
+    fn build_ok_else_block(
+        &mut self,
+        ctx: &SelectReceiveContext,
+        fx: &mut EmitEffects,
+    ) -> Option<LoweredBlock> {
+        if let Some(retry_var) = ctx.retry_var {
+            return Some(LoweredBlock {
+                statements: vec![
+                    LoweredStatement::RawGo(format!("{} = nil\n", retry_var)),
+                    LoweredStatement::Continue {
+                        directive: String::new(),
+                        label: None,
+                    },
+                ],
+            });
+        }
+        let default_body = ctx.default_body?;
+        let block = self.lower_block_to_place(default_body, ctx.place, fx);
+        (!block.is_empty()).then_some(block)
+    }
+
+    /// `case v, ok := <-ch:` plus an `if ok { ... } else { ... }` body.
+    fn lower_ok_guard(
+        &mut self,
         receiver_var: &str,
         inner_pattern: Option<(&Pattern, Option<&TypedPattern>)>,
         ctx: &SelectReceiveContext,
-    ) {
+        fx: &mut EmitEffects,
+    ) -> SelectArmPlan {
         let ok_var = self.fresh_ok_var();
-        write_line!(
-            output,
-            "case {}, {} := <-{}:\nif {} {{",
-            receiver_var,
-            ok_var,
-            ctx.channel,
-            ok_var
-        );
-        let guard = DiscardGuard::new(output, receiver_var);
-        if let Some((pattern, typed)) = inner_pattern {
-            self.emit_select_receive_pattern_site(
-                output,
-                receiver_var,
-                pattern,
-                typed,
-                &ctx.element_ty,
+        let receive_vars = format!("{}, {}", receiver_var, ok_var);
+        let body_statements = if let Some((pattern, typed)) = inner_pattern {
+            self.lower_select_receive_pattern_site(
+                TypedSubject {
+                    var: receiver_var,
+                    ty: &ctx.element_ty,
+                },
+                AnnotatedPattern { pattern, typed },
                 ctx.body,
                 ctx.default_body,
                 ctx.place,
-            );
+                fx,
+            )
         } else {
-            self.emit_body_to_place(output, ctx.body, ctx.place);
+            self.lower_block_to_place(ctx.body, ctx.place, fx)
+                .statements
+        };
+        let body_holder = LoweredBlock {
+            statements: body_statements,
+        };
+        let mut then_statements: Vec<LoweredStatement> = Vec::new();
+        if !body_holder.references_var(receiver_var) {
+            then_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", receiver_var)));
         }
-        guard.finish(output);
+        then_statements.extend(body_holder.statements);
         self.scope.pop_binding_frame();
-        let has_else = ctx.retry_var.is_some() || ctx.default_body.is_some();
-        if has_else {
-            output.push_str("} else {\n");
-            self.emit_ok_else(output, ctx);
+
+        let else_arm = match self.build_ok_else_block(ctx, fx) {
+            Some(body) => ElseArm::Else {
+                body,
+                inline: false,
+            },
+            None => ElseArm::None,
+        };
+        let if_plan = IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition: ok_var,
+            then_body: LoweredBlock {
+                statements: then_statements,
+            },
+            else_arm,
+        };
+        SelectArmPlan::Receive {
+            receive_vars: Some(receive_vars),
+            channel: ctx.channel.to_string(),
+            body: LoweredBlock {
+                statements: vec![LoweredStatement::If(if_plan)],
+            },
         }
-        output.push_str("}\n");
     }
 
-    fn emit_receive_arm(
+    fn lower_receive_arm(
         &mut self,
-        output: &mut String,
         binding: &Pattern,
         typed_pattern: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
-    ) {
+        fx: &mut EmitEffects,
+    ) -> SelectArmPlan {
         let effective_pattern = unwrap_some_pattern(binding);
         let inner_typed = unwrap_some_typed_pattern(typed_pattern);
 
         self.scope.push_binding_frame();
         if is_some_pattern(binding) {
-            self.emit_receive_arm_with_ok_check(output, effective_pattern, inner_typed, ctx);
+            self.lower_receive_arm_with_ok_check(effective_pattern, inner_typed, ctx, fx)
         } else {
-            self.emit_receive_arm_simple(output, effective_pattern, inner_typed, ctx);
+            self.lower_receive_arm_simple(effective_pattern, inner_typed, ctx, fx)
         }
     }
 
-    /// Option-binding receive: emits a `case x, ok := <-ch:` header and
-    /// either an `if ok { ... } else { ... }` guard around the body, or a
-    /// discard `if !ok { break }`. Always pops the binding frame.
-    fn emit_receive_arm_with_ok_check(
+    /// `case x, ok := <-ch:` with an `if ok` guard or `if !ok { break }`.
+    fn lower_receive_arm_with_ok_check(
         &mut self,
-        output: &mut String,
         effective_pattern: &Pattern,
         inner_typed: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
-    ) {
+        fx: &mut EmitEffects,
+    ) -> SelectArmPlan {
         if let Pattern::Identifier { identifier, .. } = effective_pattern
             && let Some(go_name) = self.go_name_for_binding(effective_pattern)
         {
             let var = self.scope.bind(identifier, go_name);
-            self.emit_ok_guard(output, &var, None, ctx);
-            return;
+            return self.lower_ok_guard(&var, None, ctx, fx);
         }
         if matches!(
             effective_pattern,
             Pattern::Identifier { .. } | Pattern::WildCard { .. }
         ) {
             let ok_var = self.fresh_ok_var();
-            write_line!(output, "case _, {} := <-{}:", ok_var, ctx.channel);
-            self.emit_ok_check(output, &ok_var, ctx);
+            let body = self.lower_ok_check(&ok_var, ctx, fx);
             self.scope.pop_binding_frame();
-            return;
+            return SelectArmPlan::Receive {
+                receive_vars: Some(format!("_, {}", ok_var)),
+                channel: ctx.channel.to_string(),
+                body: LoweredBlock { statements: body },
+            };
         }
         let receiver_var = self.fresh_var(Some("recv"));
-        self.emit_ok_guard(
-            output,
+        self.lower_ok_guard(
             &receiver_var,
             Some((effective_pattern, inner_typed)),
             ctx,
-        );
+            fx,
+        )
     }
 
-    /// Plain receive (no Option semantics): emits the `case ... := <-ch:`
-    /// header, then the arm body. Always pops the binding frame.
-    fn emit_receive_arm_simple(
+    /// Plain receive: `case v := <-ch:` then the arm body.
+    fn lower_receive_arm_simple(
         &mut self,
-        output: &mut String,
         effective_pattern: &Pattern,
         inner_typed: Option<&TypedPattern>,
         ctx: &SelectReceiveContext,
-    ) {
-        if let Pattern::Identifier { identifier, .. } = effective_pattern
+        fx: &mut EmitEffects,
+    ) -> SelectArmPlan {
+        let mut body_statements: Vec<LoweredStatement> = Vec::new();
+        let receive_vars = if let Pattern::Identifier { identifier, .. } = effective_pattern
             && let Some(go_name) = self.go_name_for_binding(effective_pattern)
         {
-            let var = self.scope.bind(identifier, go_name);
-            write_line!(output, "case {} := <-{}:", var, ctx.channel);
+            Some(self.scope.bind(identifier, go_name))
         } else if matches!(
             effective_pattern,
             Pattern::Identifier { .. } | Pattern::WildCard { .. }
         ) {
-            write_line!(output, "case <-{}:", ctx.channel);
+            None
         } else {
             let receiver_var = self.fresh_var(Some("recv"));
-            write_line!(output, "case {} := <-{}:", receiver_var, ctx.channel);
+            let mut destructure = String::new();
             self.emit_irrefutable_pattern_site(
-                output,
+                &mut destructure,
                 PatternSubject::for_value(receiver_var.clone()),
                 effective_pattern,
                 inner_typed,
                 &ctx.element_ty,
+                fx,
             );
-        }
-        self.emit_body_to_place(output, ctx.body, ctx.place);
+            if !destructure.is_empty() {
+                body_statements.push(LoweredStatement::RawGo(destructure));
+            }
+            Some(receiver_var)
+        };
+        let block = self.lower_block_to_place(ctx.body, ctx.place, fx);
         self.scope.pop_binding_frame();
+        body_statements.extend(block.statements);
+        SelectArmPlan::Receive {
+            receive_vars,
+            channel: ctx.channel.to_string(),
+            body: LoweredBlock {
+                statements: body_statements,
+            },
+        }
     }
 
     fn prepare_send_arm(
@@ -407,11 +500,18 @@ impl Emitter<'_> {
         output: &mut String,
         send_expression: &Expression,
         needs_hoist: bool,
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
     ) -> SendArmParts {
         let unwrapped = send_expression.unwrap_parens();
-        if let Some((channel, member, args)) = Self::extract_channel_op(unwrapped) {
+        if let Some((channel, member, args)) = extract_channel_op(unwrapped) {
             let ch_has_call = needs_hoist && contains_call(channel);
-            let mut ch = self.emit_value(output, channel, ExpressionContext::value());
+            let mut ch = self.emit_value(
+                output,
+                channel,
+                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                fx,
+            );
             if channel.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
@@ -421,8 +521,12 @@ impl Emitter<'_> {
             match member {
                 "send" if !args.is_empty() => {
                     let val_has_call = needs_hoist && contains_call(&args[0]);
-                    let mut val =
-                        self.emit_composite_value(output, &args[0], ExpressionContext::value());
+                    let mut val = self.emit_composite_value(
+                        output,
+                        &args[0],
+                        ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                        fx,
+                    );
                     if val_has_call {
                         val = self.hoist_tmp_value(output, "send_val", &val);
                     }
@@ -433,7 +537,12 @@ impl Emitter<'_> {
             }
         } else {
             let expression_has_call = needs_hoist && contains_call(send_expression);
-            let mut ch = self.emit_value(output, send_expression, ExpressionContext::value());
+            let mut ch = self.emit_value(
+                output,
+                send_expression,
+                ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                fx,
+            );
             if send_expression.get_type().is_ref() {
                 ch = cancel_deref_of_address(ch);
             }
@@ -444,36 +553,36 @@ impl Emitter<'_> {
         }
     }
 
-    /// Emit the `case` line and body for a pre-processed send arm.
-    fn emit_send_arm_case(
+    /// `case <send>:` (or `default:`) plus the arm body.
+    fn lower_send_arm(
         &mut self,
-        output: &mut String,
         parts: &SendArmParts,
         body: &Expression,
-        place: &BodyPlace,
-    ) {
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+    ) -> SelectArmPlan {
+        let block = self.lower_block_to_place(body, place, fx);
         match parts {
-            SendArmParts::Send(ch, val) => {
-                write_line!(output, "case {} <- {}:", ch, val);
-            }
-            SendArmParts::Receive(ch) => {
-                write_line!(output, "case <-{}:", ch);
-            }
-            SendArmParts::Default => {
-                output.push_str("default:\n");
-            }
+            SendArmParts::Send(ch, val) => SelectArmPlan::Send {
+                operation: format!("{} <- {}", ch, val),
+                body: block,
+            },
+            SendArmParts::Receive(ch) => SelectArmPlan::Send {
+                operation: format!("<-{}", ch),
+                body: block,
+            },
+            SendArmParts::Default => SelectArmPlan::Default { body: block },
         }
-        self.emit_body_to_place(output, body, place);
     }
 
-    fn emit_match_receive_arm(
+    fn lower_match_receive_arm(
         &mut self,
-        output: &mut String,
         match_arms: &[MatchArm],
         channel: &str,
         element_ty: &syntax::types::Type,
-        place: &BodyPlace,
-    ) {
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+    ) -> SelectArmPlan {
         self.scope.push_binding_frame();
 
         let (receiver_var_pattern, some_arm) = match_arms
@@ -496,12 +605,8 @@ impl Emitter<'_> {
             self.classify_receive_var_pattern(receiver_var_pattern);
 
         let ok_var = self.fresh_ok_var();
-        write_line!(output, "case {}, {} := <-{}:", case_var, ok_var, channel);
-        let recv_guard = (case_var != "_").then(|| DiscardGuard::new(output, &case_var));
-        let ok_guard = DiscardGuard::new(output, &ok_var);
 
-        let some_content = self.render_receive_some_arm(
-            output,
+        let some_block = self.lower_receive_some_arm(
             some_arm,
             match_arms,
             receiver_var_pattern,
@@ -509,124 +614,83 @@ impl Emitter<'_> {
             needs_receiver_destructure,
             element_ty,
             place,
+            fx,
         );
-        let none_content = self.capture_scoped(output, |this, output| {
-            sites::emit_none_arm_body(this, output, match_arms, place);
-        });
+        let none_block = self
+            .capture_scoped_block(|this| sites::lower_none_arm_body(this, match_arms, place, fx));
 
-        self.write_receive_arms(
-            output,
-            &ok_var,
-            some_content.as_deref(),
-            none_content.as_deref(),
-        );
-
-        if let Some(guard) = recv_guard {
-            guard.finish(output);
-        }
-        ok_guard.finish(output);
+        // Compose the receive-arms body as a structured `if ok { ... } else
+        // { ... }` plan so usage of `case_var` and `ok_var` can be checked
+        // structurally before deciding whether to emit per-var discards.
+        let body_block = LoweredBlock {
+            statements: match build_receive_arms_plan(&ok_var, some_block, none_block) {
+                Some(plan) => vec![LoweredStatement::If(plan)],
+                None => Vec::new(),
+            },
+        };
 
         self.scope.pop_binding_frame();
+
+        // Per-var discards (emitted when the body does not reference the var)
+        // precede the structured body inside the `case x, ok := <-ch:` arm.
+        let mut body_statements: Vec<LoweredStatement> = Vec::new();
+        if !body_block.references_var(&ok_var) {
+            body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", ok_var)));
+        }
+        if case_var != "_" && !body_block.references_var(&case_var) {
+            body_statements.push(LoweredStatement::RawGo(format!("_ = {}\n", case_var)));
+        }
+        body_statements.extend(body_block.statements);
+        SelectArmPlan::Receive {
+            receive_vars: Some(format!("{}, {}", case_var, ok_var)),
+            channel: channel.to_string(),
+            body: LoweredBlock {
+                statements: body_statements,
+            },
+        }
     }
 
-    /// Render the Some arm's body (including payload destructure when
-    /// needed), returning the captured content so the caller can wrap it in
-    /// an `if ok` guard alongside the None arm.
+    /// Lower the Some arm body (with payload destructure) so the caller can
+    /// wrap it in `if ok` alongside the None arm. `None` if it renders empty.
     #[allow(clippy::too_many_arguments)]
-    fn render_receive_some_arm(
+    fn lower_receive_some_arm(
         &mut self,
-        output: &mut String,
         some_arm: &MatchArm,
         match_arms: &[MatchArm],
         receiver_var_pattern: &Pattern,
         case_var: &str,
         needs_receiver_destructure: bool,
         element_ty: &syntax::types::Type,
-        place: &BodyPlace,
-    ) -> Option<String> {
-        self.capture_scoped(output, |this, output| {
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+    ) -> Option<LoweredBlock> {
+        self.capture_scoped_block(|this| {
             if !needs_receiver_destructure {
-                this.emit_body_to_place(output, &some_arm.expression, place);
-                return;
+                return this.lower_block_to_place(&some_arm.expression, place, fx);
             }
             let inner_typed = unwrap_some_typed_pattern(some_arm.typed_pattern.as_ref());
-            this.emit_select_match_receive_some_site(
-                output,
-                case_var,
-                receiver_var_pattern,
-                inner_typed,
-                element_ty,
-                &some_arm.expression,
-                match_arms,
-                place,
-            );
+            LoweredBlock {
+                statements: this.lower_select_match_receive_some_site(
+                    TypedSubject {
+                        var: case_var,
+                        ty: element_ty,
+                    },
+                    AnnotatedPattern {
+                        pattern: receiver_var_pattern,
+                        typed: inner_typed,
+                    },
+                    &some_arm.expression,
+                    match_arms,
+                    place,
+                    fx,
+                ),
+            }
         })
-    }
-
-    /// Combine the rendered Some/None arm contents into `if ok { ... } else { ... }`
-    /// scaffolding, collapsing to `if ok`, `if !ok`, or nothing when either arm
-    /// is empty.
-    fn write_receive_arms(
-        &self,
-        output: &mut String,
-        ok_var: &str,
-        some: Option<&str>,
-        none: Option<&str>,
-    ) {
-        match (some, none) {
-            (Some(some), Some(none)) => {
-                write_line!(output, "if {} {{", ok_var);
-                output.push_str(some);
-                output.push_str("} else {\n");
-                output.push_str(none);
-                output.push_str("}\n");
-            }
-            (Some(some), None) => {
-                write_line!(output, "if {} {{", ok_var);
-                output.push_str(some);
-                output.push_str("}\n");
-            }
-            (None, Some(none)) => {
-                write_line!(output, "if !{} {{", ok_var);
-                output.push_str(none);
-                output.push_str("}\n");
-            }
-            (None, None) => {}
-        }
-    }
-
-    fn extract_channel_op(expression: &Expression) -> Option<(&Expression, &str, &[Expression])> {
-        let Expression::Call {
-            expression, args, ..
-        } = expression
-        else {
-            return None;
-        };
-
-        if let Expression::DotAccess {
-            expression: channel,
-            member,
-            ..
-        } = expression.as_ref()
-            && (member == "send" || member == "receive")
-        {
-            return Some((channel, member, args));
-        }
-
-        if let Expression::Identifier { value, .. } = expression.as_ref() {
-            let method = unqualified_name(value);
-            if (method == "send" || method == "receive") && !args.is_empty() {
-                return Some((&args[0], method, &args[1..]));
-            }
-        }
-
-        None
     }
 }
 
-/// Cancel deref-of-address: `*&x` → `x`, `*(&x)` → `x`.
-/// When the emitter adds `*` to dereference a ref-typed expression that was
-/// already emitted with an `&` prefix, the two operations cancel out.
+/// `*&x` → `x` (avoids redundant deref when the emitter has already
+/// produced an `&`-prefixed expression).
 fn cancel_deref_of_address(ch: String) -> String {
     if let Some(inner) = ch.strip_prefix("(&").and_then(|s| s.strip_suffix(')')) {
         inner.to_string()
@@ -635,4 +699,77 @@ fn cancel_deref_of_address(ch: String) -> String {
     } else {
         format!("*{}", ch)
     }
+}
+
+fn channel_expression_has_call(receive_expression: &Expression) -> bool {
+    let unwrapped = receive_expression.unwrap_parens();
+    if let Some((channel, "receive", _)) = extract_channel_op(unwrapped) {
+        contains_call(channel)
+    } else {
+        contains_call(receive_expression)
+    }
+}
+
+/// `if ok { Some } else { None }`, collapsing to `if ok`/`if !ok`/`None`
+/// when one or both arms are empty.
+fn build_receive_arms_plan(
+    ok_var: &str,
+    some: Option<LoweredBlock>,
+    none: Option<LoweredBlock>,
+) -> Option<IfPlan> {
+    match (some, none) {
+        (Some(some), Some(none)) => Some(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition: ok_var.to_string(),
+            then_body: some,
+            else_arm: ElseArm::Else {
+                body: none,
+                inline: false,
+            },
+        }),
+        (Some(some), None) => Some(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition: ok_var.to_string(),
+            then_body: some,
+            else_arm: ElseArm::None,
+        }),
+        (None, Some(none)) => Some(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition: format!("!{}", ok_var),
+            then_body: none,
+            else_arm: ElseArm::None,
+        }),
+        (None, None) => None,
+    }
+}
+
+fn extract_channel_op(expression: &Expression) -> Option<(&Expression, &str, &[Expression])> {
+    let Expression::Call {
+        expression, args, ..
+    } = expression
+    else {
+        return None;
+    };
+
+    if let Expression::DotAccess {
+        expression: channel,
+        member,
+        ..
+    } = expression.as_ref()
+        && (member == "send" || member == "receive")
+    {
+        return Some((channel, member, args));
+    }
+
+    if let Expression::Identifier { value, .. } = expression.as_ref() {
+        let method = unqualified_name(value);
+        if (method == "send" || method == "receive") && !args.is_empty() {
+            return Some((&args[0], method, &args[1..]));
+        }
+    }
+
+    None
 }

@@ -141,8 +141,6 @@ pub(crate) fn contains_call(expression: &Expression) -> bool {
     }
 }
 
-// -- Eval-order staging ----------------------------------------------------
-
 pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
     !matches!(
         expression.unwrap_parens(),
@@ -155,60 +153,6 @@ pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
 /// re-evaluate.
 pub(crate) fn observable_after_mutation(expression: &Expression) -> bool {
     !matches!(expression.unwrap_parens(), Expression::Literal { .. })
-}
-
-/// Guard that snapshots the output length and inserts `_ = var\n` on `finish()`
-/// if the variable was never referenced in the output emitted since creation.
-pub(crate) struct DiscardGuard {
-    pre_len: usize,
-    var: String,
-}
-
-impl DiscardGuard {
-    pub(crate) fn new(output: &str, var: &str) -> Self {
-        Self {
-            pre_len: output.len(),
-            var: var.to_string(),
-        }
-    }
-
-    pub(crate) fn finish(self, output: &mut String) {
-        discard_if_unused(output, self.pre_len, &self.var);
-    }
-}
-
-fn discard_if_unused(output: &mut String, pre_len: usize, var: &str) {
-    if !output_references_var(&output[pre_len..], var) {
-        output.insert_str(pre_len, &format!("_ = {}\n", var));
-    }
-}
-
-/// If `var` is never referenced after the captured `tmp := <expr>\n` line,
-/// `finish` rewrites it to `_ = <expr>\n`. Otherwise the declaration stays.
-pub(crate) struct ValueTempDiscard {
-    decl_start: usize,
-    decl_end: usize,
-    var: String,
-    original_expr: String,
-}
-
-impl ValueTempDiscard {
-    pub(crate) fn new(output: &str, decl_start: usize, var: &str, original_expr: &str) -> Self {
-        Self {
-            decl_start,
-            decl_end: output.len(),
-            var: var.to_string(),
-            original_expr: original_expr.to_string(),
-        }
-    }
-
-    pub(crate) fn finish(self, output: &mut String) {
-        if output_references_var(&output[self.decl_end..], &self.var) {
-            return;
-        }
-        let replacement = format!("_ = {}\n", self.original_expr);
-        output.replace_range(self.decl_start..self.decl_end, &replacement);
-    }
 }
 
 /// True when the last emitted Go line is `break`, `continue`, `return`, or `panic`.

@@ -1,6 +1,11 @@
-use crate::Emitter;
+pub(crate) mod coercion;
+pub(crate) mod transition;
+
+use crate::EmitEffects;
 use crate::GoCallStrategy;
+use crate::Planner;
 use crate::names::go_name::PRELUDE_ERROR_ID;
+use crate::types::go_type::GoType;
 use syntax::ast::{Annotation, Expression};
 use syntax::types::{Type, unqualified_name};
 
@@ -36,7 +41,7 @@ impl AbiShape {
     }
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     /// Lowered shape for a Lisette return type, or `None` to keep it tagged.
     pub(crate) fn classify_direct_emission(&self, return_ty: &Type) -> Option<AbiShape> {
         let peeled = self.facts.peel_alias(return_ty);
@@ -78,24 +83,25 @@ impl Emitter<'_> {
         &mut self,
         shape: &AbiShape,
         return_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> String {
         let peeled = self.facts.peel_alias(return_ty);
         match shape {
-            AbiShape::BareError => self.go_type_as_string(&peeled.err_type()),
+            AbiShape::BareError => self.go_type_string(&peeled.err_type(), fx),
             AbiShape::ResultTuple | AbiShape::PartialTuple => {
-                let ok_str = self.go_type_as_string(&peeled.ok_type());
-                let err_str = self.go_type_as_string(&peeled.err_type());
+                let ok_str = self.go_type_string(&peeled.ok_type(), fx);
+                let err_str = self.go_type_string(&peeled.err_type(), fx);
                 format!("({}, {})", ok_str, err_str)
             }
             AbiShape::CommaOk => {
-                let inner_str = self.go_type_as_string(&peeled.ok_type());
+                let inner_str = self.go_type_string(&peeled.ok_type(), fx);
                 format!("({}, bool)", inner_str)
             }
-            AbiShape::NullableReturn => self.go_type_as_string(&peeled.ok_type()),
+            AbiShape::NullableReturn => self.go_type_string(&peeled.ok_type(), fx),
             AbiShape::Tuple { .. } => {
                 let parts: Vec<String> = tuple_element_types(&peeled)
                     .iter()
-                    .map(|t| self.tuple_slot_lowered_ty_string(t))
+                    .map(|t| self.tuple_slot_lowered_ty_string(t, fx))
                     .collect();
                 format!("({})", parts.join(", "))
             }
@@ -104,22 +110,21 @@ impl Emitter<'_> {
 
     /// Render a tuple slot's Go type, lowering `Option<NilableT>` to bare
     /// nilable `T` (the only arity-preserving slot recursion).
-    pub(crate) fn tuple_slot_lowered_ty_string(&mut self, slot_ty: &Type) -> String {
+    pub(crate) fn tuple_slot_lowered_ty_string(
+        &mut self,
+        slot_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> String {
         if self.facts.is_nullable_option(slot_ty) {
             let inner = self.facts.peel_alias(slot_ty).ok_type();
-            return self.go_type_as_string(&inner);
+            return self.go_type_string(&inner, fx);
         }
-        self.go_type_as_string(slot_ty)
+        self.go_type_string(slot_ty, fx)
     }
 
     /// `&self` variant of `render_lowered_return_ty`, callable from the
     /// `go_type` recursion which doesn't have `&mut self`.
-    pub(crate) fn lowered_return_go_type(
-        &self,
-        shape: &AbiShape,
-        return_ty: &Type,
-    ) -> crate::types::go_type::GoType {
-        use crate::types::go_type::GoType;
+    pub(crate) fn lowered_return_go_type(&self, shape: &AbiShape, return_ty: &Type) -> GoType {
         let peeled = self.facts.peel_alias(return_ty);
         match shape {
             AbiShape::BareError => self.go_type(&peeled.err_type()),
@@ -127,20 +132,20 @@ impl Emitter<'_> {
                 let ok_go = self.go_type(&peeled.ok_type());
                 let err_go = self.go_type(&peeled.err_type());
                 let mut result = GoType::new(format!("({}, {})", ok_go.code, err_go.code));
-                result.merge_from(&ok_go);
-                result.merge_from(&err_go);
+                result.merge(&ok_go);
+                result.merge(&err_go);
                 result
             }
             AbiShape::CommaOk => {
                 let inner_go = self.go_type(&peeled.ok_type());
                 let mut result = GoType::new(format!("({}, bool)", inner_go.code));
-                result.merge_from(&inner_go);
+                result.merge(&inner_go);
                 result
             }
             AbiShape::NullableReturn => self.go_type(&peeled.ok_type()),
             AbiShape::Tuple { .. } => {
-                let elems = tuple_element_types(&peeled);
-                let elem_gos: Vec<GoType> = elems
+                let elements = tuple_element_types(&peeled);
+                let element_gos: Vec<GoType> = elements
                     .iter()
                     .map(|t| {
                         if self.facts.is_nullable_option(t) {
@@ -151,10 +156,10 @@ impl Emitter<'_> {
                         }
                     })
                     .collect();
-                let parts: Vec<&str> = elem_gos.iter().map(|t| t.code.as_str()).collect();
+                let parts: Vec<&str> = element_gos.iter().map(|t| t.code.as_str()).collect();
                 let mut result = GoType::new(format!("({})", parts.join(", ")));
-                for go in &elem_gos {
-                    result.merge_from(go);
+                for go in &element_gos {
+                    result.merge(go);
                 }
                 result
             }
@@ -204,8 +209,7 @@ impl Emitter<'_> {
         &self,
         shape: &AbiShape,
         return_ann: &Annotation,
-    ) -> crate::types::go_type::GoType {
-        use crate::types::go_type::GoType;
+    ) -> GoType {
         let constructor_params = || match return_ann {
             Annotation::Constructor { params, .. } => params,
             _ => unreachable!("Result/Option/Partial imply Constructor annotation"),
@@ -220,15 +224,15 @@ impl Emitter<'_> {
                 let ok_go = self.go_type_from_annotation(&params[0]);
                 let err_go = self.go_type_from_annotation(&params[1]);
                 let mut result = GoType::new(format!("({}, {})", ok_go.code, err_go.code));
-                result.merge_from(&ok_go);
-                result.merge_from(&err_go);
+                result.merge(&ok_go);
+                result.merge(&err_go);
                 result
             }
             AbiShape::CommaOk => {
                 let params = constructor_params();
                 let inner_go = self.go_type_from_annotation(&params[0]);
                 let mut result = GoType::new(format!("({}, bool)", inner_go.code));
-                result.merge_from(&inner_go);
+                result.merge(&inner_go);
                 result
             }
             AbiShape::NullableReturn => {
@@ -240,7 +244,7 @@ impl Emitter<'_> {
                     Annotation::Tuple { elements, .. } => elements,
                     _ => unreachable!("Tuple shape implies Tuple annotation"),
                 };
-                let elem_gos: Vec<GoType> = elements
+                let element_gos: Vec<GoType> = elements
                     .iter()
                     .map(|a| {
                         if matches!(
@@ -256,10 +260,10 @@ impl Emitter<'_> {
                         }
                     })
                     .collect();
-                let parts: Vec<&str> = elem_gos.iter().map(|g| g.code.as_str()).collect();
+                let parts: Vec<&str> = element_gos.iter().map(|g| g.code.as_str()).collect();
                 let mut result = GoType::new(format!("({})", parts.join(", ")));
-                for go in &elem_gos {
-                    result.merge_from(go);
+                for go in &element_gos {
+                    result.merge(go);
                 }
                 result
             }
@@ -276,14 +280,23 @@ impl Emitter<'_> {
                     return true;
                 }
                 let resolved = self.peel_alias_id(name);
-                if let Some(def) = self.facts.definition(resolved.as_str())
-                    && matches!(def.body, syntax::program::DefinitionBody::TypeAlias { .. })
-                    && self.facts.resolve_to_function_type(&def.ty).is_some()
+                if let Some(definition) = self.facts.definition(resolved.as_str())
+                    && matches!(
+                        definition.body,
+                        syntax::program::DefinitionBody::TypeAlias { .. }
+                    )
+                    && self
+                        .facts
+                        .resolve_to_function_type(&definition.ty)
+                        .is_some()
                 {
                     return true;
                 }
-                if let Some(def) = self.facts.definition(resolved.as_str()) {
-                    matches!(def.body, syntax::program::DefinitionBody::Interface { .. })
+                if let Some(definition) = self.facts.definition(resolved.as_str()) {
+                    matches!(
+                        definition.body,
+                        syntax::program::DefinitionBody::Interface { .. }
+                    )
                 } else {
                     false
                 }
@@ -291,92 +304,6 @@ impl Emitter<'_> {
             _ => false,
         }
     }
-
-    /// Prelude fn refs emit with tagged Go return (`Option[T]`); user fns
-    /// and lambdas emit with the lowered ABI (`(T, bool)`).
-    pub(crate) fn is_tagged_shape_fn_value(expression: &Expression) -> bool {
-        let inner = expression.unwrap_parens();
-        if inner.as_option_constructor().is_some()
-            || inner.as_result_constructor().is_some()
-            || inner.as_partial_constructor().is_some()
-        {
-            return true;
-        }
-        matches!(
-            inner,
-            Expression::Identifier { qualified: Some(q), .. } if q.starts_with("prelude.")
-        )
-    }
-
-    /// Lowered shape of a callee. Type-driven so it fires regardless of
-    /// whether the callee is a direct ref, local, parameter, or field.
-    pub(crate) fn classify_callee_abi(&self, callee: &Expression) -> Option<AbiShape> {
-        let callee_ty = callee.get_type();
-        let unwrapped = callee_ty.unwrap_forall();
-        let resolved = self
-            .facts
-            .resolve_to_function_type(unwrapped)
-            .unwrap_or_else(|| unwrapped.clone());
-        let Type::Function { return_type, .. } = resolved else {
-            return None;
-        };
-        let inner = callee.unwrap_parens();
-        if let Expression::DotAccess {
-            expression: receiver,
-            ..
-        } = inner
-        {
-            if Self::is_go_receiver(receiver) {
-                return None;
-            }
-            // Methods on native types (`xs.find(f)`) and prelude types
-            // (`r.map(f)`, `opt.map(f)`) dispatch to Lisette-prelude
-            // helpers whose Go signatures keep the tagged return — no
-            // lowering at the call site.
-            let receiver_ty = receiver.get_type();
-            if crate::types::native::NativeGoType::from_type(&receiver_ty).is_some()
-                || receiver_is_prelude_type(&receiver_ty)
-            {
-                return None;
-            }
-            // Type-namespace dispatch like `Option.map(opt, f)` — prelude helper, tagged return.
-            if matches!(
-                &**receiver,
-                Expression::Identifier { qualified: Some(q), .. } if q.starts_with("prelude.")
-            ) {
-                return None;
-            }
-        }
-        // Tagged-type constructors compile to `lisette.Make…(...)`,
-        // not multi-return Go calls.
-        if inner.as_result_constructor().is_some()
-            || inner.as_option_constructor().is_some()
-            || inner.as_partial_constructor().is_some()
-        {
-            return None;
-        }
-        // Prelude function refs (`assert_type(x)`) — prelude helper, tagged return.
-        if let Expression::Identifier {
-            qualified: Some(q), ..
-        } = inner
-            && q.starts_with("prelude.")
-        {
-            return None;
-        }
-        let declared_return = self
-            .callee_definition(callee)
-            .and_then(|definition| definition.ty().unwrap_forall().get_function_ret());
-        let classify_ty = declared_return.unwrap_or(return_type.as_ref());
-
-        self.classify_direct_emission(classify_ty)
-    }
-}
-
-fn receiver_is_prelude_type(ty: &Type) -> bool {
-    matches!(
-        ty.strip_refs().unwrap_forall(),
-        Type::Nominal { id, .. } if id.starts_with("prelude.")
-    )
 }
 
 pub(crate) fn tuple_element_types(ty: &Type) -> Vec<Type> {
@@ -391,6 +318,21 @@ fn annotation_is_go_error(annotation: &Annotation) -> bool {
     let Annotation::Constructor { name, .. } = annotation else {
         return false;
     };
-    let leaf = unqualified_name(name);
-    leaf == "error"
+    unqualified_name(name) == "error"
+}
+
+/// Prelude fn refs emit with tagged Go return (`Option[T]`); user fns
+/// and lambdas emit with the lowered ABI (`(T, bool)`).
+pub(crate) fn is_tagged_shape_fn_value(expression: &Expression) -> bool {
+    let inner = expression.unwrap_parens();
+    if inner.as_option_constructor().is_some()
+        || inner.as_result_constructor().is_some()
+        || inner.as_partial_constructor().is_some()
+    {
+        return true;
+    }
+    matches!(
+        inner,
+        Expression::Identifier { qualified: Some(q), .. } if q.starts_with("prelude.")
+    )
 }

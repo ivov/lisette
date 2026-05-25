@@ -1,18 +1,23 @@
 use std::fmt::Write;
 
-use crate::Emitter;
-use crate::expressions::context::ExpressionContext;
-use crate::expressions::emission::EmittedExpression;
-use crate::types::coercion::{Coercion, CoercionDirection};
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::ReturnContext;
+use crate::abi::coercion::{Coercion, CoercionDirection};
+use crate::context::expression::ExpressionContext;
+use crate::expressions::emission::StagedExpression;
 use syntax::ast::{FormatStringPart, Literal};
 use syntax::types::{SimpleKind, Type};
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(super) fn emit_literal(
         &mut self,
         output: &mut String,
         literal: &Literal,
         ty: &Type,
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
     ) -> String {
         match literal {
             Literal::Integer { value, text } => match text {
@@ -45,38 +50,45 @@ impl Emitter<'_> {
             Literal::Char(c) => {
                 format!("'{}'", convert_escape_sequences(c))
             }
-            Literal::FormatString(parts) => self.emit_format_string(output, parts),
-            Literal::Slice(elems) => {
-                let elem_lisette_ty = ty
+            Literal::FormatString(parts) => self.emit_format_string(output, parts, ambient, fx),
+            Literal::Slice(elements) => {
+                let element_lisette_ty = ty
                     .get_type_params()
                     .expect("Slice type must have type args")
                     .first()
                     .expect("Slice type must have element type")
                     .clone();
-                let elem_ty = self.go_type_as_string(&elem_lisette_ty);
+                let element_ty = self.go_type_string(&element_lisette_ty, fx);
 
-                if elems.is_empty() {
+                if elements.is_empty() {
                     // Parens around the slice type disambiguate the conversion when
                     // the element type itself ends in `)` (e.g. `func(int)`); Go
                     // otherwise parses `[]func(int)(nil)` as a call expression.
-                    return format!("([]{})(nil)", elem_ty);
+                    return format!("([]{})(nil)", element_ty);
                 }
 
-                let stages: Vec<EmittedExpression> = elems
+                let stages: Vec<StagedExpression> = elements
                     .iter()
-                    .map(|e| self.stage_composite(e, ExpressionContext::value()))
+                    .map(|e| {
+                        self.stage_composite(
+                            e,
+                            ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                            fx,
+                        )
+                    })
                     .collect();
-                let elements = self.sequence(output, stages, "_v");
+                let (setup, rendered) = self.sequence_structured(stages, "_v");
+                output.push_str(&Renderer.render_setup(&setup));
 
-                let mut wrapped: Vec<String> = Vec::with_capacity(elements.len());
-                for (expr, emitted) in elems.iter().zip(elements) {
+                let mut wrapped: Vec<String> = Vec::with_capacity(rendered.len());
+                for (expr, emitted) in elements.iter().zip(rendered) {
                     let coercion = Coercion::resolve(
                         self,
                         &expr.get_type(),
-                        &elem_lisette_ty,
+                        &element_lisette_ty,
                         CoercionDirection::Internal,
                     );
-                    wrapped.push(coercion.apply(self, output, emitted));
+                    wrapped.push(coercion.apply(self, output, emitted, fx));
                 }
                 let elements = wrapped;
 
@@ -86,31 +98,41 @@ impl Emitter<'_> {
                         .map(|e| format!("\t{}", e))
                         .collect::<Vec<_>>()
                         .join(",\n");
-                    format!("[]{}{{\n{},\n}}", elem_ty, indented)
+                    format!("[]{}{{\n{},\n}}", element_ty, indented)
                 } else {
-                    format!("[]{}{{ {} }}", elem_ty, elements.join(", "))
+                    format!("[]{}{{ {} }}", element_ty, elements.join(", "))
                 }
             }
         }
     }
 
-    fn emit_format_string(&mut self, output: &mut String, parts: &[FormatStringPart]) -> String {
+    fn emit_format_string(
+        &mut self,
+        output: &mut String,
+        parts: &[FormatStringPart],
+        ambient: Option<&ReturnContext>,
+        fx: &mut EmitEffects,
+    ) -> String {
         let has_interpolation = parts
             .iter()
             .any(|p| matches!(p, FormatStringPart::Expression(_)));
 
-        // Stage all expression parts for eval-order sequencing
-        let stages: Vec<EmittedExpression> = parts
+        let stages: Vec<StagedExpression> = parts
             .iter()
             .filter_map(|p| {
                 if let FormatStringPart::Expression(e) = p {
-                    Some(self.stage_composite(e, ExpressionContext::value()))
+                    Some(self.stage_composite(
+                        e,
+                        ExpressionContext::value().with_ambient_return_ctx_opt(ambient),
+                        fx,
+                    ))
                 } else {
                     None
                 }
             })
             .collect();
-        let emitted = self.sequence(output, stages, "_fmtarg");
+        let (setup, emitted) = self.sequence_structured(stages, "_fmtarg");
+        output.push_str(&Renderer.render_setup(&setup));
 
         let mut format_string = String::new();
         let mut args = Vec::with_capacity(emitted.len());
@@ -150,7 +172,7 @@ impl Emitter<'_> {
             return format!("\"{}\"", format_string);
         }
 
-        self.requirements.require_fmt();
+        fx.require_fmt();
         // Solo-expression f-strings round-trip through fmt.Sprint, which skips
         // the format-string parse. Excluded: `%c`, because Sprint on a rune
         // prints the integer codepoint instead of the character.

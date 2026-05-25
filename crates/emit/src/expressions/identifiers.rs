@@ -1,10 +1,11 @@
 use syntax::program::DefinitionBody;
 
-use crate::Emitter;
-use crate::bindings::BindingValue;
-use crate::expressions::context::ExpressionContext;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::context::expression::ExpressionContext;
 use crate::names::generics::extract_type_mapping;
 use crate::names::go_name;
+use crate::state::bindings::BindingValue;
 use syntax::types::{Type, unqualified_name};
 
 pub(crate) enum IdentifierKind {
@@ -22,34 +23,35 @@ pub(crate) enum IdentifierKind {
     Regular { name: String },
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     pub(crate) fn emit_identifier(
         &mut self,
         value: &str,
         ty: &Type,
         ctx: ExpressionContext<'_>,
+        fx: &mut EmitEffects,
     ) -> String {
         if let Some(BindingValue::InlineExpr(expr)) = self.scope.resolve_identifier_binding(value) {
             return expr.as_str().to_string();
         }
-        match self.classify_identifier(value, ty, ctx) {
+        match self.classify_identifier(value, ty, ctx, fx) {
             IdentifierKind::UnitValue => "struct{}{}".to_string(),
             IdentifierKind::ValueEnumVariant { go_constant } => go_constant,
             IdentifierKind::PublicFunction { capitalized } => capitalized,
             IdentifierKind::UnitConstructor { name, type_args } => {
-                format!("{}{}()", self.resolve_go_name(&name), type_args)
+                format!("{}{}()", self.resolve_go_name(&name, fx), type_args)
             }
             IdentifierKind::ConstructorFunction { name, type_args } => {
-                format!("{}{}", self.resolve_go_name(&name), type_args)
+                format!("{}{}", self.resolve_go_name(&name, fx), type_args)
             }
             IdentifierKind::Regular { name } => {
-                if let Some(expression) = self.try_emit_method_expression(&name, ty) {
+                if let Some(expression) = self.try_emit_method_expression(&name, ty, fx) {
                     return expression;
                 }
                 let resolved = self.capitalize_static_method_if_public(&name);
-                let go_name = self.resolve_go_name(&resolved);
+                let go_name = self.resolve_go_name(&resolved, fx);
                 if !ctx.is_callee()
-                    && let Some(type_args) = self.format_generic_value_type_args(&name, ty)
+                    && let Some(type_args) = self.format_generic_value_type_args(&name, ty, fx)
                 {
                     return format!("{}{}", go_name, type_args);
                 }
@@ -63,6 +65,7 @@ impl Emitter<'_> {
         value: &str,
         ty: &Type,
         ctx: ExpressionContext<'_>,
+        fx: &mut EmitEffects,
     ) -> IdentifierKind {
         if value == "Unit" && ty.is_unit() {
             return IdentifierKind::UnitValue;
@@ -74,7 +77,7 @@ impl Emitter<'_> {
             .unwrap_or(value)
             .to_string();
 
-        if let Some(go_constant) = self.try_classify_value_enum_variant(&name, ty) {
+        if let Some(go_constant) = self.try_classify_value_enum_variant(&name, ty, fx) {
             return IdentifierKind::ValueEnumVariant { go_constant };
         }
 
@@ -109,10 +112,12 @@ impl Emitter<'_> {
 
             match ty {
                 Type::Nominal { params, .. } => {
-                    let type_args = ctx
-                        .expected_slot_type()
-                        .and_then(|t| self.prelude_container_type_args(t))
-                        .unwrap_or_else(|| self.format_type_args(params));
+                    let type_args = match ctx.expected_slot_type() {
+                        Some(t) => self
+                            .prelude_container_type_args(t, fx)
+                            .unwrap_or_else(|| self.format_type_args(params, fx)),
+                        None => self.format_type_args(params, fx),
+                    };
                     return IdentifierKind::UnitConstructor { name, type_args };
                 }
 
@@ -125,7 +130,8 @@ impl Emitter<'_> {
                         params: ret_params, ..
                     } = return_type.as_ref()
                     {
-                        let type_args = self.constructor_fn_type_args(fn_params, ret_params, ctx);
+                        let type_args =
+                            self.constructor_fn_type_args(fn_params, ret_params, ctx, fx);
                         return IdentifierKind::ConstructorFunction { name, type_args };
                     }
                 }
@@ -146,6 +152,7 @@ impl Emitter<'_> {
         fn_params: &[Type],
         ret_params: &[Type],
         ctx: ExpressionContext<'_>,
+        fx: &mut EmitEffects,
     ) -> String {
         let needs_type_args = !ctx.is_callee()
             || ret_params.len() > fn_params.len()
@@ -156,30 +163,21 @@ impl Emitter<'_> {
                 .iter()
                 .any(|t| self.needs_explicit_args_for_go_inference(t));
         if needs_type_args {
-            self.format_type_args(ret_params)
+            self.format_type_args(ret_params, fx)
         } else {
             String::new()
         }
     }
 
-    /// The identifier's type is already instantiated (Forall stripped by the type checker).
-    /// We look up the definition to find the generic signature, then extract concrete
-    /// types by matching the generic body against the instantiated type.
-    fn format_generic_value_type_args(
+    /// Match a generic definition's `Forall` body against an instantiated type
+    /// and render the Go type-argument list `[T1, T2]`. `None` when the
+    /// definition is not generic, a var is unresolved, or any arg is `interface{}`.
+    fn format_type_args_from_forall(
         &mut self,
-        name: &str,
+        definition_ty: &Type,
         instantiated_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
-        let qualified_name = self.facts.qualified_current(name);
-        let definition_ty = self
-            .facts
-            .definition(qualified_name.as_str())
-            .or_else(|| {
-                let prelude_name = format!("{}.{}", go_name::PRELUDE_MODULE, name);
-                self.facts.definition(prelude_name.as_str())
-            })?
-            .ty();
-
         let Type::Forall { vars, body } = definition_ty else {
             return None;
         };
@@ -191,7 +189,7 @@ impl Emitter<'_> {
             .iter()
             .filter_map(|var| {
                 let concrete = mapping.get(var.as_str())?;
-                Some(self.go_type_as_string(concrete))
+                Some(self.go_type_string(concrete, fx))
             })
             .collect();
 
@@ -203,6 +201,27 @@ impl Emitter<'_> {
         }
 
         Some(format!("[{}]", args.join(", ")))
+    }
+
+    /// Recover the type-arg list from the identifier's instantiated type by
+    /// matching against the definition's generic signature.
+    fn format_generic_value_type_args(
+        &mut self,
+        name: &str,
+        instantiated_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
+        let qualified_name = self.facts.qualified_current(name);
+        let definition_ty = self
+            .facts
+            .definition(qualified_name.as_str())
+            .or_else(|| {
+                let prelude_name = format!("{}.{}", go_name::PRELUDE_MODULE, name);
+                self.facts.definition(prelude_name.as_str())
+            })?
+            .ty();
+
+        self.format_type_args_from_forall(definition_ty, instantiated_ty, fx)
     }
 
     /// Like `format_generic_value_type_args` but takes a pre-qualified definition name
@@ -211,41 +230,21 @@ impl Emitter<'_> {
         &mut self,
         qualified_name: &str,
         instantiated_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> Option<String> {
         let definition_ty = self.facts.definition(qualified_name)?.ty().clone();
 
-        let Type::Forall { vars, body } = &definition_ty else {
-            return None;
-        };
-
-        let mut mapping = rustc_hash::FxHashMap::default();
-        extract_type_mapping(body, instantiated_ty, &mut mapping);
-
-        let args: Vec<String> = vars
-            .iter()
-            .filter_map(|var| {
-                let concrete = mapping.get(var.as_str())?;
-                Some(self.go_type_as_string(concrete))
-            })
-            .collect();
-
-        if args.len() != vars.len()
-            || args.is_empty()
-            || args.iter().any(|a| a.contains("interface{}"))
-        {
-            return None;
-        }
-
-        Some(format!("[{}]", args.join(", ")))
+        self.format_type_args_from_forall(&definition_ty, instantiated_ty, fx)
     }
 
-    /// Check if a dotted name like "Type.method" refers to a receiver method,
-    /// and if so return Go method expression syntax instead of free function name.
-    ///
-    /// Uses the identifier's type (from the AST) to determine whether the first
-    /// parameter is `self` — this is reliable because the type checker includes
-    /// the receiver as the first param for instance methods but not static ones.
-    fn try_emit_method_expression(&mut self, name: &str, id_ty: &Type) -> Option<String> {
+    /// Return Go method-expression syntax for a `Type.method` referring to an
+    /// instance method (first param is `self`); `None` for static methods.
+    fn try_emit_method_expression(
+        &mut self,
+        name: &str,
+        id_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
         let (type_part, method_part) = name.split_once('.')?;
 
         if method_part.contains('.') {
@@ -297,7 +296,7 @@ impl Emitter<'_> {
             if params.is_empty() {
                 String::new()
             } else {
-                self.format_type_args(params)
+                self.format_type_args(params, fx)
             }
         } else {
             String::new()
@@ -310,9 +309,12 @@ impl Emitter<'_> {
         }
     }
 
-    /// Attempt to resolve a cross-module static method call name using qualify_method.
-    /// Returns Some if name matches pattern "module.Type.method", None to fall through.
-    pub(crate) fn try_resolve_cross_module_static_method(&mut self, name: &str) -> Option<String> {
+    /// Resolve `module.Type.method` as a cross-module static method call.
+    pub(crate) fn try_resolve_cross_module_static_method(
+        &mut self,
+        name: &str,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
         if !name.contains('.') {
             return None;
         }
@@ -351,10 +353,15 @@ impl Emitter<'_> {
             .unwrap_or(true)
             || self.method_needs_export(method_name);
 
-        Some(self.qualify_method_call(&type_id, method_name, is_public))
+        Some(self.qualify_method_call(&type_id, method_name, is_public, fx))
     }
 
-    fn try_classify_value_enum_variant(&mut self, name: &str, ty: &Type) -> Option<String> {
+    fn try_classify_value_enum_variant(
+        &mut self,
+        name: &str,
+        ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
         if !name.contains('.') {
             return None;
         }
@@ -370,13 +377,13 @@ impl Emitter<'_> {
 
         let variant_name = go_name::unqualified_name(name);
         let module = self.facts.module_for_qualified_name(enum_id.as_str())?;
-        let qualifier = self.require_module_import(module);
+        let qualifier = self.require_module_import_fx(module, fx);
 
         Some(format!("{}.{}", qualifier, variant_name))
     }
 
-    /// Check if an identifier refers to a public function in the current module.
-    /// If so, return its capitalized Go name.
+    /// `Some(capitalized)` when the identifier names a public function in
+    /// the current module.
     fn try_capitalize_public_function(&self, name: &str, ty: &Type) -> Option<String> {
         let is_function = matches!(ty, Type::Function { .. })
             || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function { .. }));

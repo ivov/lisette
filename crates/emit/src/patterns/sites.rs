@@ -1,39 +1,44 @@
-//! Pattern-site owner for non-match emission.
-//!
-//! `decision_tree` builds runtime checks and bindings from a single pattern;
-//! `MatchEmitPlan` (via `tree_emitter`) is the match-construct pipeline. This
-//! module sits between them for every other site that contains a pattern.
-//!
-//! Callers describe the construct, this module owns the pattern mechanics:
-//! subject materialization, root assertions, refutable condition assembly,
-//! binding emission, and or-pattern scope policy.
-
+use crate::patterns::binding_decls::pattern_has_bindings;
 use std::borrow::Cow;
 
-use syntax::ast::{Binding, Expression, MatchArm, Pattern, TypedPattern};
+use syntax::ast::{Expression, MatchArm, Pattern, TypedPattern};
 use syntax::types::Type;
 
-use crate::Emitter;
-use crate::bindings::BindingValue;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::ReturnContext;
+use crate::context::expression::ExpressionContext;
 use crate::control_flow::branching::wrap_if_struct_literal;
-use crate::expressions::context::ExpressionContext;
 use crate::names::go_name;
-use crate::patterns::bindings::pattern_binds_name;
-use crate::patterns::decision_tree::{
-    self, PatternInfo, apply_refutable_root_assertion, apply_root_assertion,
-    compose_refutable_condition, drop_inline_overlays, emit_tree_assignments, emit_tree_bindings,
-    emit_tree_bindings_with_consumers, render_condition,
+use crate::patterns::binding_decls::pattern_binds_name;
+use crate::patterns::binding_emit::{
+    apply_refutable_root_assertion, apply_root_assertion, compose_refutable_condition,
+    drop_inline_overlays, emit_tree_bindings_with_consumers, tree_assignment_statements,
+    tree_binding_statements,
 };
-use crate::placement::BodyPlace;
-use crate::utils::{DiscardGuard, ValueTempDiscard};
+use crate::patterns::decision_tree::{self, PatternInfo, render_condition};
+use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement, PlacePlan};
+use crate::state::bindings::BindingValue;
 use crate::write_line;
 
-/// How a pattern's subject value reaches the site.
+#[derive(Clone, Copy)]
+pub(crate) struct AnnotatedPattern<'a> {
+    pub(crate) pattern: &'a Pattern,
+    pub(crate) typed: Option<&'a TypedPattern>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct TypedSubject<'a> {
+    pub(crate) var: &'a str,
+    pub(crate) ty: &'a Type,
+}
+
 pub(crate) enum PatternSubject<'a> {
-    /// Subject already lives in a Go variable named by the caller.
+    /// Already in a Go variable named by the caller.
     Existing { var: String },
-    /// Pattern-site decides whether to inline the scrutinee identifier
-    /// (when safe) or hoist it into a fresh temp with the given hint.
+    /// Pattern-site picks: inline the scrutinee identifier when safe, else
+    /// hoist into a fresh temp with the given hint.
     Expression {
         scrutinee: &'a Expression,
         pattern: &'a Pattern,
@@ -59,25 +64,46 @@ impl<'a> PatternSubject<'a> {
     }
 }
 
-struct ResolvedSubject {
-    var: String,
-    guard: Option<ValueTempDiscard>,
+/// For composite scrutinees, the declaration line is deferred so the caller can
+/// pick `var := expr` vs `_ = expr` based on body usage.
+enum ResolvedSubject {
+    Existing { var: String },
+    Composite { var: String, expression: String },
+}
+
+impl ResolvedSubject {
+    fn var(&self) -> &str {
+        match self {
+            ResolvedSubject::Existing { var } | ResolvedSubject::Composite { var, .. } => var,
+        }
+    }
+
+    fn emit_declaration(self, output: &mut String, body: &LoweredBlock) {
+        if let ResolvedSubject::Composite { var, expression } = self {
+            if body.references_var(&var) {
+                write_line!(output, "{} := {}", var, expression);
+            } else {
+                write_line!(output, "_ = {}", expression);
+            }
+        }
+    }
 }
 
 struct LetElseAlternatives<'s> {
     collected: Vec<PatternInfo>,
     hoisted: Vec<(Cow<'s, str>, Option<String>)>,
-    irrefutable_idx: Option<usize>,
+    irrefutable_index: Option<usize>,
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     fn resolve_pattern_subject(
         &mut self,
         output: &mut String,
         subject: PatternSubject<'_>,
+        fx: &mut EmitEffects,
     ) -> ResolvedSubject {
         match subject {
-            PatternSubject::Existing { var } => ResolvedSubject { var, guard: None },
+            PatternSubject::Existing { var } => ResolvedSubject::Existing { var },
             PatternSubject::Expression {
                 scrutinee,
                 pattern,
@@ -92,20 +118,51 @@ impl Emitter<'_> {
                     )
                 {
                     let var = self.scope.resolve_or_escape_go_name(value);
-                    return ResolvedSubject { var, guard: None };
+                    return ResolvedSubject::Existing { var };
                 }
                 let var = self.fresh_var(temp_hint);
                 self.declare(&var);
-                let expression = self.emit_value(output, scrutinee, ExpressionContext::value());
-                let decl_start = output.len();
-                write_line!(output, "{} := {}", var, expression);
-                let guard = ValueTempDiscard::new(output, decl_start, &var, &expression);
-                ResolvedSubject {
-                    var,
-                    guard: Some(guard),
-                }
+                let expression = self.emit_value(output, scrutinee, ExpressionContext::value(), fx);
+                ResolvedSubject::Composite { var, expression }
             }
         }
+    }
+
+    /// Lower an irrefutable pattern site (no branching): subject setup +
+    /// declaration, root type assertion, per-field binding leaves.
+    pub(crate) fn lower_irrefutable_pattern_site(
+        &mut self,
+        subject: PatternSubject<'_>,
+        pattern: &Pattern,
+        typed: Option<&TypedPattern>,
+        subject_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        let mut prologue = String::new();
+        let resolved = self.resolve_pattern_subject(&mut prologue, subject, fx);
+        let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
+        fx.extend(&info.effects);
+
+        let mut body = Vec::new();
+        let mut assertion = String::new();
+        let effective = apply_root_assertion(self, &mut assertion, &info, resolved.var());
+        if !assertion.is_empty() {
+            body.push(LoweredStatement::RawGo(assertion));
+        }
+        tree_binding_statements(self, &mut body, &info.bindings, &effective, &[]);
+        let body_block = LoweredBlock { statements: body };
+
+        let mut statements = Vec::new();
+        if !prologue.is_empty() {
+            statements.push(LoweredStatement::RawGo(prologue));
+        }
+        let mut declaration = String::new();
+        resolved.emit_declaration(&mut declaration, &body_block);
+        if !declaration.is_empty() {
+            statements.push(LoweredStatement::RawGo(declaration));
+        }
+        statements.extend(body_block.statements);
+        statements
     }
 
     pub(crate) fn emit_irrefutable_pattern_site(
@@ -115,59 +172,56 @@ impl Emitter<'_> {
         pattern: &Pattern,
         typed: Option<&TypedPattern>,
         subject_ty: &Type,
+        fx: &mut EmitEffects,
     ) {
-        let resolved = self.resolve_pattern_subject(output, subject);
-        let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        self.requirements.apply_effects(&info.effects);
-        let effective = apply_root_assertion(self, output, &info, &resolved.var);
-        emit_tree_bindings(self, output, &info.bindings, &effective);
-        if let Some(guard) = resolved.guard {
-            guard.finish(output);
-        }
+        let statements =
+            self.lower_irrefutable_pattern_site(subject, pattern, typed, subject_ty, fx);
+        let block = LoweredBlock { statements };
+        Renderer.render_lowered_block(output, &block);
     }
 
-    pub(crate) fn emit_let_else_pattern_site(
+    pub(crate) fn lower_let_else_pattern_site(
         &mut self,
-        output: &mut String,
-        pattern: &Pattern,
-        typed: Option<&TypedPattern>,
+        ap: AnnotatedPattern,
         binding_ty: &Type,
         scrutinee: &Expression,
         else_block: &Expression,
-    ) {
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
         let value_ty = scrutinee.get_type();
+        let mut prologue = String::new();
         let resolved = self.resolve_pattern_subject(
-            output,
-            PatternSubject::expression(scrutinee, pattern, Some("subject")),
+            &mut prologue,
+            PatternSubject::expression(scrutinee, ap.pattern, Some("subject")),
+            fx,
         );
+        let subject = TypedSubject {
+            var: resolved.var(),
+            ty: &value_ty,
+        };
 
-        if let Pattern::Or { patterns, .. } = pattern {
-            self.emit_let_else_or_pattern(
-                output,
-                pattern,
-                patterns,
-                typed,
-                binding_ty,
-                &resolved.var,
-                &value_ty,
-                else_block,
-            );
+        let body = if matches!(ap.pattern, Pattern::Or { .. }) {
+            self.lower_let_else_or_pattern(ap, binding_ty, subject, else_block, return_ctx, fx)
         } else {
-            self.emit_let_else_single_pattern(
-                output,
-                pattern,
-                typed,
-                &resolved.var,
-                &value_ty,
-                else_block,
-            );
-        }
+            self.lower_let_else_single_pattern(ap, subject, else_block, return_ctx, fx)
+        };
+        let body_block = LoweredBlock { statements: body };
 
-        if let Some(guard) = resolved.guard {
-            guard.finish(output);
+        let mut statements = Vec::new();
+        if !prologue.is_empty() {
+            statements.push(LoweredStatement::RawGo(prologue));
         }
+        let mut declaration = String::new();
+        resolved.emit_declaration(&mut declaration, &body_block);
+        if !declaration.is_empty() {
+            statements.push(LoweredStatement::RawGo(declaration));
+        }
+        statements.extend(body_block.statements);
+        statements
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn emit_while_let(
         &mut self,
         output: &mut String,
@@ -176,6 +230,8 @@ impl Emitter<'_> {
         scrutinee: &Expression,
         body: &Expression,
         needs_label: bool,
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
     ) {
         self.set_current_loop_label_if_needed(needs_label);
         if let Some(label) = self.current_loop_label() {
@@ -199,21 +255,31 @@ impl Emitter<'_> {
         };
         let subject_var = inline_var.unwrap_or_else(|| {
             let var = self.fresh_var(Some("subject"));
-            let expression = self.emit_operand(output, scrutinee, ExpressionContext::value());
+            let expression = self.emit_operand(output, scrutinee, ExpressionContext::value(), fx);
             write_line!(output, "{} := {}", var, expression);
             var
         });
 
         let scrutinee_ty = scrutinee.get_type();
         if let Pattern::Or { patterns, .. } = pattern
-            && Self::pattern_has_bindings(pattern)
+            && pattern_has_bindings(pattern)
         {
-            self.emit_while_let_or_pattern(output, patterns, &subject_var, &scrutinee_ty, body);
+            self.emit_while_let_or_pattern(
+                output,
+                patterns,
+                TypedSubject {
+                    var: &subject_var,
+                    ty: &scrutinee_ty,
+                },
+                body,
+                return_ctx,
+                fx,
+            );
             return;
         }
 
         let info = decision_tree::collect_pattern_info(self, pattern, typed, &scrutinee_ty);
-        self.requirements.apply_effects(&info.effects);
+        fx.extend(&info.effects);
         let (effective, ok_var) = apply_refutable_root_assertion(self, output, &info, &subject_var);
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
         write_line!(output, "if {} {{", condition);
@@ -223,29 +289,45 @@ impl Emitter<'_> {
             emit_tree_bindings_with_consumers(self, output, &info.bindings, &effective, &[body]);
         }
 
-        self.emit_block(output, body);
+        let block = self.lower_block_as_body(body, return_ctx, fx);
+        Renderer.render_lowered_block(output, &block);
 
         self.emit_while_let_break_else(output);
     }
 
-    fn emit_let_else_single_pattern(
+    fn lower_let_else_single_pattern(
         &mut self,
-        output: &mut String,
-        pattern: &Pattern,
-        typed: Option<&TypedPattern>,
-        subject_var: &str,
-        subject_ty: &Type,
+        ap: AnnotatedPattern,
+        subject: TypedSubject,
         else_block: &Expression,
-    ) {
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        let AnnotatedPattern { pattern, typed } = ap;
+        let TypedSubject {
+            var: subject_var,
+            ty: subject_ty,
+        } = subject;
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        self.requirements.apply_effects(&info.effects);
+        fx.extend(&info.effects);
 
+        let mut statements = Vec::new();
+        let mut assert_buffer = String::new();
         let (effective_subject, assert_ok_var) =
-            apply_refutable_root_assertion(self, output, &info, subject_var);
+            apply_refutable_root_assertion(self, &mut assert_buffer, &info, subject_var);
+        if !assert_buffer.is_empty() {
+            statements.push(LoweredStatement::RawGo(assert_buffer));
+        }
 
         if info.checks.is_empty() && assert_ok_var.is_none() {
-            emit_tree_bindings(self, output, &info.bindings, &effective_subject);
-            return;
+            tree_binding_statements(
+                self,
+                &mut statements,
+                &info.bindings,
+                &effective_subject,
+                &[],
+            );
+            return statements;
         }
 
         let mut guard_parts: Vec<String> = Vec::new();
@@ -260,43 +342,117 @@ impl Emitter<'_> {
             guard_parts.push(wrap_if_struct_literal(negated));
         }
         let guard = guard_parts.join(" || ");
-        write_line!(output, "if {} {{", guard);
-        self.emit_block(output, else_block);
-        output.push_str("}\n");
+        let else_lowered = self.lower_block_as_body(else_block, return_ctx, fx);
+        statements.push(LoweredStatement::If(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition: guard,
+            then_body: else_lowered,
+            else_arm: ElseArm::None,
+        }));
 
-        emit_tree_bindings(self, output, &info.bindings, &effective_subject);
+        tree_binding_statements(
+            self,
+            &mut statements,
+            &info.bindings,
+            &effective_subject,
+            &[],
+        );
+        statements
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn emit_let_else_or_pattern(
+    fn lower_let_else_or_pattern(
         &mut self,
-        output: &mut String,
-        pattern: &Pattern,
-        patterns: &[Pattern],
-        typed: Option<&TypedPattern>,
+        ap: AnnotatedPattern,
         binding_ty: &Type,
-        subject_var: &str,
-        subject_ty: &Type,
+        subject: TypedSubject,
         else_block: &Expression,
-    ) {
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        let AnnotatedPattern { pattern, typed } = ap;
+        let TypedSubject {
+            var: subject_var,
+            ty: subject_ty,
+        } = subject;
+        let Pattern::Or { patterns, .. } = pattern else {
+            unreachable!("lower_let_else_or_pattern requires an Or pattern");
+        };
         let pre_let_snapshot = self.scope.binding_snapshot();
-        self.emit_binding_declarations_with_type(output, pattern, binding_ty, typed);
-        let post_decl_snapshot = self.scope.binding_snapshot();
+        let mut declarations = String::new();
+        self.emit_binding_declarations_with_type(&mut declarations, pattern, binding_ty, typed, fx);
+        let post_declaration_snapshot = self.scope.binding_snapshot();
 
-        let alts = self.collect_let_else_alternatives(output, patterns, subject_ty, subject_var);
-        self.emit_let_else_chain(output, &alts);
+        let mut asserts = String::new();
+        let alts =
+            self.collect_let_else_alternatives(&mut asserts, patterns, subject_ty, subject_var, fx);
 
-        if let Some(idx) = alts.irrefutable_idx {
-            self.emit_let_else_irrefutable_tail(output, &alts, idx);
-            return;
+        let mut statements = Vec::new();
+        if !declarations.is_empty() {
+            statements.push(LoweredStatement::RawGo(declarations));
+        }
+        if !asserts.is_empty() {
+            statements.push(LoweredStatement::RawGo(asserts));
         }
 
-        self.scope.restore_binding_snapshot(pre_let_snapshot);
-        output.push_str("} else {\n");
-        self.emit_block(output, else_block);
-        output.push_str("}\n");
+        let chain_len = alts.irrefutable_index.unwrap_or(alts.collected.len());
 
-        self.scope.restore_binding_snapshot(post_decl_snapshot);
+        // An irrefutable first alternative always matches: no chain, just its
+        // assignments.
+        if chain_len == 0 {
+            let (effective, _) = &alts.hoisted[0];
+            tree_assignment_statements(
+                self,
+                &mut statements,
+                &alts.collected[0].bindings,
+                effective,
+            );
+            return statements;
+        }
+
+        // Forward pass (preserves scope-op order): condition plus assignment
+        // block per chain alternative.
+        let mut pieces: Vec<(String, LoweredBlock)> = Vec::with_capacity(chain_len);
+        for (i, info) in alts.collected.iter().take(chain_len).enumerate() {
+            let (effective, ok_var) = &alts.hoisted[i];
+            let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
+            let mut assigns = Vec::new();
+            tree_assignment_statements(self, &mut assigns, &info.bindings, effective);
+            pieces.push((
+                condition,
+                LoweredBlock {
+                    statements: assigns,
+                },
+            ));
+        }
+
+        // Terminal `else`: the irrefutable alternative's assignments, or the
+        // lowered `else` block (with the or-pattern bindings out of scope).
+        let terminal = match alts.irrefutable_index {
+            Some(index) => {
+                let (effective, _) = &alts.hoisted[index];
+                let mut assigns = Vec::new();
+                tree_assignment_statements(
+                    self,
+                    &mut assigns,
+                    &alts.collected[index].bindings,
+                    effective,
+                );
+                LoweredBlock {
+                    statements: assigns,
+                }
+            }
+            None => {
+                self.scope.restore_binding_snapshot(pre_let_snapshot);
+                let else_lowered = self.lower_block_as_body(else_block, return_ctx, fx);
+                self.scope
+                    .restore_binding_snapshot(post_declaration_snapshot);
+                else_lowered
+            }
+        };
+
+        statements.push(assemble_if_else_chain(pieces, terminal));
+        statements
     }
 
     fn collect_let_else_alternatives<'s>(
@@ -305,57 +461,27 @@ impl Emitter<'_> {
         patterns: &[Pattern],
         subject_ty: &Type,
         subject_var: &'s str,
+        fx: &mut EmitEffects,
     ) -> LetElseAlternatives<'s> {
         let collected: Vec<PatternInfo> = patterns
             .iter()
             .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
             .collect();
         for info in &collected {
-            self.requirements.apply_effects(&info.effects);
+            fx.extend(&info.effects);
         }
         let hoisted: Vec<(Cow<'s, str>, Option<String>)> = collected
             .iter()
             .map(|info| apply_refutable_root_assertion(self, output, info, subject_var))
             .collect();
-        let irrefutable_idx = collected
+        let irrefutable_index = collected
             .iter()
             .zip(hoisted.iter())
             .position(|(info, (_, ok_var))| info.checks.is_empty() && ok_var.is_none());
         LetElseAlternatives {
             collected,
             hoisted,
-            irrefutable_idx,
-        }
-    }
-
-    fn emit_let_else_chain(&mut self, output: &mut String, alts: &LetElseAlternatives<'_>) {
-        let chain_len = alts.irrefutable_idx.unwrap_or(alts.collected.len());
-        for (i, info) in alts.collected.iter().take(chain_len).enumerate() {
-            let (effective, ok_var) = &alts.hoisted[i];
-            let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, effective);
-            if i == 0 {
-                write_line!(output, "if {} {{", condition);
-            } else {
-                write_line!(output, "}} else if {} {{", condition);
-            }
-            emit_tree_assignments(self, output, &info.bindings, effective);
-        }
-    }
-
-    fn emit_let_else_irrefutable_tail(
-        &mut self,
-        output: &mut String,
-        alts: &LetElseAlternatives<'_>,
-        idx: usize,
-    ) {
-        let info = &alts.collected[idx];
-        let (effective, _) = &alts.hoisted[idx];
-        if idx == 0 {
-            emit_tree_assignments(self, output, &info.bindings, effective);
-        } else {
-            output.push_str("} else {\n");
-            emit_tree_assignments(self, output, &info.bindings, effective);
-            output.push_str("}\n");
+            irrefutable_index,
         }
     }
 
@@ -363,16 +489,21 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         patterns: &[Pattern],
-        subject_var: &str,
-        subject_ty: &Type,
+        subject: TypedSubject,
         body: &Expression,
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
     ) {
+        let TypedSubject {
+            var: subject_var,
+            ty: subject_ty,
+        } = subject;
         let mut alternatives: Vec<_> = patterns
             .iter()
             .map(|alt| decision_tree::collect_pattern_info(self, alt, None, subject_ty))
             .collect();
         for info in &alternatives {
-            self.requirements.apply_effects(&info.effects);
+            fx.extend(&info.effects);
         }
 
         let unused_names: rustc_hash::FxHashSet<String> = alternatives
@@ -402,123 +533,124 @@ impl Emitter<'_> {
 
             let overlays =
                 emit_tree_bindings_with_consumers(self, output, &info.bindings, effective, &[body]);
-            self.emit_block(output, body);
+            let block = self.lower_block_as_body(body, return_ctx, fx);
+            Renderer.render_lowered_block(output, &block);
             drop_inline_overlays(self, &overlays);
         }
 
         self.emit_while_let_break_else(output);
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn emit_select_receive_pattern_site(
+    pub(crate) fn lower_select_receive_pattern_site(
         &mut self,
-        output: &mut String,
-        receiver_var: &str,
-        pattern: &Pattern,
-        typed: Option<&TypedPattern>,
-        element_ty: &Type,
+        subject: TypedSubject,
+        ap: AnnotatedPattern,
         body: &Expression,
         default_body: Option<&Expression>,
-        place: &BodyPlace,
-    ) {
-        self.emit_refutable_arm(
-            output,
-            receiver_var,
-            pattern,
-            typed,
-            element_ty,
-            body,
-            place,
-            |this, output| {
-                if let Some(default_body) = default_body {
-                    output.push_str("} else {\n");
-                    this.emit_body_to_place(output, default_body, place);
-                }
-            },
-        );
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        self.lower_refutable_arm(subject, ap, body, place, fx, |this, fx| {
+            default_body.map(|default| this.lower_block_to_place(default, place, fx))
+        })
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn emit_select_match_receive_some_site(
+    pub(crate) fn lower_select_match_receive_some_site(
         &mut self,
-        output: &mut String,
-        case_var: &str,
-        pattern: &Pattern,
-        typed: Option<&TypedPattern>,
-        element_ty: &Type,
+        subject: TypedSubject,
+        ap: AnnotatedPattern,
         some_body: &Expression,
         match_arms: &[MatchArm],
-        place: &BodyPlace,
-    ) {
-        self.emit_refutable_arm(
-            output,
-            case_var,
-            pattern,
-            typed,
-            element_ty,
-            some_body,
-            place,
-            |this, output| {
-                output.push_str("} else {\n");
-                emit_none_arm_body(this, output, match_arms, place);
-            },
-        );
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+    ) -> Vec<LoweredStatement> {
+        self.lower_refutable_arm(subject, ap, some_body, place, fx, |this, fx| {
+            Some(lower_none_arm_body(this, match_arms, place, fx))
+        })
     }
 
-    /// Emit a refutable site whose checks gate `body`. The `failure` closure
-    /// runs only on the guarded path (after the body, before the closing
-    /// brace) so callers can emit `} else { ... }` for their failure continuation.
-    #[allow(clippy::too_many_arguments)]
-    fn emit_refutable_arm(
+    /// Lower a refutable site whose checks gate `body` into structured IR. The
+    /// `failure` callback produces the `else` block (run only on the guarded
+    /// path) for the caller's failure continuation; `None` means no `else`.
+    fn lower_refutable_arm(
         &mut self,
-        output: &mut String,
-        subject_var: &str,
-        pattern: &Pattern,
-        typed: Option<&TypedPattern>,
-        subject_ty: &Type,
+        subject: TypedSubject,
+        ap: AnnotatedPattern,
         body: &Expression,
-        place: &BodyPlace,
-        failure: impl FnOnce(&mut Emitter, &mut String),
-    ) {
+        place: &PlacePlan,
+        fx: &mut EmitEffects,
+        failure: impl FnOnce(&mut Planner, &mut EmitEffects) -> Option<LoweredBlock>,
+    ) -> Vec<LoweredStatement> {
+        let AnnotatedPattern { pattern, typed } = ap;
+        let TypedSubject {
+            var: subject_var,
+            ty: subject_ty,
+        } = subject;
         let info = decision_tree::collect_pattern_info(self, pattern, typed, subject_ty);
-        self.requirements.apply_effects(&info.effects);
-        let (effective, ok_var) = apply_refutable_root_assertion(self, output, &info, subject_var);
-        if info.checks.is_empty() && ok_var.is_none() {
-            emit_tree_bindings_with_consumers(self, output, &info.bindings, &effective, &[body]);
-            self.emit_body_to_place(output, body, place);
-            return;
+        fx.extend(&info.effects);
+        let mut statements = Vec::new();
+        let mut asserts = String::new();
+        let (effective, ok_var) =
+            apply_refutable_root_assertion(self, &mut asserts, &info, subject_var);
+        if !asserts.is_empty() {
+            statements.push(LoweredStatement::RawGo(asserts));
         }
+
+        if info.checks.is_empty() && ok_var.is_none() {
+            tree_binding_statements(self, &mut statements, &info.bindings, &effective, &[body]);
+            let block = self.lower_block_to_place(body, place, fx);
+            statements.extend(block.statements);
+            return statements;
+        }
+
         let condition = compose_refutable_condition(ok_var.as_deref(), &info.checks, &effective);
-        write_line!(output, "if {} {{", condition);
+        let mut then_body = Vec::new();
         let overlays =
-            emit_tree_bindings_with_consumers(self, output, &info.bindings, &effective, &[body]);
-        self.emit_body_to_place(output, body, place);
+            tree_binding_statements(self, &mut then_body, &info.bindings, &effective, &[body]);
+        let block = self.lower_block_to_place(body, place, fx);
+        then_body.extend(block.statements);
         drop_inline_overlays(self, &overlays);
-        failure(self, output);
-        output.push_str("}\n");
+        let else_arm = match failure(self, fx) {
+            Some(body) => ElseArm::Else {
+                body,
+                inline: false,
+            },
+            None => ElseArm::None,
+        };
+        statements.push(LoweredStatement::If(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition,
+            then_body: LoweredBlock {
+                statements: then_body,
+            },
+            else_arm,
+        }));
+        statements
     }
 }
 
-pub(crate) fn emit_none_arm_body(
-    emitter: &mut Emitter,
-    output: &mut String,
+pub(crate) fn lower_none_arm_body(
+    planner: &mut Planner,
     match_arms: &[MatchArm],
-    place: &BodyPlace,
-) {
+    place: &PlacePlan,
+    fx: &mut EmitEffects,
+) -> LoweredBlock {
     for match_arm in match_arms {
         if let Pattern::EnumVariant { identifier, .. } = &match_arm.pattern {
             let variant_name = go_name::unqualified_name(identifier);
             if variant_name == "None" {
-                emitter.emit_body_to_place(output, &match_arm.expression, place);
-                return;
+                return planner.lower_block_to_place(&match_arm.expression, place, fx);
             }
         }
+    }
+    LoweredBlock {
+        statements: Vec::new(),
     }
 }
 
 /// True when `Some(_)`-shaped (peeling any outer `as`-binding), with exactly
-/// one payload field. Used by select receive arms to decide whether the
-/// receive needs an `ok` check on channel closure.
+/// one payload field.
 pub(crate) fn is_some_pattern(pattern: &Pattern) -> bool {
     let pattern = peel_as_binding(pattern);
     if let Pattern::EnumVariant {
@@ -532,7 +664,7 @@ pub(crate) fn is_some_pattern(pattern: &Pattern) -> bool {
 }
 
 /// Peel `Some(inner)` to expose `inner`; returns the original pattern when
-/// the outer is not `Some(_)`. Pairs with `is_some_pattern` for select receive.
+/// the outer is not `Some(_)`.
 pub(crate) fn unwrap_some_pattern(pattern: &Pattern) -> &Pattern {
     let pattern = peel_as_binding(pattern);
     if let Pattern::EnumVariant {
@@ -567,7 +699,7 @@ fn peel_as_binding(pattern: &Pattern) -> &Pattern {
     }
 }
 
-impl Emitter<'_> {
+impl Planner<'_> {
     /// Map a `Some(pattern)` payload to a case-variable name and whether the
     /// payload needs decision-tree destructuring inside the arm body (rather
     /// than being bound directly by the `case v := <-ch:` header).
@@ -586,45 +718,35 @@ impl Emitter<'_> {
             _ => (self.fresh_var(Some("recv")), true),
         }
     }
+}
 
-    /// Emit a for-loop element destructure. Owns the header form decision:
-    /// when the pattern destructures nothing, emit `for range xs`; otherwise
-    /// capture into a fresh `item` var and route through the irrefutable site.
-    pub(crate) fn emit_for_loop_pattern_site(
-        &mut self,
-        output: &mut String,
-        binding: &Binding,
-        iter_expression: &str,
-        is_channel: bool,
-        body: &Expression,
-    ) {
-        if !Self::pattern_has_bindings(&binding.pattern) {
-            write_line!(output, "for range {} {{", iter_expression);
-            self.emit_block(output, body);
-            output.push_str("}\n");
-            return;
-        }
-        let item_var = self.fresh_var(Some("item"));
-        if is_channel {
-            write_line!(output, "for {} := range {} {{", item_var, iter_expression);
-        } else {
-            write_line!(
-                output,
-                "for _, {} := range {} {{",
-                item_var,
-                iter_expression
-            );
-        }
-        let guard = DiscardGuard::new(output, &item_var);
-        self.emit_irrefutable_pattern_site(
-            output,
-            PatternSubject::for_value(item_var),
-            &binding.pattern,
-            binding.typed_pattern.as_ref(),
-            &binding.ty,
-        );
-        self.emit_block(output, body);
-        guard.finish(output);
-        output.push_str("}\n");
+/// Fold the `(condition, body)` pieces plus a terminal `else` block into a
+/// nested if/else-if statement, built from the back. `pieces` must be
+/// non-empty.
+fn assemble_if_else_chain(
+    mut pieces: Vec<(String, LoweredBlock)>,
+    terminal: LoweredBlock,
+) -> LoweredStatement {
+    let mut else_arm = ElseArm::Else {
+        body: terminal,
+        inline: false,
+    };
+    while pieces.len() > 1 {
+        let (condition, then_body) = pieces.pop().expect("len > 1");
+        else_arm = ElseArm::ElseIf(Box::new(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition,
+            then_body,
+            else_arm,
+        }));
     }
+    let (condition, then_body) = pieces.pop().expect("pieces is non-empty");
+    LoweredStatement::If(IfPlan {
+        directive: String::new(),
+        condition_setup: String::new(),
+        condition,
+        then_body,
+        else_arm,
+    })
 }

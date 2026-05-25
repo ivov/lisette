@@ -1,10 +1,16 @@
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
+use crate::Renderer;
+use crate::calls::go_interop::build_tuple_literal;
+use crate::calls::go_interop::go_qualified_name;
+use crate::calls::go_interop::is_go_receiver;
+use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
-    Fallible, FallibleEmitter, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR,
+    Fallible, FalliblePlanner, PARTIAL_BOTH_CTOR, PARTIAL_ERR_CTOR, PARTIAL_OK_CTOR,
 };
-use crate::expressions::context::ExpressionContext;
 use crate::is_order_sensitive;
 use crate::names::go_name;
+use crate::plan::bodies::{ElseArm, IfPlan, LoweredBlock, LoweredStatement};
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
@@ -30,20 +36,27 @@ pub(super) enum ResolvedSink {
     Return,
 }
 
-pub(super) fn write_leaf(output: &mut String, sink: &ResolvedSink, value: &str) {
+/// `slot = value` / `return value` as a `RawGo` leaf.
+pub(super) fn leaf_statement(sink: &ResolvedSink, value: &str) -> LoweredStatement {
     match sink {
-        ResolvedSink::Slot(name) => write_line!(output, "{} = {}", name, value),
-        ResolvedSink::Return => write_line!(output, "return {}", value),
+        ResolvedSink::Slot(name) => LoweredStatement::RawGo(format!("{} = {}\n", name, value)),
+        ResolvedSink::Return => LoweredStatement::RawGo(format!("return {}\n", value)),
     }
 }
 
-impl Emitter<'_> {
-    /// Prepare a wrapper sink: declare `var slot T` for slot targets, or
-    /// route writes to `return` for `Return`. Caller emits branches via
-    /// `write_leaf`.
-    pub(super) fn open_wrapper_slot(
+/// A single-statement branch body for a wrapper-dispatch `If`.
+pub(super) fn leaf_block(sink: &ResolvedSink, value: &str) -> LoweredBlock {
+    LoweredBlock {
+        statements: vec![leaf_statement(sink, value)],
+    }
+}
+
+impl Planner<'_> {
+    /// Prepare a wrapper sink: declare `var slot T` (slot targets) or route
+    /// writes to `return`.
+    pub(super) fn push_wrapper_slot(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
         target: WrapperTarget<'_>,
         type_str: &str,
         name_hint: &'static str,
@@ -52,11 +65,17 @@ impl Emitter<'_> {
             WrapperTarget::FreshSlot => {
                 let var = self.fresh_var(Some(name_hint));
                 self.declare(&var);
-                write_line!(output, "var {} {}", var, type_str);
+                statements.push(LoweredStatement::RawGo(format!(
+                    "var {} {}\n",
+                    var, type_str
+                )));
                 (ResolvedSink::Slot(var.clone()), Some(var))
             }
             WrapperTarget::Slot(name) => {
-                write_line!(output, "var {} {}", name, type_str);
+                statements.push(LoweredStatement::RawGo(format!(
+                    "var {} {}\n",
+                    name, type_str
+                )));
                 self.declare(name);
                 let owned = name.to_string();
                 (ResolvedSink::Slot(owned.clone()), Some(owned))
@@ -65,112 +84,178 @@ impl Emitter<'_> {
         }
     }
 
-    /// Emit `slot := <expr>` for slot targets or `return <expr>` for `Return`.
-    pub(super) fn emit_simple_wrapper_value(
+    /// Typed counterpart of `extract_go_returns`.
+    fn push_go_returns(
         &mut self,
-        output: &mut String,
+        statements: &mut Vec<LoweredStatement>,
+        call_str: &str,
+        ok_ty: &Type,
+        fx: &mut EmitEffects,
+    ) -> (String, String) {
+        let mut buffer = String::new();
+        let result = self.extract_go_returns(&mut buffer, call_str, ok_ty, fx);
+        if !buffer.is_empty() {
+            statements.push(LoweredStatement::RawGo(buffer));
+        }
+        result
+    }
+
+    /// Single-leaf write for wrappers that fold to one constructor expression.
+    pub(super) fn push_simple_wrapper_value(
+        &mut self,
+        statements: &mut Vec<LoweredStatement>,
         target: WrapperTarget<'_>,
         name_hint: &'static str,
         value_expr: &str,
     ) -> WrapperOutcome {
         match target {
-            WrapperTarget::FreshSlot => Some(self.hoist_tmp_value(output, name_hint, value_expr)),
+            WrapperTarget::FreshSlot => {
+                Some(self.hoist_tmp_value_statement(statements, name_hint, value_expr))
+            }
             WrapperTarget::Slot(name) => {
                 self.declare(name);
-                write_line!(output, "{} := {}", name, value_expr);
+                statements.push(LoweredStatement::RawGo(format!(
+                    "{} := {}\n",
+                    name, value_expr
+                )));
                 Some(name.to_string())
             }
             WrapperTarget::Return => {
-                write_line!(output, "return {}", value_expr);
+                statements.push(LoweredStatement::RawGo(format!("return {}\n", value_expr)));
                 None
             }
         }
     }
 }
 
-impl Emitter<'_> {
-    pub(super) fn emit_go_tuple_call_wrapped(
+impl Planner<'_> {
+    pub(super) fn lower_go_tuple_call_wrapped(
         &mut self,
-        output: &mut String,
         call_expression: &Expression,
         arity: usize,
-    ) -> String {
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
         let Expression::Call { ty, .. } = call_expression else {
-            unreachable!("emit_go_tuple_call_wrapped called with non-call expression");
+            unreachable!("lower_go_tuple_call_wrapped called with non-call expression");
         };
 
-        let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
+        let (mut setup, call_str) =
+            self.lower_call(call_expression, None, ExpressionContext::value(), fx);
 
         let temp_vars = self.create_temp_vars("ret", arity);
+        setup.push(LoweredStatement::RawGo(format!(
+            "{} := {}\n",
+            temp_vars.join(", "),
+            call_str
+        )));
 
-        write_line!(output, "{} := {}", temp_vars.join(", "), call_str);
-
-        self.emit_tuple_from_vars(output, &temp_vars, ty)
+        let constructor = build_tuple_literal(&temp_vars, ty, fx);
+        let tuple = self.hoist_tmp_value_statement(&mut setup, "tup", &constructor);
+        (setup, tuple)
     }
 
-    pub(super) fn emit_go_partial_call_wrapped(
+    pub(super) fn lower_go_partial_call_wrapped(
         &mut self,
-        output: &mut String,
         call_expression: &Expression,
         partial_ty: &Type,
-    ) -> String {
-        self.requirements.require_stdlib();
-        let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
-        self.emit_partial_wrapping(output, &call_str, partial_ty, WrapperTarget::FreshSlot)
-            .expect("wrapper produced no slot")
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        fx.require_stdlib();
+        let (mut setup, call_str) =
+            self.lower_call(call_expression, None, ExpressionContext::value(), fx);
+        let (wrap_setup, outcome) =
+            self.lower_partial_wrapping(&call_str, partial_ty, WrapperTarget::FreshSlot, fx);
+        setup.extend(wrap_setup);
+        (setup, outcome.expect("wrapper produced no slot"))
     }
 
+    /// String-context bridge over `lower_partial_wrapping`.
     pub(crate) fn emit_partial_wrapping(
         &mut self,
         output: &mut String,
         call_str: &str,
         partial_ty: &Type,
         target: WrapperTarget<'_>,
+        fx: &mut EmitEffects,
     ) -> WrapperOutcome {
-        let ok_ty = partial_ty.ok_type();
-        let err_ty = partial_ty.err_type();
-        let ok_ty_str = self.go_type_as_string(&ok_ty);
-        let err_ty_str = self.go_type_as_string(&err_ty);
-        let pkg = go_name::GO_STDLIB_PKG;
-
-        let (err_var, val_var) = self.extract_go_returns(output, call_str, &ok_ty);
-        let nil_check = self.partial_ok_nil_check(&ok_ty, &val_var);
-
-        let type_params = format!("{}, {}", ok_ty_str, err_ty_str);
-        let result_ty_str = format!("{pkg}.Partial[{type_params}]");
-        let (sink, outcome) = self.open_wrapper_slot(output, target, &result_ty_str, "result");
-
-        let both = format!("{PARTIAL_BOTH_CTOR}[{type_params}]({val_var}, {err_var})");
-
-        write_line!(output, "if {} != nil {{", err_var);
-        if let Some(check) = &nil_check {
-            write_line!(output, "if {} {{", check);
-            write_leaf(
-                output,
-                &sink,
-                &format!("{PARTIAL_ERR_CTOR}[{type_params}]({err_var})"),
-            );
-            output.push_str("} else {\n");
-            write_leaf(output, &sink, &both);
-            output.push_str("}\n");
-        } else {
-            write_leaf(output, &sink, &both);
-        }
-        output.push_str("} else {\n");
-        write_leaf(
-            output,
-            &sink,
-            &format!("{PARTIAL_OK_CTOR}[{type_params}]({})", val_var),
-        );
-        output.push_str("}\n");
-
+        let (statements, outcome) = self.lower_partial_wrapping(call_str, partial_ty, target, fx);
+        output.push_str(&Renderer.render_setup(&statements));
         outcome
     }
 
+    /// Lower a `(T, error)` Go return into a tagged `Partial`.
+    pub(crate) fn lower_partial_wrapping(
+        &mut self,
+        call_str: &str,
+        partial_ty: &Type,
+        target: WrapperTarget<'_>,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, WrapperOutcome) {
+        let ok_ty = partial_ty.ok_type();
+        let err_ty = partial_ty.err_type();
+        let ok_ty_str = self.go_type_string(&ok_ty, fx);
+        let err_ty_str = self.go_type_string(&err_ty, fx);
+        let pkg = go_name::GO_STDLIB_PKG;
+
+        let mut statements = Vec::new();
+        let (err_var, val_var) = self.push_go_returns(&mut statements, call_str, &ok_ty, fx);
+        let nil_check = self.partial_ok_nil_check(&ok_ty, &val_var, fx);
+
+        let type_params = format!("{}, {}", ok_ty_str, err_ty_str);
+        let result_ty_str = format!("{pkg}.Partial[{type_params}]");
+        let (sink, outcome) =
+            self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
+
+        let both = format!("{PARTIAL_BOTH_CTOR}[{type_params}]({val_var}, {err_var})");
+
+        let then_body = if let Some(check) = &nil_check {
+            let inner = IfPlan {
+                directive: String::new(),
+                condition_setup: String::new(),
+                condition: check.clone(),
+                then_body: leaf_block(
+                    &sink,
+                    &format!("{PARTIAL_ERR_CTOR}[{type_params}]({err_var})"),
+                ),
+                else_arm: ElseArm::Else {
+                    body: leaf_block(&sink, &both),
+                    inline: false,
+                },
+            };
+            LoweredBlock {
+                statements: vec![LoweredStatement::If(inner)],
+            }
+        } else {
+            leaf_block(&sink, &both)
+        };
+
+        let else_arm = ElseArm::Else {
+            body: leaf_block(
+                &sink,
+                &format!("{PARTIAL_OK_CTOR}[{type_params}]({})", val_var),
+            ),
+            inline: false,
+        };
+
+        statements.push(LoweredStatement::If(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition: format!("{} != nil", err_var),
+            then_body,
+            else_arm,
+        }));
+        (statements, outcome)
+    }
+
     /// Nil check for a `Partial` ok value; `None` when the type cannot be nil.
-    fn partial_ok_nil_check(&mut self, ok_ty: &Type, val: &str) -> Option<String> {
+    fn partial_ok_nil_check(
+        &mut self,
+        ok_ty: &Type,
+        val: &str,
+        fx: &mut EmitEffects,
+    ) -> Option<String> {
         if self.facts.as_interface(ok_ty).is_some() {
-            self.requirements.require_stdlib();
+            fx.require_stdlib();
             return Some(format!("lisette.IsNilInterface({val})"));
         }
         let peeled = self.facts.peel_alias(ok_ty);
@@ -181,36 +266,55 @@ impl Emitter<'_> {
         nilable.then(|| format!("{val} == nil"))
     }
 
-    pub(super) fn emit_go_result_call_wrapped(
+    pub(super) fn lower_go_result_call_wrapped(
         &mut self,
-        output: &mut String,
         call_expression: &Expression,
         result_ty: &Type,
-    ) -> String {
-        self.requirements.require_stdlib();
-        let call_str = self.emit_call(output, call_expression, None, ExpressionContext::value());
-        self.emit_result_wrapping(output, &call_str, result_ty, WrapperTarget::FreshSlot)
-            .expect("wrapper produced no slot")
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, String) {
+        fx.require_stdlib();
+        let (mut setup, call_str) =
+            self.lower_call(call_expression, None, ExpressionContext::value(), fx);
+        let (wrap_setup, outcome) =
+            self.lower_result_wrapping(&call_str, result_ty, WrapperTarget::FreshSlot, fx);
+        setup.extend(wrap_setup);
+        (setup, outcome.expect("wrapper produced no slot"))
     }
 
+    /// String-context bridge over `lower_result_wrapping`.
     pub(crate) fn emit_result_wrapping(
         &mut self,
         output: &mut String,
         call_str: &str,
         result_ty: &Type,
         target: WrapperTarget<'_>,
+        fx: &mut EmitEffects,
     ) -> WrapperOutcome {
+        let (statements, outcome) = self.lower_result_wrapping(call_str, result_ty, target, fx);
+        output.push_str(&Renderer.render_setup(&statements));
+        outcome
+    }
+
+    /// Lower a `(T, error)` Go return into a tagged `Result`.
+    pub(crate) fn lower_result_wrapping(
+        &mut self,
+        call_str: &str,
+        result_ty: &Type,
+        target: WrapperTarget<'_>,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, WrapperOutcome) {
         let fallible = Fallible::from_type(result_ty).expect("Result type expected");
 
         if fallible.ok_ty().is_unit() {
-            return self.emit_unit_result_wrapping(output, call_str, &fallible, target);
+            return self.lower_unit_result_wrapping(call_str, &fallible, target, fx);
         }
 
+        let mut statements = Vec::new();
         let ok_ty = fallible.ok_ty();
-        let (err_var, ok_val) = self.extract_go_returns(output, call_str, ok_ty);
+        let (err_var, ok_val) = self.push_go_returns(&mut statements, call_str, ok_ty, fx);
 
         let result_ty_str = {
-            let mut fe = FallibleEmitter::new(self, &fallible);
+            let mut fe = FalliblePlanner::new(self, &fallible, fx);
             fe.full_type_string()
         };
 
@@ -220,85 +324,123 @@ impl Emitter<'_> {
                 .as_deref()
                 .is_some_and(|id| id != go_name::PRELUDE_ERROR_ID);
 
-        let (sink, outcome) = self.open_wrapper_slot(output, target, &result_ty_str, "result");
-
-        write_line!(output, "if {} != nil {{", err_var);
+        let (sink, outcome) =
+            self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
         let err_wrapper = {
-            let mut fe = FallibleEmitter::new(self, &fallible);
+            let mut fe = FalliblePlanner::new(self, &fallible, fx);
             fe.emit_failure(Some(&err_var))
         };
-        write_leaf(output, &sink, &err_wrapper);
+        let then_body = leaf_block(&sink, &err_wrapper);
 
-        if needs_nil_guard {
-            self.emit_nil_guard(output, &ok_val, ok_ty, &sink, &fallible);
-        }
-
-        output.push_str("} else {\n");
-
-        let ok_wrapper = {
-            let mut fe = FallibleEmitter::new(self, &fallible);
-            fe.emit_success(&ok_val)
+        let else_arm = if needs_nil_guard {
+            let nil_check = if ok_ty.is_tuple() {
+                format!("{}.First", ok_val)
+            } else {
+                ok_val.clone()
+            };
+            let nil_condition = if self.facts.is_interface(ok_ty) {
+                format!("lisette.IsNilInterface({})", nil_check)
+            } else {
+                format!("{} == nil", nil_check)
+            };
+            fx.require_errors();
+            let nil_err = {
+                let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                fe.emit_failure(Some("errors.New(\"unexpected nil\")"))
+            };
+            let ok_wrapper = {
+                let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                fe.emit_success(&ok_val)
+            };
+            ElseArm::ElseIf(Box::new(IfPlan {
+                directive: String::new(),
+                condition_setup: String::new(),
+                condition: nil_condition,
+                then_body: leaf_block(&sink, &nil_err),
+                else_arm: ElseArm::Else {
+                    body: leaf_block(&sink, &ok_wrapper),
+                    inline: false,
+                },
+            }))
+        } else {
+            let ok_wrapper = {
+                let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                fe.emit_success(&ok_val)
+            };
+            ElseArm::Else {
+                body: leaf_block(&sink, &ok_wrapper),
+                inline: false,
+            }
         };
-        write_leaf(output, &sink, &ok_wrapper);
 
-        output.push_str("}\n");
-
-        outcome
+        statements.push(LoweredStatement::If(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition: format!("{} != nil", err_var),
+            then_body,
+            else_arm,
+        }));
+        (statements, outcome)
     }
 
-    fn emit_unit_result_wrapping(
+    fn lower_unit_result_wrapping(
         &mut self,
-        output: &mut String,
         call_str: &str,
         fallible: &Fallible,
         target: WrapperTarget<'_>,
-    ) -> WrapperOutcome {
-        let err_var = self.hoist_tmp_value(output, "ret", call_str);
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, WrapperOutcome) {
+        let mut statements = Vec::new();
+        let err_var = self.hoist_tmp_value_statement(&mut statements, "ret", call_str);
 
         let result_ty_str = {
-            let mut fe = FallibleEmitter::new(self, fallible);
+            let mut fe = FalliblePlanner::new(self, fallible, fx);
             fe.full_type_string()
         };
 
-        let (sink, outcome) = self.open_wrapper_slot(output, target, &result_ty_str, "result");
-
-        write_line!(output, "if {} != nil {{", err_var);
+        let (sink, outcome) =
+            self.push_wrapper_slot(&mut statements, target, &result_ty_str, "result");
 
         let err_wrapper = {
-            let mut fe = FallibleEmitter::new(self, fallible);
+            let mut fe = FalliblePlanner::new(self, fallible, fx);
             fe.emit_failure(Some(&err_var))
         };
-        write_leaf(output, &sink, &err_wrapper);
-
-        output.push_str("} else {\n");
+        let then_body = leaf_block(&sink, &err_wrapper);
 
         let ok_wrapper = {
-            let mut fe = FallibleEmitter::new(self, fallible);
+            let mut fe = FalliblePlanner::new(self, fallible, fx);
             fe.emit_success("struct{}{}")
         };
-        write_leaf(output, &sink, &ok_wrapper);
+        let else_arm = ElseArm::Else {
+            body: leaf_block(&sink, &ok_wrapper),
+            inline: false,
+        };
 
-        output.push_str("}\n");
-
-        outcome
+        statements.push(LoweredStatement::If(IfPlan {
+            directive: String::new(),
+            condition_setup: String::new(),
+            condition: format!("{} != nil", err_var),
+            then_body,
+            else_arm,
+        }));
+        (statements, outcome)
     }
 
-    /// Destructure a Go multi-return call into error and value variables.
-    ///
-    /// For tuple ok types, creates N+1 temp variables and rebuilds the Lisette tuple.
-    /// For non-tuple ok types, creates 2 temp variables (value, error).
+    /// Destructure a Go multi-return into error and value temps. Tuple ok
+    /// types get N+1 temps and a rebuilt Lisette tuple; others get 2 temps.
     fn extract_go_returns(
         &mut self,
         output: &mut String,
         call_str: &str,
         ok_ty: &Type,
+        fx: &mut EmitEffects,
     ) -> (String, String) {
         if let Type::Tuple(elements) = ok_ty {
             let tuple_arity = elements.len();
             let temp_vars = self.create_temp_vars("ret", tuple_arity + 1);
             write_line!(output, "{} := {}", temp_vars.join(", "), call_str);
-            let tuple_var = self.emit_tuple_from_vars(output, &temp_vars[..tuple_arity], ok_ty);
+            let tuple_var = self.emit_tuple_from_vars(output, &temp_vars[..tuple_arity], ok_ty, fx);
             (temp_vars.last().unwrap().clone(), tuple_var)
         } else {
             let val_var = self.fresh_var(Some("ret"));
@@ -310,37 +452,6 @@ impl Emitter<'_> {
         }
     }
 
-    fn emit_nil_guard(
-        &mut self,
-        output: &mut String,
-        ok_val: &str,
-        ok_ty: &Type,
-        sink: &ResolvedSink,
-        fallible: &Fallible,
-    ) {
-        let nil_check = if ok_ty.is_tuple() {
-            format!("{}.First", ok_val)
-        } else {
-            ok_val.to_string()
-        };
-
-        let is_interface = self.facts.is_interface(ok_ty);
-        if is_interface {
-            write_line!(
-                output,
-                "}} else if lisette.IsNilInterface({}) {{",
-                nil_check
-            );
-        } else {
-            write_line!(output, "}} else if {} == nil {{", nil_check);
-        }
-
-        self.requirements.require_errors();
-        let mut fe = FallibleEmitter::new(self, fallible);
-        let nil_err = fe.emit_failure(Some("errors.New(\"unexpected nil\")"));
-        write_leaf(output, sink, &nil_err);
-    }
-
     pub(crate) fn classify_go_fn_value(&self, expression: &Expression) -> Option<GoCallStrategy> {
         let inner = expression.unwrap_parens();
 
@@ -348,7 +459,7 @@ impl Emitter<'_> {
             expression: receiver,
             ..
         } = inner
-            && Self::is_go_receiver(receiver)
+            && is_go_receiver(receiver)
         {
             let fn_type = expression.get_type();
             let Type::Function { return_type, .. } = fn_type.unwrap_forall() else {
@@ -362,7 +473,7 @@ impl Emitter<'_> {
                 ..
             } = inner
             {
-                self.go_qualified_name(receiver_expression, member)
+                go_qualified_name(receiver_expression, member)
                     .and_then(|name| self.facts.definition(name.as_str()))
                     .map(|d| d.go_hints().to_vec())
                     .unwrap_or_default()
@@ -382,15 +493,20 @@ impl Emitter<'_> {
             member,
             ..
         } = expression.unwrap_parens()
-            && Self::is_go_receiver(receiver)
+            && is_go_receiver(receiver)
         {
             return self.has_go_array_return(receiver, member);
         }
         false
     }
 
-    fn hoist_go_fn_if_needed(&mut self, output: &mut String, expression: &Expression) -> String {
-        let go_fn_str = self.emit_operand(output, expression, ExpressionContext::value());
+    fn hoist_go_fn_if_needed(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        fx: &mut EmitEffects,
+    ) -> String {
+        let go_fn_str = self.emit_operand(output, expression, ExpressionContext::value(), fx);
 
         let is_go_module_fn = matches!(
             expression.unwrap_parens(),
@@ -409,15 +525,19 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn build_wrapper_params(&mut self, params: &[Type]) -> (Vec<String>, Vec<String>) {
+    pub(crate) fn build_wrapper_params(
+        &mut self,
+        params: &[Type],
+        fx: &mut EmitEffects,
+    ) -> (Vec<String>, Vec<String>) {
         let mut param_strs = Vec::new();
         let mut arg_names = Vec::new();
-        let last_idx = params.len().saturating_sub(1);
+        let last_index = params.len().saturating_sub(1);
         for (i, param_ty) in params.iter().enumerate() {
             let name = format!("arg{}", i);
-            let ty_str = self.go_type_as_string(param_ty);
+            let ty_str = self.go_type_string(param_ty, fx);
             param_strs.push(format!("{} {}", name, ty_str));
-            if i == last_idx && param_ty.get_name() == Some("VarArgs") {
+            if i == last_index && param_ty.get_name() == Some("VarArgs") {
                 arg_names.push(format!("{}...", name));
             } else {
                 arg_names.push(name);
@@ -426,11 +546,14 @@ impl Emitter<'_> {
         (param_strs, arg_names)
     }
 
-    pub(crate) fn emit_array_return_wrapper(
+    /// Common wrapper-builder prologue: returns `(return_type, param_strs,
+    /// call_str)` for a go-fn expression, or `None` for non-function types.
+    fn wrapper_call_parts(
         &mut self,
         output: &mut String,
         expression: &Expression,
-    ) -> String {
+        fx: &mut EmitEffects,
+    ) -> Option<(Type, Vec<String>, String)> {
         let fn_type = expression.get_type();
         let (params, return_type) = match fn_type.unwrap_forall() {
             Type::Function {
@@ -438,14 +561,27 @@ impl Emitter<'_> {
                 return_type,
                 ..
             } => (params.clone(), (**return_type).clone()),
-            _ => return self.emit_operand(output, expression, ExpressionContext::value()),
+            _ => return None,
+        };
+        let go_fn_str = self.hoist_go_fn_if_needed(output, expression, fx);
+        let (param_strs, arg_names) = self.build_wrapper_params(&params, fx);
+        let call_str = format!("{}({})", go_fn_str, arg_names.join(", "));
+        Some((return_type, param_strs, call_str))
+    }
+
+    pub(crate) fn emit_array_return_wrapper(
+        &mut self,
+        output: &mut String,
+        expression: &Expression,
+        fx: &mut EmitEffects,
+    ) -> String {
+        let Some((return_type, param_strs, call_str)) =
+            self.wrapper_call_parts(output, expression, fx)
+        else {
+            return self.emit_operand(output, expression, ExpressionContext::value(), fx);
         };
 
-        let go_fn_str = self.hoist_go_fn_if_needed(output, expression);
-        let (param_strs, arg_names) = self.build_wrapper_params(&params);
-
-        let ret_ty_str = self.go_type_as_string(&return_type);
-        let call_str = format!("{}({})", go_fn_str, arg_names.join(", "));
+        let ret_ty_str = self.go_type_string(&return_type, fx);
 
         let arr_var = self.fresh_var(Some("arr"));
         self.declare(&arr_var);
@@ -465,36 +601,32 @@ impl Emitter<'_> {
         output: &mut String,
         expression: &Expression,
         strategy: &GoCallStrategy,
+        fx: &mut EmitEffects,
     ) -> String {
-        self.requirements.require_stdlib();
+        fx.require_stdlib();
 
-        let fn_type = expression.get_type();
-        let (params, return_type) = match fn_type.unwrap_forall() {
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => (params.clone(), (**return_type).clone()),
-            _ => unreachable!("expected function type"),
-        };
+        let (return_type, param_strs, call_str) = self
+            .wrapper_call_parts(output, expression, fx)
+            .expect("expected function type");
 
-        let go_fn_str = self.hoist_go_fn_if_needed(output, expression);
-        let (param_strs, arg_names) = self.build_wrapper_params(&params);
-
-        let ret_ty_str = self.go_type_as_string(&return_type);
-        let call_str = format!("{}({})", go_fn_str, arg_names.join(", "));
+        let ret_ty_str = self.go_type_string(&return_type, fx);
 
         let mut body = String::new();
         let outcome = match strategy {
-            GoCallStrategy::Result => {
-                self.emit_result_wrapping(&mut body, &call_str, &return_type, WrapperTarget::Return)
-            }
+            GoCallStrategy::Result => self.emit_result_wrapping(
+                &mut body,
+                &call_str,
+                &return_type,
+                WrapperTarget::Return,
+                fx,
+            ),
             GoCallStrategy::CommaOk => self.emit_comma_ok_wrapping(
                 &mut body,
                 &call_str,
                 &return_type,
                 true,
                 WrapperTarget::Return,
+                fx,
             ),
             GoCallStrategy::NullableReturn => {
                 let raw_var = self.hoist_tmp_value(&mut body, "raw", &call_str);
@@ -503,12 +635,13 @@ impl Emitter<'_> {
                     &raw_var,
                     &return_type,
                     WrapperTarget::Return,
+                    fx,
                 )
             }
             GoCallStrategy::Tuple { arity } => {
                 let temp_vars = self.create_temp_vars("ret", *arity);
                 write_line!(body, "{} := {}", temp_vars.join(", "), call_str);
-                let tuple_str = self.emit_tuple_from_vars(&mut body, &temp_vars, &return_type);
+                let tuple_str = self.emit_tuple_from_vars(&mut body, &temp_vars, &return_type, fx);
                 Some(tuple_str)
             }
             GoCallStrategy::Partial => self.emit_partial_wrapping(
@@ -516,6 +649,7 @@ impl Emitter<'_> {
                 &call_str,
                 &return_type,
                 WrapperTarget::Return,
+                fx,
             ),
             GoCallStrategy::Sentinel { value } => self.emit_sentinel_wrapping(
                 &mut body,
@@ -523,6 +657,7 @@ impl Emitter<'_> {
                 &return_type,
                 *value,
                 WrapperTarget::Return,
+                fx,
             ),
         };
 
@@ -543,36 +678,27 @@ impl Emitter<'_> {
         &mut self,
         output: &mut String,
         expression: &Expression,
+        fx: &mut EmitEffects,
     ) -> String {
-        self.requirements.require_stdlib();
+        fx.require_stdlib();
 
-        let fn_type = expression.get_type();
-        let (params, return_type) = match fn_type.unwrap_forall() {
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => (params.clone(), (**return_type).clone()),
-            _ => unreachable!("expected function type"),
-        };
-
-        let go_fn_str = self.hoist_go_fn_if_needed(output, expression);
-        let (param_strs, arg_names) = self.build_wrapper_params(&params);
+        let (return_type, param_strs, call_str) = self
+            .wrapper_call_parts(output, expression, fx)
+            .expect("expected function type");
 
         let ok_ty = return_type.ok_type();
         let err_ty = return_type.err_type();
         let ret_ty_str = format!(
             "({}, {})",
-            self.go_type_as_string(&ok_ty),
-            self.go_type_as_string(&err_ty)
+            self.go_type_string(&ok_ty, fx),
+            self.go_type_string(&err_ty, fx)
         );
-        let call_str = format!("{}({})", go_fn_str, arg_names.join(", "));
         let arity = ok_ty.tuple_arity().expect("tuple ok type");
 
         let mut body = String::new();
         let temp_vars = self.create_temp_vars("ret", arity + 1);
         write_line!(body, "{} := {}", temp_vars.join(", "), call_str);
-        let tuple_str = self.emit_tuple_from_vars(&mut body, &temp_vars[..arity], &ok_ty);
+        let tuple_str = self.emit_tuple_from_vars(&mut body, &temp_vars[..arity], &ok_ty, fx);
         write_line!(body, "return {}, {}", tuple_str, temp_vars[arity]);
 
         format!(

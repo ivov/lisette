@@ -1,46 +1,48 @@
-pub(crate) mod bindings;
+mod abi;
+mod analyze;
 pub(crate) mod calls;
-mod collectors;
-mod constraint_collector;
+pub(crate) mod context;
 pub(crate) mod control_flow;
 pub(crate) mod definitions;
 pub(crate) mod expressions;
-mod facts;
-pub mod imports;
-mod inline_uses;
-mod module_state;
 pub(crate) mod names;
 mod output;
 pub(crate) mod patterns;
-mod placement;
-pub(crate) mod queries;
-mod requirements;
-mod scope;
+mod plan;
+mod render;
+mod state;
 pub(crate) mod statements;
 pub(crate) mod types;
 mod utils;
 
-pub(crate) use bindings::Bindings;
+pub(crate) use analyze::facts::EmitFacts;
 pub(crate) use calls::go_interop::GoCallStrategy;
+pub(crate) use context::lowering::{LineIndex, LoopContext, ReturnContext};
 pub(crate) use definitions::enum_layout::EnumLayout;
-pub(crate) use facts::EmitFacts;
 pub(crate) use names::go_name;
 pub(crate) use names::go_name::escape_reserved;
 pub(crate) use output::OutputCollector;
-pub(crate) use requirements::EmitEffects;
-pub(crate) use types::emitter::{LineIndex, LoopContext, ReturnContext};
+pub(crate) use render::Renderer;
+pub(crate) use state::bindings::Bindings;
+pub(crate) use state::effects::EmitEffects;
 pub(crate) use types::prelude::PreludeType;
 pub(crate) use utils::is_order_sensitive;
 pub(crate) use utils::write_line;
 
 pub use names::go_name::PRELUDE_IMPORT_PATH;
 pub use output::OutputFile;
+pub use output::imports;
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::sync::Arc;
 
-use ecow::EcoString;
-use imports::ImportBuilder;
+use analyze::facts::{EmitFactsConfig, is_nullable_option};
+use output::imports::ImportBuilder;
+use plan::ModulePlan;
+use plan::bodies::{LoweredBlock, LoweredStatement};
+use state::adapter_registry::AdapterRegistry;
+use state::module_state::{FunctionEmissionState, ModuleState};
+use state::scope::ScopeState;
 use syntax::ast::Span;
 use syntax::program::{
     Definition, DefinitionBody, EmitInput, File, ModuleId, MutationInfo, UnusedInfo,
@@ -124,8 +126,7 @@ impl GlobalEmitData {
     }
 }
 
-/// Make-function name registry entries for a user-declared enum, paralleling
-/// [`PreludeType::make_function_entries`].
+/// Make-function name registry entries for a user-declared enum.
 pub(crate) fn user_enum_make_function_entries<'a>(
     name: &'a str,
     variants: &'a [syntax::ast::EnumVariant],
@@ -153,7 +154,7 @@ pub(crate) fn classify_go_return_type(
         if let Some(value) = sentinel_hint(go_hints) {
             return Some(GoCallStrategy::Sentinel { value });
         }
-        if !facts::is_nullable_option(definitions, return_ty) {
+        if !is_nullable_option(definitions, return_ty) {
             return Some(GoCallStrategy::CommaOk);
         }
         if go_hints.iter().any(|s| s == "comma_ok") {
@@ -187,25 +188,15 @@ pub struct TestEmitConfig<'a> {
     pub go_module_ids: &'a HashSet<String>,
 }
 
-pub struct Emitter<'a> {
+pub struct Planner<'a> {
     pub(crate) facts: EmitFacts<'a>,
-    pub(crate) module: module_state::ModuleState,
-    pub(crate) function_state: module_state::FunctionEmissionState,
-    pub(crate) scope: scope::ScopeState,
-
-    synthesized_adapter_types: HashMap<(EcoString, EcoString), String>,
-    pending_adapter_types: Vec<String>,
-
-    // Per-file accumulated state (reset between files)
-    pub(crate) requirements: requirements::EmitRequirements,
-
-    /// Fallback for deep callers that cannot reach a `&ReturnContext` threaded
-    /// from a tail boundary. Set only at function/lambda/try/recover scope
-    /// entry via `with_scope_return_context_fallback`.
-    scope_return_context_fallback: ReturnContext,
+    pub(crate) module: ModuleState,
+    pub(crate) function_state: FunctionEmissionState,
+    pub(crate) scope: ScopeState,
+    pub(crate) adapter_registry: AdapterRegistry,
 }
 
-impl<'a> Emitter<'a> {
+impl<'a> Planner<'a> {
     pub(crate) fn return_context_for_type(&self, return_ty: Type) -> ReturnContext {
         match self.classify_direct_emission(&return_ty) {
             Some(shape) => ReturnContext::Lowered { return_ty, shape },
@@ -213,22 +204,15 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub(crate) fn scope_return_context_fallback(&self) -> &ReturnContext {
-        &self.scope_return_context_fallback
-    }
-
-    pub(crate) fn with_scope_return_context_fallback<F, R>(&mut self, ctx: ReturnContext, f: F) -> R
-    where
-        F: FnOnce(&mut Self) -> R,
-    {
-        let saved = std::mem::replace(&mut self.scope_return_context_fallback, ctx);
-        let result = f(self);
-        self.scope_return_context_fallback = saved;
-        result
+    /// Append this file's newly-synthesized adapter declarations to `source`.
+    pub(crate) fn drain_file_emission_into(&mut self, source: &mut OutputCollector) {
+        for adapter_declaration in self.adapter_registry.flush_new_declarations() {
+            source.collect_with_blank(adapter_declaration);
+        }
     }
 }
 
-impl<'a> Emitter<'a> {
+impl<'a> Planner<'a> {
     pub fn emit(analysis: &'a EmitInput, go_module: &str, options: EmitOptions) -> Vec<OutputFile> {
         let line_indexes: Arc<HashMap<u32, LineIndex>> = Arc::new(if options.debug {
             analysis
@@ -291,7 +275,7 @@ impl<'a> Emitter<'a> {
             None => (false, Arc::new(HashMap::default())),
         };
         let globals = Arc::new(GlobalEmitData::compute(config.definitions));
-        let facts = EmitFacts::new(facts::EmitFactsConfig {
+        let facts = EmitFacts::new(EmitFactsConfig {
             definitions: config.definitions,
             unused: config.unused,
             mutations: config.mutations,
@@ -311,13 +295,10 @@ impl<'a> Emitter<'a> {
     fn new(facts: EmitFacts<'a>) -> Self {
         Self {
             facts,
-            module: module_state::ModuleState::default(),
-            function_state: module_state::FunctionEmissionState::default(),
-            scope: scope::ScopeState::new(),
-            synthesized_adapter_types: HashMap::default(),
-            pending_adapter_types: Vec::new(),
-            requirements: requirements::EmitRequirements::new(),
-            scope_return_context_fallback: ReturnContext::None,
+            module: ModuleState::default(),
+            function_state: FunctionEmissionState::default(),
+            scope: ScopeState::new(),
+            adapter_registry: AdapterRegistry::default(),
         }
     }
 
@@ -365,7 +346,23 @@ impl<'a> Emitter<'a> {
     ) -> String {
         let tmp = self.fresh_var(Some(hint));
         self.declare(&tmp);
-        utils::write_line!(output, "{} := {}", tmp, value);
+        write_line!(output, "{} := {}", tmp, value);
+        tmp
+    }
+
+    /// Structured counterpart of `hoist_tmp_value`: push a `TempBind` leaf.
+    pub(crate) fn hoist_tmp_value_statement(
+        &mut self,
+        setup: &mut Vec<LoweredStatement>,
+        hint: &str,
+        value: &str,
+    ) -> String {
+        let tmp = self.fresh_var(Some(hint));
+        self.declare(&tmp);
+        setup.push(LoweredStatement::TempBind {
+            name: tmp.clone(),
+            value: value.to_string(),
+        });
         tmp
     }
 
@@ -380,14 +377,18 @@ impl<'a> Emitter<'a> {
         (captured, value)
     }
 
-    pub(crate) fn capture_scoped<F>(&mut self, output: &mut String, f: F) -> Option<String>
+    /// Run `f` inside a fresh scope to build a `LoweredBlock`, returning `None`
+    /// when it renders empty.
+    pub(crate) fn capture_scoped_block<F>(&mut self, f: F) -> Option<LoweredBlock>
     where
-        F: FnOnce(&mut Self, &mut String),
+        F: FnOnce(&mut Self) -> LoweredBlock,
     {
         self.enter_scope();
-        let (captured, ()) = self.capture_emission(output, |this, buf| f(this, buf));
+        let block = f(self);
         self.exit_scope();
-        (!captured.is_empty()).then_some(captured)
+        let mut buffer = String::new();
+        Renderer.render_lowered_block(&mut buffer, &block);
+        (!buffer.is_empty()).then_some(block)
     }
 
     pub(crate) fn enter_scope(&mut self) {
@@ -450,65 +451,53 @@ impl<'a> Emitter<'a> {
     }
 
     pub fn emit_files(&mut self, files: &[&File], module_id: &str) -> Vec<OutputFile> {
-        self.facts.set_current_module(module_id);
-        self.collect_module_aliases(files);
-        self.collect_local_exported_method_names(files);
-        self.collect_generic_constraints(files);
-        self.collect_enum_layouts();
-        self.collect_escape_remap(files);
-        let mut make_functions_by_file = self.collect_local_make_function_code();
+        let plan = self.build_module_plan(files, module_id);
+        self.render_module_plan(files, &plan)
+    }
 
+    fn render_module_plan(&mut self, files: &[&File], plan: &ModulePlan) -> Vec<OutputFile> {
         let mut output_files = Vec::new();
 
-        let package_name = if self.facts.is_entry_module(module_id) {
-            "main".to_string()
-        } else {
-            let raw = module_id.rsplit('/').next().unwrap_or(module_id);
-            go_name::sanitize_package_name(raw).into_owned()
-        };
+        for (i, (file, file_plan)) in files.iter().zip(&plan.files).enumerate() {
+            debug_assert_eq!(file.id, file_plan.file_id, "plan/file order mismatch");
 
-        for file in files {
             let mut source = OutputCollector::new();
 
-            if let Some(functions) = make_functions_by_file.remove(&file.id) {
-                for function in functions {
-                    source.collect_with_blank(function);
-                }
+            for function in &file_plan.make_functions {
+                source.collect_with_blank(function.clone());
             }
 
-            self.pending_adapter_types.clear();
-
+            let mut fx = EmitEffects::default();
             for expression in &file.items {
                 self.scope.reset_for_top_level();
-                let code = self.emit_top_item(expression);
+                let code = self.emit_top_item(expression, &mut fx);
                 if !code.is_empty() {
                     source.collect_with_blank(code);
                 }
             }
 
-            for adapter_decl in std::mem::take(&mut self.pending_adapter_types) {
-                source.collect_with_blank(adapter_decl);
+            let mut import_builder =
+                ImportBuilder::from_plan(&file_plan.imports, self.facts.go_package_names());
+
+            self.drain_file_emission_into(&mut source);
+            fx.drain_into(&mut import_builder);
+            if i == 0 {
+                plan.collection_effects.drain_into(&mut import_builder);
             }
-
-            let mut import_builder = ImportBuilder::new(
-                self.facts.go_module(),
-                self.facts.unused_imports_for_current_module(),
-                self.facts.go_package_names(),
-            );
-            import_builder.collect_from_file(file);
-
-            self.requirements.drain_into(&mut import_builder);
 
             import_builder.filter_unused_imports();
 
             let rendered_source = source.render();
 
-            let (imports, diagnostics) = import_builder.build();
+            let (imports, mut diagnostics) = import_builder.build();
+            if i == 0 {
+                diagnostics.extend(plan.collision_diagnostics.iter().cloned());
+            }
             output_files.push(OutputFile {
-                name: file.go_filename(),
+                name: file_plan.output_name.clone(),
                 imports,
                 source: rendered_source,
-                package_name: package_name.clone(),
+                package_name: plan.package_name.clone(),
                 diagnostics,
             });
         }
@@ -526,7 +515,7 @@ fn emit_module<'a>(
     module_id: &str,
     module_info: &syntax::program::ModuleInfo,
 ) -> Vec<OutputFile> {
-    let facts = EmitFacts::new(facts::EmitFactsConfig {
+    let facts = EmitFacts::new(EmitFactsConfig {
         definitions: &analysis.definitions,
         unused: &analysis.unused,
         mutations: &analysis.mutations,
@@ -540,7 +529,7 @@ fn emit_module<'a>(
         globals: globals.clone(),
         current_module: module_id.to_string(),
     });
-    let mut emitter: Emitter<'a> = Emitter::new(facts);
+    let mut planner: Planner<'a> = Planner::new(facts);
 
     let files: Vec<_> = module_info
         .file_ids
@@ -548,7 +537,7 @@ fn emit_module<'a>(
         .filter_map(|fid| analysis.files.get(fid))
         .collect();
 
-    let mut module_output = emitter.emit_files(&files, module_id);
+    let mut module_output = planner.emit_files(&files, module_id);
 
     if module_id != analysis.entry_module_id.as_str() {
         for file in &mut module_output {

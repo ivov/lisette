@@ -1,5 +1,5 @@
 use diagnostics::SemanticResult;
-use emit::{EmitOptions, Emitter};
+use emit::{EmitOptions, Planner};
 use semantics::analyze::{AnalyzeInput, SemanticConfig, analyze};
 use semantics::loader::Loader;
 use semantics::store::ENTRY_MODULE_ID;
@@ -134,7 +134,7 @@ pub fn compile_project_files(
         analysis.errors
     );
 
-    Emitter::emit(
+    Planner::emit(
         &analysis.into_emit_input(),
         go_module,
         EmitOptions { debug },

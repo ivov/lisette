@@ -1,6 +1,6 @@
 use syntax::ast::{Expression, SelectArmPattern};
 
-use crate::patterns::bindings::pattern_binds_name;
+use crate::patterns::binding_decls::pattern_binds_name;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InlineDecision {
@@ -185,30 +185,20 @@ impl<'a> Walker<'a> {
                 ..
             } => {
                 self.walk(scrutinee);
-                let shadow = pattern_binds_name(pattern, self.name);
-                if shadow {
-                    self.shadow_depth += 1;
-                }
-                self.walk(consequence);
-                if shadow {
-                    self.shadow_depth -= 1;
-                }
+                self.with_shadow(pattern_binds_name(pattern, self.name), |w| {
+                    w.walk(consequence)
+                });
                 self.walk(alternative);
             }
             Expression::Match { subject, arms, .. } => {
                 self.walk(subject);
                 for arm in arms {
-                    let shadow = pattern_binds_name(&arm.pattern, self.name);
-                    if shadow {
-                        self.shadow_depth += 1;
-                    }
-                    if let Some(guard) = arm.guard.as_ref() {
-                        self.walk(guard);
-                    }
-                    self.walk(&arm.expression);
-                    if shadow {
-                        self.shadow_depth -= 1;
-                    }
+                    self.with_shadow(pattern_binds_name(&arm.pattern, self.name), |w| {
+                        if let Some(guard) = arm.guard.as_ref() {
+                            w.walk(guard);
+                        }
+                        w.walk(&arm.expression);
+                    });
                 }
             }
 
@@ -224,7 +214,6 @@ impl<'a> Walker<'a> {
                     self.walk(&fa.value);
                 }
             }
-            Expression::DotAccess { expression, .. } => self.walk(expression),
             Expression::IndexedAccess {
                 expression, index, ..
             } => {
@@ -235,9 +224,6 @@ impl<'a> Walker<'a> {
                 self.walk(left);
                 self.walk(right);
             }
-            Expression::Unary { expression, .. } => self.walk(expression),
-            Expression::Paren { expression, .. } => self.walk(expression),
-            Expression::Cast { expression, .. } => self.walk(expression),
             Expression::Range { start, end, .. } => {
                 if let Some(s) = start.as_ref() {
                     self.walk(s);
@@ -246,7 +232,11 @@ impl<'a> Walker<'a> {
                     self.walk(e);
                 }
             }
-            Expression::Return { expression, .. } => self.walk(expression),
+            Expression::DotAccess { expression, .. }
+            | Expression::Unary { expression, .. }
+            | Expression::Paren { expression, .. }
+            | Expression::Cast { expression, .. }
+            | Expression::Return { expression, .. } => self.walk(expression),
             Expression::Break {
                 value: Some(value), ..
             } => self.walk(value),
@@ -268,14 +258,7 @@ impl<'a> Walker<'a> {
             } => {
                 self.enclosure_depth += 1;
                 self.walk(scrutinee);
-                let shadow = pattern_binds_name(pattern, self.name);
-                if shadow {
-                    self.shadow_depth += 1;
-                }
-                self.walk(body);
-                if shadow {
-                    self.shadow_depth -= 1;
-                }
+                self.with_shadow(pattern_binds_name(pattern, self.name), |w| w.walk(body));
                 self.enclosure_depth -= 1;
             }
             Expression::For {
@@ -286,55 +269,34 @@ impl<'a> Walker<'a> {
             } => {
                 self.walk(iterable);
                 self.enclosure_depth += 1;
-                let shadow = pattern_binds_name(&binding.pattern, self.name);
-                if shadow {
-                    self.shadow_depth += 1;
-                }
-                self.walk(body);
-                if shadow {
-                    self.shadow_depth -= 1;
-                }
+                self.with_shadow(pattern_binds_name(&binding.pattern, self.name), |w| {
+                    w.walk(body)
+                });
                 self.enclosure_depth -= 1;
             }
 
             Expression::Lambda { params, body, .. } | Expression::Function { params, body, .. } => {
                 self.enclosure_depth += 1;
-                let shadow = params
+                let shadowed = params
                     .iter()
                     .any(|p| pattern_binds_name(&p.pattern, self.name));
-                if shadow {
-                    self.shadow_depth += 1;
-                }
-                self.walk(body);
-                if shadow {
-                    self.shadow_depth -= 1;
-                }
+                self.with_shadow(shadowed, |w| w.walk(body));
                 self.enclosure_depth -= 1;
             }
-            Expression::Task { expression, .. } => {
-                self.walk_in_enclosure(expression);
-                self.barriers_seen += 1;
-            }
-            Expression::Defer { expression, .. } => {
+            Expression::Task { expression, .. } | Expression::Defer { expression, .. } => {
                 self.walk_in_enclosure(expression);
                 self.barriers_seen += 1;
             }
 
             Expression::Select { arms, .. } => {
-                // Select waits before dispatching to an arm body; mark the
-                // barrier before walking arms so any use inside any arm sees
-                // it as preceding. `walk_select_arm` additionally encloses
-                // each body to reject substitutions across the wait.
+                // Mark the barrier before walking arms so uses inside any arm
+                // see the select wait as preceding.
                 self.barriers_seen += 1;
                 for arm in arms {
                     self.walk_select_arm(&arm.pattern);
                 }
             }
-            Expression::TryBlock { items, .. } => {
-                self.walk_block(items);
-                self.barriers_seen += 1;
-            }
-            Expression::RecoverBlock { items, .. } => {
+            Expression::TryBlock { items, .. } | Expression::RecoverBlock { items, .. } => {
                 self.walk_block(items);
                 self.barriers_seen += 1;
             }
@@ -368,6 +330,17 @@ impl<'a> Walker<'a> {
         self.enclosure_depth -= 1;
     }
 
+    /// Run `f` with `shadow_depth` raised while `shadowed` is true.
+    fn with_shadow(&mut self, shadowed: bool, f: impl FnOnce(&mut Self)) {
+        if shadowed {
+            self.shadow_depth += 1;
+        }
+        f(self);
+        if shadowed {
+            self.shadow_depth -= 1;
+        }
+    }
+
     fn walk_block(&mut self, items: &[Expression]) {
         let pre_shadow = self.shadow_depth;
         let block_shadows: u32 = items
@@ -385,8 +358,6 @@ impl<'a> Walker<'a> {
         self.shadow_depth = pre_shadow;
     }
 
-    // Select arm bodies run after the select has waited — treat them as
-    // enclosures so a substitution does not skip the wait.
     fn walk_select_arm(&mut self, pattern: &SelectArmPattern) {
         match pattern {
             SelectArmPattern::Receive {

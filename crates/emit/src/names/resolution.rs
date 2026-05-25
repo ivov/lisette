@@ -1,17 +1,18 @@
 use syntax::types::unqualified_name;
 
-use crate::Emitter;
+use crate::EmitEffects;
+use crate::Planner;
 use crate::names::go_name;
 
-impl Emitter<'_> {
-    pub(crate) fn resolve_go_name(&mut self, name: &str) -> String {
+impl Planner<'_> {
+    pub(crate) fn resolve_go_name(&mut self, name: &str, fx: &mut EmitEffects) -> String {
         if !name.contains('.')
             && let Some(remapped) = self.module.escape_remap(name)
         {
             return remapped.to_string();
         }
 
-        if let Some(go_call) = self.try_resolve_cross_module_static_method(name) {
+        if let Some(go_call) = self.try_resolve_cross_module_static_method(name, fx) {
             return go_call;
         }
 
@@ -39,7 +40,7 @@ impl Emitter<'_> {
 
         let resolved = go_name::resolve(&name);
         if resolved.needs_stdlib {
-            self.requirements.require_stdlib();
+            fx.require_stdlib();
         }
         resolved.name
     }
@@ -85,9 +86,9 @@ impl Emitter<'_> {
         }
     }
 
-    pub(crate) fn require_module_import(&mut self, module: &str) -> String {
-        self.requirements
-            .require_go_import(self.go_import_path_for_module(module));
+    /// Record the module import into `fx` and return its Go package qualifier.
+    pub(crate) fn require_module_import_fx(&self, module: &str, fx: &mut EmitEffects) -> String {
+        fx.require_go_import(self.go_import_path_for_module(module));
         self.go_pkg_qualifier(module)
     }
 
@@ -117,6 +118,7 @@ impl Emitter<'_> {
         type_id: &str,
         method: &str,
         is_public: bool,
+        fx: &mut EmitEffects,
     ) -> String {
         let module = self
             .facts
@@ -124,7 +126,9 @@ impl Emitter<'_> {
             .map(str::to_string);
         let type_name = unqualified_name(type_id);
         let computed_alias = match module.as_deref() {
-            Some(m) if self.facts.is_foreign_module(m) => Some(self.require_module_import(m)),
+            Some(m) if self.facts.is_foreign_module(m) => {
+                Some(self.require_module_import_fx(m, fx))
+            }
             _ => None,
         };
         let resolved = go_name::qualify_method(
@@ -136,18 +140,23 @@ impl Emitter<'_> {
             computed_alias.as_deref(),
         );
         if resolved.needs_stdlib {
-            self.requirements.require_stdlib();
+            fx.require_stdlib();
         }
         resolved.name
     }
 
-    pub(crate) fn resolve_variant(&mut self, identifier: &str, enum_id: &str) -> String {
+    pub(crate) fn resolve_variant(
+        &mut self,
+        identifier: &str,
+        enum_id: &str,
+        fx: &mut EmitEffects,
+    ) -> String {
         let enum_module = self
             .facts
             .module_for_qualified_name(enum_id)
             .unwrap_or(enum_id);
         let computed_alias = if self.facts.is_foreign_module(enum_module) {
-            Some(self.require_module_import(enum_module))
+            Some(self.require_module_import_fx(enum_module, fx))
         } else {
             None
         };
@@ -159,7 +168,7 @@ impl Emitter<'_> {
             computed_alias.as_deref(),
         );
         if resolved.needs_stdlib {
-            self.requirements.require_stdlib();
+            fx.require_stdlib();
         }
         resolved.name
     }
