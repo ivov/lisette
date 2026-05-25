@@ -1,6 +1,9 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.12](https://github.com/ivov/lisette/compare/lisette-v0.2.11...lisette-v0.2.12) - 2026-05-25
+
+- fix: disambiguate EcoString as_ref calls with as_str [#482](https://github.com/ivov/lisette/pull/482) [`9f16eef`](https://github.com/ivov/lisette/commit/9f16eef49df5a174c9139656ec5e128611758ec1)
 ## [0.2.11](https://github.com/ivov/lisette/compare/lisette-v0.2.10...lisette-v0.2.11) - 2026-05-23
 
 - fix: reject public types with non-exportable names [#480](https://github.com/ivov/lisette/pull/480) [`2226da8`](https://github.com/ivov/lisette/commit/2226da8489f515d510048cb6cd9bf69dc65d3476)
