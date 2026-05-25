@@ -126,11 +126,11 @@ fn check_constrained_return_type(
     let span = return_annotation.get_span();
     for return_param in params.iter() {
         if let Type::Parameter(param_name) = return_param
-            && let Some(method_bounds) = required_bounds.get(param_name.as_ref())
+            && let Some(method_bounds) = required_bounds.get(param_name.as_str())
         {
             let fn_generic = generics
                 .iter()
-                .find(|g| g.name.as_ref() == param_name.as_ref());
+                .find(|g| g.name.as_str() == param_name.as_str());
 
             if let Some(fn_gen) = fn_generic {
                 let fn_bounds: Vec<Type> = fn_gen
@@ -154,7 +154,7 @@ fn check_constrained_return_type(
             } else if let Some(impl_generics) = enclosing_impl_generics {
                 let impl_bounds: Vec<Type> = impl_generics
                     .iter()
-                    .filter(|g| g.name.as_ref() == param_name.as_ref())
+                    .filter(|g| g.name.as_str() == param_name.as_str())
                     .flat_map(|g| g.bounds.iter())
                     .filter_map(|b| annotation_to_type(b, module_id, store))
                     .collect();

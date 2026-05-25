@@ -477,7 +477,7 @@ impl Emitter<'_> {
             if param.ty.is_ref()
                 && let Some(inner) = param.ty.inner()
                 && let Type::Parameter(name) = &inner
-                && bounded_generics.contains(name.as_ref())
+                && bounded_generics.contains(name.as_str())
             {
                 self.function_state
                     .record_absorbed_ref_generic(name.to_string());
