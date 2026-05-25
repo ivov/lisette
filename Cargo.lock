@@ -1049,7 +1049,6 @@ name = "tests"
 version = "0.2.12"
 dependencies = [
  "bytes",
- "ecow",
  "futures",
  "insta",
  "lisette-deps",
