@@ -3667,6 +3667,139 @@ fn interface_three_way_cycle_rejected() {
 }
 
 #[test]
+fn interface_cycle_with_dot_access_does_not_crash() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+interface P {
+  impl Q
+  fn foo(self) -> int
+}
+
+interface Q {
+  impl P
+  fn bar(self) -> int
+}
+
+fn use_it(p: P) -> int { p.foo() }
+
+fn main() {}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("interface_cycle");
+}
+
+#[test]
+fn interface_cycle_with_satisfaction_does_not_crash() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+interface P {
+  impl Q
+  fn foo(self) -> int
+}
+
+interface Q {
+  impl P
+  fn bar(self) -> int
+}
+
+struct S {}
+
+impl S {
+  fn foo(self) -> int { 1 }
+  fn bar(self) -> int { 2 }
+}
+
+fn take(p: P) {}
+
+fn main() { take(S {}) }
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("interface_cycle");
+}
+
+#[test]
+fn interface_diamond_conflicting_type_args_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+interface Base<T> {
+  fn get(self) -> T
+}
+
+interface A {
+  impl Base<int>
+}
+
+interface B {
+  impl Base<string>
+}
+
+interface C {
+  impl A
+  impl B
+}
+
+struct S {}
+
+impl S {
+  fn get(self) -> int { 1 }
+}
+
+fn take(c: C) {}
+
+fn main() { take(S {}) }
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("interface_not_implemented");
+}
+
+#[test]
+fn pointer_receiver_through_same_named_parent_interface_rejected() {
+    let mut fs = MockFileSystem::new();
+    fs.add_file(
+        "shapes",
+        "lib.lis",
+        r#"
+pub interface Worker {
+  fn work(self) -> int
+}
+"#,
+    );
+    fs.add_file(
+        "main",
+        "main.lis",
+        r#"
+import "shapes"
+
+interface Worker {
+  impl shapes.Worker
+  fn name(self) -> string
+}
+
+struct MyWorker {}
+
+impl MyWorker {
+  fn name(self) -> string { "x" }
+  fn work(self: Ref<MyWorker>) -> int { 0 }
+}
+
+fn test() { let _w: Worker = MyWorker {} }
+
+fn main() {}
+"#,
+    );
+    infer_module("main", fs).assert_infer_code("interface_not_implemented");
+}
+
+#[test]
 fn interface_method_conflict_rejected() {
     infer(
         r#"

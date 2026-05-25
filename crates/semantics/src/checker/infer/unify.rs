@@ -462,14 +462,14 @@ impl TaskState<'_> {
         if let Some(interface) = store.get_interface(symbol1).cloned() {
             return self
                 .satisfies_interface(store, t2, &interface, symbol1, params1, span)
-                .and_then(|()| self.check_pointer_receivers(store, t2, &interface, span))
+                .and_then(|()| self.check_pointer_receivers(store, t2, &interface, symbol1, span))
                 .map_err(|_| UnifyError::AlreadyReported);
         }
 
         if let Some(interface) = store.get_interface(symbol2).cloned() {
             return self
                 .satisfies_interface(store, t1, &interface, symbol2, params2, span)
-                .and_then(|()| self.check_pointer_receivers(store, t1, &interface, span))
+                .and_then(|()| self.check_pointer_receivers(store, t1, &interface, symbol2, span))
                 .map_err(|_| UnifyError::AlreadyReported);
         }
 

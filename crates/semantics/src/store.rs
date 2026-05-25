@@ -348,10 +348,25 @@ impl Store {
         ty: &Type,
         trait_bounds: &HashMap<Symbol, Vec<Type>>,
     ) -> MethodSignatures {
+        let mut visited = HashSet::default();
+        self.get_all_methods_recursive(ty, trait_bounds, &mut visited)
+    }
+
+    fn get_all_methods_recursive(
+        &self,
+        ty: &Type,
+        trait_bounds: &HashMap<Symbol, Vec<Type>>,
+        visited: &mut HashSet<String>,
+    ) -> MethodSignatures {
         let stripped = ty.strip_refs();
         let Some(qualified_name) = method_lookup_key(&stripped) else {
             return MethodSignatures::default();
         };
+
+        // Cyclic embeddings survive registration as an error with parents intact; guard the walk.
+        if !visited.insert(qualified_name.as_str().to_string()) {
+            return MethodSignatures::default();
+        }
 
         if let Some(interface) = self.get_interface(&qualified_name) {
             let mut all_interface_methods = MethodSignatures::default();
@@ -370,7 +385,9 @@ impl Store {
             }
 
             for parent in &interface.parents {
-                for (name, method_ty) in self.get_all_methods(parent, trait_bounds) {
+                for (name, method_ty) in
+                    self.get_all_methods_recursive(parent, trait_bounds, visited)
+                {
                     all_interface_methods.insert(name, method_ty);
                 }
             }
@@ -381,7 +398,9 @@ impl Store {
         if let Some(bound_types) = trait_bounds.get(&qualified_name) {
             return bound_types
                 .iter()
-                .flat_map(|interface_ty| self.get_all_methods(interface_ty, trait_bounds))
+                .flat_map(|interface_ty| {
+                    self.get_all_methods_recursive(interface_ty, trait_bounds, visited)
+                })
                 .collect();
         }
 
@@ -412,7 +431,9 @@ impl Store {
                 && k != qualified_name.as_str()
             {
                 let alias_ty = alias_ty.clone();
-                for (name, method_ty) in self.get_all_methods(&alias_ty, trait_bounds) {
+                for (name, method_ty) in
+                    self.get_all_methods_recursive(&alias_ty, trait_bounds, visited)
+                {
                     methods.entry(name).or_insert(method_ty);
                 }
             }

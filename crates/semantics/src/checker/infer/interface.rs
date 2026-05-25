@@ -32,6 +32,7 @@ impl TaskState<'_> {
         }
 
         let mut violations = Vec::new();
+        let mut visited = rustc_hash::FxHashSet::default();
         self.collect_interface_violations(
             store,
             ty,
@@ -41,6 +42,7 @@ impl TaskState<'_> {
             None,
             span,
             &mut violations,
+            &mut visited,
         );
 
         self.satisfying_stack.remove(&pair);
@@ -89,6 +91,7 @@ impl TaskState<'_> {
         store: &Store,
         ty: &Type,
         interface: &Interface,
+        interface_qualified_id: &str,
         span: &Span,
     ) -> Result<(), Vec<InterfaceViolation>> {
         if ty.is_ref() {
@@ -97,8 +100,16 @@ impl TaskState<'_> {
 
         let methods = self.get_all_methods(store, ty);
         let mut ptr_methods = Vec::new();
+        let mut visited = rustc_hash::FxHashSet::default();
 
-        self.collect_pointer_receiver_methods(store, interface, &methods, &mut ptr_methods);
+        self.collect_pointer_receiver_methods(
+            store,
+            interface,
+            interface_qualified_id,
+            &methods,
+            &mut ptr_methods,
+            &mut visited,
+        );
 
         if ptr_methods.is_empty() {
             return Ok(());
@@ -119,9 +130,14 @@ impl TaskState<'_> {
         &self,
         store: &Store,
         interface: &Interface,
+        interface_qualified_id: &str,
         methods: &MethodSignatures,
         out: &mut Vec<String>,
+        visited: &mut rustc_hash::FxHashSet<String>,
     ) {
+        if !visited.insert(interface_qualified_id.to_string()) {
+            return;
+        }
         for name in interface.methods.keys() {
             if let Some(method_ty) = methods.get(name) {
                 let func = match method_ty {
@@ -138,9 +154,17 @@ impl TaskState<'_> {
         for parent in &interface.parents {
             let parent_name = parent.get_qualified_name();
             if let Some(parent_interface) = store.get_interface(&parent_name) {
-                self.collect_pointer_receiver_methods(store, parent_interface, methods, out);
+                self.collect_pointer_receiver_methods(
+                    store,
+                    parent_interface,
+                    parent_name.as_str(),
+                    methods,
+                    out,
+                    visited,
+                );
             }
         }
+        visited.remove(interface_qualified_id);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -154,7 +178,12 @@ impl TaskState<'_> {
         parent_of: Option<&str>,
         span: &Span,
         violations: &mut Vec<InterfaceViolation>,
+        visited: &mut rustc_hash::FxHashSet<String>,
     ) {
+        if !visited.insert(interface_qualified_id.to_string()) {
+            return;
+        }
+
         let symbol_methods = self.get_all_methods(store, ty);
 
         let map: SubstitutionMap = interface
@@ -306,9 +335,12 @@ impl TaskState<'_> {
                     Some(&interface.name),
                     span,
                     violations,
+                    visited,
                 );
             }
         }
+
+        visited.remove(interface_qualified_id);
     }
 
     fn remove_first_param(ty: &Type) -> Type {
