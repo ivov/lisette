@@ -10615,3 +10615,51 @@ fn main() {
 
     client.shutdown().await;
 }
+
+#[tokio::test]
+async fn completion_includes_interface_methods() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+
+    let source = "interface Example { fn example(self) -> string }\nfn test(ex: Example) { ex. }";
+    client.open(TEST_URI, source).await;
+
+    let response = client.completion(TEST_URI, 1, 26).await;
+    assert!(response.is_some());
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "example"),
+        "should include interface method 'example', got: {labels:?}"
+    );
+
+    client.shutdown().await;
+}
+
+#[tokio::test]
+async fn completion_includes_inherited_interface_methods() {
+    let mut client = TestClient::new().await;
+    client.initialize().await;
+
+    let source = "\
+interface Reader { fn read(self) -> string }
+interface ReadWriter {
+impl Reader
+fn write(self) -> string
+}
+fn use_rw(rw: ReadWriter) { rw. }";
+    client.open(TEST_URI, source).await;
+
+    let response = client.completion(TEST_URI, 5, 31).await;
+    assert!(response.is_some());
+    let labels = completion_labels(&response.unwrap());
+    assert!(
+        labels.iter().any(|l| l == "write"),
+        "should include own method 'write', got: {labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == "read"),
+        "should include inherited method 'read', got: {labels:?}"
+    );
+
+    client.shutdown().await;
+}

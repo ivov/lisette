@@ -1,3 +1,4 @@
+use rustc_hash::FxHashSet;
 use tower_lsp::lsp_types::*;
 
 use syntax::ast::Expression;
@@ -197,6 +198,24 @@ pub(crate) fn get_instance_completions(
     let mut items = Vec::new();
 
     if let Some(syntax::program::Definition {
+        body: syntax::program::DefinitionBody::Interface { definition },
+        ..
+    }) = snapshot.definitions().get(type_id)
+    {
+        let mut visited = FxHashSet::default();
+        let mut seen = FxHashSet::default();
+        collect_interface_methods(
+            type_id,
+            definition,
+            snapshot,
+            &mut visited,
+            &mut seen,
+            &mut items,
+        );
+        return items;
+    }
+
+    if let Some(syntax::program::Definition {
         body: syntax::program::DefinitionBody::Struct { fields, .. },
         ..
     }) = snapshot.definitions().get(type_id)
@@ -234,6 +253,39 @@ pub(crate) fn get_instance_completions(
     }
 
     items
+}
+
+fn collect_interface_methods(
+    interface_id: &str,
+    interface: &syntax::program::Interface,
+    snapshot: &AnalysisSnapshot,
+    visited: &mut FxHashSet<String>,
+    seen: &mut FxHashSet<String>,
+    items: &mut Vec<CompletionItem>,
+) {
+    if !visited.insert(interface_id.to_string()) {
+        return;
+    }
+    for (name, method_ty) in &interface.methods {
+        if seen.insert(name.to_string()) {
+            items.push(CompletionItem {
+                label: name.to_string(),
+                kind: Some(CompletionItemKind::METHOD),
+                detail: Some(method_ty.to_string()),
+                ..Default::default()
+            });
+        }
+    }
+    for parent in &interface.parents {
+        if let Some(parent_id) = parent.get_qualified_id()
+            && let Some(syntax::program::Definition {
+                body: syntax::program::DefinitionBody::Interface { definition },
+                ..
+            }) = snapshot.definitions().get(parent_id)
+        {
+            collect_interface_methods(parent_id, definition, snapshot, visited, seen, items);
+        }
+    }
 }
 
 pub(crate) fn get_type_completions(
