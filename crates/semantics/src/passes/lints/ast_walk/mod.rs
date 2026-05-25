@@ -61,7 +61,7 @@ use checks::{
     check_identical_if_branches, check_match_literal_collection, check_pattern_naming,
     check_rest_only_slice_pattern, check_self_assignment, check_self_comparison,
     check_single_arm_match, check_uninterpolated_fstring, check_unnecessary_raw_string_expression,
-    check_unnecessary_raw_string_pattern,
+    check_unnecessary_raw_string_pattern, check_unsigned_comparison,
 };
 use visitor::visit_ast;
 
@@ -78,6 +78,7 @@ impl AstLintGroup {
             &mut |expression| {
                 check_double_negation(expression, &mut diagnostics.borrow_mut());
                 check_self_comparison(expression, &mut diagnostics.borrow_mut());
+                check_unsigned_comparison(expression, &mut diagnostics.borrow_mut());
                 check_self_assignment(expression, &mut diagnostics.borrow_mut());
                 check_duplicate_logical_operand(expression, files, &mut diagnostics.borrow_mut());
                 check_bool_literal_comparison(expression, &mut diagnostics.borrow_mut());

@@ -259,6 +259,17 @@ pub fn tautological_comparison(span: &Span, always_true: bool) -> LisetteDiagnos
         ))
 }
 
+pub fn unsigned_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
+    let result = if always_true { "true" } else { "false" };
+
+    LisetteDiagnostic::warn(format!("Comparison is always {result}"))
+        .with_lint_code("unsigned_comparison")
+        .with_span_label(span, format!("always {result}"))
+        .with_help(
+            "An unsigned integer is never negative, so this comparison always has the same result. Did you mean to compare against a different value?",
+        )
+}
+
 pub fn self_assignment(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Self-assignment")
         .with_lint_code("self_assignment")

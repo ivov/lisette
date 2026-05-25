@@ -559,6 +559,114 @@ fn main() {
 }
 
 #[test]
+fn unsigned_comparison_less_than_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let n: uint = 5;
+  let _ = n < 0
+}
+"#
+    );
+}
+
+#[test]
+fn unsigned_comparison_greater_than_or_equal_zero() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let n: uint = 5;
+  let _ = n >= 0
+}
+"#
+    );
+}
+
+#[test]
+fn unsigned_comparison_zero_on_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let n: uint = 5;
+  let _ = 0 > n
+}
+"#
+    );
+}
+
+#[test]
+fn unsigned_comparison_byte() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let b: byte = 5;
+  let _ = b < 0
+}
+"#
+    );
+}
+
+#[test]
+fn unsigned_comparison_with_parens() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let n: uint = 5;
+  let _ = (n) >= (0)
+}
+"#
+    );
+}
+
+#[test]
+fn unsigned_equality_with_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n: uint = 5;
+  let _ = n == 0
+}
+"#
+    );
+}
+
+#[test]
+fn unsigned_less_than_or_equal_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n: uint = 5;
+  let _ = n <= 0
+}
+"#
+    );
+}
+
+#[test]
+fn signed_comparison_with_zero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n: int = 5;
+  let _ = n < 0
+}
+"#
+    );
+}
+
+#[test]
+fn unsigned_comparison_with_nonzero_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n: uint = 5;
+  let _ = n < 10
+}
+"#
+    );
+}
+
+#[test]
 fn double_bool_negation() {
     assert_lint_snapshot!(
         r#"
