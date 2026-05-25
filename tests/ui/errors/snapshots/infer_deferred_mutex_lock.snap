@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Deferred `Lock` instead of `Unlock`
+    ╭─[test.lis:11:11]
+ 10 │     self.mu.Lock()
+ 11 │     defer self.mu.Lock()
+    ·           ───────┬──────
+    ·                  ╰── re-locks at function exit
+ 12 │   }
+    ╰────
+  help: Deferring `Lock` re-acquires the lock when the function returns, deadlocking the next caller. Did you mean `Unlock`? · code: [infer.deferred_lock]

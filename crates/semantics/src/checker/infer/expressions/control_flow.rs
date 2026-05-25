@@ -723,6 +723,8 @@ impl TaskState<'_> {
                 .push(diagnostics::infer::propagate_in_defer(propagate_span));
         }
 
+        self.check_deferred_lock(&new_expression);
+
         Expression::Defer {
             expression: new_expression.into(),
             ty: self.type_unit(),

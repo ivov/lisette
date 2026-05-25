@@ -3969,6 +3969,139 @@ fn f() {
 }
 
 #[test]
+fn infer_deferred_mutex_lock() {
+    let input = r#"
+import "go:sync"
+
+struct Counter {
+  mu: sync.Mutex,
+}
+
+impl Counter {
+  fn inc(self: Ref<Counter>) {
+    self.mu.Lock()
+    defer self.mu.Lock()
+  }
+}
+
+fn main() {
+  let mut c = Counter { mu: sync.Mutex {} }
+  c.inc()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_deferred_rwmutex_rlock() {
+    let input = r#"
+import "go:sync"
+
+struct Cache {
+  rw: sync.RWMutex,
+}
+
+impl Cache {
+  fn read(self: Ref<Cache>) {
+    self.rw.RLock()
+    defer self.rw.RLock()
+  }
+}
+
+fn main() {
+  let mut c = Cache { rw: sync.RWMutex {} }
+  c.read()
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn infer_deferred_locker_lock() {
+    let input = r#"
+import "go:sync"
+
+fn run(l: sync.Locker) {
+  l.Lock()
+  defer l.Lock()
+}
+
+fn main() {
+  let mu = sync.Mutex {}
+  run(&mu)
+}
+"#;
+    crate::_harness::infer::infer(input).assert_infer_code("deferred_lock");
+}
+
+#[test]
+fn infer_deferred_unlock_is_allowed() {
+    let input = r#"
+import "go:sync"
+
+struct Counter {
+  mu: sync.Mutex,
+}
+
+impl Counter {
+  fn inc(self: Ref<Counter>) {
+    self.mu.Lock()
+    defer self.mu.Unlock()
+  }
+}
+
+fn main() {
+  let mut c = Counter { mu: sync.Mutex {} }
+  c.inc()
+}
+"#;
+    crate::_harness::infer::infer(input).assert_no_errors();
+}
+
+#[test]
+fn infer_deferred_lock_on_user_type_is_allowed() {
+    let input = r#"
+struct Resource {
+  id: int,
+}
+
+impl Resource {
+  fn Lock(self) {}
+}
+
+fn main() {
+  let r = Resource { id: 1 }
+  defer r.Lock()
+}
+"#;
+    crate::_harness::infer::infer(input).assert_no_errors();
+}
+
+#[test]
+fn infer_non_deferred_lock_is_allowed() {
+    let input = r#"
+import "go:sync"
+
+struct Counter {
+  mu: sync.Mutex,
+}
+
+impl Counter {
+  fn inc(self: Ref<Counter>) {
+    self.mu.Lock()
+    self.mu.Unlock()
+  }
+}
+
+fn main() {
+  let mut c = Counter { mu: sync.Mutex {} }
+  c.inc()
+}
+"#;
+    crate::_harness::infer::infer(input).assert_no_errors();
+}
+
+#[test]
 fn infer_defer_in_while_loop() {
     let input = r#"
 fn cleanup() {}

@@ -2148,6 +2148,15 @@ pub fn defer_in_loop(span: Span) -> LisetteDiagnostic {
         .with_help("Wrap the loop body in a helper function, e.g. `fn process(file: File) { defer file.close(); ... }` and call it in the loop: `for f in files { process(f); }`")
 }
 
+pub fn deferred_lock(span: Span, locked: &str, unlock: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error(format!("Deferred `{locked}` instead of `{unlock}`"))
+        .with_infer_code("deferred_lock")
+        .with_span_label(&span, "re-locks at function exit")
+        .with_help(format!(
+            "Deferring `{locked}` re-acquires the lock when the function returns, deadlocking the next caller. Did you mean `{unlock}`?"
+        ))
+}
+
 pub fn propagate_in_condition(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`?` cannot be used inside a condition")
         .with_infer_code("propagate_in_condition")

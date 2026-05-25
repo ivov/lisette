@@ -1,8 +1,55 @@
-use syntax::ast::Span;
+use syntax::ast::{Expression, Span};
+use syntax::types::Type;
 
 use crate::checker::TaskState;
 
+fn is_sync_lock_type(ty: &Type) -> bool {
+    matches!(
+        ty.strip_refs(),
+        Type::Nominal { id, .. }
+            if matches!(id.as_str(), "go:sync.Mutex" | "go:sync.RWMutex" | "go:sync.Locker")
+    )
+}
+
 impl TaskState<'_> {
+    pub(crate) fn check_deferred_lock(&mut self, deferred: &Expression) {
+        let Expression::Call {
+            expression: callee,
+            args,
+            span,
+            ..
+        } = deferred.unwrap_parens()
+        else {
+            return;
+        };
+
+        if !args.is_empty() {
+            return;
+        }
+
+        let Expression::DotAccess {
+            expression: receiver,
+            member,
+            ..
+        } = callee.unwrap_parens()
+        else {
+            return;
+        };
+
+        let (locked, unlock) = match member.as_str() {
+            "Lock" => ("Lock", "Unlock"),
+            "RLock" => ("RLock", "RUnlock"),
+            _ => return,
+        };
+
+        if !is_sync_lock_type(&receiver.get_type()) {
+            return;
+        }
+
+        self.sink
+            .push(diagnostics::infer::deferred_lock(*span, locked, unlock));
+    }
+
     pub(crate) fn check_return_in_try_block(&mut self, span: Span) {
         if self.scopes.lookup_try_block_context().is_some() {
             self.sink
