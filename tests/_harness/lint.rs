@@ -1,10 +1,12 @@
 use diagnostics::{LisetteDiagnostic, LocalSink};
 use semantics::{checker::TaskState, passes, store::Store};
+use stdlib::{Target, get_go_stdlib_typedef};
 use syntax::{
+    ast::Expression,
     desugar,
     lex::Lexer,
     parse::Parser,
-    program::{File, UnusedInfo, Visibility},
+    program::{File, FileImport, UnusedInfo, Visibility},
 };
 
 use super::init_prelude;
@@ -49,6 +51,35 @@ pub fn lint(source: &str) -> Vec<LisetteDiagnostic> {
     checker.cursor.module_id = TEST_MODULE_ID.to_string();
     register_test_builtins(&mut store, &mut checker);
     checker.put_prelude_in_scope(&store);
+
+    let locator = deps::TypedefLocator::default();
+    let imports: Vec<FileImport> = ast
+        .iter()
+        .filter_map(|item| {
+            let Expression::ModuleImport {
+                name,
+                name_span,
+                alias,
+                span,
+            } = item
+            else {
+                return None;
+            };
+            if let Some(go_pkg) = name.strip_prefix("go:")
+                && let Some(typedef) = get_go_stdlib_typedef(go_pkg, Target::host())
+            {
+                checker.parse_and_register_go_module(&mut store, name, typedef, None, &locator);
+            }
+            Some(FileImport {
+                name: name.clone(),
+                name_span: *name_span,
+                alias: alias.clone(),
+                span: *span,
+            })
+        })
+        .collect();
+    checker.put_imported_modules_in_scope(&store, &imports);
+
     checker.register_types_and_values(&mut store, &ast, &Visibility::Private);
 
     let mut typed_ast = vec![];

@@ -667,6 +667,113 @@ fn main() {
 }
 
 #[test]
+fn nan_comparison_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+fn main() {
+  let x: float64 = 1.0
+  let _ = x == math.NaN()
+}
+"#
+    );
+}
+
+#[test]
+fn nan_comparison_not_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+fn main() {
+  let x: float64 = 1.0
+  let _ = x != math.NaN()
+}
+"#
+    );
+}
+
+#[test]
+fn nan_comparison_less_than() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+fn main() {
+  let x: float64 = 1.0
+  let _ = x < math.NaN()
+}
+"#
+    );
+}
+
+#[test]
+fn nan_comparison_nan_on_left() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+fn main() {
+  let x: float64 = 1.0
+  let _ = math.NaN() >= x
+}
+"#
+    );
+}
+
+#[test]
+fn nan_comparison_with_parens() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+fn main() {
+  let x: float64 = 1.0
+  let _ = (x) == (math.NaN())
+}
+"#
+    );
+}
+
+#[test]
+fn is_nan_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+fn main() {
+  let x: float64 = 1.0
+  let _ = math.IsNaN(x)
+}
+"#
+    );
+}
+
+#[test]
+fn nan_comparison_other_math_function_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+fn main() {
+  let x: float64 = 1.0
+  let _ = x == math.Pi
+}
+"#
+    );
+}
+
+#[test]
+fn nan_comparison_user_defined_function_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn nan() -> float64 {
+  0.0
+}
+
+fn main() {
+  let x: float64 = 1.0
+  let _ = x == nan()
+}
+"#
+    );
+}
+
+#[test]
 fn double_bool_negation() {
     assert_lint_snapshot!(
         r#"

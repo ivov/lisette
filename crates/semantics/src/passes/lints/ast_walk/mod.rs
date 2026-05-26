@@ -73,11 +73,11 @@ use checks::{
     check_bool_literal_comparison, check_double_negation, check_duplicate_logical_operand,
     check_empty_match_arm, check_excess_parens_on_condition, check_expression_naming,
     check_identical_if_branches, check_invisible_in_string_expression,
-    check_invisible_in_string_pattern, check_match_literal_collection, check_pattern_naming,
-    check_replaceable_with_zero_fill, check_rest_only_slice_pattern, check_self_assignment,
-    check_self_comparison, check_single_arm_match, check_uninterpolated_fstring,
-    check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
-    check_unsigned_comparison,
+    check_invisible_in_string_pattern, check_match_literal_collection, check_nan_comparison,
+    check_pattern_naming, check_replaceable_with_zero_fill, check_rest_only_slice_pattern,
+    check_self_assignment, check_self_comparison, check_single_arm_match,
+    check_uninterpolated_fstring, check_unnecessary_raw_string_expression,
+    check_unnecessary_raw_string_pattern, check_unsigned_comparison,
 };
 use visitor::visit_ast;
 
@@ -88,6 +88,7 @@ const EXPRESSION_CHECKS: &[ExpressionCheck] = &[
     check_double_negation,
     check_self_comparison,
     check_unsigned_comparison,
+    check_nan_comparison,
     check_self_assignment,
     check_bool_literal_comparison,
     check_identical_if_branches,

@@ -270,6 +270,17 @@ pub fn unsigned_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic 
         )
 }
 
+pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
+    let result = if always_true { "true" } else { "false" };
+
+    LisetteDiagnostic::warn(format!("Comparison with NaN is always {result}"))
+        .with_lint_code("nan_comparison")
+        .with_span_label(span, format!("always {result}"))
+        .with_help(
+            "Per IEEE 754, NaN compares unequal to every value including itself. Use `math.IsNaN(x)` to test for NaN.",
+        )
+}
+
 pub fn self_assignment(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Self-assignment")
         .with_lint_code("self_assignment")
