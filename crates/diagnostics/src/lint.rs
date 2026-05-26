@@ -348,6 +348,31 @@ pub fn unnecessary_raw_string(span: &Span) -> LisetteDiagnostic {
         .with_help("Remove the `r` prefix. A string without backslashes does not need to be raw")
 }
 
+pub fn invisible_in_string(
+    span: &Span,
+    codepoint: u32,
+    name: &str,
+    is_bidi: bool,
+) -> LisetteDiagnostic {
+    let (title, code, help) = if is_bidi {
+        (
+            "Bidirectional character in string",
+            "bidi_in_string",
+            "Bidirectional control characters can reorder surrounding text and enable source-spoofing attacks. If intentional, write it as a `\\u` escape so it is visible in source; otherwise remove it.",
+        )
+    } else {
+        (
+            "Invisible character in string",
+            "invisible_in_string",
+            "Invisible characters in strings can hide bugs and silently shift meaning. Remove the character, or replace it with the visible character you meant.",
+        )
+    };
+    LisetteDiagnostic::warn(title)
+        .with_lint_code(code)
+        .with_span_label(span, format!("contains U+{codepoint:04X} ({name})"))
+        .with_help(help)
+}
+
 pub fn expression_only_fstring(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Expression-only f-string")
         .with_lint_code("expression_only_fstring")

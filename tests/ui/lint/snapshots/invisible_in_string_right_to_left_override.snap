@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Bidirectional character in string
+   ╭─[test.lis:3:11]
+ 2 │ fn main() {
+ 3 │   let _ = "admin‮gnp.exe"
+   ·           ───────┬──────
+   ·                  ╰── contains U+202E (right-to-left override)
+ 4 │ }
+   ╰────
+  help: Bidirectional control characters can reorder surrounding text and enable source-spoofing attacks. If intentional, write it as a `\u` escape so it is visible in source; otherwise remove it · code: [lint.bidi_in_string]

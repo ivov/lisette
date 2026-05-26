@@ -58,7 +58,8 @@ use attributes::{check_attributes, check_struct_attributes};
 use checks::{
     check_bool_literal_comparison, check_double_negation, check_duplicate_logical_operand,
     check_empty_match_arm, check_excess_parens_on_condition, check_expression_naming,
-    check_identical_if_branches, check_match_literal_collection, check_pattern_naming,
+    check_identical_if_branches, check_invisible_in_string_expression,
+    check_invisible_in_string_pattern, check_match_literal_collection, check_pattern_naming,
     check_rest_only_slice_pattern, check_self_assignment, check_self_comparison,
     check_single_arm_match, check_uninterpolated_fstring, check_unnecessary_raw_string_expression,
     check_unnecessary_raw_string_pattern, check_unsigned_comparison,
@@ -89,6 +90,7 @@ impl AstLintGroup {
                 check_single_arm_match(expression, &mut diagnostics.borrow_mut());
                 check_uninterpolated_fstring(expression, &mut diagnostics.borrow_mut());
                 check_unnecessary_raw_string_expression(expression, &mut diagnostics.borrow_mut());
+                check_invisible_in_string_expression(expression, &mut diagnostics.borrow_mut());
                 check_expression_naming(expression, is_d_lis, &mut diagnostics.borrow_mut());
                 check_struct_attributes(expression, &mut diagnostics.borrow_mut());
                 check_attributes(expression, &mut diagnostics.borrow_mut());
@@ -97,6 +99,7 @@ impl AstLintGroup {
                 check_rest_only_slice_pattern(pattern, &mut diagnostics.borrow_mut());
                 check_pattern_naming(pattern, is_d_lis, &mut diagnostics.borrow_mut());
                 check_unnecessary_raw_string_pattern(pattern, &mut diagnostics.borrow_mut());
+                check_invisible_in_string_pattern(pattern, &mut diagnostics.borrow_mut());
             },
         );
 

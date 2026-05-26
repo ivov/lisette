@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Invisible character in string
+   ╭─[test.lis:4:11]
+ 3 │   let name = "world"
+ 4 │   let _ = f"hi​{name}!"
+   ·           ──────┬─────
+   ·                 ╰── contains U+200B (zero-width space)
+ 5 │ }
+   ╰────
+  help: Invisible characters in strings can hide bugs and silently shift meaning. Remove the character, or replace it with the visible character you meant · code: [lint.invisible_in_string]

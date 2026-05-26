@@ -4019,3 +4019,100 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn invisible_in_string_zero_width_space() {
+    assert_lint_snapshot!(
+        "
+fn main() {
+  let _ = \"hello\u{200B}world\"
+}
+"
+    );
+}
+
+#[test]
+fn invisible_in_string_right_to_left_override() {
+    assert_lint_snapshot!(
+        "
+fn main() {
+  let _ = \"admin\u{202E}gnp.exe\"
+}
+"
+    );
+}
+
+#[test]
+fn invisible_in_string_no_break_space() {
+    assert_lint_snapshot!(
+        "
+fn main() {
+  let _ = \"foo\u{00A0}bar\"
+}
+"
+    );
+}
+
+#[test]
+fn invisible_in_string_byte_order_mark() {
+    assert_lint_snapshot!(
+        "
+fn main() {
+  let _ = \"\u{FEFF}leading\"
+}
+"
+    );
+}
+
+#[test]
+fn invisible_in_fstring_text_part() {
+    assert_lint_snapshot!(
+        "
+fn main() {
+  let name = \"world\"
+  let _ = f\"hi\u{200B}{name}!\"
+}
+"
+    );
+}
+
+#[test]
+fn invisible_in_string_pattern() {
+    assert_lint_snapshot!(
+        "
+fn main() {
+  let s = \"x\"
+  let _ = match s {
+    \"foo\u{200B}\" => 1,
+    _ => 0,
+  };
+}
+"
+    );
+}
+
+#[test]
+fn invisible_in_string_ascii_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = "hello world"
+  let _ = "tab\there"
+  let _ = "newline\nhere"
+}
+"#
+    );
+}
+
+#[test]
+fn invisible_in_string_unicode_letters_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = "πϊθον"
+  let _ = "日本語"
+  let _ = "emoji: 🦀"
+}
+"#
+    );
+}
