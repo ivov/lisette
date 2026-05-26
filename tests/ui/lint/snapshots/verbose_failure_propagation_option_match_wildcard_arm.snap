@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Verbose failure propagation
+   ╭─[test.lis:3:11]
+ 2 │ fn first(x: Option<int>) -> Option<int> {
+ 3 │   let v = match x {
+   ·           ──┬──
+   ·             ╰── verbose
+ 4 │     Some(v) => v,
+   ╰────
+  help: Use `?` to propagate the failure concisely · code: [lint.verbose_failure_propagation]

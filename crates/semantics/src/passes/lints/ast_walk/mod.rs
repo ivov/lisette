@@ -77,7 +77,7 @@ use checks::{
     check_replaceable_with_zero_fill, check_rest_only_slice_pattern, check_self_assignment,
     check_self_comparison, check_single_arm_match, check_uninterpolated_fstring,
     check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
-    check_unsigned_comparison,
+    check_unsigned_comparison, check_verbose_failure_propagation,
 };
 use visitor::visit_ast;
 
@@ -98,6 +98,7 @@ const EXPRESSION_CHECKS: &[ExpressionCheck] = &[
     check_uninterpolated_fstring,
     check_unnecessary_raw_string_expression,
     check_invisible_in_string_expression,
+    check_verbose_failure_propagation,
     check_struct_attributes,
     check_attributes,
 ];

@@ -4116,3 +4116,213 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn verbose_failure_propagation_option_match() {
+    assert_lint_snapshot!(
+        r#"
+fn first(x: Option<int>) -> Option<int> {
+  let v = match x {
+    Some(v) => v,
+    None => return None,
+  }
+  Some(v + 1)
+}
+
+fn main() {
+  let _ = first(Some(1))
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_option_match_reversed_arms() {
+    assert_lint_snapshot!(
+        r#"
+fn first(x: Option<int>) -> Option<int> {
+  let v = match x {
+    None => return None,
+    Some(v) => v,
+  }
+  Some(v + 1)
+}
+
+fn main() {
+  let _ = first(Some(1))
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_option_match_wildcard_arm() {
+    assert_lint_snapshot!(
+        r#"
+fn first(x: Option<int>) -> Option<int> {
+  let v = match x {
+    Some(v) => v,
+    _ => return None,
+  }
+  Some(v + 1)
+}
+
+fn main() {
+  let _ = first(Some(1))
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_result_match() {
+    assert_lint_snapshot!(
+        r#"
+fn first(x: Result<int, string>) -> Result<int, string> {
+  let v = match x {
+    Ok(v) => v,
+    Err(e) => return Err(e),
+  }
+  Ok(v + 1)
+}
+
+fn main() {
+  let _ = first(Ok(1))
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_if_let_option() {
+    assert_lint_snapshot!(
+        r#"
+fn first(x: Option<int>) -> Option<int> {
+  let v = if let Some(v) = x {
+    v
+  } else {
+    return None
+  }
+  Some(v + 1)
+}
+
+fn main() {
+  let _ = first(Some(1))
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_option_unwrap_or_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: Option<int> = Some(1)
+  let _ = match x {
+    Some(v) => v,
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_option_fallback_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn first(x: Option<int>) -> Option<int> {
+  let v = match x {
+    Some(v) => v,
+    None => return Some(99),
+  }
+  Some(v + 1)
+}
+
+fn main() {
+  let _ = first(Some(1))
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_option_transform_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn first(x: Option<int>) -> Option<int> {
+  let v = match x {
+    Some(v) => v + 1,
+    None => return None,
+  }
+  Some(v)
+}
+
+fn main() {
+  let _ = first(Some(1))
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_result_replaced_error_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+const OTHER_ERROR: string = "oops"
+
+fn first(x: Result<int, string>) -> Result<int, string> {
+  let v = match x {
+    Ok(v) => v,
+    Err(e) => return Err(OTHER_ERROR),
+  }
+  Ok(v + 1)
+}
+
+fn main() {
+  let _ = first(Ok(1))
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_result_via_wildcard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+const OTHER_ERROR: string = "oops"
+
+fn first(x: Result<int, string>) -> Result<int, string> {
+  let v = match x {
+    Ok(v) => v,
+    _ => return Err(OTHER_ERROR),
+  }
+  Ok(v + 1)
+}
+
+fn main() {
+  let _ = first(Ok(1))
+}
+"#
+    );
+}
+
+#[test]
+fn verbose_failure_propagation_guard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn first(x: Option<int>) -> Option<int> {
+  let v = match x {
+    Some(v) if v > 0 => v,
+    _ => return None,
+  }
+  Some(v + 1)
+}
+
+fn main() {
+  let _ = first(Some(1))
+}
+"#
+    );
+}
