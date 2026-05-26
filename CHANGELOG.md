@@ -1,6 +1,23 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.13](https://github.com/ivov/lisette/compare/lisette-v0.2.12...lisette-v0.2.13) - 2026-05-26
+
+- perf: skip synthetic EOF in token lookup [#500](https://github.com/ivov/lisette/pull/500) [`c9bbdeb`](https://github.com/ivov/lisette/commit/c9bbdeb9f7fb83108d46780998b8c497c57b844f)
+- feat: reject empty range [#499](https://github.com/ivov/lisette/pull/499) [`d74f193`](https://github.com/ivov/lisette/commit/d74f1930e60bf2ec8ccd83f03a72baf794481fcc)
+- perf: introduce simple benchmarking setup [#498](https://github.com/ivov/lisette/pull/498) [`47dd262`](https://github.com/ivov/lisette/commit/47dd2624ba678495305b6a2609f7b80d4d351c18)
+- feat: reject comparison against math.NaN() [#497](https://github.com/ivov/lisette/pull/497) [`e853566`](https://github.com/ivov/lisette/commit/e8535667b80a4e00965bc811d145e51e7f055a6c)
+- feat: warn on verbose failure propagation [#496](https://github.com/ivov/lisette/pull/496) [`0aef44a`](https://github.com/ivov/lisette/commit/0aef44a04095c82dd12f80b2ce34a89b1c9bd7b6)
+- refactor: consolidate in-memory loader impls [#495](https://github.com/ivov/lisette/pull/495) [`207da7f`](https://github.com/ivov/lisette/commit/207da7f4f8a7cb7269c495cc9d649a7dd55e1dda)
+- refactor: prep lint setup for upcoming diagnostics [#494](https://github.com/ivov/lisette/pull/494) [`f0b06b6`](https://github.com/ivov/lisette/commit/f0b06b6743283d09815cc33e98b8f889c720d62d)
+- feat: warn on invisible and bidi chars in strings [#493](https://github.com/ivov/lisette/pull/493) [`24abe4c`](https://github.com/ivov/lisette/commit/24abe4c9263cded785880f4bf1a5a9dbd7900b48)
+- fix: guard interface parent walks against embedding cycles [#492](https://github.com/ivov/lisette/pull/492) [`a1e2001`](https://github.com/ivov/lisette/commit/a1e20019d2468130e0a732f80ee681eb61f7701e)
+- fix: complete interface methods in lsp [#491](https://github.com/ivov/lisette/pull/491) [`079daa1`](https://github.com/ivov/lisette/commit/079daa1a954557818db5c6465a6ae14cc991e79f)
+- feat: reject deferring a mutex lock [#490](https://github.com/ivov/lisette/pull/490) [`04a8a2b`](https://github.com/ivov/lisette/commit/04a8a2bdcf72775d24317428a947b17ff1c34f04)
+- ci: catch lockfile drift [#489](https://github.com/ivov/lisette/pull/489) [`b64b576`](https://github.com/ivov/lisette/commit/b64b576d3ef16f6f806487991ea4d594d872d814)
+- chore: update lockfile [#487](https://github.com/ivov/lisette/pull/487) [`7c175d2`](https://github.com/ivov/lisette/commit/7c175d267f36f04ce65d1beade181f6f9e15225e)
+- feat: warn on unsigned integer compared against zero [#486](https://github.com/ivov/lisette/pull/486) [`d3fb542`](https://github.com/ivov/lisette/commit/d3fb542aeb214a173fb411e8b658247a86f22071)
+- refactor: restructure emit layer [#484](https://github.com/ivov/lisette/pull/484) [`f4757af`](https://github.com/ivov/lisette/commit/f4757af591949eb4650be4d1791c5cb762656740)
 ## [0.2.12](https://github.com/ivov/lisette/compare/lisette-v0.2.11...lisette-v0.2.12) - 2026-05-25
 
 - fix: disambiguate EcoString as_ref calls with as_str [#482](https://github.com/ivov/lisette/pull/482) [`9f16eef`](https://github.com/ivov/lisette/commit/9f16eef49df5a174c9139656ec5e128611758ec1)
