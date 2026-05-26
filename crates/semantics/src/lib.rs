@@ -1,6 +1,7 @@
 pub mod analyze;
 pub mod cache;
 pub mod call_classification;
+pub mod call_target;
 pub mod checker;
 pub mod context;
 pub mod diagnostics;

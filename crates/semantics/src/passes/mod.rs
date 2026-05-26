@@ -27,7 +27,6 @@ pub fn run(
     if run_lints {
         lints::from_facts::run(facts, unused, sink);
         lints::ast_walk::run(analysis, sink);
-        lints::replaceable_with_zero_fill::run(analysis, sink);
         lints::ref_graph::run(analysis, facts, unused, sink);
     }
 }

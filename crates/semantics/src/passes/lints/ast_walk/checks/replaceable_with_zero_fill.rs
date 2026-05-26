@@ -1,65 +1,22 @@
-use diagnostics::LocalSink;
-use rayon::prelude::*;
+use diagnostics::LisetteDiagnostic;
 use rustc_hash::FxHashSet as HashSet;
 use syntax::ast::{Expression, Literal, Span, StructFieldAssignment, StructSpread};
-use syntax::program::{DefinitionBody, File, Module};
+use syntax::program::DefinitionBody;
 use syntax::types::{SubstitutionMap, Type, substitute, unqualified_name};
 
 use crate::checker::infer::expressions::struct_call::has_zero;
-use crate::context::AnalysisContext;
-use crate::passes::PARALLEL_THRESHOLD;
 use crate::store::Store;
 
 const ZERO_FIELD_THRESHOLD: usize = 3;
 
-pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
-    let store = analysis.store;
-
-    let mut work: Vec<(&Module, &File)> = store
-        .modules
-        .values()
-        .filter(|m| !m.is_internal())
-        .flat_map(|m| m.files.values().map(move |f| (m, f)))
-        .collect();
-    work.sort_unstable_by(|a, b| {
-        a.0.id
-            .cmp(&b.0.id)
-            .then_with(|| a.1.name.cmp(&b.1.name))
-            .then_with(|| a.1.id.cmp(&b.1.id))
-    });
-
-    if work.len() < PARALLEL_THRESHOLD {
-        for (module, file) in &work {
-            run_per_file(&file.items, &file.source, &module.id, store, sink);
-        }
-        return;
-    }
-
-    let worker_sinks: Vec<LocalSink> = work
-        .par_iter()
-        .map(|(module, file)| {
-            let local_sink = LocalSink::new();
-            run_per_file(&file.items, &file.source, &module.id, store, &local_sink);
-            local_sink
-        })
-        .collect();
-    sink.extend(LocalSink::merge(worker_sinks));
-}
-
-fn run_per_file(
-    typed_ast: &[Expression],
-    source: &str,
-    module_id: &str,
+pub fn check_replaceable_with_zero_fill(
+    expression: &Expression,
     store: &Store,
-    sink: &LocalSink,
+    module_id: &str,
+    source: &str,
+    diagnostics: &mut Vec<LisetteDiagnostic>,
 ) {
-    for expression in typed_ast {
-        walk(expression, source, module_id, store, sink);
-    }
-}
-
-fn walk(expression: &Expression, source: &str, module_id: &str, store: &Store, sink: &LocalSink) {
-    if let Expression::StructCall {
+    let Expression::StructCall {
         name,
         field_assignments,
         spread,
@@ -67,30 +24,38 @@ fn walk(expression: &Expression, source: &str, module_id: &str, store: &Store, s
         span,
         ..
     } = expression
-        && matches!(spread, StructSpread::None)
-    {
-        let zero_count = field_assignments
-            .iter()
-            .filter(|f| is_obvious_zero(&f.value))
-            .count();
-        if zero_count >= ZERO_FIELD_THRESHOLD
-            && let Some(unspecified) = unspecified_fields(store, ty, name, field_assignments)
-            && unspecified.is_empty()
-            && rewrite_would_typecheck(store, ty, name, field_assignments, module_id)
-        {
-            let kept = render_kept_fields(source, field_assignments);
-            let owner_span = Span::new(span.file_id, span.byte_offset, name.len() as u32);
-            sink.push(diagnostics::lint::replaceable_with_zero_fill(
-                &owner_span,
-                &kept,
-                name,
-            ));
-        }
+    else {
+        return;
+    };
+    if !matches!(spread, StructSpread::None) {
+        return;
     }
 
-    for child in expression.children() {
-        walk(child, source, module_id, store, sink);
+    let zero_count = field_assignments
+        .iter()
+        .filter(|f| is_obvious_zero(&f.value))
+        .count();
+    if zero_count < ZERO_FIELD_THRESHOLD {
+        return;
     }
+
+    let Some(unspecified) = unspecified_fields(store, ty, name, field_assignments) else {
+        return;
+    };
+    if !unspecified.is_empty() {
+        return;
+    }
+    if !rewrite_would_typecheck(store, ty, name, field_assignments, module_id) {
+        return;
+    }
+
+    let kept = render_kept_fields(source, field_assignments);
+    let owner_span = Span::new(span.file_id, span.byte_offset, name.len() as u32);
+    diagnostics.push(diagnostics::lint::replaceable_with_zero_fill(
+        &owner_span,
+        &kept,
+        name,
+    ));
 }
 
 fn render_kept_fields(source: &str, fields: &[StructFieldAssignment]) -> String {

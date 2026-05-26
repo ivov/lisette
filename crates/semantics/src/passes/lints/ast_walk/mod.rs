@@ -5,13 +5,24 @@ pub(crate) mod visitor;
 
 use std::cell::RefCell;
 
-use super::from_facts::LintContext;
 use crate::context::AnalysisContext;
 use crate::passes::PARALLEL_THRESHOLD;
+use crate::store::Store;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
 use rayon::prelude::*;
-use syntax::program::Module;
+use rustc_hash::FxHashMap as HashMap;
+use syntax::ast::{Expression, Pattern};
+use syntax::program::{File, Module};
+
+pub struct LintContext<'a> {
+    pub ast: &'a [Expression],
+    pub source: &'a str,
+    pub is_d_lis: bool,
+    pub files: &'a HashMap<u32, File>,
+    pub module_id: &'a str,
+    pub store: &'a Store,
+}
 
 pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
     let store = analysis.store;
@@ -25,7 +36,7 @@ pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
 
     if modules.len() < PARALLEL_THRESHOLD {
         for module in &modules {
-            run_module(module, sink);
+            run_module(module, store, sink);
         }
         return;
     }
@@ -34,19 +45,22 @@ pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
         .par_iter()
         .map(|module| {
             let local_sink = LocalSink::new();
-            run_module(module, &local_sink);
+            run_module(module, store, &local_sink);
             local_sink
         })
         .collect();
     sink.extend(LocalSink::merge(worker_sinks));
 }
 
-fn run_module(module: &Module, sink: &LocalSink) {
+fn run_module(module: &Module, store: &Store, sink: &LocalSink) {
     for file in module.files.values() {
         let ctx = LintContext {
             ast: &file.items,
+            source: &file.source,
             is_d_lis: file.is_d_lis(),
             files: &module.files,
+            module_id: &module.id,
+            store,
         };
         let mut diagnostics = AstLintGroup.check(&ctx);
         diagnostics.sort_by(LisetteDiagnostic::sort_key);
@@ -60,11 +74,39 @@ use checks::{
     check_empty_match_arm, check_excess_parens_on_condition, check_expression_naming,
     check_identical_if_branches, check_invisible_in_string_expression,
     check_invisible_in_string_pattern, check_match_literal_collection, check_pattern_naming,
-    check_rest_only_slice_pattern, check_self_assignment, check_self_comparison,
-    check_single_arm_match, check_uninterpolated_fstring, check_unnecessary_raw_string_expression,
-    check_unnecessary_raw_string_pattern, check_unsigned_comparison,
+    check_replaceable_with_zero_fill, check_rest_only_slice_pattern, check_self_assignment,
+    check_self_comparison, check_single_arm_match, check_uninterpolated_fstring,
+    check_unnecessary_raw_string_expression, check_unnecessary_raw_string_pattern,
+    check_unsigned_comparison,
 };
 use visitor::visit_ast;
+
+type ExpressionCheck = fn(&Expression, &mut Vec<LisetteDiagnostic>);
+type PatternCheck = fn(&Pattern, &mut Vec<LisetteDiagnostic>);
+
+const EXPRESSION_CHECKS: &[ExpressionCheck] = &[
+    check_double_negation,
+    check_self_comparison,
+    check_unsigned_comparison,
+    check_self_assignment,
+    check_bool_literal_comparison,
+    check_identical_if_branches,
+    check_empty_match_arm,
+    check_excess_parens_on_condition,
+    check_match_literal_collection,
+    check_single_arm_match,
+    check_uninterpolated_fstring,
+    check_unnecessary_raw_string_expression,
+    check_invisible_in_string_expression,
+    check_struct_attributes,
+    check_attributes,
+];
+
+const PATTERN_CHECKS: &[PatternCheck] = &[
+    check_rest_only_slice_pattern,
+    check_unnecessary_raw_string_pattern,
+    check_invisible_in_string_pattern,
+];
 
 pub struct AstLintGroup;
 
@@ -73,33 +115,27 @@ impl AstLintGroup {
         let diagnostics = RefCell::new(Vec::new());
         let is_d_lis = ctx.is_d_lis;
         let files = ctx.files;
+        let store = ctx.store;
+        let module_id = ctx.module_id;
+        let source = ctx.source;
 
         visit_ast(
             ctx.ast,
             &mut |expression| {
-                check_double_negation(expression, &mut diagnostics.borrow_mut());
-                check_self_comparison(expression, &mut diagnostics.borrow_mut());
-                check_unsigned_comparison(expression, &mut diagnostics.borrow_mut());
-                check_self_assignment(expression, &mut diagnostics.borrow_mut());
-                check_duplicate_logical_operand(expression, files, &mut diagnostics.borrow_mut());
-                check_bool_literal_comparison(expression, &mut diagnostics.borrow_mut());
-                check_identical_if_branches(expression, &mut diagnostics.borrow_mut());
-                check_empty_match_arm(expression, &mut diagnostics.borrow_mut());
-                check_excess_parens_on_condition(expression, &mut diagnostics.borrow_mut());
-                check_match_literal_collection(expression, &mut diagnostics.borrow_mut());
-                check_single_arm_match(expression, &mut diagnostics.borrow_mut());
-                check_uninterpolated_fstring(expression, &mut diagnostics.borrow_mut());
-                check_unnecessary_raw_string_expression(expression, &mut diagnostics.borrow_mut());
-                check_invisible_in_string_expression(expression, &mut diagnostics.borrow_mut());
-                check_expression_naming(expression, is_d_lis, &mut diagnostics.borrow_mut());
-                check_struct_attributes(expression, &mut diagnostics.borrow_mut());
-                check_attributes(expression, &mut diagnostics.borrow_mut());
+                let mut sink = diagnostics.borrow_mut();
+                for check in EXPRESSION_CHECKS {
+                    check(expression, &mut sink);
+                }
+                check_duplicate_logical_operand(expression, files, &mut sink);
+                check_expression_naming(expression, is_d_lis, &mut sink);
+                check_replaceable_with_zero_fill(expression, store, module_id, source, &mut sink);
             },
             &mut |pattern| {
-                check_rest_only_slice_pattern(pattern, &mut diagnostics.borrow_mut());
-                check_pattern_naming(pattern, is_d_lis, &mut diagnostics.borrow_mut());
-                check_unnecessary_raw_string_pattern(pattern, &mut diagnostics.borrow_mut());
-                check_invisible_in_string_pattern(pattern, &mut diagnostics.borrow_mut());
+                let mut sink = diagnostics.borrow_mut();
+                for check in PATTERN_CHECKS {
+                    check(pattern, &mut sink);
+                }
+                check_pattern_naming(pattern, is_d_lis, &mut sink);
             },
         );
 

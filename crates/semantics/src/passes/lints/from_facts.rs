@@ -1,17 +1,9 @@
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::FxHashSet as HashSet;
 
 use crate::facts::Facts;
 use diagnostics::LisetteDiagnostic;
 use diagnostics::LocalSink;
-use syntax::ast::Expression;
-use syntax::program::File;
 use syntax::program::UnusedInfo;
-
-pub struct LintContext<'a> {
-    pub ast: &'a [Expression],
-    pub is_d_lis: bool,
-    pub files: &'a HashMap<u32, File>,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lint {
