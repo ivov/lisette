@@ -990,51 +990,40 @@ impl<'source> Parser<'source> {
 struct TokenStream<'source> {
     tokens: Vec<Token<'source>>,
     position: usize,
+    last_index: usize,
 }
 
 impl<'source> TokenStream<'source> {
     fn new(tokens: Vec<Token<'source>>) -> Self {
+        debug_assert!(
+            !tokens.is_empty(),
+            "lexer must always produce at least an EOF token",
+        );
+        let last_index = tokens.len() - 1;
         Self {
             tokens,
             position: 0,
+            last_index,
         }
     }
 
     fn peek(&self) -> Token<'source> {
-        self.tokens
-            .get(self.position)
-            .copied()
-            .unwrap_or_else(|| Token {
-                kind: TokenKind::EOF,
-                text: "",
-                byte_offset: self
-                    .tokens
-                    .last()
-                    .map(|t| t.byte_offset + t.byte_length)
-                    .unwrap_or(0),
-                byte_length: 0,
-            })
+        self.tokens[self.position]
     }
 
     fn peek_ahead(&self, n: usize) -> Token<'source> {
-        self.tokens
-            .get(self.position + n)
-            .copied()
-            .unwrap_or_else(|| Token {
-                kind: TokenKind::EOF,
-                text: "",
-                byte_offset: self
-                    .tokens
-                    .last()
-                    .map(|t| t.byte_offset + t.byte_length)
-                    .unwrap_or(0),
-                byte_length: 0,
-            })
+        let idx = self.position.saturating_add(n);
+        let idx = if idx > self.last_index {
+            self.last_index
+        } else {
+            idx
+        };
+        self.tokens[idx]
     }
 
     fn consume(&mut self) -> Token<'source> {
-        let token = self.peek();
-        if self.position < self.tokens.len() {
+        let token = self.tokens[self.position];
+        if self.position < self.last_index {
             self.position += 1;
         }
         token
