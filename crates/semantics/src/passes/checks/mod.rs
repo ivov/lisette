@@ -1,5 +1,6 @@
 pub(crate) mod const_naming;
 pub(crate) mod duplicate_bindings;
+pub(crate) mod empty_range;
 pub(crate) mod enum_variant_value;
 pub(crate) mod generics;
 pub(crate) mod irrefutable_patterns;
@@ -99,6 +100,7 @@ fn run_file_checks(
     native_value_usage::run(&file.items, &module.id, store, sink);
     enum_variant_value::run(&file.items, store, sink);
     nan_comparison::run(&file.items, sink);
+    empty_range::run(&file.items, sink);
     temp_producing::run(&file.items, sink);
     if !file.is_d_lis() {
         const_naming::run(&file.items, sink);

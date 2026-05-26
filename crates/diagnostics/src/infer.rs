@@ -2148,6 +2148,13 @@ pub fn defer_in_loop(span: Span) -> LisetteDiagnostic {
         .with_help("Wrap the loop body in a helper function, e.g. `fn process(file: File) { defer file.close(); ... }` and call it in the loop: `for f in files { process(f); }`")
 }
 
+pub fn empty_range(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Empty range")
+        .with_infer_code("empty_range")
+        .with_span_label(span, "start is greater than end")
+        .with_help("Swap the bounds.")
+}
+
 pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 

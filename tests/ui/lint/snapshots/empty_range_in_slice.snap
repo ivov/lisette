@@ -1,7 +1,7 @@
 ---
 source: tests/ui/lint/mod.rs
 ---
-  [warning] Empty range
+  [error] Empty range
    ╭─[test.lis:4:14]
  3 │   let xs = [1, 2, 3, 4, 5]
  4 │   let _ = xs[3..1]
@@ -9,4 +9,4 @@ source: tests/ui/lint/mod.rs
    ·                ╰── start is greater than end
  5 │ }
    ╰────
-  help: Swap the bounds. Or if you meant to iterate in reverse, count down with a `while` loop · code: [lint.empty_range]
+  help: Swap the bounds · code: [infer.empty_range]
