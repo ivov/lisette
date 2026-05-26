@@ -4,6 +4,7 @@ pub(crate) mod enum_variant_value;
 pub(crate) mod generics;
 pub(crate) mod irrefutable_patterns;
 pub(crate) mod json_methods;
+pub(crate) mod nan_comparison;
 pub(crate) mod native_value_usage;
 pub(crate) mod newtype;
 mod pattern_analysis;
@@ -97,6 +98,7 @@ fn run_file_checks(
     newtype::run(&file.items, store, sink);
     native_value_usage::run(&file.items, &module.id, store, sink);
     enum_variant_value::run(&file.items, store, sink);
+    nan_comparison::run(&file.items, sink);
     temp_producing::run(&file.items, sink);
     if !file.is_d_lis() {
         const_naming::run(&file.items, sink);

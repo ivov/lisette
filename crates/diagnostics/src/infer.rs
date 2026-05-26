@@ -2148,6 +2148,17 @@ pub fn defer_in_loop(span: Span) -> LisetteDiagnostic {
         .with_help("Wrap the loop body in a helper function, e.g. `fn process(file: File) { defer file.close(); ... }` and call it in the loop: `for f in files { process(f); }`")
 }
 
+pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
+    let result = if always_true { "true" } else { "false" };
+
+    LisetteDiagnostic::error("Comparison with NaN")
+        .with_infer_code("nan_comparison")
+        .with_span_label(span, format!("always {result}"))
+        .with_help(
+            "NaN is unequal to every value including itself. Use `math.IsNaN(x)` to test for NaN.",
+        )
+}
+
 pub fn deferred_lock(span: Span, locked: &str, unlock: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error(format!("Deferred `{locked}` instead of `{unlock}`"))
         .with_infer_code("deferred_lock")
