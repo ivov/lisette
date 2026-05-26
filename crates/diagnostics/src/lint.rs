@@ -270,6 +270,13 @@ pub fn unsigned_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic 
         )
 }
 
+pub fn empty_range(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Empty range")
+        .with_lint_code("empty_range")
+        .with_span_label(span, "start is greater than end")
+        .with_help("Swap the bounds. Or if you meant to iterate in reverse, count down with a `while` loop.")
+}
+
 pub fn verbose_failure_propagation(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Verbose failure propagation")
         .with_lint_code("verbose_failure_propagation")

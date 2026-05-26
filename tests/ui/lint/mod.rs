@@ -4433,3 +4433,127 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn empty_range_in_for() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+fn main() {
+  for i in 10..0 {
+    fmt.Println(i)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_range_inclusive() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+fn main() {
+  for i in 10..=5 {
+    fmt.Println(i)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_range_with_negative_end() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+fn main() {
+  for i in 0..-5 {
+    fmt.Println(i)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_range_in_slice() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let _ = xs[3..1]
+}
+"#
+    );
+}
+
+#[test]
+fn forward_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+fn main() {
+  for i in 0..10 {
+    fmt.Println(i)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn equal_bounds_exclusive_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+fn main() {
+  for i in 5..5 {
+    fmt.Println(i)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn equal_bounds_inclusive_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+fn main() {
+  for i in 5..=5 {
+    fmt.Println(i)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn variable_bounds_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+fn main() {
+  let a = 10
+  let b = 0
+  for i in a..b {
+    fmt.Println(i)
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn open_ended_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3, 4, 5]
+  let _ = xs[2..]
+}
+"#
+    );
+}

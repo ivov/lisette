@@ -2,6 +2,7 @@ mod bool_literal_comparison;
 mod double_negation;
 mod duplicate_logical_operand;
 mod empty_match_arm;
+mod empty_range;
 mod excess_parens_on_condition;
 mod helpers;
 mod identical_if_branches;
@@ -22,6 +23,7 @@ pub use bool_literal_comparison::check_bool_literal_comparison;
 pub use double_negation::check_double_negation;
 pub use duplicate_logical_operand::check_duplicate_logical_operand;
 pub use empty_match_arm::check_empty_match_arm;
+pub use empty_range::check_empty_range;
 pub use excess_parens_on_condition::check_excess_parens_on_condition;
 pub use identical_if_branches::check_identical_if_branches;
 pub use invisible_in_string::{
