@@ -36,7 +36,7 @@ pub fn infer_with_go_typedefs(raw_source: &str, typedefs: &[(&str, &str)]) -> In
 }
 
 pub fn infer_module(module_name: &str, fs: MockFileSystem) -> InferResult {
-    let available_folders = fs.get_folders();
+    let available_folders = fs.folders();
 
     let mut store = Store::new();
 

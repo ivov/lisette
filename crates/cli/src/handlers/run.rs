@@ -11,7 +11,7 @@ use crate::cli_error;
 use crate::go_cli;
 use diagnostics::render::{self, Filter};
 use lisette::pipeline::{CompileConfig, CompilePhase, compile};
-use semantics::loader::Loader;
+use semantics::loader::MemoryLoader;
 
 fn run_with_invocation_cwd(
     build_dir: &Path,
@@ -249,13 +249,6 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         locator: deps::TypedefLocator::default(),
     };
 
-    struct NoLoader;
-    impl Loader for NoLoader {
-        fn scan_folder(&self, _folder_name: &str) -> semantics::loader::Files {
-            rustc_hash::FxHashMap::default()
-        }
-    }
-
     let entry_name = file_path
         .file_name()
         .and_then(|s| s.to_str())
@@ -263,7 +256,7 @@ fn run_standalone(file: &str, args: Vec<String>, debug: bool) -> i32 {
         .to_string();
     let entry_display = lisette::fs::relative_to_cwd(file_path).unwrap_or_else(|| file.to_string());
 
-    let no_loader = NoLoader;
+    let no_loader = MemoryLoader::new();
     let result = compile(
         &source,
         &entry_name,

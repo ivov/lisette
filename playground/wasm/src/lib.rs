@@ -8,13 +8,12 @@ use wasm_bindgen::prelude::*;
 
 use std::sync::Arc;
 
-use lisette_semantics::loader::{FileContent, Files, Loader};
+use lisette_semantics::loader::MemoryLoader;
 use lisette_semantics::analyze::{analyze, AnalyzeInput, CompilePhase, SemanticConfig};
 use lisette_semantics::facts::{BindingIdAllocator, Facts};
 use lisette_syntax::ast::{Expression, Span, StructSpread};
 use lisette_syntax::program::{Definition, DefinitionBody};
 use lisette_syntax::types::Type;
-use rustc_hash::FxHashMap;
 
 // ─── Panic hook ───────────────────────────────────────────────────────────────
 #[wasm_bindgen(start)]
@@ -101,28 +100,6 @@ fn offset_to_line_col(source: &str, byte_offset: usize) -> (u32, u32) {
         .unwrap_or(clamped)
         + 1) as u32;
     (line, col)
-}
-
-// ─── In-memory Loader ─────────────────────────────────────────────────────────
-
-struct MemoryLoader {
-    filename: String,
-    source: String,
-}
-
-impl Loader for MemoryLoader {
-    fn scan_folder(&self, folder: &str) -> Files {
-        if folder == "_entry_" {
-            let mut map: Files = FxHashMap::default();
-            map.insert(
-                self.filename.clone(),
-                FileContent::new(self.source.clone(), self.filename.clone()),
-            );
-            map
-        } else {
-            FxHashMap::default()
-        }
-    }
 }
 
 // ─── Convert LisetteDiagnostic to JsDiagnostic ────────────────────────────────
@@ -212,10 +189,8 @@ fn run_analysis(code: &str) -> AnalysisResult {
         };
     }
 
-    let loader = MemoryLoader {
-        filename: PLAYGROUND_FILE.to_string(),
-        source: code.to_string(),
-    };
+    let mut loader = MemoryLoader::new();
+    loader.add_file("_entry_", PLAYGROUND_FILE, code);
 
     let input = AnalyzeInput {
         config: SemanticConfig {
@@ -270,10 +245,8 @@ fn run_pipeline(
         return (vec![], diagnostics);
     }
 
-    let loader = MemoryLoader {
-        filename: PLAYGROUND_FILE.to_string(),
-        source: code.to_string(),
-    };
+    let mut loader = MemoryLoader::new();
+    loader.add_file("_entry_", PLAYGROUND_FILE, code);
 
     let input = AnalyzeInput {
         config: SemanticConfig {

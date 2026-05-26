@@ -25,3 +25,46 @@ pub trait Loader {
     /// Scans a folder and returns all `.lis` files keyed by bare filename.
     fn scan_folder(&self, folder: &str) -> Files;
 }
+
+/// In-memory `Loader` keyed by folder. Use for tests, benches, the wasm
+/// playground, and anywhere the source content does not live on disk.
+#[derive(Debug, Clone, Default)]
+pub struct MemoryLoader {
+    folders: HashMap<String, Files>,
+}
+
+impl MemoryLoader {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Insert a file; the diagnostic display path is set to `filename`.
+    pub fn add_file(&mut self, folder: &str, filename: &str, content: &str) {
+        self.add_file_with_display(folder, filename, filename, content);
+    }
+
+    /// Insert a file with an explicit diagnostic display path.
+    pub fn add_file_with_display(
+        &mut self,
+        folder: &str,
+        filename: &str,
+        display_path: &str,
+        content: &str,
+    ) {
+        self.folders.entry(folder.to_string()).or_default().insert(
+            filename.to_string(),
+            FileContent::new(content.to_string(), display_path.to_string()),
+        );
+    }
+
+    /// All registered folder names.
+    pub fn folders(&self) -> Vec<String> {
+        self.folders.keys().cloned().collect()
+    }
+}
+
+impl Loader for MemoryLoader {
+    fn scan_folder(&self, folder: &str) -> Files {
+        self.folders.get(folder).cloned().unwrap_or_default()
+    }
+}

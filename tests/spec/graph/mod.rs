@@ -467,7 +467,7 @@ fn resolver_root_vs_subpackage_typedef_lookup() {
 #[test]
 fn third_party_go_struct_impl_methods_registered() {
     use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
-    use semantics::loader::Loader;
+    use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
     let project_root = tmp.path();
@@ -502,12 +502,7 @@ fn main() {
 }
 "#;
 
-    struct NoLoader;
-    impl Loader for NoLoader {
-        fn scan_folder(&self, _: &str) -> semantics::loader::Files {
-            rustc_hash::FxHashMap::default()
-        }
-    }
+    let no_loader = MemoryLoader::new();
 
     let build_result = syntax::build_ast(source, 0);
     let result = analyze(AnalyzeInput {
@@ -516,7 +511,7 @@ fn main() {
             standalone_mode: false,
             load_siblings: false,
         },
-        loader: &NoLoader,
+        loader: &no_loader,
         source: source.to_string(),
         filename: "main.lis".to_string(),
         display_path: "main.lis".to_string(),
@@ -564,7 +559,7 @@ fn main() {
 #[test]
 fn stdlib_cache_save_load_excludes_third_party() {
     use semantics::analyze::{AnalyzeInput, CompilePhase, SemanticConfig, analyze};
-    use semantics::loader::Loader;
+    use semantics::loader::MemoryLoader;
 
     let tmp = tempfile::tempdir().unwrap();
     let project_root = tmp.path();
@@ -594,12 +589,7 @@ fn main() {
 }
 "#;
 
-    struct NoLoader;
-    impl Loader for NoLoader {
-        fn scan_folder(&self, _: &str) -> semantics::loader::Files {
-            rustc_hash::FxHashMap::default()
-        }
-    }
+    let no_loader = MemoryLoader::new();
 
     let build_result = syntax::build_ast(source, 0);
 
@@ -610,7 +600,7 @@ fn main() {
             standalone_mode: false,
             load_siblings: false,
         },
-        loader: &NoLoader,
+        loader: &no_loader,
         source: source.to_string(),
         filename: "main.lis".to_string(),
         display_path: "main.lis".to_string(),
@@ -636,7 +626,7 @@ fn main() {
             standalone_mode: false,
             load_siblings: false,
         },
-        loader: &NoLoader,
+        loader: &no_loader,
         source: source.to_string(),
         filename: "main.lis".to_string(),
         display_path: "main.lis".to_string(),
