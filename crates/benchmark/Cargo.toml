@@ -1,0 +1,33 @@
+[package]
+name = "lisette-benchmark"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+test = false
+bench = false
+
+[dependencies]
+syntax = { package = "lisette-syntax", path = "../syntax" }
+semantics = { package = "lisette-semantics", path = "../semantics" }
+deps = { package = "lisette-deps", path = "../deps" }
+emit = { package = "lisette-emit", path = "../emit" }
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "parse"
+harness = false
+
+[[bench]]
+name = "analyze"
+harness = false
+
+[[bench]]
+name = "emit"
+harness = false

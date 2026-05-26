@@ -1,0 +1,102 @@
+struct Point {
+  x: int,
+  y: int,
+}
+
+struct Config {
+  enabled: bool,
+  threshold: int,
+  label: string,
+}
+
+enum Shape {
+  Circle(int),
+  Square(int),
+  Rect { width: int, height: int },
+}
+
+impl Point {
+  fn origin() -> Point {
+    Point { x: 0, y: 0 }
+  }
+
+  fn translate(self, dx: int, dy: int) -> Point {
+    Point { x: self.x + dx, y: self.y + dy }
+  }
+
+  fn manhattan(self) -> int {
+    let ax = if self.x < 0 { -self.x } else { self.x };
+    let ay = if self.y < 0 { -self.y } else { self.y };
+    return ax + ay;
+  }
+}
+
+impl Shape {
+  fn area(self) -> int {
+    match self {
+      Shape.Circle(r) => 3 * r * r,
+      Shape.Square(s) => s * s,
+      Shape.Rect { width, height } => width * height,
+    }
+  }
+}
+
+fn identity<T>(x: T) -> T {
+  return x;
+}
+
+fn pair<T, U>(x: T, y: U) -> (T, U) {
+  return (x, y);
+}
+
+fn sum(values: Slice<int>) -> int {
+  let mut total = 0;
+  for v in values {
+    total = total + v;
+  }
+  return total;
+}
+
+fn describe(p: Point) -> string {
+  match p {
+    Point { x: 0, y: 0 } => "origin",
+    Point { x: 0, y: _ } => "on y-axis",
+    Point { x: _, y: 0 } => "on x-axis",
+    Point { x: _, y: _ } => "elsewhere",
+  }
+}
+
+fn pipeline(values: Slice<int>) -> int {
+  values
+    |> sum
+    |> identity
+}
+
+fn run(cfg: Config) -> Result<int, string> {
+  if !cfg.enabled {
+    return Err("disabled");
+  }
+  if cfg.threshold < 0 {
+    return Err("negative threshold");
+  }
+  let shapes: Slice<Shape> = [
+    Shape.Circle(cfg.threshold),
+    Shape.Square(cfg.threshold),
+    Shape.Rect { width: cfg.threshold, height: cfg.threshold * 2 },
+  ];
+  let mut acc = 0;
+  for s in shapes {
+    acc = acc + s.area();
+  }
+  return Ok(acc);
+}
+
+fn entry() {
+  let p = Point.origin().translate(3, 4);
+  let d = p.manhattan();
+  let cfg = Config { enabled: true, threshold: 5, label: "demo" };
+  match run(cfg) {
+    Ok(total) => print("total", total, "manhattan", d),
+    Err(msg) => print("error", msg),
+  }
+}
