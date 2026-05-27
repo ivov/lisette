@@ -1,0 +1,14 @@
+---
+source: tests/spec/emit/imports.rs
+description: "input: \nimport \"go:example.com/cli\"\n\nfn make() -> Ref<cli.StringFlag> {\n  &cli.StringFlag { Name: \"n\", Value: \"v\", .. }\n}\n"
+---
+package main
+
+import "example.com/cli"
+
+func make_() *cli.StringFlag {
+	return &cli.StringFlag{
+		Name:  "n",
+		Value: "v",
+	}
+}

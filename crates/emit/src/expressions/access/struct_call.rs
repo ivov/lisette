@@ -439,7 +439,9 @@ impl Planner<'_> {
             let parts: Vec<&str> = name.split('.').collect();
             let emits_qualified = (is_enum && parts.len() == 3) || (!is_enum && parts.len() == 2);
             if emits_qualified && !self.facts.is_current_module(parts[0]) {
-                let type_args = if let Type::Nominal { params, .. } = ty {
+                let type_args = if self.is_non_generic_alias_call(parts[1], ty) {
+                    String::new()
+                } else if let Type::Nominal { params, .. } = ty {
                     self.format_type_args(params, fx)
                 } else {
                     String::new()
@@ -450,6 +452,22 @@ impl Planner<'_> {
         }
 
         self.go_type_string(ty, fx)
+    }
+
+    /// True when `type_name` (e.g., `StringFlag`) is a non-generic alias in the
+    /// same module as the underlying struct `ty`.
+    fn is_non_generic_alias_call(&self, type_name: &str, ty: &Type) -> bool {
+        let Type::Nominal { id: struct_id, .. } = ty else {
+            return false;
+        };
+        let Some(module) = self.facts.module_for_qualified_name(struct_id) else {
+            return false;
+        };
+        let alias_id = format!("{}.{}", module, type_name);
+        matches!(
+            self.facts.definition(&alias_id).map(|d| &d.body),
+            Some(DefinitionBody::TypeAlias { generics, .. }) if generics.is_empty()
+        )
     }
 
     /// Compute the enum-specific context for a struct call.

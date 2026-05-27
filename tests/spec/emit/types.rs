@@ -143,6 +143,20 @@ struct Box<T> { value: T }
 }
 
 #[test]
+fn non_generic_alias_pins_unconstrained_type_param() {
+    let input = r#"
+struct Phantom<T, P> { pub value: T }
+
+type IntPhantom = Phantom<int, string>
+
+fn make() -> IntPhantom {
+  IntPhantom { value: 7, .. }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn type_alias_field_access() {
     let input = r#"
 struct Point { pub x: int, pub y: int }

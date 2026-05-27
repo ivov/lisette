@@ -81,6 +81,7 @@ impl TaskState<'_> {
                 spread,
                 span,
                 expected_ty,
+                None,
             );
         }
 
@@ -112,6 +113,11 @@ impl TaskState<'_> {
                 let struct_ty = struct_ty.clone();
                 let struct_fields = struct_fields.clone();
                 let struct_id_str = struct_id.to_string();
+                let alias_underlying = if matches!(&alias_ty, Type::Forall { .. }) {
+                    None
+                } else {
+                    Some(underlying)
+                };
                 return self.infer_struct_call_for_struct(
                     store,
                     struct_name,
@@ -122,6 +128,7 @@ impl TaskState<'_> {
                     spread,
                     span,
                     expected_ty,
+                    alias_underlying,
                 );
             }
 
@@ -251,8 +258,13 @@ impl TaskState<'_> {
         spread: StructSpread,
         span: Span,
         expected_ty: &Type,
+        alias_underlying: Option<Type>,
     ) -> Expression {
         let (struct_call_ty, map) = self.instantiate(&struct_ty);
+
+        if let Some(underlying) = alias_underlying {
+            self.unify(store, &struct_call_ty, &underlying, &span);
+        }
 
         let peeled_expected = store.deep_resolve_alias(&expected_ty.resolve_in(&self.env));
         if same_nominal(&peeled_expected, &struct_call_ty) && !peeled_expected.contains_unknown() {

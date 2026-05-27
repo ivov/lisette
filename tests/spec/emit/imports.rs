@@ -494,3 +494,24 @@ pub struct TypeError {
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:gopkg.in/yaml.v3", typedef)]);
 }
+
+#[test]
+fn cross_module_non_generic_alias_call_emits_without_type_args() {
+    let input = r#"
+import "go:example.com/cli"
+
+fn make() -> Ref<cli.StringFlag> {
+  &cli.StringFlag { Name: "n", Value: "v", .. }
+}
+"#;
+    let typedef = r#"
+pub struct FlagBase<T, C> {
+  pub Name: string,
+  pub Value: T,
+  pub Config: C,
+}
+
+pub type StringFlag = FlagBase<string, int>
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cli", typedef)]);
+}

@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \nstruct Phantom<T, P> { pub value: T }\n\ntype IntPhantom = Phantom<int, string>\n\nfn make() -> IntPhantom {\n  IntPhantom { value: 7, .. }\n}\n"
+---
+package main
+
+import "fmt"
+
+type Phantom[T any, P any] struct {
+	Value T
+}
+
+func (p Phantom[T, P]) String() string {
+	return fmt.Sprintf("Phantom { value: %v }", p.Value)
+}
+
+type IntPhantom = Phantom[int, string]
+
+func make_() IntPhantom {
+	return Phantom[int, string]{Value: 7}
+}
