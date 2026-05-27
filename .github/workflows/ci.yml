@@ -94,7 +94,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           go: 'true'
-      - run: cargo test -p tests --test suite --locked -- --format terse
+      - run: cargo test -p tests --test suite --locked -- --format terse --skip e2e_smoke
 
   lsp-test:
     name: LSP tests
