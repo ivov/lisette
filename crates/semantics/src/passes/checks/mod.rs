@@ -15,6 +15,7 @@ pub(crate) mod predeclared_shadowing;
 pub(crate) mod prelude_shadowing;
 pub(crate) mod pub_type_export;
 pub(crate) mod receivers;
+pub(crate) mod repeated_if_condition;
 pub(crate) mod stringer_signature;
 pub(crate) mod temp_producing;
 pub(crate) mod visibility;
@@ -105,6 +106,7 @@ fn run_file_checks(
     empty_range::run(&file.items, sink);
     index_out_of_bounds::run(&file.items, sink);
     oversized_shift::run(&file.items, sink);
+    repeated_if_condition::run(&file.items, sink);
     temp_producing::run(&file.items, sink);
     if !file.is_d_lis() {
         const_naming::run(&file.items, sink);

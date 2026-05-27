@@ -913,6 +913,93 @@ fn main() {
 }
 
 #[test]
+fn repeated_if_condition_simple() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = if x > 0 { 1 } else if x > 0 { 2 } else { 3 }
+}
+"#
+    );
+}
+
+#[test]
+fn repeated_if_condition_with_parens() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = if x > (0) { 1 } else if x > 0 { 2 } else { 3 }
+}
+"#
+    );
+}
+
+#[test]
+fn repeated_if_condition_identifier() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let flag = true;
+  let _ = if flag { 1 } else if flag { 2 } else { 3 }
+}
+"#
+    );
+}
+
+#[test]
+fn repeated_if_condition_dot_access() {
+    assert_lint_snapshot!(
+        r#"
+struct Config { enabled: bool }
+
+fn main() {
+  let c = Config { enabled: true };
+  let _ = if c.enabled { 1 } else if c.enabled { 2 } else { 3 }
+}
+"#
+    );
+}
+
+#[test]
+fn repeated_if_condition_distinct_conditions_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = if x > 0 { 1 } else if x < 0 { 2 } else { 3 }
+}
+"#
+    );
+}
+
+#[test]
+fn repeated_if_condition_with_side_effects_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn side_effect() -> bool { true }
+
+fn main() {
+  let _ = if side_effect() { 1 } else if side_effect() { 2 } else { 3 }
+}
+"#
+    );
+}
+
+#[test]
+fn repeated_if_condition_simple_if_else_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x = 5;
+  let _ = if x > 0 { 1 } else { 2 }
+}
+"#
+    );
+}
+
+#[test]
 fn unused_function() {
     assert_lint_snapshot!(
         r#"

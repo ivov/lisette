@@ -2155,6 +2155,15 @@ pub fn empty_range(span: &Span) -> LisetteDiagnostic {
         .with_help("Swap the bounds.")
 }
 
+pub fn repeated_if_condition(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`if` condition repeated in `else if`")
+        .with_infer_code("repeated_if_condition")
+        .with_span_label(span, "same as prior condition")
+        .with_help(
+            "This branch is unreachable, because its condition duplicates the preceding condition. Did you mean a different condition?",
+        )
+}
+
 pub fn index_out_of_bounds(span: &Span, index_text: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Index out of bounds")
         .with_infer_code("index_out_of_bounds")
