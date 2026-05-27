@@ -1563,3 +1563,30 @@ fn main() {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn interop_nested_slice_of_option_unwrapped_at_go_field() {
+    let input = r#"
+import "go:example.com/cli"
+
+fn main() {
+  let f1 = &cli.Flag { Name: "a", .. }
+  let f2 = &cli.Flag { Name: "b", .. }
+  let g = cli.Group {
+    Flags: [[Some(f1), Some(f2)]],
+    ..,
+  }
+  let _ = g
+}
+"#;
+    let typedef = r#"
+pub struct Flag {
+  pub Name: string,
+}
+
+pub struct Group {
+  pub Flags: Slice<Slice<Option<Ref<Flag>>>>,
+}
+"#;
+    assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/cli", typedef)]);
+}

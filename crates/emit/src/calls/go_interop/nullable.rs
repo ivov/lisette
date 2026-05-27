@@ -6,16 +6,10 @@ use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, leaf_blo
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement};
-use crate::types::shape::CollectionKind;
+use crate::types::shape::{CollectionKind, NullableCollectionElement, NullableCollectionShape};
 use crate::write_line;
 use syntax::ast::Expression;
 use syntax::types::Type;
-
-struct CollectionUnwrapShape {
-    raw_collection_ty: String,
-    is_pointer_bridged: bool,
-    emit_nil_else: bool,
-}
 
 impl Planner<'_> {
     pub(super) fn lower_go_option_call_wrapped(
@@ -374,7 +368,7 @@ impl Planner<'_> {
         output: &mut String,
         raw_value: &str,
         collection_ty: &Type,
-        element_option_ty: &Type,
+        shape: &NullableCollectionShape,
         fx: &mut EmitEffects,
     ) -> String {
         fx.require_stdlib();
@@ -406,28 +400,42 @@ impl Planner<'_> {
             src_var
         );
 
-        let fallible = Fallible::from_type(element_option_ty).expect("Option type expected");
-        let is_pointer_bridged = self.is_non_nilable_option(element_option_ty);
-
-        let is_interface = self.is_interface_option(element_option_ty);
-        if is_interface {
-            write_line!(output, "if !lisette.IsNilInterface({}) {{", val_var);
-        } else {
-            write_line!(output, "if {} != nil {{", val_var);
+        match &shape.element {
+            NullableCollectionElement::Option(opt_ty) => {
+                let fallible = Fallible::from_type(opt_ty).expect("Option type expected");
+                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
+                let is_interface = self.is_interface_option(opt_ty);
+                if is_interface {
+                    write_line!(output, "if !lisette.IsNilInterface({}) {{", val_var);
+                } else {
+                    write_line!(output, "if {} != nil {{", val_var);
+                }
+                let some_input = if is_pointer_bridged {
+                    format!("*{}", val_var)
+                } else {
+                    val_var.clone()
+                };
+                let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                let some_wrapper = fe.emit_success(&some_input);
+                write_line!(output, "{}[{}] = {}", wrapped_var, index_var, some_wrapper);
+                output.push_str("} else {\n");
+                let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                let none_wrapper = fe.emit_failure(None);
+                write_line!(output, "{}[{}] = {}", wrapped_var, index_var, none_wrapper);
+                output.push_str("}\n");
+            }
+            NullableCollectionElement::Nested(inner_shape) => {
+                let inner_lisette_ty = self.collection_element_ty(collection_ty, shape);
+                let inner_var = self.emit_collection_nullable_wrap(
+                    output,
+                    &val_var,
+                    &inner_lisette_ty,
+                    inner_shape,
+                    fx,
+                );
+                write_line!(output, "{}[{}] = {}", wrapped_var, index_var, inner_var);
+            }
         }
-        let some_input = if is_pointer_bridged {
-            format!("*{}", val_var)
-        } else {
-            val_var.clone()
-        };
-        let mut fe = FalliblePlanner::new(self, &fallible, fx);
-        let some_wrapper = fe.emit_success(&some_input);
-        write_line!(output, "{}[{}] = {}", wrapped_var, index_var, some_wrapper);
-        output.push_str("} else {\n");
-        let mut fe = FalliblePlanner::new(self, &fallible, fx);
-        let none_wrapper = fe.emit_failure(None);
-        write_line!(output, "{}[{}] = {}", wrapped_var, index_var, none_wrapper);
-        output.push_str("}\n");
 
         output.push_str("}\n");
 
@@ -440,7 +448,7 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         raw_value: &str,
         collection_ty: &Type,
-        element_option_ty: &Type,
+        shape: &NullableCollectionShape,
         fx: &mut EmitEffects,
     ) -> String {
         fx.require_stdlib();
@@ -457,54 +465,75 @@ impl Planner<'_> {
         let val_var = self.fresh_var(Some("v"));
         self.declare(&val_var);
 
-        let fallible = Fallible::from_type(element_option_ty).expect("Option type expected");
-        let is_pointer_bridged = self.is_non_nilable_option(element_option_ty);
-        let is_interface = self.is_interface_option(element_option_ty);
+        let loop_body = match &shape.element {
+            NullableCollectionElement::Option(opt_ty) => {
+                let fallible = Fallible::from_type(opt_ty).expect("Option type expected");
+                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
+                let is_interface = self.is_interface_option(opt_ty);
+                let some_input = if is_pointer_bridged {
+                    format!("*{}", val_var)
+                } else {
+                    val_var.clone()
+                };
+                let some_wrapper = {
+                    let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                    fe.emit_success(&some_input)
+                };
+                let none_wrapper = {
+                    let mut fe = FalliblePlanner::new(self, &fallible, fx);
+                    fe.emit_failure(None)
+                };
+                let condition = if is_interface {
+                    format!("!lisette.IsNilInterface({})", val_var)
+                } else {
+                    format!("{} != nil", val_var)
+                };
+                let then_body = LoweredBlock {
+                    statements: vec![LoweredStatement::RawGo(format!(
+                        "{}[{}] = {}\n",
+                        wrapped_var, index_var, some_wrapper
+                    ))],
+                };
+                let else_body = LoweredBlock {
+                    statements: vec![LoweredStatement::RawGo(format!(
+                        "{}[{}] = {}\n",
+                        wrapped_var, index_var, none_wrapper
+                    ))],
+                };
+                let if_plan = IfPlan {
+                    directive: String::new(),
+                    condition_setup: String::new(),
+                    condition,
+                    then_body,
+                    else_arm: ElseArm::Else {
+                        body: else_body,
+                        inline: false,
+                    },
+                };
+                LoweredBlock {
+                    statements: vec![LoweredStatement::If(if_plan)],
+                }
+            }
+            NullableCollectionElement::Nested(inner_shape) => {
+                let inner_lisette_ty = self.collection_element_ty(collection_ty, shape);
+                let mut inner_statements = Vec::new();
+                let inner_var = self.plan_collection_nullable_wrap(
+                    &mut inner_statements,
+                    &val_var,
+                    &inner_lisette_ty,
+                    inner_shape,
+                    fx,
+                );
+                inner_statements.push(LoweredStatement::RawGo(format!(
+                    "{}[{}] = {}\n",
+                    wrapped_var, index_var, inner_var
+                )));
+                LoweredBlock {
+                    statements: inner_statements,
+                }
+            }
+        };
 
-        let some_input = if is_pointer_bridged {
-            format!("*{}", val_var)
-        } else {
-            val_var.clone()
-        };
-        let some_wrapper = {
-            let mut fe = FalliblePlanner::new(self, &fallible, fx);
-            fe.emit_success(&some_input)
-        };
-        let none_wrapper = {
-            let mut fe = FalliblePlanner::new(self, &fallible, fx);
-            fe.emit_failure(None)
-        };
-
-        let condition = if is_interface {
-            format!("!lisette.IsNilInterface({})", val_var)
-        } else {
-            format!("{} != nil", val_var)
-        };
-        let then_body = LoweredBlock {
-            statements: vec![LoweredStatement::RawGo(format!(
-                "{}[{}] = {}\n",
-                wrapped_var, index_var, some_wrapper
-            ))],
-        };
-        let else_body = LoweredBlock {
-            statements: vec![LoweredStatement::RawGo(format!(
-                "{}[{}] = {}\n",
-                wrapped_var, index_var, none_wrapper
-            ))],
-        };
-        let if_plan = IfPlan {
-            directive: String::new(),
-            condition_setup: String::new(),
-            condition,
-            then_body,
-            else_arm: ElseArm::Else {
-                body: else_body,
-                inline: false,
-            },
-        };
-        let loop_body = LoweredBlock {
-            statements: vec![LoweredStatement::If(if_plan)],
-        };
         statements.push(LoweredStatement::Loop(LoopPlan {
             directive: String::new(),
             prologue: String::new(),
@@ -521,11 +550,11 @@ impl Planner<'_> {
         output: &mut String,
         lisette_value: &str,
         collection_ty: &Type,
-        element_option_ty: &Type,
+        shape: &NullableCollectionShape,
         fx: &mut EmitEffects,
     ) -> String {
         fx.require_stdlib();
-        let shape = self.classify_collection_unwrap_shape(collection_ty, element_option_ty, fx);
+        let raw_collection_ty = self.shape_raw_collection_ty(shape, fx);
 
         let src_var = self.fresh_var(Some("src"));
         self.declare(&src_var);
@@ -541,7 +570,7 @@ impl Planner<'_> {
             output,
             "{} := make({}, len({}))",
             unwrapped_var,
-            shape.raw_collection_ty,
+            raw_collection_ty,
             src_var
         );
 
@@ -553,24 +582,42 @@ impl Planner<'_> {
             src_var
         );
 
-        let some_assignment = if shape.is_pointer_bridged {
-            format!("&{}.SomeVal", val_var)
-        } else {
-            format!("{}.SomeVal", val_var)
-        };
-        write_line!(output, "if {}.Tag == {} {{", val_var, OPTION_SOME_TAG);
-        write_line!(
-            output,
-            "{}[{}] = {}",
-            unwrapped_var,
-            index_var,
-            some_assignment
-        );
-        if shape.emit_nil_else {
-            output.push_str("} else {\n");
-            write_line!(output, "{}[{}] = nil", unwrapped_var, index_var);
+        match &shape.element {
+            NullableCollectionElement::Option(opt_ty) => {
+                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
+                let is_map = matches!(shape.kind, CollectionKind::Map);
+                let emit_nil_else = is_map || is_pointer_bridged;
+                let some_assignment = if is_pointer_bridged {
+                    format!("&{}.SomeVal", val_var)
+                } else {
+                    format!("{}.SomeVal", val_var)
+                };
+                write_line!(output, "if {}.Tag == {} {{", val_var, OPTION_SOME_TAG);
+                write_line!(
+                    output,
+                    "{}[{}] = {}",
+                    unwrapped_var,
+                    index_var,
+                    some_assignment
+                );
+                if emit_nil_else {
+                    output.push_str("} else {\n");
+                    write_line!(output, "{}[{}] = nil", unwrapped_var, index_var);
+                }
+                output.push_str("}\n");
+            }
+            NullableCollectionElement::Nested(inner_shape) => {
+                let inner_lisette_ty = self.collection_element_ty(collection_ty, shape);
+                let inner_var = self.emit_collection_nullable_unwrap(
+                    output,
+                    &val_var,
+                    &inner_lisette_ty,
+                    inner_shape,
+                    fx,
+                );
+                write_line!(output, "{}[{}] = {}", unwrapped_var, index_var, inner_var);
+            }
         }
-        output.push_str("}\n");
         output.push_str("}\n");
 
         unwrapped_var
@@ -582,57 +629,83 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         lisette_value: &str,
         collection_ty: &Type,
-        element_option_ty: &Type,
+        shape: &NullableCollectionShape,
         fx: &mut EmitEffects,
     ) -> String {
         fx.require_stdlib();
-        let shape = self.classify_collection_unwrap_shape(collection_ty, element_option_ty, fx);
+        let raw_collection_ty = self.shape_raw_collection_ty(shape, fx);
 
         let src_var = self.hoist_tmp_value_statement(statements, "src", lisette_value);
         let unwrapped_var = self.hoist_tmp_value_statement(
             statements,
             "unwrapped",
-            &format!("make({}, len({}))", shape.raw_collection_ty, src_var),
+            &format!("make({}, len({}))", raw_collection_ty, src_var),
         );
         let index_var = self.fresh_var(Some("i"));
         self.declare(&index_var);
         let val_var = self.fresh_var(Some("v"));
         self.declare(&val_var);
 
-        let some_assignment = if shape.is_pointer_bridged {
-            format!("&{}.SomeVal", val_var)
-        } else {
-            format!("{}.SomeVal", val_var)
-        };
-        let then_body = LoweredBlock {
-            statements: vec![LoweredStatement::RawGo(format!(
-                "{}[{}] = {}\n",
-                unwrapped_var, index_var, some_assignment
-            ))],
-        };
-        let else_arm = if shape.emit_nil_else {
-            ElseArm::Else {
-                body: LoweredBlock {
+        let loop_body = match &shape.element {
+            NullableCollectionElement::Option(opt_ty) => {
+                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
+                let is_map = matches!(shape.kind, CollectionKind::Map);
+                let emit_nil_else = is_map || is_pointer_bridged;
+                let some_assignment = if is_pointer_bridged {
+                    format!("&{}.SomeVal", val_var)
+                } else {
+                    format!("{}.SomeVal", val_var)
+                };
+                let then_body = LoweredBlock {
                     statements: vec![LoweredStatement::RawGo(format!(
-                        "{}[{}] = nil\n",
-                        unwrapped_var, index_var
+                        "{}[{}] = {}\n",
+                        unwrapped_var, index_var, some_assignment
                     ))],
-                },
-                inline: false,
+                };
+                let else_arm = if emit_nil_else {
+                    ElseArm::Else {
+                        body: LoweredBlock {
+                            statements: vec![LoweredStatement::RawGo(format!(
+                                "{}[{}] = nil\n",
+                                unwrapped_var, index_var
+                            ))],
+                        },
+                        inline: false,
+                    }
+                } else {
+                    ElseArm::None
+                };
+                let if_plan = IfPlan {
+                    directive: String::new(),
+                    condition_setup: String::new(),
+                    condition: format!("{}.Tag == {}", val_var, OPTION_SOME_TAG),
+                    then_body,
+                    else_arm,
+                };
+                LoweredBlock {
+                    statements: vec![LoweredStatement::If(if_plan)],
+                }
             }
-        } else {
-            ElseArm::None
+            NullableCollectionElement::Nested(inner_shape) => {
+                let inner_lisette_ty = self.collection_element_ty(collection_ty, shape);
+                let mut inner_statements = Vec::new();
+                let inner_var = self.plan_collection_nullable_unwrap(
+                    &mut inner_statements,
+                    &val_var,
+                    &inner_lisette_ty,
+                    inner_shape,
+                    fx,
+                );
+                inner_statements.push(LoweredStatement::RawGo(format!(
+                    "{}[{}] = {}\n",
+                    unwrapped_var, index_var, inner_var
+                )));
+                LoweredBlock {
+                    statements: inner_statements,
+                }
+            }
         };
-        let if_plan = IfPlan {
-            directive: String::new(),
-            condition_setup: String::new(),
-            condition: format!("{}.Tag == {}", val_var, OPTION_SOME_TAG),
-            then_body,
-            else_arm,
-        };
-        let loop_body = LoweredBlock {
-            statements: vec![LoweredStatement::If(if_plan)],
-        };
+
         statements.push(LoweredStatement::Loop(LoopPlan {
             directive: String::new(),
             prologue: String::new(),
@@ -644,34 +717,47 @@ impl Planner<'_> {
         unwrapped_var
     }
 
-    fn classify_collection_unwrap_shape(
-        &mut self,
-        collection_ty: &Type,
-        element_option_ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> CollectionUnwrapShape {
-        let shape = self
-            .nullable_collection_shape(collection_ty)
-            .expect("nullable collection unwrap requires alias-aware shape");
-        let is_map = matches!(shape.kind, CollectionKind::Map);
-        let is_pointer_bridged = self.is_non_nilable_option(element_option_ty);
-        let inner_ty = element_option_ty.ok_type();
-        let inner_ty_str = self.go_type_string(&inner_ty, fx);
-        let raw_element_ty = if is_pointer_bridged {
-            format!("*{}", inner_ty_str)
+    /// Lisette element type of a collection: `Slice<X>` to `X`, `Map<K, V>` to `V`.
+    fn collection_element_ty(&self, collection_ty: &Type, shape: &NullableCollectionShape) -> Type {
+        let resolved = self.emit_shape_ty(collection_ty);
+        let params = resolved
+            .get_type_params()
+            .expect("native collection has type params");
+        let index = if matches!(shape.kind, CollectionKind::Map) {
+            1
         } else {
-            inner_ty_str
+            0
         };
-        let raw_collection_ty = if let Some(key_ty) = shape.key_ty.as_ref() {
+        params[index].clone()
+    }
+
+    /// Raw Go type for an unwrapped collection; walks the shape recursively so
+    /// nested options lower past the outer `[]` (e.g. to `[][]*T`).
+    fn shape_raw_collection_ty(
+        &mut self,
+        shape: &NullableCollectionShape,
+        fx: &mut EmitEffects,
+    ) -> String {
+        let raw_element_ty = match &shape.element {
+            NullableCollectionElement::Option(opt_ty) => {
+                let is_pointer_bridged = self.is_non_nilable_option(opt_ty);
+                let inner_ty = opt_ty.ok_type();
+                let inner_ty_str = self.go_type_string(&inner_ty, fx);
+                if is_pointer_bridged {
+                    format!("*{}", inner_ty_str)
+                } else {
+                    inner_ty_str
+                }
+            }
+            NullableCollectionElement::Nested(inner_shape) => {
+                self.shape_raw_collection_ty(inner_shape, fx)
+            }
+        };
+        if let Some(key_ty) = shape.key_ty.as_ref() {
             let key_ty_str = self.go_type_string(key_ty, fx);
             format!("map[{}]{}", key_ty_str, raw_element_ty)
         } else {
             format!("[]{}", raw_element_ty)
-        };
-        CollectionUnwrapShape {
-            raw_collection_ty,
-            is_pointer_bridged,
-            emit_nil_else: is_map || is_pointer_bridged,
         }
     }
 }

@@ -6,6 +6,7 @@ use crate::Planner;
 use crate::calls::go_interop::WrapperTarget;
 use crate::definitions::interface_adapter::AdapterPlan;
 use crate::plan::bodies::LoweredStatement;
+use crate::types::shape::NullableCollectionShape;
 
 pub(crate) struct Coercion {
     kind: CoercionKind,
@@ -14,14 +15,30 @@ pub(crate) struct Coercion {
 pub(crate) enum CoercionKind {
     Identity,
     WrapAsInterface(AdapterPlan),
-    WrapNewtype { ty: Type },
-    UnwrapNullableOption { ty: Type },
-    UnwrapPointerOption { ty: Type },
-    UnwrapNullableCollection { ty: Type, element_option_ty: Type },
+    WrapNewtype {
+        ty: Type,
+    },
+    UnwrapNullableOption {
+        ty: Type,
+    },
+    UnwrapPointerOption {
+        ty: Type,
+    },
+    UnwrapNullableCollection {
+        ty: Type,
+        shape: NullableCollectionShape,
+    },
     UnwrapOptionToAny,
-    WrapNullableOption { ty: Type },
-    WrapPointerOption { ty: Type },
-    WrapNullableCollection { ty: Type, element_option_ty: Type },
+    WrapNullableOption {
+        ty: Type,
+    },
+    WrapPointerOption {
+        ty: Type,
+    },
+    WrapNullableCollection {
+        ty: Type,
+        shape: NullableCollectionShape,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -71,11 +88,8 @@ impl Coercion {
                 let ptr = format!("*{}", planner.go_type_string(&ty.ok_type(), fx));
                 planner.emit_option_projection(output, &value, "ptr", &ptr, true, fx)
             }
-            CoercionKind::UnwrapNullableCollection {
-                ty,
-                element_option_ty,
-            } => {
-                planner.emit_collection_nullable_unwrap(output, &value, &ty, &element_option_ty, fx)
+            CoercionKind::UnwrapNullableCollection { ty, shape } => {
+                planner.emit_collection_nullable_unwrap(output, &value, &ty, &shape, fx)
             }
             CoercionKind::UnwrapOptionToAny => {
                 planner.emit_option_projection(output, &value, "unwrap", "any", false, fx)
@@ -86,10 +100,9 @@ impl Coercion {
             CoercionKind::WrapPointerOption { ty } => {
                 planner.emit_pointer_to_option_wrap(output, &value, &ty, fx)
             }
-            CoercionKind::WrapNullableCollection {
-                ty,
-                element_option_ty,
-            } => planner.emit_collection_nullable_wrap(output, &value, &ty, &element_option_ty, fx),
+            CoercionKind::WrapNullableCollection { ty, shape } => {
+                planner.emit_collection_nullable_wrap(output, &value, &ty, &shape, fx)
+            }
         }
     }
 
@@ -122,32 +135,18 @@ impl Coercion {
             CoercionKind::UnwrapOptionToAny => {
                 planner.plan_option_projection(&mut statements, &value, "unwrap", "any", false, fx)
             }
-            CoercionKind::UnwrapNullableCollection {
-                ty,
-                element_option_ty,
-            } => planner.plan_collection_nullable_unwrap(
-                &mut statements,
-                &value,
-                &ty,
-                &element_option_ty,
-                fx,
-            ),
+            CoercionKind::UnwrapNullableCollection { ty, shape } => {
+                planner.plan_collection_nullable_unwrap(&mut statements, &value, &ty, &shape, fx)
+            }
             CoercionKind::WrapNullableOption { ty } => {
                 planner.plan_nil_check_option_wrap(&mut statements, &value, &ty, fx)
             }
             CoercionKind::WrapPointerOption { ty } => {
                 planner.plan_pointer_to_option_wrap(&mut statements, &value, &ty, fx)
             }
-            CoercionKind::WrapNullableCollection {
-                ty,
-                element_option_ty,
-            } => planner.plan_collection_nullable_wrap(
-                &mut statements,
-                &value,
-                &ty,
-                &element_option_ty,
-                fx,
-            ),
+            CoercionKind::WrapNullableCollection { ty, shape } => {
+                planner.plan_collection_nullable_wrap(&mut statements, &value, &ty, &shape, fx)
+            }
         };
         (statements, value)
     }
@@ -196,7 +195,7 @@ pub(crate) enum OptionShape {
     /// uses `*T` and bridges nil ↔ `None`.
     PointerBridged,
     NullableCollection {
-        element_option_ty: Type,
+        shape: NullableCollectionShape,
     },
 }
 
@@ -206,9 +205,7 @@ pub(crate) fn classify_option_shape(planner: &Planner, ty: &Type) -> OptionShape
     } else if planner.is_non_nilable_option(ty) {
         OptionShape::PointerBridged
     } else if let Some(shape) = planner.nullable_collection_shape(ty) {
-        OptionShape::NullableCollection {
-            element_option_ty: shape.element_option_ty,
-        }
+        OptionShape::NullableCollection { shape }
     } else {
         OptionShape::Plain
     }
@@ -228,9 +225,9 @@ fn resolve_to_go(planner: &Planner, from: &Type, to: &Type) -> CoercionKind {
             CoercionKind::UnwrapPointerOption { ty: from.clone() }
         }
         PointerBridged => CoercionKind::Identity,
-        NullableCollection { element_option_ty } => CoercionKind::UnwrapNullableCollection {
+        NullableCollection { shape } => CoercionKind::UnwrapNullableCollection {
             ty: from.clone(),
-            element_option_ty,
+            shape,
         },
     }
 }
@@ -241,9 +238,9 @@ fn resolve_from_go(planner: &Planner, from: &Type) -> CoercionKind {
         Plain => CoercionKind::Identity,
         Nullable => CoercionKind::WrapNullableOption { ty: from.clone() },
         PointerBridged => CoercionKind::WrapPointerOption { ty: from.clone() },
-        NullableCollection { element_option_ty } => CoercionKind::WrapNullableCollection {
+        NullableCollection { shape } => CoercionKind::WrapNullableCollection {
             ty: from.clone(),
-            element_option_ty,
+            shape,
         },
     }
 }

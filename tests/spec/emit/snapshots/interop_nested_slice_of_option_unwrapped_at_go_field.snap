@@ -1,0 +1,29 @@
+---
+source: tests/spec/emit/interop_matrix.rs
+description: "input: \nimport \"go:example.com/cli\"\n\nfn main() {\n  let f1 = &cli.Flag { Name: \"a\", .. }\n  let f2 = &cli.Flag { Name: \"b\", .. }\n  let g = cli.Group {\n    Flags: [[Some(f1), Some(f2)]],\n    ..,\n  }\n  let _ = g\n}\n"
+---
+package main
+
+import (
+	"example.com/cli"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func main() {
+	f1 := &cli.Flag{Name: "a"}
+	f2 := &cli.Flag{Name: "b"}
+	src_1 := [][]lisette.Option[*cli.Flag]{[]lisette.Option[*cli.Flag]{lisette.MakeOptionSome(f1), lisette.MakeOptionSome(f2)}}
+	unwrapped_2 := make([][]*cli.Flag, len(src_1))
+	for i_3, v_4 := range src_1 {
+		src_5 := v_4
+		unwrapped_6 := make([]*cli.Flag, len(src_5))
+		for i_7, v_8 := range src_5 {
+			if v_8.Tag == lisette.OptionSome {
+				unwrapped_6[i_7] = v_8.SomeVal
+			}
+		}
+		unwrapped_2[i_3] = unwrapped_6
+	}
+	g := cli.Group{Flags: unwrapped_2}
+	_ = g
+}

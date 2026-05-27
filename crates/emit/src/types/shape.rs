@@ -35,7 +35,13 @@ pub(crate) enum CollectionKind {
 pub(crate) struct NullableCollectionShape {
     pub(crate) kind: CollectionKind,
     pub(crate) key_ty: Option<Type>,
-    pub(crate) element_option_ty: Type,
+    pub(crate) element: NullableCollectionElement,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum NullableCollectionElement {
+    Option(Type),
+    Nested(Box<NullableCollectionShape>),
 }
 
 impl Planner<'_> {
@@ -122,32 +128,41 @@ impl Planner<'_> {
 
     /// Classify a type as a nullable collection (`Slice<Option<...>>` or
     /// `Map<K, Option<...>>`) after alias peeling. Element option types are
-    /// also alias-aware via the inner option classifier.
+    /// also alias-aware via the inner option classifier. Nested collections
+    /// (e.g. `Slice<Slice<Option<T>>>`) are detected recursively.
     pub(crate) fn nullable_collection_shape(&self, ty: &Type) -> Option<NullableCollectionShape> {
         let shape = self.native_shape(ty)?;
         match shape.kind {
             NativeGoType::Slice => {
                 let element_ty = shape.params.into_iter().next()?;
-                let resolved_option = self.pointer_bridged_option_ty(&element_ty)?;
+                let element = self.classify_nullable_element(&element_ty)?;
                 Some(NullableCollectionShape {
                     kind: CollectionKind::Slice,
                     key_ty: None,
-                    element_option_ty: resolved_option,
+                    element,
                 })
             }
             NativeGoType::Map => {
                 let mut iter = shape.params.into_iter();
                 let key_ty = iter.next()?;
                 let val_ty = iter.next()?;
-                let resolved_option = self.pointer_bridged_option_ty(&val_ty)?;
+                let element = self.classify_nullable_element(&val_ty)?;
                 Some(NullableCollectionShape {
                     kind: CollectionKind::Map,
                     key_ty: Some(key_ty),
-                    element_option_ty: resolved_option,
+                    element,
                 })
             }
             _ => None,
         }
+    }
+
+    fn classify_nullable_element(&self, element_ty: &Type) -> Option<NullableCollectionElement> {
+        if let Some(opt) = self.pointer_bridged_option_ty(element_ty) {
+            return Some(NullableCollectionElement::Option(opt));
+        }
+        let nested = self.nullable_collection_shape(element_ty)?;
+        Some(NullableCollectionElement::Nested(Box::new(nested)))
     }
 
     fn pointer_bridged_option_ty(&self, ty: &Type) -> Option<Type> {
