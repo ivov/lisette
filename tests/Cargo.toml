@@ -13,26 +13,14 @@ format = { package = "lisette-format", path = "../crates/format" }
 emit = { package = "lisette-emit", path = "../crates/emit" }
 stdlib = { package = "lisette-stdlib", path = "../crates/stdlib" }
 deps = { package = "lisette-deps", path = "../crates/deps" }
-lsp = { package = "lisette-lsp", path = "../crates/lsp" }
 rustc-hash.workspace = true
 insta.workspace = true
 miette.workspace = true
-tower-lsp = "0.20"
-tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["codec"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-bytes = "1"
-futures = "0.3"
 tempfile = "3"
 
 [[test]]
 name = "suite"
 path = "suite.rs"
-
-[[test]]
-name = "lsp"
-path = "lsp.rs"
 
 [[test]]
 name = "e2e_suite"

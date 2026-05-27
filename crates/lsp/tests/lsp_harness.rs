@@ -10,7 +10,7 @@ use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{LspService, Server};
 
-use lsp::Backend;
+use lisette_lsp::Backend;
 
 /// LSP message codec implementing Content-Length framing.
 struct LspCodec;

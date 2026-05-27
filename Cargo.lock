@@ -753,15 +753,22 @@ dependencies = [
 name = "lisette-lsp"
 version = "0.2.13"
 dependencies = [
+ "bytes",
  "dashmap 6.1.0",
+ "futures",
  "lisette-deps",
  "lisette-diagnostics",
  "lisette-format",
  "lisette-semantics",
+ "lisette-stdlib",
  "lisette-syntax",
  "miette",
  "rustc-hash",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
+ "tokio-util",
  "tower-lsp",
 ]
 
@@ -1274,25 +1281,17 @@ dependencies = [
 name = "tests"
 version = "0.2.13"
 dependencies = [
- "bytes",
- "futures",
  "insta",
  "lisette-deps",
  "lisette-diagnostics",
  "lisette-emit",
  "lisette-format",
- "lisette-lsp",
  "lisette-semantics",
  "lisette-stdlib",
  "lisette-syntax",
  "miette",
  "rustc-hash",
- "serde",
- "serde_json",
  "tempfile",
- "tokio",
- "tokio-util",
- "tower-lsp",
 ]
 
 [[package]]

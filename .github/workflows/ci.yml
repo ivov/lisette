@@ -94,7 +94,16 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           go: 'true'
-      - run: cargo test -p tests --test suite --test lsp --locked -- --format terse
+      - run: cargo test -p tests --test suite --locked -- --format terse
+
+  lsp-test:
+    name: LSP tests
+    if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
+      - uses: ./.github/actions/setup-rust
+      - run: cargo test -p lisette-lsp --test lsp --locked -- --format terse
 
   stdlib-check:
     name: Stdlib check

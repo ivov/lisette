@@ -18,7 +18,8 @@ build-debug:
     cargo build
 
 test:
-    cargo test -p tests --test suite --test lsp
+    cargo test -p tests --test suite
+    cargo test -p lisette-lsp --test lsp
 
 test-infer:
     cargo test -p tests --test suite infer_tests
@@ -40,7 +41,7 @@ test-e2e-suite:
     cargo test -p tests --test e2e_suite -- --nocapture
 
 test-cov:
-    cargo llvm-cov -p tests --test suite --test lsp --html --open
+    cargo llvm-cov -p tests -p lisette-lsp --test suite --test lsp --html --open
 
 test-refresh-snapshots:
     cargo insta test --force-update-snapshots

@@ -23,3 +23,12 @@ tokio = { version = "1", features = ["full"] }
 dashmap = "6"
 miette.workspace = true
 rustc-hash.workspace = true
+
+[dev-dependencies]
+bytes = "1"
+futures = "0.3"
+serde.workspace = true
+serde_json.workspace = true
+stdlib = { package = "lisette-stdlib", path = "../stdlib" }
+tempfile = "3"
+tokio-util = { version = "0.7", features = ["codec"] }
