@@ -4895,3 +4895,142 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn empty_select_default_fires_in_loop() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  loop {
+    select {
+      let Some(v) = ch.receive() => fmt.Println(v),
+      _ => {},
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_select_default_fires_in_while() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  let done = false
+  while !done {
+    select {
+      let Some(v) = ch.receive() => fmt.Println(v),
+      _ => {},
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_select_default_outside_loop_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  select {
+    let Some(v) = ch.receive() => fmt.Println(v),
+    _ => {},
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_select_default_non_empty_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+import "go:time"
+
+fn main() {
+  let ch = Channel.new<int>()
+  loop {
+    select {
+      let Some(v) = ch.receive() => fmt.Println(v),
+      _ => time.Sleep(time.Millisecond),
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_select_default_inside_lambda_in_loop_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  loop {
+    let _ = || {
+      select {
+        let Some(v) = ch.receive() => fmt.Println(v),
+        _ => {},
+      }
+    }
+    break
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_select_default_unit_body_fires() {
+    assert_lint_snapshot!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  loop {
+    select {
+      let Some(v) = ch.receive() => fmt.Println(v),
+      _ => (),
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_select_default_inside_task_in_loop_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:fmt"
+
+fn main() {
+  let ch = Channel.new<int>()
+  loop {
+    task {
+      select {
+        let Some(v) = ch.receive() => fmt.Println(v),
+        _ => {},
+      }
+    }
+    break
+  }
+}
+"#
+    );
+}

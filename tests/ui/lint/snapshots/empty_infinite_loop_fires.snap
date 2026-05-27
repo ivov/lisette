@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  2 │ fn main() {
  3 │   loop {}
    ·   ───┬───
-   ·      ╰── spins forever
+   ·      ╰── busy-spins
  4 │ }
    ╰────
   help: An empty `loop` spins forever at 100% CPU. Block on a channel, call `time.Sleep`, or add a `break` · code: [infer.empty_infinite_loop]

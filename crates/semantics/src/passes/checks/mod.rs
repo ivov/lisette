@@ -2,6 +2,7 @@ pub(crate) mod const_naming;
 pub(crate) mod duplicate_bindings;
 pub(crate) mod empty_infinite_loop;
 pub(crate) mod empty_range;
+pub(crate) mod empty_select_default;
 pub(crate) mod enum_variant_value;
 pub(crate) mod generics;
 pub(crate) mod index_out_of_bounds;
@@ -106,6 +107,7 @@ fn run_file_checks(
     nan_comparison::run(&file.items, sink);
     empty_infinite_loop::run(&file.items, sink);
     empty_range::run(&file.items, sink);
+    empty_select_default::run(&file.items, sink);
     index_out_of_bounds::run(&file.items, sink);
     oversized_shift::run(&file.items, sink);
     repeated_if_condition::run(&file.items, sink);

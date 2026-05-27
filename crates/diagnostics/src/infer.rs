@@ -2158,10 +2158,17 @@ pub fn empty_range(span: &Span) -> LisetteDiagnostic {
 pub fn empty_infinite_loop(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Empty infinite loop")
         .with_infer_code("empty_infinite_loop")
-        .with_span_label(span, "spins forever")
+        .with_span_label(span, "busy-spins")
         .with_help(
             "An empty `loop` spins forever at 100% CPU. Block on a channel, call `time.Sleep`, or add a `break`.",
         )
+}
+
+pub fn empty_select_default(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Empty `select` default arm in a loop")
+        .with_infer_code("empty_select_default")
+        .with_span_label(span, "busy-spins")
+        .with_help("Drop the `_ =>` arm to block, or do work in it.")
 }
 
 pub fn repeated_if_condition(span: &Span) -> LisetteDiagnostic {

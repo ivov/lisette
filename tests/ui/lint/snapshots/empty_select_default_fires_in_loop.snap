@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Empty `select` default arm in a loop
+    ╭─[test.lis:9:12]
+  8 │       let Some(v) = ch.receive() => fmt.Println(v),
+  9 │       _ => {},
+    ·            ─┬
+    ·             ╰── busy-spins
+ 10 │     }
+    ╰────
+  help: Drop the `_ =>` arm to block, or do work in it · code: [infer.empty_select_default]
