@@ -9,6 +9,7 @@ pub(crate) mod json_methods;
 pub(crate) mod nan_comparison;
 pub(crate) mod native_value_usage;
 pub(crate) mod newtype;
+pub(crate) mod oversized_shift;
 mod pattern_analysis;
 pub(crate) mod predeclared_shadowing;
 pub(crate) mod prelude_shadowing;
@@ -103,6 +104,7 @@ fn run_file_checks(
     nan_comparison::run(&file.items, sink);
     empty_range::run(&file.items, sink);
     index_out_of_bounds::run(&file.items, sink);
+    oversized_shift::run(&file.items, sink);
     temp_producing::run(&file.items, sink);
     if !file.is_d_lis() {
         const_naming::run(&file.items, sink);

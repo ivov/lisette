@@ -2162,6 +2162,20 @@ pub fn index_out_of_bounds(span: &Span, index_text: &str) -> LisetteDiagnostic {
         .with_help(format!("Indexing at `{index_text}` will panic at runtime"))
 }
 
+pub fn oversized_shift(
+    span: &Span,
+    type_name: &str,
+    bit_width: u32,
+    shift_amount: u64,
+) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Shift amount exceeds integer width")
+        .with_infer_code("oversized_shift")
+        .with_span_label(span, "shift exceeds width")
+        .with_help(format!(
+            "`{type_name}` is {bit_width} bits wide, so shifting by {shift_amount} discards every bit of the value."
+        ))
+}
+
 pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 

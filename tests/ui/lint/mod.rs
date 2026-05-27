@@ -4661,3 +4661,100 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn oversized_shift_uint32_left() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: uint32 = 1
+  let _ = x << 40
+}
+"#
+    );
+}
+
+#[test]
+fn oversized_shift_int8_at_width() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: int8 = 1
+  let _ = x << 8
+}
+"#
+    );
+}
+
+#[test]
+fn oversized_shift_int64_right() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: int64 = 1
+  let _ = x >> 64
+}
+"#
+    );
+}
+
+#[test]
+fn oversized_shift_byte() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let x: byte = 1
+  let _ = x << 8
+}
+"#
+    );
+}
+
+#[test]
+fn oversized_shift_in_bounds_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uint16 = 1
+  let _ = x << 15
+}
+"#
+    );
+}
+
+#[test]
+fn oversized_shift_platform_int_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uint = 1
+  let _ = x << 64
+}
+"#
+    );
+}
+
+#[test]
+fn oversized_shift_uintptr_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uintptr = 1
+  let _ = x << 64
+}
+"#
+    );
+}
+
+#[test]
+fn oversized_shift_non_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let x: uint32 = 1
+  let n: uint = 40
+  let _ = x << n
+}
+"#
+    );
+}
