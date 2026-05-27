@@ -1771,7 +1771,7 @@ fn risky() -> Result<int, string> { Ok(1) }
 fn test() {
   let result: Result<int, string> = try {
     let _ = risky()?;
-    loop {}
+    loop { panic("unreachable") }
   };
   let _ = result;
 }

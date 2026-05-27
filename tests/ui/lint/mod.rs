@@ -4845,3 +4845,53 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn empty_infinite_loop_fires() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  loop {}
+}
+"#
+    );
+}
+
+#[test]
+fn empty_infinite_loop_with_break_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  loop {
+    break
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_infinite_loop_non_empty_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut i = 0
+  loop {
+    i = i + 1
+    break
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn empty_infinite_loop_while_false_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  while false {}
+}
+"#
+    );
+}

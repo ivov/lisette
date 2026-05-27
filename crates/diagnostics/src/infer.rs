@@ -2155,6 +2155,15 @@ pub fn empty_range(span: &Span) -> LisetteDiagnostic {
         .with_help("Swap the bounds.")
 }
 
+pub fn empty_infinite_loop(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Empty infinite loop")
+        .with_infer_code("empty_infinite_loop")
+        .with_span_label(span, "spins forever")
+        .with_help(
+            "An empty `loop` spins forever at 100% CPU. Block on a channel, call `time.Sleep`, or add a `break`.",
+        )
+}
+
 pub fn repeated_if_condition(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("`if` condition repeated in `else if`")
         .with_infer_code("repeated_if_condition")

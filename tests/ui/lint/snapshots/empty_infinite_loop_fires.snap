@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Empty infinite loop
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   loop {}
+   ·   ───┬───
+   ·      ╰── spins forever
+ 4 │ }
+   ╰────
+  help: An empty `loop` spins forever at 100% CPU. Block on a channel, call `time.Sleep`, or add a `break` · code: [infer.empty_infinite_loop]

@@ -27,12 +27,12 @@ nested_block_continue_in_if_branch          # hang/block: continue in always-tru
 nested_block_continue_in_let                # hang/block: continue in let-bound block loops forever
 select_match_receive_unused_binding         # hang/block: select on channel with no sender
 select_send_value_eval_order                # hang/block: select-send with no receiver
-try_block_diverging_final_expression        # hang/block: try-block contains `loop {}`
 
 # --- intentional panic ---
 builtin_panic                               # intentional: explicit panic("...") in test body
 if_with_user_never_branch_tail              # intentional: if-branch calls Never-returning fn
 never_returning_user_function_in_body       # intentional: test body calls Never-returning fn
+try_block_diverging_final_expression        # intentional: loop body panics
 try_block_panic_tail_option_context         # intentional: explicit panic in try-block tail
 try_block_panic_tail_result_context         # intentional: explicit panic in try-block tail
 try_block_user_never_tail_result_context    # intentional: tail calls Never-returning fn

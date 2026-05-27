@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/control_flow.rs
-description: "input: \nfn risky() -> Result<int, string> { Ok(1) }\n\nfn test() {\n  let result: Result<int, string> = try {\n    let _ = risky()?;\n    loop {}\n  };\n  let _ = result;\n}\n"
+description: "input: \nfn risky() -> Result<int, string> { Ok(1) }\n\nfn test() {\n  let result: Result<int, string> = try {\n    let _ = risky()?;\n    loop { panic(\"unreachable\") }\n  };\n  let _ = result;\n}\n"
 ---
 package main
 
@@ -18,6 +18,7 @@ func test() {
 			return lisette.MakeResultErr[struct{}, string](check_2.ErrVal)
 		}
 		for {
+			panic("unreachable")
 		}
 		panic("unreachable")
 	}()
