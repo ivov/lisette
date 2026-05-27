@@ -1,6 +1,5 @@
 mod build;
 mod desugar;
-mod e2e_smoke;
 mod emit;
 mod format;
 mod graph;

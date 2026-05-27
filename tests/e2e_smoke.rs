@@ -54,7 +54,7 @@ fn e2e_smoke() {
 
     let stdout = String::from_utf8_lossy(&run.stdout);
     insta::with_settings!({
-        snapshot_path => "emit/snapshots",
+        snapshot_path => "spec/emit/snapshots",
         snapshot_suffix => "",
         prepend_module_to_snapshot => false,
     }, {

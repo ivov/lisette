@@ -35,7 +35,7 @@ test-accept:
 
 test-e2e-smoke:
     cargo build -p lisette
-    cargo test -p tests --test suite e2e_smoke
+    cargo test -p tests --test e2e_smoke
 
 test-e2e-suite:
     cargo test -p tests --test e2e_suite -- --nocapture
