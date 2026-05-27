@@ -546,7 +546,10 @@ impl<'source> Parser<'source> {
             NotEqual => BinaryOperator::NotEqual,
             AmpersandDouble => BinaryOperator::And,
             PipeDouble => BinaryOperator::Or,
-            Pipeline => BinaryOperator::Pipeline,
+            Pipeline => {
+                self.has_desugarables = true;
+                BinaryOperator::Pipeline
+            }
 
             _ => {
                 self.track_error(format!(

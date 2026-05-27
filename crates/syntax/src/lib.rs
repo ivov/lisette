@@ -62,6 +62,13 @@ pub fn build_ast(source: &str, file_id: u32) -> AstBuildResult {
         };
     }
 
+    if !parse_result.has_desugarables {
+        return AstBuildResult {
+            ast: parse_result.ast,
+            errors: vec![],
+        };
+    }
+
     let desugar_result = desugar::desugar(parse_result.ast);
     AstBuildResult {
         ast: desugar_result.ast,

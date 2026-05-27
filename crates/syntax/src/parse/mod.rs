@@ -26,6 +26,7 @@ pub use error::ParseError;
 pub struct ParseResult {
     pub ast: Vec<ast::Expression>,
     pub errors: Vec<ParseError>,
+    pub has_desugarables: bool,
 }
 
 impl ParseResult {
@@ -43,6 +44,7 @@ pub struct Parser<'source> {
     in_control_flow_header: bool,
     source: &'source str,
     depth: u32,
+    pub(crate) has_desugarables: bool,
 }
 
 impl<'source> Parser<'source> {
@@ -57,6 +59,7 @@ impl<'source> Parser<'source> {
             return ParseResult {
                 ast: vec![],
                 errors: lex_result.errors,
+                has_desugarables: false,
             };
         }
 
@@ -80,6 +83,7 @@ impl<'source> Parser<'source> {
             in_control_flow_header: false,
             source,
             depth: 0,
+            has_desugarables: false,
         };
 
         parser.skip_comments();
@@ -107,6 +111,7 @@ impl<'source> Parser<'source> {
         ParseResult {
             ast: top_items,
             errors: self.errors,
+            has_desugarables: self.has_desugarables,
         }
     }
 

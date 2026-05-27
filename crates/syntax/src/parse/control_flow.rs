@@ -126,6 +126,7 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_if_let_expression(&mut self, start: crate::lex::Token) -> Expression {
+        self.has_desugarables = true;
         self.ensure(Let);
 
         let pattern = self.parse_pattern_allowing_or();
