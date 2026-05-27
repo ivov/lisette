@@ -541,17 +541,21 @@ pub(crate) fn is_go_never(expression: &Expression) -> bool {
     }
 }
 
-fn change_go_builtin_methods(
-    function_definition: &FunctionDefinition,
+fn change_go_builtin_methods<'a>(
+    function_definition: &'a FunctionDefinition,
     receiver: Option<(String, Type)>,
-) -> (FunctionDefinition, Option<(String, Type)>) {
+) -> (
+    std::borrow::Cow<'a, FunctionDefinition>,
+    Option<(String, Type)>,
+) {
+    use std::borrow::Cow;
     let Some((receiver_name, receiver_type)) = receiver else {
-        return (function_definition.clone(), None);
+        return (Cow::Borrowed(function_definition), None);
     };
 
     let Some(native) = NativeGoType::from_type(&receiver_type) else {
         return (
-            function_definition.clone(),
+            Cow::Borrowed(function_definition),
             Some((receiver_name, receiver_type)),
         );
     };
@@ -572,5 +576,5 @@ fn change_go_builtin_methods(
     };
 
     new_function_definition.params.insert(0, self_binding);
-    (new_function_definition, None)
+    (Cow::Owned(new_function_definition), None)
 }
