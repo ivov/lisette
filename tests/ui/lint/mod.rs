@@ -4557,3 +4557,107 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn index_out_of_bounds_past_length() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = [1, 2, 3][5]
+}
+"#
+    );
+}
+
+#[test]
+fn index_out_of_bounds_equal_to_length() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = [10, 20, 30][3]
+}
+"#
+    );
+}
+
+#[test]
+fn index_out_of_bounds_single_element() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _ = [42][1]
+}
+"#
+    );
+}
+
+#[test]
+fn index_out_of_bounds_empty_slice() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let _: int = [][0]
+}
+"#
+    );
+}
+
+#[test]
+fn index_out_of_bounds_length_call() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [10, 20]
+  let _ = xs[xs.length()]
+}
+"#
+    );
+}
+
+#[test]
+fn index_in_bounds_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = [1, 2, 3][2]
+}
+"#
+    );
+}
+
+#[test]
+fn index_length_minus_one_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [10, 20]
+  let _ = xs[xs.length() - 1]
+}
+"#
+    );
+}
+
+#[test]
+fn index_dynamic_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let i = 0
+  let _ = xs[i]
+}
+"#
+    );
+}
+
+#[test]
+fn index_map_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let m = Map.new<int, string>()
+  let _ = m[5]
+}
+"#
+    );
+}

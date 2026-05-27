@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Index out of bounds
+   ╭─[test.lis:3:23]
+ 2 │ fn main() {
+ 3 │   let _ = [10, 20, 30][3]
+   ·                       ─┬─
+   ·                        ╰── out of bounds
+ 4 │ }
+   ╰────
+  help: Indexing at `3` will panic at runtime · code: [infer.index_out_of_bounds]

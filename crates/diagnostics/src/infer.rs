@@ -2155,6 +2155,13 @@ pub fn empty_range(span: &Span) -> LisetteDiagnostic {
         .with_help("Swap the bounds.")
 }
 
+pub fn index_out_of_bounds(span: &Span, index_text: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Index out of bounds")
+        .with_infer_code("index_out_of_bounds")
+        .with_span_label(span, "out of bounds")
+        .with_help(format!("Indexing at `{index_text}` will panic at runtime"))
+}
+
 pub fn nan_comparison(span: &Span, always_true: bool) -> LisetteDiagnostic {
     let result = if always_true { "true" } else { "false" };
 

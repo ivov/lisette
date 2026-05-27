@@ -1,0 +1,97 @@
+use diagnostics::LocalSink;
+use syntax::ast::{Expression, Literal};
+
+pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
+    for item in typed_ast {
+        visit_expression(item, sink);
+    }
+}
+
+fn visit_expression(expression: &Expression, sink: &LocalSink) {
+    check(expression, sink);
+    for child in expression.children() {
+        visit_expression(child, sink);
+    }
+}
+
+fn check(expression: &Expression, sink: &LocalSink) {
+    let Expression::IndexedAccess {
+        expression: receiver,
+        index,
+        from_colon_syntax,
+        span,
+        ..
+    } = expression
+    else {
+        return;
+    };
+
+    if *from_colon_syntax {
+        return;
+    }
+
+    if !receiver.get_type().is_slice() {
+        return;
+    }
+
+    if let Expression::Literal {
+        literal: Literal::Slice(elements),
+        ..
+    } = receiver.unwrap_parens()
+        && let Expression::Literal {
+            literal: Literal::Integer { value, .. },
+            ..
+        } = index.unwrap_parens()
+        && *value >= elements.len() as u64
+    {
+        sink.push(diagnostics::infer::index_out_of_bounds(
+            span,
+            &value.to_string(),
+        ));
+        return;
+    }
+
+    if let Expression::Call {
+        expression: callee,
+        args,
+        ..
+    } = index.unwrap_parens()
+        && args.is_empty()
+        && let Expression::DotAccess {
+            expression: call_receiver,
+            member,
+            ..
+        } = callee.unwrap_parens()
+        && member == "length"
+        && expressions_equivalent(receiver, call_receiver)
+    {
+        let receiver_text = receiver.root_identifier().unwrap_or("xs");
+        sink.push(diagnostics::infer::index_out_of_bounds(
+            span,
+            &format!("{receiver_text}.length()"),
+        ));
+    }
+}
+
+fn expressions_equivalent(a: &Expression, b: &Expression) -> bool {
+    let a = a.unwrap_parens();
+    let b = b.unwrap_parens();
+    match (a, b) {
+        (Expression::Identifier { value: av, .. }, Expression::Identifier { value: bv, .. }) => {
+            av == bv
+        }
+        (
+            Expression::DotAccess {
+                expression: ae,
+                member: am,
+                ..
+            },
+            Expression::DotAccess {
+                expression: be,
+                member: bm,
+                ..
+            },
+        ) => am == bm && expressions_equivalent(ae, be),
+        _ => false,
+    }
+}

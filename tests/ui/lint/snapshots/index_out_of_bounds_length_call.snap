@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Index out of bounds
+   ╭─[test.lis:4:13]
+ 3 │   let xs = [10, 20]
+ 4 │   let _ = xs[xs.length()]
+   ·             ──────┬──────
+   ·                   ╰── out of bounds
+ 5 │ }
+   ╰────
+  help: Indexing at `xs.length()` will panic at runtime · code: [infer.index_out_of_bounds]
