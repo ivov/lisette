@@ -38,6 +38,12 @@ pub fn Min<T: Ordered>(a: T, b: T) -> T
 /// cmp.Ordered constraint (named-identity recognizer)
 pub fn MinOrdered<T: cmp.Ordered>(a: T, b: T) -> T
 
+/// Generic interface bound with a concrete type arg.
+pub fn PushInts<P: Pusher<int, string>>(p: P)
+
+/// Generic interface bound with type params from the surrounding scope.
+pub fn PushOne<T, C, P: Pusher<T, C>>(p: P, t: T, c: C)
+
 /// Bound by an alias of a method-only interface.
 pub fn SalutationsAll<T: Salutation>(xs: Slice<T>)
 
@@ -62,6 +68,11 @@ pub struct ConstrainedPair<K: Comparable, V> {
 
 pub type Container<T>
 
+/// Generic struct field that binds a type parameter to a generic interface.
+pub struct Driver<T, C, P: Pusher<T, C>> {
+  pub Inner: P,
+}
+
 /// Local method-only interface for cross-package and self-package bound tests.
 pub interface Greeter {
   fn Greet() -> string
@@ -73,6 +84,11 @@ pub type Ordered
 pub struct Pair<K, V> {
   pub Key: K,
   pub Value: V,
+}
+
+/// Generic interface used as a bound; type args must round-trip into the bound.
+pub interface Pusher<T, C> {
+  fn Push(t: T, c: C)
 }
 
 /// Type alias to a method-only interface — exercises *types.Alias path.

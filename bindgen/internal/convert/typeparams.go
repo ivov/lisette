@@ -76,7 +76,7 @@ func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, o
 	if named, isNamed := constraint.(*types.Named); isNamed {
 		obj := named.Obj()
 		if obj.Pkg() != nil && obj.Pkg().Path() == "cmp" && obj.Name() == "Ordered" {
-			return qualifyTypeNameBound(obj, conv)
+			return qualifyTypeNameBound(obj, nil, conv)
 		}
 	}
 
@@ -106,9 +106,9 @@ func recognizeBound(constraint types.Type, conv *Converter) (boundExpr string, o
 	if iface.NumMethods() > 0 && iface.NumEmbeddeds() == 0 {
 		switch t := constraint.(type) {
 		case *types.Named:
-			return qualifyTypeNameBound(t.Obj(), conv)
+			return qualifyTypeNameBound(t.Obj(), t.TypeArgs(), conv)
 		case *types.Alias:
-			return qualifyTypeNameBound(t.Obj(), conv)
+			return qualifyTypeNameBound(t.Obj(), t.TypeArgs(), conv)
 		}
 	}
 
@@ -148,18 +148,30 @@ func isOrderedBasicKind(kind types.BasicKind) bool {
 // Renders a Named or Alias bound by its TypeName, qualifying with the package
 // alias when external and tracking the external package on conv. Bounds in the
 // current package render unqualified to avoid a self-import.
-func qualifyTypeNameBound(obj *types.TypeName, conv *Converter) (string, bool) {
+func qualifyTypeNameBound(obj *types.TypeName, typeArgs *types.TypeList, conv *Converter) (string, bool) {
 	pkg := obj.Pkg()
 	if pkg == nil || isInternalPackagePath(pkg.Path()) {
 		return "", false
 	}
-	if conv != nil && pkg.Path() == conv.currentPkgPath {
-		return obj.Name(), true
+	name := obj.Name()
+	if conv == nil || pkg.Path() != conv.currentPkgPath {
+		if conv != nil {
+			conv.trackExternalPkg(pkg.Path(), pkg.Name())
+		}
+		name = PkgRef(pkg.Path()) + "." + obj.Name()
 	}
-	if conv != nil {
-		conv.trackExternalPkg(pkg.Path(), pkg.Name())
+	if typeArgs == nil || typeArgs.Len() == 0 {
+		return name, true
 	}
-	return PkgRef(pkg.Path()) + "." + obj.Name(), true
+	args := make([]string, 0, typeArgs.Len())
+	for arg := range typeArgs.Types() {
+		result := ToLisette(arg, conv)
+		if result.SkipReason != nil {
+			return "", false
+		}
+		args = append(args, result.LisetteType)
+	}
+	return name + "<" + strings.Join(args, ", ") + ">", true
 }
 
 // Unwraps `interface { ~T }` to its inner T, the shared shape of every

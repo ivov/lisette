@@ -149,3 +149,19 @@ func MapEqual[M1, M2 ~map[K]V, K, V comparable](m1 M1, m2 M2) bool {
 func MapEqualFunc[M1 ~map[K]V1, M2 ~map[K]V2, K comparable, V1, V2 any](m1 M1, m2 M2, eq func(V1, V2) bool) bool {
 	return false
 }
+
+// Generic interface used as a bound; type args must round-trip into the bound.
+type Pusher[T any, C any] interface {
+	Push(T, C)
+}
+
+// Generic interface bound with type params from the surrounding scope.
+func PushOne[T any, C any, P Pusher[T, C]](p P, t T, c C) {}
+
+// Generic interface bound with a concrete type arg.
+func PushInts[P Pusher[int, string]](p P) {}
+
+// Generic struct field that binds a type parameter to a generic interface.
+type Driver[T any, C any, P Pusher[T, C]] struct {
+	Inner P
+}
