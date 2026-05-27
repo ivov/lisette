@@ -75,7 +75,13 @@ jobs:
           go-version-file: go-version
           cache: true
           cache-dependency-path: '**/go.sum'
-      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.1
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # ratchet:actions/cache@v4
+        id: cache-golangci-lint
+        with:
+          path: ~/go/bin/golangci-lint
+          key: golangci-lint-v2.12.1-${{ runner.os }}
+      - if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.1
       - run: cd bindgen && golangci-lint run
       - run: cd prelude && golangci-lint run
 
@@ -88,7 +94,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           go: 'true'
-      - run: cargo test -p tests --test suite --locked -- --format terse
+      - run: cargo test -p tests --test suite --test lsp --locked -- --format terse
 
   stdlib-check:
     name: Stdlib check
@@ -169,18 +175,6 @@ jobs:
           fi
 
           exit $fail
-
-  e2e-smoke:
-    name: E2E smoke
-    if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6
-      - uses: ./.github/actions/setup-rust
-        with:
-          just: 'true'
-          go: 'true'
-      - run: just test-e2e-smoke
 
   e2e-suite:
     name: E2E suite
