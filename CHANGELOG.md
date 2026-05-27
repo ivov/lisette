@@ -1,6 +1,21 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+## [0.2.14](https://github.com/ivov/lisette/compare/lisette-v0.2.13...lisette-v0.2.14) - 2026-05-27
+
+- fix: translate `unknown` to any in explicit type arguments [#513](https://github.com/ivov/lisette/pull/513) [`7d6687a`](https://github.com/ivov/lisette/commit/7d6687a8ae52f122aef8b6341d3de707d01a667f)
+- feat: reject empty select default arm in loop [#515](https://github.com/ivov/lisette/pull/515) [`68e1881`](https://github.com/ivov/lisette/commit/68e1881b9cb1905041103f6debf0a17e52f7088d)
+- ci: split lsp tests from main suite [#514](https://github.com/ivov/lisette/pull/514) [`470d511`](https://github.com/ivov/lisette/commit/470d511e07b68f3e20ae5f796f44632e24557687)
+- ci: drop redundant job, cache golangci-lint, run lsp tests [#512](https://github.com/ivov/lisette/pull/512) [`45c2388`](https://github.com/ivov/lisette/commit/45c2388fdcbe040ae16e495b9577ee185593da31)
+- feat: reject empty infinite loop [#511](https://github.com/ivov/lisette/pull/511) [`fafb988`](https://github.com/ivov/lisette/commit/fafb988a5472e6a2f6b0354c1da865a9a0fccb1c)
+- feat: reject repeated condition in if else if chain [#510](https://github.com/ivov/lisette/pull/510) [`024aab4`](https://github.com/ivov/lisette/commit/024aab48996d8c84c89a7fb9d0478bb64de8e05f)
+- feat: reject shift exceeding integer width [#509](https://github.com/ivov/lisette/pull/509) [`b45378f`](https://github.com/ivov/lisette/commit/b45378f047a8c5d30bb9a0f060057507937796ae)
+- fix: unwrap nested option-slice at Go boundary [#508](https://github.com/ivov/lisette/pull/508) [`4500702`](https://github.com/ivov/lisette/commit/45007023f21ce97cee49e72f593ff3a0b7a7a22a)
+- fix: preserve type args from non-generic alias in struct calls [#507](https://github.com/ivov/lisette/pull/507) [`e9f7161`](https://github.com/ivov/lisette/commit/e9f71616682b06f337e4a294dcbb4ac2054a37df)
+- feat: reject out-of-bounds slice indexing [#506](https://github.com/ivov/lisette/pull/506) [`7ab94ec`](https://github.com/ivov/lisette/commit/7ab94ecc68bd904c6c0dd4172221d59d08c60487)
+- perf: avoid cloning function definition in non-builtin emit path [#505](https://github.com/ivov/lisette/pull/505) [`560678c`](https://github.com/ivov/lisette/commit/560678cb186f7c1c4f3fdf81534d4c93e7e2bc1c)
+- fix: preserve type args on generic interface bounds in bindgen [#503](https://github.com/ivov/lisette/pull/503) [`39ac1b7`](https://github.com/ivov/lisette/commit/39ac1b7729026259d221b3430250277547d6eb83)
+- perf: skip desugar pass when parser produced no desugarables [#502](https://github.com/ivov/lisette/pull/502) [`af8156c`](https://github.com/ivov/lisette/commit/af8156c1531645da32fcd39154ee7f0c52f8056f)
 ## [0.2.13](https://github.com/ivov/lisette/compare/lisette-v0.2.12...lisette-v0.2.13) - 2026-05-26
 
 - perf: skip synthetic EOF in token lookup [#500](https://github.com/ivov/lisette/pull/500) [`c9bbdeb`](https://github.com/ivov/lisette/commit/c9bbdeb9f7fb83108d46780998b8c497c57b844f)
