@@ -2,6 +2,19 @@
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 
+## [0.2.15](https://github.com/ivov/lisette/compare/lisette-v0.2.14...lisette-v0.2.15) - 2026-05-28
+
+- fix: emit middle index for capped range-from slice [#527](https://github.com/ivov/lisette/pull/527) [`00f3b56`](https://github.com/ivov/lisette/commit/00f3b562a9e0887655766e7ebaf75828fe85da72)
+- fix: enforce consistent evaluation order in emit [#526](https://github.com/ivov/lisette/pull/526) [`749ada5`](https://github.com/ivov/lisette/commit/749ada5067df054f62a08e4a563621aaa6450fb5)
+- feat: reject channel and function fields in json types [#525](https://github.com/ivov/lisette/pull/525) [`317647b`](https://github.com/ivov/lisette/commit/317647b224de687e1d451ef3b9c75049235382ac)
+- fix: evaluate deferred native-method operands at defer site [#524](https://github.com/ivov/lisette/pull/524) [`c905f1c`](https://github.com/ivov/lisette/commit/c905f1cc94e630b6324c315bc51eec9cb937106a)
+- feat: flag charset misuse in strings.Trim calls [#523](https://github.com/ivov/lisette/pull/523) [`b6b3d43`](https://github.com/ivov/lisette/commit/b6b3d43ec4c61ddffa9f5edd5c12b0b97f755276)
+- ci: harden release body and notes generation [#522](https://github.com/ivov/lisette/pull/522) [`5dd023e`](https://github.com/ivov/lisette/commit/5dd023e89b9d970075a95f64af883a57a5159cd4)
+- docs: restore blank lines between changelog releases [#521](https://github.com/ivov/lisette/pull/521) [`e9f267e`](https://github.com/ivov/lisette/commit/e9f267e6c3a0485c900ceca46f58a108d2d68544)
+- feat: flag duplicate args in stdlib calls [#520](https://github.com/ivov/lisette/pull/520) [`6b5e3e4`](https://github.com/ivov/lisette/commit/6b5e3e4199f03a92d6213dae3db6547274483a4b)
+- feat: reject decimal file mode literals [#518](https://github.com/ivov/lisette/pull/518) [`b8a2bdd`](https://github.com/ivov/lisette/commit/b8a2bdd45ecd31c59b52edbe0a43effbbc5c24e7)
+- fix: track function return context for nested ? propagation [#517](https://github.com/ivov/lisette/pull/517) [`00316bf`](https://github.com/ivov/lisette/commit/00316bf8f68467895407f9868800fca414867afd)
+
 ## [0.2.14](https://github.com/ivov/lisette/compare/lisette-v0.2.13...lisette-v0.2.14) - 2026-05-27
 
 - fix: translate `unknown` to any in explicit type arguments [#513](https://github.com/ivov/lisette/pull/513) [`7d6687a`](https://github.com/ivov/lisette/commit/7d6687a8ae52f122aef8b6341d3de707d01a667f)
