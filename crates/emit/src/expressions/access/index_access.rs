@@ -208,11 +208,11 @@ fn emit_range_var_slice(base: &str, range: &str, range_kind: &str, needs_cap: bo
         return format!("{}[{}:{}]", base, start_str, end_str);
     }
 
-    let cap = if end_str.is_empty() {
+    let bound = if end_str.is_empty() {
         format!("len({})", base)
     } else {
         end_str.to_string()
     };
 
-    format!("{}[{}:{}:{}]", base, start_str, end_str, cap)
+    format!("{}[{}:{}:{}]", base, start_str, bound, bound)
 }

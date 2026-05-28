@@ -1008,6 +1008,17 @@ fn test(xs: Slice<int>, r: Prefix) -> Slice<int> {
 }
 
 #[test]
+fn slice_index_aliased_range_from() {
+    let input = r#"
+type Suffix = RangeFrom<int>
+fn test(xs: Slice<int>, r: Suffix) -> Slice<int> {
+  xs[r]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn mut_subslice_clones_for_aliased_range() {
     let input = r#"
 type Prefix = Range<int>

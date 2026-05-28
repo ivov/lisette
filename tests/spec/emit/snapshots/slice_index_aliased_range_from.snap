@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/prelude.rs
+description: "input: \ntype Suffix = RangeFrom<int>\nfn test(xs: Slice<int>, r: Suffix) -> Slice<int> {\n  xs[r]\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+type Suffix = lisette.RangeFrom[int]
+
+func test(xs []int, r Suffix) []int {
+	return xs[r.Start:len(xs):len(xs)]
+}
