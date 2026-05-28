@@ -23,7 +23,8 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, String) {
         fx.require_stdlib();
 
-        let effective_ty = resolve_fallible_block_type(items, ty, outer);
+        let fallback = self.current_return_ctx().cloned();
+        let effective_ty = resolve_fallible_block_type(items, ty, outer.or(fallback.as_ref()));
         let fallible = Fallible::from_type(&effective_ty)
             .expect("`try` block must have Result or Option type");
 
@@ -35,8 +36,10 @@ impl Planner<'_> {
         };
 
         let body_ctx = ReturnContext::TaggedBlock(effective_ty);
+        self.push_return_ctx(body_ctx.clone());
         let body = self
             .with_fresh_scope(|planner| planner.lower_try_body(items, &fallible, &body_ctx, fx));
+        self.pop_return_ctx();
 
         let setup = vec![LoweredStatement::ClosureBind {
             name: result_var.clone(),
@@ -216,7 +219,8 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, String) {
         fx.require_stdlib();
 
-        let effective_ty = resolve_fallible_block_type(items, ty, outer);
+        let fallback = self.current_return_ctx().cloned();
+        let effective_ty = resolve_fallible_block_type(items, ty, outer.or(fallback.as_ref()));
         let fallible = Fallible::from_type(&effective_ty)
             .expect("recover block type must be Result<T, PanicValue>");
 
@@ -225,9 +229,11 @@ impl Planner<'_> {
         let inner_ty_str = self.go_type_string(fallible.ok_ty(), fx);
 
         let body_return_ctx = self.return_context_for_type(fallible.ok_ty().clone());
+        self.push_return_ctx(body_return_ctx.clone());
         let body = self.with_fresh_scope(|planner| {
             planner.lower_recover_body_block(items, &fallible, &body_return_ctx, fx)
         });
+        self.pop_return_ctx();
 
         let setup = vec![LoweredStatement::ClosureBind {
             name: result_var.clone(),

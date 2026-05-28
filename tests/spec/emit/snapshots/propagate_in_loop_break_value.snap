@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn g() -> Result<int, string> { Ok(5) }\n\nfn f() -> Result<int, string> {\n  let x = loop { break g()? }\n  Ok(x)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func g() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](5)
+}
+
+func f() lisette.Result[int, string] {
+	var x int
+	for {
+		check_1 := g()
+		if check_1.Tag != lisette.ResultOk {
+			return lisette.MakeResultErr[int, string](check_1.ErrVal)
+		}
+		x = check_1.OkVal
+		break
+	}
+	return lisette.MakeResultOk[int, string](x)
+}

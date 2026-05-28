@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct User {\n  id: int,\n  name: string,\n}\n\nfn get_id() -> Result<int, string> { Ok(1) }\nfn get_name() -> Result<string, string> { Ok(\"Ada\") }\n\nfn make_user() -> Result<User, string> {\n  Ok(User {\n    id: get_id()?,\n    name: get_name()?,\n  })\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type User struct {
+	id   int
+	name string
+}
+
+func (u User) String() string {
+	return fmt.Sprintf("User { id: %v, name: %v }", u.id, u.name)
+}
+
+func get_id() lisette.Result[int, string] {
+	return lisette.MakeResultOk[int, string](1)
+}
+
+func get_name() lisette.Result[string, string] {
+	return lisette.MakeResultOk[string, string]("Ada")
+}
+
+func make_user() lisette.Result[User, string] {
+	check_1 := get_id()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[User, string](check_1.ErrVal)
+	}
+	check_2 := get_name()
+	if check_2.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[User, string](check_2.ErrVal)
+	}
+	return lisette.MakeResultOk[User, string](User{
+		id:   check_1.OkVal,
+		name: check_2.OkVal,
+	})
+}

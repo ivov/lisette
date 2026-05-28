@@ -46,7 +46,9 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) {
         self.push_const_frame();
+        self.push_return_ctx(return_ctx.clone());
         self.emit_function_body_inner(output, body, should_return, return_ctx, fx);
+        self.pop_return_ctx();
         self.pop_const_frame();
     }
 

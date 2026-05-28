@@ -425,6 +425,140 @@ fn test() -> Result<int, string> {
 }
 
 #[test]
+fn propagate_in_struct_literal_field() {
+    let input = r#"
+struct User {
+  id: int,
+  name: string,
+}
+
+fn get_id() -> Result<int, string> { Ok(1) }
+fn get_name() -> Result<string, string> { Ok("Ada") }
+
+fn make_user() -> Result<User, string> {
+  Ok(User {
+    id: get_id()?,
+    name: get_name()?,
+  })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_in_struct_literal_spread_base() {
+    let input = r#"
+struct User {
+  id: int,
+  name: string,
+}
+
+fn get_base() -> Result<User, string> {
+  Ok(User { id: 1, name: "a" })
+}
+
+fn override_id() -> Result<User, string> {
+  Ok(User { id: 2, ..get_base()? })
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_in_match_subject() {
+    let input = r#"
+fn g() -> Result<int, string> { Ok(1) }
+
+fn f() -> Result<int, string> {
+  match g()? {
+    0 => Ok(10),
+    x => Ok(x),
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_in_range_start() {
+    let input = r#"
+fn g() -> Result<int, string> { Ok(0) }
+
+fn f() -> Result<int, string> {
+  let mut s = 0
+  for i in g()?..5 { s = s + i }
+  Ok(s)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_in_range_end() {
+    let input = r#"
+fn g() -> Result<int, string> { Ok(5) }
+
+fn f() -> Result<int, string> {
+  let mut s = 0
+  for i in 0..g()? { s = s + i }
+  Ok(s)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_in_for_iterable() {
+    let input = r#"
+fn g() -> Result<Slice<int>, string> { Ok([1, 2, 3]) }
+
+fn f() -> Result<int, string> {
+  let mut s = 0
+  for i in g()? { s = s + i }
+  Ok(s)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_in_loop_break_value() {
+    let input = r#"
+fn g() -> Result<int, string> { Ok(5) }
+
+fn f() -> Result<int, string> {
+  let x = loop { break g()? }
+  Ok(x)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_in_if_let_subject() {
+    let input = r#"
+fn g() -> Result<Option<int>, string> { Ok(Some(1)) }
+
+fn f() -> Result<int, string> {
+  if let Some(n) = g()? { Ok(n) } else { Ok(0) }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn propagate_chained_double() {
+    let input = r#"
+fn h() -> Result<Result<int, string>, string> { Ok(Ok(1)) }
+
+fn f() -> Result<int, string> {
+  Ok(h()??)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn const_simple() {
     let input = r#"
 const MAX_SIZE = 100

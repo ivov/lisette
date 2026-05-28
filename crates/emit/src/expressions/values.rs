@@ -270,10 +270,9 @@ impl Planner<'_> {
                 params, body, ty, ..
             } => self.emit_lambda(params, body, ty, ctx, fx),
             Expression::Propagate { expression, .. } => {
-                let return_ctx = ctx
-                    .ambient_return_ctx()
-                    .expect("operand-position propagate requires a threaded return context")
-                    .clone();
+                let return_ctx = self
+                    .resolve_ambient_return_ctx(ctx)
+                    .expect("operand-position propagate requires an enclosing return context");
                 self.emit_propagate(output, expression, None, &return_ctx, fx)
             }
             Expression::TryBlock { .. } => {
@@ -306,10 +305,9 @@ impl Planner<'_> {
                 expression: return_expression,
                 ..
             } => {
-                let return_ctx = ctx
-                    .ambient_return_ctx()
-                    .expect("operand-position return requires a threaded return context")
-                    .clone();
+                let return_ctx = self
+                    .resolve_ambient_return_ctx(ctx)
+                    .expect("operand-position return requires an enclosing return context");
                 self.emit_return(output, return_expression, &return_ctx, fx);
                 String::new()
             }
@@ -607,8 +605,9 @@ impl Planner<'_> {
     ) -> ValuePlan {
         if let Expression::Block { .. } = expression {
             let return_ctx = ambient
-                .expect("async block body requires a threaded return context")
-                .clone();
+                .cloned()
+                .or_else(|| self.current_return_ctx().cloned())
+                .expect("async block body requires an enclosing return context");
             let body = self.with_fresh_scope(|planner| {
                 planner.lower_block_as_body(expression, &return_ctx, fx)
             });

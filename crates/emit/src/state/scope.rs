@@ -2,6 +2,7 @@ use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
 
 use crate::Bindings;
+use crate::ReturnContext;
 use crate::context::lowering::LoopContext;
 use crate::escape_reserved;
 use crate::state::bindings::{BindingValue, InlineExpr};
@@ -12,6 +13,7 @@ pub(crate) struct ScopeState {
     declared: Vec<HashSet<String>>,
     scope_depth: usize,
     loop_stack: Vec<LoopContext>,
+    return_ctx_stack: Vec<ReturnContext>,
     assign_targets: HashSet<String>,
     go_const_bindings: Vec<HashSet<String>>,
 }
@@ -33,6 +35,7 @@ impl ScopeState {
             declared: vec![HashSet::default()],
             scope_depth: 0,
             loop_stack: Vec::new(),
+            return_ctx_stack: Vec::new(),
             assign_targets: HashSet::default(),
             go_const_bindings: vec![HashSet::default()],
         }
@@ -177,6 +180,18 @@ impl ScopeState {
 
     pub(crate) fn pop_loop(&mut self) {
         self.loop_stack.pop();
+    }
+
+    pub(crate) fn push_return_ctx(&mut self, ctx: ReturnContext) {
+        self.return_ctx_stack.push(ctx);
+    }
+
+    pub(crate) fn pop_return_ctx(&mut self) {
+        self.return_ctx_stack.pop();
+    }
+
+    pub(crate) fn current_return_ctx(&self) -> Option<&ReturnContext> {
+        self.return_ctx_stack.last()
     }
 
     pub(crate) fn current_loop_result_var(&self) -> Option<&str> {

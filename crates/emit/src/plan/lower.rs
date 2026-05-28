@@ -52,8 +52,9 @@ impl Planner<'_> {
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
         let return_ctx = ambient
-            .expect("operand-position control flow requires a threaded return context")
-            .clone();
+            .cloned()
+            .or_else(|| self.current_return_ctx().cloned())
+            .expect("operand-position control flow requires an enclosing return context");
         let plan = self.lower_if(
             String::new(),
             condition,
@@ -81,8 +82,9 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, String) {
         let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
         let return_ctx = ambient
-            .expect("operand-position control flow requires a threaded return context")
-            .clone();
+            .cloned()
+            .or_else(|| self.current_return_ctx().cloned())
+            .expect("operand-position control flow requires an enclosing return context");
         let block = self.lower_branching_to_block(
             expression,
             &PlacePlan::Assign {
@@ -115,8 +117,9 @@ impl Planner<'_> {
         };
         let (result_var, declaration) = self.operand_temp_declaration(ty, fx);
         let return_ctx = ambient
-            .expect("operand-position control flow requires a threaded return context")
-            .clone();
+            .cloned()
+            .or_else(|| self.current_return_ctx().cloned())
+            .expect("operand-position control flow requires an enclosing return context");
         self.push_loop(result_var.clone());
         let plan = self.lower_loop_with_header(
             String::new(),

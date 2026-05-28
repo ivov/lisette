@@ -1,0 +1,23 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn h() -> Result<Result<int, string>, string> { Ok(Ok(1)) }\n\nfn f() -> Result<int, string> {\n  Ok(h()??)\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func h() lisette.Result[lisette.Result[int, string], string] {
+	return lisette.MakeResultOk[lisette.Result[int, string], string](lisette.MakeResultOk[int, string](1))
+}
+
+func f() lisette.Result[int, string] {
+	check_1 := h()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_1.ErrVal)
+	}
+	check_2 := check_1.OkVal
+	if check_2.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_2.ErrVal)
+	}
+	return lisette.MakeResultOk[int, string](check_2.OkVal)
+}

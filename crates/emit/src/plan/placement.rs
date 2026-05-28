@@ -669,8 +669,9 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> String {
         let return_ctx = ambient
-            .expect("operand-temp emission requires a threaded return context")
-            .clone();
+            .cloned()
+            .or_else(|| self.current_return_ctx().cloned())
+            .expect("operand-temp emission requires an enclosing return context");
         if let Expression::Block { items, .. } = expression {
             if ty.is_never() || ty.is_unit() || matches!(ty, Type::Var { .. } | Type::Forall { .. })
             {
