@@ -14,6 +14,7 @@ use crate::plan::calls::plan_variadic_spread;
 use crate::plan::values::{ValuePlan, setup_from_string, value_plan_from_statements};
 use crate::statements::assignments::is_lvalue_chain;
 use crate::types::native::NativeGoType;
+use crate::utils::contains_call;
 use crate::write_line;
 use syntax::ast::{Expression, Literal};
 use syntax::types::Type;
@@ -566,9 +567,9 @@ impl Planner<'_> {
 
         let mut buffer = String::new();
         let value = if receiver_is_lvalue {
-            let receiver_lv = self.emit_left_value_capturing(&mut buffer, unwrapped, false, fx);
+            let mut args_buffer = String::new();
             let args_str = self.emit_append_args(
-                &mut buffer,
+                &mut args_buffer,
                 func,
                 args,
                 (**spread).as_ref(),
@@ -576,6 +577,12 @@ impl Planner<'_> {
                 return_ctx,
                 fx,
             );
+            let rhs_has_setup = !args_buffer.is_empty()
+                || args.iter().any(contains_call)
+                || (**spread).as_ref().is_some_and(contains_call);
+            let receiver_lv =
+                self.emit_left_value_capturing(&mut buffer, unwrapped, rhs_has_setup, fx);
+            buffer.push_str(&args_buffer);
             format!("append({}, {})", receiver_lv, args_str)
         } else {
             self.emit_value(

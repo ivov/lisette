@@ -15,6 +15,7 @@ use crate::expressions::staging::VariadicCombine;
 use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::{ArgumentPlan, CallPlan, CallbackWrapperKind, NullableCoerceKind};
+use crate::utils::{contains_call, reads_mutable_operand};
 use crate::write_line;
 use syntax::ast::{Annotation, Expression};
 use syntax::program::Definition;
@@ -188,6 +189,18 @@ impl<'a> Planner<'a> {
         };
         let (args_setup, args_strings) = self.emit_call_args(args, &args_ctx, fx);
 
+        let mut setup = callee_staged.setup;
+        let callee_needs_pin = setup.is_empty()
+            && type_args_string.is_empty()
+            && reads_mutable_operand(function)
+            && (!args_setup.is_empty()
+                || (!matches!(function, Expression::Call { .. })
+                    && (args.iter().any(contains_call) || spread.is_some_and(contains_call))));
+        if callee_needs_pin {
+            function_string =
+                self.hoist_tmp_value_statement(&mut setup, "callee", &function_string);
+        }
+
         let call_str = format!(
             "{}{}({})",
             function_string,
@@ -196,7 +209,6 @@ impl<'a> Planner<'a> {
         );
         let call_str = collapse_fmt_print(&function_string, args, &args_strings, call_str);
 
-        let mut setup = callee_staged.setup;
         setup.extend(args_setup);
 
         let has_array_return = call_plan.has_go_array_return();

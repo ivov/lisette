@@ -20,6 +20,7 @@ func bump(i *int) int {
 func main() {
 	i := 0
 	fs := []func(int) int{f0, f1}
-	r := fs[i](bump(&i))
+	callee_1 := fs[i]
+	r := callee_1(bump(&i))
 	_ = r
 }

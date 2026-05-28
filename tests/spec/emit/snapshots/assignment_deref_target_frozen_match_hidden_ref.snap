@@ -36,12 +36,13 @@ func main() {
 		h:  &h,
 		np: &b,
 	}
+	ref_2 := h.p
 	var tmp_1 int
 	if 0 == 0 {
 		tmp_1 = retarget(c)
 	} else {
 		tmp_1 = 0
 	}
-	*h.p = tmp_1
+	*ref_2 = tmp_1
 	_ = a
 }

@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn lo() -> int { 0 }\n\nfn run() -> int {\n  let mut rs = [0..0, 0..0]\n  let mut i = 0\n  let bump = || -> int { i = 1; 5 }\n  rs[i] = lo()..bump()\n  rs[0].end\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func lo() int {
+	return 0
+}
+
+func run() int {
+	rs := []lisette.Range[int]{
+		lisette.Range[int]{
+			Start: 0,
+			End:   0,
+		},
+		lisette.Range[int]{
+			Start: 0,
+			End:   0,
+		},
+	}
+	i := 0
+	bump := func() int {
+		i = 1
+		return 5
+	}
+	idx_1 := i
+	rs[idx_1] = lisette.Range[int]{
+		Start: lo(),
+		End:   bump(),
+	}
+	return rs[0].End
+}

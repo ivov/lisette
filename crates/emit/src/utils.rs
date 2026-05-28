@@ -1,5 +1,6 @@
 use std::borrow::Cow;
-use syntax::ast::Expression;
+use syntax::ast::{Expression, FormatStringPart, Literal, UnaryOperator};
+use syntax::program::DotAccessKind;
 
 macro_rules! write_line {
     ($dst:expr, $($arg:tt)*) => {
@@ -129,6 +130,28 @@ pub(crate) fn contains_call(expression: &Expression) -> bool {
             expression, index, ..
         } => contains_call(expression) || contains_call(index),
         Expression::Tuple { elements, .. } => elements.iter().any(contains_call),
+        Expression::StructCall {
+            field_assignments,
+            spread,
+            ..
+        } => {
+            field_assignments.iter().any(|f| contains_call(&f.value))
+                || spread.as_expression().is_some_and(contains_call)
+        }
+        Expression::Literal {
+            literal: Literal::Slice(elements),
+            ..
+        } => elements.iter().any(contains_call),
+        Expression::Literal {
+            literal: Literal::FormatString(parts),
+            ..
+        } => parts.iter().any(|part| match part {
+            FormatStringPart::Expression(e) => contains_call(e),
+            FormatStringPart::Text(_) => false,
+        }),
+        Expression::Range { start, end, .. } => {
+            start.as_deref().is_some_and(contains_call) || end.as_deref().is_some_and(contains_call)
+        }
         Expression::If { .. }
         | Expression::IfLet { .. }
         | Expression::Match { .. }
@@ -153,6 +176,29 @@ pub(crate) fn is_order_sensitive(expression: &Expression) -> bool {
 /// re-evaluate.
 pub(crate) fn observable_after_mutation(expression: &Expression) -> bool {
     !matches!(expression.unwrap_parens(), Expression::Literal { .. })
+}
+
+pub(crate) fn reads_mutable_operand(expression: &Expression) -> bool {
+    match expression.unwrap_parens() {
+        Expression::IndexedAccess { .. } | Expression::Call { .. } => true,
+        Expression::Unary {
+            operator: UnaryOperator::Deref,
+            ..
+        } => true,
+        Expression::DotAccess {
+            expression,
+            dot_access_kind,
+            ..
+        } => match dot_access_kind {
+            Some(
+                DotAccessKind::StructField { .. }
+                | DotAccessKind::TupleStructField { .. }
+                | DotAccessKind::TupleElement,
+            ) => true,
+            _ => reads_mutable_operand(expression),
+        },
+        _ => false,
+    }
 }
 
 /// True when the last emitted Go line is `break`, `continue`, `return`, or `panic`.

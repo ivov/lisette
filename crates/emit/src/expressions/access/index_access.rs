@@ -6,6 +6,7 @@ use crate::Planner;
 use crate::ReturnContext;
 use crate::context::expression::ExpressionContext;
 use crate::expressions::emission::StagedExpression;
+use crate::is_order_sensitive;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::values::{ValuePlan, value_plan_from_statements};
 use crate::types::native::NativeGoType;
@@ -117,12 +118,12 @@ impl Planner<'_> {
             ));
         }
         let (mut setup, values) = self.sequence_structured(all_stages, "_base");
-        let base_str = &values[0];
+        let base_str = values[0].clone();
 
         let (start_str, end_expression) = if start.is_some() {
-            (values[1].as_str(), values.get(2).map(|s| s.as_str()))
+            (values[1].clone(), values.get(2).map(String::as_str))
         } else {
-            ("", values.get(1).map(|s| s.as_str()))
+            (String::new(), values.get(1).map(String::as_str))
         };
 
         let end_str = match (end_expression, inclusive) {
@@ -135,16 +136,30 @@ impl Planner<'_> {
             return (setup, format!("{}[{}:{}]", base_str, start_str, end_str));
         }
 
-        if end_str.is_empty() {
-            let len_var =
-                self.hoist_tmp_value_statement(&mut setup, "len", &format!("len({})", base_str));
-            return (
-                setup,
-                format!("{}[{}:{}:{}]", base_str, start_str, len_var, len_var),
-            );
-        }
-
-        if end_str.contains('(') {
+        if end_str.is_empty() || end_str.contains('(') {
+            let base_expr = expression.deref_inner().unwrap_or(expression);
+            let base_str = if is_order_sensitive(base_expr) {
+                self.hoist_tmp_value_statement(&mut setup, "base", &base_str)
+            } else {
+                base_str
+            };
+            if end_str.is_empty() {
+                let len_var = self.hoist_tmp_value_statement(
+                    &mut setup,
+                    "len",
+                    &format!("len({})", base_str),
+                );
+                return (
+                    setup,
+                    format!("{}[{}:{}:{}]", base_str, start_str, len_var, len_var),
+                );
+            }
+            let start_str = match start {
+                Some(s) if is_order_sensitive(s) => {
+                    self.hoist_tmp_value_statement(&mut setup, "start", &start_str)
+                }
+                _ => start_str,
+            };
             let end_var = self.hoist_tmp_value_statement(&mut setup, "end", &end_str);
             return (
                 setup,

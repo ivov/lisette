@@ -1,0 +1,24 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn run() -> Result<(), string> {\n  let mut a = 10\n  let mut b = 20\n  let mut p = &a\n  let bump = || -> Result<int, string> {\n    p = &b\n    Ok(5)\n  }\n  p.* = bump()?\n  Ok(())\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func run() lisette.Result[struct{}, string] {
+	a := 10
+	b := 20
+	p := &a
+	bump := func() lisette.Result[int, string] {
+		p = &b
+		return lisette.MakeResultOk[int, string](5)
+	}
+	ref_2 := p
+	check_1 := bump()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
+	}
+	*ref_2 = check_1.OkVal
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}

@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Box { value: int }\n\nfn run() -> Result<(), string> {\n  let mut a = Box { value: 10 }\n  let mut b = Box { value: 20 }\n  let mut p = &a\n  let bump = || -> Result<int, string> {\n    p = &b\n    Ok(5)\n  }\n  p.value = bump()?\n  Ok(())\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+type Box struct {
+	value int
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { value: %v }", b.value)
+}
+
+func run() lisette.Result[struct{}, string] {
+	a := Box{value: 10}
+	b := Box{value: 20}
+	p := &a
+	bump := func() lisette.Result[int, string] {
+		p = &b
+		return lisette.MakeResultOk[int, string](5)
+	}
+	ref_2 := p
+	check_1 := bump()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[struct{}, string](check_1.ErrVal)
+	}
+	ref_2.value = check_1.OkVal
+	return lisette.MakeResultOk[struct{}, string](struct{}{})
+}

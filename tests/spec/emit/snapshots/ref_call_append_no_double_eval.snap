@@ -18,5 +18,6 @@ func arg() int {
 }
 
 func main() {
-	_ = append(*get(), arg())
+	recv_1 := *get()
+	_ = append(recv_1, arg())
 }

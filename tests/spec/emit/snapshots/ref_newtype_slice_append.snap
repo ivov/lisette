@@ -15,6 +15,7 @@ func (w Wrap) String() string {
 func main() {
 	w := Wrap([]int{1})
 	r := &w
-	*r = Wrap(append([]int(*r), 2))
+	ref_1 := r
+	*ref_1 = Wrap(append([]int(*r), 2))
 	_ = w
 }

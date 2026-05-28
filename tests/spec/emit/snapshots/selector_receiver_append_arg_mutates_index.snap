@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Holder { slc: Slice<int> }\nfn bump(i: Ref<int>) -> int { i.* = 1; 99 }\n\nfn run() -> int {\n  let hs = [Holder { slc: [10] }, Holder { slc: [20] }]\n  let mut i = 0\n  let ys = hs[i].slc.append(bump(&i))\n  ys[0]\n}\n"
+---
+package main
+
+import "fmt"
+
+type Holder struct {
+	slc []int
+}
+
+func (h Holder) String() string {
+	return fmt.Sprintf("Holder { slc: %v }", h.slc)
+}
+
+func bump(i *int) int {
+	*i = 1
+	return 99
+}
+
+func run() int {
+	hs := []Holder{Holder{slc: []int{10}}, Holder{slc: []int{20}}}
+	i := 0
+	recv_1 := hs[i].slc
+	ys := append(recv_1, bump(&i))
+	return ys[0]
+}

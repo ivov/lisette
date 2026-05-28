@@ -4193,3 +4193,319 @@ fn run() -> Result<int, error> {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn slice_range_capped_callable_bounds_eval_order() {
+    let input = r#"
+fn start() -> int { 1 }
+fn end() -> int { 3 }
+
+fn test() -> int {
+  let xs = [10, 20, 30, 40]
+  let ys = xs[start()..end()]
+  ys.length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_range_capped_open_base_evaluated_once() {
+    let input = r#"
+fn make_items() -> Slice<int> { [10, 20, 30] }
+
+fn test() -> int {
+  let ys = make_items()[1..]
+  ys.length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn indexed_receiver_append_arg_mutates_index() {
+    let input = r#"
+fn bump(i: Ref<int>) -> int {
+  i.* = 1
+  99
+}
+
+fn test() -> int {
+  let xss = [[10], [20]]
+  let mut i = 0
+  let ys = xss[i].append(bump(&i))
+  ys[0]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn indexed_receiver_extend_arg_mutates_index() {
+    let input = r#"
+fn bump_and_make(i: Ref<int>) -> Slice<int> {
+  i.* = 1
+  [99]
+}
+
+fn test() -> int {
+  let xss = [[10], [20]]
+  let mut i = 0
+  let ys = xss[i].extend(bump_and_make(&i))
+  ys[0]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn call_callee_eval_order_propagate_arg() {
+    let input = r#"
+fn make_f(i: Ref<int>) -> fn(int) -> int {
+  |x: int| -> int { x }
+}
+
+fn get(i: Ref<int>) -> Result<int, string> {
+  i.* = 1
+  Ok(7)
+}
+
+fn run() -> Result<int, string> {
+  let mut i = 0
+  let y = make_f(&i)(get(&i)?)
+  Ok(y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn compound_index_target_frozen_before_rhs() {
+    let input = r#"
+fn run() -> Result<(), string> {
+  let mut xs = [10, 20]
+  let mut i = 0
+  let bump = || -> Result<int, string> {
+    i = 1
+    Ok(5)
+  }
+  xs[i] += bump()?
+  Ok(())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pointer_deref_target_frozen_before_rhs() {
+    let input = r#"
+fn run() -> Result<(), string> {
+  let mut a = 10
+  let mut b = 20
+  let mut p = &a
+  let bump = || -> Result<int, string> {
+    p = &b
+    Ok(5)
+  }
+  p.* = bump()?
+  Ok(())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pointer_deref_field_target_frozen_before_rhs() {
+    let input = r#"
+struct Box { value: int }
+
+fn run() -> Result<(), string> {
+  let mut a = Box { value: 10 }
+  let mut b = Box { value: 20 }
+  let mut p = &a
+  let bump = || -> Result<int, string> {
+    p = &b
+    Ok(5)
+  }
+  p.*.value = bump()?
+  Ok(())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pointer_implicit_field_target_frozen_before_rhs() {
+    let input = r#"
+struct Box { value: int }
+
+fn run() -> Result<(), string> {
+  let mut a = Box { value: 10 }
+  let mut b = Box { value: 20 }
+  let mut p = &a
+  let bump = || -> Result<int, string> {
+    p = &b
+    Ok(5)
+  }
+  p.value = bump()?
+  Ok(())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn compound_index_target_frozen_before_call_rhs() {
+    let input = r#"
+fn run() -> int {
+  let mut xs = [10, 20]
+  let mut i = 0
+  let bump = || -> int { i = 1; 5 }
+  xs[i] += bump()
+  xs[0]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn pointer_deref_target_frozen_before_call_rhs() {
+    let input = r#"
+fn run() -> int {
+  let mut a = 10
+  let mut b = 20
+  let mut p = &a
+  let repoint = || -> int { p = &b; 5 }
+  p.* = repoint()
+  a
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn selector_callee_eval_order_captured() {
+    let input = r#"
+fn f0(x: int) -> int { x + 10 }
+fn f1(x: int) -> int { x + 20 }
+struct Handler { f: fn(int) -> int }
+
+fn run() -> Result<int, string> {
+  let hs = [Handler { f: f0 }, Handler { f: f1 }]
+  let mut i = 0
+  let get = || -> Result<int, string> { i = 1; Ok(7) }
+  let y = hs[i].f(get()?)
+  Ok(y)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn selector_receiver_append_arg_mutates_index() {
+    let input = r#"
+struct Holder { slc: Slice<int> }
+fn bump(i: Ref<int>) -> int { i.* = 1; 99 }
+
+fn run() -> int {
+  let hs = [Holder { slc: [10] }, Holder { slc: [20] }]
+  let mut i = 0
+  let ys = hs[i].slc.append(bump(&i))
+  ys[0]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn index_target_constructor_rhs_not_frozen() {
+    let input = r#"
+struct Wrap(int)
+
+fn run() -> int {
+  let mut xs = [Wrap(0), Wrap(0)]
+  let i = 0
+  xs[i] = Wrap(5)
+  xs[0].0
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn struct_literal_arg_callee_eval_order() {
+    let input = r#"
+struct Box { v: int }
+fn f0(b: Box) -> int { b.v }
+fn f1(b: Box) -> int { b.v }
+
+fn run() -> int {
+  let fs = [f0, f1]
+  let mut i = 0
+  let bump = || -> int { i = 1; 7 }
+  let y = fs[i](Box { v: bump() })
+  y
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn slice_literal_rhs_index_target_frozen() {
+    let input = r#"
+fn run() -> int {
+  let mut xs = [[0], [0]]
+  let mut i = 0
+  let bump = || -> int { i = 1; 5 }
+  xs[i] = [bump()]
+  xs[0][0]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn field_receiver_append_arg_mutates_field() {
+    let input = r#"
+struct Holder { slc: Slice<int> }
+
+fn run() -> int {
+  let mut h = Holder { slc: [10] }
+  let bump = || -> int { h.slc = [99]; 7 }
+  let ys = h.slc.append(bump())
+  ys[0]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn range_rhs_index_target_frozen() {
+    let input = r#"
+fn lo() -> int { 0 }
+
+fn run() -> int {
+  let mut rs = [0..0, 0..0]
+  let mut i = 0
+  let bump = || -> int { i = 1; 5 }
+  rs[i] = lo()..bump()
+  rs[0].end
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn identifier_native_receiver_arg_mutates_index() {
+    let input = r#"
+fn bump(i: Ref<int>) -> int { i.* = 1; 99 }
+
+fn run() -> int {
+  let xss = [[10], [20]]
+  let mut i = 0
+  let ys = Slice.append(xss[i], bump(&i))
+  ys[0]
+}
+"#;
+    assert_emit_snapshot!(input);
+}

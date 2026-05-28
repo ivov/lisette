@@ -10,6 +10,7 @@ use crate::names::go_name;
 use crate::plan::bodies::LoweredStatement;
 use crate::plan::calls::plan_variadic_spread;
 use crate::types::native::NativeGoType;
+use crate::utils::{contains_call, reads_mutable_operand};
 use syntax::ast::Expression;
 use syntax::types::peel_to_range_type;
 
@@ -405,13 +406,23 @@ impl Planner<'_> {
             unreachable!("expected DotAccess for native method call")
         };
 
-        let mut all_stages: Vec<StagedExpression> =
-            Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
-        all_stages.push(self.stage_operand(
+        let mut receiver_staged = self.stage_operand(
             expression,
             ExpressionContext::value().with_ambient_return_ctx_opt(ctx.ambient_return_ctx),
             fx,
-        ));
+        );
+        let receiver_is_call = matches!(expression.unwrap_parens(), Expression::Call { .. });
+        if !receiver_is_call
+            && reads_mutable_operand(expression)
+            && receiver_staged.setup.is_empty()
+            && (ctx.args.iter().any(contains_call) || ctx.spread.is_some_and(contains_call))
+        {
+            self.pin_staged(&mut receiver_staged, "recv");
+        }
+
+        let mut all_stages: Vec<StagedExpression> =
+            Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
+        all_stages.push(receiver_staged);
         all_stages.extend(self.stage_native_method_args(
             ctx.function,
             ctx.args,
@@ -504,8 +515,16 @@ impl Planner<'_> {
         ctx: &NativeCallContext,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
-        let stages =
+        let mut stages =
             self.stage_native_method_args(ctx.function, ctx.args, ctx.ambient_return_ctx, fx);
+        if let Some(receiver) = ctx.args.first()
+            && !matches!(receiver.unwrap_parens(), Expression::Call { .. })
+            && reads_mutable_operand(receiver)
+            && stages[0].setup.is_empty()
+            && (ctx.args[1..].iter().any(contains_call) || ctx.spread.is_some_and(contains_call))
+        {
+            self.pin_staged(&mut stages[0], "recv");
+        }
         let combine = plan_variadic_spread(ctx.function, ctx.spread).map(|p| p.combine(0));
         self.sequence_with_spread_structured(
             stages,

@@ -18,6 +18,7 @@ func main() {
 	items := []int{1}
 	m := make(map[string]Outer)
 	m["a"] = Outer{items: &items}
-	*m["a"].items = append(*m["a"].items, 2)
+	ref_1 := m["a"].items
+	*ref_1 = append(*m["a"].items, 2)
 	_ = items
 }

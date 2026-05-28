@@ -23,7 +23,8 @@ func main() {
 	a := 1
 	b := 2
 	h := H{ptr: &a}
-	*h.ptr = h.repoint(&b)
+	ref_1 := h.ptr
+	*ref_1 = h.repoint(&b)
 	_ = a
 	_ = b
 }

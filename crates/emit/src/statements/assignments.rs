@@ -9,7 +9,8 @@ use crate::names::go_name;
 use crate::plan::bodies::{AssignForm, AssignPlan, CompoundKind, LoweredBlock, LoweredStatement};
 use crate::plan::values::value_plan_from_statements;
 use crate::state::bindings::BindingValue;
-use syntax::ast::{BinaryOperator, Expression, UnaryOperator};
+use crate::utils::observable_after_mutation;
+use syntax::ast::{BinaryOperator, Expression, FormatStringPart, Literal, UnaryOperator};
 use syntax::parse::TUPLE_FIELDS;
 use syntax::types::Type;
 
@@ -61,28 +62,32 @@ impl Planner<'_> {
         }
 
         if let Some((op, rhs)) = detect_compound_assignment(target, value, compound_operator) {
+            let is_inc_dec = is_literal_one(rhs)
+                && matches!(op, BinaryOperator::Addition | BinaryOperator::Subtraction);
+            let (kind, rhs_has_setup) = if is_inc_dec {
+                let kind = if *op == BinaryOperator::Addition {
+                    CompoundKind::Increment
+                } else {
+                    CompoundKind::Decrement
+                };
+                (kind, false)
+            } else {
+                let staged = self.stage_operand(rhs, ExpressionContext::value(), fx);
+                let rhs_has_setup =
+                    !staged.setup.is_empty() || self.rhs_contains_effectful_call(rhs);
+                let kind = CompoundKind::OpAssign {
+                    op_text: format!("{}", op),
+                    rhs: value_plan_from_statements(staged.setup, staged.value),
+                };
+                (kind, rhs_has_setup)
+            };
             let mut target_setup = String::new();
             let target_str = if is_order_sensitive(target) {
-                self.emit_left_value_capturing(&mut target_setup, target, false, fx)
+                self.emit_left_value_capturing(&mut target_setup, target, rhs_has_setup, fx)
             } else {
                 self.emit_left_value(&mut target_setup, target, fx)
             };
             let target_capture = capture_to_vec(target_setup);
-            let is_inc_dec = is_literal_one(rhs)
-                && matches!(op, BinaryOperator::Addition | BinaryOperator::Subtraction);
-            let kind = if is_inc_dec {
-                if *op == BinaryOperator::Addition {
-                    CompoundKind::Increment
-                } else {
-                    CompoundKind::Decrement
-                }
-            } else {
-                let staged = self.stage_operand(rhs, ExpressionContext::value(), fx);
-                CompoundKind::OpAssign {
-                    op_text: format!("{}", op),
-                    rhs: value_plan_from_statements(staged.setup, staged.value),
-                }
-            };
             return AssignPlan {
                 directive,
                 form: AssignForm::Compound {
@@ -141,7 +146,7 @@ impl Planner<'_> {
             ExpressionContext::value().with_ambient_return_ctx(return_ctx),
             fx,
         );
-        let rhs_has_setup = !rhs_staged.setup.is_empty();
+        let rhs_has_setup = !rhs_staged.setup.is_empty() || self.rhs_contains_effectful_call(value);
         let mut target_setup = String::new();
         let target_str = if is_order_sensitive(target) {
             self.emit_left_value_capturing(&mut target_setup, target, rhs_has_setup, fx)
@@ -174,6 +179,89 @@ impl Planner<'_> {
                 value: value_plan_from_statements(value_setup, final_value),
             },
         }
+    }
+
+    fn rhs_contains_effectful_call(&self, expression: &Expression) -> bool {
+        match expression.unwrap_parens() {
+            Expression::Call {
+                expression: callee,
+                args,
+                spread,
+                ..
+            } => {
+                if self.is_pure_constructor_callee(callee) {
+                    args.iter().any(|a| self.rhs_contains_effectful_call(a))
+                        || (**spread)
+                            .as_ref()
+                            .is_some_and(|s| self.rhs_contains_effectful_call(s))
+                } else {
+                    true
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.rhs_contains_effectful_call(left) || self.rhs_contains_effectful_call(right)
+            }
+            Expression::Unary { expression, .. }
+            | Expression::DotAccess { expression, .. }
+            | Expression::Cast { expression, .. }
+            | Expression::Reference { expression, .. } => {
+                self.rhs_contains_effectful_call(expression)
+            }
+            Expression::IndexedAccess {
+                expression, index, ..
+            } => {
+                self.rhs_contains_effectful_call(expression)
+                    || self.rhs_contains_effectful_call(index)
+            }
+            Expression::Tuple { elements, .. } => {
+                elements.iter().any(|e| self.rhs_contains_effectful_call(e))
+            }
+            Expression::StructCall {
+                field_assignments,
+                spread,
+                ..
+            } => {
+                field_assignments
+                    .iter()
+                    .any(|f| self.rhs_contains_effectful_call(&f.value))
+                    || spread
+                        .as_expression()
+                        .is_some_and(|s| self.rhs_contains_effectful_call(s))
+            }
+            Expression::Literal {
+                literal: Literal::Slice(elements),
+                ..
+            } => elements.iter().any(|e| self.rhs_contains_effectful_call(e)),
+            Expression::Literal {
+                literal: Literal::FormatString(parts),
+                ..
+            } => parts.iter().any(|part| match part {
+                FormatStringPart::Expression(e) => self.rhs_contains_effectful_call(e),
+                FormatStringPart::Text(_) => false,
+            }),
+            Expression::Range { start, end, .. } => {
+                start
+                    .as_deref()
+                    .is_some_and(|e| self.rhs_contains_effectful_call(e))
+                    || end
+                        .as_deref()
+                        .is_some_and(|e| self.rhs_contains_effectful_call(e))
+            }
+            _ => false,
+        }
+    }
+
+    fn is_pure_constructor_callee(&self, callee: &Expression) -> bool {
+        let name = match callee.unwrap_parens() {
+            Expression::Identifier { value, .. } => Some(value.as_str()),
+            Expression::DotAccess { member, .. } => Some(member.as_str()),
+            _ => None,
+        };
+        if matches!(name, Some("Some" | "Ok" | "Err" | "None")) {
+            return true;
+        }
+        self.callee_definition(callee)
+            .is_some_and(|definition| definition.is_type_definition())
     }
 
     fn target_binds_to_discard(&self, target: &Expression) -> bool {
@@ -228,7 +316,7 @@ impl Planner<'_> {
                 operator: UnaryOperator::Deref,
                 expression,
                 ..
-            } => self.emit_deref_lvalue(output, expression, fx),
+            } => self.emit_deref_lvalue(output, expression, false, fx),
             Expression::Call { .. } if expression.get_type().is_ref() => {
                 let call_str =
                     self.emit_operand(output, expression, ExpressionContext::value(), fx);
@@ -239,15 +327,19 @@ impl Planner<'_> {
     }
 
     /// Emit `*X` lvalue form, capturing the pointee into a temp if it's a
-    /// call (Go requires an addressable operand for deref-assignment).
+    /// call (Go requires an addressable operand for deref-assignment) or when
+    /// RHS setup could reassign the pointer before the write executes.
     fn emit_deref_lvalue(
         &mut self,
         output: &mut String,
         pointee: &Expression,
+        rhs_has_setup: bool,
         fx: &mut EmitEffects,
     ) -> String {
         let pointee_string = self.emit_operand(output, pointee, ExpressionContext::value(), fx);
-        if matches!(pointee.unwrap_parens(), Expression::Call { .. }) {
+        let needs_capture = matches!(pointee.unwrap_parens(), Expression::Call { .. })
+            || (rhs_has_setup && observable_after_mutation(pointee));
+        if needs_capture {
             let tmp = self.hoist_tmp_value(output, "ref", &pointee_string);
             return format!("*{}", tmp);
         }
@@ -308,9 +400,15 @@ impl Planner<'_> {
                 ..
             } => {
                 let base_str = if let Some(inner) = base.deref_inner() {
-                    self.emit_operand(output, inner, ExpressionContext::value(), fx)
+                    if rhs_has_setup {
+                        self.emit_force_capture(output, inner, "ref", fx)
+                    } else {
+                        self.emit_operand(output, inner, ExpressionContext::value(), fx)
+                    }
                 } else if is_order_sensitive(base) {
                     self.emit_left_value_capturing(output, base, rhs_has_setup, fx)
+                } else if rhs_has_setup && base.get_type().is_ref() {
+                    self.emit_force_capture(output, base, "ref", fx)
                 } else {
                     self.emit_left_value(output, base, fx)
                 };
@@ -321,7 +419,7 @@ impl Planner<'_> {
                 operator: UnaryOperator::Deref,
                 expression: inner,
                 ..
-            } => self.emit_deref_lvalue(output, inner, fx),
+            } => self.emit_deref_lvalue(output, inner, rhs_has_setup, fx),
             _ => self.emit_left_value(output, expression, fx),
         }
     }

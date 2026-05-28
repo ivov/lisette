@@ -1,0 +1,21 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn start() -> int { 1 }\nfn end() -> int { 3 }\n\nfn test() -> int {\n  let xs = [10, 20, 30, 40]\n  let ys = xs[start()..end()]\n  ys.length()\n}\n"
+---
+package main
+
+func start() int {
+	return 1
+}
+
+func end() int {
+	return 3
+}
+
+func test() int {
+	xs := []int{10, 20, 30, 40}
+	start_1 := start()
+	end_2 := end()
+	ys := xs[start_1:end_2:end_2]
+	return len(ys)
+}

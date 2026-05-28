@@ -1,0 +1,17 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn run() -> int {\n  let mut xs = [10, 20]\n  let mut i = 0\n  let bump = || -> int { i = 1; 5 }\n  xs[i] += bump()\n  xs[0]\n}\n"
+---
+package main
+
+func run() int {
+	xs := []int{10, 20}
+	i := 0
+	bump := func() int {
+		i = 1
+		return 5
+	}
+	idx_1 := i
+	xs[idx_1] += bump()
+	return xs[0]
+}

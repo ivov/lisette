@@ -16,6 +16,7 @@ func main() {
 	w := Wrap([]int{1})
 	m := make(map[string]*Wrap)
 	m["a"] = &w
-	*m["a"] = Wrap(append([]int(*m["a"]), 2))
+	ref_1 := m["a"]
+	*ref_1 = Wrap(append([]int(*m["a"]), 2))
 	_ = w
 }

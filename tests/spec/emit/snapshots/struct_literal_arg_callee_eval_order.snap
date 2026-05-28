@@ -1,0 +1,35 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nstruct Box { v: int }\nfn f0(b: Box) -> int { b.v }\nfn f1(b: Box) -> int { b.v }\n\nfn run() -> int {\n  let fs = [f0, f1]\n  let mut i = 0\n  let bump = || -> int { i = 1; 7 }\n  let y = fs[i](Box { v: bump() })\n  y\n}\n"
+---
+package main
+
+import "fmt"
+
+type Box struct {
+	v int
+}
+
+func (b Box) String() string {
+	return fmt.Sprintf("Box { v: %v }", b.v)
+}
+
+func f0(b Box) int {
+	return b.v
+}
+
+func f1(b Box) int {
+	return b.v
+}
+
+func run() int {
+	fs := []func(Box) int{f0, f1}
+	i := 0
+	bump := func() int {
+		i = 1
+		return 7
+	}
+	callee_1 := fs[i]
+	y := callee_1(Box{v: bump()})
+	return y
+}

@@ -1,0 +1,42 @@
+---
+source: tests/spec/emit/expressions.rs
+description: "input: \nfn f0(x: int) -> int { x + 10 }\nfn f1(x: int) -> int { x + 20 }\nstruct Handler { f: fn(int) -> int }\n\nfn run() -> Result<int, string> {\n  let hs = [Handler { f: f0 }, Handler { f: f1 }]\n  let mut i = 0\n  let get = || -> Result<int, string> { i = 1; Ok(7) }\n  let y = hs[i].f(get()?)\n  Ok(y)\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func f0(x int) int {
+	return x + 10
+}
+
+func f1(x int) int {
+	return x + 20
+}
+
+type Handler struct {
+	f func(int) int
+}
+
+func (h Handler) String() string {
+	return fmt.Sprintf("Handler { f: %p }", h.f)
+}
+
+func run() lisette.Result[int, string] {
+	hs := []Handler{Handler{f: f0}, Handler{f: f1}}
+	i := 0
+	get := func() lisette.Result[int, string] {
+		i = 1
+		return lisette.MakeResultOk[int, string](7)
+	}
+	callee_2 := hs[i].f
+	check_1 := get()
+	if check_1.Tag != lisette.ResultOk {
+		return lisette.MakeResultErr[int, string](check_1.ErrVal)
+	}
+	y := callee_2(check_1.OkVal)
+	return lisette.MakeResultOk[int, string](y)
+}

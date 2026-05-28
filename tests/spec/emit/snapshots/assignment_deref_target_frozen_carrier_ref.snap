@@ -36,6 +36,7 @@ func main() {
 		h:  &h,
 		np: &b,
 	}
-	*h.p = retarget(c)
+	ref_1 := h.p
+	*ref_1 = retarget(c)
 	_ = a
 }

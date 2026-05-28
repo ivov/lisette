@@ -45,6 +45,15 @@ impl Planner<'_> {
         }
     }
 
+    /// Pin a staged operand's value into a temp so it evaluates before any
+    /// later sibling.
+    pub(crate) fn pin_staged(&mut self, staged: &mut StagedExpression, prefix: &str) {
+        let value = std::mem::take(&mut staged.value);
+        let tmp = self.hoist_tmp_value_statement(&mut staged.setup, prefix, &value);
+        staged.value = tmp;
+        staged.capture = CapturePolicy::Never;
+    }
+
     pub(crate) fn emit_force_capture(
         &mut self,
         output: &mut String,

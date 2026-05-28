@@ -25,6 +25,7 @@ func main() {
 	h := Holder{p: &a}
 	hp := &h
 	np := &b
-	*h.p = retarget(hp, np)
+	ref_1 := h.p
+	*ref_1 = retarget(hp, np)
 	_ = a
 }
