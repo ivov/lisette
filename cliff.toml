@@ -4,6 +4,7 @@ header = """# Changelog
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
 """
 body = '''
+
 ## [{{ version | trim_start_matches(pat="lisette-v") }}](https://github.com/ivov/lisette/compare/{{ previous.version }}...{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
 {% for commit in commits | sort(attribute="author.timestamp") | reverse %}
 {%- set subject = commit.raw_message | split(pat="\n") | first | trim -%}

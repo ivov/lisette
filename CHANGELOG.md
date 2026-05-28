@@ -1,6 +1,7 @@
 # Changelog
 
 Lisette is under active development. Any version before 1.0.0 may include breaking changes.
+
 ## [0.2.14](https://github.com/ivov/lisette/compare/lisette-v0.2.13...lisette-v0.2.14) - 2026-05-27
 
 - fix: translate `unknown` to any in explicit type arguments [#513](https://github.com/ivov/lisette/pull/513) [`7d6687a`](https://github.com/ivov/lisette/commit/7d6687a8ae52f122aef8b6341d3de707d01a667f)
@@ -16,6 +17,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - perf: avoid cloning function definition in non-builtin emit path [#505](https://github.com/ivov/lisette/pull/505) [`560678c`](https://github.com/ivov/lisette/commit/560678cb186f7c1c4f3fdf81534d4c93e7e2bc1c)
 - fix: preserve type args on generic interface bounds in bindgen [#503](https://github.com/ivov/lisette/pull/503) [`39ac1b7`](https://github.com/ivov/lisette/commit/39ac1b7729026259d221b3430250277547d6eb83)
 - perf: skip desugar pass when parser produced no desugarables [#502](https://github.com/ivov/lisette/pull/502) [`af8156c`](https://github.com/ivov/lisette/commit/af8156c1531645da32fcd39154ee7f0c52f8056f)
+
 ## [0.2.13](https://github.com/ivov/lisette/compare/lisette-v0.2.12...lisette-v0.2.13) - 2026-05-26
 
 - perf: skip synthetic EOF in token lookup [#500](https://github.com/ivov/lisette/pull/500) [`c9bbdeb`](https://github.com/ivov/lisette/commit/c9bbdeb9f7fb83108d46780998b8c497c57b844f)
@@ -33,15 +35,18 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - chore: update lockfile [#487](https://github.com/ivov/lisette/pull/487) [`7c175d2`](https://github.com/ivov/lisette/commit/7c175d267f36f04ce65d1beade181f6f9e15225e)
 - feat: warn on unsigned integer compared against zero [#486](https://github.com/ivov/lisette/pull/486) [`d3fb542`](https://github.com/ivov/lisette/commit/d3fb542aeb214a173fb411e8b658247a86f22071)
 - refactor: restructure emit layer [#484](https://github.com/ivov/lisette/pull/484) [`f4757af`](https://github.com/ivov/lisette/commit/f4757af591949eb4650be4d1791c5cb762656740)
+
 ## [0.2.12](https://github.com/ivov/lisette/compare/lisette-v0.2.11...lisette-v0.2.12) - 2026-05-25
 
 - fix: disambiguate EcoString as_ref calls with as_str [#482](https://github.com/ivov/lisette/pull/482) [`9f16eef`](https://github.com/ivov/lisette/commit/9f16eef49df5a174c9139656ec5e128611758ec1)
+
 ## [0.2.11](https://github.com/ivov/lisette/compare/lisette-v0.2.10...lisette-v0.2.11) - 2026-05-23
 
 - fix: reject public types with non-exportable names [#480](https://github.com/ivov/lisette/pull/480) [`2226da8`](https://github.com/ivov/lisette/commit/2226da8489f515d510048cb6cd9bf69dc65d3476)
 - fix: reject any/comparable as type or generic names [#479](https://github.com/ivov/lisette/pull/479) [`d3ed928`](https://github.com/ivov/lisette/commit/d3ed9280f8ff6a11cd4563eda66c316d87c0f791)
 - fix: diagnose duplicate json methods on #[json] enums [#477](https://github.com/ivov/lisette/pull/477) [`5fcc6b0`](https://github.com/ivov/lisette/commit/5fcc6b08c6c0bef2172f99325d0c686fe88d4b89)
 - ci: drop release.yml fork guard [#476](https://github.com/ivov/lisette/pull/476) [`865b74c`](https://github.com/ivov/lisette/commit/865b74c4af9329d36f1ccf7134fd927c2eb06a1d)
+
 ## [0.2.10](https://github.com/ivov/lisette/compare/lisette-v0.2.9...lisette-v0.2.10) - 2026-05-23
 
 - fix: bind more value-plus-error returns as Partial [#475](https://github.com/ivov/lisette/pull/475) [`e1c3772`](https://github.com/ivov/lisette/commit/e1c377254a1bd844d49fb5d4297fc362fb76b70c)
@@ -54,11 +59,13 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - ci: skip fuzz and release workflows on forks [#468](https://github.com/ivov/lisette/pull/468) [`2a8a152`](https://github.com/ivov/lisette/commit/2a8a152290163a86faa7b5086415f4448ade0a49)
 - feat: relative paths in diagnostics [#467](https://github.com/ivov/lisette/pull/467) [`39830a0`](https://github.com/ivov/lisette/commit/39830a045e3c9c1023fadf69f975e028d9450b31)
 - feat: bare variants in match arms [#465](https://github.com/ivov/lisette/pull/465) [`2faa0f6`](https://github.com/ivov/lisette/commit/2faa0f6bbcecefc20bcdb7cfb767c8335a72260a)
+
 ## [0.2.9](https://github.com/ivov/lisette/compare/lisette-v0.2.8...lisette-v0.2.9) - 2026-05-20
 
 - fix: drop redundant block around irrefutable match arm [#464](https://github.com/ivov/lisette/pull/464) [`6e3e211`](https://github.com/ivov/lisette/commit/6e3e2112860d3183ecf51757987ae9e85a3b5fc5)
 - fix: derive generic method call shapes from declarations [#463](https://github.com/ivov/lisette/pull/463) [`b4c22b5`](https://github.com/ivov/lisette/commit/b4c22b593da837f60698ea513b1c45ee4ec84ff9)
 - fix: classify generic callee shape from its declaration [#461](https://github.com/ivov/lisette/pull/461) [`07914a1`](https://github.com/ivov/lisette/commit/07914a1bda37687197c4fe254e01f567324b003b)
+
 ## [0.2.8](https://github.com/ivov/lisette/compare/lisette-v0.2.7...lisette-v0.2.8) - 2026-05-19
 
 - fix: adapt lowered fn arg shape at generic call boundary [#459](https://github.com/ivov/lisette/pull/459) [`ee69def`](https://github.com/ivov/lisette/commit/ee69deff9510071418c1ac66c104606af0507f36)
@@ -73,6 +80,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - ci: guard release workflows from running on forks [#444](https://github.com/ivov/lisette/pull/444) [`7f9c583`](https://github.com/ivov/lisette/commit/7f9c58357fbdc4e882bc1c7c67dd6d8774554642)
 - feat: bitwise operators [#382](https://github.com/ivov/lisette/pull/382) [`bb5de34`](https://github.com/ivov/lisette/commit/bb5de3434223f0ef4fa62cabf7ed11519c87dfdc)
 - fix: qualify imported enum in variant-not-found diagnostic [#442](https://github.com/ivov/lisette/pull/442) [`4a02f60`](https://github.com/ivov/lisette/commit/4a02f60db605731729688f21644fd8b8c8754033)
+
 ## [0.2.7](https://github.com/ivov/lisette/compare/lisette-v0.2.6...lisette-v0.2.7) - 2026-05-17
 
 - fix: unwrap option at go any and honor tail-return hints [#437](https://github.com/ivov/lisette/pull/437) [`afcf72c`](https://github.com/ivov/lisette/commit/afcf72ccfc6258e0c986de233cb299485c161f05)
@@ -92,6 +100,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - refactor: reduce emit complexity [#423](https://github.com/ivov/lisette/pull/423) [`bcc574b`](https://github.com/ivov/lisette/commit/bcc574b373d4257cb0c4eee7c2295fecdbc2e3fd)
 - docs: add section on typed nil at the boundary [#422](https://github.com/ivov/lisette/pull/422) [`045e502`](https://github.com/ivov/lisette/commit/045e502b90a54591aaffa763c366e39ba5295ea3)
 - refactor: emit idiomatic fmt verbs in interpolations [#420](https://github.com/ivov/lisette/pull/420) [`5121f0d`](https://github.com/ivov/lisette/commit/5121f0de48c9bdd8f6c00bb73f5b6311918b9834)
+
 ## [0.2.6](https://github.com/ivov/lisette/compare/lisette-v0.2.5...lisette-v0.2.6) - 2026-05-16
 
 - fix: resolve dotted go import paths [#419](https://github.com/ivov/lisette/pull/419) [`d22fdfa`](https://github.com/ivov/lisette/commit/d22fdfaa0bc78850c07c0130769379999294042f)
@@ -101,6 +110,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - refactor: drop last cosmetic emit cleanup pass [#414](https://github.com/ivov/lisette/pull/414) [`8e41a3a`](https://github.com/ivov/lisette/commit/8e41a3a9195374606918f872b6352e4bca8b2e0d)
 - refactor: drop four cosmetic emit cleanup passes [#413](https://github.com/ivov/lisette/pull/413) [`ed30007`](https://github.com/ivov/lisette/commit/ed300078ea67500655a10e7bfd5bfae205280b63)
 - refactor: ast-level emit negation and fmt collapse [#411](https://github.com/ivov/lisette/pull/411) [`f0b3966`](https://github.com/ivov/lisette/commit/f0b3966580b23a38cd536211f181bbe8286c06a2)
+
 ## [0.2.5](https://github.com/ivov/lisette/compare/lisette-v0.2.4...lisette-v0.2.5) - 2026-05-14
 
 - fix: track go import usage during emit [#410](https://github.com/ivov/lisette/pull/410) [`00d1b7a`](https://github.com/ivov/lisette/commit/00d1b7ab37daa2e0af24fb55e84622cb6e10a18c)
@@ -108,6 +118,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - refactor: emit architecture overhaul [#407](https://github.com/ivov/lisette/pull/407) [`01c7c34`](https://github.com/ivov/lisette/commit/01c7c3443a8f7e41ed94fd6fc2dda8b082278d47)
 - fix: cache no longer hides internal_type_leak warnings [#405](https://github.com/ivov/lisette/pull/405) [`d820e1d`](https://github.com/ivov/lisette/commit/d820e1d8472f35cd56a578d40c9c62d9d2b2329d)
 - perf: skip unchanged emit/gofmt/tidy work on rebuilds [#403](https://github.com/ivov/lisette/pull/403) [`3ef0961`](https://github.com/ivov/lisette/commit/3ef096162bba93a595c84c711962607082a29295)
+
 ## [0.2.4](https://github.com/ivov/lisette/compare/lisette-v0.2.3...lisette-v0.2.4) - 2026-05-12
 
 - fix: honor allow attributes on interface methods [#402](https://github.com/ivov/lisette/pull/402) [`3e2e5c2`](https://github.com/ivov/lisette/commit/3e2e5c2ddba766bd8a81c4451877845c2c1909f2)
@@ -123,6 +134,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: prevent go const eligibility from leaking across scopes [#392](https://github.com/ivov/lisette/pull/392) [`f3a09b8`](https://github.com/ivov/lisette/commit/f3a09b80f4b7a24bba39c3e879e30a12b9adf1f7)
 - fix: emit tail panic as statement in fallible function [#391](https://github.com/ivov/lisette/pull/391) [`5f77c90`](https://github.com/ivov/lisette/commit/5f77c90ffb73f18f723ba6fbded237880dfe85b0)
 - fix: monomorphize generic interface adapters per instantiation [#389](https://github.com/ivov/lisette/pull/389) [`563c642`](https://github.com/ivov/lisette/commit/563c642cc89d8b475555d629d3d11c242d70f333)
+
 ## [0.2.3](https://github.com/ivov/lisette/compare/lisette-v0.2.2...lisette-v0.2.3) - 2026-05-11
 
 - fix: detect fluent builders on promoted methods [#388](https://github.com/ivov/lisette/pull/388) [`50190aa`](https://github.com/ivov/lisette/commit/50190aa4a29c1dc45159d4a627296cfb4dacf646)
@@ -133,6 +145,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - refactor: trim dead temps and discards from emitted Go [#383](https://github.com/ivov/lisette/pull/383) [`69179a9`](https://github.com/ivov/lisette/commit/69179a98a55b1438a51959d4e0d82c8e1fca1b74)
 - perf: skip per-file gofmt during build [#381](https://github.com/ivov/lisette/pull/381) [`3f7a395`](https://github.com/ivov/lisette/commit/3f7a395a77c2dab18cda281997a873ec43eeb65f)
 - fix: support Option<T> when T is a fn type alias [#379](https://github.com/ivov/lisette/pull/379) [`417a247`](https://github.com/ivov/lisette/commit/417a24717d77ad40ba504c7783bb188742217ab3)
+
 ## [0.2.2](https://github.com/ivov/lisette/compare/lisette-v0.2.1...lisette-v0.2.2) - 2026-05-10
 
 - feat: third-party Go dependencies [#374](https://github.com/ivov/lisette/pull/374) [`5276b12`](https://github.com/ivov/lisette/commit/5276b12f3897f2a33bca1eab0dab2947d27a443a)
@@ -161,6 +174,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: preserve generic arity on skipped opaque type placeholders [#349](https://github.com/ivov/lisette/pull/349) [`6adc0b8`](https://github.com/ivov/lisette/commit/6adc0b8e8ef082f167242e233eb12a2dc3fee7d5)
 - fix: preserve bindgen docs on funcs returning a local type [#347](https://github.com/ivov/lisette/pull/347) [`29e953b`](https://github.com/ivov/lisette/commit/29e953b9852d9836d1b95c4745d07d3ff6bed302)
 - fix: bridge Option<T> on scalar args to *scalar at callsites [#346](https://github.com/ivov/lisette/pull/346) [`321abdc`](https://github.com/ivov/lisette/commit/321abdc856ff9bef746cd29a35efd0d74a60868a)
+
 ## [0.2.1](https://github.com/ivov/lisette/compare/lisette-v0.2.0...lisette-v0.2.1) - 2026-05-07
 
 - fix: snapshot bytes-loop receiver to survive body reassignment [#344](https://github.com/ivov/lisette/pull/344) [`1eda7c8`](https://github.com/ivov/lisette/commit/1eda7c83360ca712eabfe0ec081878ea647c5d94)
@@ -181,6 +195,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: export camel-case method names in interface adapters [#329](https://github.com/ivov/lisette/pull/329) [`d35f8d3`](https://github.com/ivov/lisette/commit/d35f8d3113ff9c9089f3f90719e206a669be0a51)
 - fix: handle escaped quotes in fmt.Println f-string collapse [#328](https://github.com/ivov/lisette/pull/328) [`a798d21`](https://github.com/ivov/lisette/commit/a798d218279b08e0d201fc5e05a830bf9dc9590e)
 - fix: preserve short-circuit when && or || RHS needs setup [#326](https://github.com/ivov/lisette/pull/326) [`4126b50`](https://github.com/ivov/lisette/commit/4126b50af7cd378fdc0730fe3ca8ef23e0a7ff75)
+
 ## [0.2.0](https://github.com/ivov/lisette/compare/lisette-v0.1.26...lisette-v0.2.0) - 2026-05-06
 
 - refactor!: reject positional access on string [#323](https://github.com/ivov/lisette/pull/323) [`a7c7245`](https://github.com/ivov/lisette/commit/a7c7245aab153ad88d44ef5ea93529c26cad2d8c)
@@ -196,6 +211,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: disambiguate bindgen aliases on shared trailing segments [#312](https://github.com/ivov/lisette/pull/312) [`cc2f820`](https://github.com/ivov/lisette/commit/cc2f820039f6c8dd0551dbc27b922eb91eef1295)
 - fix: suggest `..` zero-fill in missing-fields help [#311](https://github.com/ivov/lisette/pull/311) [`219cf0a`](https://github.com/ivov/lisette/commit/219cf0ab8f5f062320eabbf6fd4d5e195d328dc2)
 - fix: preserve all returns when trailing bool is a flag [#307](https://github.com/ivov/lisette/pull/307) [`227e61e`](https://github.com/ivov/lisette/commit/227e61e7e23246ee08e69e671d2df53be5708c17)
+
 ## [0.1.26](https://github.com/ivov/lisette/compare/lisette-v0.1.25...lisette-v0.1.26) - 2026-05-04
 
 - fix: tailor nil and member-not-found help to context [#306](https://github.com/ivov/lisette/pull/306) [`aa12647`](https://github.com/ivov/lisette/commit/aa12647673d779dad69b6142b3b61b681611a205)
@@ -215,6 +231,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - refactor: consolidate checker definitions and walkers [#290](https://github.com/ivov/lisette/pull/290) [`c895586`](https://github.com/ivov/lisette/commit/c8955865b2c1cf1330f3229ef85edff045f4a0fa)
 - refactor: thread target argument through stdlib typedef lookups [#289](https://github.com/ivov/lisette/pull/289) [`0b7570c`](https://github.com/ivov/lisette/commit/0b7570c7a767ff1b577adc67dc984277b279d9c5)
 - refactor: consolidate checker cursor and scope setup [#287](https://github.com/ivov/lisette/pull/287) [`ce653c9`](https://github.com/ivov/lisette/commit/ce653c9bf32e618458ba737f3d56bc29e6a6439a)
+
 ## [0.1.25](https://github.com/ivov/lisette/compare/lisette-v0.1.24...lisette-v0.1.25) - 2026-05-03
 
 - fix: propagate expected type through generic positions [#286](https://github.com/ivov/lisette/pull/286) [`9777eec`](https://github.com/ivov/lisette/commit/9777eec86c5fc3d3b636f6820f5b7cadcc561d8c)
@@ -240,6 +257,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: improve diagnostic for backticks outside attribute position [#264](https://github.com/ivov/lisette/pull/264) [`569e309`](https://github.com/ivov/lisette/commit/569e309926be460265508e2b881fa5956fcf016d)
 - feat: add beginner-friendly diagnostics [#263](https://github.com/ivov/lisette/pull/263) [`063a155`](https://github.com/ivov/lisette/commit/063a1550301372100814cdc416f74bd40cef26e9)
 - fix: stop double-wrapping callbacks bound to Go fn aliases [#261](https://github.com/ivov/lisette/pull/261) [`6b8894c`](https://github.com/ivov/lisette/commit/6b8894cb0674008e8c9feba41822c56154a22c96)
+
 ## [0.1.24](https://github.com/ivov/lisette/compare/lisette-v0.1.23...lisette-v0.1.24) - 2026-05-01
 
 - refactor: clean up diagnostics taxonomy [#260](https://github.com/ivov/lisette/pull/260) [`608b213`](https://github.com/ivov/lisette/commit/608b2136b2ad799405c86fb3267b13b85b56f2f7)
@@ -255,6 +273,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - ci: parallelize checks and reorganize e2e tests [#248](https://github.com/ivov/lisette/pull/248) [`ab8933d`](https://github.com/ivov/lisette/commit/ab8933d6431c391bda59dcfeb4539130eaa73180)
 - ci: skip regen step when release-plz returns no PR [#246](https://github.com/ivov/lisette/pull/246) [`a11466e`](https://github.com/ivov/lisette/commit/a11466ebe80507608852c5cd225e79a97dc7655f)
 - ci: fix release-publish iteration on workspace crates [#245](https://github.com/ivov/lisette/pull/245) [`3a3ab02`](https://github.com/ivov/lisette/commit/3a3ab0215942b344a7bfc4882c74db74dd4f8d1a)
+
 ## [0.1.23](https://github.com/ivov/lisette/compare/lisette-v0.1.22...lisette-v0.1.23) - 2026-04-30
 
 - fix: lsp completion for built-in prelude types [#240](https://github.com/ivov/lisette/pull/240) [`abe54cb`](https://github.com/ivov/lisette/commit/abe54cbd76151c65776cb86bb5e6601a7114cf0c)
@@ -274,6 +293,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: allow assignment to pub var through import alias [#225](https://github.com/ivov/lisette/pull/225) [`2df0d3e`](https://github.com/ivov/lisette/commit/2df0d3ece32e17bd57321c507429d93145cc981a)
 - feat: recognize named-interface bounds in bindgen generics [#224](https://github.com/ivov/lisette/pull/224) [`6a41b27`](https://github.com/ivov/lisette/commit/6a41b272cf3ff55d777dc2a4ac87cd68a888d407)
 - ci: skip autogenerated release.yml in ratchet recipes [#222](https://github.com/ivov/lisette/pull/222) [`3e203c9`](https://github.com/ivov/lisette/commit/3e203c9e6600eb9179f130cb72502bb66eeba898)
+
 ## [0.1.22](https://github.com/ivov/lisette/compare/lisette-v0.1.21...lisette-v0.1.22) - 2026-04-28
 
 - ci: unpin release.yml so cargo-dist can regenerate it [#221](https://github.com/ivov/lisette/pull/221) [`b81058f`](https://github.com/ivov/lisette/commit/b81058f85509d5e12ded66085af309464851e45e)
@@ -289,6 +309,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: avoid cloning lhs on compound assign with invalid target [#209](https://github.com/ivov/lisette/pull/209) [`e481af2`](https://github.com/ivov/lisette/commit/e481af2e5562e96cbb788b696aec5b600407eb30)
 - feat: zero-fill spread [#210](https://github.com/ivov/lisette/pull/210) [`9681887`](https://github.com/ivov/lisette/commit/9681887c997b4c3d6e63e4107d883294edf3e679)
 - feat: support sql.Scanner and driver.Valuer on option [#206](https://github.com/ivov/lisette/pull/206) [`6091db8`](https://github.com/ivov/lisette/commit/6091db8e03b00bb0d765f52586a483c9da29a8de)
+
 ## [0.1.21](https://github.com/ivov/lisette/compare/lisette-v0.1.20...lisette-v0.1.21) - 2026-04-26
 
 - fix: alias transparency with generics [#203](https://github.com/ivov/lisette/pull/203) [`5b10e59`](https://github.com/ivov/lisette/commit/5b10e5927827738666e048d0f7a4c23a156b149e)
@@ -305,6 +326,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: use %p for func-typed fields in auto-stringers [#188](https://github.com/ivov/lisette/pull/188) [`6331009`](https://github.com/ivov/lisette/commit/633100914497636b78e55ee57f76c6f0a6fc11cd)
 - fix: do not lower-classify prelude-fn callees [#186](https://github.com/ivov/lisette/pull/186) [`8ad9926`](https://github.com/ivov/lisette/commit/8ad992603b33817b773eae9221ab2ab94a6e428f)
 - ci: add emit-runtime suite and restructure release gates [#185](https://github.com/ivov/lisette/pull/185) [`02f6e09`](https://github.com/ivov/lisette/commit/02f6e0951415d370cadfedd0d87cde2a81fb4de4)
+
 ## [0.1.20](https://github.com/ivov/lisette/compare/lisette-v0.1.19...lisette-v0.1.20) - 2026-04-25
 
 - feat: add sentinel-int hint and lower any nilable err type [`c11e1de`](https://github.com/ivov/lisette/commit/c11e1de139756c1a324e9dd345a4bc05c6e6ca12)
@@ -315,6 +337,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - feat: introduce raw string literals [#179](https://github.com/ivov/lisette/pull/179) [`4dcd1cb`](https://github.com/ivov/lisette/commit/4dcd1cbefbefb786ea4d8342c25a7d5802adbd2e)
 - fix: harden go interface dispatch for user impl methods [#175](https://github.com/ivov/lisette/pull/175) [`9194ef5`](https://github.com/ivov/lisette/commit/9194ef52825ca3b47a02bf1bba8e501c666e5e1a)
 - docs: add prebuilt install path [#174](https://github.com/ivov/lisette/pull/174) [`65fd842`](https://github.com/ivov/lisette/commit/65fd8421d7b139346b5ed6ba96fe8014afa9374f)
+
 ## [0.1.19](https://github.com/ivov/lisette/compare/lisette-v0.1.18...lisette-v0.1.19) - 2026-04-24
 
 - fix: place enum constructors beside their enum definition [#172](https://github.com/ivov/lisette/pull/172) [`e367406`](https://github.com/ivov/lisette/commit/e3674063d070d130d53be9b43525d4a7fcd41b86)
@@ -322,12 +345,14 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - refactor: prep parallel semantics [#170](https://github.com/ivov/lisette/pull/170) [`54a2a0c`](https://github.com/ivov/lisette/commit/54a2a0cf07d34f1f9bea6205fb963114351790a1)
 - ci: ship prebuilt binaries [#165](https://github.com/ivov/lisette/pull/165) [`a11eda1`](https://github.com/ivov/lisette/commit/a11eda1696aa2e0c9b3e7cc311d8031125a17529)
 - ci: rename release.yml to release-plz.yml [`92c3ba7`](https://github.com/ivov/lisette/commit/92c3ba7f4da9b90f66045cccea47d0bf73bc1167)
+
 ## [0.1.18](https://github.com/ivov/lisette/compare/lisette-v0.1.17...lisette-v0.1.18) - 2026-04-23
 
 - fix: bolster misuse diagnostics [#164](https://github.com/ivov/lisette/pull/164) [`11c86eb`](https://github.com/ivov/lisette/commit/11c86eb1c0c4b3f6d8189bf5eb147fafcfd3f51f)
 - fix: align const semantics with Go [#162](https://github.com/ivov/lisette/pull/162) [`db32264`](https://github.com/ivov/lisette/commit/db32264e14e1bb9748c5c597192abe316fb4e741)
 - refactor: overhaul type representation and inference state [#161](https://github.com/ivov/lisette/pull/161) [`8468519`](https://github.com/ivov/lisette/commit/84685195a0e777ae01835d68969eb11c69516a6a)
 - refactor: consolidate emit coercions and decision walkers [#157](https://github.com/ivov/lisette/pull/157) [`ed1cf48`](https://github.com/ivov/lisette/commit/ed1cf48f37b7f8c33f79bc660c636306d1fea27c)
+
 ## [0.1.17](https://github.com/ivov/lisette/compare/lisette-v0.1.16...lisette-v0.1.17) - 2026-04-21
 
 - fix: auto-address struct literal receivers for ref methods [#156](https://github.com/ivov/lisette/pull/156) [`4f4f065`](https://github.com/ivov/lisette/commit/4f4f065484795310e901c29c6b47eb45a503d2a3)
@@ -336,6 +361,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: reset emit scope between impl methods to prevent name leak [#154](https://github.com/ivov/lisette/pull/154) [`259a32c`](https://github.com/ivov/lisette/commit/259a32c9498c4323f1259ffbcd4fd1fe2b165488)
 - fix: reject bare record struct names used as values [#153](https://github.com/ivov/lisette/pull/153) [`a057965`](https://github.com/ivov/lisette/commit/a0579651d6ed5219b4f5b1d83cc55fd146aec978)
 - refactor: simplify emit layer readability and structure [#151](https://github.com/ivov/lisette/pull/151) [`4dc768e`](https://github.com/ivov/lisette/commit/4dc768ef45a196f1d9f532f95856d15b0e7f582f)
+
 ## [0.1.16](https://github.com/ivov/lisette/compare/lisette-v0.1.15...lisette-v0.1.16) - 2026-04-20
 
 - feat: as pattern bindings [#145](https://github.com/ivov/lisette/pull/145) [`4688fd6`](https://github.com/ivov/lisette/commit/4688fd67f6a774fa4857a088a90825f70b8175ae)
@@ -346,9 +372,11 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: emit type switch for or-pattern on interface with field checks [`d8352ca`](https://github.com/ivov/lisette/commit/d8352ca9d2a060a474205c2e2776d43166069c62)
 - fix: emit Go type switch case for or-pattern on interface [#143](https://github.com/ivov/lisette/pull/143) [`478d1bd`](https://github.com/ivov/lisette/commit/478d1bdb0417c37fab0cbc25535360e13ebc66dc)
 - fix: emit type switch when matching on aliased go interface [#142](https://github.com/ivov/lisette/pull/142) [`97f7f5a`](https://github.com/ivov/lisette/commit/97f7f5a83f6118c33e01d4853947a2f6f3daaa16)
+
 ## [0.1.15](https://github.com/ivov/lisette/compare/lisette-v0.1.14...lisette-v0.1.15) - 2026-04-19
 
 - fix: emit Go type switch when matching on an interface type [#138](https://github.com/ivov/lisette/pull/138) [`9803025`](https://github.com/ivov/lisette/commit/9803025475bfd7efb70e91176784887a8387d023)
+
 ## [0.1.14](https://github.com/ivov/lisette/compare/lisette-v0.1.13...lisette-v0.1.14) - 2026-04-19
 
 - fix: embed external config in bindgen binary as default [#136](https://github.com/ivov/lisette/pull/136) [`ef30543`](https://github.com/ivov/lisette/commit/ef305432fc7893da03cbf4e480263db3fd0f08c2)
@@ -360,6 +388,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: off-by-one in struct-literal lookahead skipped empty {} [#132](https://github.com/ivov/lisette/pull/132) [`f419749`](https://github.com/ivov/lisette/commit/f4197492391b1bec1dcafedaf9c32ff96e4470a3)
 - fix: support building from source on windows [#130](https://github.com/ivov/lisette/pull/130) [`35c0437`](https://github.com/ivov/lisette/commit/35c04379bf2f4a527ab6d4972ac09af2fe8a2503)
 - ci: sort changelog commits by timestamp [`f7fdc64`](https://github.com/ivov/lisette/commit/f7fdc64a18a38ff1b391253ce49313f3f7d7cfbb)
+
 ## [0.1.13](https://github.com/ivov/lisette/compare/lisette-v0.1.12...lisette-v0.1.13) - 2026-04-18
 
 - fix: allow closures returning concrete types as Go function aliases [`96b5a31`](https://github.com/ivov/lisette/commit/96b5a3122c85c542176ef7303c63ea70901145cf)
@@ -381,6 +410,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: emit break after switch in guarded match [#104](https://github.com/ivov/lisette/pull/104) [`1644ca0`](https://github.com/ivov/lisette/commit/1644ca04959b517743c299a025a0619d5cfa8a4f)
 - fix: don't wrap named function type returns in Option [#103](https://github.com/ivov/lisette/pull/103) [`0e31195`](https://github.com/ivov/lisette/commit/0e311953357d3a7df4dac182dee7693e2bc7caa7)
 - fix: value enum match arms and interface-slotted tuple returns [#101](https://github.com/ivov/lisette/pull/101) [`2791a57`](https://github.com/ivov/lisette/commit/2791a5720d8b42dc79d736f9e7d90925ce8304c7)
+
 ## [0.1.12](https://github.com/ivov/lisette/compare/lisette-v0.1.11...lisette-v0.1.12) - 2026-04-15
 
 - fix: synthesize Go interface adapters for Lisette impls [#92](https://github.com/ivov/lisette/pull/92) [`ccea037`](https://github.com/ivov/lisette/commit/ccea03769210d8995102686e58065710f7318d41)
@@ -389,6 +419,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - docs: note that goland extension is available [#89](https://github.com/ivov/lisette/pull/89) [`bad3dee`](https://github.com/ivov/lisette/commit/bad3deea6fd89ddd38ba583f06822f78f7f92ecf)
 - fix: regenerate missing Go typedefs before check/build/run [#88](https://github.com/ivov/lisette/pull/88) [`cc6912b`](https://github.com/ivov/lisette/commit/cc6912be7cd3ef069468d1b668c81d72dff58bcb)
 - fix: emit named empty Go interfaces as Lisette interfaces [#86](https://github.com/ivov/lisette/pull/86) [`029bb6e`](https://github.com/ivov/lisette/commit/029bb6e55888f0ac59acc9293250e1a88f4ee9b8)
+
 ## [0.1.11](https://github.com/ivov/lisette/compare/lisette-v0.1.10...lisette-v0.1.11) - 2026-04-14
 
 - fix: emit unloadable stub when bindgen hits cgo type errors [`82d1022`](https://github.com/ivov/lisette/commit/82d10222af3d2788dd1d5292817e5a507a6b5a9d)
@@ -402,6 +433,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: preserve snake_case field name on ref receiver access [#80](https://github.com/ivov/lisette/pull/80) [`1fa6205`](https://github.com/ivov/lisette/commit/1fa6205d26c5ea94996091660f90caca6eb39842)
 - fix: report missing repo segment in github.com module path [`00f297c`](https://github.com/ivov/lisette/commit/00f297c7f9bdf7b5738375705cb9bdce6c29fdab)
 - docs: mention goland in changelog [`56aaff5`](https://github.com/ivov/lisette/commit/56aaff581355f85cc29634d32f250bc48fda6198)
+
 ## [0.1.10](https://github.com/ivov/lisette/compare/lisette-v0.1.9...lisette-v0.1.10) - 2026-04-14
 
 - docs: mention goland in homepage [`834c1d3`](https://github.com/ivov/lisette/commit/834c1d31e734012da93f77af18f851376ce12b39)
@@ -410,6 +442,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - chore: simplify release PR body template [#75](https://github.com/ivov/lisette/pull/75) [`bd2fd9b`](https://github.com/ivov/lisette/commit/bd2fd9b1083b4237838de1901d99a03517a6445c)
 - fix: accept \a \b \f \v escape sequences in string and rune literals [#73](https://github.com/ivov/lisette/pull/73) [`7b7d7ce`](https://github.com/ivov/lisette/commit/7b7d7ce4d8bd8b8d5ae1c8dc828fcc4a5377dee5)
 - fix: default Go import alias to declared package name [#72](https://github.com/ivov/lisette/pull/72) [`af71eca`](https://github.com/ivov/lisette/commit/af71ecacc5fbe85ec02851aa12244be3202f6b59)
+
 ## [0.1.9](https://github.com/ivov/lisette/compare/lisette-v0.1.8...lisette-v0.1.9) - 2026-04-13
 
 - fix: reject static method called on an instance [#69](https://github.com/ivov/lisette/pull/69) [`efacd5f`](https://github.com/ivov/lisette/commit/efacd5f42a9f349806c7fd2c8096abe017ebebe7)
@@ -424,6 +457,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: skip bindgen exports referencing internal package types [#59](https://github.com/ivov/lisette/pull/59) [`3956c00`](https://github.com/ivov/lisette/commit/3956c00b34c3aa3c03f9d1995d7ffd0d87128140)
 - ci: rename publish job to cover Go modules [`e65bb69`](https://github.com/ivov/lisette/commit/e65bb69b012132eaf1649fd1756d6705a1ba7bc1)
 - chore: normalize changelog and fix template format [`e51e64e`](https://github.com/ivov/lisette/commit/e51e64e8aa9abcce40a2a5f52a34eb590acf5aa8)
+
 ## [0.1.8](https://github.com/ivov/lisette/compare/lisette-v0.1.7...lisette-v0.1.8) - 2026-04-12
 
 - chore: render changelog as flat list of all commits [`08d6a72`](https://github.com/ivov/lisette/commit/08d6a72e6f83d97b1a9e531b639554432f7eefde)
@@ -433,6 +467,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - refactor: reorganize deps crate [`09beac3`](https://github.com/ivov/lisette/commit/09beac374f09f4766d67598a203d41eabf8a70bd)
 - refactor: simplify bindgen invocation [`262cc20`](https://github.com/ivov/lisette/commit/262cc20c20cad53d61415b0538f4cf9be7a65dc2)
 - refactor: simplify typedef resolver [#50](https://github.com/ivov/lisette/pull/50) [`07a7a45`](https://github.com/ivov/lisette/commit/07a7a453b2deeef6660a5e2f56f66801af3012bc)
+
 ## [0.1.7](https://github.com/ivov/lisette/compare/lisette-v0.1.6...lisette-v0.1.7) - 2026-04-11
 
 - chore: include license file in published crates [#48](https://github.com/ivov/lisette/pull/48) [`e7a6205`](https://github.com/ivov/lisette/commit/e7a62053f6f34f41a68a679286cab1f63fcfbbf7)
@@ -442,6 +477,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: use program::Visibility in fuzz infer target [`41ca5bb`](https://github.com/ivov/lisette/commit/41ca5bb2b796ddd30bd9f46b475da034dc1e3ee2)
 - chore: update fuzz lockfile versions to v0.1.6 [`1423dca`](https://github.com/ivov/lisette/commit/1423dcab49b4ee15ad9b8b82177f38d8243984d3)
 - fix: resolve Forall gracefully and add registration to fuzz target [`480ca6e`](https://github.com/ivov/lisette/commit/480ca6e32810d9e6b002a387a14face4934cd8c2)
+
 ## [0.1.6](https://github.com/ivov/lisette/compare/lisette-v0.1.5...lisette-v0.1.6) - 2026-04-09
 
 - fix: deduplicate diagnostics for const type annotations [`09f7d2c`](https://github.com/ivov/lisette/commit/09f7d2c536f21be76bd4cd5ec62783ce966f5d5b)
@@ -454,6 +490,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - ci: guard release comment calls against transient failures [`2b90fe0`](https://github.com/ivov/lisette/commit/2b90fe0ef3a37c606b85ab3bc8a712c5c348906d)
 - ci: add issues write permission for release comments [`f4ed6b1`](https://github.com/ivov/lisette/commit/f4ed6b13484ff66be49eda84d46316ea9f0162e6)
 - chore: auto-commit stdlib typedefs in regeneration recipe [`aebc6a2`](https://github.com/ivov/lisette/commit/aebc6a26edc7bfde3283b3a0ef55f2c37bb810b7)
+
 ## [0.1.5](https://github.com/ivov/lisette/compare/lisette-v0.1.4...lisette-v0.1.5) - 2026-04-08
 
 - ci: comment on closed issues in release workflow [`73143dc`](https://github.com/ivov/lisette/commit/73143dc4bb5a3936da2da82e25ec72b435250dd7)
@@ -461,6 +498,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - feat: add playground to docs site [#27](https://github.com/ivov/lisette/pull/27) [`d917711`](https://github.com/ivov/lisette/commit/d917711bd556bd6e8e747e4000ec2454686d42a7)
 - fix: interface subtype satisfaction through type variables [#31](https://github.com/ivov/lisette/pull/31) [`020c407`](https://github.com/ivov/lisette/commit/020c407a88e5556151afe173286fada1f26a1b8b)
 - ci: skip check job on release-plz commits [`2497b62`](https://github.com/ivov/lisette/commit/2497b62e6531a9a201f1facc2df8e90c997ee3a4)
+
 ## [0.1.4](https://github.com/ivov/lisette/compare/lisette-v0.1.3...lisette-v0.1.4) - 2026-04-07
 
 - ci: comment on PRs included in a release [`04b5a82`](https://github.com/ivov/lisette/commit/04b5a8273a75079c500abb9d1fd15157413a043d)
@@ -471,6 +509,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: support octal escape sequences [#22](https://github.com/ivov/lisette/pull/22) [`a9a5872`](https://github.com/ivov/lisette/commit/a9a5872374f9d582c2cd18c5585b95b2e2d02188)
 - fix: add typo suggestions for CLI subcommands [#23](https://github.com/ivov/lisette/pull/23) [`befe96a`](https://github.com/ivov/lisette/commit/befe96aa284c41b3d55f2b18e22525980eaa24f4)
 - docs: update Zed extension PR link [`2f76686`](https://github.com/ivov/lisette/commit/2f76686f3bd4d54ca99303a8d5e20a3f1609e354)
+
 ## [0.1.3](https://github.com/ivov/lisette/compare/lisette-v0.1.2...lisette-v0.1.3) - 2026-04-06
 
 - chore: add pre-1.0 breaking changes policy [`9ccebaa`](https://github.com/ivov/lisette/commit/9ccebaa7a495beb8f5aaa7c739a51850981ef0c6)
@@ -490,6 +529,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - fix: wrap interface globals in Option when not provably non-nil [`2703398`](https://github.com/ivov/lisette/commit/270339884ed000af61225a2af297c6d3ce951025)
 - chore: regenerate stdlib typedefs [`b7324fb`](https://github.com/ivov/lisette/commit/b7324fb8bea0f1c9cd8feb642c6bff021569450d)
 - fix: detect typed nils in Go interface wrapping [`7325047`](https://github.com/ivov/lisette/commit/73250472dbf48e4d527ba5f499794717e0759ed3)
+
 ## [0.1.2](https://github.com/ivov/lisette/compare/lisette-v0.1.1...lisette-v0.1.2) - 2026-03-31
 
 - fix: fold Range sub-expressions in AstFolder [`2d357f1`](https://github.com/ivov/lisette/commit/2d357f179f8f4536b5bc723fad55b438dc2113cf)
@@ -510,6 +550,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - docs: make homepage mobile-responsive [`b3c7dad`](https://github.com/ivov/lisette/commit/b3c7dad8b4676a6b9c810ce5587eb331718ea620)
 - ci: restore release-plz prepare job and push trigger [`6789dab`](https://github.com/ivov/lisette/commit/6789dabb023746d54f60c94424f98cbe942600bf)
 - fix: lower parser max depth to prevent stack overflow under asan [`97ebe8b`](https://github.com/ivov/lisette/commit/97ebe8bd7a3473aae8febf7b023a8bef883763b4)
+
 ## [0.1.1](https://github.com/ivov/lisette/compare/lisette-v0.1.0...lisette-v0.1.1) - 2026-03-21
 
 - chore: bump version to 0.1.1 [`318e9a4`](https://github.com/ivov/lisette/commit/318e9a4093c8c47c87b9aa916a019bb066c317ff)
@@ -520,6 +561,7 @@ Lisette is under active development. Any version before 1.0.0 may include breaki
 - refactor: move go version to standalone file [`6d61563`](https://github.com/ivov/lisette/commit/6d61563c8686e761d8bb75ce7ddc038abd0a1f5a)
 - fix: resolve prelude path for crates.io packaging [`c8b0960`](https://github.com/ivov/lisette/commit/c8b09606eebc7ec01d9df1d75b6169f738e14a5d)
 - chore: update zed extension grammar rev [`64004e2`](https://github.com/ivov/lisette/commit/64004e2d1b97c1e33ec3204ffb0d4028bef3c488)
+
 ## [0.1.0](https://github.com/ivov/lisette/compare/...lisette-v0.1.0) - 2026-03-21
 
 - feat: initial release v0.1.0 [`a2fbd9d`](https://github.com/ivov/lisette/commit/a2fbd9d956ba38f52a456c5ad51da30e4bacdd1f)
