@@ -5352,3 +5352,102 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn duplicate_cutset_trim() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let url = "https://example.com"
+  let _ = strings.Trim(url, "https://")
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_cutset_trim_left() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "//path"
+  let _ = strings.TrimLeft(s, "//")
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_cutset_trim_right() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "value.."
+  let _ = strings.TrimRight(s, "..")
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_cutset_no_duplicate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "abc"
+  let _ = strings.Trim(s, "abc")
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_cutset_non_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "abc"
+  let cutset = "aa"
+  let _ = strings.Trim(s, cutset)
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_cutset_trim_prefix_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let url = "https://example.com"
+  let _ = strings.TrimPrefix(url, "https://")
+}
+"#
+    );
+}
+
+#[test]
+fn duplicate_cutset_trim_space_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "  hi  "
+  let _ = strings.TrimSpace(s)
+}
+"#
+    );
+}

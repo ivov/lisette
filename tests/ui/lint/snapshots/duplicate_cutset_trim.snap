@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Misuse of `Trim`
+   ╭─[test.lis:6:29]
+ 5 │   let url = "https://example.com"
+ 6 │   let _ = strings.Trim(url, "https://")
+   ·                             ─────┬────
+   ·                                  ╰── treated as charset
+ 7 │ }
+   ╰────
+  help: `strings.Trim` removes a set of characters, not a substring. Did you mean `strings.TrimPrefix` or `strings.TrimSuffix`? · code: [lint.trim_charset_misuse]

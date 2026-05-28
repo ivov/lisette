@@ -1,6 +1,7 @@
 mod bool_literal_comparison;
 mod double_negation;
 mod dup_arg;
+mod duplicate_cutset;
 mod duplicate_logical_operand;
 mod empty_match_arm;
 mod excess_parens_on_condition;
@@ -22,6 +23,7 @@ mod verbose_failure_propagation;
 pub use bool_literal_comparison::check_bool_literal_comparison;
 pub use double_negation::check_double_negation;
 pub use dup_arg::check_dup_arg;
+pub use duplicate_cutset::check_duplicate_cutset;
 pub use duplicate_logical_operand::check_duplicate_logical_operand;
 pub use empty_match_arm::check_empty_match_arm;
 pub use excess_parens_on_condition::check_excess_parens_on_condition;
