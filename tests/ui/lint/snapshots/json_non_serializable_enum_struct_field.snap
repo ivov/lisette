@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Non-serializable field in a `#[json]` type
+   ╭─[test.lis:4:13]
+ 3 │ pub enum Event {
+ 4 │   Run { cb: fn() -> int },
+   ·             ─────┬─────
+   ·                  ╰── a function cannot be JSON-encoded
+ 5 │ }
+   ╰────
+  help: Go's `encoding/json` cannot marshal functions. Remove it from the variant · code: [infer.json_non_serializable_field]

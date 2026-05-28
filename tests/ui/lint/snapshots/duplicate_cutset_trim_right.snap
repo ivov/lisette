@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Misuse of `TrimRight`
+   ╭─[test.lis:6:32]
+ 5 │   let s = "value.."
+ 6 │   let _ = strings.TrimRight(s, "..")
+   ·                                ──┬─
+   ·                                  ╰── treated as charset
+ 7 │ }
+   ╰────
+  help: `strings.TrimRight` removes a set of characters, not a substring. Did you mean `strings.TrimPrefix` or `strings.TrimSuffix`? · code: [lint.trim_charset_misuse]

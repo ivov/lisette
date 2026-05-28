@@ -54,7 +54,7 @@ jobs:
           TAG="lisette-v${NEW_VERSION}"
           git-cliff --config cliff.toml --tag "$TAG" -o CHANGELOG.md
           git-cliff --config cliff.toml --tag "$TAG" --unreleased --strip all > /tmp/pr-body.md
-          sed -i "1c## ${NEW_VERSION} (upcoming)" /tmp/pr-body.md
+          sed -i -e '/./,$!d' -e "s|^## \[${NEW_VERSION}\].*|## ${NEW_VERSION} (upcoming)|" /tmp/pr-body.md
 
           if git diff --quiet CHANGELOG.md; then
             echo "CHANGELOG.md unchanged after regeneration"

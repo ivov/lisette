@@ -6,7 +6,8 @@ package main
 
 func test() {
 	xs := []int{1}
+	_arg_1 := xs
 	defer func() {
-		_ = len(xs)
+		_ = len(_arg_1)
 	}()
 }

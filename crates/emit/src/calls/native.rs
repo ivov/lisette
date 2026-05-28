@@ -406,7 +406,9 @@ impl Planner<'_> {
             unreachable!("expected DotAccess for native method call")
         };
 
-        let mut receiver_staged = self.stage_operand(
+        let mut all_stages: Vec<StagedExpression> =
+            Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
+        let mut receiver_stage = self.stage_operand(
             expression,
             ExpressionContext::value().with_ambient_return_ctx_opt(ctx.ambient_return_ctx),
             fx,
@@ -414,15 +416,15 @@ impl Planner<'_> {
         let receiver_is_call = matches!(expression.unwrap_parens(), Expression::Call { .. });
         if !receiver_is_call
             && reads_mutable_operand(expression)
-            && receiver_staged.setup.is_empty()
+            && receiver_stage.setup.is_empty()
             && (ctx.args.iter().any(contains_call) || ctx.spread.is_some_and(contains_call))
         {
-            self.pin_staged(&mut receiver_staged, "recv");
+            self.pin_staged(&mut receiver_stage, "recv");
         }
-
-        let mut all_stages: Vec<StagedExpression> =
-            Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
-        all_stages.push(receiver_staged);
+        if expression.get_type().is_ref() {
+            receiver_stage.value = format!("*{}", receiver_stage.value);
+        }
+        all_stages.push(receiver_stage);
         all_stages.extend(self.stage_native_method_args(
             ctx.function,
             ctx.args,
@@ -441,14 +443,8 @@ impl Planner<'_> {
             fx,
         );
 
-        let raw_receiver = all_values[0].clone();
+        let receiver = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
-
-        let receiver = if expression.get_type().is_ref() {
-            format!("*{}", raw_receiver)
-        } else {
-            raw_receiver
-        };
         (setup, receiver, emitted_args)
     }
 

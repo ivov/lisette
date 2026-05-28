@@ -1095,6 +1095,59 @@ fn test() {
 }
 
 #[test]
+fn defer_native_method_iife_evaluates_argument_eagerly() {
+    let input = r#"
+fn mark() -> int {
+  2
+}
+
+fn test() {
+  let mut xs = [1]
+  defer xs.append(mark())
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn defer_native_method_iife_evaluates_receiver_eagerly() {
+    let input = r#"
+fn get_items() -> Slice<int> {
+  [1]
+}
+
+fn test() {
+  defer get_items().length()
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn defer_native_method_iife_snapshots_mutable_identifier_argument() {
+    let input = r#"
+fn run() {
+  let mut dst = [0, 0, 0]
+  let mut src = [1, 2, 3]
+  defer dst.copy_from(src)
+  src = [9, 9, 9]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn defer_native_method_iife_snapshots_deref_receiver() {
+    let input = r#"
+fn run(out: Ref<Slice<int>>) {
+  defer out.copy_from([1, 2, 3])
+  out.* = [7, 7, 7, 7, 7]
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn task_native_method_inlined_to_non_call_wraps_in_iife() {
     let input = r#"
 fn test() {
@@ -1158,6 +1211,30 @@ fn test() {
   }
   let send_val_2 = result + 1
   fmt.Println(send_val_2)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn defer_static_native_method_iife_captures_value_receiver() {
+    let input = r#"
+fn test() {
+  let items = [1, 2, 3]
+  defer Slice.length(items)
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn defer_static_native_method_iife_on_alias_captures_value_receiver() {
+    let input = r#"
+type MyString = string
+
+fn test() {
+  let s = "hi"
+  defer MyString.length(s)
 }
 "#;
     assert_emit_snapshot!(input);

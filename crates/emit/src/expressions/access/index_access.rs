@@ -84,6 +84,7 @@ impl Planner<'_> {
             value: format!("(*{})", s.value),
             setup: s.setup,
             capture: s.capture,
+            non_literal: s.non_literal,
         }
     }
 
