@@ -42,6 +42,7 @@ impl Planner<'_> {
             setup,
             value: temp_var,
             capture: CapturePolicy::Never,
+            non_literal: false,
         }
     }
 
@@ -239,7 +240,8 @@ impl Planner<'_> {
         mut stages: Vec<StagedExpression>,
         prefix: &str,
     ) -> (Vec<LoweredStatement>, Vec<String>) {
-        if stages.iter().all(|s| s.setup.is_empty()) {
+        let eager = self.function_state.eager_operand_capture();
+        if !eager && stages.iter().all(|s| s.setup.is_empty()) {
             return (Vec::new(), stages.into_iter().map(|s| s.value).collect());
         }
 
@@ -248,12 +250,15 @@ impl Planner<'_> {
         for i in 0..stages.len() {
             let later_has_setup = stages[i + 1..].iter().any(|s| !s.setup.is_empty());
             let s_capture = stages[i].capture;
+            let s_non_literal = stages[i].non_literal;
             let s_value = std::mem::take(&mut stages[i].value);
             let s_setup = std::mem::take(&mut stages[i].setup);
 
             setup.extend(s_setup);
 
-            if later_has_setup && matches!(s_capture, CapturePolicy::IfLaterSetup) {
+            let capture_for_later =
+                later_has_setup && matches!(s_capture, CapturePolicy::IfLaterSetup);
+            if capture_for_later || (eager && s_non_literal) {
                 let tmp = self.fresh_var(Some(prefix));
                 self.declare(&tmp);
                 setup.push(LoweredStatement::TempBind {

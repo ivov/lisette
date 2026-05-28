@@ -407,11 +407,15 @@ impl Planner<'_> {
 
         let mut all_stages: Vec<StagedExpression> =
             Vec::with_capacity(1 + ctx.args.len() + ctx.spread.is_some() as usize);
-        all_stages.push(self.stage_operand(
+        let mut receiver_stage = self.stage_operand(
             expression,
             ExpressionContext::value().with_ambient_return_ctx_opt(ctx.ambient_return_ctx),
             fx,
-        ));
+        );
+        if expression.get_type().is_ref() {
+            receiver_stage.value = format!("*{}", receiver_stage.value);
+        }
+        all_stages.push(receiver_stage);
         all_stages.extend(self.stage_native_method_args(
             ctx.function,
             ctx.args,
@@ -430,14 +434,8 @@ impl Planner<'_> {
             fx,
         );
 
-        let raw_receiver = all_values[0].clone();
+        let receiver = all_values[0].clone();
         let emitted_args: Vec<String> = all_values[1..].to_vec();
-
-        let receiver = if expression.get_type().is_ref() {
-            format!("*{}", raw_receiver)
-        } else {
-            raw_receiver
-        };
         (setup, receiver, emitted_args)
     }
 

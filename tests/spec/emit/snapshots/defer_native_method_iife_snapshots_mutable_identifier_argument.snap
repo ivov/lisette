@@ -1,0 +1,16 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn run() {\n  let mut dst = [0, 0, 0]\n  let mut src = [1, 2, 3]\n  defer dst.copy_from(src)\n  src = [9, 9, 9]\n}\n"
+---
+package main
+
+func run() {
+	dst := []int{0, 0, 0}
+	src := []int{1, 2, 3}
+	_arg_1 := dst
+	_arg_2 := src
+	defer func() {
+		_ = copy(_arg_1, _arg_2)
+	}()
+	src = []int{9, 9, 9}
+}

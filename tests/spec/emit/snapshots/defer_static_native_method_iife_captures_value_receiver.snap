@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn test() {\n  let items = [1, 2, 3]\n  defer Slice.length(items)\n}\n"
+---
+package main
+
+func test() {
+	items := []int{1, 2, 3}
+	_arg_1 := items
+	defer func() {
+		_ = len(_arg_1)
+	}()
+}

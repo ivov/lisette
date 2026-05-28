@@ -1,0 +1,13 @@
+---
+source: tests/spec/emit/concurrency.rs
+description: "input: \nfn run(out: Ref<Slice<int>>) {\n  defer out.copy_from([1, 2, 3])\n  out.* = [7, 7, 7, 7, 7]\n}\n"
+---
+package main
+
+func run(out *[]int) {
+	_arg_1 := *out
+	defer func() {
+		_ = copy(_arg_1, []int{1, 2, 3})
+	}()
+	*out = []int{7, 7, 7, 7, 7}
+}
