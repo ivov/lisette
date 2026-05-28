@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Duplicate arguments
+   ╭─[test.lis:6:11]
+ 5 │   let bs: Slice<byte> = Slice.new<byte>()
+ 6 │   let _ = bytes.EqualFold(bs, bs)
+   ·           ───────────┬───────────
+   ·                      ╰── identical arguments
+ 7 │ }
+   ╰────
+  help: Passing the same value twice to `bytes.EqualFold` makes this call a no-op. Did you mean to pass different values? · code: [lint.duplicate_arguments]

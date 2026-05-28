@@ -5110,3 +5110,245 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn dup_arg_math_max() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+
+fn main() {
+  let x: float64 = 1.0
+  let _ = math.Max(x, x)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_math_min() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+
+fn main() {
+  let x: float64 = 1.0
+  let _ = math.Min(x, x)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_reflect_deep_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:reflect"
+
+fn main() {
+  let s = "abc"
+  let _ = reflect.DeepEqual(s, s)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_strings_replace() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "abc"
+  let _ = strings.Replace(s, s, s, 1)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_strings_replace_all() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "abc"
+  let _ = strings.ReplaceAll(s, s, s)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_strings_compare() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "abc"
+  let _ = strings.Compare(s, s)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_strings_equal_fold() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "abc"
+  let _ = strings.EqualFold(s, s)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_bytes_equal() {
+    assert_lint_snapshot!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let bs: Slice<byte> = Slice.new<byte>()
+  let _ = bytes.Equal(bs, bs)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_bytes_compare() {
+    assert_lint_snapshot!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let bs: Slice<byte> = Slice.new<byte>()
+  let _ = bytes.Compare(bs, bs)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_bytes_equal_fold() {
+    assert_lint_snapshot!(
+        r#"
+import "go:bytes"
+
+fn main() {
+  let bs: Slice<byte> = Slice.new<byte>()
+  let _ = bytes.EqualFold(bs, bs)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_parenthesized_args() {
+    assert_lint_snapshot!(
+        r#"
+import "go:math"
+
+fn main() {
+  let x: float64 = 1.0
+  let _ = math.Max((x), x)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_strings_replace_with_search_replace_dup() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "abc"
+  let pat = "x"
+  let _ = strings.Replace(s, pat, pat, 1)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_distinct_identifiers_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+
+fn main() {
+  let x: float64 = 1.0
+  let y: float64 = 2.0
+  let _ = math.Max(x, y)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_distinct_literals_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+
+fn main() {
+  let _ = math.Max(1.0, 2.0)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_calls_with_side_effects_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:math"
+
+fn next() -> float64 {
+  return 1.0
+}
+
+fn main() {
+  let _ = math.Max(next(), next())
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_strings_replace_different_search_replace_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "abc"
+  let _ = strings.Replace(s, "a", "b", 1)
+}
+"#
+    );
+}
+
+#[test]
+fn dup_arg_unrelated_function_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:strings"
+
+fn main() {
+  let s = "abc"
+  let _ = strings.Contains(s, s)
+}
+"#
+    );
+}

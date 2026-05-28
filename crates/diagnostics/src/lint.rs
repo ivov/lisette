@@ -508,3 +508,13 @@ pub fn unknown_tag_option(span: &Span, option: &str) -> LisetteDiagnostic {
             option
         ))
 }
+
+pub fn duplicate_arguments(span: &Span, module: &str, function: &str) -> LisetteDiagnostic {
+    let display_module = module.strip_prefix("go:").unwrap_or(module);
+    LisetteDiagnostic::warn("Duplicate arguments")
+        .with_lint_code("duplicate_arguments")
+        .with_span_label(span, "identical arguments")
+        .with_help(format!(
+            "Passing the same value twice to `{display_module}.{function}` makes this call a no-op. Did you mean to pass different values?"
+        ))
+}

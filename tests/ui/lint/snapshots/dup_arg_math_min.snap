@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Duplicate arguments
+   ╭─[test.lis:6:11]
+ 5 │   let x: float64 = 1.0
+ 6 │   let _ = math.Min(x, x)
+   ·           ───────┬──────
+   ·                  ╰── identical arguments
+ 7 │ }
+   ╰────
+  help: Passing the same value twice to `math.Min` makes this call a no-op. Did you mean to pass different values? · code: [lint.duplicate_arguments]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Duplicate arguments
+   ╭─[test.lis:6:11]
+ 5 │   let s = "abc"
+ 6 │   let _ = strings.ReplaceAll(s, s, s)
+   ·           ─────────────┬─────────────
+   ·                        ╰── identical arguments
+ 7 │ }
+   ╰────
+  help: Passing the same value twice to `strings.ReplaceAll` makes this call a no-op. Did you mean to pass different values? · code: [lint.duplicate_arguments]
