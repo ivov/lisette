@@ -49,7 +49,7 @@ jobs:
           set -euo pipefail
           TAG=$(echo "$RELEASES" | jq -er '.[] | select(.package_name == "lisette") | .tag')
           git fetch --tags origin
-          git-cliff --config cliff.toml --latest --strip all | tail -n +3 > /tmp/notes.md
+          git-cliff --config cliff.toml --latest --strip all | sed -e '/^## \[/d' -e '/./,$!d' > /tmp/notes.md
           gh release edit "$TAG" --notes-file /tmp/notes.md
           { grep -oE 'pull/[0-9]+' /tmp/notes.md || true; } | cut -d/ -f2 | sort -u > "/tmp/prs-${TAG}.txt"
 
