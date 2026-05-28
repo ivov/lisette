@@ -595,6 +595,17 @@ impl Planner<'_> {
         result
     }
 
+    fn with_eager_operand_capture<R>(
+        &mut self,
+        enabled: bool,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let previous = self.function_state.set_eager_operand_capture(enabled);
+        let result = f(self);
+        self.function_state.set_eager_operand_capture(previous);
+        result
+    }
+
     /// Plan a `Task`/`Defer` operand.
     pub(crate) fn plan_async_wrapper(
         &mut self,
@@ -629,8 +640,11 @@ impl Planner<'_> {
             );
         }
 
-        let (mut setup, inner) = self.lower_value(expression, ExpressionContext::value(), fx);
+        let (setup, inner) = self.lower_value(expression, ExpressionContext::value(), fx);
         if needs_iife_for_async(expression, &inner) {
+            let (mut setup, inner) = self.with_eager_operand_capture(true, |planner| {
+                planner.lower_value(expression, ExpressionContext::value(), fx)
+            });
             let mut body_statements = Vec::new();
             if !inner.is_empty() {
                 let line = if expression.get_type().is_unit() {
@@ -710,14 +724,18 @@ impl Planner<'_> {
     }
 }
 
+fn is_native_method_call(expression: &Expression) -> bool {
+    matches!(
+        expression.unwrap_parens(),
+        Expression::Call {
+            call_kind: Some(CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_)),
+            ..
+        }
+    )
+}
+
 fn needs_iife_for_async(expression: &Expression, emitted: &str) -> bool {
-    let Expression::Call { call_kind, .. } = expression.unwrap_parens() else {
-        return false;
-    };
-    if !matches!(
-        call_kind,
-        Some(CallKind::NativeMethod(_) | CallKind::NativeMethodIdentifier(_))
-    ) {
+    if !is_native_method_call(expression) {
         return false;
     }
     !is_valid_go_async_target(emitted)

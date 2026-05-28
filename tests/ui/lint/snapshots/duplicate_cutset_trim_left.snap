@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Misuse of `TrimLeft`
+   ╭─[test.lis:6:31]
+ 5 │   let s = "//path"
+ 6 │   let _ = strings.TrimLeft(s, "//")
+   ·                               ──┬─
+   ·                                 ╰── treated as charset
+ 7 │ }
+   ╰────
+  help: `strings.TrimLeft` removes a set of characters, not a substring. Did you mean `strings.TrimPrefix` or `strings.TrimSuffix`? · code: [lint.trim_charset_misuse]

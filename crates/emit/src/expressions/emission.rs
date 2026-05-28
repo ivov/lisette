@@ -19,6 +19,7 @@ pub(crate) struct StagedExpression {
     pub setup: Vec<LoweredStatement>,
     pub value: String,
     pub capture: CapturePolicy,
+    pub non_literal: bool,
 }
 
 impl StagedExpression {
@@ -33,6 +34,7 @@ impl StagedExpression {
             setup: setup_from_string(setup),
             value,
             capture,
+            non_literal: observable_after_mutation(expression),
         }
     }
 
@@ -51,6 +53,7 @@ impl StagedExpression {
             setup,
             value,
             capture,
+            non_literal: observable_after_mutation(expression),
         }
     }
 
@@ -61,6 +64,7 @@ impl StagedExpression {
                 setup,
                 value,
                 capture: CapturePolicy::Never,
+                non_literal: observable_after_mutation(expression),
             },
             ValuePlan::Operand(value) => {
                 let capture = if observable_after_mutation(expression) {
@@ -72,6 +76,7 @@ impl StagedExpression {
                     setup: Vec::new(),
                     value,
                     capture,
+                    non_literal: observable_after_mutation(expression),
                 }
             }
             other => {

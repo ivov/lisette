@@ -509,6 +509,15 @@ pub fn unknown_tag_option(span: &Span, option: &str) -> LisetteDiagnostic {
         ))
 }
 
+pub fn trim_charset_misuse(span: &Span, function: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn(format!("Misuse of `{function}`"))
+        .with_lint_code("trim_charset_misuse")
+        .with_span_label(span, "treated as charset")
+        .with_help(format!(
+            "`strings.{function}` removes a set of characters, not a substring. Did you mean `strings.TrimPrefix` or `strings.TrimSuffix`?"
+        ))
+}
+
 pub fn duplicate_arguments(span: &Span, module: &str, function: &str) -> LisetteDiagnostic {
     let display_module = module.strip_prefix("go:").unwrap_or(module);
     LisetteDiagnostic::warn("Duplicate arguments")
