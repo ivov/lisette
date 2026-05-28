@@ -2155,6 +2155,15 @@ pub fn empty_range(span: &Span) -> LisetteDiagnostic {
         .with_help("Swap the bounds.")
 }
 
+pub fn decimal_file_mode(span: &Span, value: u64) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("File permission written in decimal")
+        .with_infer_code("decimal_file_mode")
+        .with_span_label(span, format!("decimal {value} is octal 0o{value:o}"))
+        .with_help(
+            "File permissions are conventionally written in octal. Use a `0o` prefix (for example `0o644`) so the bits line up with the rwx triples.",
+        )
+}
+
 pub fn empty_infinite_loop(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Empty infinite loop")
         .with_infer_code("empty_infinite_loop")

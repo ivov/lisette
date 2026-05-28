@@ -5034,3 +5034,79 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn decimal_file_mode_chmod() {
+    assert_lint_snapshot!(
+        r#"
+import "go:os"
+
+fn main() {
+  let _ = os.Chmod("/tmp/foo", 644)
+}
+"#
+    );
+}
+
+#[test]
+fn decimal_file_mode_mkdir_all() {
+    assert_lint_snapshot!(
+        r#"
+import "go:os"
+
+fn main() {
+  let _ = os.MkdirAll("/tmp/foo", 1000)
+}
+"#
+    );
+}
+
+#[test]
+fn decimal_file_mode_octal_prefix_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+fn main() {
+  let _ = os.Chmod("/tmp/foo", 0o755)
+}
+"#
+    );
+}
+
+#[test]
+fn decimal_file_mode_legacy_octal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+fn main() {
+  let _ = os.Chmod("/tmp/foo", 0755)
+}
+"#
+    );
+}
+
+#[test]
+fn decimal_file_mode_below_perm_mask_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:os"
+
+fn main() {
+  let _ = os.Chmod("/tmp/foo", 420)
+}
+"#
+    );
+}
+
+#[test]
+fn decimal_file_mode_non_file_mode_position_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let _ = 1000
+}
+"#
+    );
+}
