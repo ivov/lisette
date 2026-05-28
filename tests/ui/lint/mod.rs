@@ -5352,3 +5352,115 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn json_non_serializable_channel_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Job {
+  id: int,
+  ch: Channel<int>,
+}
+"#
+    );
+}
+
+#[test]
+fn json_non_serializable_function_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Task {
+  handler: fn(int) -> int,
+}
+"#
+    );
+}
+
+#[test]
+fn json_non_serializable_sender_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Pipe {
+  tx: Sender<int>,
+}
+"#
+    );
+}
+
+#[test]
+fn json_non_serializable_receiver_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub struct Pipe {
+  rx: Receiver<int>,
+}
+"#
+    );
+}
+
+#[test]
+fn json_non_serializable_enum_tuple_payload() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub enum Event {
+  Tick,
+  Data(Channel<int>),
+}
+"#
+    );
+}
+
+#[test]
+fn json_non_serializable_enum_struct_field() {
+    assert_lint_snapshot!(
+        r#"
+#[json]
+pub enum Event {
+  Run { cb: fn() -> int },
+}
+"#
+    );
+}
+
+#[test]
+fn json_skipped_channel_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+#[json]
+pub struct Job {
+  #[json(skip)]
+  ch: Channel<int>,
+  id: int,
+}
+"#
+    );
+}
+
+#[test]
+fn json_serializable_struct_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+#[json]
+pub struct Job {
+  id: int,
+  name: string,
+}
+"#
+    );
+}
+
+#[test]
+fn non_json_channel_field_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub struct Job {
+  ch: Channel<int>,
+}
+"#
+    );
+}

@@ -387,6 +387,18 @@ pub fn json_method_override(method_name: &str, span: Span) -> LisetteDiagnostic 
         )
 }
 
+pub fn json_non_serializable_field(span: &Span, kind: &str, skippable: bool) -> LisetteDiagnostic {
+    let fix = if skippable {
+        " Drop the field, or exclude it with `#[json(skip)]`."
+    } else {
+        " Remove it from the variant."
+    };
+    LisetteDiagnostic::error("Non-serializable field in a `#[json]` type")
+        .with_infer_code("json_non_serializable_field")
+        .with_span_label(span, format!("a {kind} cannot be JSON-encoded"))
+        .with_help(format!("Go's `encoding/json` cannot marshal {kind}s.{fix}"))
+}
+
 pub fn disallowed_mutation(
     variable_name: &str,
     span: Span,

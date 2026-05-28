@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Non-serializable field in a `#[json]` type
+   ╭─[test.lis:4:12]
+ 3 │ pub struct Task {
+ 4 │   handler: fn(int) -> int,
+   ·            ───────┬──────
+   ·                   ╰── a function cannot be JSON-encoded
+ 5 │ }
+   ╰────
+  help: Go's `encoding/json` cannot marshal functions. Drop the field, or exclude it with `#[json(skip)]` · code: [infer.json_non_serializable_field]

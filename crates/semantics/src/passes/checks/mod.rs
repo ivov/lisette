@@ -9,6 +9,7 @@ pub(crate) mod generics;
 pub(crate) mod index_out_of_bounds;
 pub(crate) mod irrefutable_patterns;
 pub(crate) mod json_methods;
+pub(crate) mod json_serializable_fields;
 pub(crate) mod nan_comparison;
 pub(crate) mod native_value_usage;
 pub(crate) mod newtype;
@@ -111,6 +112,7 @@ fn run_file_checks(
     empty_select_default::run(&file.items, sink);
     decimal_file_mode::run(&file.items, sink);
     index_out_of_bounds::run(&file.items, sink);
+    json_serializable_fields::run(&file.items, sink);
     oversized_shift::run(&file.items, sink);
     repeated_if_condition::run(&file.items, sink);
     temp_producing::run(&file.items, sink);

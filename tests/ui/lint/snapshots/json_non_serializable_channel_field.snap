@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Non-serializable field in a `#[json]` type
+   ╭─[test.lis:5:7]
+ 4 │   id: int,
+ 5 │   ch: Channel<int>,
+   ·       ──────┬─────
+   ·             ╰── a channel cannot be JSON-encoded
+ 6 │ }
+   ╰────
+  help: Go's `encoding/json` cannot marshal channels. Drop the field, or exclude it with `#[json(skip)]` · code: [infer.json_non_serializable_field]
