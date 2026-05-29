@@ -48,73 +48,10 @@ impl TaskState<'_> {
             }
         }
 
-        if let Some(root) = expression.root_identifier()
-            && let Some(qualified_root) = self.lookup_qualified_name(store, root)
-            && let Some(base) = expression.as_dotted_path()
+        if let Some(resolved) =
+            self.resolve_qualified_path(store, &expression, &member, span, expected_ty)
         {
-            let path = format!("{}.{}", base, member);
-            if self.lookup_type(store, &path).is_some() {
-                self.track_name_usage(store, &qualified_root, &span, root.len() as u32);
-                return self.infer_expression(
-                    store,
-                    Expression::Identifier {
-                        value: path.into(),
-                        ty: Type::uninferred(),
-                        span,
-                        binding_id: None,
-                        qualified: None,
-                    },
-                    expected_ty,
-                );
-            }
-
-            let alias_target = store
-                .get_definition(&qualified_root)
-                .and_then(|definition| {
-                    if let DefinitionBody::TypeAlias { .. } = &definition.body {
-                        let underlying = definition.ty.unwrap_forall();
-                        match underlying {
-                            Type::Nominal { id, params, .. }
-                                if params.is_empty() && id.as_str() != qualified_root.as_str() =>
-                            {
-                                return Some(id.to_string());
-                            }
-                            Type::Simple(kind) => {
-                                return Some(format!("prelude.{}", kind.leaf_name()));
-                            }
-                            Type::Compound { kind, args } if args.is_empty() => {
-                                return Some(format!("prelude.{}", kind.leaf_name()));
-                            }
-                            _ => {}
-                        }
-                    }
-                    None
-                });
-
-            if let Some(resolved_id) = alias_target {
-                let mut paths = Vec::with_capacity(2);
-                let short_name = unqualified_name(&resolved_id);
-                if short_name != resolved_id {
-                    paths.push(format!("{}.{}", short_name, member));
-                }
-                paths.push(format!("{}.{}", resolved_id, member));
-
-                for path in paths {
-                    if self.lookup_type(store, &path).is_some() {
-                        return self.infer_expression(
-                            store,
-                            Expression::Identifier {
-                                value: path.into(),
-                                ty: Type::uninferred(),
-                                span,
-                                binding_id: None,
-                                qualified: None,
-                            },
-                            expected_ty,
-                        );
-                    }
-                }
-            }
+            return resolved;
         }
 
         if let Some(root) = expression.root_identifier()
@@ -157,6 +94,84 @@ impl TaskState<'_> {
         }
 
         self.infer_dot_access(store, expression, member, span, expected_ty)
+    }
+
+    fn resolve_qualified_path(
+        &mut self,
+        store: &Store,
+        expression: &Expression,
+        member: &EcoString,
+        span: Span,
+        expected_ty: &Type,
+    ) -> Option<Expression> {
+        let root = expression.root_identifier()?;
+        let qualified_root = self.lookup_qualified_name(store, root)?;
+        let base = expression.as_dotted_path()?;
+
+        let direct = format!("{}.{}", base, member);
+        let path = if self.lookup_type(store, &direct).is_some() {
+            self.track_name_usage(store, &qualified_root, &span, root.len() as u32);
+            direct
+        } else {
+            let resolved_id = self.nongeneric_alias_target(store, &qualified_root)?;
+            if self.alias_member_is_enum_variant(store, &resolved_id, member) {
+                return None;
+            }
+            let short_name = unqualified_name(&resolved_id);
+            let mut candidates = Vec::with_capacity(2);
+            if short_name != resolved_id {
+                candidates.push(format!("{}.{}", short_name, member));
+            }
+            candidates.push(format!("{}.{}", resolved_id, member));
+            candidates
+                .into_iter()
+                .find(|candidate| self.lookup_type(store, candidate).is_some())?
+        };
+
+        Some(self.infer_expression(
+            store,
+            Expression::Identifier {
+                value: path.into(),
+                ty: Type::uninferred(),
+                span,
+                binding_id: None,
+                qualified: None,
+            },
+            expected_ty,
+        ))
+    }
+
+    fn nongeneric_alias_target(&self, store: &Store, qualified_root: &str) -> Option<String> {
+        let definition = store.get_definition(qualified_root)?;
+        let DefinitionBody::TypeAlias { .. } = &definition.body else {
+            return None;
+        };
+        match definition.ty.unwrap_forall() {
+            Type::Nominal { id, params, .. }
+                if params.is_empty() && id.as_str() != qualified_root =>
+            {
+                Some(id.to_string())
+            }
+            Type::Simple(kind) => Some(format!("prelude.{}", kind.leaf_name())),
+            Type::Compound { kind, args } if args.is_empty() => {
+                Some(format!("prelude.{}", kind.leaf_name()))
+            }
+            _ => None,
+        }
+    }
+
+    fn alias_member_is_enum_variant(&self, store: &Store, type_id: &str, member: &str) -> bool {
+        store
+            .get_definition(type_id)
+            .is_some_and(|definition| match &definition.body {
+                DefinitionBody::Enum { variants, .. } => {
+                    variants.iter().any(|variant| variant.name == member)
+                }
+                DefinitionBody::ValueEnum { variants, .. } => {
+                    variants.iter().any(|variant| variant.name == member)
+                }
+                _ => false,
+            })
     }
 }
 
@@ -895,15 +910,9 @@ impl TaskState<'_> {
 
         if let DefinitionBody::ValueEnum { methods, .. } = &definition.body
             && methods.contains_key(args.member_name)
+            && !self.is_type_level_receiver(store, args.expression)
         {
-            let is_type_access = matches!(
-                args.expression,
-                Expression::DotAccess { expression, .. }
-                    if expression.get_type().resolve_in(&self.env).as_import_namespace().is_some()
-            );
-            if !is_type_access {
-                return None;
-            }
+            return None;
         }
 
         let variant_qualified_name = id.with_segment(args.member_name);

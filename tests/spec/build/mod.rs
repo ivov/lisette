@@ -1233,6 +1233,62 @@ fn main() {
 }
 
 #[test]
+fn entry_module_type_alias_cross_module_enum_variant() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "palette",
+        "mod.lis",
+        r#"
+pub enum Color {
+  RGB,
+  Named(string),
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "palette"
+
+type LocalColor = palette.Color
+
+fn main() {
+  let _ = LocalColor.RGB
+  let _ = LocalColor.Named("teal")
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn entry_module_type_alias_value_enum_variant_method_collision() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "go:fmt"
+import "go:reflect"
+
+type K = reflect.Kind
+
+fn main() {
+  fmt.Println(K.String)
+  fmt.Println(K.Int)
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn multimodule_enum_static_method() {
     let mut fs = MockFileSystem::new();
 

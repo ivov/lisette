@@ -1,0 +1,51 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/palette"
+
+type LocalColor = palette.Color
+
+func main() {
+	_ = palette.MakeColorRGB()
+	_ = palette.MakeColorNamed("teal")
+}
+
+
+// === palette/mod.go ===
+package palette
+
+import "fmt"
+
+func MakeColorRGB() Color {
+	return Color{Tag: ColorRGB}
+}
+
+func MakeColorNamed(arg0 string) Color {
+	return Color{Tag: ColorNamed, Named: arg0}
+}
+
+type ColorTag int
+
+const (
+	ColorRGB ColorTag = iota
+	ColorNamed
+)
+
+type Color struct {
+	Tag   ColorTag
+	Named string
+}
+
+func (c Color) String() string {
+	switch c.Tag {
+	case ColorRGB:
+		return "Color.RGB"
+	case ColorNamed:
+		return fmt.Sprintf("Color.Named(%v)", c.Named)
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}

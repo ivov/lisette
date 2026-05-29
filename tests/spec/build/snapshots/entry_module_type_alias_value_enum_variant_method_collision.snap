@@ -1,0 +1,17 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"reflect"
+)
+
+type K = reflect.Kind
+
+func main() {
+	fmt.Println(reflect.String)
+	fmt.Println(reflect.Int)
+}
