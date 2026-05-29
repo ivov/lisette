@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Needless `return`
+   ╭─[test.lis:4:3]
+ 3 │   let x = n * 2
+ 4 │   return x
+   ·   ────┬───
+   ·       ╰── redundant in tail position
+ 5 │ }
+   ╰────
+  help: The final expression of a function is its return value. Drop `return` and keep the value · code: [lint.needless_return]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Needless `return`
+   ╭─[test.lis:4:10]
+ 3 │   match n {
+ 4 │     0 => return "zero",
+   ·          ──────┬──────
+   ·                ╰── redundant in tail position
+ 5 │     _ => return "other",
+   ╰────
+  help: The final expression of a function is its return value. Drop `return` and keep the value · code: [lint.needless_return]

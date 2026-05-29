@@ -10,6 +10,7 @@ mod identical_if_branches;
 mod invisible_in_string;
 mod match_literal_collection;
 mod naming;
+mod needless_return;
 mod replaceable_with_zero_fill;
 mod rest_only_slice_pattern;
 mod self_assignment;
@@ -33,6 +34,7 @@ pub use invisible_in_string::{
 };
 pub use match_literal_collection::check_match_literal_collection;
 pub use naming::{check_expression_naming, check_pattern_naming};
+pub use needless_return::check_needless_return;
 pub use replaceable_with_zero_fill::check_replaceable_with_zero_fill;
 pub use rest_only_slice_pattern::check_rest_only_slice_pattern;
 pub use self_assignment::check_self_assignment;

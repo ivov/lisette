@@ -667,6 +667,163 @@ fn main() {
 }
 
 #[test]
+fn needless_return_simple() {
+    assert_lint_snapshot!(
+        r#"
+fn five() -> int {
+  return 5
+}
+
+fn main() {
+  let _ = five()
+}
+"#
+    );
+}
+
+#[test]
+fn needless_return_after_statements() {
+    assert_lint_snapshot!(
+        r#"
+fn doubled(n: int) -> int {
+  let x = n * 2
+  return x
+}
+
+fn main() {
+  let _ = doubled(3)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_return_if_else_branches() {
+    assert_lint_snapshot!(
+        r#"
+fn sign(n: int) -> int {
+  if n > 0 {
+    return 1
+  } else {
+    return 2
+  }
+}
+
+fn main() {
+  let _ = sign(3)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_return_match_arms() {
+    assert_lint_snapshot!(
+        r#"
+fn label(n: int) -> string {
+  match n {
+    0 => return "zero",
+    _ => return "other",
+  }
+}
+
+fn main() {
+  let _ = label(0)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_return_early_return_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn clamp(n: int) -> int {
+  if n > 0 {
+    return 1
+  }
+  n + 1
+}
+
+fn main() {
+  let _ = clamp(1)
+}
+"#
+    );
+}
+
+#[test]
+fn needless_return_in_loop_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn first_positive(xs: Slice<int>) -> int {
+  for x in xs {
+    if x > 0 {
+      return x
+    }
+  }
+  0
+}
+
+fn main() {
+  let _ = first_positive([1])
+}
+"#
+    );
+}
+
+#[test]
+fn needless_return_bare_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn greet() {
+  return
+}
+
+fn main() {
+  greet()
+}
+"#
+    );
+}
+
+#[test]
+fn needless_return_let_else_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn unwrap_or_zero(x: Option<int>) -> int {
+  let Some(v) = x else {
+    return 0
+  }
+  v
+}
+
+fn main() {
+  let _ = unwrap_or_zero(Some(3))
+}
+"#
+    );
+}
+
+#[test]
+fn needless_return_in_lambda_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn apply() -> int {
+  let f = || {
+    return 1
+  }
+  f()
+}
+
+fn main() {
+  let _ = apply()
+}
+"#
+    );
+}
+
+#[test]
 fn nan_comparison_equal() {
     assert_lint_snapshot!(
         r#"
@@ -1742,8 +1899,8 @@ pub fn foo() -> int {
 fn no_dead_code_when_return_is_last() {
     assert_no_lint_warnings!(
         r#"
-pub fn foo() -> int {
-  return 42
+pub fn foo() {
+  return
 }
 "#
     );
@@ -1826,11 +1983,11 @@ pub fn foo() -> int {
 fn no_dead_code_when_only_one_branch_returns() {
     assert_no_lint_warnings!(
         r#"
-pub fn foo() -> int {
+pub fn foo() {
   if true {
-    return 1
+    return
   } else {
-    2
+    ()
   }
 }
 "#
@@ -1857,10 +2014,10 @@ pub fn foo(x: int) -> int {
 fn no_dead_code_when_not_all_match_arms_diverge() {
     assert_no_lint_warnings!(
         r#"
-pub fn foo(x: int) -> int {
+pub fn foo(x: int) {
   match x {
-    0 => return 0,
-    _ => 1,
+    0 => { return },
+    _ => (),
   }
 }
 "#
@@ -5315,7 +5472,7 @@ fn dup_arg_calls_with_side_effects_no_warning() {
 import "go:math"
 
 fn next() -> float64 {
-  return 1.0
+  1.0
 }
 
 fn main() {

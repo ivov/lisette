@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Needless `return`
+   ╭─[test.lis:3:3]
+ 2 │ fn five() -> int {
+ 3 │   return 5
+   ·   ────┬───
+   ·       ╰── redundant in tail position
+ 4 │ }
+   ╰────
+  help: The final expression of a function is its return value. Drop `return` and keep the value · code: [lint.needless_return]

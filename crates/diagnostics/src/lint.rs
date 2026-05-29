@@ -298,6 +298,13 @@ pub fn bool_literal_comparison(span: &Span, replacement: &str) -> LisetteDiagnos
         .with_help(format!("Simplify to `{replacement}`"))
 }
 
+pub fn needless_return(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Needless `return`")
+        .with_lint_code("needless_return")
+        .with_span_label(span, "redundant in tail position")
+        .with_help("The final expression of a function is its return value. Drop `return` and keep the value")
+}
+
 pub fn identical_if_branches(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Identical if-else branches")
         .with_lint_code("identical_if_branches")

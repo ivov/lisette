@@ -1,0 +1,52 @@
+use diagnostics::LisetteDiagnostic;
+use syntax::ast::Expression;
+
+pub fn check_needless_return(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+    let Expression::Function { body, .. } = expression else {
+        return;
+    };
+
+    flag_tail_returns(body, diagnostics);
+}
+
+/// Flag a `return <value>` sitting in tail position, where the value is what
+/// the surrounding block yields anyway.
+fn flag_tail_returns(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+    match expression {
+        Expression::Return {
+            expression: value,
+            span,
+            ..
+        } => {
+            // Bare `return` is excluded: dropping it can change the block's
+            // type when a preceding statement is non-unit.
+            if !matches!(value.as_ref(), Expression::Unit { .. }) {
+                diagnostics.push(diagnostics::lint::needless_return(span));
+            }
+        }
+        Expression::Block { items, .. } => {
+            if let Some(last) = items.last() {
+                flag_tail_returns(last, diagnostics);
+            }
+        }
+        Expression::If {
+            consequence,
+            alternative,
+            ..
+        }
+        | Expression::IfLet {
+            consequence,
+            alternative,
+            ..
+        } => {
+            flag_tail_returns(consequence, diagnostics);
+            flag_tail_returns(alternative, diagnostics);
+        }
+        Expression::Match { arms, .. } => {
+            for arm in arms {
+                flag_tail_returns(&arm.expression, diagnostics);
+            }
+        }
+        _ => {}
+    }
+}
