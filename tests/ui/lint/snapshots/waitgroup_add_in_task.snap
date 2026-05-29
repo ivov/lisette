@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] `WaitGroup.Add` inside a `task`
+   ╭─[test.lis:7:5]
+ 6 │   task {
+ 7 │     wg.Add(1)
+   ·     ────┬────
+   ·         ╰── may run after `Wait`
+ 8 │     wg.Done()
+   ╰────
+  help: If `Wait` runs before this `Add`, it sees a zero counter and returns immediately. Call `Add` before the `task` · code: [lint.waitgroup_add_in_task]

@@ -547,3 +547,12 @@ pub fn duplicate_arguments(span: &Span, module: &str, function: &str) -> Lisette
             "Passing the same value twice to `{display_module}.{function}` makes this call a no-op. Did you mean to pass different values?"
         ))
 }
+
+pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("`WaitGroup.Add` inside a `task`")
+        .with_lint_code("waitgroup_add_in_task")
+        .with_span_label(span, "may run after `Wait`")
+        .with_help(
+            "If `Wait` runs before this `Add`, it sees a zero counter and returns immediately. Call `Add` before the `task`",
+        )
+}

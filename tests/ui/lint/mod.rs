@@ -5776,3 +5776,92 @@ pub struct Job {
 "#
     );
 }
+
+#[test]
+fn waitgroup_add_in_task() {
+    assert_lint_snapshot!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let mut wg = sync.WaitGroup {}
+  task {
+    wg.Add(1)
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn waitgroup_add_before_task_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let mut wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    wg.Done()
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn waitgroup_add_in_task_not_waited_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let mut wg = sync.WaitGroup {}
+  task {
+    wg.Add(1)
+    wg.Done()
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn waitgroup_negative_add_in_task_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let mut wg = sync.WaitGroup {}
+  wg.Add(1)
+  task {
+    wg.Add(-1)
+  }
+  wg.Wait()
+}
+"#
+    );
+}
+
+#[test]
+fn waitgroup_distinct_groups_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+import "go:sync"
+
+fn main() {
+  let mut wg1 = sync.WaitGroup {}
+  let mut wg2 = sync.WaitGroup {}
+  task {
+    wg1.Add(1)
+  }
+  wg2.Wait()
+}
+"#
+    );
+}

@@ -21,6 +21,7 @@ mod uninterpolated_fstring;
 mod unnecessary_raw_string;
 mod unsigned_comparison;
 mod verbose_failure_propagation;
+mod waitgroup_add_in_task;
 
 pub use bool_literal_comparison::check_bool_literal_comparison;
 pub use double_negation::check_double_negation;
@@ -48,3 +49,4 @@ pub use unnecessary_raw_string::{
 };
 pub use unsigned_comparison::check_unsigned_comparison;
 pub use verbose_failure_propagation::check_verbose_failure_propagation;
+pub use waitgroup_add_in_task::check_waitgroup_add_in_task;
