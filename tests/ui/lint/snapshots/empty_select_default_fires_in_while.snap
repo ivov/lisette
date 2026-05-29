@@ -3,7 +3,7 @@ source: tests/ui/lint/mod.rs
 ---
   [error] Empty `select` default arm in a loop
     ╭─[test.lis:10:12]
-  9 │       let Some(v) = ch.receive() => fmt.Println(v),
+  9 │       let Some(v) = ch.receive() => { fmt.Println(v); done = true },
  10 │       _ => {},
     ·            ─┬
     ·             ╰── busy-spins

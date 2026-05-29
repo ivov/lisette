@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [error] Loop condition never changes
+   ╭─[test.lis:4:9]
+ 3 │   let n = 5;
+ 4 │   while n < 10 {
+   ·         ───┬──
+   ·            ╰── never changes
+ 5 │     let _ = n
+   ╰────
+  help: Nothing in the loop body changes this condition, so the loop either never runs or never terminates. Did you forget to update a variable, or mean to `break` out of the loop? · code: [infer.unchanging_loop_condition]
