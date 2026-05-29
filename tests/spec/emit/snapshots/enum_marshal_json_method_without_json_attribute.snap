@@ -1,6 +1,6 @@
 ---
 source: tests/spec/emit/types.rs
-description: "input: \nenum Status {\n  Ready,\n}\n\nimpl Status {\n  fn MarshalJSON(self) -> int {\n    1\n  }\n}\n"
+description: "input: \nenum Status {\n  Ready,\n}\n\nimpl Status {\n  fn MarshalJSON(self) -> Result<Slice<byte>, error> {\n    Ok([])\n  }\n}\n"
 ---
 package main
 
@@ -29,6 +29,6 @@ func (s Status) String() string {
 	}
 }
 
-func (s Status) MarshalJSON() int {
-	return 1
+func (s Status) MarshalJSON() ([]byte, error) {
+	return ([]byte)(nil), nil
 }

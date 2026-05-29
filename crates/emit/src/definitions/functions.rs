@@ -473,7 +473,7 @@ impl Planner<'_> {
                     if let Some(go_name) = self.go_name_for_binding(&param.pattern) {
                         self.declare_param(identifier, go_name)
                     } else {
-                        "_".to_string()
+                        self.scope.bind(identifier.as_str(), "_")
                     }
                 }
                 Pattern::WildCard { .. } => "_".to_string(),

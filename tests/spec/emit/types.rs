@@ -2146,8 +2146,8 @@ enum Status {
 }
 
 impl Status {
-  fn MarshalJSON(self) -> int {
-    1
+  fn MarshalJSON(self) -> Result<Slice<byte>, error> {
+    Ok([])
   }
 }
 "#;

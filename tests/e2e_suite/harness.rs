@@ -232,17 +232,19 @@ pub fn write_subpackage(
     target_dir: &Path,
     name: &str,
     go_code: &str,
-    entry: EntryPoint,
+    entry: Option<EntryPoint>,
 ) -> std::io::Result<()> {
     let pkg_dir = target_dir.join(format!("test_{name}"));
     fs::create_dir_all(&pkg_dir)?;
     fs::write(pkg_dir.join("test.go"), go_code)?;
 
-    let entry_name = entry.as_go_name();
-    let runner = format!(
-        "package test_{name}\n\nimport \"testing\"\n\nfunc TestRun(t *testing.T) {{\n\tdefer func() {{\n\t\tif r := recover(); r != nil {{\n\t\t\tt.Fatalf(\"panic: %v\", r)\n\t\t}}\n\t}}()\n\t{entry_name}()\n}}\n"
-    );
-    fs::write(pkg_dir.join("test_test.go"), runner)?;
+    if let Some(entry) = entry {
+        let entry_name = entry.as_go_name();
+        let runner = format!(
+            "package test_{name}\n\nimport \"testing\"\n\nfunc TestRun(t *testing.T) {{\n\tdefer func() {{\n\t\tif r := recover(); r != nil {{\n\t\t\tt.Fatalf(\"panic: %v\", r)\n\t\t}}\n\t}}()\n\t{entry_name}()\n}}\n"
+        );
+        fs::write(pkg_dir.join("test_test.go"), runner)?;
+    }
     Ok(())
 }
 

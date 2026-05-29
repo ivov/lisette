@@ -5,5 +5,5 @@ description: "input: \nfn process(mut items: Slice<int>) {\n  items = [1, 2, 3]\
 package main
 
 func process(_ []int) {
-	items = []int{1, 2, 3}
+	_ = []int{1, 2, 3}
 }

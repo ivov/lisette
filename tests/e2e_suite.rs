@@ -41,7 +41,7 @@ fn e2e_suite() {
     let mut emit_failures = Vec::new();
     let mut skipped_imports = Vec::new();
     let mut skipped_denylist = Vec::new();
-    let mut skipped_no_entry = Vec::new();
+    let mut build_only = Vec::new();
     let mut included = Vec::new();
 
     for HarvestedTest {
@@ -67,21 +67,21 @@ fn e2e_suite() {
         };
         let EmittedTest { go_code, entry } = result;
 
-        let Some(entry) = entry else {
-            skipped_no_entry.push(name.clone());
-            continue;
-        };
         write_subpackage(&target, name, &go_code, entry).expect("write subpackage");
-        included.push(name.clone());
+        if entry.is_some() {
+            included.push(name.clone());
+        } else {
+            build_only.push(name.clone());
+        }
     }
 
     eprintln!(
-        "harvested {}, included {}, skipped {} (imports), {} (deny-list), {} (no entry), {} re-emit failures",
+        "harvested {}, included {} (run), {} (build-only), skipped {} (imports), {} (deny-list), {} re-emit failures",
         harvested.len(),
         included.len(),
+        build_only.len(),
         skipped_imports.len(),
         skipped_denylist.len(),
-        skipped_no_entry.len(),
         emit_failures.len(),
     );
 
