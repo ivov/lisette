@@ -1,6 +1,7 @@
 alias b := build
 alias c := check
 alias t := test
+alias tu := test-unit
 alias tr := test-review
 alias ta := test-accept
 alias te := test-e2e-smoke
@@ -20,6 +21,9 @@ build-debug:
 test:
     cargo test -p tests --test suite
     cargo test -p lisette-lsp --test lsp
+
+test-unit:
+    cargo test --workspace --lib --bins
 
 test-infer:
     cargo test -p tests --test suite infer_tests
@@ -61,7 +65,7 @@ lintfix:
 run file:
     cargo run -p lisette -- {{file}}
 
-check: format-check test lint
+check: format-check test test-unit lint
 
 perf-flamegraph:
     cargo build --profile flamegraph -p lisette

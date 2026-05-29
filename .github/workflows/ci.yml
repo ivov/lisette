@@ -95,6 +95,7 @@ jobs:
         with:
           go: 'true'
       - run: cargo test -p tests --test suite --locked -- --format terse
+      - run: cargo test --workspace --lib --bins --locked -- --format terse
 
   lsp-test:
     name: LSP tests
