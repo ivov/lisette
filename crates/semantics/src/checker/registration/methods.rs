@@ -204,7 +204,13 @@ impl TaskState<'_> {
                 Visibility::Private
             };
             let fn_sig = function.to_function_signature();
-            let mut fn_ty = self.extract_function_signature(&*store, &fn_sig, span);
+            let mut fn_ty = self.extract_signature_parts(
+                &*store,
+                &fn_sig.generics,
+                &fn_sig.params,
+                &fn_sig.annotation,
+                span,
+            );
             let qualified_name = format!("{}.{}", type_name, fn_sig.name);
             let module_qualified_name = Symbol::from_parts(&module_id, &qualified_name);
             let is_instance_method = fn_sig.params.first().is_some_and(|p| {
@@ -318,7 +324,13 @@ impl TaskState<'_> {
                     &[]
                 };
                 let method_sig = fe.to_function_signature();
-                let fn_ty = self.extract_function_signature(&*store, &method_sig, span);
+                let fn_ty = self.extract_signature_parts(
+                    &*store,
+                    &method_sig.generics,
+                    &method_sig.params,
+                    &method_sig.annotation,
+                    span,
+                );
                 let fn_ty = match &fn_ty {
                     Type::Forall { body, .. } => body.as_ref().clone(),
                     _ => fn_ty,

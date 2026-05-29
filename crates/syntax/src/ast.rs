@@ -3,6 +3,106 @@ use ecow::EcoString;
 use crate::program::{CallKind, DotAccessKind, ReceiverCoercion};
 use crate::types::Type;
 
+const CHILDREN_INLINE_CAP: usize = 4;
+
+pub struct Children<'a> {
+    inline: [Option<&'a Expression>; CHILDREN_INLINE_CAP],
+    inline_len: usize,
+    heap: Vec<&'a Expression>,
+}
+
+impl<'a> Children<'a> {
+    pub fn new() -> Self {
+        Children {
+            inline: [None; CHILDREN_INLINE_CAP],
+            inline_len: 0,
+            heap: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, expression: &'a Expression) {
+        if self.heap.is_empty() && self.inline_len < CHILDREN_INLINE_CAP {
+            self.inline[self.inline_len] = Some(expression);
+            self.inline_len += 1;
+        } else {
+            self.heap.push(expression);
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &'a Expression> + '_ {
+        self.inline[..self.inline_len]
+            .iter()
+            .filter_map(|slot| *slot)
+            .chain(self.heap.iter().copied())
+    }
+}
+
+impl Default for Children<'_> {
+    fn default() -> Self {
+        Children::new()
+    }
+}
+
+impl<'a> Extend<&'a Expression> for Children<'a> {
+    fn extend<T: IntoIterator<Item = &'a Expression>>(&mut self, iter: T) {
+        for expression in iter {
+            self.push(expression);
+        }
+    }
+}
+
+impl<'a> FromIterator<&'a Expression> for Children<'a> {
+    fn from_iter<T: IntoIterator<Item = &'a Expression>>(iter: T) -> Self {
+        let mut children = Children::new();
+        children.extend(iter);
+        children
+    }
+}
+
+pub struct ChildrenIntoIter<'a> {
+    inline: [Option<&'a Expression>; CHILDREN_INLINE_CAP],
+    pos: usize,
+    inline_len: usize,
+    heap: std::vec::IntoIter<&'a Expression>,
+}
+
+impl<'a> Iterator for ChildrenIntoIter<'a> {
+    type Item = &'a Expression;
+
+    fn next(&mut self) -> Option<&'a Expression> {
+        if self.pos < self.inline_len {
+            let item = self.inline[self.pos];
+            self.pos += 1;
+            item
+        } else {
+            self.heap.next()
+        }
+    }
+}
+
+impl<'a> IntoIterator for Children<'a> {
+    type Item = &'a Expression;
+    type IntoIter = ChildrenIntoIter<'a>;
+
+    fn into_iter(self) -> ChildrenIntoIter<'a> {
+        ChildrenIntoIter {
+            inline: self.inline,
+            pos: 0,
+            inline_len: self.inline_len,
+            heap: self.heap.into_iter(),
+        }
+    }
+}
+
+macro_rules! children {
+    () => { Children::new() };
+    ($($expression:expr),+ $(,)?) => {{
+        let mut __children = Children::new();
+        $( __children.push($expression); )+
+        __children
+    }};
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeadCodeCause {
     Return,
@@ -1285,7 +1385,7 @@ impl Expression {
     ///
     /// This is the single source of truth for expression tree recursion. Use this
     /// instead of writing per-variant match arms when you need to walk an expression tree.
-    pub fn children(&self) -> Vec<&Expression> {
+    pub fn children(&self) -> Children<'_> {
         match self {
             Expression::Literal { literal, .. } => match literal {
                 Literal::Slice(elements) => elements.iter().collect(),
@@ -1296,28 +1396,28 @@ impl Expression {
                         FormatStringPart::Text(_) => None,
                     })
                     .collect(),
-                _ => vec![],
+                _ => Children::new(),
             },
-            Expression::Function { body, .. } => vec![body],
-            Expression::Lambda { body, .. } => vec![body],
+            Expression::Function { body, .. } => children![body],
+            Expression::Lambda { body, .. } => children![body],
             Expression::Block { items, .. } => items.iter().collect(),
             Expression::Let {
                 value, else_block, ..
             } => {
-                let mut c = vec![value.as_ref()];
+                let mut c = children![value.as_ref()];
                 if let Some(eb) = else_block {
                     c.push(eb);
                 }
                 c
             }
-            Expression::Identifier { .. } => vec![],
+            Expression::Identifier { .. } => Children::new(),
             Expression::Call {
                 expression,
                 args,
                 spread,
                 ..
             } => {
-                let mut c = vec![expression.as_ref()];
+                let mut c = children![expression.as_ref()];
                 c.extend(args);
                 if let Some(s) = spread.as_ref() {
                     c.push(s);
@@ -1329,15 +1429,15 @@ impl Expression {
                 consequence,
                 alternative,
                 ..
-            } => vec![condition, consequence, alternative],
+            } => children![condition, consequence, alternative],
             Expression::IfLet {
                 scrutinee,
                 consequence,
                 alternative,
                 ..
-            } => vec![scrutinee, consequence, alternative],
+            } => children![scrutinee, consequence, alternative],
             Expression::Match { subject, arms, .. } => {
-                let mut c = vec![subject.as_ref()];
+                let mut c = children![subject.as_ref()];
                 for arm in arms {
                     if let Some(guard) = &arm.guard {
                         c.push(guard);
@@ -1352,44 +1452,44 @@ impl Expression {
                 spread,
                 ..
             } => {
-                let mut c: Vec<&Expression> =
-                    field_assignments.iter().map(|f| f.value.as_ref()).collect();
+                let mut c: Children = field_assignments.iter().map(|f| f.value.as_ref()).collect();
                 if let Some(s) = spread.as_expression() {
                     c.push(s);
                 }
                 c
             }
-            Expression::DotAccess { expression, .. } => vec![expression],
-            Expression::Assignment { target, value, .. } => vec![target, value],
-            Expression::Return { expression, .. } => vec![expression],
-            Expression::Propagate { expression, .. } => vec![expression],
+            Expression::DotAccess { expression, .. } => children![expression],
+            Expression::Assignment { target, value, .. } => children![target, value],
+            Expression::Return { expression, .. } => children![expression],
+            Expression::Propagate { expression, .. } => children![expression],
             Expression::TryBlock { items, .. } | Expression::RecoverBlock { items, .. } => {
                 items.iter().collect()
             }
             Expression::ImplBlock { methods, .. } => methods.iter().collect(),
-            Expression::Binary { left, right, .. } => vec![left, right],
-            Expression::Unary { expression, .. } => vec![expression],
-            Expression::Paren { expression, .. } => vec![expression],
-            Expression::Const { expression, .. } => vec![expression],
-            Expression::Loop { body, .. } => vec![body],
+            Expression::Binary { left, right, .. } => children![left, right],
+            Expression::Unary { expression, .. } => children![expression],
+            Expression::Paren { expression, .. } => children![expression],
+            Expression::Const { expression, .. } => children![expression],
+            Expression::Loop { body, .. } => children![body],
             Expression::While {
                 condition, body, ..
-            } => vec![condition, body],
+            } => children![condition, body],
             Expression::WhileLet {
                 scrutinee, body, ..
-            } => vec![scrutinee, body],
-            Expression::For { iterable, body, .. } => vec![iterable, body],
-            Expression::Break { value, .. } => {
-                value.as_ref().map(|v| vec![v.as_ref()]).unwrap_or_default()
-            }
-            Expression::Reference { expression, .. } => vec![expression],
+            } => children![scrutinee, body],
+            Expression::For { iterable, body, .. } => children![iterable, body],
+            Expression::Break { value, .. } => value
+                .as_ref()
+                .map(|v| children![v.as_ref()])
+                .unwrap_or_default(),
+            Expression::Reference { expression, .. } => children![expression],
             Expression::IndexedAccess {
                 expression, index, ..
-            } => vec![expression, index],
-            Expression::Task { expression, .. } => vec![expression],
-            Expression::Defer { expression, .. } => vec![expression],
+            } => children![expression, index],
+            Expression::Task { expression, .. } => children![expression],
+            Expression::Defer { expression, .. } => children![expression],
             Expression::Select { arms, .. } => {
-                let mut c = vec![];
+                let mut c = Children::new();
                 for arm in arms {
                     match &arm.pattern {
                         SelectArmPattern::Receive {
@@ -1427,7 +1527,7 @@ impl Expression {
                 c
             }
             Expression::Range { start, end, .. } => {
-                let mut c = vec![];
+                let mut c = Children::new();
                 if let Some(s) = start {
                     c.push(s.as_ref());
                 }
@@ -1436,7 +1536,7 @@ impl Expression {
                 }
                 c
             }
-            Expression::Cast { expression, .. } => vec![expression],
+            Expression::Cast { expression, .. } => children![expression],
             Expression::Interface {
                 method_signatures, ..
             } => method_signatures.iter().collect(),
@@ -1449,7 +1549,7 @@ impl Expression {
             | Expression::VariableDeclaration { .. }
             | Expression::ModuleImport { .. }
             | Expression::RawGo { .. }
-            | Expression::NoOp => vec![],
+            | Expression::NoOp => Children::new(),
         }
     }
 

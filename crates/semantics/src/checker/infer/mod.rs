@@ -184,14 +184,20 @@ impl TaskState<'_> {
     }
 
     fn register_block_local_fn(&mut self, store: &Store, item: &Expression) {
-        let Expression::Function { name, span, .. } = item else {
+        let Expression::Function {
+            name,
+            generics,
+            params,
+            return_annotation,
+            span,
+            ..
+        } = item
+        else {
             return;
         };
 
-        let fn_sig = item.to_function_signature();
-
         let before = self.sink.len();
-        let fn_ty = self.extract_function_signature(store, &fn_sig, span);
+        let fn_ty = self.extract_signature_parts(store, generics, params, return_annotation, span);
         self.sink.truncate(before);
 
         let scope = self.scopes.current_mut();

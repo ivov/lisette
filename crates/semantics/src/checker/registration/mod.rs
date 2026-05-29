@@ -9,8 +9,8 @@ use rustc_hash::FxHashMap as HashMap;
 
 use deps::TypedefLocator;
 use syntax::ast::{
-    Annotation, Attribute, AttributeArg, EnumVariant, Expression, FunctionDefinition, Generic,
-    Span, StructKind, Visibility as SyntacticVisibility,
+    Annotation, Attribute, AttributeArg, Binding, EnumVariant, Expression, Generic, Span,
+    StructKind, Visibility as SyntacticVisibility,
 };
 use syntax::program::{Definition, DefinitionBody, File, FileImport, Visibility};
 use syntax::types::{Symbol, Type};
@@ -613,6 +613,8 @@ impl TaskState<'_> {
             name_span,
             attributes,
             generics,
+            params,
+            return_annotation,
             span,
             body,
             visibility: syntactic_visibility,
@@ -628,13 +630,12 @@ impl TaskState<'_> {
                 .push(diagnostics::infer::bodyless_function_outside_typedef(*span));
         }
 
-        let fn_sig = item.to_function_signature();
         let qualified_name = self.qualify_name(name);
 
         self.scopes.push();
         self.put_in_scope(generics);
 
-        let fn_ty = self.extract_function_signature(store, &fn_sig, span);
+        let fn_ty = self.extract_signature_parts(store, generics, params, return_annotation, span);
 
         self.scopes.pop();
 
@@ -838,14 +839,14 @@ impl TaskState<'_> {
         }
     }
 
-    pub(crate) fn extract_function_signature(
+    pub(crate) fn extract_signature_parts(
         &mut self,
         store: &Store,
-        function: &FunctionDefinition,
+        generics: &[Generic],
+        params: &[Binding],
+        return_annotation: &Annotation,
         span: &Span,
     ) -> Type {
-        let generics = &function.generics;
-
         self.scopes.push();
         self.put_in_scope(generics);
 
@@ -875,8 +876,7 @@ impl TaskState<'_> {
 
         let before = self.sink.len();
 
-        let param_types: Vec<Type> = function
-            .params
+        let param_types: Vec<Type> = params
             .iter()
             .map(|binding| {
                 binding
@@ -887,16 +887,16 @@ impl TaskState<'_> {
             })
             .collect();
 
-        let return_ty = match &function.annotation {
+        let return_ty = match return_annotation {
             Annotation::Unknown => self.type_unit(),
-            _ => self.convert_to_type(store, &function.annotation, span),
+            _ => self.convert_to_type(store, return_annotation, span),
         };
 
         self.sink.truncate(before);
 
         self.scopes.pop();
 
-        let param_mutability: Vec<bool> = function.params.iter().map(|b| b.mutable).collect();
+        let param_mutability: Vec<bool> = params.iter().map(|b| b.mutable).collect();
 
         let base_fn_ty = Type::Function {
             params: param_types,
