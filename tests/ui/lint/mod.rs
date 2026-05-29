@@ -1070,6 +1070,62 @@ fn main() {
 }
 
 #[test]
+fn needless_bool_true_false() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = 5;
+  let b = 10;
+  let x = if a > b { true } else { false };
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn needless_bool_false_true() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let a = 5;
+  let b = 10;
+  let x = if a > b { false } else { true };
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn needless_bool_non_bool_branches_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 5;
+  let b = 10;
+  let x = if a > b { 1 } else { 0 };
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
+fn needless_bool_branch_not_literal_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let a = 5;
+  let b = 10;
+  let x = if a > b { true } else { a < b };
+  let _ = x
+}
+"#
+    );
+}
+
+#[test]
 fn repeated_if_condition_simple() {
     assert_lint_snapshot!(
         r#"

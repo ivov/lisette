@@ -312,6 +312,19 @@ pub fn identical_if_branches(span: &Span) -> LisetteDiagnostic {
         .with_help("Remove the `if` and keep a single copy of the branch body")
 }
 
+pub fn needless_bool(span: &Span, consequence_is_true: bool) -> LisetteDiagnostic {
+    let help = if consequence_is_true {
+        "Replace this `if... else` with the condition itself"
+    } else {
+        "Replace this `if... else` with the negated condition"
+    };
+
+    LisetteDiagnostic::warn("Needless boolean if-else")
+        .with_lint_code("needless_bool")
+        .with_span_label(span, "needlessly verbose")
+        .with_help(help)
+}
+
 pub fn empty_match_arm(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Empty match arm")
         .with_lint_code("empty_match_arm")
