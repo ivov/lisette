@@ -37,7 +37,6 @@ impl Planner<'_> {
     /// ADT enum variant dot access (constructor or unit variant).
     pub(crate) fn emit_enum_variant_dot(
         &mut self,
-        expression: &Expression,
         member: &str,
         result_ty: &Type,
         fx: &mut EmitEffects,
@@ -45,13 +44,7 @@ impl Planner<'_> {
         if let Some(s) = self.emit_enum_variant_constructor(member, result_ty, fx) {
             return Some(s);
         }
-        if let Some(s) = self.emit_unit_variant_via_alias(expression, member, result_ty, fx) {
-            return Some(s);
-        }
-        if let Some(s) = self.emit_type_alias_unit_variant(expression, member, result_ty, fx) {
-            return Some(s);
-        }
-        None
+        self.emit_unit_variant_constructor(member, result_ty, fx)
     }
 
     /// Static method dot access (cross-module, alias, or instance-as-value).
@@ -132,9 +125,8 @@ impl Planner<'_> {
         Some(make_fn)
     }
 
-    fn emit_unit_variant_via_alias(
+    fn emit_unit_variant_constructor(
         &mut self,
-        expression: &Expression,
         variant_name: &str,
         result_ty: &Type,
         fx: &mut EmitEffects,
@@ -151,10 +143,6 @@ impl Planner<'_> {
         let enum_module = self.facts.module_for_qualified_name(enum_id)?;
         let is_prelude = enum_module == go_name::PRELUDE_MODULE;
         let is_cross_module = !self.facts.is_current_module(enum_module) && !is_prelude;
-
-        if is_cross_module && !matches!(expression, Expression::Identifier { .. }) {
-            return None;
-        }
 
         let definition = self.facts.definition(enum_id.as_str())?;
         let DefinitionBody::Enum { variants, .. } = &definition.body else {
@@ -182,71 +170,6 @@ impl Planner<'_> {
             Some(format!("{}.{}{}()", pkg, make_fn, type_args))
         } else {
             Some(format!("{}{}()", make_fn, type_args))
-        }
-    }
-
-    /// Unit variant access through a type alias (e.g. `api.UIEvent.Close`
-    /// where `UIEvent = events.EventKind` → `api.UIEvent{Tag: events.EventClose}`).
-    fn emit_type_alias_unit_variant(
-        &mut self,
-        expression: &Expression,
-        variant_name: &str,
-        result_ty: &Type,
-        fx: &mut EmitEffects,
-    ) -> Option<String> {
-        let Type::Nominal {
-            id: enum_id,
-            params,
-            ..
-        } = result_ty
-        else {
-            return None;
-        };
-
-        let definition = self.facts.definition(enum_id.as_str())?;
-        let DefinitionBody::Enum { variants, .. } = &definition.body else {
-            return None;
-        };
-
-        let variant = variants.iter().find(|v| v.name == variant_name)?;
-        if !variant.fields.is_empty() {
-            return None;
-        }
-
-        let Expression::DotAccess {
-            expression: inner_expression,
-            member: type_alias_name,
-            ..
-        } = expression
-        else {
-            return None;
-        };
-
-        let inner_ty = inner_expression.get_type();
-        let alias_module = inner_ty.as_import_namespace()?.to_string();
-        let alias_module = alias_module.as_str();
-
-        let enum_module = self.facts.module_for_qualified_name(enum_id)?.to_string();
-
-        self.require_module_import_fx(&enum_module, fx);
-
-        let type_args = self.format_type_args(params, fx);
-
-        let alias_pkg = self.require_module_import_fx(alias_module, fx);
-        let tag_value = self.resolve_variant(variant_name, enum_id, fx);
-        let literal = format!(
-            "{}.{}{}{{ Tag: {} }}",
-            alias_pkg,
-            go_name::snake_to_camel(type_alias_name),
-            type_args,
-            tag_value
-        );
-        // Wrap generic composite literals in parens so gofmt doesn't
-        // produce invalid Go in comparison/selector contexts.
-        if type_args.is_empty() {
-            Some(literal)
-        } else {
-            Some(format!("({})", literal))
         }
     }
 

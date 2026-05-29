@@ -70,5 +70,5 @@ func main() {
 		Y:   20,
 	}
 	_ = events.MakeEventKeyPress("Enter")
-	_ = api.UIEvent{Tag: events.EventClose}
+	_ = events.MakeEventClose()
 }

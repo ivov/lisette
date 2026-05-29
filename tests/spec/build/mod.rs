@@ -3082,7 +3082,7 @@ fn main() {
 }
 
 #[test]
-fn multimodule_nested_path_enum_struct_literal() {
+fn multimodule_nested_path_enum_construction() {
     let mut fs = MockFileSystem::new();
 
     fs.add_file(

@@ -46,6 +46,6 @@ import (
 )
 
 func main() {
-	c := L.Color{Tag: L.ColorRed}
+	c := L.MakeColorRed()
 	fmt.Println(c)
 }

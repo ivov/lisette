@@ -96,9 +96,7 @@ impl Planner<'_> {
             Some(SemanticDotKind::ValueEnumVariant) => {
                 self.emit_value_enum_variant(expression, member, fx)
             }
-            Some(SemanticDotKind::EnumVariant) => {
-                self.emit_enum_variant_dot(expression, member, result_ty, fx)
-            }
+            Some(SemanticDotKind::EnumVariant) => self.emit_enum_variant_dot(member, result_ty, fx),
             Some(SemanticDotKind::StaticMethod { .. }) => {
                 self.emit_static_method_dot(expression, member, result_ty, ctx, fx)
             }
@@ -114,7 +112,7 @@ impl Planner<'_> {
                 fx,
             ),
             Some(SemanticDotKind::ModuleMember) | None => {
-                if let Some(s) = self.emit_enum_variant_dot(expression, member, result_ty, fx) {
+                if let Some(s) = self.emit_enum_variant_dot(member, result_ty, fx) {
                     Some(s)
                 } else {
                     self.emit_static_method_dot(expression, member, result_ty, ctx, fx)
