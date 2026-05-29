@@ -2201,6 +2201,15 @@ pub fn repeated_if_condition(span: &Span) -> LisetteDiagnostic {
         )
 }
 
+pub fn unchanging_loop_condition(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Loop condition never changes")
+        .with_infer_code("unchanging_loop_condition")
+        .with_span_label(span, "never changes")
+        .with_help(
+            "Nothing in the loop body changes this condition, so the loop either never runs or never terminates. Did you forget to update a variable, or mean to `break` out of the loop?",
+        )
+}
+
 pub fn index_out_of_bounds(span: &Span, index_text: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Index out of bounds")
         .with_infer_code("index_out_of_bounds")

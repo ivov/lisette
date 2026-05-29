@@ -1213,6 +1213,210 @@ fn main() {
 }
 
 #[test]
+fn unchanging_loop_condition_comparison() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let n = 5;
+  while n < 10 {
+    let _ = n
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_negated_flag() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let done = false;
+  while !done {
+    let _ = done
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_mutated_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut i = 0;
+  while i < 10 {
+    i = i + 1
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_partial_mutation_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut a = 0;
+  let b = 5;
+  while a < b {
+    a = a + 1
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_break_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n = 5;
+  while n < 10 {
+    let _ = n
+    break
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_return_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let n = 5;
+  while n < 10 {
+    return
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_call_in_condition_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn check() -> bool { true }
+
+fn main() {
+  while check() {
+    let _ = 1
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_literal_condition_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  while true {
+    let _ = 1
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_try_scoped_propagate() {
+    assert_lint_snapshot!(
+        r#"
+fn may_fail() -> Result<int, string> { Ok(1) }
+
+fn main() {
+  let n = 5;
+  while n < 10 {
+    let _ = try { may_fail()? }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_function_propagate_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn may_fail() -> Result<int, string> { Ok(1) }
+
+fn run() -> Result<int, string> {
+  let n = 5;
+  while n < 10 {
+    let _ = may_fail()?
+  }
+  Ok(0)
+}
+
+fn main() {
+  let _ = run()
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_diverging_call_in_try_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn may_fail() -> Result<int, string> { Ok(1) }
+fn diverge() -> Never { panic("x") }
+
+fn run() {
+  let n = 5;
+  while n < 10 {
+    let _ = try {
+      let _ = may_fail()?
+      diverge()
+    }
+  }
+}
+
+fn main() {
+  run()
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_deref_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut x = 0;
+  let r = &x;
+  while r.* < 10 {
+    x = x + 1
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn unchanging_loop_condition_task_return() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let n = 5;
+  while n < 10 {
+    task { return }
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn unused_function() {
     assert_lint_snapshot!(
         r#"
@@ -5136,10 +5340,10 @@ import "go:fmt"
 
 fn main() {
   let ch = Channel.new<int>()
-  let done = false
+  let mut done = false
   while !done {
     select {
-      let Some(v) = ch.receive() => fmt.Println(v),
+      let Some(v) = ch.receive() => { fmt.Println(v); done = true },
       _ => {},
     }
   }

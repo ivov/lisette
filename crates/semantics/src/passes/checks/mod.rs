@@ -23,14 +23,17 @@ pub(crate) mod receivers;
 pub(crate) mod repeated_if_condition;
 pub(crate) mod stringer_signature;
 pub(crate) mod temp_producing;
+pub(crate) mod unchanging_loop_condition;
 pub(crate) mod visibility;
 
 use diagnostics::{LocalSink, PatternIssue};
 use rayon::prelude::*;
+use rustc_hash::FxHashMap as HashMap;
+use syntax::ast::BindingId;
 use syntax::program::{File, Module};
 
 use crate::context::AnalysisContext;
-use crate::facts::Facts;
+use crate::facts::{BindingFact, Facts};
 use crate::store::Store;
 
 use super::PARALLEL_THRESHOLD;
@@ -58,11 +61,12 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
     });
 
     let or_spans = &facts.or_pattern_error_spans;
+    let bindings = &facts.bindings;
 
     if work.len() < PARALLEL_THRESHOLD {
         let pattern_ctx = pattern_analysis::Context::new(analysis, or_spans);
         for (module, file) in &work {
-            run_file_checks(module, file, store, sink, &pattern_ctx);
+            run_file_checks(module, file, store, bindings, sink, &pattern_ctx);
         }
         facts.pattern_issues = pattern_ctx.take_issues();
         return;
@@ -74,7 +78,7 @@ pub(crate) fn run_all(analysis: &AnalysisContext, facts: &mut Facts, sink: &Loca
         .map(|(module, file)| {
             let local_sink = LocalSink::new();
             let pattern_ctx = pattern_analysis::Context::new(analysis, or_spans);
-            run_file_checks(module, file, store, &local_sink, &pattern_ctx);
+            run_file_checks(module, file, store, bindings, &local_sink, &pattern_ctx);
             (local_sink, pattern_ctx.take_issues())
         })
         .collect();
@@ -93,10 +97,11 @@ fn run_file_checks(
     module: &Module,
     file: &File,
     store: &Store,
+    bindings: &HashMap<BindingId, BindingFact>,
     sink: &LocalSink,
     pattern_ctx: &pattern_analysis::Context,
 ) {
-    node_walk::run(&file.items, store, file.is_d_lis(), sink);
+    node_walk::run(&file.items, store, bindings, file.is_d_lis(), sink);
 
     prelude_shadowing::run(&file.items, store, sink);
     generics::run(&file.items, &module.id, store, sink);
