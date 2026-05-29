@@ -5,7 +5,7 @@ use crate::Planner;
 use crate::Renderer;
 use crate::ReturnContext;
 use crate::abi::{AbiShape, tuple_element_types};
-use crate::calls::go_interop::WrapperTarget;
+use crate::calls::go_interop::{TupleReturnLayout, WrapperTarget};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{
     OPTION_SOME_TAG, PARTIAL_ERR_TAG, PARTIAL_OK_TAG, RESULT_OK_TAG,
@@ -234,14 +234,21 @@ pub(crate) fn emit_callee_abi_wrapping(
 ) -> String {
     match shape {
         AbiShape::PartialTuple => planner
-            .emit_partial_wrapping(output, call_str, result_ty, WrapperTarget::FreshSlot, fx)
+            .emit_partial_wrapping(
+                output,
+                call_str,
+                result_ty,
+                TupleReturnLayout::Packed,
+                WrapperTarget::FreshSlot,
+                fx,
+            )
             .expect("wrapper produced no slot"),
         AbiShape::CommaOk => planner
             .emit_comma_ok_wrapping(
                 output,
                 call_str,
                 result_ty,
-                false,
+                TupleReturnLayout::Packed,
                 WrapperTarget::FreshSlot,
                 fx,
             )
@@ -259,7 +266,14 @@ pub(crate) fn emit_callee_abi_wrapping(
                 .expect("wrapper produced no slot")
         }
         AbiShape::ResultTuple | AbiShape::BareError => planner
-            .emit_result_wrapping(output, call_str, result_ty, WrapperTarget::FreshSlot, fx)
+            .emit_result_wrapping(
+                output,
+                call_str,
+                result_ty,
+                TupleReturnLayout::Packed,
+                WrapperTarget::FreshSlot,
+                fx,
+            )
             .expect("wrapper produced no slot"),
         AbiShape::Tuple { arity } => {
             let temps = planner.create_temp_vars("ret", *arity);

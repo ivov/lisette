@@ -2,7 +2,9 @@ use crate::EmitEffects;
 use crate::Planner;
 use crate::Renderer;
 use crate::calls::go_interop::build_tuple_literal;
-use crate::calls::go_interop::wrappers::{WrapperOutcome, WrapperTarget, leaf_block};
+use crate::calls::go_interop::wrappers::{
+    TupleReturnLayout, WrapperOutcome, WrapperTarget, leaf_block,
+};
 use crate::context::expression::ExpressionContext;
 use crate::control_flow::fallible::{Fallible, FalliblePlanner, OPTION_SOME_TAG};
 use crate::plan::bodies::{ElseArm, IfPlan, LoopPlan, LoweredBlock, LoweredStatement};
@@ -20,8 +22,13 @@ impl Planner<'_> {
     ) -> (Vec<LoweredStatement>, String) {
         let (mut setup, call_str) =
             self.lower_call(call_expression, None, ExpressionContext::value(), fx);
-        let (wrap_setup, outcome) =
-            self.lower_comma_ok_wrapping(&call_str, option_ty, true, WrapperTarget::FreshSlot, fx);
+        let (wrap_setup, outcome) = self.lower_comma_ok_wrapping(
+            &call_str,
+            option_ty,
+            TupleReturnLayout::Flattened,
+            WrapperTarget::FreshSlot,
+            fx,
+        );
         setup.extend(wrap_setup);
         (setup, outcome.expect("wrapper produced no slot"))
     }
@@ -90,24 +97,24 @@ impl Planner<'_> {
         output: &mut String,
         call_str: &str,
         option_ty: &Type,
-        tuple_flattened: bool,
+        layout: TupleReturnLayout,
         target: WrapperTarget<'_>,
         fx: &mut EmitEffects,
     ) -> WrapperOutcome {
         let (statements, outcome) =
-            self.lower_comma_ok_wrapping(call_str, option_ty, tuple_flattened, target, fx);
+            self.lower_comma_ok_wrapping(call_str, option_ty, layout, target, fx);
         output.push_str(&Renderer.render_setup(&statements));
         outcome
     }
 
-    /// Wrap a comma-ok-returning call into a tagged `Option`. `tuple_flattened`
-    /// distinguishes Go-imported `(T1, ..., Tn, bool)` from Lisette
-    /// `(Tuple_n[...], bool)`.
+    /// Wrap a comma-ok-returning call into a tagged `Option`. A `Flattened`
+    /// tuple inner type comes from a Go-imported `(T1, ..., Tn, bool)`; a
+    /// `Packed` one from a Lisette `(Tuple_n[...], bool)`.
     pub(crate) fn lower_comma_ok_wrapping(
         &mut self,
         call_str: &str,
         option_ty: &Type,
-        tuple_flattened: bool,
+        layout: TupleReturnLayout,
         target: WrapperTarget<'_>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
@@ -119,7 +126,7 @@ impl Planner<'_> {
         let needs_nilable_validation = self.facts.is_nullable_option(option_ty);
 
         let needs_complex =
-            needs_nilable_validation || (tuple_flattened && inner_tuple_arity.is_some());
+            needs_nilable_validation || (layout.is_flattened() && inner_tuple_arity.is_some());
 
         if !needs_complex {
             let inner_ty_str = self.go_type_string(&inner_ty, fx);
@@ -131,7 +138,9 @@ impl Planner<'_> {
 
         let fallible = Fallible::from_type(option_ty).expect("Option type expected");
 
-        let val_vars = if tuple_flattened && let Some(arity) = inner_tuple_arity {
+        let val_vars = if layout.is_flattened()
+            && let Some(arity) = inner_tuple_arity
+        {
             self.create_temp_vars("ret", arity)
         } else {
             self.create_temp_vars("ret", 1)
@@ -150,7 +159,7 @@ impl Planner<'_> {
             call_str
         )));
 
-        let val_expression = if tuple_flattened && inner_tuple_arity.is_some() {
+        let val_expression = if layout.is_flattened() && inner_tuple_arity.is_some() {
             build_tuple_literal(&val_vars, &inner_ty, fx)
         } else {
             val_vars[0].clone()

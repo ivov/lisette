@@ -1,0 +1,28 @@
+---
+source: tests/spec/emit/result_option_patterns.rs
+description: "input: \nfn pair<A, B>(a: A, b: B) -> Result<(A, B), error> {\n  Ok((a, b))\n}\n\nfn test() {\n  match pair<int, string>(1, \"x\") {\n    Ok((first, second)) => {\n      let _ = first\n      let _ = second\n    },\n    Err(e) => {\n      let _ = e\n    },\n  }\n}\n"
+---
+package main
+
+import lisette "github.com/ivov/lisette/prelude"
+
+func pair[A any, B any](a A, b B) (lisette.Tuple2[A, B], error) {
+	return lisette.MakeTuple2(a, b), nil
+}
+
+func test() {
+	ret_2, ret_3 := pair[int, string](1, "x")
+	var result_4 lisette.Result[lisette.Tuple2[int, string], error]
+	if ret_3 != nil {
+		result_4 = lisette.MakeResultErr[lisette.Tuple2[int, string], error](ret_3)
+	} else {
+		result_4 = lisette.MakeResultOk[lisette.Tuple2[int, string], error](ret_2)
+	}
+	subject_1 := result_4
+	if subject_1.Tag == lisette.ResultOk {
+		_ = subject_1.OkVal.First
+		_ = subject_1.OkVal.Second
+	} else {
+		_ = subject_1.ErrVal
+	}
+}

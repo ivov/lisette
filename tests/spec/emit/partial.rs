@@ -97,3 +97,30 @@ fn test(p: Partial<int, string>) -> bool {
 "#;
     assert_emit_snapshot!(input);
 }
+
+#[test]
+fn lisette_function_returning_partial_tuple_uses_packed_abi() {
+    let input = r#"
+fn pair<A, B>(a: A, b: B) -> Partial<(A, B), error> {
+  Partial.Ok((a, b))
+}
+
+fn test() {
+  match pair<int, string>(1, "x") {
+    Partial.Ok((first, second)) => {
+      let _ = first
+      let _ = second
+    },
+    Partial.Err(e) => {
+      let _ = e
+    },
+    Partial.Both((first, second), e) => {
+      let _ = first
+      let _ = second
+      let _ = e
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

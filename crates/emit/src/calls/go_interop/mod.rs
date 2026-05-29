@@ -1,7 +1,7 @@
 mod nullable;
 mod wrappers;
 
-pub(crate) use wrappers::WrapperTarget;
+pub(crate) use wrappers::{TupleReturnLayout, WrapperTarget};
 
 use crate::EmitEffects;
 use crate::Planner;
@@ -101,12 +101,26 @@ impl Planner<'_> {
                 let call_str =
                     self.emit_call(output, expression, None, ExpressionContext::value(), fx);
                 fx.require_stdlib();
-                Some(self.emit_result_wrapping(output, &call_str, result_ty, target, fx))
+                Some(self.emit_result_wrapping(
+                    output,
+                    &call_str,
+                    result_ty,
+                    TupleReturnLayout::Flattened,
+                    target,
+                    fx,
+                ))
             }
             GoCallStrategy::CommaOk => {
                 let call_str =
                     self.emit_call(output, expression, None, ExpressionContext::value(), fx);
-                Some(self.emit_comma_ok_wrapping(output, &call_str, result_ty, true, target, fx))
+                Some(self.emit_comma_ok_wrapping(
+                    output,
+                    &call_str,
+                    result_ty,
+                    TupleReturnLayout::Flattened,
+                    target,
+                    fx,
+                ))
             }
             GoCallStrategy::NullableReturn => {
                 let call_str =
@@ -118,7 +132,14 @@ impl Planner<'_> {
                 fx.require_stdlib();
                 let call_str =
                     self.emit_call(output, expression, None, ExpressionContext::value(), fx);
-                Some(self.emit_partial_wrapping(output, &call_str, result_ty, target, fx))
+                Some(self.emit_partial_wrapping(
+                    output,
+                    &call_str,
+                    result_ty,
+                    TupleReturnLayout::Flattened,
+                    target,
+                    fx,
+                ))
             }
             GoCallStrategy::Sentinel { value } => {
                 let call_str =

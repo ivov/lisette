@@ -1002,6 +1002,28 @@ fn main() {
 }
 
 #[test]
+fn lisette_function_returning_result_tuple_uses_packed_abi() {
+    let input = r#"
+fn pair<A, B>(a: A, b: B) -> Result<(A, B), error> {
+  Ok((a, b))
+}
+
+fn test() {
+  match pair<int, string>(1, "x") {
+    Ok((first, second)) => {
+      let _ = first
+      let _ = second
+    },
+    Err(e) => {
+      let _ = e
+    },
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn complex_number_with_typed_float_multiplication() {
     let input = r#"
 import "go:fmt"

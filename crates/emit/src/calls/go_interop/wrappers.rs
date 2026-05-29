@@ -27,6 +27,22 @@ pub(crate) enum WrapperTarget<'a> {
     Return,
 }
 
+/// How a fallible callee presents a tuple `Ok`/`Some` payload at the Go
+/// boundary: as separate return values (`Flattened`, e.g. a Go-imported
+/// `(A, B, error)`) or already bundled into one tuple value (`Packed`, the
+/// Lisette `(Tuple_n[...], error)` ABI).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TupleReturnLayout {
+    Packed,
+    Flattened,
+}
+
+impl TupleReturnLayout {
+    pub(crate) fn is_flattened(self) -> bool {
+        matches!(self, TupleReturnLayout::Flattened)
+    }
+}
+
 /// `Some(slot_name)` when the wrapper wrote into a fresh or named slot; `None`
 /// when it wrote a `return` statement and the caller should not emit its own.
 pub(crate) type WrapperOutcome = Option<String>;
@@ -90,10 +106,11 @@ impl Planner<'_> {
         statements: &mut Vec<LoweredStatement>,
         call_str: &str,
         ok_ty: &Type,
+        layout: TupleReturnLayout,
         fx: &mut EmitEffects,
     ) -> (String, String) {
         let mut buffer = String::new();
-        let result = self.extract_go_returns(&mut buffer, call_str, ok_ty, fx);
+        let result = self.extract_go_returns(&mut buffer, call_str, ok_ty, layout, fx);
         if !buffer.is_empty() {
             statements.push(LoweredStatement::RawGo(buffer));
         }
@@ -163,8 +180,13 @@ impl Planner<'_> {
         fx.require_stdlib();
         let (mut setup, call_str) =
             self.lower_call(call_expression, None, ExpressionContext::value(), fx);
-        let (wrap_setup, outcome) =
-            self.lower_partial_wrapping(&call_str, partial_ty, WrapperTarget::FreshSlot, fx);
+        let (wrap_setup, outcome) = self.lower_partial_wrapping(
+            &call_str,
+            partial_ty,
+            TupleReturnLayout::Flattened,
+            WrapperTarget::FreshSlot,
+            fx,
+        );
         setup.extend(wrap_setup);
         (setup, outcome.expect("wrapper produced no slot"))
     }
@@ -175,10 +197,12 @@ impl Planner<'_> {
         output: &mut String,
         call_str: &str,
         partial_ty: &Type,
+        layout: TupleReturnLayout,
         target: WrapperTarget<'_>,
         fx: &mut EmitEffects,
     ) -> WrapperOutcome {
-        let (statements, outcome) = self.lower_partial_wrapping(call_str, partial_ty, target, fx);
+        let (statements, outcome) =
+            self.lower_partial_wrapping(call_str, partial_ty, layout, target, fx);
         output.push_str(&Renderer.render_setup(&statements));
         outcome
     }
@@ -188,6 +212,7 @@ impl Planner<'_> {
         &mut self,
         call_str: &str,
         partial_ty: &Type,
+        layout: TupleReturnLayout,
         target: WrapperTarget<'_>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
@@ -198,7 +223,8 @@ impl Planner<'_> {
         let pkg = go_name::GO_STDLIB_PKG;
 
         let mut statements = Vec::new();
-        let (err_var, val_var) = self.push_go_returns(&mut statements, call_str, &ok_ty, fx);
+        let (err_var, val_var) =
+            self.push_go_returns(&mut statements, call_str, &ok_ty, layout, fx);
         let nil_check = self.partial_ok_nil_check(&ok_ty, &val_var, fx);
 
         let type_params = format!("{}, {}", ok_ty_str, err_ty_str);
@@ -275,8 +301,13 @@ impl Planner<'_> {
         fx.require_stdlib();
         let (mut setup, call_str) =
             self.lower_call(call_expression, None, ExpressionContext::value(), fx);
-        let (wrap_setup, outcome) =
-            self.lower_result_wrapping(&call_str, result_ty, WrapperTarget::FreshSlot, fx);
+        let (wrap_setup, outcome) = self.lower_result_wrapping(
+            &call_str,
+            result_ty,
+            TupleReturnLayout::Flattened,
+            WrapperTarget::FreshSlot,
+            fx,
+        );
         setup.extend(wrap_setup);
         (setup, outcome.expect("wrapper produced no slot"))
     }
@@ -287,10 +318,12 @@ impl Planner<'_> {
         output: &mut String,
         call_str: &str,
         result_ty: &Type,
+        layout: TupleReturnLayout,
         target: WrapperTarget<'_>,
         fx: &mut EmitEffects,
     ) -> WrapperOutcome {
-        let (statements, outcome) = self.lower_result_wrapping(call_str, result_ty, target, fx);
+        let (statements, outcome) =
+            self.lower_result_wrapping(call_str, result_ty, layout, target, fx);
         output.push_str(&Renderer.render_setup(&statements));
         outcome
     }
@@ -300,6 +333,7 @@ impl Planner<'_> {
         &mut self,
         call_str: &str,
         result_ty: &Type,
+        layout: TupleReturnLayout,
         target: WrapperTarget<'_>,
         fx: &mut EmitEffects,
     ) -> (Vec<LoweredStatement>, WrapperOutcome) {
@@ -311,7 +345,7 @@ impl Planner<'_> {
 
         let mut statements = Vec::new();
         let ok_ty = fallible.ok_ty();
-        let (err_var, ok_val) = self.push_go_returns(&mut statements, call_str, ok_ty, fx);
+        let (err_var, ok_val) = self.push_go_returns(&mut statements, call_str, ok_ty, layout, fx);
 
         let result_ty_str = {
             let mut fe = FalliblePlanner::new(self, &fallible, fx);
@@ -427,16 +461,21 @@ impl Planner<'_> {
         (statements, outcome)
     }
 
-    /// Destructure a Go multi-return into error and value temps. Tuple ok
-    /// types get N+1 temps and a rebuilt Lisette tuple; others get 2 temps.
+    /// Destructure a Go multi-return into error and value temps. A `Flattened`
+    /// tuple ok type (Go-imported `(T1, ..., Tn, error)`) gets N+1 temps and a
+    /// rebuilt Lisette tuple; a `Packed` one (Lisette `(Tuple_n[...], error)`)
+    /// gets 2 temps like any other ok type.
     fn extract_go_returns(
         &mut self,
         output: &mut String,
         call_str: &str,
         ok_ty: &Type,
+        layout: TupleReturnLayout,
         fx: &mut EmitEffects,
     ) -> (String, String) {
-        if let Type::Tuple(elements) = ok_ty {
+        if layout.is_flattened()
+            && let Type::Tuple(elements) = ok_ty
+        {
             let tuple_arity = elements.len();
             let temp_vars = self.create_temp_vars("ret", tuple_arity + 1);
             write_line!(output, "{} := {}", temp_vars.join(", "), call_str);
@@ -617,6 +656,7 @@ impl Planner<'_> {
                 &mut body,
                 &call_str,
                 &return_type,
+                TupleReturnLayout::Flattened,
                 WrapperTarget::Return,
                 fx,
             ),
@@ -624,7 +664,7 @@ impl Planner<'_> {
                 &mut body,
                 &call_str,
                 &return_type,
-                true,
+                TupleReturnLayout::Flattened,
                 WrapperTarget::Return,
                 fx,
             ),
@@ -648,6 +688,7 @@ impl Planner<'_> {
                 &mut body,
                 &call_str,
                 &return_type,
+                TupleReturnLayout::Flattened,
                 WrapperTarget::Return,
                 fx,
             ),
