@@ -8,6 +8,7 @@ mod excess_parens_on_condition;
 mod helpers;
 mod identical_if_branches;
 mod invisible_in_string;
+mod loop_runs_once;
 mod match_literal_collection;
 mod naming;
 mod needless_bool;
@@ -34,6 +35,7 @@ pub use identical_if_branches::check_identical_if_branches;
 pub use invisible_in_string::{
     check_invisible_in_string_expression, check_invisible_in_string_pattern,
 };
+pub use loop_runs_once::check_loop_runs_once;
 pub use match_literal_collection::check_match_literal_collection;
 pub use naming::{check_expression_naming, check_pattern_naming};
 pub use needless_bool::check_needless_bool;

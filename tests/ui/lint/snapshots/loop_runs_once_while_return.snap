@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Loop runs at most once
+   ╭─[test.lis:4:3]
+ 3 │   let flag = true
+ 4 │   while flag {
+   ·   ──┬──
+   ·     ╰── the body always exits before looping back
+ 5 │     return
+   ╰────
+  help: The body always exits on the first iteration, so the loop never repeats. Make the exit conditional, or remove the loop · code: [lint.loop_runs_once]

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Loop runs at most once
+   ╭─[test.lis:3:3]
+ 2 │ fn main() {
+ 3 │   for _ in 0..10 {
+   ·   ─┬─
+   ·    ╰── the body always exits before looping back
+ 4 │     return
+   ╰────
+  help: The body always exits on the first iteration, so the loop never repeats. Make the exit conditional, or remove the loop · code: [lint.loop_runs_once]

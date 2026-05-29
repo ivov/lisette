@@ -1276,8 +1276,10 @@ fn unchanging_loop_condition_break_no_warning() {
 fn main() {
   let n = 5;
   while n < 10 {
+    if n > 7 {
+      break
+    }
     let _ = n
-    break
   }
 }
 "#
@@ -1291,7 +1293,10 @@ fn unchanging_loop_condition_return_no_warning() {
 fn main() {
   let n = 5;
   while n < 10 {
-    return
+    if n > 7 {
+      return
+    }
+    let _ = n
   }
 }
 "#
@@ -1410,6 +1415,206 @@ fn main() {
   let n = 5;
   while n < 10 {
     task { return }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_loop_break() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  loop {
+    let _ = 1
+    break
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_for_return() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  for _ in 0..10 {
+    return
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_while_return() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let flag = true
+  while flag {
+    return
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_if_else_both_exit() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let flag = true
+  loop {
+    if flag {
+      break
+    } else {
+      return
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_diverging_call() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  loop {
+    panic("stop")
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_conditional_break_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  for i in 0..10 {
+    if i > 5 {
+      break
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_continue_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  for i in 0..10 {
+    if i > 5 {
+      continue
+    }
+    let _ = i
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_continue_then_break_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut i = 0
+  loop {
+    i = i + 1
+    if i < 10 {
+      continue
+    }
+    break
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_continue_in_return_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn pick(n: int) -> int {
+  let mut i = 0
+  loop {
+    i = i + 1
+    return if i < n { continue } else { 42 }
+  }
+}
+
+fn main() {
+  let _ = pick(5)
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_continue_in_break_value_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut i = 0
+  let _x = loop {
+    i = i + 1
+    break if i < 10 { continue } else { 42 }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_continue_in_nested_for_iterable_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut i = 0
+  loop {
+    i = i + 1
+    for _ in if i < 10 { continue } else { 0..1 } {
+      let _ = i
+    }
+    break
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_normal_loop_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  for i in 0..10 {
+    let _ = i
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn loop_runs_once_return_in_lambda_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  for i in 0..10 {
+    let _f = || { return i }
+    let _ = i
   }
 }
 "#
@@ -2186,8 +2391,11 @@ fn no_dead_code_when_break_is_last() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
+  let cond = true
   loop {
-    break
+    if cond {
+      break
+    }
   }
 }
 "#
@@ -2301,8 +2509,8 @@ pub fn foo() -> int {
 fn no_dead_code_after_loop_with_break() {
     assert_no_lint_warnings!(
         r#"
-pub fn foo() -> int {
-  loop { break };
+pub fn foo(cond: bool) -> int {
+  loop { if cond { break } };
   42
 }
 "#
@@ -2313,8 +2521,8 @@ pub fn foo() -> int {
 fn no_dead_code_after_while_with_break() {
     assert_no_lint_warnings!(
         r#"
-pub fn foo() -> int {
-  while true { break };
+pub fn foo(cond: bool) -> int {
+  while true { if cond { break } };
   42
 }
 "#
@@ -4545,7 +4753,12 @@ fn discarded_loop_break_value_silent_with_allow_attr() {
 #[allow(unused_value)]
 fn allowed() -> int { 42 }
 fn test() {
-  loop { break allowed() }
+  let cond = true
+  loop {
+    if cond {
+      break allowed()
+    }
+  }
 }
 fn main() {
   test()
@@ -5279,8 +5492,11 @@ fn empty_infinite_loop_with_break_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
+  let cond = true
   loop {
-    break
+    if cond {
+      break
+    }
   }
 }
 "#
@@ -5295,7 +5511,9 @@ fn main() {
   let mut i = 0
   loop {
     i = i + 1
-    break
+    if i > 5 {
+      break
+    }
   }
 }
 "#
@@ -5404,7 +5622,6 @@ fn main() {
         _ => {},
       }
     }
-    break
   }
 }
 "#
@@ -5445,7 +5662,6 @@ fn main() {
         _ => {},
       }
     }
-    break
   }
 }
 "#

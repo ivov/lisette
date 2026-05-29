@@ -298,6 +298,15 @@ pub fn bool_literal_comparison(span: &Span, replacement: &str) -> LisetteDiagnos
         .with_help(format!("Simplify to `{replacement}`"))
 }
 
+pub fn loop_runs_once(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Loop runs at most once")
+        .with_lint_code("loop_runs_once")
+        .with_span_label(span, "the body always exits before looping back")
+        .with_help(
+            "The body always exits on the first iteration, so the loop never repeats. Make the exit conditional, or remove the loop.",
+        )
+}
+
 pub fn needless_return(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Needless `return`")
         .with_lint_code("needless_return")
