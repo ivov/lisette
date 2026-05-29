@@ -117,6 +117,7 @@ jobs:
           go: 'true'
       - run: cargo build -p lisette --locked
       - run: cargo test -p tests --test e2e_smoke --locked -- --format terse
+      - run: cargo test -p tests --test e2e_learn --locked -- --format terse
 
   stdlib-check:
     name: Stdlib check

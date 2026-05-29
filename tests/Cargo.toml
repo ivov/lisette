@@ -27,5 +27,9 @@ name = "e2e_smoke"
 path = "e2e_smoke.rs"
 
 [[test]]
+name = "e2e_learn"
+path = "e2e_learn.rs"
+
+[[test]]
 name = "e2e_suite"
 path = "e2e_suite.rs"
