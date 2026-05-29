@@ -8,24 +8,15 @@ use diagnostics::LocalSink;
 use syntax::ast::Expression;
 use syntax::types::{SimpleKind, Type};
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit(item, sink);
-    }
-}
-
-fn visit(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     if let Expression::ImplBlock { methods, .. } = expression {
         for method in methods {
-            check(method, sink);
+            check_method(method, sink);
         }
-    }
-    for child in expression.children() {
-        visit(child, sink);
     }
 }
 
-fn check(method: &Expression, sink: &LocalSink) {
+fn check_method(method: &Expression, sink: &LocalSink) {
     let Expression::Function {
         name,
         name_span,

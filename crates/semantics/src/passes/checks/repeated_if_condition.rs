@@ -1,13 +1,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::Expression;
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     if let Expression::If {
         condition,
         alternative,
@@ -24,10 +18,6 @@ fn visit_expression(expression: &Expression, sink: &LocalSink) {
         sink.push(diagnostics::infer::repeated_if_condition(
             &next_condition.get_span(),
         ));
-    }
-
-    for child in expression.children() {
-        visit_expression(child, sink);
     }
 }
 

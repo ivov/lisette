@@ -7,13 +7,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Generic};
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit(item, sink);
-    }
-}
-
-fn visit(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     check_type_name(expression, sink);
     for generic in generics_of(expression) {
         if is_reserved(&generic.name) {
@@ -22,9 +16,6 @@ fn visit(expression: &Expression, sink: &LocalSink) {
                 generic.span,
             ));
         }
-    }
-    for child in expression.children() {
-        visit(child, sink);
     }
 }
 

@@ -1,4 +1,7 @@
-use syntax::ast::{Expression, MatchArm, Pattern, RestPattern, SelectArm, SelectArmPattern};
+use syntax::ast::{
+    Expression, FormatStringPart, Literal, MatchArm, Pattern, RestPattern, SelectArm,
+    SelectArmPattern,
+};
 
 pub fn visit_ast<E, P>(ast: &[Expression], expression_visitor: &mut E, pattern_visitor: &mut P)
 where
@@ -24,6 +27,34 @@ where
             visit_node(val, expression_visitor, pattern_visitor);
         }
 
+        Expression::Literal {
+            literal: Literal::Slice(elements),
+            ..
+        } => {
+            for element in elements {
+                visit_node(element, expression_visitor, pattern_visitor);
+            }
+        }
+
+        Expression::Literal {
+            literal: Literal::FormatString(parts),
+            ..
+        } => {
+            for part in parts {
+                if let FormatStringPart::Expression(expression) = part {
+                    visit_node(expression, expression_visitor, pattern_visitor);
+                }
+            }
+        }
+
+        Expression::Interface {
+            method_signatures, ..
+        } => {
+            for signature in method_signatures {
+                visit_node(signature, expression_visitor, pattern_visitor);
+            }
+        }
+
         Expression::Literal { .. }
         | Expression::Identifier { .. }
         | Expression::Unit { .. }
@@ -36,8 +67,7 @@ where
         | Expression::Struct { .. }
         | Expression::TypeAlias { .. }
         | Expression::VariableDeclaration { .. }
-        | Expression::ModuleImport { .. }
-        | Expression::Interface { .. } => {}
+        | Expression::ModuleImport { .. } => {}
 
         Expression::Function { params, body, .. } => {
             for param in params {

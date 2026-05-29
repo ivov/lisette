@@ -13,6 +13,7 @@ pub(crate) mod json_serializable_fields;
 pub(crate) mod nan_comparison;
 pub(crate) mod native_value_usage;
 pub(crate) mod newtype;
+mod node_walk;
 pub(crate) mod oversized_shift;
 mod pattern_analysis;
 pub(crate) mod predeclared_shadowing;
@@ -95,30 +96,14 @@ fn run_file_checks(
     sink: &LocalSink,
     pattern_ctx: &pattern_analysis::Context,
 ) {
-    duplicate_bindings::run(&file.items, sink);
-    irrefutable_patterns::run(&file.items, sink);
-    receivers::run(&file.items, sink);
-    stringer_signature::run(&file.items, sink);
-    predeclared_shadowing::run(&file.items, sink);
+    node_walk::run(&file.items, store, file.is_d_lis(), sink);
+
     prelude_shadowing::run(&file.items, store, sink);
-    pub_type_export::run(&file.items, sink);
     generics::run(&file.items, &module.id, store, sink);
-    newtype::run(&file.items, store, sink);
     native_value_usage::run(&file.items, &module.id, store, sink);
-    enum_variant_value::run(&file.items, store, sink);
-    nan_comparison::run(&file.items, sink);
-    empty_infinite_loop::run(&file.items, sink);
-    empty_range::run(&file.items, sink);
-    empty_select_default::run(&file.items, sink);
-    decimal_file_mode::run(&file.items, sink);
-    index_out_of_bounds::run(&file.items, sink);
     json_serializable_fields::run(&file.items, sink);
-    oversized_shift::run(&file.items, sink);
-    repeated_if_condition::run(&file.items, sink);
-    temp_producing::run(&file.items, sink);
-    if !file.is_d_lis() {
-        const_naming::run(&file.items, sink);
-    }
+    empty_select_default::run(&file.items, sink);
+
     for expression in &file.items {
         pattern_analysis::check(expression, pattern_ctx, sink);
     }

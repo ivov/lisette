@@ -7,13 +7,7 @@ use diagnostics::LocalSink;
 use syntax::ast::{Expression, Pattern};
 use syntax::types::Type;
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     if let Expression::ImplBlock {
         ty: impl_ty,
         methods,
@@ -23,9 +17,6 @@ fn visit_expression(expression: &Expression, sink: &LocalSink) {
         for method in methods {
             check_method_receiver(method, impl_ty, sink);
         }
-    }
-    for child in expression.children() {
-        visit_expression(child, sink);
     }
 }
 

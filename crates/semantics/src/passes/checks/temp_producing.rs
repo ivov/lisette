@@ -2,64 +2,45 @@ use diagnostics::LocalSink;
 use syntax::ast::{Expression, FormatStringPart, Literal};
 use syntax::program::ReceiverCoercion;
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     match expression {
-        Expression::Call {
-            expression: callee,
-            args,
-            spread,
-            ..
-        } => {
+        Expression::Call { args, spread, .. } => {
             for arg in args {
-                check(arg, sink);
+                flag_sub_expression(arg, sink);
             }
             if let Some(s) = spread.as_ref() {
-                check(s, sink);
+                flag_sub_expression(s, sink);
             }
-            visit_expression(callee, sink);
-            for arg in args {
-                visit_expression(arg, sink);
-            }
-            if let Some(s) = spread.as_ref() {
-                visit_expression(s, sink);
-            }
-            return;
         }
         Expression::StructCall {
             field_assignments, ..
         } => {
             for f in field_assignments {
-                check(&f.value, sink);
+                flag_sub_expression(&f.value, sink);
             }
         }
         Expression::Binary { left, right, .. } => {
-            check(left, sink);
-            check(right, sink);
+            flag_sub_expression(left, sink);
+            flag_sub_expression(right, sink);
         }
         Expression::Unary { expression, .. } | Expression::Reference { expression, .. } => {
-            check(expression, sink);
+            flag_sub_expression(expression, sink);
         }
         Expression::Cast { expression, .. } => {
-            check(expression, sink);
+            flag_sub_expression(expression, sink);
         }
         Expression::If { condition, .. } | Expression::While { condition, .. } => {
-            check(condition, sink);
+            flag_sub_expression(condition, sink);
         }
         Expression::IndexedAccess { index, .. } => {
-            check(index, sink);
+            flag_sub_expression(index, sink);
         }
         Expression::Range { start, end, .. } => {
             if let Some(s) = start {
-                check(s, sink);
+                flag_sub_expression(s, sink);
             }
             if let Some(e) = end {
-                check(e, sink);
+                flag_sub_expression(e, sink);
             }
         }
         Expression::Literal {
@@ -67,7 +48,7 @@ fn visit_expression(expression: &Expression, sink: &LocalSink) {
             ..
         } => {
             for e in elements {
-                check(e, sink);
+                flag_sub_expression(e, sink);
             }
         }
         Expression::Literal {
@@ -76,19 +57,15 @@ fn visit_expression(expression: &Expression, sink: &LocalSink) {
         } => {
             for p in parts {
                 if let FormatStringPart::Expression(e) = p {
-                    check(e, sink);
+                    flag_sub_expression(e, sink);
                 }
             }
         }
         _ => {}
     }
-
-    for child in expression.children() {
-        visit_expression(child, sink);
-    }
 }
 
-fn check(expression: &Expression, sink: &LocalSink) {
+fn flag_sub_expression(expression: &Expression, sink: &LocalSink) {
     if is_temp_producing(expression) || has_auto_address_on_call(expression) {
         sink.push(diagnostics::infer::complex_sub_expression(
             expression.get_span(),

@@ -8,13 +8,7 @@ use syntax::types::{Type, unqualified_name};
 
 use crate::store::Store;
 
-pub(crate) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, store, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, store: &Store, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, store: &Store, sink: &LocalSink) {
     match expression {
         Expression::Assignment { target, span, .. } => {
             check_newtype_field_assignment(target, *span, store, sink);
@@ -28,9 +22,6 @@ fn visit_expression(expression: &Expression, store: &Store, sink: &LocalSink) {
             sink.push(diagnostics::infer::reference_through_newtype(*span));
         }
         _ => {}
-    }
-    for child in expression.children() {
-        visit_expression(child, store, sink);
     }
 }
 

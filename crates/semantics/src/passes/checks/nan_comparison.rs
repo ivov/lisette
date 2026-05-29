@@ -3,13 +3,7 @@ use syntax::ast::{BinaryOperator, Expression};
 
 use crate::call_target::resolve_call;
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     if let Expression::Binary {
         operator,
         left,
@@ -27,10 +21,6 @@ fn visit_expression(expression: &Expression, sink: &LocalSink) {
             let always_true = matches!(operator, NotEqual);
             sink.push(diagnostics::infer::nan_comparison(span, always_true));
         }
-    }
-
-    for child in expression.children() {
-        visit_expression(child, sink);
     }
 }
 

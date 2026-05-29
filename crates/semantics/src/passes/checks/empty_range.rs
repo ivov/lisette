@@ -1,13 +1,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Literal, UnaryOperator};
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     if let Expression::Range {
         start: Some(start),
         end: Some(end),
@@ -19,10 +13,6 @@ fn visit_expression(expression: &Expression, sink: &LocalSink) {
         && start_value > end_value
     {
         sink.push(diagnostics::infer::empty_range(span));
-    }
-
-    for child in expression.children() {
-        visit_expression(child, sink);
     }
 }
 

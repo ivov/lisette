@@ -9,13 +9,7 @@ use syntax::ast::{Expression, Span, Visibility};
 
 use crate::passes::lints::ast_walk::casing::to_pascal_case;
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit(item, sink);
-    }
-}
-
-fn visit(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     if let Some((name, name_span, visibility)) = type_declaration(expression)
         && visibility.is_public()
         && !is_exportable(name)
@@ -25,9 +19,6 @@ fn visit(expression: &Expression, sink: &LocalSink) {
             &to_pascal_case(name),
             *name_span,
         ));
-    }
-    for child in expression.children() {
-        visit(child, sink);
     }
 }
 

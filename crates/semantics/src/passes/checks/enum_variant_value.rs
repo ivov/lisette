@@ -4,13 +4,7 @@ use syntax::types::{Type, unqualified_name};
 
 use crate::store::Store;
 
-pub(crate) fn run(typed_ast: &[Expression], store: &Store, sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, store, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, store: &Store, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, store: &Store, sink: &LocalSink) {
     match expression {
         Expression::Identifier {
             qualified: Some(qualified),
@@ -19,7 +13,7 @@ fn visit_expression(expression: &Expression, store: &Store, sink: &LocalSink) {
             ..
         } => {
             if let Some((enum_id, variant_name)) = qualified.rsplit_once('.') {
-                check(enum_id, variant_name, value, *span, store, sink);
+                check_variant(enum_id, variant_name, value, *span, store, sink);
             }
         }
         Expression::DotAccess {
@@ -30,18 +24,14 @@ fn visit_expression(expression: &Expression, store: &Store, sink: &LocalSink) {
         } => {
             if let Type::Nominal { id, .. } = base.get_type().strip_refs() {
                 let display = format!("{}.{}", unqualified_name(&id), member);
-                check(&id, member, &display, *span, store, sink);
+                check_variant(&id, member, &display, *span, store, sink);
             }
         }
         _ => {}
     }
-
-    for child in expression.children() {
-        visit_expression(child, store, sink);
-    }
 }
 
-fn check(
+fn check_variant(
     enum_qualified: &str,
     variant_name: &str,
     display: &str,

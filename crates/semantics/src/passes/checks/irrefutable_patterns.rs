@@ -17,13 +17,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Binding, Expression, Pattern, SelectArm, SelectArmPattern};
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     match expression {
         Expression::Let {
             binding,
@@ -52,10 +46,6 @@ fn visit_expression(expression: &Expression, sink: &LocalSink) {
             }
         }
         _ => {}
-    }
-
-    for child in expression.children() {
-        visit_expression(child, sink);
     }
 }
 

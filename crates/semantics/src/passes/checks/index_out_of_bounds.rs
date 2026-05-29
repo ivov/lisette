@@ -1,20 +1,7 @@
 use diagnostics::LocalSink;
 use syntax::ast::{Expression, Literal};
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, sink: &LocalSink) {
-    check(expression, sink);
-    for child in expression.children() {
-        visit_expression(child, sink);
-    }
-}
-
-fn check(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     let Expression::IndexedAccess {
         expression: receiver,
         index,

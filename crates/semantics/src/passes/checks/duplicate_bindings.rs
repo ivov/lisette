@@ -10,19 +10,13 @@ use syntax::ast::{Binding, Expression, MatchArm, Pattern, SelectArm, SelectArmPa
 
 use crate::checker::infer::expressions::patterns::collect_pattern_bindings;
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     match expression {
         Expression::Let { binding, .. } | Expression::For { binding, .. } => {
             visit_binding(binding, sink);
         }
         Expression::IfLet { pattern, .. } | Expression::WhileLet { pattern, .. } => {
-            check(pattern, sink);
+            check_pattern(pattern, sink);
         }
         Expression::Match { arms, .. } => {
             for arm in arms {
@@ -41,23 +35,19 @@ fn visit_expression(expression: &Expression, sink: &LocalSink) {
         }
         _ => {}
     }
-
-    for child in expression.children() {
-        visit_expression(child, sink);
-    }
 }
 
 fn visit_binding(binding: &Binding, sink: &LocalSink) {
-    check(&binding.pattern, sink);
+    check_pattern(&binding.pattern, sink);
 }
 
 fn visit_match_arm(arm: &MatchArm, sink: &LocalSink) {
-    check(&arm.pattern, sink);
+    check_pattern(&arm.pattern, sink);
 }
 
 fn visit_select_arm(arm: &SelectArm, sink: &LocalSink) {
     if let SelectArmPattern::Receive { binding, .. } = &arm.pattern {
-        check(binding, sink);
+        check_pattern(binding, sink);
     } else if let SelectArmPattern::MatchReceive { arms, .. } = &arm.pattern {
         for arm in arms {
             visit_match_arm(arm, sink);
@@ -65,10 +55,10 @@ fn visit_select_arm(arm: &SelectArm, sink: &LocalSink) {
     }
 }
 
-fn check(pattern: &Pattern, sink: &LocalSink) {
+fn check_pattern(pattern: &Pattern, sink: &LocalSink) {
     if let Pattern::Or { patterns, .. } = pattern {
         for alternative in patterns {
-            check(alternative, sink);
+            check_pattern(alternative, sink);
         }
         return;
     }

@@ -2,13 +2,7 @@ use diagnostics::LocalSink;
 use syntax::ast::{BinaryOperator, Expression, Literal};
 use syntax::types::SimpleKind;
 
-pub(crate) fn run(typed_ast: &[Expression], sink: &LocalSink) {
-    for item in typed_ast {
-        visit_expression(item, sink);
-    }
-}
-
-fn visit_expression(expression: &Expression, sink: &LocalSink) {
+pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     if let Expression::Binary {
         operator,
         left,
@@ -34,10 +28,6 @@ fn visit_expression(expression: &Expression, sink: &LocalSink) {
             bit_width,
             *value,
         ));
-    }
-
-    for child in expression.children() {
-        visit_expression(child, sink);
     }
 }
 
