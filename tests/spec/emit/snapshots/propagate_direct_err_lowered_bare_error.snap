@@ -8,7 +8,6 @@ import "errors"
 
 func fail_unit() error {
 	return errors.New("boom")
-	return nil
 }
 
 func main() {

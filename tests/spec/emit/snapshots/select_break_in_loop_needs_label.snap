@@ -28,7 +28,6 @@ loop_1:
 			default:
 				break loop_1
 			}
-			break
 		}
 	}
 }

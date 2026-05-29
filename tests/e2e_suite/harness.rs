@@ -276,6 +276,23 @@ pub fn run_go_test(target_dir: &Path, timeout_per_pkg: &str) -> Result<String, S
     }
 }
 
+pub fn run_go_vet(target_dir: &Path) -> Result<String, String> {
+    let output = Command::new("go")
+        .args(["vet", "-unreachable=false", "-copylocks=false", "./..."])
+        .current_dir(target_dir)
+        .env("NO_COLOR", "1")
+        .output()
+        .map_err(|e| format!("failed to spawn go vet: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let combined = format!("{stdout}{stderr}");
+    if output.status.success() {
+        Ok(combined)
+    } else {
+        Err(combined)
+    }
+}
+
 pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

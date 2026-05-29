@@ -6,7 +6,6 @@ package main
 
 func missing() (int, bool) {
 	return *new(int), false
-	return 1, true
 }
 
 func main() {

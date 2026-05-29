@@ -133,10 +133,26 @@ impl Planner<'_> {
         (vec![declaration, LoweredStatement::Loop(plan)], result_var)
     }
 
-    /// Lower a function/lambda body to a `LoweredBlock`. Non-value bodies map
-    /// each item through `lower_statement`; value bodies lower the tail through
-    /// the shared `lower_return_tail`. Unlike branch-arm return lowering, a
-    /// function body does not elide a tail `let` into the return place.
+    fn lower_body_until_diverge(
+        &mut self,
+        rest: &[Expression],
+        last: &Expression,
+        return_ctx: &ReturnContext,
+        fx: &mut EmitEffects,
+    ) -> (Vec<LoweredStatement>, bool) {
+        let mut statements: Vec<LoweredStatement> = Vec::with_capacity(rest.len() + 1);
+        for item in rest {
+            let statement = self.lower_statement(item, return_ctx, fx);
+            let diverged = statement.blocks_fallthrough();
+            statements.push(statement);
+            if diverged {
+                return (statements, true);
+            }
+        }
+        statements.extend(self.lower_return_tail(last, return_ctx, fx));
+        (statements, false)
+    }
+
     pub(crate) fn lower_function_body(
         &mut self,
         body: &Expression,
@@ -160,11 +176,10 @@ impl Planner<'_> {
             };
         };
 
-        let mut statements: Vec<LoweredStatement> = rest
-            .iter()
-            .map(|item| self.lower_statement(item, return_ctx, fx))
-            .collect();
-        statements.extend(self.lower_return_tail(last, return_ctx, fx));
+        let (mut statements, diverged) = self.lower_body_until_diverge(rest, last, return_ctx, fx);
+        if diverged {
+            return LoweredBlock { statements };
+        }
 
         // A unit/statement-only body under a non-unit signature has no value to
         // return, so `lower_return_tail` emits it as a bare statement. A
@@ -653,11 +668,7 @@ impl Planner<'_> {
             };
         };
 
-        let mut statements: Vec<LoweredStatement> = rest
-            .iter()
-            .map(|item| self.lower_statement(item, return_ctx, fx))
-            .collect();
-        statements.extend(self.lower_return_tail(last, return_ctx, fx));
+        let (statements, _) = self.lower_body_until_diverge(rest, last, return_ctx, fx);
         LoweredBlock { statements }
     }
 

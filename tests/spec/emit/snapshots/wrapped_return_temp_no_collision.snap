@@ -1,16 +1,15 @@
 ---
 source: tests/spec/emit/result_option_patterns.rs
-description: "input: \nfn foo() -> Option<int> {\n  return if true { Some(1) } else { None };\n  let tmp_1 = 7;\n  let _ = tmp_1;\n  None\n}\n\nfn main() {\n  let _ = foo();\n}\n"
+description: "input: \nfn foo() -> Option<int> {\n  let tmp_1 = 7;\n  let _ = tmp_1;\n  return if true { Some(1) } else { None };\n}\n\nfn main() {\n  let _ = foo();\n}\n"
 ---
 package main
 
 func foo() (int, bool) {
+	tmp_1 := 7
+	_ = tmp_1
 	if true {
 		return 1, true
 	}
-	return *new(int), false
-	tmp_1 := 7
-	_ = tmp_1
 	return *new(int), false
 }
 

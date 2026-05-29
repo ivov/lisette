@@ -22,7 +22,5 @@ func test() int {
 		default:
 			return 0
 		}
-		break
 	}
-	panic("unreachable")
 }

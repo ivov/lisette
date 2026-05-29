@@ -29,7 +29,5 @@ func test(ch <-chan Message) int {
 		default:
 			return 0
 		}
-		break
 	}
-	panic("unreachable")
 }

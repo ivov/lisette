@@ -61,7 +61,11 @@ impl Renderer {
         }
         output.push_str("}\n");
         if plan.retry_loop {
-            output.push_str("break\n}\n");
+            if plan.all_arms_diverge() {
+                output.push_str("}\n");
+            } else {
+                output.push_str("break\n}\n");
+            }
         }
         for statement in &plan.postlude {
             self.render_statement(output, statement);

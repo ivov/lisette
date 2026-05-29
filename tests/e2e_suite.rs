@@ -8,8 +8,8 @@ use std::process::Command;
 
 use harness::{
     EmittedTest, HarvestedTest, compile_e2e_suite_test, harvest_snapshots, prelude_dir,
-    read_go_version, read_skip_list, run_go_test, skip_reason_for_imports, snapshots_dir,
-    target_dir, write_go_mod, write_subpackage,
+    read_go_version, read_skip_list, run_go_test, run_go_vet, skip_reason_for_imports,
+    snapshots_dir, target_dir, write_go_mod, write_subpackage,
 };
 
 #[test]
@@ -108,5 +108,11 @@ fn e2e_suite() {
             eprintln!("{out}");
             panic!("go test failed");
         }
+    }
+
+    eprintln!("running `go vet ./...` in {}", target.display());
+    if let Err(out) = run_go_vet(&target) {
+        eprintln!("{out}");
+        panic!("go vet failed");
     }
 }

@@ -20,5 +20,4 @@ func drain(ch <-chan shapes.Shape) int {
 			return -1
 		}
 	}
-	panic("unreachable")
 }

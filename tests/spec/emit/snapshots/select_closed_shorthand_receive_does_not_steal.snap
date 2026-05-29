@@ -25,7 +25,5 @@ func test() int {
 		default:
 			return 30
 		}
-		break
 	}
-	panic("unreachable")
 }

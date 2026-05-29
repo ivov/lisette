@@ -372,6 +372,11 @@ impl SelectStatementPlan {
         self.postlude
             .last()
             .is_some_and(LoweredStatement::ends_with_diverge)
+            || self.all_arms_diverge()
+    }
+
+    pub(crate) fn all_arms_diverge(&self) -> bool {
+        !self.arms.is_empty() && self.arms.iter().all(|arm| arm.body().ends_with_diverge())
     }
 }
 
@@ -498,6 +503,10 @@ impl LoweredStatement {
         }
     }
 
+    pub(crate) fn blocks_fallthrough(&self) -> bool {
+        !matches!(self, LoweredStatement::WhileLet(_)) && self.ends_with_diverge()
+    }
+
     pub(crate) fn references_var(&self, var: &str) -> bool {
         match self {
             LoweredStatement::If(plan) => plan.references_var(var),
@@ -606,12 +615,14 @@ impl LoweredStatement {
 
 impl IfPlan {
     fn ends_with_diverge(&self) -> bool {
+        if !self.then_body.ends_with_diverge() {
+            return false;
+        }
         match &self.else_arm {
             ElseArm::None => false,
             ElseArm::ElseIf(inner) if inner.condition_setup.is_empty() => inner.ends_with_diverge(),
             ElseArm::ElseIf(_) => false,
-            ElseArm::Else { body, inline: true } => body.ends_with_diverge(),
-            ElseArm::Else { inline: false, .. } => false,
+            ElseArm::Else { body, .. } => body.ends_with_diverge(),
         }
     }
 

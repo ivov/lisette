@@ -1170,10 +1170,9 @@ fn test() -> Option<()> {
 fn wrapped_return_temp_no_collision() {
     let input = r#"
 fn foo() -> Option<int> {
-  return if true { Some(1) } else { None };
   let tmp_1 = 7;
   let _ = tmp_1;
-  None
+  return if true { Some(1) } else { None };
 }
 
 fn main() {

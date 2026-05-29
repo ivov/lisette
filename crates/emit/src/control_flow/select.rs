@@ -69,7 +69,9 @@ impl Planner<'_> {
         let has_default = arms
             .iter()
             .any(|arm| matches!(arm.pattern, SelectArmPattern::WildCard { .. }));
-        let exhaustive = if needs_retry_loop { false } else { has_default };
+        let all_arms_diverge =
+            !arm_plans.is_empty() && arm_plans.iter().all(|arm| arm.body().ends_with_diverge());
+        let exhaustive = all_arms_diverge || if needs_retry_loop { false } else { has_default };
         let mut postlude: Vec<LoweredStatement> = Vec::new();
         let mut panic_buffer = String::new();
         emit_unreachable_panic_if_needed(&mut panic_buffer, place, exhaustive);

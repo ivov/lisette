@@ -8,7 +8,6 @@ import "errors"
 
 func fail() (int, error) {
 	return *new(int), errors.New("boom")
-	return 1, nil
 }
 
 func main() {
