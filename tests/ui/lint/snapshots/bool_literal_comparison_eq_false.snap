@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  3 │   let x = true;
  4 │   let _ = x == false
    ·           ─────┬────
-   ·                ╰── needlessly verbose
+   ·                ╰── can be simpler
  5 │ }
    ╰────
   help: Simplify to `!x` · code: [lint.bool_literal_comparison]

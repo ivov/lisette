@@ -6,7 +6,7 @@ source: tests/ui/lint/mod.rs
  4 │   let b = 10;
  5 │   let x = if a > b { true } else { false };
    ·           ────────────────┬───────────────
-   ·                           ╰── needlessly verbose
+   ·                           ╰── can be simpler
  6 │   let _ = x
    ╰────
   help: Replace this `if... else` with the condition itself · code: [lint.needless_bool]

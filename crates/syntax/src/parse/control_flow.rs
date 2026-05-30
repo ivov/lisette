@@ -204,6 +204,7 @@ impl<'source> Parser<'source> {
             body: body.into(),
             span: self.span_from_tokens(start),
             needs_label: false,
+            binding_id: None,
         }
     }
 

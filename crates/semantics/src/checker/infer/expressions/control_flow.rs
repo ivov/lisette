@@ -1,7 +1,7 @@
 use crate::checker::EnvResolve;
 use crate::store::Store;
 use syntax::ast::BindingKind;
-use syntax::ast::{Binding, Expression, MatchArm, MatchOrigin, Pattern, Span};
+use syntax::ast::{Binding, BindingId, Expression, MatchArm, MatchOrigin, Pattern, Span};
 use syntax::types::Type;
 
 use super::super::TaskState;
@@ -584,6 +584,11 @@ impl TaskState<'_> {
             mutable: false,
         };
 
+        let binding_id: Option<BindingId> = new_binding
+            .pattern
+            .get_identifier()
+            .and_then(|name| self.scopes.lookup_binding_id(&name));
+
         // When iterating over types that yield multiple values (`Map`, `EnumeratedSlice`),
         // Go's `range` returns multiple values, so the binding must be a tuple literal.
         // This does NOT apply to `Slice<(A, B)>` where the element is already a tuple value.
@@ -617,6 +622,7 @@ impl TaskState<'_> {
             body: new_body.into(),
             span,
             needs_label,
+            binding_id,
         }
     }
 

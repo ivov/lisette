@@ -91,6 +91,7 @@ description: "input: \nfn test() { for i in 0.. { break; } }\n"
                         byte_length: 23,
                     },
                     needs_label: false,
+                    binding_id: None,
                 },
             ],
             ty: Var {

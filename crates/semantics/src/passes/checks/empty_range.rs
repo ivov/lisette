@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use syntax::ast::{Expression, Literal, UnaryOperator};
+use syntax::ast::{Expression, UnaryOperator};
 
 pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
     if let Expression::Range {
@@ -17,25 +17,16 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
 }
 
 fn signed_integer_literal(expression: &Expression) -> Option<i128> {
-    match expression {
-        Expression::Literal {
-            literal: Literal::Integer { value, .. },
-            ..
-        } => Some(*value as i128),
-        Expression::Unary {
-            operator: UnaryOperator::Negative,
-            expression,
-            ..
-        } => {
-            let Expression::Literal {
-                literal: Literal::Integer { value, .. },
-                ..
-            } = expression.unwrap_parens()
-            else {
-                return None;
-            };
-            Some(-(*value as i128))
-        }
-        _ => None,
+    if let Some(value) = expression.as_integer() {
+        return Some(value as i128);
     }
+    if let Expression::Unary {
+        operator: UnaryOperator::Negative,
+        expression,
+        ..
+    } = expression
+    {
+        return expression.as_integer().map(|value| -(value as i128));
+    }
+    None
 }

@@ -53,17 +53,11 @@ impl TaskState<'_> {
         target_ty: &Type,
         span: Span,
     ) {
-        let inner = expression.unwrap_parens();
-
-        let Expression::Literal {
-            literal: syntax::ast::Literal::Integer { value, .. },
-            ..
-        } = inner
-        else {
+        let Some(value) = expression.as_integer() else {
             return;
         };
 
-        self.check_negative_magnitude_overflow(*value, target_ty, span);
+        self.check_negative_magnitude_overflow(value, target_ty, span);
     }
 
     pub(crate) fn check_negative_magnitude_overflow(

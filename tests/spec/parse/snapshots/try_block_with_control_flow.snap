@@ -164,6 +164,7 @@ description: "input: \nfn test() {\n  let result = try {\n    for i in items {\n
                                     byte_length: 63,
                                 },
                                 needs_label: false,
+                                binding_id: None,
                             },
                             Propagate {
                                 expression: Call {

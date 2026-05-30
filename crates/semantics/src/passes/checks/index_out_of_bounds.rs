@@ -25,11 +25,8 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
         literal: Literal::Slice(elements),
         ..
     } = receiver.unwrap_parens()
-        && let Expression::Literal {
-            literal: Literal::Integer { value, .. },
-            ..
-        } = index.unwrap_parens()
-        && *value >= elements.len() as u64
+        && let Some(value) = index.as_integer()
+        && value >= elements.len() as u64
     {
         sink.push(diagnostics::infer::index_out_of_bounds(
             span,

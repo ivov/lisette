@@ -337,12 +337,14 @@ pub trait AstFolder {
                 body,
                 span,
                 needs_label,
+                binding_id,
             } => For {
                 binding,
                 iterable: Box::new(self.fold_expression(*iterable)?),
                 body: Box::new(self.fold_expression(*body)?),
                 span,
                 needs_label,
+                binding_id,
             },
 
             While {

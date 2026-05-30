@@ -6285,3 +6285,367 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn needless_range_loop_read() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [10, 20, 30]
+  for i in 0..xs.length() {
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_accumulator() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let mut total = 0
+  for i in 0..xs.length() {
+    total = total + xs[i]
+  }
+  let _ = total
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_index_used_directly_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  for i in 0..xs.length() {
+    let _ = i
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_two_collections_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let ys = [4, 5, 6]
+  for i in 0..xs.length() {
+    let _ = xs[i]
+    let _ = ys[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_writes_through_index_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut xs = [1, 2, 3]
+  for i in 0..xs.length() {
+    xs[i] = 0
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_nonzero_start_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  for i in 1..xs.length() {
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_inclusive_range_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  for i in 0..=xs.length() {
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_discarded_index_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  for _ in 0..xs.length() {
+    let _ = 1
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_shadowed_collection_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  for i in 0..xs.length() {
+    let xs = [9, 9, 9]
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_field_write_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Point {
+  x: int,
+}
+
+fn main() {
+  let mut xs = [Point { x: 0 }]
+  for i in 0..xs.length() {
+    xs[i].x = 1
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_method_receiver_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [[1, 2], [3, 4]]
+  for i in 0..xs.length() {
+    let _ = xs[i].length()
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_other_index_write_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut xs = [1, 2, 3]
+  for i in 0..xs.length() {
+    xs[0] = 99
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_map_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut m = Map.new<int, int>()
+  m[0] = 10
+  m[1] = 20
+  for i in 0..m.length() {
+    let _ = m[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_shadowed_inner_index() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let flag = true
+  for i in 0..xs.length() {
+    let _ = xs[i]
+    if flag {
+      let i = 0
+      let _ = xs[i]
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_alias_write_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let mut ys = xs
+  for i in 0..xs.length() {
+    ys[0] = 99
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_collection_passed_to_call_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn sum_all(s: Slice<int>) -> int {
+  let mut total = 0
+  for x in s {
+    total = total + x
+  }
+  total
+}
+
+fn main() {
+  let xs = [1, 2, 3]
+  for i in 0..xs.length() {
+    let _ = sum_all(xs)
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_alias_passed_to_call_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn touch(mut s: Slice<int>) {
+  s[0] = 99
+}
+
+fn main() {
+  let xs = [1, 2, 3]
+  let mut ys = xs
+  for i in 0..xs.length() {
+    touch(ys)
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_wrapper_passed_to_call_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+struct Box {
+  items: Slice<int>,
+}
+
+fn touch(mut b: Box) {
+  b.items[0] = 99
+}
+
+fn main() {
+  let xs = [1, 2, 3]
+  let mut b = Box { items: xs }
+  for i in 0..xs.length() {
+    touch(b)
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_lambda_call_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let mut xs = [1, 2, 3]
+  let touch = || {
+    xs[0] = 99
+  }
+  for i in 0..xs.length() {
+    touch()
+    let _ = xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_task_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  for i in 0..xs.length() {
+    task {
+      let _ = xs[i]
+    }
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_lambda_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  for i in 0..xs.length() {
+    let _ = || xs[i]
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn needless_range_loop_select_arm_binds_index_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = [1, 2, 3]
+  let ch = Channel.buffered<int>(1)
+  ch.send(0)
+  for i in 0..xs.length() {
+    let _ = xs[i]
+    let _ = select {
+      let Some(i) = ch.receive() => xs[i],
+      _ => 0,
+    }
+  }
+}
+"#
+    );
+}
