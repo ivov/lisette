@@ -68,7 +68,7 @@ fn run_module(module: &Module, store: &Store, sink: &LocalSink) {
     }
 }
 
-use attributes::{check_attributes, check_struct_attributes};
+use attributes::{check_attributes, check_enum_attributes, check_struct_attributes};
 use checks::{
     check_bool_literal_comparison, check_double_negation, check_dup_arg, check_duplicate_cutset,
     check_duplicate_logical_operand, check_empty_match_arm, check_excess_parens_on_condition,
@@ -109,6 +109,7 @@ const EXPRESSION_CHECKS: &[ExpressionCheck] = &[
     check_waitgroup_add_in_task,
     check_struct_attributes,
     check_attributes,
+    check_enum_attributes,
 ];
 
 const PATTERN_CHECKS: &[PatternCheck] = &[

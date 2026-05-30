@@ -24,6 +24,16 @@ pub fn check_attributes(expression: &Expression, diagnostics: &mut Vec<LisetteDi
     }
 }
 
+pub fn check_enum_attributes(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
+    let Expression::Enum { attributes, .. } = expression else {
+        return;
+    };
+
+    for attribute in attributes {
+        check_unknown_attribute(attribute, diagnostics);
+    }
+}
+
 pub fn check_struct_attributes(expression: &Expression, diagnostics: &mut Vec<LisetteDiagnostic>) {
     let Expression::Struct {
         attributes: struct_attributes,

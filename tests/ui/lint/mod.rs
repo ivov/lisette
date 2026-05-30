@@ -3848,6 +3848,19 @@ pub struct User {
 }
 
 #[test]
+fn unknown_attribute_on_enum() {
+    assert_lint_snapshot!(
+        r#"
+#[foo]
+enum Color {
+  Red,
+  Green,
+}
+"#
+    );
+}
+
+#[test]
 fn field_attribute_without_struct_attribute() {
     assert_lint_snapshot!(
         r#"

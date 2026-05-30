@@ -969,6 +969,11 @@ fn attribute_multiple_on_struct() {
 }
 
 #[test]
+fn attribute_on_enum() {
+    assert_format_snapshot!("#[json]\nenum Shape { Circle, Square }");
+}
+
+#[test]
 fn attribute_on_field() {
     assert_format_snapshot!(
         r#"struct Person {

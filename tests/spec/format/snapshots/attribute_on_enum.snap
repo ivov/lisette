@@ -1,0 +1,9 @@
+---
+source: tests/spec/format/mod.rs
+description: "input: #[json]\nenum Shape { Circle, Square }"
+---
+#[json]
+enum Shape {
+  Circle,
+  Square,
+}

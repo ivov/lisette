@@ -156,9 +156,9 @@ impl<'a> Formatter<'a> {
         let doc_comments_doc = self.comments.take_doc_comments_before(start);
 
         let attrs = match expression {
-            Expression::Function { attributes, .. } | Expression::Struct { attributes, .. } => {
-                self.attributes(attributes)
-            }
+            Expression::Function { attributes, .. }
+            | Expression::Struct { attributes, .. }
+            | Expression::Enum { attributes, .. } => self.attributes(attributes),
             _ => Document::Sequence(vec![]),
         };
         let between_attrs_and_keyword = self.comments.take_comments_before(start);
@@ -317,9 +317,9 @@ impl<'a> Formatter<'a> {
 
     fn item_leading_edge(item: &'a Expression) -> u32 {
         let attrs: &[Attribute] = match item {
-            Expression::Function { attributes, .. } | Expression::Struct { attributes, .. } => {
-                attributes
-            }
+            Expression::Function { attributes, .. }
+            | Expression::Struct { attributes, .. }
+            | Expression::Enum { attributes, .. } => attributes,
             _ => &[],
         };
         attrs
