@@ -135,6 +135,10 @@ pub struct Scopes {
     /// record-struct-as-value error when the struct name is a type qualifier
     /// (e.g. `lib.Point` in `lib.Point.sum`).
     dot_access_base: Cell<bool>,
+    /// True while inferring a `let` binding's right-hand side. Suppresses the generic
+    /// "used as a value" rejection there so `bindings.rs` can raise the specific
+    /// "cannot bind a type or module to a variable" error instead.
+    let_binding_rhs: Cell<bool>,
     /// The enclosing impl block's receiver type, used to resolve `self`
     /// parameter annotations inside the impl's methods. `None` outside impls.
     /// Singleton because Lisette does not allow nested impl blocks.
@@ -155,6 +159,7 @@ impl Scopes {
             loop_needs_label_stack: std::cell::RefCell::new(Vec::new()),
             in_subexpression: Cell::new(false),
             dot_access_base: Cell::new(false),
+            let_binding_rhs: Cell::new(false),
             impl_receiver_type: None,
         }
     }
@@ -461,6 +466,14 @@ impl Scopes {
 
     pub fn set_dot_access_base(&self, value: bool) -> bool {
         self.dot_access_base.replace(value)
+    }
+
+    pub fn is_let_binding_rhs(&self) -> bool {
+        self.let_binding_rhs.get()
+    }
+
+    pub fn set_let_binding_rhs(&self, value: bool) -> bool {
+        self.let_binding_rhs.replace(value)
     }
 
     pub fn increment_type_param_depth(&self) {

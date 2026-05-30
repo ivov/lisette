@@ -85,11 +85,7 @@ impl LeakCtx<'_> {
                     self.check(param, param_ann);
                 }
             }
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => {
+            Type::Function(f) => {
                 let return_ann = match annotation {
                     Some(Annotation::Function { return_type, .. }) => Some(return_type.as_ref()),
                     Some(ann @ (Annotation::Constructor { .. } | Annotation::Tuple { .. })) => {
@@ -97,10 +93,10 @@ impl LeakCtx<'_> {
                     }
                     _ => None,
                 };
-                for param in params {
+                for param in &f.params {
                     self.check(param, None);
                 }
-                self.check(return_type, return_ann);
+                self.check(&f.return_type, return_ann);
             }
             Type::Forall { body, .. } => {
                 self.check(body, annotation);

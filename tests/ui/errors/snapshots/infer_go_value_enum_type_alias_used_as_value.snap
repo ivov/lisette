@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot bind an enum type to a variable
+   ╭─[test.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let m = time.Month
+   ·           ─────┬────
+   ·                ╰── enum types are not runtime values
+ 6 │ }
+   ╰────
+  help: Use a type alias instead: `type Alias = go:time.Month` · code: [infer.let_binding_enum_type]

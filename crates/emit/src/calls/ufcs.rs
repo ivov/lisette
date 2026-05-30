@@ -31,13 +31,10 @@ impl Planner<'_> {
         let Type::Forall { vars, body } = &definition_ty else {
             return None;
         };
-        let Type::Function {
-            params: generic_params,
-            ..
-        } = body.as_ref()
-        else {
+        let Type::Function(f) = body.as_ref() else {
             return None;
         };
+        let generic_params = &f.params;
 
         let all_inferable = vars.iter().all(|var| {
             let param_ty = Type::Parameter(var.clone());
@@ -143,7 +140,7 @@ impl Planner<'_> {
         // suppresses the Go-fn-value identity short-circuit before dispatch
         // into prelude helpers like `lisette.OptionAndThen`.
         let formal_params: Vec<Type> = match function.get_type().unwrap_forall() {
-            Type::Function { params, .. } => params.clone(),
+            Type::Function(f) => f.params.clone(),
             _ => Vec::new(),
         };
         let declared_params =

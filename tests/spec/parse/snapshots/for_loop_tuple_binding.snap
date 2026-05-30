@@ -184,6 +184,7 @@ description: "input: \nfn test(map_data: Map<string, int>) {\n  for (key, value)
                         byte_length: 57,
                     },
                     needs_label: false,
+                    binding_id: None,
                 },
             ],
             ty: Var {

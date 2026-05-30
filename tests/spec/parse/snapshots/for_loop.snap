@@ -145,6 +145,7 @@ description: "input: \nfn test(items: Slice<string>) {\n  for item in items {\n 
                         byte_length: 40,
                     },
                     needs_label: false,
+                    binding_id: None,
                 },
             ],
             ty: Var {

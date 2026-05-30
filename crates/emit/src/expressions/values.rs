@@ -109,10 +109,10 @@ impl Planner<'_> {
             return raw;
         }
         let fn_ty = ty.unwrap_forall();
-        let Type::Function { return_type, .. } = fn_ty else {
+        let Type::Function(f) = fn_ty else {
             return raw;
         };
-        if self.classify_direct_emission(return_type).is_none() {
+        if self.classify_direct_emission(&f.return_type).is_none() {
             return raw;
         }
         emit_lisette_callback_wrapper(self, output, &raw, fn_ty, fx)
@@ -130,13 +130,13 @@ impl Planner<'_> {
             return false;
         }
         let fn_ty = expression.get_type();
-        let Type::Function { return_type, .. } = fn_ty.unwrap_forall() else {
+        let Type::Function(f) = fn_ty.unwrap_forall() else {
             return false;
         };
-        let Some(shape) = self.classify_direct_emission(return_type) else {
+        let Some(shape) = self.classify_direct_emission(&f.return_type) else {
             return false;
         };
-        if self.fallible_tuple_return(return_type) {
+        if self.fallible_tuple_return(&f.return_type) {
             return false;
         }
         shape.matches_go_strategy(strategy)
@@ -165,10 +165,10 @@ impl Planner<'_> {
             return false;
         }
         let fn_ty = expression.get_type();
-        let Type::Function { return_type, .. } = fn_ty.unwrap_forall() else {
+        let Type::Function(f) = fn_ty.unwrap_forall() else {
             return false;
         };
-        self.fallible_tuple_return(return_type)
+        self.fallible_tuple_return(&f.return_type)
     }
 
     pub(crate) fn emit_composite_value(
@@ -488,9 +488,7 @@ impl Planner<'_> {
 
         let value = if inner.get_type() == *ty {
             emitted
-        } else if self.is_go_unaddressable(inner)
-            || matches!(inner.get_type(), Type::Function { .. })
-        {
+        } else if self.is_go_unaddressable(inner) || matches!(inner.get_type(), Type::Function(_)) {
             let tmp = self.hoist_tmp_value_statement(&mut setup, "ref", &emitted);
             format!("&{}", tmp)
         } else {
@@ -675,12 +673,12 @@ impl Planner<'_> {
         match expression.unwrap_parens() {
             Expression::Call { .. } => true,
             Expression::Identifier { value, ty, .. }
-                if !matches!(ty.unwrap_forall(), Type::Function { .. }) =>
+                if !matches!(ty.unwrap_forall(), Type::Function(_)) =>
             {
                 self.identifier_is_unaddressable(value, ty)
             }
             Expression::DotAccess { expression, ty, .. }
-                if !matches!(ty.unwrap_forall(), Type::Function { .. }) =>
+                if !matches!(ty.unwrap_forall(), Type::Function(_)) =>
             {
                 self.dot_access_is_unaddressable(expression, ty)
             }

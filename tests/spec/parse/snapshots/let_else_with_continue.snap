@@ -220,6 +220,7 @@ description: "input: \nfn test() {\n  for item in items {\n    let Valid(data) =
                         byte_length: 99,
                     },
                     needs_label: false,
+                    binding_id: None,
                 },
             ],
             ty: Var {

@@ -119,15 +119,10 @@ impl TypeEnv {
                 kind: *kind,
                 args: args.iter().map(|a| self.resolve(a)).collect(),
             },
-            Type::Function {
-                params,
-                param_mutability,
-                bounds,
-                return_type,
-            } => Type::Function {
-                params: params.iter().map(|p| self.resolve(p)).collect(),
-                param_mutability: param_mutability.clone(),
-                bounds: bounds
+            Type::Function(f) => Type::function(
+                f.params.iter().map(|p| self.resolve(p)).collect(),
+                f.param_mutability.clone(),
+                f.bounds
                     .iter()
                     .map(|b| Bound {
                         param_name: b.param_name.clone(),
@@ -135,8 +130,8 @@ impl TypeEnv {
                         ty: self.resolve(&b.ty),
                     })
                     .collect(),
-                return_type: Box::new(self.resolve(return_type)),
-            },
+                Box::new(self.resolve(&f.return_type)),
+            ),
             Type::Forall { vars, body } => Type::Forall {
                 vars: vars.clone(),
                 body: Box::new(self.resolve(body)),
@@ -166,11 +161,9 @@ impl TypeEnv {
             }
             Type::Nominal { params, .. } => params.iter().any(|p| self.occurs(id, p)),
             Type::Compound { args, .. } => args.iter().any(|a| self.occurs(id, a)),
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => params.iter().any(|p| self.occurs(id, p)) || self.occurs(id, return_type),
+            Type::Function(f) => {
+                f.params.iter().any(|p| self.occurs(id, p)) || self.occurs(id, &f.return_type)
+            }
             Type::Forall { body, .. } => self.occurs(id, body),
             Type::Tuple(elements) => elements.iter().any(|e| self.occurs(id, e)),
             _ => false,

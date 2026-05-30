@@ -46,12 +46,13 @@ impl TaskState<'_> {
                     self.convert_to_type(store, return_type, span)
                 };
 
-                Type::Function {
-                    param_mutability: vec![false; new_params.len()],
-                    params: new_params,
-                    bounds: Default::default(),
-                    return_type: new_return_type.into(),
-                }
+                let param_mutability = vec![false; new_params.len()];
+                Type::function(
+                    new_params,
+                    param_mutability,
+                    Default::default(),
+                    new_return_type.into(),
+                )
             }
 
             Annotation::Constructor {
@@ -333,7 +334,7 @@ impl TaskState<'_> {
             return;
         }
 
-        let reason = if matches!(&resolved, Type::Function { .. }) {
+        let reason = if matches!(&resolved, Type::Function(_)) {
             "functions"
         } else if resolved.has_name("Slice") {
             "slices"

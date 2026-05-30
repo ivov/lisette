@@ -860,6 +860,7 @@ pub enum Expression {
         body: Box<Expression>,
         span: Span,
         needs_label: bool,
+        binding_id: Option<BindingId>,
     },
     Break {
         value: Option<Box<Expression>>,
@@ -1557,6 +1558,23 @@ impl Expression {
         match self {
             Expression::Paren { expression, .. } => expression.unwrap_parens(),
             other => other,
+        }
+    }
+
+    pub fn binding_id(&self) -> Option<BindingId> {
+        match self.unwrap_parens() {
+            Expression::Identifier { binding_id, .. } => *binding_id,
+            _ => None,
+        }
+    }
+
+    pub fn as_integer(&self) -> Option<u64> {
+        match self.unwrap_parens() {
+            Expression::Literal {
+                literal: Literal::Integer { value, .. },
+                ..
+            } => Some(*value),
+            _ => None,
         }
     }
 

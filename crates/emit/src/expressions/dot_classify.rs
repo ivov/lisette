@@ -17,8 +17,8 @@ impl Planner<'_> {
         let expression_ty = expression.get_type();
         let enum_id = match expression_ty.unwrap_forall() {
             Type::Nominal { id, .. } => id.clone(),
-            Type::Function { return_type, .. } => {
-                if let Type::Nominal { id, .. } = return_type.as_ref() {
+            Type::Function(f) => {
+                if let Type::Nominal { id, .. } = f.return_type.as_ref() {
                     id.clone()
                 } else {
                     return None;
@@ -75,20 +75,16 @@ impl Planner<'_> {
         result_ty: &Type,
         fx: &mut EmitEffects,
     ) -> Option<String> {
-        let Type::Function {
-            return_type,
-            params: fn_params,
-            ..
-        } = result_ty
-        else {
+        let Type::Function(f) = result_ty else {
             return None;
         };
+        let fn_params = &f.params;
 
         let Type::Nominal {
             id: enum_id,
             params: ret_params,
             ..
-        } = return_type.as_ref()
+        } = f.return_type.as_ref()
         else {
             return None;
         };
@@ -183,7 +179,7 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> Option<String> {
         let func_ty = result_ty.unwrap_forall();
-        if !matches!(func_ty, Type::Function { .. }) {
+        if !matches!(func_ty, Type::Function(_)) {
             return None;
         }
 
@@ -244,8 +240,8 @@ impl Planner<'_> {
         let go_type_name = go_name::snake_to_camel(type_name);
 
         // Extract type args from the receiver parameter
-        let type_args = if let Type::Function { params, .. } = result_ty.unwrap_forall()
-            && let Some(first_param) = params.first()
+        let type_args = if let Type::Function(f) = result_ty.unwrap_forall()
+            && let Some(first_param) = f.params.first()
         {
             let receiver_ty = first_param.strip_refs();
             if let Type::Nominal {
@@ -284,7 +280,7 @@ impl Planner<'_> {
         ctx: ExpressionContext<'_>,
         fx: &mut EmitEffects,
     ) -> Option<String> {
-        if !matches!(result_ty.unwrap_forall(), Type::Function { .. }) {
+        if !matches!(result_ty.unwrap_forall(), Type::Function(_)) {
             return None;
         }
 

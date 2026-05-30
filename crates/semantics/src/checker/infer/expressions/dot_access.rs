@@ -260,7 +260,7 @@ impl TaskState<'_> {
             if !self.scopes.is_callee_context()
                 && matches!(
                     expression.get_type().resolve_in(&self.env),
-                    Type::Function { .. } | Type::Forall { .. }
+                    Type::Function(_) | Type::Forall { .. }
                 )
                 && NativeTypeKind::from_type(&resolved_expression_ty).is_some()
             {
@@ -581,6 +581,20 @@ impl TaskState<'_> {
                     *args.span,
                 ));
             }
+
+            if !self.scopes.is_callee_context()
+                && !self.scopes.is_dot_access_base()
+                && !self.scopes.is_let_binding_rhs()
+                && matches!(
+                    store.get_definition(&qualified_name).map(|d| &d.body),
+                    Some(DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. })
+                )
+            {
+                self.sink
+                    .push(diagnostics::infer::namespace_alias_used_as_value(
+                        *args.span,
+                    ));
+            }
         }
 
         let (module_ty, _) = self.instantiate(&module_ty);
@@ -616,7 +630,7 @@ impl TaskState<'_> {
 
         let (mut method_ty, _) = self.instantiate(&method_ty);
 
-        if !matches!(method_ty, Type::Function { .. }) {
+        if !matches!(method_ty, Type::Function(_)) {
             return None;
         }
 
@@ -626,18 +640,13 @@ impl TaskState<'_> {
             return Some((expression, value_kind));
         }
 
-        let Type::Function {
-            ref mut params,
-            ref mut param_mutability,
-            ..
-        } = method_ty
-        else {
+        let Type::Function(ref mut f) = method_ty else {
             unreachable!();
         };
 
-        let receiver_ty = params.remove(0);
-        if !param_mutability.is_empty() {
-            param_mutability.remove(0);
+        let receiver_ty = f.params.remove(0);
+        if !f.param_mutability.is_empty() {
+            f.param_mutability.remove(0);
         }
         let actual_ty = args.expression_ty;
 
@@ -707,9 +716,10 @@ impl TaskState<'_> {
         method_ty: &mut Type,
         is_exported: bool,
     ) -> Option<(Expression, DotAccessKind)> {
-        let Type::Function { params, .. } = &*method_ty else {
+        let Type::Function(f) = &*method_ty else {
             return None;
         };
+        let params = &f.params;
 
         let is_cross_module_type_access = matches!(
             args.expression,
@@ -730,7 +740,7 @@ impl TaskState<'_> {
 
         self.unify(store, args.expected_ty, method_ty, args.span);
 
-        let is_pointer_receiver = matches!(method_ty, Type::Function { params, .. } if !params.is_empty() && params[0].resolve_in(&self.env).is_ref());
+        let is_pointer_receiver = matches!(method_ty, Type::Function(f) if !f.params.is_empty() && f.params[0].resolve_in(&self.env).is_ref());
         let value_kind = DotAccessKind::InstanceMethodValue {
             is_exported,
             is_pointer_receiver,
@@ -880,8 +890,8 @@ impl TaskState<'_> {
     ) -> Option<(Expression, DotAccessKind)> {
         let id = match &args.deref_ty {
             Type::Nominal { id, .. } => id.clone(),
-            Type::Function { return_type, .. } => {
-                if let Type::Nominal { id, .. } = return_type.as_ref() {
+            Type::Function(f) => {
+                if let Type::Nominal { id, .. } = f.return_type.as_ref() {
                     id.clone()
                 } else {
                     return None;
@@ -952,8 +962,8 @@ impl TaskState<'_> {
         args: &DotAccessResolutionArgs,
     ) -> Option<(Expression, DotAccessKind)> {
         let id = match &args.deref_ty {
-            Type::Function { return_type, .. } => {
-                if let Type::Nominal { id, .. } = return_type.as_ref() {
+            Type::Function(f) => {
+                if let Type::Nominal { id, .. } = f.return_type.as_ref() {
                     id.clone()
                 } else {
                     return None;

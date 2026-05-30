@@ -19,14 +19,11 @@ pub(crate) fn handle(items: &[Expression], offset: u32) -> Option<SignatureHelp>
         syntax::types::Type::Forall { body, .. } => body.as_ref(),
         other => other,
     };
-    let syntax::types::Type::Function {
-        params,
-        return_type,
-        ..
-    } = func_ty_inner
-    else {
+    let syntax::types::Type::Function(f) = func_ty_inner else {
         return None;
     };
+    let params = &f.params;
+    let return_type = &f.return_type;
 
     let func_name = match expression.as_ref() {
         Expression::Identifier { value, .. } => unqualified_name(value),

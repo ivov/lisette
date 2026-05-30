@@ -139,6 +139,7 @@ description: "input: \nfn test() { for i in 0..5 { print(i); } }\n"
                         byte_length: 27,
                     },
                     needs_label: false,
+                    binding_id: None,
                 },
             ],
             ty: Var {

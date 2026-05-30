@@ -1,0 +1,52 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import (
+	"fmt"
+	"github.com/user/myproject/utils"
+)
+
+func main() {
+	fmt.Println("rgb direct", utils.MakeColorRGB())
+}
+
+
+// === utils/color.go ===
+package utils
+
+import "fmt"
+
+func MakeColorRGB() Color {
+	return Color{Tag: ColorRGB}
+}
+
+type ColorTag int
+
+const (
+	ColorRGB ColorTag = iota
+)
+
+type Color struct {
+	Tag ColorTag
+}
+
+func (c Color) String() string {
+	switch c.Tag {
+	case ColorRGB:
+		return "RGB"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+func (c Color) GoString() string {
+	switch c.Tag {
+	case ColorRGB:
+		return "Color.RGB"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}

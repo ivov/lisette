@@ -501,10 +501,10 @@ impl Planner<'_> {
             && is_go_receiver(receiver)
         {
             let fn_type = expression.get_type();
-            let Type::Function { return_type, .. } = fn_type.unwrap_forall() else {
+            let Type::Function(f) = fn_type.unwrap_forall() else {
                 return None;
             };
-            let return_type = return_type.clone();
+            let return_type = f.return_type.clone();
 
             let go_hints = if let Expression::DotAccess {
                 expression: receiver_expression,
@@ -595,11 +595,7 @@ impl Planner<'_> {
     ) -> Option<(Type, Vec<String>, String)> {
         let fn_type = expression.get_type();
         let (params, return_type) = match fn_type.unwrap_forall() {
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => (params.clone(), (**return_type).clone()),
+            Type::Function(f) => (f.params.clone(), (*f.return_type).clone()),
             _ => return None,
         };
         let go_fn_str = self.hoist_go_fn_if_needed(output, expression, fx);

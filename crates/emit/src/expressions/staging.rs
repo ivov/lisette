@@ -119,8 +119,8 @@ impl Planner<'_> {
         ambient: Option<&ReturnContext>,
         fx: &mut EmitEffects,
     ) -> StagedExpression {
-        let suppress = param_ty
-            .is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function { .. }));
+        let suppress =
+            param_ty.is_some_and(|p| matches!(p.unwrap_forall(), syntax::types::Type::Function(_)));
         let arg_ctx = ExpressionContext::value()
             .with_forced_tagged_go_function(suppress)
             .with_ambient_return_ctx_opt(ambient);
@@ -173,10 +173,10 @@ impl Planner<'_> {
             return None;
         }
         let param_ty = param_ty?;
-        let Type::Function { return_type, .. } = param_ty.unwrap_forall() else {
+        let Type::Function(f) = param_ty.unwrap_forall() else {
             return None;
         };
-        self.classify_direct_emission(return_type)?;
+        self.classify_direct_emission(&f.return_type)?;
         Some(())
     }
 
@@ -200,7 +200,7 @@ impl Planner<'_> {
     ) -> Vec<StagedExpression> {
         let fn_ty = function.get_type();
         let formal_params: &[syntax::types::Type] = match fn_ty.unwrap_forall() {
-            syntax::types::Type::Function { params, .. } => params,
+            syntax::types::Type::Function(f) => &f.params,
             _ => &[],
         };
         args.iter()

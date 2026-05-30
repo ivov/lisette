@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Cannot bind a module namespace to a variable
+   ╭─[main.lis:5:11]
+ 4 │ fn main() {
+ 5 │   let u = utils
+   ·           ──┬──
+   ·             ╰── module namespaces are not runtime values
+ 6 │ }
+   ╰────
+  help: Use an import alias instead: `import alias "utils"` · code: [infer.let_binding_module_namespace]

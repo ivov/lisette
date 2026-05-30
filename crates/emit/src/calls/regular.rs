@@ -715,26 +715,22 @@ impl<'a> Planner<'a> {
                     .resolve_to_function_type(param_ty.unwrap_forall())
             })
             .filter(|fn_ty| {
-                let Type::Function { return_type, .. } = fn_ty else {
+                let Type::Function(f) = fn_ty else {
                     return false;
                 };
-                return_type.is_result()
-                    || return_type.is_option()
-                    || return_type.tuple_arity().is_some_and(|a| a >= 2)
+                f.return_type.is_result()
+                    || f.return_type.is_option()
+                    || f.return_type.tuple_arity().is_some_and(|a| a >= 2)
             })?;
 
         let arg_ty = arg.get_type();
         let arg_fn_ty = self.facts.resolve_to_function_type(arg_ty.unwrap_forall());
-        if let Some(Type::Function {
-            return_type: arg_ret,
-            ..
-        }) = arg_fn_ty.as_ref()
-            && let Type::Function {
-                return_type: param_ret,
-                ..
-            } = &param_fn_ty
-            && self.classify_direct_emission(arg_ret).is_some()
-            && self.classify_direct_emission(param_ret).is_some()
+        if let Some(Type::Function(arg_f)) = arg_fn_ty.as_ref()
+            && let Type::Function(param_f) = &param_fn_ty
+            && self.classify_direct_emission(&arg_f.return_type).is_some()
+            && self
+                .classify_direct_emission(&param_f.return_type)
+                .is_some()
         {
             return Some(CallbackWrapperKind::Identity);
         }
@@ -913,7 +909,7 @@ fn spread_needs_any_wrap(function: &Expression, spread: Option<&Expression>) -> 
 /// tagged-Go lowering wrap.
 fn would_suppress_tagged_go(ctx: &CallArgsContext<'_>, effective_param_ty: Option<&Type>) -> bool {
     let unwrapped = effective_param_ty.map(|p| p.unwrap_forall());
-    ctx.is_prelude_dispatch && unwrapped.is_some_and(|p| matches!(p, Type::Function { .. }))
+    ctx.is_prelude_dispatch && unwrapped.is_some_and(|p| matches!(p, Type::Function(_)))
 }
 
 /// Compute the `ExpressionContext` for emitting a Direct or TaggedGoLowering

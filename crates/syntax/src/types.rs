@@ -213,15 +213,10 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
             params: params.iter().map(|p| substitute(p, map)).collect(),
             underlying_ty: underlying.as_ref().map(|u| Box::new(substitute(u, map))),
         },
-        Type::Function {
-            params,
-            param_mutability,
-            bounds,
-            return_type,
-        } => Type::Function {
-            params: params.iter().map(|p| substitute(p, map)).collect(),
-            param_mutability: param_mutability.clone(),
-            bounds: bounds
+        Type::Function(f) => Type::function(
+            f.params.iter().map(|p| substitute(p, map)).collect(),
+            f.param_mutability.clone(),
+            f.bounds
                 .iter()
                 .map(|b| Bound {
                     param_name: b.param_name.clone(),
@@ -229,8 +224,8 @@ pub fn substitute(ty: &Type, map: &HashMap<EcoString, Type>) -> Type {
                     ty: substitute(&b.ty, map),
                 })
                 .collect(),
-            return_type: Box::new(substitute(return_type, map)),
-        },
+            Box::new(substitute(&f.return_type, map)),
+        ),
         Type::Var { .. } | Type::Error => ty.clone(),
         Type::Forall { vars, body } => {
             let has_overlap = map.keys().any(|k| vars.contains(k));
@@ -266,6 +261,15 @@ pub struct Bound {
     pub param_name: EcoString,
     pub generic: Type,
     pub ty: Type,
+}
+
+#[derive(Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FunctionType {
+    pub params: Vec<Type>,
+    pub param_mutability: Vec<bool>,
+    pub bounds: Vec<Bound>,
+    pub return_type: Box<Type>,
 }
 
 /// A unique handle identifying a type variable. The binding state (Unbound /
@@ -319,12 +323,7 @@ pub enum Type {
     /// Dot-access on this type resolves to the module's exports.
     ImportNamespace(EcoString),
 
-    Function {
-        params: Vec<Type>,
-        param_mutability: Vec<bool>,
-        bounds: Vec<Bound>,
-        return_type: Box<Type>,
-    },
+    Function(Box<FunctionType>),
 
     /// Type variable handle. Binding state lives in a `TypeEnv` owned by the
     /// checker; the inline `hint` is display metadata set at allocation time
@@ -364,19 +363,14 @@ impl std::fmt::Debug for Type {
                 .field("id", id)
                 .field("params", params)
                 .finish(),
-            Type::Function {
-                params,
-                param_mutability,
-                bounds,
-                return_type,
-            } => {
+            Type::Function(f_ty) => {
                 let mut s = f.debug_struct("Function");
-                s.field("params", params);
-                if param_mutability.iter().any(|m| *m) {
-                    s.field("param_mutability", param_mutability);
+                s.field("params", &f_ty.params);
+                if f_ty.param_mutability.iter().any(|m| *m) {
+                    s.field("param_mutability", &f_ty.param_mutability);
                 }
-                s.field("bounds", bounds)
-                    .field("return_type", return_type)
+                s.field("bounds", &f_ty.bounds)
+                    .field("return_type", &f_ty.return_type)
                     .finish()
             }
             Type::Var { id, hint } => {
@@ -425,20 +419,7 @@ impl PartialEq for Type {
                     ..
                 },
             ) => id1 == id2 && params1 == params2,
-            (
-                Type::Function {
-                    params: p1,
-                    param_mutability: m1,
-                    bounds: b1,
-                    return_type: r1,
-                },
-                Type::Function {
-                    params: p2,
-                    param_mutability: m2,
-                    bounds: b2,
-                    return_type: r2,
-                },
-            ) => p1 == p2 && m1 == m2 && b1 == b2 && r1 == r2,
+            (Type::Function(f1), Type::Function(f2)) => f1 == f2,
             (Type::Var { id: id1, .. }, Type::Var { id: id2, .. }) => id1 == id2,
             (
                 Type::Forall {
@@ -481,6 +462,20 @@ impl Type {
 
     pub fn compound(kind: CompoundKind, args: Vec<Type>) -> Type {
         Self::Compound { kind, args }
+    }
+
+    pub fn function(
+        params: Vec<Type>,
+        param_mutability: Vec<bool>,
+        bounds: Vec<Bound>,
+        return_type: Box<Type>,
+    ) -> Type {
+        Type::Function(Box::new(FunctionType {
+            params,
+            param_mutability,
+            bounds,
+            return_type,
+        }))
     }
 
     pub fn int() -> Type {
@@ -556,13 +551,9 @@ impl Type {
                 c
             }
             Type::Compound { args, .. } => args.iter().collect(),
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => {
-                let mut c: Vec<&Type> = params.iter().collect();
-                c.push(return_type);
+            Type::Function(f) => {
+                let mut c: Vec<&Type> = f.params.iter().collect();
+                c.push(&f.return_type);
                 c
             }
             Type::Tuple(elements) => elements.iter().collect(),
@@ -757,7 +748,7 @@ impl SimpleKind {
 impl Type {
     pub fn get_function_ret(&self) -> Option<&Type> {
         match self {
-            Type::Function { return_type, .. } => Some(return_type),
+            Type::Function(f) => Some(&f.return_type),
             _ => None,
         }
     }
@@ -875,11 +866,9 @@ impl Type {
         }
         match &peeled {
             Type::Compound { args, .. } => args.iter().any(|a| a.contains_unknown()),
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => params.iter().any(|p| p.contains_unknown()) || return_type.contains_unknown(),
+            Type::Function(f) => {
+                f.params.iter().any(|p| p.contains_unknown()) || f.return_type.contains_unknown()
+            }
             Type::Tuple(elements) => elements.iter().any(|e| e.contains_unknown()),
             Type::Nominal { params, .. } => params.iter().any(|p| p.contains_unknown()),
             Type::Forall { body, .. } => body.contains_unknown(),
@@ -1062,11 +1051,9 @@ impl Type {
                     || underlying_ty.as_deref().is_some_and(Type::contains_error)
             }
             Type::Compound { args, .. } => args.iter().any(Type::contains_error),
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => params.iter().any(Type::contains_error) || return_type.contains_error(),
+            Type::Function(f) => {
+                f.params.iter().any(Type::contains_error) || f.return_type.contains_error()
+            }
             Type::Tuple(elements) => elements.iter().any(Type::contains_error),
             Type::Forall { body, .. } => body.contains_error(),
             _ => false,
@@ -1077,13 +1064,9 @@ impl Type {
         match self {
             Type::Var { hint, .. } => hint.is_some(),
             Type::Nominal { params, .. } => params.iter().any(|p| p.has_unbound_variables()),
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => {
-                params.iter().any(|p| p.has_unbound_variables())
-                    || return_type.has_unbound_variables()
+            Type::Function(f) => {
+                f.params.iter().any(|p| p.has_unbound_variables())
+                    || f.return_type.has_unbound_variables()
             }
             Type::Forall { body, .. } => body.has_unbound_variables(),
             Type::Tuple(elements) => elements.iter().any(|e| e.has_unbound_variables()),
@@ -1109,17 +1092,12 @@ impl Type {
                     param.remove_found_type_names(names);
                 }
             }
-            Type::Function {
-                params,
-                return_type,
-                bounds,
-                ..
-            } => {
-                for param in params {
+            Type::Function(f) => {
+                for param in &f.params {
                     param.remove_found_type_names(names);
                 }
-                return_type.remove_found_type_names(names);
-                for bound in bounds {
+                f.return_type.remove_found_type_names(names);
+                for bound in &f.bounds {
                     bound.generic.remove_found_type_names(names);
                     bound.ty.remove_found_type_names(names);
                 }
@@ -1183,7 +1161,7 @@ impl Type {
 
     pub fn get_function_params(&self) -> Option<&[Type]> {
         match self {
-            Type::Function { params, .. } => Some(params),
+            Type::Function(f) => Some(&f.params),
             Type::Nominal {
                 underlying_ty: Some(inner),
                 ..
@@ -1194,39 +1172,32 @@ impl Type {
 
     pub fn param_count(&self) -> usize {
         match self {
-            Type::Function { params, .. } => params.len(),
+            Type::Function(f) => f.params.len(),
             _ => 0,
         }
     }
 
     pub fn get_param_mutability(&self) -> &[bool] {
         match self {
-            Type::Function {
-                param_mutability, ..
-            } => param_mutability,
+            Type::Function(f) => &f.param_mutability,
             _ => &[],
         }
     }
 
     pub fn with_replaced_first_param(&self, new_first: &Type) -> Type {
         match self {
-            Type::Function {
-                params,
-                param_mutability,
-                bounds,
-                return_type,
-            } => {
-                if params.is_empty() {
+            Type::Function(f) => {
+                if f.params.is_empty() {
                     return self.clone();
                 }
-                let mut new_params = params.clone();
+                let mut new_params = f.params.clone();
                 new_params[0] = new_first.clone();
-                Type::Function {
-                    params: new_params,
-                    param_mutability: param_mutability.clone(),
-                    bounds: bounds.clone(),
-                    return_type: return_type.clone(),
-                }
+                Type::function(
+                    new_params,
+                    f.param_mutability.clone(),
+                    f.bounds.clone(),
+                    f.return_type.clone(),
+                )
             }
             Type::Forall { vars, body } => Type::Forall {
                 vars: vars.clone(),
@@ -1238,7 +1209,7 @@ impl Type {
 
     pub fn get_bounds(&self) -> &[Bound] {
         match self {
-            Type::Function { bounds, .. } => bounds,
+            Type::Function(f) => &f.bounds,
             Type::Forall { body, .. } => body.get_bounds(),
             _ => &[],
         }
@@ -1342,24 +1313,15 @@ impl Type {
 
     pub fn with_receiver_placeholder(self) -> Type {
         match self {
-            Type::Function {
-                params,
-                param_mutability,
-                bounds,
-                return_type,
-            } => {
+            Type::Function(f) => {
+                let f = *f;
                 let mut new_params = vec![Type::ReceiverPlaceholder];
-                new_params.extend(params);
+                new_params.extend(f.params);
 
                 let mut new_mutability = vec![false];
-                new_mutability.extend(param_mutability);
+                new_mutability.extend(f.param_mutability);
 
-                Type::Function {
-                    params: new_params,
-                    param_mutability: new_mutability,
-                    bounds,
-                    return_type,
-                }
+                Type::function(new_params, new_mutability, f.bounds, f.return_type)
             }
             _ => unreachable!(
                 "with_receiver_placeholder called on non-function type: {:?}",
@@ -1395,18 +1357,13 @@ impl Type {
                     .map(|u| Box::new(Self::remove_vars_impl(u, vars))),
             },
 
-            Type::Function {
-                params: args,
-                param_mutability,
-                bounds,
-                return_type,
-            } => Type::Function {
-                params: args
+            Type::Function(f) => Type::function(
+                f.params
                     .iter()
                     .map(|a| Self::remove_vars_impl(a, vars))
                     .collect(),
-                param_mutability: param_mutability.clone(),
-                bounds: bounds
+                f.param_mutability.clone(),
+                f.bounds
                     .iter()
                     .map(|b| Bound {
                         param_name: b.param_name.clone(),
@@ -1414,8 +1371,8 @@ impl Type {
                         ty: Self::remove_vars_impl(&b.ty, vars),
                     })
                     .collect(),
-                return_type: Self::remove_vars_impl(return_type, vars).into(),
-            },
+                Self::remove_vars_impl(&f.return_type, vars).into(),
+            ),
 
             Type::Var { id, hint } => match vars.get(&id.0) {
                 Some(g) => Type::Parameter(g.clone()),
@@ -1456,12 +1413,9 @@ impl Type {
         }
         match self {
             Type::Nominal { params, .. } => params.iter().any(|p| p.contains_type(target)),
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => {
-                params.iter().any(|p| p.contains_type(target)) || return_type.contains_type(target)
+            Type::Function(f) => {
+                f.params.iter().any(|p| p.contains_type(target))
+                    || f.return_type.contains_type(target)
             }
             Type::Var { .. } => false,
             Type::Forall { body, .. } => body.contains_type(target),
@@ -1580,27 +1534,23 @@ mod tests {
 
     #[test]
     fn remove_vars_handles_more_than_six_unhinted_vars() {
-        let func = Type::Function {
-            params: (0..6).map(unhinted_var).collect(),
-            param_mutability: vec![false; 6],
-            bounds: vec![],
-            return_type: Box::new(unhinted_var(6)),
-        };
+        let func = Type::function(
+            (0..6).map(unhinted_var).collect(),
+            vec![false; 6],
+            vec![],
+            Box::new(unhinted_var(6)),
+        );
 
         let (resolved, generics) = Type::remove_vars(&[&func]);
 
         assert_eq!(generics.len(), 7);
-        let Type::Function {
-            params,
-            return_type,
-            ..
-        } = &resolved[0]
-        else {
+        let Type::Function(f) = &resolved[0] else {
             panic!("expected function type");
         };
-        let names: Vec<_> = params
+        let names: Vec<_> = f
+            .params
             .iter()
-            .chain(std::iter::once(return_type.as_ref()))
+            .chain(std::iter::once(f.return_type.as_ref()))
             .map(|p| match p {
                 Type::Parameter(name) => name.to_string(),
                 other => panic!("expected parameter, got {:?}", other),
@@ -1612,12 +1562,12 @@ mod tests {
     #[test]
     fn remove_vars_handles_dozens_of_unhinted_vars() {
         let params: Vec<Type> = (0..30).map(unhinted_var).collect();
-        let func = Type::Function {
-            params: params.clone(),
-            param_mutability: vec![false; params.len()],
-            bounds: vec![],
-            return_type: Box::new(Type::Simple(SimpleKind::Unit)),
-        };
+        let func = Type::function(
+            params.clone(),
+            vec![false; params.len()],
+            vec![],
+            Box::new(Type::Simple(SimpleKind::Unit)),
+        );
         let (_, generics) = Type::remove_vars(&[&func]);
         assert_eq!(generics.len(), 30);
     }

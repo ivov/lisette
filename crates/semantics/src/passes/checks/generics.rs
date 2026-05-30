@@ -111,8 +111,8 @@ fn check_constrained_return_type(
             Type::Forall { body, .. } => body.as_ref(),
             other => other,
         };
-        if let Type::Function { bounds, .. } = fn_ty {
-            for bound in bounds {
+        if let Type::Function(f) = fn_ty {
+            for bound in &f.bounds {
                 if let Type::Parameter(param_name) = &bound.generic {
                     let entry = required_bounds.entry(param_name.to_string()).or_default();
                     if !entry.contains(&bound.ty) {

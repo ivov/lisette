@@ -45,7 +45,7 @@ pub(crate) fn definition_to_completion_kind(
         DefinitionBody::Value { .. } => {
             if matches!(
                 &definition.ty,
-                syntax::types::Type::Function { .. } | syntax::types::Type::Forall { .. }
+                syntax::types::Type::Function(_) | syntax::types::Type::Forall { .. }
             ) {
                 CompletionItemKind::FUNCTION
             } else {
@@ -346,8 +346,8 @@ fn is_instance_method(ty: &syntax::types::Type, type_id: &str) -> bool {
         other => other,
     };
     match func_ty {
-        syntax::types::Type::Function { params, .. } if !params.is_empty() => {
-            type_name(&params[0]).is_some_and(|name| name == type_id)
+        syntax::types::Type::Function(f) if !f.params.is_empty() => {
+            type_name(&f.params[0]).is_some_and(|name| name == type_id)
         }
         _ => false,
     }

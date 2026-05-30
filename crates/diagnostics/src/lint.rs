@@ -294,7 +294,7 @@ pub fn duplicate_logical_operand(span: &Span, operand_text: &str) -> LisetteDiag
 pub fn bool_literal_comparison(span: &Span, replacement: &str) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Redundant comparison to boolean literal")
         .with_lint_code("bool_literal_comparison")
-        .with_span_label(span, "needlessly verbose")
+        .with_span_label(span, "can be simpler")
         .with_help(format!("Simplify to `{replacement}`"))
 }
 
@@ -330,7 +330,7 @@ pub fn needless_bool(span: &Span, consequence_is_true: bool) -> LisetteDiagnosti
 
     LisetteDiagnostic::warn("Needless boolean if-else")
         .with_lint_code("needless_bool")
-        .with_span_label(span, "needlessly verbose")
+        .with_span_label(span, "can be simpler")
         .with_help(help)
 }
 
@@ -564,4 +564,13 @@ pub fn waitgroup_add_in_task(span: &Span) -> LisetteDiagnostic {
         .with_help(
             "If `Wait` runs before this `Add`, it sees a zero counter and returns immediately. Call `Add` before the `task`",
         )
+}
+
+pub fn needless_range_loop(span: &Span, collection: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Needless range loop")
+        .with_lint_code("needless_range_loop")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!(
+            "This loop exposes the index only to access elements of `{collection}`. Iterate directly over the elements with `for value in {collection}`"
+        ))
 }

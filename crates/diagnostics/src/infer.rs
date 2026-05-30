@@ -2753,6 +2753,34 @@ pub fn record_struct_value(name: &str, span: Span) -> LisetteDiagnostic {
         ))
 }
 
+pub fn namespace_alias_used_as_value(span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot use a module or enum-type alias as a value")
+        .with_infer_code("namespace_alias_used_as_value")
+        .with_span_label(
+            &span,
+            "this alias refers to a type or module, not a runtime value",
+        )
+        .with_help("Access a member instead, e.g. `alias.VariantName`")
+}
+
+pub fn let_binding_module_namespace(module_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot bind a module namespace to a variable")
+        .with_infer_code("let_binding_module_namespace")
+        .with_span_label(&span, "module namespaces are not runtime values")
+        .with_help(format!(
+            "Use an import alias instead: `import alias \"{module_name}\"`"
+        ))
+}
+
+pub fn let_binding_enum_type(type_name: &str, span: Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("Cannot bind an enum type to a variable")
+        .with_infer_code("let_binding_enum_type")
+        .with_span_label(&span, "enum types are not runtime values")
+        .with_help(format!(
+            "Use a type alias instead: `type Alias = {type_name}`"
+        ))
+}
+
 pub fn private_method_expression(span: Span) -> LisetteDiagnostic {
     LisetteDiagnostic::error("Cannot use private method as a value")
         .with_infer_code("private_method_expression")

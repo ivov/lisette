@@ -19,8 +19,8 @@ pub fn is_ufcs_method_type(method_ty: &Type, base_generics_count: usize) -> bool
         return true;
     }
 
-    if let Type::Function { params, .. } = body.as_ref()
-        && let Some(receiver_param) = params.first()
+    if let Type::Function(f) = body.as_ref()
+        && let Some(receiver_param) = f.params.first()
         && let Type::Nominal {
             params: receiver_params,
             ..

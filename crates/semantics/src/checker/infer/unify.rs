@@ -199,7 +199,7 @@ impl TaskState<'_> {
 
             (Nominal { .. }, Nominal { .. }) => self.unify_constructors(store, &r1, &r2, span),
 
-            (Function { .. }, Function { .. }) => self.unify_functions(store, &r1, &r2, span),
+            (Function(_), Function(_)) => self.unify_functions(store, &r1, &r2, span),
 
             (Type::Tuple(elems1), Type::Tuple(elems2)) => {
                 if elems1.len() != elems2.len() {
@@ -215,14 +215,14 @@ impl TaskState<'_> {
                     underlying_ty: Some(underlying),
                     ..
                 },
-                Function { .. },
+                Function(_),
             ) => {
                 let u = underlying.as_ref().clone();
                 self.try_unify(store, &u, &r2, span)
             }
 
             (
-                Function { .. },
+                Function(_),
                 Nominal {
                     underlying_ty: Some(underlying),
                     ..
@@ -283,15 +283,12 @@ impl TaskState<'_> {
                     self.collapse_vars_to_error(store, &p, span);
                 }
             }
-            Function {
-                params,
-                return_type,
-                ..
-            } => {
-                for p in params {
+            Function(f) => {
+                let f = *f;
+                for p in f.params {
                     self.collapse_vars_to_error(store, &p, span);
                 }
-                self.collapse_vars_to_error(store, &return_type, span);
+                self.collapse_vars_to_error(store, &f.return_type, span);
             }
             Type::Tuple(elems) => {
                 for e in elems {
@@ -509,44 +506,28 @@ impl TaskState<'_> {
         t2: &Type,
         span: &Span,
     ) -> Result<(), UnifyError> {
-        let (
-            Function {
-                params: params1,
-                return_type: return_type1,
-                bounds: bounds1,
-                param_mutability: mut1,
-                ..
-            },
-            Function {
-                params: params2,
-                return_type: return_type2,
-                bounds: bounds2,
-                param_mutability: mut2,
-                ..
-            },
-        ) = (t1, t2)
-        else {
+        let (Function(f1), Function(f2)) = (t1, t2) else {
             unreachable!("unify_functions called with non-Function types")
         };
 
-        if params1.len() != params2.len() {
+        if f1.params.len() != f2.params.len() {
             return Err(UnifyError::ArityMismatch);
         }
 
         // A function with `mut` params cannot unify with one without (or vice versa),
         // since that would let callers bypass the `let mut` requirement.
-        if mut1 != mut2 {
+        if f1.param_mutability != f2.param_mutability {
             return Err(UnifyError::TypeMismatch);
         }
 
-        let params_result = self.unify_pairs(store, params1.iter().zip(params2), span);
-        let return_type_result = self.try_unify(store, return_type1, return_type2, span);
+        let params_result = self.unify_pairs(store, f1.params.iter().zip(&f2.params), span);
+        let return_type_result = self.try_unify(store, &f1.return_type, &f2.return_type, span);
 
-        for bound in bounds1.iter().chain(bounds2.iter()) {
+        for bound in f1.bounds.iter().chain(f2.bounds.iter()) {
             self.check_function_bound(store, bound, span);
         }
 
-        if !self.bounds_equivalent(bounds1, bounds2) {
+        if !self.bounds_equivalent(&f1.bounds, &f2.bounds) {
             return Err(UnifyError::TypeMismatch);
         }
 
@@ -820,7 +801,7 @@ impl TaskState<'_> {
 
 fn function_return_under_nominal(ty: &Type) -> Option<&Type> {
     match ty {
-        Type::Function { return_type, .. } => Some(return_type),
+        Type::Function(f) => Some(&f.return_type),
         Type::Nominal {
             underlying_ty: Some(u),
             ..

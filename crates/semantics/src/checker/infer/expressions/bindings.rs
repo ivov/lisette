@@ -3,7 +3,8 @@ use crate::store::Store;
 use ecow::EcoString;
 use syntax::ast::BindingKind;
 use syntax::ast::{Annotation, Binding, Expression, Literal, Span, Visibility};
-use syntax::types::Type;
+use syntax::program::DefinitionBody;
+use syntax::types::{Symbol, Type};
 
 use super::super::TaskState;
 
@@ -111,7 +112,9 @@ impl TaskState<'_> {
             self.new_type_var()
         };
 
+        let prior_let_rhs = self.scopes.set_let_binding_rhs(true);
         let new_value = self.with_value_context(|s| s.infer_expression(store, *value, &ty));
+        self.scopes.set_let_binding_rhs(prior_let_rhs);
 
         let new_else_block = if let Some(else_expression) = else_block {
             let else_ty = self.new_type_var();
@@ -148,7 +151,7 @@ impl TaskState<'_> {
 
         if !has_annotation
             && new_value.is_empty_collection()
-            && let Some(name) = binding_name
+            && let Some(ref name) = binding_name
         {
             self.facts
                 .empty_collection_checks
@@ -163,6 +166,37 @@ impl TaskState<'_> {
             self.sink.push(diagnostics::infer::disallowed_mut_use(
                 mut_span.unwrap_or(span),
             ));
+        }
+
+        // Reject module namespace bindings: `let u = utils`
+        if let Some(module_id) = new_value.get_type().as_import_namespace() {
+            self.sink
+                .push(diagnostics::infer::let_binding_module_namespace(
+                    module_id,
+                    new_value.get_span(),
+                ));
+        }
+        // Reject enum type bindings: `let c = utils.Color`
+        else if let Expression::DotAccess {
+            expression: inner,
+            member,
+            ..
+        } = &new_value
+        {
+            let inner_ty = inner.get_type();
+            if let Some(module_id) = inner_ty.as_import_namespace() {
+                let qualified = Symbol::from_parts(module_id, member.as_str());
+                if matches!(
+                    store.get_definition(&qualified).map(|d| &d.body),
+                    Some(DefinitionBody::Enum { .. } | DefinitionBody::ValueEnum { .. })
+                ) {
+                    let type_name = format!("{}.{}", module_id, member);
+                    self.sink.push(diagnostics::infer::let_binding_enum_type(
+                        &type_name,
+                        new_value.get_span(),
+                    ));
+                }
+            }
         }
 
         let unit_ty = self.type_unit();

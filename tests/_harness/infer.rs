@@ -449,24 +449,14 @@ fn types_equal(t1: &Type, t2: &Type) -> bool {
             false
         }
 
-        (
-            Type::Function {
-                params: args1,
-                return_type: ret1,
-                ..
-            },
-            Type::Function {
-                params: args2,
-                return_type: ret2,
-                ..
-            },
-        ) => {
-            args1.len() == args2.len()
-                && args1
+        (Type::Function(f1), Type::Function(f2)) => {
+            f1.params.len() == f2.params.len()
+                && f1
+                    .params
                     .iter()
-                    .zip(args2.iter())
+                    .zip(f2.params.iter())
                     .all(|(a1, a2)| types_equal(a1, a2))
-                && types_equal(ret1, ret2)
+                && types_equal(&f1.return_type, &f2.return_type)
         }
 
         (Type::Tuple(elems1), Type::Tuple(elems2)) => {

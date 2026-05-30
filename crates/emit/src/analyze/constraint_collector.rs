@@ -428,8 +428,8 @@ fn collect_demands_from_type(
         }
         // `Type::children()` excludes function bounds; include them so bound
         // type expressions can also impose constraints.
-        if let Type::Function { bounds, .. } = current {
-            for b in bounds {
+        if let Type::Function(f) = current {
+            for b in &f.bounds {
                 stack.push(&b.ty);
             }
         }
@@ -479,8 +479,8 @@ fn scan_propagation(
         for child in current.children() {
             stack.push(child);
         }
-        if let Type::Function { bounds, .. } = current {
-            for b in bounds {
+        if let Type::Function(f) = current {
+            for b in &f.bounds {
                 stack.push(&b.ty);
             }
         }

@@ -69,10 +69,10 @@ impl Planner<'_> {
 
 fn extract_return_type_param(function: &Expression) -> Option<Type> {
     let ty = function.get_type();
-    let Type::Function { return_type, .. } = ty.unwrap_forall() else {
+    let Type::Function(f) = ty.unwrap_forall() else {
         return None;
     };
-    let Type::Nominal { params, .. } = return_type.as_ref() else {
+    let Type::Nominal { params, .. } = f.return_type.as_ref() else {
         return None;
     };
     params.first().cloned()
@@ -124,10 +124,11 @@ impl Planner<'_> {
             );
         }
         let ty = function.get_type();
-        let Type::Function { return_type, .. } = ty.unwrap_forall() else {
+        let Type::Function(f) = ty.unwrap_forall() else {
             unreachable!("MapNew must be a function");
         };
-        let params = return_type
+        let params = f
+            .return_type
             .get_type_params()
             .expect("MapNew must return a type with type arguments");
         (
@@ -345,13 +346,10 @@ impl Planner<'_> {
         let Type::Forall { vars, body } = definition_ty else {
             return None;
         };
-        let Type::Function {
-            params: generic_params,
-            ..
-        } = body.as_ref()
-        else {
+        let Type::Function(f) = body.as_ref() else {
             return None;
         };
+        let generic_params = &f.params;
 
         let all_inferrable = vars.iter().all(|var| {
             let param_ty = Type::Parameter(var.clone());
@@ -457,8 +455,8 @@ impl Planner<'_> {
 
     fn get_make_function_info(&mut self, function: &Expression) -> Option<(String, String)> {
         fn enum_id_from_type(ty: &Type) -> Option<String> {
-            if let Type::Function { return_type, .. } = ty.unwrap_forall()
-                && let Type::Nominal { id, .. } = return_type.as_ref()
+            if let Type::Function(f) = ty.unwrap_forall()
+                && let Type::Nominal { id, .. } = f.return_type.as_ref()
             {
                 return Some(id.to_string());
             }
@@ -474,13 +472,13 @@ impl Planner<'_> {
                 if self.facts.has_make_function_name(&qualified) {
                     return Some((enum_id, variant.to_string()));
                 }
-                if let Type::Function { params, .. } = ty.unwrap_forall() {
+                if let Type::Function(f) = ty.unwrap_forall() {
                     for key in self.facts.make_function_keys() {
                         if let Some((e_name, v_name)) = key.split_once('.')
                             && e_name == enum_name
                             && let Some(layout) = self.module.enum_layout(&enum_id)
                             && let Some(v) = layout.get_variant(v_name)
-                            && v.fields.len() == params.len()
+                            && v.fields.len() == f.params.len()
                         {
                             return Some((enum_id, v_name.to_string()));
                         }
@@ -567,12 +565,12 @@ impl Planner<'_> {
         fx: &mut EmitEffects,
     ) -> Option<TupleStructTarget> {
         let ty = function.get_type();
-        let Type::Function { return_type, .. } = ty.unwrap_forall() else {
+        let Type::Function(f) = ty.unwrap_forall() else {
             return None;
         };
         let return_ty = call_ty
             .cloned()
-            .unwrap_or_else(|| return_type.as_ref().clone());
+            .unwrap_or_else(|| f.return_type.as_ref().clone());
 
         let Type::Nominal { id, params, .. } = &return_ty else {
             return None;

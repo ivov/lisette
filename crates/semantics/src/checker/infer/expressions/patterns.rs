@@ -390,11 +390,10 @@ impl TaskState<'_> {
         }
 
         let (pattern_ty, params) = match value_constructor_type {
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => (*return_type, params),
+            Type::Function(f) => {
+                let f = *f;
+                (*f.return_type, f.params)
+            }
             Type::Nominal { .. } | Type::Compound { .. } | Type::Simple(_) => {
                 (value_constructor_type, vec![])
             }
@@ -900,7 +899,7 @@ impl TaskState<'_> {
         let (value_constructor_type, map) = self.instantiate(&ty);
 
         let pattern_ty = match value_constructor_type {
-            Type::Function { return_type, .. } => *return_type,
+            Type::Function(f) => *f.return_type,
             Type::Nominal { .. } => value_constructor_type,
             _ => return None,
         };

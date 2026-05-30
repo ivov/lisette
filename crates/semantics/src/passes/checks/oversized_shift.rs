@@ -1,5 +1,5 @@
 use diagnostics::LocalSink;
-use syntax::ast::{BinaryOperator, Expression, Literal};
+use syntax::ast::{BinaryOperator, Expression};
 use syntax::types::SimpleKind;
 
 pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
@@ -16,17 +16,14 @@ pub(crate) fn check(expression: &Expression, sink: &LocalSink) {
         )
         && let Some(kind) = left.get_type().as_simple()
         && let Some(bit_width) = fixed_bit_width(kind)
-        && let Expression::Literal {
-            literal: Literal::Integer { value, .. },
-            ..
-        } = right.unwrap_parens()
-        && *value >= u64::from(bit_width)
+        && let Some(value) = right.as_integer()
+        && value >= u64::from(bit_width)
     {
         sink.push(diagnostics::infer::oversized_shift(
             span,
             kind.leaf_name(),
             bit_width,
-            *value,
+            value,
         ));
     }
 }

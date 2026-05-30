@@ -391,8 +391,8 @@ impl Planner<'_> {
             return None;
         }
         let ty = definition.ty();
-        let is_function = matches!(ty, Type::Function { .. })
-            || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function { .. }));
+        let is_function = matches!(ty, Type::Function(_))
+            || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function(_)));
         if is_function {
             return None;
         }

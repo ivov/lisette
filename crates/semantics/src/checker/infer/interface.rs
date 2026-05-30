@@ -144,8 +144,8 @@ impl TaskState<'_> {
                     Type::Forall { body, .. } => body.as_ref(),
                     other => other,
                 };
-                if let Type::Function { params, .. } = func
-                    && params.first().is_some_and(|p| p.is_ref())
+                if let Type::Function(f) = func
+                    && f.params.first().is_some_and(|p| p.is_ref())
                 {
                     out.push(name.to_string());
                 }
@@ -248,17 +248,12 @@ impl TaskState<'_> {
 
             // Strip bounds before comparing - bounds are checked separately via bounds_equivalent
             let strip_bounds = |ty: &Type| match ty {
-                Type::Function {
-                    params,
-                    param_mutability,
-                    return_type,
-                    ..
-                } => Type::Function {
-                    params: params.clone(),
-                    param_mutability: param_mutability.clone(),
-                    bounds: vec![],
-                    return_type: return_type.clone(),
-                },
+                Type::Function(f) => Type::function(
+                    f.params.clone(),
+                    f.param_mutability.clone(),
+                    vec![],
+                    f.return_type.clone(),
+                ),
                 other => other.clone(),
             };
 
@@ -345,28 +340,23 @@ impl TaskState<'_> {
 
     fn remove_first_param(ty: &Type) -> Type {
         match ty {
-            Type::Function {
-                params,
-                param_mutability,
-                bounds,
-                return_type,
-            } => {
-                let new_params = if params.is_empty() {
+            Type::Function(f) => {
+                let new_params = if f.params.is_empty() {
                     vec![]
                 } else {
-                    params[1..].to_vec()
+                    f.params[1..].to_vec()
                 };
-                let new_mutability = if param_mutability.is_empty() {
+                let new_mutability = if f.param_mutability.is_empty() {
                     vec![]
                 } else {
-                    param_mutability[1..].to_vec()
+                    f.param_mutability[1..].to_vec()
                 };
-                Type::Function {
-                    params: new_params,
-                    param_mutability: new_mutability,
-                    bounds: bounds.clone(),
-                    return_type: return_type.clone(),
-                }
+                Type::function(
+                    new_params,
+                    new_mutability,
+                    f.bounds.clone(),
+                    f.return_type.clone(),
+                )
             }
             _ => ty.clone(),
         }
@@ -387,21 +377,11 @@ fn covariant_return_adjustment(
         return None;
     }
 
-    let (
-        Type::Function {
-            return_type: iface_ret,
-            ..
-        },
-        Type::Function {
-            params,
-            param_mutability,
-            bounds,
-            return_type: impl_ret,
-        },
-    ) = (interface_method, impl_method)
-    else {
+    let (Type::Function(iface_f), Type::Function(impl_f)) = (interface_method, impl_method) else {
         return None;
     };
+    let iface_ret = &iface_f.return_type;
+    let impl_ret = &impl_f.return_type;
 
     if !iface_ret.is_option() {
         return None;
@@ -425,10 +405,10 @@ fn covariant_return_adjustment(
         return None;
     }
 
-    Some(Type::Function {
-        params: params.clone(),
-        param_mutability: param_mutability.clone(),
-        bounds: bounds.clone(),
-        return_type: iface_ret.clone(),
-    })
+    Some(Type::function(
+        impl_f.params.clone(),
+        impl_f.param_mutability.clone(),
+        impl_f.bounds.clone(),
+        iface_ret.clone(),
+    ))
 }
