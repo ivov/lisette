@@ -67,10 +67,6 @@ pub fn con_type(name: &str, args: Vec<Type>) -> Type {
 }
 
 pub fn fun_type(args: Vec<Type>, ret: Type) -> Type {
-    Type::Function {
-        param_mutability: vec![false; args.len()],
-        params: args,
-        bounds: vec![],
-        return_type: Box::new(ret),
-    }
+    let param_mutability = vec![false; args.len()];
+    Type::function(args, param_mutability, vec![], Box::new(ret))
 }

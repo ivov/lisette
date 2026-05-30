@@ -62,8 +62,7 @@ fn visit_expression(
             ..
         } => {
             let is_implicit_return = matches!(return_annotation, Annotation::Unknown);
-            let lambda_returns_unit =
-                matches!(ty, Type::Function { return_type, .. } if return_type.is_unit());
+            let lambda_returns_unit = matches!(ty, Type::Function(f) if f.return_type.is_unit());
             let body_ty = body.get_type();
             let tail_is_discarded = is_implicit_return
                 && (lambda_returns_unit
@@ -71,7 +70,7 @@ fn visit_expression(
                     || body_ty.is_ignored()
                     || body_ty.is_never());
             let lambda_return_ty: &Type = match ty {
-                Type::Function { return_type, .. } => return_type,
+                Type::Function(f) => &f.return_type,
                 _ => &body_ty,
             };
             let ctx = tail_is_discarded.then(|| TailContext {

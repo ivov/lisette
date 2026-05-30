@@ -492,16 +492,12 @@ pub(crate) fn emit_lisette_callback_wrapper(
     fn_type: &Type,
     fx: &mut EmitEffects,
 ) -> String {
-    let Type::Function {
-        params,
-        return_type,
-        ..
-    } = fn_type
-    else {
+    let Type::Function(f) = fn_type else {
         return fn_value.to_string();
     };
+    let params = &f.params;
 
-    let return_type = return_type.as_ref();
+    let return_type = f.return_type.as_ref();
 
     let (param_strs, arg_names) = planner.build_wrapper_params(params, fx);
     let params_str = param_strs.join(", ");
@@ -522,7 +518,7 @@ pub(crate) fn emit_lisette_callback_wrapper(
     if let Type::Nominal { id, params: ps, .. } = return_type
         && id == "Option"
         && let Some(inner) = ps.first()
-        && matches!(inner.unwrap_forall(), Type::Function { .. })
+        && matches!(inner.unwrap_forall(), Type::Function(_))
     {
         return fn_value.to_string();
     }
@@ -587,15 +583,11 @@ pub(crate) fn lower_arg_to_tagged(
     fx: &mut EmitEffects,
 ) -> String {
     let unwrapped = param_ty.unwrap_forall();
-    let Type::Function {
-        params: inner_params,
-        return_type: inner_ret,
-        ..
-    } = unwrapped
-    else {
+    let Type::Function(f) = unwrapped else {
         return arg_name.to_string();
     };
-    let inner_ret = inner_ret.as_ref();
+    let inner_params = &f.params;
+    let inner_ret = f.return_type.as_ref();
     let Some(shape) = planner.classify_direct_emission(inner_ret) else {
         return arg_name.to_string();
     };

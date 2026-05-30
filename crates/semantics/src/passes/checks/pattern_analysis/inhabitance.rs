@@ -40,7 +40,7 @@ fn type_key(ty: &Type) -> String {
             let elem_keys: Vec<String> = elements.iter().map(type_key).collect();
             format!("({})", elem_keys.join(", "))
         }
-        Type::Function { .. } => "fn".to_string(),
+        Type::Function(_) => "fn".to_string(),
         Type::Var { .. } | Type::Parameter(_) | Type::Error => "param".to_string(),
         Type::Forall { body, .. } => type_key(body),
         Type::ImportNamespace(m) => format!("<import:{}>", m),
@@ -60,7 +60,7 @@ fn type_key(ty: &Type) -> String {
 pub fn is_inhabited(ty: &Type, store: &Store, cache: &InhabitanceCache) -> bool {
     match ty {
         Type::Never => return false,
-        Type::Function { .. } => return true,
+        Type::Function(_) => return true,
         Type::Var { .. } | Type::Parameter(_) => return true,
         _ => {}
     }

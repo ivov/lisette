@@ -88,7 +88,7 @@ impl TaskState<'_> {
                     .push(diagnostics::infer::cannot_match_on_unknown(*span));
             }
             Type::Nominal { .. } => {}
-            Type::Function { .. } => {
+            Type::Function(_) => {
                 self.sink
                     .push(diagnostics::infer::cannot_match_on_functions(*span));
             }

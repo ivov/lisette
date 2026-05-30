@@ -219,7 +219,7 @@ pub(crate) struct StringerField {
 
 pub(crate) fn is_raw_function_type(ty: &Type) -> bool {
     match ty {
-        Type::Function { .. } => true,
+        Type::Function(_) => true,
         Type::Forall { body, .. } => is_raw_function_type(body),
         _ => false,
     }
@@ -237,15 +237,10 @@ fn is_stringer_signature(method_ty: Option<&Type>) -> bool {
         Type::Forall { body, .. } => body.as_ref(),
         other => other,
     };
-    let Type::Function {
-        params,
-        return_type,
-        ..
-    } = func
-    else {
+    let Type::Function(f) = func else {
         return false;
     };
-    params.len() == 1 && matches!(return_type.as_ref(), Type::Simple(SimpleKind::String))
+    f.params.len() == 1 && matches!(f.return_type.as_ref(), Type::Simple(SimpleKind::String))
 }
 
 fn is_option_type(ty: &Type) -> bool {

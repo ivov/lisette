@@ -248,7 +248,7 @@ impl Store {
     }
 
     pub fn is_nilable_go_type(&self, ty: &Type) -> bool {
-        if ty.is_ref() || matches!(ty, Type::Function { .. }) {
+        if ty.is_ref() || matches!(ty, Type::Function(_)) {
             return true;
         }
         let Type::Nominal { id, .. } = ty else {
@@ -261,7 +261,7 @@ impl Store {
             return true;
         }
         match ty.get_underlying() {
-            Some(Type::Function { .. }) => true,
+            Some(Type::Function(_)) => true,
             Some(u) if u.is_ref() => true,
             _ => false,
         }
@@ -318,17 +318,15 @@ impl Store {
                 params: params.iter().map(|p| self.peel_alias_deep(p)).collect(),
                 underlying_ty,
             },
-            Type::Function {
-                params,
-                param_mutability,
-                bounds,
-                return_type,
-            } => Type::Function {
-                params: params.iter().map(|p| self.peel_alias_deep(p)).collect(),
-                param_mutability,
-                bounds,
-                return_type: Box::new(self.peel_alias_deep(&return_type)),
-            },
+            Type::Function(f) => {
+                let f = *f;
+                Type::function(
+                    f.params.iter().map(|p| self.peel_alias_deep(p)).collect(),
+                    f.param_mutability,
+                    f.bounds,
+                    Box::new(self.peel_alias_deep(&f.return_type)),
+                )
+            }
             other => other,
         }
     }

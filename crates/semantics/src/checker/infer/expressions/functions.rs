@@ -175,12 +175,12 @@ impl TaskState<'_> {
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
-        let base_fn_ty = Type::Function {
-            param_mutability: new_params.iter().map(|p| p.mutable).collect(),
-            params: new_params.iter().map(|p| p.ty.clone()).collect(),
+        let base_fn_ty = Type::function(
+            new_params.iter().map(|p| p.ty.clone()).collect(),
+            new_params.iter().map(|p| p.mutable).collect(),
             bounds,
-            return_type: return_ty.clone().into(),
-        };
+            return_ty.clone().into(),
+        );
 
         // `Type::ignored()` defers the tail-position check to
         // `passes/fact_producers/unused_expressions.rs`, which honors `#[allow(unused_*)]`.
@@ -253,12 +253,12 @@ impl TaskState<'_> {
 
         self.scopes.current_mut().fn_return_type = Some(return_ty.clone());
 
-        let base_fn_ty = Type::Function {
-            param_mutability: vec![false; new_params.len()],
-            params: new_params.iter().map(|p| p.ty.clone()).collect(),
-            bounds: vec![],
-            return_type: return_ty.clone().into(),
-        };
+        let base_fn_ty = Type::function(
+            new_params.iter().map(|p| p.ty.clone()).collect(),
+            vec![false; new_params.len()],
+            vec![],
+            return_ty.clone().into(),
+        );
 
         // Reset loop depth — closures introduce a new function scope, so
         // `defer` inside a closure body should not be flagged as "defer in loop"
@@ -635,16 +635,12 @@ impl TaskState<'_> {
             let has_receiver = instantiated_params > callee_params;
 
             if has_receiver
-                && let Type::Function {
-                    ref mut params,
-                    ref mut param_mutability,
-                    ..
-                } = instantiated
-                && !params.is_empty()
+                && let Type::Function(ref mut f) = instantiated
+                && !f.params.is_empty()
             {
-                let receiver_param = params.remove(0);
-                if !param_mutability.is_empty() {
-                    param_mutability.remove(0);
+                let receiver_param = f.params.remove(0);
+                if !f.param_mutability.is_empty() {
+                    f.param_mutability.remove(0);
                 }
                 let receiver_ty_stripped = receiver_ty.strip_refs();
                 if receiver_param.is_ref() && !receiver_ty.is_ref() {
@@ -733,13 +729,8 @@ impl TaskState<'_> {
 
     fn extract_function_type(&self, store: &Store, ty: &Type) -> Option<(Vec<Type>, Type)> {
         let fn_type = |ty: &Type| -> Option<(Vec<Type>, Type)> {
-            if let Type::Function {
-                params,
-                return_type,
-                ..
-            } = ty
-            {
-                Some((params.clone(), (**return_type).clone()))
+            if let Type::Function(f) = ty {
+                Some((f.params.clone(), (*f.return_type).clone()))
             } else {
                 None
             }
@@ -799,7 +790,7 @@ impl TaskState<'_> {
             return None;
         };
 
-        if !matches!(underlying.as_ref(), Type::Function { .. }) {
+        if !matches!(underlying.as_ref(), Type::Function(_)) {
             return None;
         }
 
@@ -1084,15 +1075,15 @@ impl TaskState<'_> {
     ) -> Type {
         match annotation {
             Annotation::Unknown => {
-                if let Type::Function { return_type, .. } = expected_ty {
-                    (**return_type).clone()
+                if let Type::Function(f) = expected_ty {
+                    (*f.return_type).clone()
                 } else if let Type::Nominal {
                     underlying_ty: Some(inner),
                     ..
                 } = expected_ty
-                    && let Type::Function { return_type, .. } = inner.as_ref()
+                    && let Type::Function(f) = inner.as_ref()
                 {
-                    (**return_type).clone()
+                    (*f.return_type).clone()
                 } else {
                     default_for_unknown
                 }
@@ -1221,10 +1212,10 @@ impl TaskState<'_> {
             })?;
 
         let has_self = match &method_ty {
-            Type::Function { params, .. } => !params.is_empty(),
+            Type::Function(f) => !f.params.is_empty(),
             Type::Forall { body, .. } => {
-                if let Type::Function { params, .. } = body.as_ref() {
-                    !params.is_empty()
+                if let Type::Function(f) = body.as_ref() {
+                    !f.params.is_empty()
                 } else {
                     false
                 }
@@ -1276,7 +1267,7 @@ impl TaskState<'_> {
         ) {
             let ty = callee.get_type().resolve_in(&self.env);
             let return_ty = match ty.unwrap_forall() {
-                Type::Function { return_type, .. } => return_type.as_ref().clone(),
+                Type::Function(f) => f.return_type.as_ref().clone(),
                 _ => return false,
             };
             if let Type::Nominal { id, .. } = return_ty.resolve_in(&self.env) {

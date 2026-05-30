@@ -649,15 +649,11 @@ fn walk_type(
                 walk_type(module, p, graph, alias_map, from);
             }
         }
-        Type::Function {
-            params,
-            return_type,
-            ..
-        } => {
-            for p in params {
+        Type::Function(f) => {
+            for p in &f.params {
                 walk_type(module, p, graph, alias_map, from);
             }
-            walk_type(module, return_type, graph, alias_map, from);
+            walk_type(module, &f.return_type, graph, alias_map, from);
         }
         Type::Forall { body, .. } => walk_type(module, body, graph, alias_map, from),
         Type::Tuple(elems) => {

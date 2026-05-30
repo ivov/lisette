@@ -898,12 +898,7 @@ impl TaskState<'_> {
 
         let param_mutability: Vec<bool> = params.iter().map(|b| b.mutable).collect();
 
-        let base_fn_ty = Type::Function {
-            params: param_types,
-            param_mutability,
-            bounds,
-            return_type: return_ty.into(),
-        };
+        let base_fn_ty = Type::function(param_types, param_mutability, bounds, return_ty.into());
 
         if generics.is_empty() {
             base_fn_ty
@@ -930,12 +925,12 @@ pub(super) fn enum_variant_constructor_type(
         _ => enum_ty.clone(),
     };
 
-    let fn_ty = Type::Function {
-        param_mutability: vec![false; enum_variant.fields.len()],
-        params: enum_variant.fields.iter().map(|f| f.ty.clone()).collect(),
-        bounds: Default::default(),
-        return_type: return_type.into(),
-    };
+    let fn_ty = Type::function(
+        enum_variant.fields.iter().map(|f| f.ty.clone()).collect(),
+        vec![false; enum_variant.fields.len()],
+        Default::default(),
+        return_type.into(),
+    );
 
     if generics.is_empty() {
         fn_ty
@@ -957,12 +952,12 @@ fn tuple_struct_constructor_type_from_fields(
         _ => struct_ty.clone(),
     };
 
-    let fn_ty = Type::Function {
-        param_mutability: vec![false; field_types.len()],
-        params: field_types.to_vec(),
-        bounds: Default::default(),
-        return_type: return_type.into(),
-    };
+    let fn_ty = Type::function(
+        field_types.to_vec(),
+        vec![false; field_types.len()],
+        Default::default(),
+        return_type.into(),
+    );
 
     if generics.is_empty() {
         fn_ty
@@ -996,17 +991,12 @@ pub(super) fn wrap_with_impl_generics(
     match fn_ty {
         Type::Forall { vars, body } => {
             let new_body = match body.as_ref() {
-                Type::Function {
-                    params,
-                    param_mutability,
-                    bounds,
-                    return_type,
-                } => Type::Function {
-                    params: params.clone(),
-                    param_mutability: param_mutability.clone(),
-                    bounds: add_impl_bounds(bounds),
-                    return_type: return_type.clone(),
-                },
+                Type::Function(f) => Type::function(
+                    f.params.clone(),
+                    f.param_mutability.clone(),
+                    add_impl_bounds(&f.bounds),
+                    f.return_type.clone(),
+                ),
                 _ => *body.clone(),
             };
             Type::Forall {
@@ -1014,19 +1004,14 @@ pub(super) fn wrap_with_impl_generics(
                 body: Box::new(new_body),
             }
         }
-        Type::Function {
-            params,
-            param_mutability,
-            bounds,
-            return_type,
-        } => Type::Forall {
+        Type::Function(f) => Type::Forall {
             vars: impl_vars,
-            body: Box::new(Type::Function {
-                params: params.clone(),
-                param_mutability: param_mutability.clone(),
-                bounds: add_impl_bounds(bounds),
-                return_type: return_type.clone(),
-            }),
+            body: Box::new(Type::function(
+                f.params.clone(),
+                f.param_mutability.clone(),
+                add_impl_bounds(&f.bounds),
+                f.return_type.clone(),
+            )),
         },
         _ => Type::Forall {
             vars: impl_vars,

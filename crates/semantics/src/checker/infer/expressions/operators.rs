@@ -16,7 +16,7 @@ pub(crate) fn check_not_comparable(
     store: &Store,
     ty: &Type,
 ) -> Option<&'static str> {
-    if matches!(ty, Type::Function { .. }) {
+    if matches!(ty, Type::Function(_)) {
         return Some("functions");
     }
 

@@ -173,14 +173,10 @@ impl Planner<'_> {
         impl_ty: &Type,
         subst_map: &SubstitutionMap,
     ) -> Option<(AdapterMethod, bool)> {
-        let Type::Function {
-            params,
-            return_type,
-            ..
-        } = impl_ty.unwrap_forall()
-        else {
+        let Type::Function(f) = impl_ty.unwrap_forall() else {
             return None;
         };
+        let params = &f.params;
         let param_types: Vec<Type> = if params.is_empty() {
             Vec::new()
         } else {
@@ -189,7 +185,7 @@ impl Planner<'_> {
                 .map(|p| substitute(p, subst_map))
                 .collect()
         };
-        let return_type = substitute(return_type, subst_map);
+        let return_type = substitute(&f.return_type, subst_map);
 
         // Compute the natural shape once and shift it for the interface side
         // if a `#[go(...)]` hint applies, instead of re-walking `peel_alias`

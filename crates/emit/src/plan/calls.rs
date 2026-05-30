@@ -229,7 +229,7 @@ impl Planner<'_> {
             .facts
             .resolve_to_function_type(unwrapped)
             .unwrap_or_else(|| unwrapped.clone());
-        let Type::Function { return_type, .. } = resolved else {
+        let Type::Function(f) = resolved else {
             return None;
         };
         let inner = callee.unwrap_parens();
@@ -278,7 +278,7 @@ impl Planner<'_> {
         let declared_return = self
             .callee_definition(callee)
             .and_then(|definition| definition.ty().unwrap_forall().get_function_ret());
-        let classify_ty = declared_return.unwrap_or(return_type.as_ref());
+        let classify_ty = declared_return.unwrap_or(f.return_type.as_ref());
 
         self.classify_direct_emission(classify_ty)
     }

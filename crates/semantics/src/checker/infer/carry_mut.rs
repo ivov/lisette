@@ -55,7 +55,7 @@ fn can_carry_mutation(
             result
         }
         Type::Forall { body, .. } => can_carry_mutation(body, env, store, visited),
-        Type::Function { .. }
+        Type::Function(_)
         | Type::Var { .. }
         | Type::Parameter(_)
         | Type::Simple(_)

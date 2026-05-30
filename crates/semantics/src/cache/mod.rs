@@ -585,20 +585,20 @@ mod tests {
 
     #[test]
     fn test_type_roundtrip_bincode() {
-        let ty = Type::Function {
-            params: vec![Type::Nominal {
+        let ty = Type::function(
+            vec![Type::Nominal {
                 id: Symbol::from_raw("int"),
                 params: vec![],
                 underlying_ty: None,
             }],
-            param_mutability: vec![false],
-            bounds: vec![],
-            return_type: Box::new(Type::Nominal {
+            vec![false],
+            vec![],
+            Box::new(Type::Nominal {
                 id: Symbol::from_raw("main.MyType"),
                 params: vec![Type::Tuple(vec![Type::Never])],
                 underlying_ty: None,
             }),
-        };
+        );
 
         let bytes = bincode::serialize(&ty).unwrap();
         let restored: Type = bincode::deserialize(&bytes).unwrap();

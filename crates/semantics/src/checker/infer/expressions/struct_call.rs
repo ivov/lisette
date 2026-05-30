@@ -174,7 +174,7 @@ impl TaskState<'_> {
             if let Some(variant_fields) = variant_fields {
                 let (instantiated_ty, map) = self.instantiate(&alias_ty);
                 let enum_ty = match instantiated_ty {
-                    Type::Function { return_type, .. } => *return_type,
+                    Type::Function(f) => *f.return_type,
                     _ => instantiated_ty,
                 };
                 return self.infer_struct_call_for_enum_variant(
@@ -195,7 +195,7 @@ impl TaskState<'_> {
             let (value_constructor_type, map) = self.instantiate(&ty);
 
             let pattern_ty = match value_constructor_type {
-                Type::Function { return_type, .. } => *return_type,
+                Type::Function(f) => *f.return_type,
                 Type::Nominal { .. } => value_constructor_type,
                 _ => {
                     self.sink
@@ -611,7 +611,7 @@ pub(crate) fn has_zero(store: &Store, ty: &Type, from_module: &str) -> Result<()
             }
             Ok(())
         }
-        Type::Function { .. } => Err(NoZero {
+        Type::Function(_) => Err(NoZero {
             chain: vec![],
             reason: NoZeroReason::NoZeroForType,
             leaf_ty: ty.clone(),

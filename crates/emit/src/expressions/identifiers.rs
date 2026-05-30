@@ -89,8 +89,8 @@ impl Planner<'_> {
 
         if make_fn.is_none() {
             let enum_id = match ty {
-                Type::Function { return_type, .. } => {
-                    if let Type::Nominal { id, .. } = return_type.as_ref() {
+                Type::Function(f) => {
+                    if let Type::Nominal { id, .. } = f.return_type.as_ref() {
                         Some(id.as_str())
                     } else {
                         None
@@ -121,17 +121,13 @@ impl Planner<'_> {
                     return IdentifierKind::UnitConstructor { name, type_args };
                 }
 
-                Type::Function {
-                    params: fn_params,
-                    return_type,
-                    ..
-                } => {
+                Type::Function(f) => {
                     if let Type::Nominal {
                         params: ret_params, ..
-                    } = return_type.as_ref()
+                    } = f.return_type.as_ref()
                     {
                         let type_args =
-                            self.constructor_fn_type_args(fn_params, ret_params, ctx, fx);
+                            self.constructor_fn_type_args(&f.params, ret_params, ctx, fx);
                         return IdentifierKind::ConstructorFunction { name, type_args };
                     }
                 }
@@ -252,9 +248,9 @@ impl Planner<'_> {
         }
 
         let fn_params = match id_ty {
-            Type::Function { params, .. } => params,
+            Type::Function(f) => &f.params,
             Type::Forall { body, .. } => match body.as_ref() {
-                Type::Function { params, .. } => params,
+                Type::Function(f) => &f.params,
                 _ => return None,
             },
             _ => return None,
@@ -385,8 +381,8 @@ impl Planner<'_> {
     /// `Some(capitalized)` when the identifier names a public function in
     /// the current module.
     fn try_capitalize_public_function(&self, name: &str, ty: &Type) -> Option<String> {
-        let is_function = matches!(ty, Type::Function { .. })
-            || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function { .. }));
+        let is_function = matches!(ty, Type::Function(_))
+            || matches!(ty, Type::Forall { body, .. } if matches!(body.as_ref(), Type::Function(_)));
         if !is_function {
             return None;
         }

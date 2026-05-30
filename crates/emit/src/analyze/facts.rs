@@ -246,11 +246,11 @@ pub(crate) fn resolve_to_function_type(
     ty: &Type,
 ) -> Option<Type> {
     fn as_function(ty: &Type) -> Option<Type> {
-        if matches!(ty, Type::Function { .. }) {
+        if matches!(ty, Type::Function(_)) {
             return Some(ty.clone());
         }
         ty.get_underlying()
-            .filter(|u| matches!(u, Type::Function { .. }))
+            .filter(|u| matches!(u, Type::Function(_)))
             .cloned()
     }
     as_function(ty).or_else(|| as_function(&peel_alias(definitions, ty)))

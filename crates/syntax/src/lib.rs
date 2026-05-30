@@ -27,9 +27,9 @@ impl AstBuildResult {
 #[cfg(target_pointer_width = "64")]
 mod size_assertions {
     use std::mem::size_of;
-    const _: () = assert!(size_of::<super::ast::Expression>() == 408);
-    const _: () = assert!(size_of::<super::types::Type>() == 80);
-    const _: () = assert!(size_of::<super::ast::Pattern>() == 152);
+    const _: () = assert!(size_of::<super::ast::Expression>() == 344);
+    const _: () = assert!(size_of::<super::types::Type>() == 48);
+    const _: () = assert!(size_of::<super::ast::Pattern>() == 120);
     const _: () = assert!(size_of::<super::ast::Span>() == 12);
 }
 

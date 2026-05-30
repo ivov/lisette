@@ -40,12 +40,7 @@ pub fn register_test_builtins(store: &mut Store, _checker: &mut TaskState) {
             format!("prelude.{name}").into(),
             Definition {
                 visibility: Visibility::Public,
-                ty: Type::Function {
-                    params,
-                    param_mutability,
-                    bounds: vec![],
-                    return_type: Box::new(return_type),
-                },
+                ty: Type::function(params, param_mutability, vec![], Box::new(return_type)),
                 name: None,
                 name_span: None,
                 doc: None,

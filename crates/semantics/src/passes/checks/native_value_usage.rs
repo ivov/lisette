@@ -123,9 +123,9 @@ fn check_one(
 
     if matches!(method_part, "new" | "buffered") {
         let ret_ty = match ty {
-            Type::Function { return_type, .. } => Some(return_type.as_ref()),
+            Type::Function(f) => Some(f.return_type.as_ref()),
             Type::Forall { body, .. } => match body.as_ref() {
-                Type::Function { return_type, .. } => Some(return_type.as_ref()),
+                Type::Function(f) => Some(f.return_type.as_ref()),
                 _ => None,
             },
             _ => None,
@@ -139,14 +139,14 @@ fn check_one(
         }
     }
 
-    let is_fn = matches!(ty, Type::Function { .. } | Type::Forall { .. });
+    let is_fn = matches!(ty, Type::Function(_) | Type::Forall { .. });
     if !is_fn {
         return;
     }
     let fn_params = match ty {
-        Type::Function { params, .. } => params.as_slice(),
+        Type::Function(f) => f.params.as_slice(),
         Type::Forall { body, .. } => match body.as_ref() {
-            Type::Function { params, .. } => params.as_slice(),
+            Type::Function(f) => f.params.as_slice(),
             _ => return,
         },
         _ => return,

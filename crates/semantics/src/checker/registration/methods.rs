@@ -345,21 +345,20 @@ impl TaskState<'_> {
                 });
                 let fn_ty = if has_self_receiver {
                     match fn_ty {
-                        Type::Function {
-                            params,
-                            param_mutability,
-                            bounds,
-                            return_type,
-                        } => Type::Function {
-                            params: params[1..].to_vec(),
-                            param_mutability: if param_mutability.is_empty() {
+                        Type::Function(f) => {
+                            let f = *f;
+                            let param_mutability = if f.param_mutability.is_empty() {
                                 vec![]
                             } else {
-                                param_mutability[1..].to_vec()
-                            },
-                            bounds,
-                            return_type,
-                        },
+                                f.param_mutability[1..].to_vec()
+                            };
+                            Type::function(
+                                f.params[1..].to_vec(),
+                                param_mutability,
+                                f.bounds,
+                                f.return_type,
+                            )
+                        }
                         other => other,
                     }
                 } else {

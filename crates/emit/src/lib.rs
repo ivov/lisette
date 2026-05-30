@@ -76,12 +76,12 @@ impl GlobalEmitData {
             let is_go = go_name::is_go_import(key);
 
             if is_go
-                && let Type::Function { return_type, .. } = match definition.ty() {
+                && let Type::Function(f) = match definition.ty() {
                     Type::Forall { body, .. } => body.as_ref(),
                     other => other,
                 }
                 && let Some(strategy) =
-                    classify_go_return_type(definitions, return_type, definition.go_hints())
+                    classify_go_return_type(definitions, &f.return_type, definition.go_hints())
             {
                 globals.go_call_strategies.insert(key.to_string(), strategy);
             }

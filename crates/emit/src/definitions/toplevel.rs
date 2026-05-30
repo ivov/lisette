@@ -23,7 +23,7 @@ impl Planner<'_> {
                 Type::Nominal {
                     underlying_ty: Some(inner),
                     ..
-                } if matches!(inner.as_ref(), Type::Function { .. }) => {
+                } if matches!(inner.as_ref(), Type::Function(_)) => {
                     is_fn_alias = true;
                     inner.as_ref()
                 }
@@ -35,7 +35,7 @@ impl Planner<'_> {
             Type::Nominal {
                 underlying_ty: Some(inner),
                 ..
-            } if matches!(inner.as_ref(), Type::Function { .. }) => {
+            } if matches!(inner.as_ref(), Type::Function(_)) => {
                 is_fn_alias = true;
                 inner.as_ref()
             }

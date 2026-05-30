@@ -152,22 +152,11 @@ pub(crate) fn extract_type_mapping(
     }
 
     match (generic, concrete) {
-        (
-            Type::Function {
-                params: gen_params,
-                return_type: gen_ret,
-                ..
-            },
-            Type::Function {
-                params: conc_params,
-                return_type: conc_ret,
-                ..
-            },
-        ) => {
-            for (g, c) in gen_params.iter().zip(conc_params.iter()) {
+        (Type::Function(gen_f), Type::Function(conc_f)) => {
+            for (g, c) in gen_f.params.iter().zip(conc_f.params.iter()) {
                 extract_type_mapping(g, c, mapping);
             }
-            extract_type_mapping(gen_ret, conc_ret, mapping);
+            extract_type_mapping(&gen_f.return_type, &conc_f.return_type, mapping);
         }
         (Type::Tuple(generic_elements), Type::Tuple(conc)) => {
             for (g, c) in generic_elements.iter().zip(conc.iter()) {

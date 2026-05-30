@@ -36,7 +36,7 @@ fn needs_explicit_type_declaration(
     }
     if is_fn_alias_nominal(binding_ty) {
         let value_ty = value.get_type();
-        if matches!(value_ty.unwrap_forall(), Type::Function { .. }) {
+        if matches!(value_ty.unwrap_forall(), Type::Function(_)) {
             return true;
         }
     }
@@ -70,7 +70,7 @@ fn is_fn_alias_nominal(ty: &Type) -> bool {
     else {
         return false;
     };
-    matches!(inner.unwrap_forall(), Type::Function { .. })
+    matches!(inner.unwrap_forall(), Type::Function(_))
 }
 
 /// `let mut x = arr[range]` would otherwise alias the backing array.

@@ -44,17 +44,13 @@ impl Type {
                 None => format!("?{}", id.as_u32()),
             },
 
-            Type::Function {
-                params: args,
-                param_mutability,
-                return_type,
-                ..
-            } => {
-                let args_formatted = args
+            Type::Function(f) => {
+                let args_formatted = f
+                    .params
                     .iter()
                     .enumerate()
                     .map(|(i, a)| {
-                        let is_mut = param_mutability.get(i).copied().unwrap_or(false);
+                        let is_mut = f.param_mutability.get(i).copied().unwrap_or(false);
                         if is_mut {
                             format!("mut {}", a.stringify())
                         } else {
@@ -64,7 +60,7 @@ impl Type {
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                let ret_formatted = (*return_type).stringify();
+                let ret_formatted = f.return_type.stringify();
 
                 format!("fn ({}) -> {}", args_formatted, ret_formatted)
             }

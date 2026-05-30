@@ -140,14 +140,14 @@ impl Planner<'_> {
         let suppress_lowering = ctx.forces_tagged_go_function();
         let argument_flows_to_unknown = ctx.argument_flows_to_unknown();
 
-        let has_return = matches!(ty, Type::Function { return_type, .. }
-            if !(return_type.is_unit()
-                || return_type.is_variable()
-                || (argument_flows_to_unknown && return_type.is_never())));
+        let has_return = matches!(ty, Type::Function(f)
+            if !(f.return_type.is_unit()
+                || f.return_type.is_variable()
+                || (argument_flows_to_unknown && f.return_type.is_never())));
 
         let ctx = match ty {
-            Type::Function { return_type, .. } => {
-                let return_ty = return_type.as_ref().clone();
+            Type::Function(f) => {
+                let return_ty = f.return_type.as_ref().clone();
                 if suppress_lowering {
                     ReturnContext::Tagged(return_ty)
                 } else {
@@ -159,14 +159,14 @@ impl Planner<'_> {
 
         let ty_string = if has_return {
             match ty {
-                Type::Function { return_type, .. } => match ctx.lowered_shape() {
+                Type::Function(f) => match ctx.lowered_shape() {
                     Some(shape) => {
                         format!(
                             " {}",
-                            self.render_lowered_return_ty(&shape, return_type, fx)
+                            self.render_lowered_return_ty(&shape, &f.return_type, fx)
                         )
                     }
-                    None => format!(" {}", self.go_type_string(return_type, fx)),
+                    None => format!(" {}", self.go_type_string(&f.return_type, fx)),
                 },
                 _ => String::new(),
             }

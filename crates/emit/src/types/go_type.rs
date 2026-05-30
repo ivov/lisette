@@ -68,11 +68,7 @@ impl Planner<'_> {
                 }
             }
             Type::Compound { kind, args } => self.emit_compound(*kind, args, ty),
-            Type::Function {
-                params,
-                return_type,
-                ..
-            } => self.emit_function_type(params, return_type),
+            Type::Function(f) => self.emit_function_type(&f.params, &f.return_type),
             Type::Var { .. } => GoType::new("any"),
             Type::Forall { .. } => GoType::new("any"),
             Type::Parameter(name) => GoType::new(name.to_string()),
