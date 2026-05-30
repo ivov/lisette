@@ -35,6 +35,19 @@ type Val struct {
 func (v Val) String() string {
 	switch v.Tag {
 	case ValA:
+		return fmt.Sprintf("A(%v)", v.A)
+	case ValB:
+		return fmt.Sprintf("B(%v)", v.B)
+	case ValC:
+		return "C"
+	default:
+		return fmt.Sprintf("Val(%d)", v.Tag)
+	}
+}
+
+func (v Val) GoString() string {
+	switch v.Tag {
+	case ValA:
 		return fmt.Sprintf("Val.A(%v)", v.A)
 	case ValB:
 		return fmt.Sprintf("Val.B(%v)", v.B)

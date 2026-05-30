@@ -24,6 +24,15 @@ type Carrier struct {
 func (c Carrier) String() string {
 	switch c.Tag {
 	case CarrierC:
+		return fmt.Sprintf("C { p: %v }", c.P)
+	default:
+		return fmt.Sprintf("Carrier(%d)", c.Tag)
+	}
+}
+
+func (c Carrier) GoString() string {
+	switch c.Tag {
+	case CarrierC:
 		return fmt.Sprintf("Carrier.C { p: %v }", c.P)
 	default:
 		return fmt.Sprintf("Carrier(%d)", c.Tag)

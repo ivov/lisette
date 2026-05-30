@@ -30,6 +30,17 @@ type Result2[T any, E any] struct {
 func (r Result2[T, E]) String() string {
 	switch r.Tag {
 	case Result2Ok2:
+		return fmt.Sprintf("Ok2(%v)", r.Ok2)
+	case Result2Err2:
+		return fmt.Sprintf("Err2(%v)", r.Err2)
+	default:
+		return fmt.Sprintf("Result2(%d)", r.Tag)
+	}
+}
+
+func (r Result2[T, E]) GoString() string {
+	switch r.Tag {
+	case Result2Ok2:
 		return fmt.Sprintf("Result2.Ok2(%v)", r.Ok2)
 	case Result2Err2:
 		return fmt.Sprintf("Result2.Err2(%v)", r.Err2)

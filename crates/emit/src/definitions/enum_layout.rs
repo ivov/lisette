@@ -236,6 +236,7 @@ impl EnumLayout {
         &self,
         receiver_generics: &str,
         method_name: &str,
+        qualified: bool,
     ) -> String {
         let receiver = receiver_name(&self.enum_name);
         let go_type_name = go_name::escape_keyword(&self.enum_name);
@@ -249,7 +250,7 @@ impl EnumLayout {
 
         for variant in &self.variants {
             lines.push(format!("case {}:", variant.tag_constant));
-            lines.push(self.build_variant_stringer_line(variant, &receiver));
+            lines.push(self.build_variant_stringer_line(variant, &receiver, qualified));
         }
 
         lines.push("default:".to_string());
@@ -263,10 +264,19 @@ impl EnumLayout {
         lines.join("\n")
     }
 
-    /// Per-variant `return ...` line for the Stringer method.
-    fn build_variant_stringer_line(&self, variant: &VariantLayout, receiver: &str) -> String {
+    fn build_variant_stringer_line(
+        &self,
+        variant: &VariantLayout,
+        receiver: &str,
+        qualified: bool,
+    ) -> String {
+        let prefix = if qualified {
+            format!("{}.", self.enum_name)
+        } else {
+            String::new()
+        };
         if variant.fields.is_empty() {
-            return format!("return \"{}.{}\"", self.enum_name, variant.name);
+            return format!("return \"{}{}\"", prefix, variant.name);
         }
         let args: Vec<String> = variant
             .fields
@@ -289,8 +299,8 @@ impl EnumLayout {
             ("(", ")", parts.join(", "))
         };
         format!(
-            "return fmt.Sprintf(\"{}.{}{}{}{}\", {})",
-            self.enum_name,
+            "return fmt.Sprintf(\"{}{}{}{}{}\", {})",
+            prefix,
             variant.name,
             open,
             placeholders,

@@ -31,6 +31,17 @@ type Action struct {
 func (a Action) String() string {
 	switch a.Tag {
 	case ActionMove:
+		return fmt.Sprintf("Move { x: %v, y: %v, dist: %v }", a.X, a.Y, a.Dist)
+	case ActionStop:
+		return "Stop"
+	default:
+		return fmt.Sprintf("Action(%d)", a.Tag)
+	}
+}
+
+func (a Action) GoString() string {
+	switch a.Tag {
+	case ActionMove:
 		return fmt.Sprintf("Action.Move { x: %v, y: %v, dist: %v }", a.X, a.Y, a.Dist)
 	case ActionStop:
 		return "Action.Stop"

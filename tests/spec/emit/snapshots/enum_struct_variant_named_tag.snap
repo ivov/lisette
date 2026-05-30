@@ -29,6 +29,17 @@ type E struct {
 func (e E) String() string {
 	switch e.Tag {
 	case ETag_:
+		return fmt.Sprintf("Tag { x: %v }", e.X)
+	case EOther:
+		return fmt.Sprintf("Other { x: %v }", e.X)
+	default:
+		return fmt.Sprintf("E(%d)", e.Tag)
+	}
+}
+
+func (e E) GoString() string {
+	switch e.Tag {
+	case ETag_:
 		return fmt.Sprintf("E.Tag { x: %v }", e.X)
 	case EOther:
 		return fmt.Sprintf("E.Other { x: %v }", e.X)

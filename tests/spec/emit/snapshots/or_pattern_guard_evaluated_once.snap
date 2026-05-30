@@ -30,6 +30,17 @@ type Res struct {
 func (r Res) String() string {
 	switch r.Tag {
 	case ResOk:
+		return fmt.Sprintf("Ok(%v)", r.Ok)
+	case ResErr:
+		return fmt.Sprintf("Err(%v)", r.Err)
+	default:
+		return fmt.Sprintf("Res(%d)", r.Tag)
+	}
+}
+
+func (r Res) GoString() string {
+	switch r.Tag {
+	case ResOk:
 		return fmt.Sprintf("Res.Ok(%v)", r.Ok)
 	case ResErr:
 		return fmt.Sprintf("Res.Err(%v)", r.Err)

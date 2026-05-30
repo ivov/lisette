@@ -26,6 +26,15 @@ type Holder[T comparable] struct {
 func (h Holder[T]) String() string {
 	switch h.Tag {
 	case HolderSome:
+		return fmt.Sprintf("Some(%v)", h.Some)
+	default:
+		return fmt.Sprintf("Holder(%d)", h.Tag)
+	}
+}
+
+func (h Holder[T]) GoString() string {
+	switch h.Tag {
+	case HolderSome:
 		return fmt.Sprintf("Holder.Some(%v)", h.Some)
 	default:
 		return fmt.Sprintf("Holder(%d)", h.Tag)

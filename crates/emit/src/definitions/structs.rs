@@ -165,10 +165,10 @@ impl Planner<'_> {
         )
     }
 
-    /// Auto-stringer method name to emit, or `None` when the user already
-    /// supplies one via a real receiver method (UFCS-emitted free functions
-    /// do not satisfy Go interfaces, so they don't count).
-    pub(crate) fn stringer_method_name(&self, name: &str) -> Option<&'static str> {
+    /// Whether the user already supplies `(String, GoString)` via real receiver
+    /// methods (UFCS-emitted free functions do not satisfy Go interfaces, so
+    /// they don't count). Drives which stringers the compiler synthesizes.
+    pub(crate) fn stringer_overrides(&self, name: &str) -> (bool, bool) {
         let qualified = self.facts.qualified_current(name);
         let methods = self
             .facts
@@ -187,10 +187,17 @@ impl Planner<'_> {
         };
 
         let has_stringer = is_user_stringer("string") || is_user_stringer(ENUM_STRINGER_METHOD);
-
         let has_go_stringer =
             is_user_stringer("goString") || is_user_stringer(ENUM_GO_STRINGER_METHOD);
-        match (has_stringer, has_go_stringer) {
+        (has_stringer, has_go_stringer)
+    }
+
+    /// Single stringer to synthesize for structs: `String` by default,
+    /// `GoString` when the user already supplies `String`, none when both
+    /// exist. Enums use [`Self::stringer_overrides`] directly, since they
+    /// synthesize both a bare `String` and a qualified `GoString`.
+    pub(crate) fn stringer_method_name(&self, name: &str) -> Option<&'static str> {
+        match self.stringer_overrides(name) {
             (true, true) => None,
             (true, false) => Some(ENUM_GO_STRINGER_METHOD),
             _ => Some(ENUM_STRINGER_METHOD),

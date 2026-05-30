@@ -23,6 +23,15 @@ type Status struct {
 func (s Status) String() string {
 	switch s.Tag {
 	case StatusReady:
+		return "Ready"
+	default:
+		return fmt.Sprintf("Status(%d)", s.Tag)
+	}
+}
+
+func (s Status) GoString() string {
+	switch s.Tag {
+	case StatusReady:
 		return "Status.Ready"
 	default:
 		return fmt.Sprintf("Status(%d)", s.Tag)

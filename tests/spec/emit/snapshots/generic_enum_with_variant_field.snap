@@ -29,6 +29,17 @@ type MyResult[T any] struct {
 func (m MyResult[T]) String() string {
 	switch m.Tag {
 	case MyResultSuccess:
+		return fmt.Sprintf("Success(%v)", m.Success)
+	case MyResultFailure:
+		return "Failure"
+	default:
+		return fmt.Sprintf("MyResult(%d)", m.Tag)
+	}
+}
+
+func (m MyResult[T]) GoString() string {
+	switch m.Tag {
+	case MyResultSuccess:
 		return fmt.Sprintf("MyResult.Success(%v)", m.Success)
 	case MyResultFailure:
 		return "MyResult.Failure"

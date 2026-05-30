@@ -38,6 +38,19 @@ type NetworkResult struct {
 func (n NetworkResult) String() string {
 	switch n.Tag {
 	case NetworkResultSuccess:
+		return "Success"
+	case NetworkResultTimeout:
+		return "Timeout"
+	case NetworkResultError:
+		return fmt.Sprintf("Error(%v)", n.Error)
+	default:
+		return fmt.Sprintf("NetworkResult(%d)", n.Tag)
+	}
+}
+
+func (n NetworkResult) GoString() string {
+	switch n.Tag {
+	case NetworkResultSuccess:
 		return "NetworkResult.Success"
 	case NetworkResultTimeout:
 		return "NetworkResult.Timeout"

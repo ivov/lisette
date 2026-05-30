@@ -110,6 +110,21 @@ type MyEnum struct {
 func (m MyEnum) String() string {
 	switch m.Tag {
 	case MyEnumSingle:
+		return fmt.Sprintf("Single(%v)", m.Single)
+	case MyEnumMulti:
+		return fmt.Sprintf("Multi(%v, %v)", m.Multi0, m.Multi1)
+	case MyEnumContainerSlice:
+		return fmt.Sprintf("ContainerSlice(%v)", m.ContainerSlice)
+	case MyEnumAliased:
+		return fmt.Sprintf("Aliased(%v)", m.Aliased)
+	default:
+		return fmt.Sprintf("MyEnum(%d)", m.Tag)
+	}
+}
+
+func (m MyEnum) GoString() string {
+	switch m.Tag {
+	case MyEnumSingle:
 		return fmt.Sprintf("MyEnum.Single(%v)", m.Single)
 	case MyEnumMulti:
 		return fmt.Sprintf("MyEnum.Multi(%v, %v)", m.Multi0, m.Multi1)

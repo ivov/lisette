@@ -58,6 +58,17 @@ type ShapeKind struct {
 func (s ShapeKind) String() string {
 	switch s.Tag {
 	case ShapeKindCircleKind:
+		return fmt.Sprintf("CircleKind(%v)", s.CircleKind)
+	case ShapeKindRectKind:
+		return fmt.Sprintf("RectKind { width: %v, height: %v }", s.Width, s.Height)
+	default:
+		return fmt.Sprintf("ShapeKind(%d)", s.Tag)
+	}
+}
+
+func (s ShapeKind) GoString() string {
+	switch s.Tag {
+	case ShapeKindCircleKind:
 		return fmt.Sprintf("ShapeKind.CircleKind(%v)", s.CircleKind)
 	case ShapeKindRectKind:
 		return fmt.Sprintf("ShapeKind.RectKind { width: %v, height: %v }", s.Width, s.Height)

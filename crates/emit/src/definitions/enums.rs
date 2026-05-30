@@ -1,5 +1,6 @@
 use crate::EmitEffects;
 use crate::Planner;
+use crate::definitions::enum_layout::{ENUM_GO_STRINGER_METHOD, ENUM_STRINGER_METHOD};
 use crate::names::generics::receiver_generics_string;
 use crate::names::go_name;
 use syntax::ast::{Attribute, Generic};
@@ -44,13 +45,27 @@ impl Planner<'_> {
         let receiver_generics = receiver_generics_string(generics);
         let has_json = attributes.iter().any(|a| a.name == "json");
 
-        let stringer_name = self.stringer_method_name(name);
-        let needs_fmt = stringer_name.is_some();
+        let (has_user_string, has_user_go_string) = self.stringer_overrides(name);
+        let emit_string = !has_user_string;
+        let emit_go_string = !has_user_go_string;
+        let needs_fmt = emit_string || emit_go_string;
         let layout = self.module.enum_layout(&enum_id).unwrap();
         let mut result = layout.emit_definition(&generics_string);
-        if let Some(stringer_name) = stringer_name {
+        if emit_string {
             result.push_str("\n\n");
-            result.push_str(&layout.emit_stringer_method(&receiver_generics, stringer_name));
+            result.push_str(&layout.emit_stringer_method(
+                &receiver_generics,
+                ENUM_STRINGER_METHOD,
+                false,
+            ));
+        }
+        if emit_go_string {
+            result.push_str("\n\n");
+            result.push_str(&layout.emit_stringer_method(
+                &receiver_generics,
+                ENUM_GO_STRINGER_METHOD,
+                true,
+            ));
         }
         if has_json {
             result.push_str("\n\n");

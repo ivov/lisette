@@ -29,6 +29,17 @@ type Container[K comparable, V any] struct {
 func (c Container[K, V]) String() string {
 	switch c.Tag {
 	case ContainerEmpty:
+		return "Empty"
+	case ContainerIndexed:
+		return fmt.Sprintf("Indexed(%v)", c.Indexed)
+	default:
+		return fmt.Sprintf("Container(%d)", c.Tag)
+	}
+}
+
+func (c Container[K, V]) GoString() string {
+	switch c.Tag {
+	case ContainerEmpty:
 		return "Container.Empty"
 	case ContainerIndexed:
 		return fmt.Sprintf("Container.Indexed(%v)", c.Indexed)

@@ -31,6 +31,17 @@ type Color struct {
 func (c Color) String() string {
 	switch c.Tag {
 	case ColorRed:
+		return "Red"
+	case ColorGreen:
+		return "Green"
+	default:
+		return fmt.Sprintf("Color(%d)", c.Tag)
+	}
+}
+
+func (c Color) GoString() string {
+	switch c.Tag {
+	case ColorRed:
 		return "Color.Red"
 	case ColorGreen:
 		return "Color.Green"

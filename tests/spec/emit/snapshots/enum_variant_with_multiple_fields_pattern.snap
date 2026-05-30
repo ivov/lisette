@@ -30,6 +30,17 @@ type Pair[A any, B any] struct {
 func (p Pair[A, B]) String() string {
 	switch p.Tag {
 	case PairBoth:
+		return fmt.Sprintf("Both(%v, %v)", p.Both0, p.Both1)
+	case PairNeither:
+		return "Neither"
+	default:
+		return fmt.Sprintf("Pair(%d)", p.Tag)
+	}
+}
+
+func (p Pair[A, B]) GoString() string {
+	switch p.Tag {
+	case PairBoth:
 		return fmt.Sprintf("Pair.Both(%v, %v)", p.Both0, p.Both1)
 	case PairNeither:
 		return "Pair.Neither"

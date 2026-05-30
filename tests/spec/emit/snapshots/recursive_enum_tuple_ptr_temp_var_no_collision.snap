@@ -31,6 +31,17 @@ type Node struct {
 func (n Node) String() string {
 	switch n.Tag {
 	case NodeLeaf:
+		return fmt.Sprintf("Leaf(%v)", n.Leaf)
+	case NodeBranch:
+		return fmt.Sprintf("Branch(%v, %v)", n.Branch0, n.Branch1)
+	default:
+		return fmt.Sprintf("Node(%d)", n.Tag)
+	}
+}
+
+func (n Node) GoString() string {
+	switch n.Tag {
+	case NodeLeaf:
 		return fmt.Sprintf("Node.Leaf(%v)", n.Leaf)
 	case NodeBranch:
 		return fmt.Sprintf("Node.Branch(%v, %v)", n.Branch0, n.Branch1)

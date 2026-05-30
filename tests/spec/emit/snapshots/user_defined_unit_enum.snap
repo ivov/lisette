@@ -33,6 +33,19 @@ type Tag struct {
 func (t Tag) String() string {
 	switch t.Tag {
 	case TagA:
+		return "A"
+	case TagB:
+		return "B"
+	case TagC:
+		return "C"
+	default:
+		return fmt.Sprintf("Tag(%d)", t.Tag)
+	}
+}
+
+func (t Tag) GoString() string {
+	switch t.Tag {
+	case TagA:
 		return "Tag.A"
 	case TagB:
 		return "Tag.B"

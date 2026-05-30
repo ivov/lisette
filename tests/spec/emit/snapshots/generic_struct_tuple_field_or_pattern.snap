@@ -41,6 +41,17 @@ type E struct {
 func (e E) String() string {
 	switch e.Tag {
 	case EA:
+		return fmt.Sprintf("A(%v)", e.A)
+	case EB:
+		return fmt.Sprintf("B(%v)", e.B)
+	default:
+		return fmt.Sprintf("E(%d)", e.Tag)
+	}
+}
+
+func (e E) GoString() string {
+	switch e.Tag {
+	case EA:
 		return fmt.Sprintf("E.A(%v)", e.A)
 	case EB:
 		return fmt.Sprintf("E.B(%v)", e.B)

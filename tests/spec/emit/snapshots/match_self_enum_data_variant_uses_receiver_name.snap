@@ -31,6 +31,17 @@ type Shape struct {
 func (s Shape) String() string {
 	switch s.Tag {
 	case ShapeCircle:
+		return fmt.Sprintf("Circle(%v)", s.Circle)
+	case ShapeRectangle:
+		return fmt.Sprintf("Rectangle { width: %v, height: %v }", s.Width, s.Height)
+	default:
+		return fmt.Sprintf("Shape(%d)", s.Tag)
+	}
+}
+
+func (s Shape) GoString() string {
+	switch s.Tag {
+	case ShapeCircle:
 		return fmt.Sprintf("Shape.Circle(%v)", s.Circle)
 	case ShapeRectangle:
 		return fmt.Sprintf("Shape.Rectangle { width: %v, height: %v }", s.Width, s.Height)

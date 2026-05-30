@@ -31,6 +31,17 @@ type Event struct {
 func (e Event) String() string {
 	switch e.Tag {
 	case EventClick:
+		return fmt.Sprintf("Click(%v, %v)", e.Click0, e.Click1)
+	case EventKeyPress:
+		return fmt.Sprintf("KeyPress(%v)", e.KeyPress)
+	default:
+		return fmt.Sprintf("Event(%d)", e.Tag)
+	}
+}
+
+func (e Event) GoString() string {
+	switch e.Tag {
+	case EventClick:
 		return fmt.Sprintf("Event.Click(%v, %v)", e.Click0, e.Click1)
 	case EventKeyPress:
 		return fmt.Sprintf("Event.KeyPress(%v)", e.KeyPress)

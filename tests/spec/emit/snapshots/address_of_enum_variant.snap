@@ -30,6 +30,17 @@ type List struct {
 func (l List) String() string {
 	switch l.Tag {
 	case ListCons:
+		return fmt.Sprintf("Cons(%v, %v)", l.Cons0, l.Cons1)
+	case ListNil:
+		return "Nil"
+	default:
+		return fmt.Sprintf("List(%d)", l.Tag)
+	}
+}
+
+func (l List) GoString() string {
+	switch l.Tag {
+	case ListCons:
 		return fmt.Sprintf("List.Cons(%v, %v)", l.Cons0, l.Cons1)
 	case ListNil:
 		return "List.Nil"

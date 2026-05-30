@@ -36,6 +36,19 @@ type Status struct {
 func (s Status) String() string {
 	switch s.Tag {
 	case StatusActive:
+		return "Active"
+	case StatusInactive:
+		return "Inactive"
+	case StatusSuspended:
+		return "Suspended"
+	default:
+		return fmt.Sprintf("Status(%d)", s.Tag)
+	}
+}
+
+func (s Status) GoString() string {
+	switch s.Tag {
+	case StatusActive:
 		return "Status.Active"
 	case StatusInactive:
 		return "Status.Inactive"

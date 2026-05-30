@@ -63,6 +63,15 @@ type MyEnum struct {
 func (m MyEnum) String() string {
 	switch m.Tag {
 	case MyEnumMaybe:
+		return fmt.Sprintf("Maybe(%v)", m.Maybe)
+	default:
+		return fmt.Sprintf("MyEnum(%d)", m.Tag)
+	}
+}
+
+func (m MyEnum) GoString() string {
+	switch m.Tag {
+	case MyEnumMaybe:
 		return fmt.Sprintf("MyEnum.Maybe(%v)", m.Maybe)
 	default:
 		return fmt.Sprintf("MyEnum(%d)", m.Tag)

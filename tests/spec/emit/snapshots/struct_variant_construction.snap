@@ -25,6 +25,15 @@ type Message struct {
 func (m Message) String() string {
 	switch m.Tag {
 	case MessageMove:
+		return fmt.Sprintf("Move { x: %v, y: %v }", m.X, m.Y)
+	default:
+		return fmt.Sprintf("Message(%d)", m.Tag)
+	}
+}
+
+func (m Message) GoString() string {
+	switch m.Tag {
+	case MessageMove:
 		return fmt.Sprintf("Message.Move { x: %v, y: %v }", m.X, m.Y)
 	default:
 		return fmt.Sprintf("Message(%d)", m.Tag)

@@ -31,6 +31,17 @@ type Expr struct {
 func (e Expr) String() string {
 	switch e.Tag {
 	case ExprNum:
+		return fmt.Sprintf("Num(%v)", e.Num)
+	case ExprAdd:
+		return fmt.Sprintf("Add(%v, %v)", e.Add0, e.Add1)
+	default:
+		return fmt.Sprintf("Expr(%d)", e.Tag)
+	}
+}
+
+func (e Expr) GoString() string {
+	switch e.Tag {
+	case ExprNum:
 		return fmt.Sprintf("Expr.Num(%v)", e.Num)
 	case ExprAdd:
 		return fmt.Sprintf("Expr.Add(%v, %v)", e.Add0, e.Add1)

@@ -24,6 +24,15 @@ type Wrap[T any] struct {
 func (w Wrap[T]) String() string {
 	switch w.Tag {
 	case WrapW:
+		return fmt.Sprintf("W(%v)", w.W)
+	default:
+		return fmt.Sprintf("Wrap(%d)", w.Tag)
+	}
+}
+
+func (w Wrap[T]) GoString() string {
+	switch w.Tag {
+	case WrapW:
 		return fmt.Sprintf("Wrap.W(%v)", w.W)
 	default:
 		return fmt.Sprintf("Wrap(%d)", w.Tag)

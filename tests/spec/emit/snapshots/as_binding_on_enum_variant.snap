@@ -30,6 +30,17 @@ type Status struct {
 func (s Status) String() string {
 	switch s.Tag {
 	case StatusGood:
+		return fmt.Sprintf("Good(%v)", s.Good)
+	case StatusBad:
+		return fmt.Sprintf("Bad(%v)", s.Bad)
+	default:
+		return fmt.Sprintf("Status(%d)", s.Tag)
+	}
+}
+
+func (s Status) GoString() string {
+	switch s.Tag {
+	case StatusGood:
 		return fmt.Sprintf("Status.Good(%v)", s.Good)
 	case StatusBad:
 		return fmt.Sprintf("Status.Bad(%v)", s.Bad)

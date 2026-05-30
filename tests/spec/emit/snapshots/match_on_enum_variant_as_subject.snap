@@ -33,6 +33,19 @@ type Dir struct {
 func (d Dir) String() string {
 	switch d.Tag {
 	case DirNorth:
+		return "North"
+	case DirSouth:
+		return "South"
+	case DirEast:
+		return "East"
+	default:
+		return fmt.Sprintf("Dir(%d)", d.Tag)
+	}
+}
+
+func (d Dir) GoString() string {
+	switch d.Tag {
+	case DirNorth:
 		return "Dir.North"
 	case DirSouth:
 		return "Dir.South"
