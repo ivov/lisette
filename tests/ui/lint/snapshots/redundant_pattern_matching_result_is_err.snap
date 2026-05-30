@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Redundant pattern matching
+   ╭─[test.lis:4:11]
+ 3 │   let r: Result<int, string> = Ok(1)
+ 4 │   let _ = match r {
+   ·           ──┬──
+   ·             ╰── can be simpler
+ 5 │     Ok(_) => false,
+   ╰────
+  help: Replace this `match` with `.is_err()` · code: [lint.redundant_pattern_matching]

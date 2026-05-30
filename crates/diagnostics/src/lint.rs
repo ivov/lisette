@@ -334,6 +334,13 @@ pub fn needless_bool(span: &Span, consequence_is_true: bool) -> LisetteDiagnosti
         .with_help(help)
 }
 
+pub fn redundant_pattern_matching(span: &Span, predicate: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Redundant pattern matching")
+        .with_lint_code("redundant_pattern_matching")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Replace this `match` with `.{predicate}()`"))
+}
+
 pub fn empty_match_arm(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Empty match arm")
         .with_lint_code("empty_match_arm")

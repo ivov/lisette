@@ -3631,6 +3631,143 @@ fn main() { test(Some(1)); }
 }
 
 #[test]
+fn redundant_pattern_matching_option_is_some() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(_) => true,
+    None => false,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_pattern_matching_option_is_none() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(_) => false,
+    None => true,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_pattern_matching_result_is_ok() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(_) => true,
+    Err(_) => false,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_pattern_matching_result_is_err() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(_) => false,
+    Err(_) => true,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_pattern_matching_reversed_arms() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    None => false,
+    Some(_) => true,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_pattern_matching_non_bool_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(_) => 1,
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_pattern_matching_same_bool_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(_) => true,
+    None => true,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_pattern_matching_bound_payload_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => true,
+    None => false,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_pattern_matching_non_option_enum_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Toggle { On, Off }
+
+fn main() {
+  let t = Toggle.On
+  let _ = match t {
+    Toggle.On => true,
+    Toggle.Off => false,
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn redundant_if_let_else() {
     assert_lint_snapshot!(
         r#"
