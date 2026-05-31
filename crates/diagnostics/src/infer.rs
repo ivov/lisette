@@ -169,7 +169,7 @@ pub fn type_not_found(type_name: &str, annotation_span: Span) -> LisetteDiagnost
         .with_help("Define or import this type")
 }
 
-pub fn not_a_type(
+pub fn value_in_type_position(
     name: &str,
     kind: &str,
     annotation_span: Span,
@@ -181,9 +181,9 @@ pub fn not_a_type(
         name.len() as u32,
     );
 
-    let mut diag = LisetteDiagnostic::error(format!("`{}` is not a type", name))
-        .with_resolve_code("not_a_type")
-        .with_span_label(&name_span, format!("{} used in type position", kind));
+    let mut diag = LisetteDiagnostic::error("Value in type position")
+        .with_resolve_code("value_in_type_position")
+        .with_span_label(&name_span, format!("expected type, found {}", kind));
 
     if let Some(help) = help {
         diag = diag.with_help(help);

@@ -1,13 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
-assertion_line: 1841
 ---
-  [error] `Some` is not a type
+  [error] Value in type position
    ╭─[test.lis:3:10]
  2 │ fn test() {
  3 │   let x: Some = Some(1)
    ·          ──┬─
-   ·            ╰── enum variant used in type position
+   ·            ╰── expected type, found enum variant
  4 │ }
    ╰────
-  help: Use `Option` for the enum type, or call `Some(...)` to construct a value · code: [resolve.not_a_type]
+  help: Use `Option` for the enum type, or call `Some(...)` to construct a value · code: [resolve.value_in_type_position]

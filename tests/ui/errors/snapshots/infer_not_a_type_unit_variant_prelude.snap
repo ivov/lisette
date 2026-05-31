@@ -1,13 +1,12 @@
 ---
 source: tests/ui/errors/mod.rs
-assertion_line: 1831
 ---
-  [error] `None` is not a type
+  [error] Value in type position
    ╭─[test.lis:2:17]
  1 │ 
  2 │ fn nothing() -> None {
    ·                 ──┬─
-   ·                   ╰── enum variant used in type position
+   ·                   ╰── expected type, found enum variant
  3 │   return None
    ╰────
-  help: Use `Option` for the enum type · code: [resolve.not_a_type]
+  help: Use `Option` for the enum type · code: [resolve.value_in_type_position]

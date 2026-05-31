@@ -261,38 +261,39 @@ impl TaskState<'_> {
                 } else {
                     variant.name_span
                 };
-                if let Some(&(v_a, f_a, is_struct_a, ty_a, _)) = seen.get(&go_name) {
-                    let ty_a_resolved = ty_a.resolve_in(&self.env);
-                    // Skip the conflict check if either side already errored — the
-                    // primary diagnostic on the bad annotation is enough.
-                    if !matches!(ty_a_resolved, Type::Error)
-                        && !matches!(resolved, Type::Error)
-                        && ty_a_resolved != resolved
-                    {
-                        let loc_a = if is_struct_a {
-                            format!("{}.{}.{}", name, v_a, f_a)
-                        } else {
-                            format!("{}.{}", name, v_a)
-                        };
-                        let loc_b = if is_struct {
-                            format!("{}.{}.{}", name, variant.name, field.name)
-                        } else {
-                            format!("{}.{}", name, variant.name)
-                        };
-                        self.sink.push(diagnostics::infer::enum_field_type_conflict(
-                            &loc_a,
-                            &ty_a.resolve_in(&self.env).to_string(),
-                            &loc_b,
-                            &resolved.to_string(),
-                            span,
-                        ));
-                    }
-                } else {
+                let Some(&(v_a, f_a, is_struct_a, ty_a, _)) = seen.get(&go_name) else {
                     seen.insert(
                         go_name,
                         (&variant.name, &field.name, is_struct, &field.ty, span),
                     );
+                    continue;
+                };
+
+                let ty_a_resolved = ty_a.resolve_in(&self.env);
+                if matches!(ty_a_resolved, Type::Error)
+                    || matches!(resolved, Type::Error)
+                    || ty_a_resolved == resolved
+                {
+                    continue;
                 }
+
+                let loc_a = if is_struct_a {
+                    format!("{}.{}.{}", name, v_a, f_a)
+                } else {
+                    format!("{}.{}", name, v_a)
+                };
+                let loc_b = if is_struct {
+                    format!("{}.{}.{}", name, variant.name, field.name)
+                } else {
+                    format!("{}.{}", name, variant.name)
+                };
+                self.sink.push(diagnostics::infer::enum_field_type_conflict(
+                    &loc_a,
+                    &ty_a_resolved.to_string(),
+                    &loc_b,
+                    &resolved.to_string(),
+                    span,
+                ));
             }
         }
     }

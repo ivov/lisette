@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Value in type position
+    ╭─[test.lis:11:11]
+ 10 │ 
+ 11 │ fn run(f: make) -> int {
+    ·           ──┬─
+    ·             ╰── expected type, found function
+ 12 │   return f(0)
+    ╰────
+  help: Use a function type alias or write the function type directly · code: [resolve.value_in_type_position]

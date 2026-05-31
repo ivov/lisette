@@ -478,12 +478,9 @@ impl<'s> TaskState<'s> {
         }
 
         let qualified_name = self.lookup_qualified_name(store, type_name)?;
-        let definition = store.get_definition(&qualified_name)?;
-        if !definition_names_a_type(definition, &qualified_name) {
-            return None;
-        }
+        let ty = store.get_type(&qualified_name)?.clone();
 
-        Some((qualified_name, definition.ty.clone()))
+        Some((qualified_name, ty))
     }
 
     pub(crate) fn resolve_type_from_prelude(
@@ -492,11 +489,8 @@ impl<'s> TaskState<'s> {
         type_name: &str,
     ) -> Option<(String, Type)> {
         let qualified_name = format!("prelude.{}", type_name);
-        let definition = store.get_definition(&qualified_name)?;
-        if !definition_names_a_type(definition, &qualified_name) {
-            return None;
-        }
-        Some((qualified_name, definition.ty.clone()))
+        let ty = store.get_type(&qualified_name)?.clone();
+        Some((qualified_name, ty))
     }
 
     pub(crate) fn get_all_methods(&self, store: &Store, ty: &Type) -> MethodSignatures {
@@ -776,24 +770,6 @@ impl<'s> TaskState<'s> {
 ///
 /// Reserved names include Go keywords, Go predeclared identifiers, Go builtins,
 /// Go type constraint names, and Lisette prelude symbols.
-/// Whether `definition` introduces a type with name `qualified_name`.
-/// Type declarations (struct/enum/interface/typedef/value-enum) qualify, plus
-/// the placeholder `Value` entries that `collect_type_name_entries` writes
-/// during pre-registration — those carry a self-referential `Type::Nominal`
-/// id, distinguishing them from real values (functions, consts, enum variant
-/// constructors whose `ty` points at the parent enum).
-fn definition_names_a_type(definition: &Definition, qualified_name: &str) -> bool {
-    if !matches!(definition.body, DefinitionBody::Value { .. }) {
-        return true;
-    }
-
-    definition
-        .ty
-        .unwrap_forall()
-        .get_qualified_id()
-        .is_some_and(|id| id == qualified_name)
-}
-
 fn is_reserved_import_alias(name: &str) -> bool {
     matches!(
         name,

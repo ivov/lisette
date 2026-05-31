@@ -4734,13 +4734,6 @@ fn main() {
 
 #[test]
 fn value_placeholder_for_forward_reference_resolves() {
-    // Pins the self-referential placeholder branch in
-    // `definition_names_a_type`. `collect_type_name_entries` pre-registers
-    // every type name with a `DefinitionBody::Value` placeholder before
-    // `populate_X` fills in the real body; while that placeholder is in
-    // place, other items in the same module must still resolve it as a
-    // type. Forward references trigger the window: when `Holder`'s field
-    // annotation is resolved, `Later`'s body is still the placeholder.
     infer(
         r#"{
         struct Holder {

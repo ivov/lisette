@@ -1856,6 +1856,25 @@ fn run(f: helper) -> int {
 }
 
 #[test]
+fn infer_not_a_type_function_returning_enum() {
+    let input = r#"
+enum Kind {
+  Int,
+  String,
+}
+
+fn make() -> Kind {
+  Kind.Int
+}
+
+fn run(f: make) -> int {
+  return f(0)
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
 fn infer_variable_not_found_no_suggestion() {
     let input = r#"
 fn test() {
