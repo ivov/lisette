@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Redundant closure
+   ╭─[test.lis:6:22]
+ 5 │   let xs = [1, 2, 3]
+ 6 │   let _ = xs.fold(0, |acc, x| add(acc, x))
+   ·                      ──────────┬─────────
+   ·                                ╰── can be simpler
+ 7 │ }
+   ╰────
+  help: Replace this closure with `add` · code: [lint.redundant_closure]

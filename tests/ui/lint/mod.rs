@@ -7125,3 +7125,174 @@ fn main() {
 "#
     );
 }
+
+#[test]
+fn redundant_closure_single_param() {
+    assert_lint_snapshot!(
+        r#"
+fn double(x: int) -> int { x * 2 }
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.map(|x| double(x))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_multi_param() {
+    assert_lint_snapshot!(
+        r#"
+fn add(a: int, b: int) -> int { a + b }
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.fold(0, |acc, x| add(acc, x))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_module_member() {
+    assert_lint_snapshot!(
+        r#"
+import "go:strconv"
+
+fn main() {
+  let xs = ["1", "2"]
+  let _ = xs.map(|s| strconv.Atoi(s))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_block_body() {
+    assert_lint_snapshot!(
+        r#"
+fn double(x: int) -> int { x * 2 }
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.map(|x| { double(x) })
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_immutable_local_callee() {
+    assert_lint_snapshot!(
+        r#"
+fn double(x: int) -> int { x * 2 }
+
+fn main() {
+  let f = double
+  let xs = [1, 2, 3]
+  let _ = xs.map(|x| f(x))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_partial_application_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn add(a: int, b: int) -> int { a + b }
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.map(|x| add(10, x))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_reordered_args_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn add(a: int, b: int) -> int { a + b }
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.fold(0, |acc, x| add(x, acc))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_repeated_arg_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn add(a: int, b: int) -> int { a + b }
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.map(|x| add(x, x))
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_transformed_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn double(x: int) -> int { x * 2 }
+
+fn main() {
+  let xs = [1, 2, 3]
+  let _ = xs.map(|x| double(x) + 1)
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_mutable_capture_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn double(x: int) -> int { x * 2 }
+fn triple(x: int) -> int { x * 3 }
+
+fn main() {
+  let mut f = double
+  let xs = [1, 2, 3]
+  let _ = xs.map(|x| f(x))
+  f = triple
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_method_receiver_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let xs = ["a", "bb"]
+  let _ = xs.map(|s| s.length())
+}
+"#
+    );
+}
+
+#[test]
+fn redundant_closure_mut_param_callee_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn dec(mut x: int) -> int { x = x - 1; x }
+fn apply(f: fn(int) -> int, n: int) -> int { f(n) }
+
+fn main() {
+  let n = 5
+  let _ = apply(|x| dec(x), n)
+}
+"#
+    );
+}

@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Redundant closure
+   ╭─[test.lis:6:18]
+ 5 │   let xs = ["1", "2"]
+ 6 │   let _ = xs.map(|s| strconv.Atoi(s))
+   ·                  ─────────┬─────────
+   ·                           ╰── can be simpler
+ 7 │ }
+   ╰────
+  help: Replace this closure with `strconv.Atoi` · code: [lint.redundant_closure]

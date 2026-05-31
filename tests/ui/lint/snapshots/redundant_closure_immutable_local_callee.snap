@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Redundant closure
+   ╭─[test.lis:7:18]
+ 6 │   let xs = [1, 2, 3]
+ 7 │   let _ = xs.map(|x| f(x))
+   ·                  ────┬───
+   ·                      ╰── can be simpler
+ 8 │ }
+   ╰────
+  help: Replace this closure with `f` · code: [lint.redundant_closure]

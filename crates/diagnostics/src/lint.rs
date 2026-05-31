@@ -360,6 +360,13 @@ pub fn manual_unwrap_or(span: &Span, default_has_effects: bool) -> LisetteDiagno
         .with_help(format!("Replace this `match` with `.{method}(...)`"))
 }
 
+pub fn redundant_closure(span: &Span, callee: &str) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Redundant closure")
+        .with_lint_code("redundant_closure")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Replace this closure with `{callee}`"))
+}
+
 pub fn empty_match_arm(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Empty match arm")
         .with_lint_code("empty_match_arm")

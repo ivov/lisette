@@ -6,6 +6,7 @@ pub(crate) mod visitor;
 use std::cell::RefCell;
 
 use crate::context::AnalysisContext;
+use crate::facts::Facts;
 use crate::passes::PARALLEL_THRESHOLD;
 use crate::store::Store;
 use diagnostics::LisetteDiagnostic;
@@ -22,9 +23,10 @@ pub struct LintContext<'a> {
     pub files: &'a HashMap<u32, File>,
     pub module_id: &'a str,
     pub store: &'a Store,
+    pub facts: &'a Facts,
 }
 
-pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
+pub(crate) fn run(analysis: &AnalysisContext, facts: &Facts, sink: &LocalSink) {
     let store = analysis.store;
 
     let mut modules: Vec<&Module> = store
@@ -36,7 +38,7 @@ pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
 
     if modules.len() < PARALLEL_THRESHOLD {
         for module in &modules {
-            run_module(module, store, sink);
+            run_module(module, store, facts, sink);
         }
         return;
     }
@@ -45,14 +47,14 @@ pub(crate) fn run(analysis: &AnalysisContext, sink: &LocalSink) {
         .par_iter()
         .map(|module| {
             let local_sink = LocalSink::new();
-            run_module(module, store, &local_sink);
+            run_module(module, store, facts, &local_sink);
             local_sink
         })
         .collect();
     sink.extend(LocalSink::merge(worker_sinks));
 }
 
-fn run_module(module: &Module, store: &Store, sink: &LocalSink) {
+fn run_module(module: &Module, store: &Store, facts: &Facts, sink: &LocalSink) {
     for file in module.files.values() {
         let ctx = LintContext {
             ast: &file.items,
@@ -61,6 +63,7 @@ fn run_module(module: &Module, store: &Store, sink: &LocalSink) {
             files: &module.files,
             module_id: &module.id,
             store,
+            facts,
         };
         let mut diagnostics = AstLintGroup.check(&ctx);
         diagnostics.sort_by(LisetteDiagnostic::sort_key);
@@ -76,7 +79,7 @@ use checks::{
     check_invisible_in_string_pattern, check_loop_runs_once, check_manual_map,
     check_manual_unwrap_or, check_match_literal_collection, check_needless_bool,
     check_needless_range_loop, check_needless_return, check_pattern_naming,
-    check_redundant_pattern_matching, check_replaceable_with_zero_fill,
+    check_redundant_closure, check_redundant_pattern_matching, check_replaceable_with_zero_fill,
     check_rest_only_slice_pattern, check_self_assignment, check_self_comparison,
     check_single_arm_match, check_uninterpolated_fstring, check_unnecessary_raw_string_expression,
     check_unnecessary_raw_string_pattern, check_unsigned_comparison,
@@ -133,6 +136,7 @@ impl AstLintGroup {
         let store = ctx.store;
         let module_id = ctx.module_id;
         let source = ctx.source;
+        let facts = ctx.facts;
 
         visit_ast(
             ctx.ast,
@@ -144,6 +148,7 @@ impl AstLintGroup {
                 check_duplicate_logical_operand(expression, files, &mut sink);
                 check_expression_naming(expression, is_d_lis, &mut sink);
                 check_replaceable_with_zero_fill(expression, store, module_id, source, &mut sink);
+                check_redundant_closure(expression, facts, &mut sink);
             },
             &mut |pattern| {
                 let mut sink = diagnostics.borrow_mut();
