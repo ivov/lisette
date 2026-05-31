@@ -133,10 +133,24 @@ impl Planner<'_> {
                 name_span,
                 variants,
                 attributes,
+                visibility,
                 ..
             } => {
                 let type_go = go_name::escape_keyword(name).into_owned();
                 self.check_reserved_prefix(&type_go, name_span, diagnostics);
+
+                if attributes
+                    .iter()
+                    .any(|attribute| attribute.name == "iterable")
+                {
+                    let variants_fn =
+                        self.variants_go_name(name, matches!(visibility, Visibility::Public));
+                    package_block
+                        .entry(variants_fn)
+                        .or_default()
+                        .push(*name_span);
+                }
+
                 package_block
                     .entry(type_go.clone())
                     .or_default()

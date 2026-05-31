@@ -152,6 +152,12 @@ impl<'source> Parser<'source> {
 
         let doc = doc_with_span.map(|(text, _)| text);
 
+        if !matches!(self.current_token().kind, Enum | Struct | Function)
+            && let Some(attribute) = attributes.first()
+        {
+            self.error_misplaced_attribute(attribute.span);
+        }
+
         let expression = match self.current_token().kind {
             Enum => self.parse_enum_definition(doc, attributes),
             Struct => self.parse_struct_definition(doc, attributes),
@@ -831,6 +837,18 @@ impl<'source> Parser<'source> {
         let error = ParseError::new("Unattached doc comment", span, "is detached")
             .with_parse_code("detached_doc_comment")
             .with_help("Place the doc comment on the line immediately above a symbol definition");
+
+        self.errors.push(error);
+    }
+
+    fn error_misplaced_attribute(&mut self, span: Span) {
+        let error = ParseError::new(
+            "Attribute not supported on target",
+            span,
+            "not supported on target",
+        )
+        .with_parse_code("misplaced_attribute")
+        .with_help("Remove the attribute, or move it onto an enum, struct, or function");
 
         self.errors.push(error);
     }

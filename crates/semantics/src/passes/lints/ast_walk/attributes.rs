@@ -231,7 +231,7 @@ fn check_tag_with_alias(attribute: &Attribute, diagnostics: &mut Vec<LisetteDiag
 }
 
 fn is_known_attribute(name: &str) -> bool {
-    is_serialization_key(name) || name == "tag" || name == "allow"
+    is_serialization_key(name) || matches!(name, "tag" | "allow" | "iterable")
 }
 
 fn is_serialization_key(key: &str) -> bool {

@@ -10,6 +10,27 @@ struct Point { x: int, y: int }
 }
 
 #[test]
+fn iterable_enum_variants() {
+    let input = r#"
+#[iterable]
+pub enum BuildPhase {
+  Validate,
+  Parse,
+  Codegen,
+}
+
+fn count() -> int {
+  let mut total = 0
+  for _phase in BuildPhase.variants() {
+    total = total + 1
+  }
+  total
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
 fn struct_instantiation() {
     let input = r#"
 struct Point { x: int, y: int }

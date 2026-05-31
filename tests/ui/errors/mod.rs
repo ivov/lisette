@@ -519,6 +519,32 @@ fn main() {
 }
 
 #[test]
+fn parse_attribute_on_unsupported_declaration() {
+    let input = r#"
+#[iterable]
+interface Service {
+  fn run(self) -> int
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
+fn parse_attribute_on_interface_parent() {
+    let input = r#"
+interface Parent {
+  fn base(self) -> int
+}
+
+interface Child {
+  #[iterable]
+  impl Parent
+}
+"#;
+    assert_parse_error_snapshot!(input);
+}
+
+#[test]
 fn parse_missing_closing_brace() {
     let input = r#"
 fn main() {
@@ -7230,6 +7256,106 @@ struct Coord { x: int, y: int }
 fn main() {
   let c = Coord
   let _ = c
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn iterable_on_payload_variant() {
+    let input = r#"
+#[iterable]
+enum Token {
+  Eof,
+  Ident(string),
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn iterable_on_generic_enum() {
+    let input = r#"
+#[iterable]
+enum Cached<T> {
+  Hit,
+  Miss,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn iterable_on_struct() {
+    let input = r#"
+#[iterable]
+struct Point { x: int, y: int }
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn iterable_variants_method_collision() {
+    let input = r#"
+#[iterable]
+enum Color {
+  Red,
+  Green,
+}
+
+impl Color {
+  fn variants() -> int {
+    0
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn iterable_variant_named_variants() {
+    let input = r#"
+#[iterable]
+enum Color {
+  Red,
+  variants,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn iterable_on_struct_field() {
+    let input = r#"
+struct Config {
+  #[iterable]
+  value: int,
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn iterable_on_impl_method() {
+    let input = r#"
+struct Widget {}
+
+impl Widget {
+  #[iterable]
+  fn build() -> int {
+    0
+  }
+}
+"#;
+    assert_infer_error_snapshot!(input);
+}
+
+#[test]
+fn iterable_on_interface_method() {
+    let input = r#"
+interface Service {
+  #[iterable]
+  fn run() -> int
 }
 "#;
     assert_infer_error_snapshot!(input);

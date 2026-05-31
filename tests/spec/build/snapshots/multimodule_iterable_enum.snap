@@ -1,0 +1,79 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "github.com/user/myproject/phases"
+
+func main() {
+	total := 0
+	for range phases.BuildPhase_Variants() {
+		total++
+	}
+	_ = total
+}
+
+
+// === phases/mod.go ===
+package phases
+
+import "fmt"
+
+func MakeBuildPhaseValidate() BuildPhase {
+	return BuildPhase{Tag: BuildPhaseValidate}
+}
+
+func MakeBuildPhaseParse() BuildPhase {
+	return BuildPhase{Tag: BuildPhaseParse}
+}
+
+func MakeBuildPhaseCodegen() BuildPhase {
+	return BuildPhase{Tag: BuildPhaseCodegen}
+}
+
+type BuildPhaseTag int
+
+const (
+	BuildPhaseValidate BuildPhaseTag = iota
+	BuildPhaseParse
+	BuildPhaseCodegen
+)
+
+type BuildPhase struct {
+	Tag BuildPhaseTag
+}
+
+func (b BuildPhase) String() string {
+	switch b.Tag {
+	case BuildPhaseValidate:
+		return "Validate"
+	case BuildPhaseParse:
+		return "Parse"
+	case BuildPhaseCodegen:
+		return "Codegen"
+	default:
+		return fmt.Sprintf("BuildPhase(%d)", b.Tag)
+	}
+}
+
+func (b BuildPhase) GoString() string {
+	switch b.Tag {
+	case BuildPhaseValidate:
+		return "BuildPhase.Validate"
+	case BuildPhaseParse:
+		return "BuildPhase.Parse"
+	case BuildPhaseCodegen:
+		return "BuildPhase.Codegen"
+	default:
+		return fmt.Sprintf("BuildPhase(%d)", b.Tag)
+	}
+}
+
+func BuildPhase_Variants() []BuildPhase {
+	return []BuildPhase{
+		{Tag: BuildPhaseValidate},
+		{Tag: BuildPhaseParse},
+		{Tag: BuildPhaseCodegen},
+	}
+}

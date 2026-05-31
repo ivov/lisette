@@ -31,3 +31,46 @@ pub fn conflicting_case_transforms(span: &Span) -> LisetteDiagnostic {
         .with_span_label(span, "conflicting")
         .with_help("Choose either `snake_case` or `camel_case`, not both")
 }
+
+pub fn iterable_non_unit_variant(attribute_span: &Span, variant_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[iterable]` on enum with payload variant")
+        .with_attribute_code("iterable_non_unit_variant")
+        .with_span_label(attribute_span, "disallowed if a variant has a payload")
+        .with_span_label(variant_span, "this variant has a payload")
+        .with_help("Remove the payload, or drop `#[iterable]`")
+}
+
+pub fn iterable_generic_enum(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[iterable]` on generic enum")
+        .with_attribute_code("iterable_generic_enum")
+        .with_span_label(attribute_span, "disallowed if enum has generics")
+        .with_help("Remove the generic type parameters, or drop `#[iterable]`")
+}
+
+pub fn iterable_not_an_enum(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[iterable]` not on enum")
+        .with_attribute_code("iterable_not_an_enum")
+        .with_span_label(attribute_span, "not on an enum")
+        .with_help("Only an enum can be marked `#[iterable]`")
+}
+
+pub fn iterable_in_typedef(attribute_span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::error("`#[iterable]` in a typedef")
+        .with_attribute_code("iterable_in_typedef")
+        .with_span_label(attribute_span, "disallowed in a `.d.lis` typedef")
+        .with_help("Only enums in `.lis` source can be marked `#[iterable]`")
+}
+
+pub fn iterable_variants_conflict(
+    attribute_span: &Span,
+    existing_span: Option<&Span>,
+) -> LisetteDiagnostic {
+    let mut diagnostic =
+        LisetteDiagnostic::error("`#[iterable]` conflicts with existing `variants`")
+            .with_attribute_code("iterable_variants_conflict")
+            .with_span_label(attribute_span, "would synthesize `variants`");
+    if let Some(span) = existing_span {
+        diagnostic = diagnostic.with_span_label(span, "`variants` already defined here");
+    }
+    diagnostic.with_help("Rename the existing `variants`, or drop `#[iterable]`")
+}

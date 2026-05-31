@@ -1327,6 +1327,93 @@ fn main() {
 }
 
 #[test]
+fn iterable_enum_named_go_keyword() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+#[iterable]
+enum map {
+  A,
+  B,
+}
+
+fn main() {
+  let _ = map.variants()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn iterable_enum_export_name_consistency() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+#[iterable]
+pub enum PublicPhase {
+  Build,
+}
+
+#[iterable]
+enum LocalPhase {
+  Check,
+}
+
+fn main() {
+  let _ = LocalPhase.variants()
+  let _ = PublicPhase.variants()
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
+fn multimodule_iterable_enum() {
+    let mut fs = MockFileSystem::new();
+
+    fs.add_file(
+        "phases",
+        "mod.lis",
+        r#"
+#[iterable]
+pub enum BuildPhase {
+  Validate,
+  Parse,
+  Codegen,
+}
+"#,
+    );
+
+    fs.add_file(
+        ENTRY_MODULE_ID,
+        "main.lis",
+        r#"
+import "phases"
+
+fn main() {
+  let mut total = 0
+  for _phase in phases.BuildPhase.variants() {
+    total = total + 1
+  }
+  let _ = total
+}
+"#,
+    );
+
+    assert_build_snapshot!(fs, "github.com/user/myproject");
+}
+
+#[test]
 fn receiver_name_collision_with_parameter() {
     let mut fs = MockFileSystem::new();
 

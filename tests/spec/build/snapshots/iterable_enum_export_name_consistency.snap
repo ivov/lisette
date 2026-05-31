@@ -1,0 +1,88 @@
+---
+source: tests/spec/build/mod.rs
+---
+// === main.go ===
+package main
+
+import "fmt"
+
+func MakePublicPhaseBuild() PublicPhase {
+	return PublicPhase{Tag: PublicPhaseBuild}
+}
+
+func MakeLocalPhaseCheck() LocalPhase {
+	return LocalPhase{Tag: LocalPhaseCheck}
+}
+
+type PublicPhaseTag int
+
+const (
+	PublicPhaseBuild PublicPhaseTag = iota
+)
+
+type PublicPhase struct {
+	Tag PublicPhaseTag
+}
+
+func (p PublicPhase) String() string {
+	switch p.Tag {
+	case PublicPhaseBuild:
+		return "Build"
+	default:
+		return fmt.Sprintf("PublicPhase(%d)", p.Tag)
+	}
+}
+
+func (p PublicPhase) GoString() string {
+	switch p.Tag {
+	case PublicPhaseBuild:
+		return "PublicPhase.Build"
+	default:
+		return fmt.Sprintf("PublicPhase(%d)", p.Tag)
+	}
+}
+
+func PublicPhase_Variants() []PublicPhase {
+	return []PublicPhase{
+		{Tag: PublicPhaseBuild},
+	}
+}
+
+type LocalPhaseTag int
+
+const (
+	LocalPhaseCheck LocalPhaseTag = iota
+)
+
+type LocalPhase struct {
+	Tag LocalPhaseTag
+}
+
+func (l LocalPhase) String() string {
+	switch l.Tag {
+	case LocalPhaseCheck:
+		return "Check"
+	default:
+		return fmt.Sprintf("LocalPhase(%d)", l.Tag)
+	}
+}
+
+func (l LocalPhase) GoString() string {
+	switch l.Tag {
+	case LocalPhaseCheck:
+		return "LocalPhase.Check"
+	default:
+		return fmt.Sprintf("LocalPhase(%d)", l.Tag)
+	}
+}
+
+func LocalPhase_Variants() []LocalPhase {
+	return []LocalPhase{
+		{Tag: LocalPhaseCheck},
+	}
+}
+
+func main() {
+	_ = LocalPhase_Variants()
+	_ = PublicPhase_Variants()
+}

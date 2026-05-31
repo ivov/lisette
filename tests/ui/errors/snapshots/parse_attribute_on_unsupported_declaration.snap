@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] Attribute not supported on target
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[iterable]
+   · ─────┬─────
+   ·      ╰── not supported on target
+ 3 │ interface Service {
+   ╰────
+  help: Remove the attribute, or move it onto an enum, struct, or function · code: [parse.misplaced_attribute]

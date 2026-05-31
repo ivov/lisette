@@ -1,6 +1,10 @@
 # Attributes
 
-Attributes attach metadata to structs and fields, typically for serialization.
+Attributes attach metadata or behavior to declarations:
+
+- structs and fields for serialization,
+- enums for iteration, and
+- functions for lint suppression.
 
 ## Serialization
 
@@ -143,6 +147,26 @@ fn warm_cache(path: string) {
   os.ReadFile(path)  // preload file, ignore contents
 }
 ```
+
+## Iteration
+
+Add `#[iterable]` to an enum to synthesize a `variants()` associated function returning every variant, in declaration order:
+
+```rs
+#[iterable]
+enum Direction {
+  North,
+  East,
+  West,
+  South,
+}
+
+for direction in Direction.variants() {
+  fmt.Println(direction)
+}
+```
+
+`Direction.variants()` returns a `Slice<Direction>`. Only enums whose variants have no payloads can be `#[iterable]`.
 
 <br>
 

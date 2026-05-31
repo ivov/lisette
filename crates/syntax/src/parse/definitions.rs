@@ -851,6 +851,11 @@ impl<'source> Parser<'source> {
 
             let item_doc = self.collect_doc_comments();
             let method_attrs = self.parse_attributes();
+            if !self.is(Function)
+                && let Some(attribute) = method_attrs.first()
+            {
+                self.error_misplaced_attribute(attribute.span);
+            }
             match self.current_token().kind {
                 Function => {
                     let method =

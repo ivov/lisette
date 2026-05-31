@@ -1,0 +1,12 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[iterable]` not on enum
+   ╭─[test.lis:3:3]
+ 2 │ interface Service {
+ 3 │   #[iterable]
+   ·   ─────┬─────
+   ·        ╰── not on an enum
+ 4 │   fn run() -> int
+   ╰────
+  help: Only an enum can be marked `#[iterable]` · code: [attribute.iterable_not_an_enum]

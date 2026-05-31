@@ -42,6 +42,15 @@ pub(crate) fn snake_to_camel(s: &str) -> String {
     s.split('_').map(capitalize_first).collect()
 }
 
+pub(crate) fn iterable_variants_fn_name(enum_name: &str, exported: bool) -> String {
+    let method_segment = if exported {
+        snake_to_camel("variants")
+    } else {
+        "variants".to_string()
+    };
+    format!("{}_{}", enum_name, method_segment)
+}
+
 pub(crate) fn go_package_name(module: &str) -> &str {
     module.rsplit('/').next().unwrap_or(module)
 }

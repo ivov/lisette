@@ -1,5 +1,6 @@
 mod builtins;
 mod convert;
+mod iterables;
 mod methods;
 mod types;
 
@@ -101,6 +102,8 @@ impl TaskState<'_> {
         for (file_id, imports) in &file_data {
             self.register_file_values(store, id, *file_id, imports);
         }
+
+        self.register_module_iterables(store, id);
 
         let module = store.get_module(id).expect("module must exist");
         let ufcs_entries = crate::call_classification::compute_module_ufcs(module, id);
@@ -339,6 +342,7 @@ impl TaskState<'_> {
         self.register_type_definitions(store, items);
         self.register_impl_blocks(store, items);
         self.register_values(store, items, visibility);
+        self.register_iterables(store, items);
     }
 
     pub fn register_type_names(

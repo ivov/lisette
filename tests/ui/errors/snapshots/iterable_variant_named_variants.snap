@@ -1,0 +1,17 @@
+---
+source: tests/ui/errors/mod.rs
+---
+  [error] `#[iterable]` conflicts with existing `variants`
+   ╭─[test.lis:2:1]
+ 1 │ 
+ 2 │ #[iterable]
+   · ─────┬─────
+   ·      ╰── would synthesize `variants`
+ 3 │ enum Color {
+ 4 │   Red,
+ 5 │   variants,
+   ·   ────┬───
+   ·       ╰── `variants` already defined here
+ 6 │ }
+   ╰────
+  help: Rename the existing `variants`, or drop `#[iterable]` · code: [attribute.iterable_variants_conflict]

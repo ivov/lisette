@@ -309,6 +309,21 @@ impl EnumLayout {
         )
     }
 
+    pub(crate) fn emit_variants_function(&self, fn_name: &str) -> String {
+        let go_type_name = go_name::escape_keyword(&self.enum_name);
+
+        let mut lines = Vec::new();
+        lines.push(format!("func {fn_name}() []{go_type_name} {{"));
+        lines.push(format!("return []{go_type_name}{{"));
+        for variant in &self.variants {
+            lines.push(format!("{{Tag: {}}},", variant.tag_constant));
+        }
+        lines.push("}".to_string());
+        lines.push("}".to_string());
+
+        lines.join("\n")
+    }
+
     pub(crate) fn emit_json_methods(&self, receiver_generics: &str) -> String {
         let receiver = receiver_name(&self.enum_name);
         let go_type_name = go_name::escape_keyword(&self.enum_name);

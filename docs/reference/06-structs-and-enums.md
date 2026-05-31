@@ -195,6 +195,12 @@ let err = Err("oh no")
 
 📚 See [`09-error-handling.md`](09-error-handling.md)
 
+### Iterating on enum variants
+
+To iterate on enum variants in declaration order, mark an enum with the `#[iterable]` attribute.
+
+📚 See [`15-attributes.md`](15-attributes.md)
+
 <br>
 
 <table><tr>

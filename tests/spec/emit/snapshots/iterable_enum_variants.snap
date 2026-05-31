@@ -1,0 +1,73 @@
+---
+source: tests/spec/emit/types.rs
+description: "input: \n#[iterable]\npub enum BuildPhase {\n  Validate,\n  Parse,\n  Codegen,\n}\n\nfn count() -> int {\n  let mut total = 0\n  for _phase in BuildPhase.variants() {\n    total = total + 1\n  }\n  total\n}\n"
+---
+package main
+
+import "fmt"
+
+func MakeBuildPhaseValidate() BuildPhase {
+	return BuildPhase{Tag: BuildPhaseValidate}
+}
+
+func MakeBuildPhaseParse() BuildPhase {
+	return BuildPhase{Tag: BuildPhaseParse}
+}
+
+func MakeBuildPhaseCodegen() BuildPhase {
+	return BuildPhase{Tag: BuildPhaseCodegen}
+}
+
+type BuildPhaseTag int
+
+const (
+	BuildPhaseValidate BuildPhaseTag = iota
+	BuildPhaseParse
+	BuildPhaseCodegen
+)
+
+type BuildPhase struct {
+	Tag BuildPhaseTag
+}
+
+func (b BuildPhase) String() string {
+	switch b.Tag {
+	case BuildPhaseValidate:
+		return "Validate"
+	case BuildPhaseParse:
+		return "Parse"
+	case BuildPhaseCodegen:
+		return "Codegen"
+	default:
+		return fmt.Sprintf("BuildPhase(%d)", b.Tag)
+	}
+}
+
+func (b BuildPhase) GoString() string {
+	switch b.Tag {
+	case BuildPhaseValidate:
+		return "BuildPhase.Validate"
+	case BuildPhaseParse:
+		return "BuildPhase.Parse"
+	case BuildPhaseCodegen:
+		return "BuildPhase.Codegen"
+	default:
+		return fmt.Sprintf("BuildPhase(%d)", b.Tag)
+	}
+}
+
+func BuildPhase_variants() []BuildPhase {
+	return []BuildPhase{
+		{Tag: BuildPhaseValidate},
+		{Tag: BuildPhaseParse},
+		{Tag: BuildPhaseCodegen},
+	}
+}
+
+func count() int {
+	total := 0
+	for range BuildPhase_variants() {
+		total++
+	}
+	return total
+}
