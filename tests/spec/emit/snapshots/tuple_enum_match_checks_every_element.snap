@@ -1,0 +1,91 @@
+---
+source: tests/spec/emit/patterns.rs
+description: "input: \npub enum Hand {\n  Left,\n  Right,\n}\n\nimpl Hand {\n  pub fn left_right(self, other: Hand) -> bool {\n    match (self, other) {\n      (Hand.Left, Hand.Right) => true,\n      _ => false,\n    }\n  }\n\n  pub fn left_left(self, other: Hand) -> bool {\n    match (self, other) {\n      (Hand.Left, Hand.Left) => true,\n      _ => false,\n    }\n  }\n\n  pub fn eq(self, other: Hand) -> bool {\n    match (self, other) {\n      (Hand.Left, Hand.Left) => true,\n      (Hand.Right, Hand.Right) => true,\n      _ => false,\n    }\n  }\n}\n"
+---
+package main
+
+import (
+	"fmt"
+	lisette "github.com/ivov/lisette/prelude"
+)
+
+func MakeHandLeft() Hand {
+	return Hand{Tag: HandLeft}
+}
+
+func MakeHandRight() Hand {
+	return Hand{Tag: HandRight}
+}
+
+type HandTag int
+
+const (
+	HandLeft HandTag = iota
+	HandRight
+)
+
+type Hand struct {
+	Tag HandTag
+}
+
+func (h Hand) String() string {
+	switch h.Tag {
+	case HandLeft:
+		return "Left"
+	case HandRight:
+		return "Right"
+	default:
+		return fmt.Sprintf("Hand(%d)", h.Tag)
+	}
+}
+
+func (h Hand) GoString() string {
+	switch h.Tag {
+	case HandLeft:
+		return "Hand.Left"
+	case HandRight:
+		return "Hand.Right"
+	default:
+		return fmt.Sprintf("Hand(%d)", h.Tag)
+	}
+}
+
+func (h Hand) LeftRight(other Hand) bool {
+	subject_1 := lisette.MakeTuple2(h, other)
+	if subject_1.First.Tag == HandLeft {
+		if subject_1.Second.Tag == HandRight {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+func (h Hand) LeftLeft(other Hand) bool {
+	subject_1 := lisette.MakeTuple2(h, other)
+	if subject_1.First.Tag == HandLeft {
+		if subject_1.Second.Tag == HandLeft {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+func (h Hand) Eq(other Hand) bool {
+	subject_1 := lisette.MakeTuple2(h, other)
+	switch subject_1.First.Tag {
+	case HandLeft:
+		if subject_1.Second.Tag == HandLeft {
+			return true
+		}
+		return false
+	case HandRight:
+		if subject_1.Second.Tag == HandRight {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}

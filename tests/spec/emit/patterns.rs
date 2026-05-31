@@ -1369,3 +1369,55 @@ pub struct Rect { pub W: int, pub H: int }
 "#;
     assert_emit_snapshot_with_go_typedefs!(input, &[("go:example.com/shapes", typedef)]);
 }
+
+#[test]
+fn tuple_enum_match_checks_every_element() {
+    let input = r#"
+pub enum Hand {
+  Left,
+  Right,
+}
+
+impl Hand {
+  pub fn left_right(self, other: Hand) -> bool {
+    match (self, other) {
+      (Hand.Left, Hand.Right) => true,
+      _ => false,
+    }
+  }
+
+  pub fn left_left(self, other: Hand) -> bool {
+    match (self, other) {
+      (Hand.Left, Hand.Left) => true,
+      _ => false,
+    }
+  }
+
+  pub fn eq(self, other: Hand) -> bool {
+    match (self, other) {
+      (Hand.Left, Hand.Left) => true,
+      (Hand.Right, Hand.Right) => true,
+      _ => false,
+    }
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}
+
+#[test]
+fn switch_case_with_remaining_enum_check_routes_to_catchall() {
+    let input = r#"
+enum Side { Left, Right }
+struct Pair { a: Side, b: Side }
+
+fn classify(p: Pair) -> int {
+  match p {
+    Pair { a: Side.Left, b: Side.Left } => 1,
+    Pair { a: Side.Right, b: Side.Right } => 2,
+    _ => 0,
+  }
+}
+"#;
+    assert_emit_snapshot!(input);
+}

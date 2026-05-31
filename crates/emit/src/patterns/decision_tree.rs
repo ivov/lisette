@@ -494,7 +494,7 @@ fn try_build_switch(arms: &[ArmInfo]) -> Option<Decision> {
     validate_switch_arms(arms, &kind, &switch_path)?;
 
     let grouped = group_switch_branches(arms, &kind);
-    let branches = build_switch_branches(&kind, grouped.order, grouped.by_label, &grouped.fallback);
+    let branches = build_switch_branches(grouped.order, grouped.by_label, &grouped.fallback);
 
     let fallback = if grouped.fallback.is_empty() {
         None
@@ -632,11 +632,9 @@ fn group_switch_branches(arms: &[ArmInfo], kind: &SwitchKind) -> GroupedBranches
     }
 }
 
-/// Splice the catchall into any type-switch case whose inner tree can still
-/// fail. Go type-switch cases do not fall through, so the fallback arms must
-/// be inlined into each fail-prone case body.
+/// Splice the catchall into any fail-prone case body: Go `switch` cases do not
+/// fall through to `default`, so a failed inner check has nowhere else to go.
 fn build_switch_branches(
-    kind: &SwitchKind,
     order: Vec<String>,
     mut by_label: HashMap<String, BranchGroup>,
     fallback_arms: &[ArmInfo],
@@ -651,7 +649,7 @@ fn build_switch_branches(
             let any_inner_can_fail = inner_arms
                 .iter()
                 .any(|a| a.has_guard || !a.checks.is_empty());
-            let decision = if matches!(kind, SwitchKind::TypeSwitch) && any_inner_can_fail {
+            let decision = if any_inner_can_fail {
                 let mut arms_with_fallback = inner_arms;
                 arms_with_fallback.extend(fallback_arms.iter().cloned());
                 build_tree(arms_with_fallback)
