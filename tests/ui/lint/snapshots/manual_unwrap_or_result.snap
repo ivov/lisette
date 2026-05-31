@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Manual unwrap_or
+   ╭─[test.lis:4:11]
+ 3 │   let r: Result<int, string> = Ok(1)
+ 4 │   let _ = match r {
+   ·           ──┬──
+   ·             ╰── can be simpler
+ 5 │     Ok(v) => v,
+   ╰────
+  help: Replace this `match` with `.unwrap_or(...)` · code: [lint.manual_unwrap_or]

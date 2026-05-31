@@ -2117,7 +2117,7 @@ struct Container {
 fn main() {
   let c = Container { value: Some(42) };
   let _ = match c.value {
-    Some(n) => n,
+    Some(n) => n + 1,
     None => 0,
   }
 }
@@ -3768,6 +3768,190 @@ fn main() {
 }
 
 #[test]
+fn manual_unwrap_or_option() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => v,
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_result() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(v) => v,
+    Err(_) => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_reversed_arms() {
+    assert_lint_snapshot!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    None => 0,
+    Some(v) => v,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_else_effectful_default() {
+    assert_lint_snapshot!(
+        r#"
+fn fallback() -> int {
+  0
+}
+
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => v,
+    None => fallback(),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_transformed_body_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => v + 1,
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_bound_error_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let r: Result<int, string> = Ok(1)
+  let _ = match r {
+    Ok(v) => v,
+    Err(e) => e.length(),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_propagating_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn fallback() -> Result<int, string> {
+  Ok(0)
+}
+
+fn run(r: Result<int, string>) -> Result<int, string> {
+  let v = match r {
+    Ok(v) => v,
+    Err(_) => fallback()?,
+  }
+  Ok(v)
+}
+
+fn main() {
+  let _ = run(Ok(1))
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_conditional_return_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn run(o: Option<int>, flag: bool) -> int {
+  let v = match o {
+    Some(v) => v,
+    None => if flag { return 0 } else { 5 },
+  }
+  v + 1
+}
+
+fn main() {
+  let _ = run(Some(1), true)
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_diverging_default_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(v) => v,
+    None => return (),
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_custom_enum_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+enum Maybe { Yes(int), Nope }
+
+fn main() {
+  let m = Maybe.Yes(1)
+  let _ = match m {
+    Maybe.Yes(v) => v,
+    Maybe.Nope => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn manual_unwrap_or_mismatched_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let other = 5
+  let _ = match o {
+    Some(v) => other,
+    None => 0,
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn redundant_if_let_else() {
     assert_lint_snapshot!(
         r#"
@@ -5188,13 +5372,13 @@ fn main() {
 }
 
 #[test]
-fn verbose_failure_propagation_option_unwrap_or_no_warning() {
+fn verbose_failure_propagation_option_value_default_no_warning() {
     assert_no_lint_warnings!(
         r#"
 fn main() {
   let x: Option<int> = Some(1)
   let _ = match x {
-    Some(v) => v,
+    Some(v) => v + 1,
     None => 0,
   }
 }

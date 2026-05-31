@@ -569,18 +569,12 @@ fn test_struct_let_destructure() -> int {
 
 fn test_option_some() -> int {
   let x = Some(42)
-  match x {
-    Some(n) => n,
-    None => 0,
-  }
+  x.unwrap_or(0)
 }
 
 fn test_option_none() -> int {
   let x: Option<int> = None
-  match x {
-    Some(n) => n,
-    None => -1,
-  }
+  x.unwrap_or(-1)
 }
 
 fn test_option_chain() -> int {
@@ -598,10 +592,7 @@ fn get_option() -> Option<int> {
 
 fn test_option_passthrough() -> int {
   let x = get_option()
-  match x {
-    Some(n) => n,
-    None => 0,
-  }
+  x.unwrap_or(0)
 }
 
 fn maybe_double(x: int) -> Option<int> {
@@ -609,17 +600,11 @@ fn maybe_double(x: int) -> Option<int> {
 }
 
 fn test_option_conditional() -> int {
-  match maybe_double(5) {
-    Some(n) => n,
-    None => 0,
-  }
+  maybe_double(5).unwrap_or(0)
 }
 
 fn test_option_conditional_none() -> int {
-  match maybe_double(-1) {
-    Some(n) => n,
-    None => -1,
-  }
+  maybe_double(-1).unwrap_or(-1)
 }
 
 fn test_option_nested() -> int {
@@ -635,10 +620,7 @@ struct Container { value: Option<int> }
 
 fn test_option_in_struct() -> int {
   let c = Container { value: Some(99) }
-  match c.value {
-    Some(n) => n,
-    None => 0,
-  }
+  c.value.unwrap_or(0)
 }
 
 fn get_some() -> Option<int> {
@@ -646,10 +628,7 @@ fn get_some() -> Option<int> {
 }
 
 fn test_option_return_some() -> int {
-  match get_some() {
-    Some(n) => n,
-    None => 0,
-  }
+  get_some().unwrap_or(0)
 }
 
 fn get_none() -> Option<int> {
@@ -657,10 +636,7 @@ fn get_none() -> Option<int> {
 }
 
 fn test_option_return_none() -> int {
-  match get_none() {
-    Some(n) => n,
-    None => -1,
-  }
+  get_none().unwrap_or(-1)
 }
 
 // if let
@@ -850,18 +826,12 @@ fn test_while_let_result() -> int {
 
 fn test_result_ok() -> int {
   let x = Ok(42)
-  match x {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  x.unwrap_or(-1)
 }
 
 fn test_result_err() -> int {
   let x: Result<int, string> = Err("failed")
-  match x {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  x.unwrap_or(-1)
 }
 
 fn fallible() -> Result<int, string> {
@@ -874,10 +844,7 @@ fn fallible_propagate() -> Result<int, string> {
 }
 
 fn test_result_propagation() -> int {
-  match fallible_propagate() {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  fallible_propagate().unwrap_or(-1)
 }
 
 fn test_result_chain() -> int {
@@ -910,10 +877,7 @@ fn fallible_propagate_err() -> Result<int, string> {
 }
 
 fn test_result_propagation_err() -> int {
-  match fallible_propagate_err() {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  fallible_propagate_err().unwrap_or(-1)
 }
 
 fn multi_fallible() -> Result<int, string> {
@@ -923,10 +887,7 @@ fn multi_fallible() -> Result<int, string> {
 }
 
 fn test_result_multi_propagation() -> int {
-  match multi_fallible() {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  multi_fallible().unwrap_or(-1)
 }
 
 fn check_error(e: string) -> int {
@@ -963,10 +924,7 @@ fn test_try_block_basic() -> int {
   let result = try {
     try_risky_ok()?
   }
-  match result {
-    Ok(x) => x,
-    Err(_) => 0,
-  }
+  result.unwrap_or(0)
 }
 
 fn test_try_block_multiple() -> int {
@@ -975,10 +933,7 @@ fn test_try_block_multiple() -> int {
     let b = try_risky_ok()?
     a + b
   }
-  match result {
-    Ok(x) => x,
-    Err(_) => 0,
-  }
+  result.unwrap_or(0)
 }
 
 fn test_try_block_early_err() -> int {
@@ -997,10 +952,7 @@ fn test_try_block_option() -> int {
     let x = try_maybe_some()?
     x + 5
   }
-  match opt {
-    Some(v) => v,
-    None => 0,
-  }
+  opt.unwrap_or(0)
 }
 
 fn test_try_block_option_none() -> int {
@@ -1019,16 +971,10 @@ fn test_try_block_nested() -> int {
     let inner: Result<int, string> = try {
       try_risky_ok()?
     }
-    let inner_val = match inner {
-      Ok(x) => x,
-      Err(_) => 0,
-    }
+    let inner_val = inner.unwrap_or(0)
     inner_val + try_risky_ok()?
   }
-  match outer {
-    Ok(x) => x,
-    Err(_) => 0,
-  }
+  outer.unwrap_or(0)
 }
 
 fn test_try_block_with_loop() -> int {
@@ -1040,20 +986,14 @@ fn test_try_block_with_loop() -> int {
     }
     sum + try_risky_ok()?
   }
-  match result {
-    Ok(x) => x,
-    Err(_) => 0,
-  }
+  result.unwrap_or(0)
 }
 
 fn test_try_block_conditional() -> int {
   let result = try {
     if true { try_risky_ok()? } else { 0 }
   }
-  match result {
-    Ok(x) => x,
-    Err(_) => 0,
-  }
+  result.unwrap_or(0)
 }
 
 // Control flow tests
@@ -1357,14 +1297,8 @@ fn test_buffered_channel() -> int {
   ch.send(10)
   ch.send(20)
   // Receive the values
-  let v1 = match ch.receive() {
-    Some(v) => v,
-    None => 0,
-  }
-  let v2 = match ch.receive() {
-    Some(v) => v,
-    None => 0,
-  }
+  let v1 = ch.receive().unwrap_or(0)
+  let v2 = ch.receive().unwrap_or(0)
   v1 + v2
 }
 
@@ -1374,10 +1308,7 @@ fn test_blocking_send_receive() -> int {
     ch.send(42)
   }
   // Blocking receive waits for the send
-  match ch.receive() {
-    Some(v) => v,
-    None => 0,
-  }
+  ch.receive().unwrap_or(0)
 }
 
 fn test_channel_iteration() -> int {
@@ -1399,10 +1330,7 @@ fn test_channel_split() -> int {
   task {
     tx.send(99)
   }
-  match rx.receive() {
-    Some(v) => v,
-    None => 0,
-  }
+  rx.receive().unwrap_or(0)
 }
 
 fn test_select_match_receive_value() -> int {
@@ -1486,10 +1414,7 @@ fn try_in_arg_helper() -> Result<int, string> {
 }
 
 fn test_try_in_argument() -> int {
-  match try_in_arg_helper() {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  try_in_arg_helper().unwrap_or(-1)
 }
 
 struct Fallible { value: int }
@@ -1503,10 +1428,7 @@ impl Fallible {
 fn test_try_then_chain() -> int {
   // Can't easily chain after try, test try on method call
   let f = Fallible { value: 25 }
-  match f.get() {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  f.get().unwrap_or(-1)
 }
 
 fn try_return_helper() -> Result<int, string> {
@@ -1515,10 +1437,7 @@ fn try_return_helper() -> Result<int, string> {
 }
 
 fn test_try_in_return() -> int {
-  match try_return_helper() {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  try_return_helper().unwrap_or(-1)
 }
 
 fn test_try_in_lambda() -> int {
@@ -1526,10 +1445,7 @@ fn test_try_in_lambda() -> int {
     let v = fallible()?
     Ok(v + x)
   }
-  match f(5) {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  f(5).unwrap_or(-1)
 }
 
 // Lambda edge cases tests
@@ -2655,10 +2571,7 @@ fn maybe_int_for_test(b: bool) -> Option<int> {
 }
 
 fn unwrap_or_for_test(o: Option<int>, fallback: int) -> int {
-  match o {
-    Some(v) => v,
-    None => fallback,
-  }
+  o.unwrap_or(fallback)
 }
 
 fn test_result_direct_arg_ok() -> int {
@@ -2715,10 +2628,7 @@ fn parse_digit(s: string) -> Result<int, string> {
 
 fn test_result_if_else_chain_ok() -> int {
   let res = parse_digit("1")
-  match res {
-    Ok(n) => n,
-    Err(_) => -1,
-  }
+  res.unwrap_or(-1)
 }
 
 fn test_result_if_else_chain_err() -> int {
@@ -2735,10 +2645,7 @@ fn get_optional(flag: bool) -> Option<int> {
 
 fn test_option_if_else_chain_some() -> int {
   let opt = get_optional(true)
-  match opt {
-    Some(n) => n,
-    None => -1,
-  }
+  opt.unwrap_or(-1)
 }
 
 fn test_option_if_else_chain_none() -> int {
@@ -3036,19 +2943,13 @@ fn test_option_zip() -> int {
 fn test_option_flatten() -> int {
   let nested: Option<Option<int>> = Some(Some(100))
   let flat = nested.flatten()
-  match flat {
-    Some(v) => v,
-    None => 0,
-  }
+  flat.unwrap_or(0)
 }
 
 fn test_result_map() -> int {
   let res = Ok(50)
   let result = res.map(|x| x * 2)
-  match result {
-    Ok(v) => v,
-    Err(_) => 0,
-  }
+  result.unwrap_or(0)
 }
 
 fn test_result_and_then() -> int {
@@ -3058,10 +2959,7 @@ fn test_result_and_then() -> int {
   } else {
     Err("too small")
   })
-  match result {
-    Ok(v) => v,
-    Err(_) => 0,
-  }
+  result.unwrap_or(0)
 }
 
 fn test_result_map_or() -> int {

@@ -341,6 +341,18 @@ pub fn redundant_pattern_matching(span: &Span, predicate: &str) -> LisetteDiagno
         .with_help(format!("Replace this `match` with `.{predicate}()`"))
 }
 
+pub fn manual_unwrap_or(span: &Span, default_has_effects: bool) -> LisetteDiagnostic {
+    let method = if default_has_effects {
+        "unwrap_or_else"
+    } else {
+        "unwrap_or"
+    };
+    LisetteDiagnostic::warn("Manual unwrap_or")
+        .with_lint_code("manual_unwrap_or")
+        .with_span_label(span, "can be simpler")
+        .with_help(format!("Replace this `match` with `.{method}(...)`"))
+}
+
 pub fn empty_match_arm(span: &Span) -> LisetteDiagnostic {
     LisetteDiagnostic::warn("Empty match arm")
         .with_lint_code("empty_match_arm")
