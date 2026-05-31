@@ -2600,12 +2600,14 @@ fn test_option_direct_arg_none() -> int {
 
 fn noop() {}
 
+fn noop2() {}
+
 fn test_match_statement_result() -> int {
   // This match is used as a statement (not assigned, not returned)
-  // Arms call noop() which returns Unit - this triggered invalid Go code
+  // Arms call Unit-returning functions - this triggered invalid Go code
   match divide_for_test(10, 2) {
     Ok(_) => noop(),
-    Err(_) => noop(),
+    Err(_) => noop2(),
   }
   100 // If we get here, the code compiled correctly
 }
@@ -2613,7 +2615,7 @@ fn test_match_statement_result() -> int {
 fn test_match_statement_option() -> int {
   match maybe_int_for_test(true) {
     Some(_) => noop(),
-    None => noop(),
+    None => noop2(),
   }
   100
 }

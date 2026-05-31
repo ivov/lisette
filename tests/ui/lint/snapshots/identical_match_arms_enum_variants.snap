@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Identical match arms
+   ╭─[test.lis:6:3]
+ 5 │   let halt = 1;
+ 6 │   match s {
+   ·   ──┬──
+   ·     ╰── every arm is identical
+ 7 │     Signal.Red => halt,
+   ╰────
+  help: All `match` arms resolve to the same value. Did you mean for the arms to differ? · code: [lint.identical_match_arms]

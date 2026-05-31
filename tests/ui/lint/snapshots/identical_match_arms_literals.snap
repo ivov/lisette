@@ -1,0 +1,12 @@
+---
+source: tests/ui/lint/mod.rs
+---
+  [warning] Identical match arms
+   ╭─[test.lis:5:3]
+ 4 │   let b = 2;
+ 5 │   match n {
+   ·   ──┬──
+   ·     ╰── every arm is identical
+ 6 │     0 => a + b,
+   ╰────
+  help: All `match` arms resolve to the same value. Did you mean for the arms to differ? · code: [lint.identical_match_arms]

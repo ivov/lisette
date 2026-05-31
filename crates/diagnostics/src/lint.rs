@@ -321,6 +321,15 @@ pub fn identical_if_branches(span: &Span) -> LisetteDiagnostic {
         .with_help("Remove the `if` and keep a single copy of the branch body")
 }
 
+pub fn identical_match_arms(span: &Span) -> LisetteDiagnostic {
+    LisetteDiagnostic::warn("Identical match arms")
+        .with_lint_code("identical_match_arms")
+        .with_span_label(span, "every arm is identical")
+        .with_help(
+            "All `match` arms resolve to the same value. Did you mean for the arms to differ?",
+        )
+}
+
 pub fn needless_bool(span: &Span, consequence_is_true: bool) -> LisetteDiagnostic {
     let help = if consequence_is_true {
         "Replace this `if... else` with the condition itself"

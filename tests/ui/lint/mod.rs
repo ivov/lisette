@@ -1070,6 +1070,131 @@ fn main() {
 }
 
 #[test]
+fn identical_match_arms_literals() {
+    assert_lint_snapshot!(
+        r#"
+pub fn pick(n: int) -> int {
+  let a = 1;
+  let b = 2;
+  match n {
+    0 => a + b,
+    1 => a + b,
+    _ => a + b,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn identical_match_arms_enum_variants() {
+    assert_lint_snapshot!(
+        r#"
+pub enum Signal { Red, Yellow, Green }
+
+pub fn stop(s: Signal) -> int {
+  let halt = 1;
+  match s {
+    Signal.Red => halt,
+    Signal.Yellow => halt,
+    Signal.Green => halt,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn differing_match_arms_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn pick(n: int) -> int {
+  let a = 1;
+  let b = 2;
+  match n {
+    0 => a + b,
+    _ => a - b,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn identical_match_arms_with_binding_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn pick(opt: Option<int>) -> int {
+  match opt {
+    Some(v) => 42,
+    None => 42,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn identical_match_arms_with_guard_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn pick(n: int) -> int {
+  let a = 1;
+  let b = 2;
+  match n {
+    0 if a > 0 => a + b,
+    _ => a + b,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn identical_match_arms_dividing_subject_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn pick(n: int) -> int {
+  match 10 / n {
+    0 => 42,
+    _ => 42,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn identical_match_arms_shifting_subject_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn pick(n: int) -> int {
+  match 1 << n {
+    0 => 42,
+    _ => 42,
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn identical_match_arms_interpolated_subject_no_warning() {
+    assert_no_lint_warnings!(
+        r#"
+pub fn side() -> string { "x" }
+
+pub fn pick() -> int {
+  match f"a{side()}" {
+    "ax" => 42,
+    _ => 42,
+  }
+}
+"#
+    );
+}
+
+#[test]
 fn needless_bool_true_false() {
     assert_lint_snapshot!(
         r#"
@@ -3721,8 +3846,8 @@ fn main() {
 }
 
 #[test]
-fn redundant_pattern_matching_same_bool_no_warning() {
-    assert_no_lint_warnings!(
+fn identical_match_arms_same_bool() {
+    assert_lint_snapshot!(
         r#"
 fn main() {
   let o: Option<int> = Some(1)
@@ -3732,6 +3857,29 @@ fn main() {
   }
 }
 "#
+    );
+}
+
+#[test]
+fn redundant_pattern_matching_same_bool_no_suggestion() {
+    let warnings = crate::_harness::lint::lint(
+        r#"
+fn main() {
+  let o: Option<int> = Some(1)
+  let _ = match o {
+    Some(_) => true,
+    None => true,
+  }
+}
+"#,
+    );
+    let suggests_predicate = warnings
+        .iter()
+        .any(|w| w.code_str() == Some("lint.redundant_pattern_matching"));
+    assert!(
+        !suggests_predicate,
+        "expected no redundant_pattern_matching suggestion on same-bool arms, got: {:?}",
+        warnings
     );
 }
 
